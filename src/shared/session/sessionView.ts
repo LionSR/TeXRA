@@ -29,7 +29,7 @@ import {
   requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
-  RunFlowSchema,
+  LoopPositionSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
@@ -108,7 +108,7 @@ const RunViewCommonSchema = z.object({
    *  undecoded here, read through its plugin's reader. */
   facts: z.record(z.string(), JsonValueSchema),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase, folded from `run.activate` (running), `flow.step`
+  /** The durable phase, folded from `run.activate` (running), `run.position`
    *  (`waiting` parks, any other step runs), `child.park` (an agent-CLI
    *  child's own park row, which has no loop to step), and `run.end` (the
    *  outcome); `ready` before the first activation folds (3.3). An
@@ -144,11 +144,11 @@ const RunViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  /** The loop's latest `flow.step`: family, step, and coordinates. Null
-   *  before the first step and after every activation, and null for the
-   *  whole life of a run with no loop of its own — an agent-CLI child
+  /** The loop's latest `run.position`: family, where it stands, and its
+   *  coordinates. Null before the first position and after every
+   *  activation, and null for the whole life of a run with no loop of its own — an agent-CLI child
    *  parks through `child.park`, which carries a phase and no position. */
-  flow: RunFlowSchema.nullable(),
+  position: LoopPositionSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */

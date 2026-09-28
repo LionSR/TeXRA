@@ -1,7 +1,7 @@
 /**
  * Session resume data retrieval: the identity a host needs to launch a
  * resumed run, read from the durable run facts. Every run resumes from the
- * same fact: the run aggregate's latest `flow.snapshot`, one indexed read. The run's state is `RunLedger.load`, folded by the loop that
+ * same fact: the run aggregate's latest `run.snapshot`, one indexed read. The run's state is `RunLedger.load`, folded by the loop that
  * continues it; nothing here parses a checkpoint.
  */
 
@@ -28,7 +28,7 @@ export interface ResumeData {
  * Retrieve resume data for a run.
  *
  * @returns The resume identity, or `null` when there is nothing to resume
- *   (no `flow.snapshot` on the run aggregate). Fails when the durable facts
+ *   (no `run.snapshot` on the run aggregate). Fails when the durable facts
  *   cannot be read, so the caller can distinguish "nothing to resume" from
  *   "resume failed" instead of silently abandoning the session.
  */

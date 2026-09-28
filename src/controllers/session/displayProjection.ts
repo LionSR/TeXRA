@@ -90,7 +90,7 @@ WHERE cost > 0
 )`;
 
 /**
- * The `run.model` rows no run stores, projected from its `flow.snapshot`
+ * The `run.model` rows no run stores, projected from its `run.snapshot`
  * rows: one at each snapshot whose `modelId` differs from the snapshot before
  * it, so a run that never switched projects none and reads its launch model
  * from `run.config`. Each keeps its snapshot's envelope. The earlier snapshot
@@ -103,10 +103,10 @@ SELECT e."commit" AS "commit", e.aggregate_id AS aggregateId, e.seq,
   'run.model.1' AS type, e.origin AS origin, e.at,
   json_object('model', json_extract(e.data, '$.payload.runtime.modelId')) AS data
 FROM event e
-WHERE e.type = 'flow.snapshot.1'
+WHERE e.type = 'run.snapshot.1'
   AND json_extract(e.data, '$.payload.runtime.modelId') IS NOT COALESCE((
     SELECT json_extract(p.data, '$.payload.runtime.modelId') FROM event p
-    WHERE p.aggregate_id = e.aggregate_id AND p.type = 'flow.snapshot.1'
+    WHERE p.aggregate_id = e.aggregate_id AND p.type = 'run.snapshot.1'
       AND p.seq < e.seq
     ORDER BY p.seq DESC LIMIT 1
   ), json_extract(e.data, '$.payload.runtime.modelId'))

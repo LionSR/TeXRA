@@ -16,7 +16,7 @@
       "@agent/core/tools/ToolTypes",
       "@agent/index",
       "@agent/runtime",
-      "@agent/runtime/AgentFlowResult",
+      "@agent/runtime/RunEndResult",
       "@agent/trace"
     ]
   }

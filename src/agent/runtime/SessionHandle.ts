@@ -5,7 +5,7 @@
  * methods, so callers address each owner directly
  * (`session.interactions.x(...)`, `session.runs.y(...)`). It has no
  * readiness gate: a restored session is usable the moment it is constructed,
- * and what a stream with no live flow context in this process is gets decided
+ * and what a run with no running loop in this process is gets decided
  * by the fold's `readOnly` and `group` rules over the session's view, never
  * by a boot pass. It carries the session's `Runs` and its requests as the
  * session layer built them, and composes {@link SessionHostInteractions} and

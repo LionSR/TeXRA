@@ -252,7 +252,7 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
+   *  `view.requests`, `view.queuedFollowUps`, `RunView.position` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
@@ -367,7 +367,7 @@ function createRun(
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
-    flow: null,
+    position: null,
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
@@ -939,7 +939,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       // Every activation, the launch and each resume, opens a running window
       // (one run model, 3.3); the tool-call count is the run's and carries
       // over. A first activation is starting and a later one resuming (A9-1);
-      // the first `flow.step` clears it.
+      // the first `run.position` clears it.
       let substate: RunView['substate'] = null;
       if (isPlainAgentIdentity(run.identity)) {
         substate =
@@ -952,7 +952,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         status: RUN_PHASE.RUNNING,
         substate,
         runStartedAt: event.at,
-        flow: null,
+        position: null,
       };
     }
     case 'run.config': {
@@ -1030,18 +1030,18 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, projected from the slice the rows folded
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
-  const { family, step, round, turn } = rows;
-  if (family === null || step === null) return run;
-  const flow = { family, step, round, turn };
+  const { family, at, round, turn } = rows;
+  if (family === null || at === null) return run;
+  const position = { family, at, round, turn };
   const phase = phaseMoveOf(row);
   return phase === null
-    ? { ...run, flow }
-    : parked({ ...run, flow }, phase === RUN_PHASE.WAITING, row.at);
+    ? { ...run, position }
+    : parked({ ...run, position }, phase === RUN_PHASE.WAITING, row.at);
 }
 
 /** The run window (3.3): a park closes it and settles the transcript, any
  *  other move opens it. The one phase writer for both rows that park, a
- *  loop's `flow.step waiting` and a child's `child.park`. */
+ *  loop's `run.position waiting` and a child's `child.park`. */
 function parked(run: RunView, atRest: boolean, at: number): RunView {
   const moved: RunView = {
     ...run,
@@ -1118,7 +1118,7 @@ function applyRowFacts(
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
-  const next = moved.step === undefined ? run : withPosition(run, after, event);
+  const next = moved.at === undefined ? run : withPosition(run, after, event);
   const rounds = moved.roundOutputs;
   if (rounds === undefined) return next;
   const byRound = <T>(pick: (round: RoundOutput) => T) =>

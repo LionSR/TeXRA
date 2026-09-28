@@ -16,7 +16,7 @@ import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentFlowResult } from './AgentFlowResult';
+import type { RunEndResult } from './RunEndResult';
 
 /**
  * Options for `runAgent`. Fields shared with the lower-level `executeAgent`
@@ -81,7 +81,7 @@ export interface RunAgentRequest {
 export const runAgent = Effect.fn('runAgent')(function* (
   request: RunAgentRequest,
   options: RunAgentOptions,
-): Effect.fn.Return<AgentFlowResult, Error, ProcessServices> {
+): Effect.fn.Return<RunEndResult, Error, ProcessServices> {
   const {
     beforeRunEnd,
     onRunClaimed,

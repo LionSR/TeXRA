@@ -765,6 +765,11 @@ All notable changes to this project will be documented in this file.
   commands** and **Auto-approve edits** toggles (the same grant as answering
   a prompt with "approve for session"). `/tools` lives under `/config` →
   Tools.
+- **`texra history show` names the saved checkpoint `checkpointPresent`** —
+  the `--json` / `--ndjson` field was `hasFlowRecord`, and the text output
+  prints `Checkpoint: present` instead of `Flow record: present`. The
+  session's stored rows are renamed with it (`run.snapshot`, `run.position`),
+  so session history from earlier builds starts over once.
 - **Esc no longer stops the running agent** — it closes panels and returns to
   the parent session. Stop a run with Ctrl-C, or with `k` in the session list.
 - **A quieter status bar** — the key row names keys only (`Tab`, `Ctrl-T`,

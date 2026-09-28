@@ -2,7 +2,7 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
@@ -59,7 +59,7 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
 }));
 
 const RUN = 'aabbcc' as RunId;
-const completed: ToolUseFlowResult = {
+const completed: ToolUseRunEndResult = {
   outcome: RUN_OUTCOME.COMPLETED,
   runId: RUN,
   output: { category: 'toolUse', response: 'done', files: [] },
@@ -73,7 +73,7 @@ const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
   session: ReturnType<typeof createTestSession>,
   ...texts: string[]
 ) {
-  const flow = session.followUps.claimLive(RUN, 'flow')!;
+  const flow = session.followUps.claimLive(RUN, 'loop')!;
   for (const text of texts) {
     yield* session.followUps.submit(
       RUN,

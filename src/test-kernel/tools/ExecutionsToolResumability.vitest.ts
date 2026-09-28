@@ -15,7 +15,7 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 /** The opening snapshot a run writes before its first external activity. */
 function openingSnapshot(runId: RunId): RunLedgerDraft {
   return {
-    type: 'flow.snapshot',
+    type: 'run.snapshot',
     aggregateId: aggregateId('run', runId),
     payload: {
       family: 'toolUse',

@@ -29,7 +29,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
   RUN_OUTCOME,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   type RunId,
   type SessionEventDraft,
   AgentCategory,
@@ -332,8 +332,8 @@ async function setupCancelledOutput(
 
 /** The snapshot a round writes, with the runtime fields a case sets. */
 function workflowSnapshot(
-  runtime: Partial<FlowSnapshotPayload['runtime']> = {},
-): FlowSnapshotPayload {
+  runtime: Partial<RunSnapshotPayload['runtime']> = {},
+): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
@@ -392,18 +392,18 @@ const seedResumableCheckpoint = (
     const aggregate = aggregateId('run', runId as RunId);
     yield* session.ledger.appendBatch(runId as RunId, null, [
       {
-        type: 'flow.snapshot',
+        type: 'run.snapshot',
         aggregateId: aggregate,
         payload: workflowSnapshot(terminal ? { phase: 'halted' } : {}),
       },
       ...(terminal
         ? [
             {
-              type: 'flow.step' as const,
+              type: 'run.position' as const,
               aggregateId: aggregate,
               payload: {
                 family: 'toolUse' as const,
-                step: 'halted' as const,
+                at: 'halted' as const,
                 turn: 1,
                 outcome: RUN_OUTCOME.FAILED,
               },

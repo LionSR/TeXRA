@@ -29,7 +29,7 @@ import {
   appendRow,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { RunControls } from '@agent/runtime/RunHandle';
@@ -220,7 +220,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   usage: null,
                 },
               },
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             return {
               kind: 'response' as const,
@@ -443,7 +443,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       snapshotCommit: null,
       rowsBeforeSnapshot: 0,
       family: 'toolUse',
-      step: null,
+      at: null,
       outcome: null,
       phase: null,
       round: 0,
@@ -507,7 +507,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
           usage: null,
         },
       },
-      stepRow(runId, opened, 'response.ready'),
+      positionRow(runId, opened, 'response.ready'),
     ]);
   },
 );
@@ -705,7 +705,7 @@ describe('a parked root run', () => {
           appendBatch: (id, state, drafts) =>
             drafts.some(
               (draft) =>
-                draft.type === 'flow.step' && draft.payload.step === 'halted',
+                draft.type === 'run.position' && draft.payload.at === 'halted',
             )
               ? Effect.fail(writeFailed)
               : session.ledger.appendBatch(id, state, drafts),
@@ -786,8 +786,8 @@ describe('a parked root run', () => {
       // rail: the park, then the step that leaves it.
       const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'flow.step',
-      ).map((event) => event.payload.step);
+        'run.position',
+      ).map((event) => event.payload.at);
       const parked = steps.indexOf('waiting');
       expect(parked).toBeGreaterThanOrEqual(0);
       expect(steps.slice(parked + 1).some((step) => step !== 'waiting')).toBe(
@@ -840,8 +840,8 @@ describe('a parked root run', () => {
 
       const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'flow.step',
-      ).map((event) => event.payload.step);
+        'run.position',
+      ).map((event) => event.payload.at);
       // The interrupt that ends the test writes its own halt last.
       expect(steps.slice(0, -1)).toContain('waiting');
       expect(resumed.requests).toHaveLength(0);
@@ -869,7 +869,7 @@ describe('a parked root run', () => {
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
         snapshotRow(runId, parked, { runtime: { lastError: null } }),
-        stepRow(runId, parked, 'turn.ready'),
+        positionRow(runId, parked, 'turn.ready'),
       ]);
 
       const resumed = yield* forkLoop({
@@ -906,8 +906,8 @@ describe('a parked root run', () => {
       // before it parks.
       const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'flow.step',
-      ).map((event) => event.payload.step);
+        'run.position',
+      ).map((event) => event.payload.at);
       const parked = steps.indexOf('waiting');
       expect(parked).toBeGreaterThan(0);
       expect(steps.slice(0, parked).every((step) => step !== 'waiting')).toBe(
@@ -1353,7 +1353,7 @@ describe('the host wiring a run attaches', () => {
         expect(detach).toHaveBeenCalledTimes(1);
         const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
         expect(state?.phase ?? null).toBeNull();
-        const lease = session.followUps.claimLive(runId, 'flow');
+        const lease = session.followUps.claimLive(runId, 'loop');
         expect(lease).not.toBeNull();
         if (lease) session.followUps.release(lease, 'recoverable');
       }).pipe(Effect.provide(NodeFileSystem.layer)),

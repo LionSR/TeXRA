@@ -33,7 +33,7 @@ import {
   ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
   ToolUseSnapshotStateSchema,
-} from './runFlowState';
+} from './runSnapshotState';
 import {
   ErrorToolResultSchema,
   ExecutedToolResultSchema,
@@ -68,9 +68,9 @@ export type InvocationRef = z.infer<typeof InvocationRefSchema>;
  *  completed turn cannot carry a call without an identity. */
 const CallIdSchema = z.string().min(1);
 
-/* ------------------------------------------------------------- flow.step */
+/* ---------------------------------------------------------- run.position */
 
-const FlowStepSchema = z.enum([
+const PositionAtSchema = z.enum([
   'turn.ready',
   'turn.begin',
   'turn.end',
@@ -79,25 +79,25 @@ const FlowStepSchema = z.enum([
   'waiting',
   'halted',
 ]);
-export type FlowStep = z.infer<typeof FlowStepSchema>;
+export type PositionAt = z.infer<typeof PositionAtSchema>;
 
-/** The loop's coordinates: the step and where it sits. What `RunView.flow`
- *  carries, so a renderer paints the position without the halt's outcome. */
-export const RunFlowSchema = z.strictObject({
+/** Where the loop stands (`at`, not "step": a step is one model call), as
+ *  `RunView.position` carries it: without the halt's outcome. */
+export const LoopPositionSchema = z.strictObject({
   family: RunFamilySchema,
-  step: FlowStepSchema,
+  at: PositionAtSchema,
   round: z.int().nonnegative().nullish(),
   turn: z.int().nonnegative().nullish(),
 });
-export type RunFlow = z.infer<typeof RunFlowSchema>;
+export type LoopPosition = z.infer<typeof LoopPositionSchema>;
 
-export const FlowStepPayloadSchema = RunFlowSchema.extend({
+export const RunPositionPayloadSchema = LoopPositionSchema.extend({
   /** The loop's own terminal word. The canonical terminal fact stays
    *  `run.end`, which also covers failures before the runtime starts. */
   outcome: RunOutcomeSchema.nullish(),
 }).refine(
-  (p) => (p.step === 'halted') === (p.outcome != null),
-  'Only a halted step carries an outcome, and it always carries one.',
+  (p) => (p.at === 'halted') === (p.outcome != null),
+  'Only a halted position carries an outcome, and it always carries one.',
 );
 
 /* ---------------------------------------------------------- model.message */
@@ -453,7 +453,7 @@ export const ToolResultPayloadSchema = z
   });
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
-/* ----------------------------------------------------------- flow.snapshot */
+/* ----------------------------------------------------------- run.snapshot */
 
 /** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). */
 const RunLoopPhaseSchema = z.enum([
@@ -515,9 +515,9 @@ export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 /** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
  *  pending response, its intents and their approval bindings are folded from
  *  `model.message`, `tool.intent` and `tool.binding`. */
-export const FlowSnapshotPayloadSchema = z.strictObject({
+export const RunSnapshotPayloadSchema = z.strictObject({
   family: RunFamilySchema,
   runtime: SnapshotRuntimeSchema,
   state: ToolUseSnapshotStateSchema,
 });
-export type FlowSnapshotPayload = z.infer<typeof FlowSnapshotPayloadSchema>;
+export type RunSnapshotPayload = z.infer<typeof RunSnapshotPayloadSchema>;

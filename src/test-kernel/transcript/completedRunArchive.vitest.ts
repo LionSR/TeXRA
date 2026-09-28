@@ -33,7 +33,7 @@ import {
   MESSAGE_TYPES,
   AgentCategory,
   aggregateId,
-  FlowSnapshotPayloadSchema,
+  RunSnapshotPayloadSchema,
 } from '@shared/schemas';
 import type { LogLevel, RunId, TodoItem } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -382,12 +382,12 @@ describe('completedRunArchive facade', () => {
         );
 
         // The one fact a resume reads: the run aggregate's latest
-        // `flow.snapshot`, committed here as this run's opening row.
+        // `run.snapshot`, committed here as this run's opening row.
         yield* session.commit([
           {
-            type: 'flow.snapshot',
+            type: 'run.snapshot',
             aggregateId: aggregateId('run', runId),
-            payload: FlowSnapshotPayloadSchema.parse({
+            payload: RunSnapshotPayloadSchema.parse({
               family: 'toolUse',
               runtime: {
                 phase: 'waiting',

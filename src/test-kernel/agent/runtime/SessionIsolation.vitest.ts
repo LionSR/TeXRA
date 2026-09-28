@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 
-import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   AgentCategory,
@@ -240,7 +240,7 @@ describe('session isolation', () => {
   );
 
   it.effect(
-    'runFlowWithLifecycle tracks the handle in the runs it is provided, not the default',
+    'runWithLifecycle tracks the handle in the runs it is provided, not the default',
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
@@ -258,7 +258,7 @@ describe('session isolation', () => {
         publishTestRunStart(sessionB, runId);
 
         yield* Effect.provide(
-          runFlowWithLifecycle(ctx, () =>
+          runWithLifecycle(ctx, () =>
             Effect.sync(() => {
               // Mid-run: the handle is registered in session B's registry only.
               expect(sessionB.runs.getHandle(runId)).toBeDefined();

@@ -5,7 +5,7 @@ import { Effect, FileSystem, Path, PlatformError } from 'effect';
 import {
   withWorkflowDiffs,
   type AgentConfigPayload,
-  type WorkflowFlowResult,
+  type WorkflowRunEndResult,
 } from '@agent/runtime';
 import { isNotADirectoryError } from '@common/errors';
 import type {
@@ -316,7 +316,7 @@ function copyOutputFile(
 export function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: WorkflowFlowResult,
+  result: WorkflowRunEndResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {

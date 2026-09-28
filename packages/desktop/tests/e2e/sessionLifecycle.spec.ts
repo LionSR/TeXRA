@@ -101,9 +101,9 @@ async function writeCanonicalRunFixtures(
             text: `Saved history for ${runFixture.agent}.`,
           },
           {
-            type: 'flow.step',
+            type: 'run.position',
             aggregateId: id,
-            payload: { family: 'toolUse', step: runFixture.step },
+            payload: { family: 'toolUse', at: runFixture.step },
           },
         ]);
       }

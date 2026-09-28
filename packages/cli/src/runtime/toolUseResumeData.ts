@@ -9,7 +9,7 @@ import {
   AgentCategory,
   HISTORY_RUN_STATUS,
   RUN_OUTCOME,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   type HistoryRunStatus,
   type RunId,
   type RunLifecycleStatus,
@@ -28,7 +28,7 @@ const CHANNEL = 'CliToolUseResumeData';
  */
 export interface CliRunFacts {
   readonly id: RunId;
-  /** A `flow.snapshot` exists on the run aggregate — one indexed read. */
+  /** A `run.snapshot` exists on the run aggregate — one indexed read. */
   readonly checkpointPresent: boolean;
   /** Null when the run has no readable config: there is no category to
    *  resume under and no config for a host to adopt, so it is not offered. */
@@ -129,7 +129,7 @@ export const isTerminalWorkflowCheckpoint = Effect.fn(
   'isTerminalWorkflowCheckpoint',
 )(function* (
   id: RunId,
-  snapshot: FlowSnapshotPayload,
+  snapshot: RunSnapshotPayload,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
   const { runtime } = snapshot;

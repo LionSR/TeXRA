@@ -205,7 +205,7 @@ public admission entry of the existing launch path. None owns duplicate executio
 
 Start/resume returns the admitted live handle and its completion Promise. Resume preserves
 retained logical execution/stream identity but creates a new live scope and a fresh Promise;
-it never reuses a settled handle. Each live scope settles its own `AgentFlowResult`.
+it never reuses a settled handle. Each live scope settles its own `RunEndResult`.
 WAITING remains nonterminal. A follow-up admitted into active execution adds input without
 creating another completion Promise. Continuing terminal execution uses resume admission.
 The current public trace iterator is narrowed or retired only in the same change that
@@ -284,7 +284,7 @@ button state or an earlier frontend check cannot authorize the mutation.
 
 ### Errors
 
-Keep existing typed request errors and `AgentFlowResult` domain outcomes. Operational
+Keep existing typed request errors and `RunEndResult` domain outcomes. Operational
 request failure rejects once at the Promise boundary; the transport serializes the same
 error. A terminal agent failure is its result; it is not separately synthesized from text.
 Cancellation remains distinct from failure. Internal causes are logged once and surfaced

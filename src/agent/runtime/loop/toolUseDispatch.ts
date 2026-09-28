@@ -70,7 +70,7 @@ import {
   redactedForFact,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
   type Message,
 } from './rows';
 import type { StepTools } from './step';
@@ -966,7 +966,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       phase: 'results.ready',
       state: { ...flow, stateSlices, ...joined?.recorded },
     }),
-    stepRow(runId, state, 'results.ready'),
+    positionRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };
 });

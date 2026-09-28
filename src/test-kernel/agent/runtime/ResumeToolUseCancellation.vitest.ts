@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
   readRunRecords: vi.fn(),
-  runFlowWithLifecycle: vi.fn(),
+  runWithLifecycle: vi.fn(),
   runToolUse: vi.fn(),
   agentRunLayer: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
@@ -29,8 +29,7 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
 // The lifecycle wrapper is the Effect the lane hands its runner to; the
 // suite's subject is what the lane passes, so the wrapper just runs it.
 vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
-  runFlowWithLifecycle: (...args: unknown[]) =>
-    mocks.runFlowWithLifecycle(...args),
+  runWithLifecycle: (...args: unknown[]) => mocks.runWithLifecycle(...args),
 }));
 
 // The launch terminal's backstop row: the lifecycle this suite stubs owns
@@ -189,7 +188,7 @@ function completedTurn() {
 }
 
 /** Handle stub for tests that only need the flow to run to completion. */
-function noopFlowHandle(): unknown {
+function noopRunHandle(): unknown {
   return {
     attachControls: vi.fn(),
     detachControls: vi.fn(),
@@ -208,11 +207,11 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
-    mocks.runFlowWithLifecycle.mockImplementation(
+    mocks.runWithLifecycle.mockImplementation(
       (
         _context: unknown,
         run: (liveHandle: unknown) => Effect.Effect<unknown, unknown>,
-      ) => run(noopFlowHandle()),
+      ) => run(noopRunHandle()),
     );
   });
 

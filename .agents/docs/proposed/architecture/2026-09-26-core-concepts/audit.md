@@ -8,15 +8,15 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
 
 **Terms used below**
 
-| Term           | Meaning                                                                                                 |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| Publisher      | The `SessionEvents` inbox, the one intended writer of the session event table                           |
-| Display view   | `SessionView` / `runView`, the fold the UI reads                                                        |
-| Pin / snapshot | The composition and definition a run holds; the opening `flow.snapshot` row records what it was offered |
-| Bypass         | The in-memory "approve all" flags per run (`SessionApprovals`, `byRun`)                                 |
-| Lease          | A follow-up queue lease (kinds flow, child, recovery)                                                   |
-| Terminal       | Writing `run.end` (via `finalizeRun`)                                                                   |
-| Move N         | A numbered proposal in the #13350 note                                                                  |
+| Term           | Meaning                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| Publisher      | The `SessionEvents` inbox, the one intended writer of the session event table                          |
+| Display view   | `SessionView` / `runView`, the fold the UI reads                                                       |
+| Pin / snapshot | The composition and definition a run holds; the opening `run.snapshot` row records what it was offered |
+| Bypass         | The in-memory "approve all" flags per run (`SessionApprovals`, `byRun`)                                |
+| Lease          | A follow-up queue lease (kinds flow, child, recovery)                                                  |
+| Terminal       | Writing `run.end` (via `finalizeRun`)                                                                  |
+| Move N         | A numbered proposal in the #13350 note                                                                 |
 
 ### Summary
 
@@ -191,7 +191,7 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
    - The dashboard's own "enabled" (`ToolDashboardData.ts:82-89,131-166`).
    - Skills and agents gates.
    - LM tools.
-7. [v] **The composition is not in the log:** the snapshot has only `offeredTools` and `toolsetHash` (`runFlowState.ts:294-310`).
+7. [v] **The composition is not in the log:** the snapshot has only `offeredTools` and `toolsetHash` (`runSnapshotState.ts:294-310`).
 8. [v] **No presets exist,** only a comment (`composition.ts:10`).
 
 ### Pin

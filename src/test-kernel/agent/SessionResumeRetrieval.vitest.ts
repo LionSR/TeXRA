@@ -1,6 +1,6 @@
 /**
  * The resume identity a host launches a resumed run with, read from the run
- * aggregate's latest `flow.snapshot`. The run's state is `RunLedger.load`,
+ * aggregate's latest `run.snapshot`. The run's state is `RunLedger.load`,
  * folded by the loop that continues it: nothing here carries a conversation,
  * and no checkpoint file is parsed.
  */
@@ -18,7 +18,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
   AgentCategory,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
@@ -45,7 +45,7 @@ const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
 const runtimeOf = (
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null,
-): FlowSnapshotPayload['runtime'] => ({
+): RunSnapshotPayload['runtime'] => ({
   phase: 'initial',
   round: 0,
   turn: 0,
@@ -58,7 +58,7 @@ const runtimeOf = (
 function toolUseSnapshot(
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null = COMPATIBILITY_KEY,
-): FlowSnapshotPayload {
+): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
@@ -77,14 +77,14 @@ describe('retrieveSessionResumeData', () => {
   /** Open the run aggregate the way a loop does: claim, then snapshot. */
   const openRun = Effect.fn('openRun')(function* (
     runId: RunId,
-    payload: FlowSnapshotPayload,
+    payload: RunSnapshotPayload,
   ) {
     publishTestRunStart(session, runId);
     yield* session.settlePublications();
     yield* session.ledger.acquire(runId);
     yield* session.ledger.appendBatch(runId, null, [
       {
-        type: 'flow.snapshot',
+        type: 'run.snapshot',
         aggregateId: aggregateId('run', runId),
         payload,
       },

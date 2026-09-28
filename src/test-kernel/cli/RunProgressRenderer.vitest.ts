@@ -224,8 +224,8 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-/** A workflow run's round as `flow.step` states it: round `n` is turn
- *  `n + 1`. `RunView.flow` carries the coordinate alone: a planned total is
+/** A workflow run's round as `run.position` states it: round `n` is turn
+ *  `n + 1`. `RunView.position` carries the coordinate alone: a planned total is
  *  the agent registry's fact. */
 async function handleRound(
   renderer: TestRunProgressRenderer,
@@ -233,7 +233,7 @@ async function handleRound(
   round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    flow: { family: 'toolUse', step: 'turn.begin', turn: round + 1 },
+    position: { family: 'toolUse', at: 'turn.begin', turn: round + 1 },
   });
 }
 async function handleConversationProgress(
@@ -346,9 +346,9 @@ function publishRun(
     // substate, so the live line reads the plain running phase. A workflow
     // run's first turn is its first round.
     {
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     },
   ]);
   return Effect.promise(() => settle());

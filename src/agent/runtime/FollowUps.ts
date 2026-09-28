@@ -3,7 +3,7 @@
  * `followup.consumed` (the session publisher's pending set), the blocking
  * wait and the non-blocking probe, and `consume`, which commits one batch's
  * `followup.consumed` rows with the user message they become and
- * `flow.step turn.ready`, in one ledger transaction (C3). A crash before
+ * `run.position turn.ready`, in one ledger transaction (C3). A crash before
  * that commit leaves the rows queued, so the next consumer delivers them
  * again; after it, nothing re-delivers them.
  *
@@ -56,7 +56,7 @@ import {
   appendRow,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
   type Message,
   type ToolUseFlowState,
 } from './loop/rows';
@@ -109,7 +109,7 @@ export interface FollowUps {
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
    * Commit a batch: its `followup.consumed` rows, its user message, and
-   * `flow.step turn.ready` in one transaction. On failure nothing is
+   * `run.position turn.ready` in one transaction. On failure nothing is
    * consumed and the run's rows still queue the batch.
    */
   readonly consume: (
@@ -138,7 +138,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
   let released = false;
   const lease = yield* Effect.acquireRelease(
-    Effect.sync(() => manager.claimLive(runId, 'flow')),
+    Effect.sync(() => manager.claimLive(runId, 'loop')),
     (held) =>
       Effect.sync(() => {
         if (!released && held) {
@@ -328,7 +328,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
                   ? { state: { ...state.flow, ...joined.recorded } }
                   : {}),
               }),
-              stepRow(runId, state, 'turn.ready'),
+              positionRow(runId, state, 'turn.ready'),
             ]
           : []),
       ]),
@@ -346,7 +346,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     },
     wait: Effect.map(input.take, taken),
     joinStopped: (state) =>
-      state.step === 'halted' &&
+      state.at === 'halted' &&
       // Only a user stop joins: that halt carries no error fact to clear and
       // no turn.ready row to write, which is why the join skips `consume`'s.
       state.outcome === 'cancelled' &&

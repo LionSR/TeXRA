@@ -11,7 +11,7 @@
 import { Cause, Effect, Fiber, Stream } from 'effect';
 
 import {
-  type AgentFlowResult,
+  type RunEndResult,
   type HostPresentation,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
@@ -77,7 +77,7 @@ export interface DesktopAgentRun {
   ): Effect.Effect<void, Error>;
   /** Open a resumed workflow's final output, as a launch opens a fresh one's
    *  (`HostRunActionPorts.openWorkflowOutput`). */
-  openWorkflowOutput(result: AgentFlowResult): Effect.Effect<void, Error>;
+  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
   /** The tool-edit approvals this window owns. A prompt's verbs act over its
    *  staged preview: the approval applies the proposed file as the user left
    *  it. The host arm calls `handleAction` directly, as the extension does. */

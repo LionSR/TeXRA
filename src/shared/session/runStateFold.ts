@@ -17,7 +17,7 @@ import {
 import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
-  FlowSnapshotPayloadSchema,
+  RunSnapshotPayloadSchema,
   RunUsageTotalsSchema,
   requestParksItsCaller,
   type CommitOrdinal,
@@ -67,14 +67,14 @@ export type RunLedgerDraft = Extract<
   SessionEventDraft,
   {
     type:
-      | 'flow.step'
+      | 'run.position'
       | 'model.message'
       | 'model.compaction'
       | 'tool.intent'
       | 'tool.binding'
       | 'tool.result'
       | 'model.retry'
-      | 'flow.snapshot'
+      | 'run.snapshot'
       | 'tools.offered'
       | 'context.blob'
       | 'output.produced'
@@ -100,8 +100,8 @@ export class RunLedgerInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The loop state a `flow.snapshot` restores. */
-const FlowStateSchema = FlowSnapshotPayloadSchema.shape.state;
+/** The loop state a `run.snapshot` restores. */
+const FlowStateSchema = RunSnapshotPayloadSchema.shape.state;
 type FlowState = z.output<typeof FlowStateSchema>;
 type Message = z.output<typeof MessageSchema>;
 
@@ -152,7 +152,7 @@ export type RunState = RunPosition & {
   /** Ledger rows folded into this state: zero means nothing but queued
    *  input has folded, which is what tells an unopened run from a broken one. */
   readonly rowsBeforeSnapshot: number;
-  /** `null` until the opening `flow.snapshot`: no row that presupposes an
+  /** `null` until the opening `run.snapshot`: no row that presupposes an
    *  opened run folds before it. */
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
@@ -370,7 +370,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
   }
   /** A row that presupposes the opening snapshot, folded before it. */
   const beforeOpening = (what: string) =>
-    refuse('out-of-order', `${what} before the opening flow.snapshot`, commit);
+    refuse('out-of-order', `${what} before the opening run.snapshot`, commit);
   /** The state with this ledger row counted in. */
   const advance = (state: RunState): RunState => ({
     ...state,
@@ -405,15 +405,15 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     return Result.succeed({
       ...state,
       commit,
-      // Only the loop's own step is a ledger row; queued input, output and
-      // the requests a session opens do not open a run.
+      // Only the loop's own position is a ledger row; queued input, output
+      // and the requests a session opens do not open a run.
       rowsBeforeSnapshot:
-        state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
+        state.rowsBeforeSnapshot + (verdict.rows.at === undefined ? 0 : 1),
       ...verdict.rows,
     });
   }
   switch (row.type) {
-    case 'flow.snapshot': {
+    case 'run.snapshot': {
       // Flow state and the coordinates the loop owns, and nothing else: no
       // reference set to reconcile, so there is no way for a snapshot to
       // disagree with the rows below it (single-owner note, section 3.3).

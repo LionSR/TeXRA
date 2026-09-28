@@ -230,11 +230,11 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('reports input admitted by a live flow as sent', () =>
+  it.effect('reports input admitted by a running loop as sent', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession(activeTarget());
-      const flow = session.followUps.claimLive(runId, 'flow')!;
+      const flow = session.followUps.claimLive(runId, 'loop')!;
       const tryResumeRun = mockTryResume();
 
       expect(
@@ -258,7 +258,7 @@ describe('submitFollowUp', () => {
       Effect.gen(function* () {
         const runId = generateRunId();
         const session = fakeSession(activeTarget());
-        const flow = session.followUps.claimLive(runId, 'flow')!;
+        const flow = session.followUps.claimLive(runId, 'loop')!;
 
         expect(
           yield* submitFollowUp(
@@ -434,7 +434,7 @@ describe('submitFollowUp', () => {
       Effect.gen(function* () {
         const runId = generateRunId();
         const session = fakeSession({ kind: 'queue' });
-        const parent = session.followUps.claimLive(runId, 'flow')!;
+        const parent = session.followUps.claimLive(runId, 'loop')!;
         session.followUps.release(parent, 'recoverable');
         const deriveSpy = vi.spyOn(resumability, 'deriveResumability');
         const tryResumeRun = mockTryResume();
@@ -545,7 +545,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
     const id = generateRunId();
     const child = followUps.claimLive(id, 'child');
     expect(child).toBeDefined();
-    expect(followUps.claimLive(id, 'flow')).toBeUndefined();
+    expect(followUps.claimLive(id, 'loop')).toBeUndefined();
     expect(followUps.claimRecovery(id)).toBeUndefined();
 
     expect(followUps.release(child!, 'recoverable')).toBe(true);
@@ -668,7 +668,7 @@ describe('ToolUseFollowUpQueue ownership', () => {
       Effect.gen(function* () {
         const { followUps, queued } = recordedFollowUps();
         const id = generateRunId();
-        const lease = followUps.claimLive(id, 'flow')!;
+        const lease = followUps.claimLive(id, 'loop')!;
         followUps.release(lease, 'terminal');
 
         expect(followUps.hasLiveOwner(id)).toBe(false);
@@ -735,13 +735,13 @@ describe('ToolUseFollowUpQueue ownership', () => {
       const liveId = generateRunId();
       const released: RunId[] = [];
       followUps.onRelease((runId) => released.push(runId));
-      followUps.claimLive(liveId, 'flow');
+      followUps.claimLive(liveId, 'loop');
       followUps.dispose();
 
       // Disposal releases every held run, so per-run observers (subscription
       // pollers holding this session) let go of it.
       expect(released).toEqual([liveId]);
-      expect(followUps.claimLive(liveId, 'flow')).toBeUndefined();
+      expect(followUps.claimLive(liveId, 'loop')).toBeUndefined();
       expect(followUps.claimChildRun(generateRunId())).toBeUndefined();
       expect(followUps.claimRecovery(liveId, true)).toBeUndefined();
       expect(
@@ -791,7 +791,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
       Effect.gen(function* () {
         const { followUps, queued } = recordedFollowUps();
         const id = generateRunId();
-        followUps.claimLive(id, 'flow');
+        followUps.claimLive(id, 'loop');
         const delivery = childResult('exec-1:turn:1:delivery');
 
         expect(yield* followUps.submit(id, delivery, 'live_owner')).toEqual({
@@ -814,7 +814,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         // must not have been told `duplicate` for a row that never landed.
         const { followUps, queued } = recordedFollowUps({ failWrites: 1 });
         const id = generateRunId();
-        followUps.claimLive(id, 'flow');
+        followUps.claimLive(id, 'loop');
         const delivery = childResult('exec-2:turn:1:delivery');
 
         const [first, second] = yield* Effect.all(
@@ -837,7 +837,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
       Effect.gen(function* () {
         const { followUps, queuedRows } = recordedFollowUps();
         const id = generateRunId();
-        followUps.claimLive(id, 'flow');
+        followUps.claimLive(id, 'loop');
 
         for (const deliveryId of ['d1', 'd2']) {
           expect(
@@ -920,7 +920,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     Effect.gen(function* () {
       const { followUps, queuedRows } = recordedFollowUps();
       const id = generateRunId();
-      followUps.claimLive(id, 'flow');
+      followUps.claimLive(id, 'loop');
 
       yield* followUps.submit(
         id,
@@ -942,7 +942,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
     }),
   );
 
-  it.effect.each(['flow', 'recovered-child', 'recovered-root'] as const)(
+  it.effect.each(['loop', 'recovered-child', 'recovered-root'] as const)(
     'a deferred admission waits for resubmission before offering to %s',
     (consumer) =>
       Effect.gen(function* () {
@@ -954,8 +954,8 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         const { followUps, queued } = recordedFollowUps();
         const id = generateRunId();
         const recovery =
-          consumer === 'flow' ? undefined : followUps.claimRecovery(id, true);
-        let lease = recovery ?? followUps.claimLive(id, 'flow')!;
+          consumer === 'loop' ? undefined : followUps.claimRecovery(id, true);
+        let lease = recovery ?? followUps.claimLive(id, 'loop')!;
         if (consumer === 'recovered-child') {
           lease = followUps.claimChildRun(id, recovery!)!;
           expect(followUps.useRecovery(recovery!)).toBeUndefined();

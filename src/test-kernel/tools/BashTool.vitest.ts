@@ -119,9 +119,9 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
   const session = testDefaultSession();
   session.publish([
     {
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: aggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'waiting' },
+      payload: { family: 'toolUse', at: 'waiting' },
     },
   ]);
   await vi.waitFor(() => {
@@ -525,7 +525,7 @@ describe('BashTool', () => {
         const parentRunId = startedParentRun();
         const parentLease = testDefaultSession().followUps.claimLive(
           parentRunId,
-          'flow',
+          'loop',
         )!;
 
         try {

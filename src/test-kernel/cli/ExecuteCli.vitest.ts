@@ -17,7 +17,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { enablePlugin } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import type { AggregateId, RunSnapshotPayload, RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -299,7 +299,7 @@ async function spyOnArtifactFlush() {
  * The snapshot a resumable run carries on its aggregate. Only its presence
  * is read here; the workflow command owns the rule that reads its fields.
  */
-function checkpointSnapshot(): FlowSnapshotPayload {
+function checkpointSnapshot(): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {

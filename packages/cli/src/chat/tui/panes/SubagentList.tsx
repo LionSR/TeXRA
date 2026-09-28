@@ -9,8 +9,8 @@ import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import {
-  flowPosition,
-  formatFlowPositionLabel,
+  loopPositionLabel,
+  formatLoopPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -112,8 +112,8 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const flowLabel = formatFlowPositionLabel(
-    flowPosition(run.flow, run.category),
+  const flowLabel = formatLoopPositionLabel(
+    loopPositionLabel(run.position, run.category),
   );
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn

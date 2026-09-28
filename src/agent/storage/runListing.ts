@@ -47,7 +47,7 @@ interface RunListingBase {
    *  (`run.model`), else the one it was launched with. */
   model?: string;
   /**
-   * Whether a `flow.snapshot` row exists on the run aggregate — one indexed
+   * Whether a `run.snapshot` row exists on the run aggregate — one indexed
    * read per row, never a fold. This is what a listing needs to advertise
    * "this run can be continued"; loadability is decided by `RunLedger.load`,
    * which folds the one run asked for and refuses loudly.

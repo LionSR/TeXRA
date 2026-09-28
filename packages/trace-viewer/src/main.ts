@@ -13,14 +13,18 @@ import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import {
-  flowPosition,
-  formatFlowPositionLabel,
+  loopPositionLabel,
+  formatLoopPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { TraceDocument } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTraceCut, trace } from './traceHostBridge';
-import { traceDisplayName, traceSteps, type TraceStep } from './traceFrames';
+import {
+  traceDisplayName,
+  tracePositions,
+  type TracePosition,
+} from './traceFrames';
 
 /**
  * Last-resort error surface for a trace that fails to load or parse. A
@@ -40,22 +44,22 @@ function renderLoadError(err: unknown): void {
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
-/** One step's position, as the slider's readout spells it: the single
- *  coordinate the step's family counts in, in the wording every run surface
- *  prints. A row carries all three coordinates, the ones its family never
- *  advances included, so reading them all would label a tool-use turn with
- *  the round and cycle it never left. */
-function stepLabel(step: TraceStep): string {
-  const where = formatFlowPositionLabel(
-    // A step names its family, not its run's category: the raw coordinate.
-    flowPosition(step.payload, undefined),
+/** One position, as the slider's readout spells it: the single coordinate
+ *  its family counts in, in the wording every run surface prints. A row
+ *  carries all three coordinates, the ones its family never advances
+ *  included, so reading them all would label a tool-use turn with the round
+ *  and cycle it never left. */
+function positionLabel(position: TracePosition): string {
+  const where = formatLoopPositionLabel(
+    // A position names its family, not its run's category: the raw coordinate.
+    loopPositionLabel(position.payload, undefined),
   );
-  return `${step.payload.family} ${step.payload.step}${where ? ` (${where})` : ''}`;
+  return `${position.payload.family} ${position.payload.at}${where ? ` (${where})` : ''}`;
 }
 
 /**
- * The scrubber over the run's `flow.step` rows: a position slider whose
- * change remounts the shell, so the folded view is read at that step. The
+ * The scrubber over the run's `run.position` rows: a position slider whose
+ * change remounts the shell, so the folded view is read at that position. The
  * last position is the whole document, which is what a fresh page shows.
  */
 function installScrubber(loaded: TraceDocument, remount: () => void): void {
@@ -65,13 +69,13 @@ function installScrubber(loaded: TraceDocument, remount: () => void): void {
   if (!scrubber || !slider || !readout) {
     throw new Error('The trace viewer HTML carries no scrubber');
   }
-  const steps = traceSteps(loaded);
-  const last = steps.length - 1;
+  const positions = tracePositions(loaded);
+  const last = positions.length - 1;
   if (last < 0) return;
   const show = (index: number): void => {
-    const step = steps[index];
-    if (!step) return;
-    readout.textContent = `Step ${index + 1} of ${last + 1}: ${stepLabel(step)}`;
+    const position = positions[index];
+    if (!position) return;
+    readout.textContent = `Position ${index + 1} of ${last + 1}: ${positionLabel(position)}`;
   };
   slider.max = String(last);
   slider.value = String(last);

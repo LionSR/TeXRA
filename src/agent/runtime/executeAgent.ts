@@ -30,11 +30,8 @@ import {
   type PreparedAgentDefinition,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
-import { runFlowWithLifecycle } from './AgentRunLifecycle';
-import {
-  type AgentFlowResult,
-  type WorkflowFlowResult,
-} from './AgentFlowResult';
+import { runWithLifecycle } from './AgentRunLifecycle';
+import { type RunEndResult, type WorkflowRunEndResult } from './RunEndResult';
 import {
   generateSessionDescription,
   settleDescriptionOnExit,
@@ -133,10 +130,10 @@ function launchToolUseRun(
   handle: RunHandle,
   shared: SubagentRunOptions,
   variant: ToolUseLaunchVariant,
-): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
+): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const toResult = (
     result: Effect.Success<ReturnType<typeof runToolUse>>,
-  ): AgentFlowResult => ({
+  ): RunEndResult => ({
     outcome: result.outcome,
     output: {
       category: 'toolUse',
@@ -196,12 +193,12 @@ function launchWorkflowRun(
   options: SubagentRunOptions &
     Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
   resumed: boolean,
-): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
+): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const program = Effect.gen(function* () {
     const result = yield* runToolUse({ resume: resumed }).pipe(
       Effect.provide(runLayerFor(ctx, options, undefined)),
     );
-    const flowResult: WorkflowFlowResult = {
+    const flowResult: WorkflowRunEndResult = {
       outcome: result.outcome,
       output: {
         category: 'workflow',
@@ -266,7 +263,7 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  */
 interface SubagentRunOptions {
   /** The child-run policy: each turn's permit, each completed turn's boundary. */
-  readonly turns?: import('./childRunLoop').ChildRunTurns<AgentFlowResult>;
+  readonly turns?: import('./childRunLoop').ChildRunTurns<RunEndResult>;
   /** Run-scoped tools added to tool-use agents without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
@@ -311,7 +308,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * fiber: nothing carries one.
    */
   publishWorkflowOutput?: (
-    result: WorkflowFlowResult,
+    result: WorkflowRunEndResult,
     /**
      * The `defaultOutputFiles` declared by the definition this run loaded —
      * the run's own copy, so a host never re-reads a catalog entry that may
@@ -346,7 +343,7 @@ export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
+): Effect.Effect<RunEndResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     const ctx = yield* buildAgentLaunchContext({
       definition,
@@ -381,14 +378,14 @@ export function executeAgent(
     );
     // The backstop wait is `ensuring`, not a generator `finally`: the driver
     // skips a `finally` after a failed `yield*`, ending the run early.
-    return yield* runFlowWithLifecycle(
+    return yield* runWithLifecycle(
       ctx,
       (handle) =>
         Effect.gen(function* () {
           // This run's lineage, derived once, from the live handle the
           // registry admitted: the caller's own parent.
           const parentRunId = handle.parent ?? undefined;
-          // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
+          // Pre-run UI setup (RUNNING is set by runWithLifecycle)
           yield* ensureRunDirUnder(runSession.roots.storage, runId);
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             withLogChannel(CHANNEL),
@@ -488,7 +485,7 @@ export interface ResumeToolUseFromResumeDataOptions
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions,
-): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
+): Effect.Effect<RunEndResult, Error, ProcessServices> {
   const runSession = options.session;
   const resumed = Effect.gen(function* () {
     const resume = yield* retrieveSessionResumeData(
@@ -520,7 +517,7 @@ export function resumeToolUseFromResumeData(
           runSession.interactions.approvalPromptsUnavailable,
       },
     });
-    return yield* runFlowWithLifecycle(
+    return yield* runWithLifecycle(
       ctx,
       (handle) =>
         ctx.setting.agentCategory === AgentCategory.Workflow

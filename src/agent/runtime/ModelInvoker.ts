@@ -109,7 +109,7 @@ import {
   retryRows,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
 } from './loop/rows';
 import type { RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/unstable/http';
@@ -539,7 +539,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           ...(state.lastError === null
             ? []
             : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
-          stepRow(runId, state, 'response.ready'),
+          positionRow(runId, state, 'response.ready'),
         ]);
         logRetryLifecycle(operationId, 'attempt_succeeded', bound, {
           attempt: invocation.attempt,

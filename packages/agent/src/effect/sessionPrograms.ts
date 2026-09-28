@@ -42,7 +42,7 @@ import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
@@ -249,7 +249,7 @@ function start(
       tapping = false;
     };
     const settle = (
-      exit: Exit.Exit<AgentFlowResult, RunFailure>,
+      exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         release();

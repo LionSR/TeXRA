@@ -158,7 +158,7 @@ export class TuiSession {
    * which records its terminal `run.end` as cancelled ("Stopped"): every
    * activation ends with one, and a run left without it would read as
    * interrupted by a crash. Resumability survives either way: a run's rows
-   * and its latest `flow.snapshot` stay until the run is explicitly deleted.
+   * and its latest `run.snapshot` stay until the run is explicitly deleted.
    */
   isResumableIdle(): boolean {
     return (

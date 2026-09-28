@@ -8,7 +8,7 @@ import {
   aggregateId,
   AgentCategory,
   emptyRunEndOutput,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -21,7 +21,7 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
-const OPENING_SNAPSHOT: FlowSnapshotPayload = {
+const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
     phase: 'initial',
@@ -50,7 +50,7 @@ describe('deriveResumability', () => {
     await Effect.runPromise(
       session.ledger.appendBatch(runId, null, [
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),
           payload: OPENING_SNAPSHOT,
         },

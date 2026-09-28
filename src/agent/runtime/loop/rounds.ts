@@ -48,7 +48,7 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 import { compactIfNeeded } from '../run/compaction';
 import { turnText } from '../run/turnText';
-import { appendRow, stepRow, type SnapshotPatch } from './rows';
+import { appendRow, positionRow, type SnapshotPatch } from './rows';
 import { ModelInvoker } from '../ModelInvoker';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -234,7 +234,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
       // round rather than no position until the next round opens.
       const at = live
         ? initial
-        : yield* cell.append([stepRow(runId, initial, 'response.ready')]);
+        : yield* cell.append([positionRow(runId, initial, 'response.ready')]);
       if (text) {
         logger.debug(`First ${K_SLICE} chars:\n${text.slice(0, K_SLICE)}`);
         logger.debug(`Last ${K_SLICE} chars:\n${text.slice(-K_SLICE)}`);
@@ -326,7 +326,7 @@ export const roundLoop =
           if (finish !== null) {
             if (state.phase === 'halted') return { state, outcome: finish };
             const halted = yield* cell.append([
-              ...(completed ? [stepRow(runId, state, 'turn.end')] : []),
+              ...(completed ? [positionRow(runId, state, 'turn.end')] : []),
               snapshot(state, { phase: 'halted' }),
             ]);
             return { state: halted, outcome: finish };

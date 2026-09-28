@@ -2,19 +2,19 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
+import { type RunSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Resumability';
 
 /**
  * What the durable run facts alone say about continuing a run: a
- * `flow.snapshot` exists on the run aggregate, nothing is left to resume, or
+ * `run.snapshot` exists on the run aggregate, nothing is left to resume, or
  * the storage itself could not be read (reported with its cause, which is
  * display text, never guessed).
  */
 export type ResumabilityDecision =
-  | { readonly kind: 'checkpoint'; readonly snapshot: FlowSnapshotPayload }
+  | { readonly kind: 'checkpoint'; readonly snapshot: RunSnapshotPayload }
   | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly cause: string };
 
@@ -22,7 +22,7 @@ export type ResumabilityDecision =
  * Single storage-owned resumability decision.
  *
  * A checkpoint means exactly one thing: the run aggregate carries a
- * `flow.snapshot`, read through the indexed latest-snapshot read. The run's
+ * `run.snapshot`, read through the indexed latest-snapshot read. The run's
  * records are read only to prove its metadata is readable at all, never its
  * whole aggregate, which the resume's claim reads once: the terminal outcome
  * never blocks, because rows live until explicit deletion
@@ -66,7 +66,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
 });
 
 /**
- * Whether a run has a `flow.snapshot` to continue from: one indexed read,
+ * Whether a run has a `run.snapshot` to continue from: one indexed read,
  * never a fold.
  *
  * A probe that fails answers "no checkpoint" and says so at `warn` with the

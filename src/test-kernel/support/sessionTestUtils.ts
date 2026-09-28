@@ -156,7 +156,7 @@ export function createTestRunTrace(runId: RunId) {
     settlePhase: (phase: RunPhase) => {
       if (phase === RUN_PHASE.RUNNING) apply({ type: 'run.activate' });
       else if (phase === RUN_PHASE.WAITING) {
-        apply({ type: 'flow.step', payload: { step: 'waiting' } });
+        apply({ type: 'run.position', payload: { at: 'waiting' } });
       } else apply({ type: 'run.end', outcome: phase });
     },
     transcript: () => transcript,

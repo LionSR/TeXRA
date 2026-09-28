@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
-  runFlowWithLifecycle: vi.fn(),
+  runWithLifecycle: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
@@ -27,14 +27,14 @@ vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
   helperCall: mocks.helperCall,
 }));
-// Only the regression test below replaces `runFlowWithLifecycle`; every other
+// Only the regression test below replaces `runWithLifecycle`; every other
 // launch in this suite fails during launch-assembly, before the lifecycle, and
 // an unconsumed once-implementation falls back to the real one.
 vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
   const actual =
     await importActual<typeof import('@agent/runtime/AgentRunLifecycle')>();
-  mocks.runFlowWithLifecycle.mockImplementation(actual.runFlowWithLifecycle);
-  return { ...actual, runFlowWithLifecycle: mocks.runFlowWithLifecycle };
+  mocks.runWithLifecycle.mockImplementation(actual.runWithLifecycle);
+  return { ...actual, runWithLifecycle: mocks.runWithLifecycle };
 });
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
@@ -313,7 +313,7 @@ describe('native agent launch activation', () => {
         );
         // Fail the run only once the description fiber is parked on its gate,
         // so both sides settle deterministically.
-        mocks.runFlowWithLifecycle.mockImplementationOnce(() =>
+        mocks.runWithLifecycle.mockImplementationOnce(() =>
           Deferred.await(descriptionStarted).pipe(
             Effect.andThen(Effect.fail(RUN_FAILURE)),
           ),

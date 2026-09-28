@@ -58,7 +58,7 @@ These storage facts constrain the design:
   `run.end` belongs to the previous lifecycle (`sessionFold.ts`,
   `case 'run.activate'`; `runEndFromEvents` in `runRecords.ts`).
 - Run-ledger rows (`model.message`, `model.compaction`, `tool.intent`,
-  `tool.binding`, `tool.result`, `model.retry`, `flow.snapshot`,
+  `tool.binding`, `tool.result`, `model.retry`, `run.snapshot`,
   `child.turn`) share the table and the `["run", id]` aggregate with the
   display rows. C3 makes them byte-exact and readable only through
   `RunLedger`.
@@ -117,7 +117,7 @@ loadExtension`). The first draft put the store in a worker thread, but
     process.
 - **Nothing is persisted.** The query store is a cache of public rows in
   memory, so §5 and C10 (no projection tables; nothing derived is stored
-  except `flow.snapshot`) still hold. SQLite's own memory in the store is
+  except `run.snapshot`) still hold. SQLite's own memory in the store is
   capped with `PRAGMA hard_heap_limit` (1 GiB).
 - **What the store refuses.** The model's statement runs with
   `PRAGMA query_only = ON`; the feed turns it off only while appending.

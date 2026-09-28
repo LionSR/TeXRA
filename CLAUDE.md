@@ -241,7 +241,7 @@ architecture).
 **There is no flow engine.** A run is one Effect program that appends rows to
 the run ledger (`src/shared/session/runLedger.ts`) and continues from the
 folded `RunState` each `appendBatch` returns; resume is the same function
-reading the same rows. Every wait writes a `flow.step`; a response row is
+reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Retry has two owners inside `ModelInvoker`: an automatic
 route-scoped batch under the session's `ModelRetryGate`, and a durable human

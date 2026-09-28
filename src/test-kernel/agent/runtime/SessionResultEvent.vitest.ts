@@ -5,10 +5,10 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
-import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
@@ -37,8 +37,8 @@ const settle = Effect.promise(
  * it on the default runtime rather than a process runtime, so the services it
  * requires are provided here.
  */
-function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
-  return runFlowWithLifecycle(...args).pipe(
+function runLifecycle(...args: Parameters<typeof runWithLifecycle<never>>) {
+  return runWithLifecycle(...args).pipe(
     Effect.provide(fakeProcessServices()),
     Effect.provideService(Runs, args[0].session.runs),
   );
@@ -83,7 +83,7 @@ function setupResultCase(owner?: {
 }
 
 /** The completed tool-use result a flow returns for the given run. */
-function completedRun(ctx: AgentLaunchContext): AgentFlowResult {
+function completedRun(ctx: AgentLaunchContext): RunEndResult {
   return {
     outcome: RUN_OUTCOME.COMPLETED,
     runId: ctx.runId,
@@ -118,7 +118,7 @@ describe('terminal result event', () => {
   it.effect('emits exactly one completed result on a successful run', () =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)));
+      yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         output: { category: 'toolUse' },
@@ -141,7 +141,7 @@ describe('terminal result event', () => {
   ])('keeps running when onRun $name', ({ onRun }) =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      const result = yield* runFlow(
+      const result = yield* runLifecycle(
         ctx,
         () => Effect.succeed(completedRun(ctx)),
         { onRun },
@@ -161,7 +161,7 @@ describe('terminal result event', () => {
       const { approvals } = ctx.session;
       const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
       let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
-      yield* runFlow(
+      yield* runLifecycle(
         ctx,
         () =>
           Effect.sync(() => {
@@ -190,7 +190,7 @@ describe('terminal result event', () => {
           throw new Error('stage listener boom');
         });
 
-        const error = yield* Effect.flip(runFlow(ctx, explodedRun));
+        const error = yield* Effect.flip(runLifecycle(ctx, explodedRun));
         expect(error.message).toContain('model exploded');
 
         expectSingleResult(results, ctx, { outcome: 'failed' });
@@ -202,7 +202,7 @@ describe('terminal result event', () => {
     () =>
       Effect.gen(function* () {
         const { ctx, results } = setupResultCase();
-        yield* runFlow(ctx, () =>
+        yield* runLifecycle(ctx, () =>
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
             runId: ctx.runId,
@@ -216,7 +216,7 @@ describe('terminal result event', () => {
   it.effect('emits a cancelled result with kind=abort on a thrown abort', () =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      yield* runFlow(ctx, () =>
+      yield* runLifecycle(ctx, () =>
         Effect.fail(new DOMException('Request aborted', 'AbortError')),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
@@ -232,7 +232,7 @@ describe('terminal result event', () => {
       const { logger, ctx } = setupResultCase({ session, parentRunId });
       session.onResult(onResult);
       try {
-        yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
+        yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)), {
           parentRunId,
         });
         yield* session.settlePublications();

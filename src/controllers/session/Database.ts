@@ -351,9 +351,9 @@ export const databaseLayer = (
         WHERE e.type IN (SELECT value FROM json_each(?))
         UNION ALL SELECT * FROM ${PROJECTED_ROWS}) r
         WHERE r.aggregateId = ? AND r.seq >= ? ORDER BY seq`;
-      // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
+      // The latest `run.snapshot` of one open run, off `event_agg_type_seq`.
       const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id = ? AND e.type = 'flow.snapshot.1'
+        WHERE e.aggregate_id = ? AND e.type = 'run.snapshot.1'
           AND EXISTS (SELECT 1 FROM event_sequence s
                       WHERE s.aggregate_id = e.aggregate_id AND s.closed = 0)
         ORDER BY e.seq DESC LIMIT 1`;
@@ -866,7 +866,7 @@ export const databaseLayer = (
               const row = yield* execOne(runSnapshot, [id]);
               if (row === undefined) return null;
               const event = decodeEvent(row);
-              if (event.type !== 'flow.snapshot')
+              if (event.type !== 'run.snapshot')
                 return yield* invariant('Invalid run snapshot row');
               return event;
             }),

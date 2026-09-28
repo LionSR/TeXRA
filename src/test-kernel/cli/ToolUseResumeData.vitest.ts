@@ -9,7 +9,7 @@ import {
 import {
   aggregateId,
   RUN_OUTCOME,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -52,7 +52,7 @@ function mintRunId(): RunId {
  * A workflow run's snapshot. A terminal rejection is a halted snapshot with no
  * model failure whose loop halted FAILED; anything else stays continuable.
  */
-function workflowSnapshot(terminal: boolean): FlowSnapshotPayload {
+function workflowSnapshot(terminal: boolean): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
@@ -95,18 +95,18 @@ describe('CLI listing resumability', () => {
     await Effect.runPromise(
       session.ledger.appendBatch(runId, null, [
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),
           payload: workflowSnapshot(terminal),
         },
         ...(terminal
           ? [
               {
-                type: 'flow.step' as const,
+                type: 'run.position' as const,
                 aggregateId: aggregateId('run', runId),
                 payload: {
                   family: 'toolUse' as const,
-                  step: 'halted' as const,
+                  at: 'halted' as const,
                   turn: 1,
                   outcome: RUN_OUTCOME.FAILED,
                 },
