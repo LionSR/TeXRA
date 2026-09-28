@@ -87,6 +87,7 @@ import {
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import {
+  beforeNextAttempt,
   callModel,
   reportUsage,
   RETRY_BACKOFF_MS,
@@ -215,6 +216,7 @@ export class ModelInvoker extends Context.Service<
     readonly call: (
       purpose: Exclude<CallPurpose, 'turn'>,
       request: TurnRequest,
+      declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CallResult, Error>;
   }
 >()('@texra/agent/ModelInvoker') {}
@@ -242,7 +244,7 @@ type RetryLifecycleEvent =
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | UsageLog
+  AgentRun | UsageLog | LanguageModel | HttpClient.HttpClient
 > =>
   Layer.effect(
     ModelInvoker,
@@ -251,7 +253,8 @@ export const modelInvokerLayer = (): Layer.Layer<
       const { runId, session, logger } = run;
       const aggregateId = rowAggregate(runId);
       const usageLog = yield* UsageLog;
-      // The run every priced call of this invoker is billed to.
+      type Binders = LanguageModel | HttpClient.HttpClient;
+      const binders = yield* Effect.context<Binders>();
       const attribution = {
         agentName: run.config.agent,
         agentCategory: run.config.agentCategory,
@@ -886,6 +889,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 }),
           )
           .pipe(
+            Effect.provideContext(binders),
             Effect.catch((error) =>
               Effect.sync(() =>
                 logger.warn('Failed to refresh the model binding', {
@@ -1214,13 +1218,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
               { data: failure.info.message },
             );
-            yield* Effect.sleep(RETRY_BACKOFF_MS);
-            // A failed turn (or 55 minutes' age) kills a socket: reacquire it.
-            const failed = yield* SynchronizedRef.get(run.model);
-            if (failed.persistentConnection) {
-              const { declinedRoutes } = yield* cell.current;
-              yield* rebind('configured', failed, declinedRoutes);
-            }
+            const { declinedRoutes: declined } = yield* cell.current;
+            const bound = yield* SynchronizedRef.get(run.model);
+            yield* beforeNextAttempt(bound, (b) =>
+              rebind('configured', b, declined),
+            );
             continue;
           }
           if (
@@ -1244,23 +1246,22 @@ export const modelInvokerLayer = (): Layer.Layer<
         }
       });
 
-      /** A compaction summary on the run's current binding: gated, priced
-       *  and reported like a turn; the caller records its usage. */
+      /** A compaction summary on the run's binding; its caller records it. */
       const call = (
         purpose: Exclude<CallPurpose, 'turn'>,
         request: TurnRequest,
+        declinedRoutes: readonly DeclinableUsageRoute[],
       ) =>
-        Effect.flatMap(SynchronizedRef.get(run.model), (bound) =>
-          callModel({
-            purpose,
-            bound,
-            request,
-            gate: session.modelRetries,
-            settings: session.roots,
-            attribution,
-            logger,
-          }),
-        ).pipe(Effect.provideService(UsageLog, usageLog));
+        callModel({
+          purpose,
+          binding: SynchronizedRef.get(run.model),
+          reacquire: (failed) => rebind('configured', failed, declinedRoutes),
+          request,
+          gate: session.modelRetries,
+          settings: session.roots,
+          attribution,
+          logger,
+        }).pipe(Effect.provideService(UsageLog, usageLog));
 
       return { invoke, call };
     }),

@@ -383,6 +383,8 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
         UsageLog.disabled,
+        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+        testHttpClientLayer,
       ),
     ),
     Layer.merge(Layer.succeed(RunLedger, session.ledger)),

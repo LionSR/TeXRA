@@ -8,9 +8,8 @@
  * model call; it writes no ledger row, because it belongs to no run's history.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Data, Effect, type Scope } from 'effect';
+import { Data, Effect, Exit, Ref, Scope } from 'effect';
 
-import { writeLogLine } from '@logger/logSink';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
@@ -80,12 +79,6 @@ interface HelperPrompt {
   readonly systemPrompt?: string;
 }
 
-/** Pricing warnings of a call no run's trace can show. */
-const HELPER_LOG = {
-  warn: (message: string) => writeLogLine('WARN', 'HelperModel', message),
-  debug: (message: string) => writeLogLine('DEBUG', 'HelperModel', message),
-};
-
 /**
  * One helper call: bind the configured helper model for this call alone and
  * run one completion through the invoker's call path (`run/modelCall.ts`),
@@ -98,14 +91,41 @@ export const helperCall = Effect.fn('helperCall')(
     stores: ModelOptionStores,
     { userPrompt, systemPrompt }: HelperPrompt,
     attribution: UsageAttribution,
+    /** Automatic retries; the configured batch when absent. */
+    retries?: number,
   ): Effect.fn.Return<
     string,
     HelperModelUnavailable | Error,
     Scope.Scope | LanguageModel | HttpClient.HttpClient | UsageLog
   > {
+    // Each binding in its own fork of this call's scope, so a reacquired
+    // connection retires the dead one at once.
+    const scope = yield* Effect.scope;
+    const context = yield* Effect.context<
+      LanguageModel | HttpClient.HttpClient
+    >();
+    const bindFresh = Effect.gen(function* () {
+      const fork = yield* Scope.fork(scope);
+      const bound = yield* helperModel(stores).pipe(Scope.provide(fork));
+      return { bound, fork };
+    });
+    const held = yield* Ref.make(yield* bindFresh);
     const { turn } = yield* callModel({
       purpose: 'helper',
-      bound: yield* helperModel(stores),
+      binding: Effect.map(Ref.get(held), ({ bound }) => bound),
+      reacquire: () =>
+        Effect.gen(function* () {
+          const retired = yield* Ref.getAndSet(held, yield* bindFresh);
+          yield* Scope.close(retired.fork, Exit.void);
+        }).pipe(
+          Effect.provideContext(context),
+          Effect.catch((error) =>
+            Effect.logWarning('Could not rebind the helper model').pipe(
+              Effect.annotateLogs({ error }),
+            ),
+          ),
+        ),
+      ...(retries === undefined ? {} : { retries }),
       request: {
         mode: 'foreground',
         ...(systemPrompt === undefined ? {} : { system: systemPrompt }),
@@ -116,7 +136,8 @@ export const helperCall = Effect.fn('helperCall')(
       gate: session.modelRetries,
       settings: session.roots,
       attribution,
-      logger: HELPER_LOG,
+      // No run's trace: diagnostics go to the Effect logger.
+      logger: null,
     });
     // The turn's assistant text, from the same leaf the run loop reads.
     return turnText(turn);

@@ -34,9 +34,9 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
-import type { ModelInvoker } from '../ModelInvoker';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
+import type { ModelInvoker } from '../ModelInvoker';
 import type { TurnRequest } from '@texra-ai/llm/turn';
 import type { BoundModel } from './modelBinding';
 
@@ -262,19 +262,23 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   // The summary is a model call like any other: the invoker gates, prices
   // and reports it, and its usage rides the row below.
   const summarized = yield* Effect.exit(
-    input.invoker.call('compaction', {
-      mode: 'foreground',
-      system: COMPACTION_SYSTEM_PROMPT,
-      messages: [
-        ...conversation,
-        {
-          role: 'user',
-          content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],
-        },
-      ],
-      tools: [],
-      maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-    }),
+    input.invoker.call(
+      'compaction',
+      {
+        mode: 'foreground',
+        system: COMPACTION_SYSTEM_PROMPT,
+        messages: [
+          ...conversation,
+          {
+            role: 'user',
+            content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],
+          },
+        ],
+        tools: [],
+        maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+      },
+      state.declinedRoutes,
+    ),
   );
   if (Exit.isFailure(summarized)) {
     if (Cause.hasInterrupts(summarized.cause)) {

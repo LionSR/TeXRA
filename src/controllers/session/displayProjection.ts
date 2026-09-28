@@ -91,22 +91,25 @@ WHERE cost > 0
 
 /**
  * The `run.model` rows no run stores, projected from its `flow.snapshot`
- * rows: one at each snapshot whose `modelId` differs from the one before it,
- * so a run that never switched projects none and reads its launch model from
- * `run.config`. Each keeps its snapshot's envelope.
+ * rows: one at each snapshot whose `modelId` differs from the snapshot before
+ * it, so a run that never switched projects none and reads its launch model
+ * from `run.config`. Each keeps its snapshot's envelope. The earlier snapshot
+ * is one indexed lookup (`event_agg_type_seq`) from the row being read, so a
+ * read's commit or aggregate range reaches the snapshots themselves and an
+ * incremental read costs what it reads.
  */
 const MODEL_ROWS = `(
-SELECT "commit", aggregateId, seq, 'run.model.1' AS type, origin, at,
-  json_object('model', model) AS data
-FROM (
-  SELECT e."commit" AS "commit", e.aggregate_id AS aggregateId, e.seq,
-    e.origin AS origin, e.at,
-    json_extract(e.data, '$.payload.runtime.modelId') AS model,
-    LAG(json_extract(e.data, '$.payload.runtime.modelId')) OVER (
-      PARTITION BY e.aggregate_id ORDER BY e.seq) AS previous
-  FROM event e WHERE e.type = 'flow.snapshot.1'
-)
-WHERE previous IS NOT NULL AND model IS NOT previous
+SELECT e."commit" AS "commit", e.aggregate_id AS aggregateId, e.seq,
+  'run.model.1' AS type, e.origin AS origin, e.at,
+  json_object('model', json_extract(e.data, '$.payload.runtime.modelId')) AS data
+FROM event e
+WHERE e.type = 'flow.snapshot.1'
+  AND json_extract(e.data, '$.payload.runtime.modelId') IS NOT COALESCE((
+    SELECT json_extract(p.data, '$.payload.runtime.modelId') FROM event p
+    WHERE p.aggregate_id = e.aggregate_id AND p.type = 'flow.snapshot.1'
+      AND p.seq < e.seq
+    ORDER BY p.seq DESC LIMIT 1
+  ), json_extract(e.data, '$.payload.runtime.modelId'))
 )`;
 
 /** Every projected display row: a run's spend and its model changes. */

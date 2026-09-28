@@ -37,7 +37,8 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
       session,
       { ...session.roots, secrets },
       { userPrompt: POLISH_PROMPT_PREFIX + text },
-      {},
+      // A draft polish serves no run and no agent category.
+      { agentName: 'polish', agentCategory: null, runId: null },
     );
     if (!isNonEmptyString(responseText)) {
       return yield* Effect.fail(new Error('Model returned no text.'));

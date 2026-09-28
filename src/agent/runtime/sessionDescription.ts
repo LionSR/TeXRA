@@ -83,6 +83,9 @@ export function getDisplayedInstruction(
   );
 }
 
+/** How long a run's end may wait on its optional description. */
+const DESCRIPTION_DEADLINE = '20 seconds';
+
 /**
  * Generate and persist a session description from the user's instruction.
  *
@@ -130,7 +133,24 @@ export const generateSessionDescription = Effect.fn(
         ),
         systemPrompt: SYSTEM_PROMPT,
       },
-      { agentName: config.agent, runId },
+      {
+        agentName: config.agent,
+        agentCategory: config.agentCategory,
+        runId,
+      },
+      // No automatic retry and a short deadline: the run's end joins this
+      // fiber, and a label is not worth holding it through route backoff.
+      0,
+    ).pipe(
+      Effect.timeoutOrElse({
+        duration: DESCRIPTION_DEADLINE,
+        orElse: () =>
+          Effect.fail(
+            new Error(
+              `The helper model did not answer within ${DESCRIPTION_DEADLINE}.`,
+            ),
+          ),
+      }),
     );
     if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);

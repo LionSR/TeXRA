@@ -9,7 +9,7 @@
  * reaches {@link callModel} directly with its session's gate. Each is gated,
  * priced and reported under one retry owner; only a turn writes rows.
  */
-import { Clock, Effect, Schedule } from 'effect';
+import { Cause, Clock, Effect, Exit } from 'effect';
 import {
   completedTurn,
   type TurnRequest,
@@ -74,12 +74,14 @@ export function routePolicies(
   ];
 }
 
-/** Who a call's usage is billed to, as the usage log's wire names them. */
+/**
+ * Who a call's usage is billed to, as the usage log's wire names them. Every
+ * field is stated: a call that serves no run (a draft polish) says so.
+ */
 export interface UsageAttribution {
-  readonly agentName?: string;
-  readonly agentCategory?: AgentCategory;
-  /** The run the call served; a helper with no run has none. */
-  readonly runId?: RunId;
+  readonly agentName: string;
+  readonly agentCategory: AgentCategory | null;
+  readonly runId: RunId | null;
 }
 
 /**
@@ -103,10 +105,8 @@ export const reportUsage = (
           {
             model: bound.config.fullName,
             provider: usage.provider,
-            ...(attribution.agentName === undefined
-              ? {}
-              : { agentName: attribution.agentName }),
-            ...(attribution.agentCategory === undefined
+            agentName: attribution.agentName,
+            ...(attribution.agentCategory === null
               ? {}
               : { agentCategory: attribution.agentCategory }),
             // Billing needs a real number, so a provider that reported no
@@ -123,7 +123,7 @@ export const reportUsage = (
             usageRoute: usage.usageRoute ?? 'api-key',
             // The usage-log edge function's wire key, which stores the run id
             // in its `stream_id` column; a server-side rename, not ours.
-            ...(attribution.runId === undefined
+            ...(attribution.runId === null
               ? {}
               : { streamId: attribution.runId }),
           },
@@ -146,72 +146,119 @@ export interface CallResult {
   readonly usage: NormalizedUsage | null;
 }
 
-export interface ModelCall {
+/**
+ * Between two automatic attempts, in both retry loops (a turn's and
+ * {@link callModel}'s): the backoff, then a fresh binding when the failed one
+ * held a connection a failure invalidates. A Responses WebSocket dies with a
+ * failed turn and ages out after 55 minutes, so retrying on it cannot
+ * succeed (#13407).
+ */
+export const beforeNextAttempt = <E, R>(
+  failed: BoundModel,
+  reacquire: (failed: BoundModel) => Effect.Effect<unknown, E, R>,
+): Effect.Effect<unknown, E, R> =>
+  Effect.sleep(RETRY_BACKOFF_MS).pipe(
+    Effect.andThen(
+      failed.persistentConnection ? reacquire(failed) : Effect.void,
+    ),
+  );
+
+export interface ModelCall<R = never> {
   readonly purpose: Exclude<CallPurpose, 'turn'>;
-  readonly bound: BoundModel;
-  /** A foreground request; the call prepares it on `bound`. */
+  /** The binding in force, read again before every attempt. */
+  readonly binding: Effect.Effect<BoundModel>;
+  /** Replace a binding whose connection a failure killed. */
+  readonly reacquire: (failed: BoundModel) => Effect.Effect<unknown, never, R>;
+  /** A foreground request; each attempt prepares it on its binding. */
   readonly request: TurnRequest;
   /** The session's retry gate: sibling calls on one credential share it. */
   readonly gate: ModelRetryGate;
   /** The session's settings: the retry limit and usage consent read them. */
   readonly settings: SettingsStores;
   readonly attribution: UsageAttribution;
-  /** Where a pricing warning goes: the run's trace, or the process log. */
-  readonly logger: Pick<AgentTrace, 'warn' | 'debug'>;
+  /** Automatic retries; the configured batch when absent. */
+  readonly retries?: number;
+  /** A run's trace; without one, diagnostics go to the Effect logger. */
+  readonly logger: Pick<AgentTrace, 'warn' | 'debug'> | null;
 }
 
 /**
  * One completed call outside a turn: prepared, streamed to its completed
  * result under the session's route gate, retried automatically as a turn's
- * attempts are (the configured batch, over failures classified retryable on
- * the bound route), then priced and reported. It writes no row; a caller
- * that records the call stamps the returned usage on its own row.
+ * attempts are (the batch, over failures classified retryable on the bound
+ * route, reacquiring a dead connection first), then priced and reported. It
+ * writes no row; a caller that records the call stamps the usage on its own.
  */
-export const callModel = Effect.fn('ModelInvoker.call')(function* (
-  call: ModelCall,
-): Effect.fn.Return<CallResult, Error, UsageLog> {
-  const { bound, logger } = call;
-  const retries = yield* readSettingFrom<number>(
-    call.settings,
-    MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
+  call: ModelCall<R>,
+): Effect.fn.Return<CallResult, Error, UsageLog | R> {
+  const retries =
+    call.retries ??
+    (yield* readSettingFrom<number>(
+      call.settings,
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+    ));
+  // The trace's sinks are synchronous; with no trace, lines queue here and
+  // leave through the Effect logger at the next step.
+  const queued: Effect.Effect<void>[] = [];
+  const logger = call.logger ?? {
+    warn: (message: string) => void queued.push(Effect.logWarning(message)),
+    debug: (message: string) => void queued.push(Effect.logDebug(message)),
+  };
+  const flush = Effect.suspend(() =>
+    Effect.all(queued.splice(0), { discard: true }),
   );
-  const verdictOf = (error: Error) =>
-    classifyModelFailure(error, bound.usageRoute).verdict;
-  const attempt = Effect.gen(function* () {
-    const prepared = yield* bound.model.prepareTurn(call.request);
-    if (prepared.mode !== 'foreground') {
-      return yield* Effect.die(
-        new Error(`A ${call.purpose} call prepared as background work.`),
-      );
-    }
-    const started = yield* Clock.currentTimeMillis;
-    const turn = yield* completedTurn(bound.model.streamTurn(prepared));
-    const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
-    return { turn, responseTimeMs };
-  });
-  const { turn, responseTimeMs } = yield* call.gate
-    .withRoutes(routePolicies(bound, verdictOf), {
-      baseBackoffMs: RETRY_BACKOFF_MS,
-      onWait: (delayMs) =>
-        logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-    })(attempt)
-    .pipe(
-      Effect.retry({
-        times: retries,
-        schedule: Schedule.spaced(RETRY_BACKOFF_MS),
-        // Stamped with the bound route, as a turn's attempts are: an
-        // exhausted plan's 429 on a shared API-key host is not a rate limit.
-        while: (error) =>
-          classifyModelFailure(error, bound.usageRoute).autoRetryable,
-      }),
+  for (let attempt = 0; ; attempt++) {
+    const bound = yield* call.binding;
+    const once = Effect.gen(function* () {
+      const prepared = yield* bound.model.prepareTurn(call.request);
+      if (prepared.mode !== 'foreground') {
+        return yield* Effect.die(
+          new Error(`A ${call.purpose} call prepared as background work.`),
+        );
+      }
+      const started = yield* Clock.currentTimeMillis;
+      const turn = yield* completedTurn(bound.model.streamTurn(prepared));
+      const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
+      return { turn, responseTimeMs };
+    });
+    const exit = yield* Effect.exit(
+      call.gate.withRoutes(
+        routePolicies(
+          bound,
+          (error) => classifyModelFailure(error, bound.usageRoute).verdict,
+        ),
+        {
+          baseBackoffMs: RETRY_BACKOFF_MS,
+          onWait: (delayMs) =>
+            logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
+        },
+      )(once),
     );
-  const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-  yield* reportUsage(
-    yield* UsageLog,
-    bound,
-    usage,
-    call.attribution,
-    call.settings,
-  );
-  return { turn, usage };
+    yield* flush;
+    if (Exit.isSuccess(exit)) {
+      const { turn, responseTimeMs } = exit.value;
+      const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
+      yield* flush;
+      yield* reportUsage(
+        yield* UsageLog,
+        bound,
+        usage,
+        call.attribution,
+        call.settings,
+      );
+      return { turn, usage };
+    }
+    const error = Cause.squash(exit.cause);
+    // Stamped with the bound route, as a turn's attempts are: an exhausted
+    // plan's 429 on a shared API-key host is not a rate limit.
+    if (
+      Cause.hasInterrupts(exit.cause) ||
+      attempt >= retries ||
+      !classifyModelFailure(error, bound.usageRoute).autoRetryable
+    ) {
+      return yield* Effect.failCause(exit.cause);
+    }
+    yield* beforeNextAttempt(bound, call.reacquire);
+  }
 });
