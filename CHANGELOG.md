@@ -267,6 +267,13 @@ All notable changes to this project will be documented in this file.
   now see the built-in agents and its reference docs and save the new agent
   into your custom agents folder, as it already could in VS Code. Before, its
   instructions named no folders and saving outside the project was refused.
+  An agent it writes can be run right away, in the same session.
+
+- **Your own agents show up in the agent selector without an extra step** —
+  a new agent in your custom agents folder is shown even when the workspace
+  uses a team or a hand-picked list of agents. An agent you turn off in the
+  Agents settings stays off, under any team. Choosing "All agents" turns every
+  one back on.
 
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
