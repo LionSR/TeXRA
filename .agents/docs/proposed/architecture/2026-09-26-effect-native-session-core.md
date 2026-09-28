@@ -528,7 +528,11 @@ no `@tools` to `@agent` edges.
   does not carry across a resume: it starts paused and runs on only after a
   human re-arms it, as in deepseek-harness. **Done in #13387:** a resumed
   root's first step pauses a goal that was active and revokes its grant, and
-  approving a plan re-arms it.
+  approving a plan re-arms it. **Done in #13420:** `GoalGrants` and its
+  session layer are gone. Core approval state holds a run's goal grant
+  beside its human values (`SessionApprovals.setGoalGrant`, the snapshot's
+  `goal`); a human write on a kind ends that kind's grant, ending the goal
+  writes nothing back, and a step with no continuation ends the grant.
 - **Installed plugins join the one model instead of being renamed away.** The
   owner has ruled that a plugin is one on/off unit with one install record,
   qualified names and a `plugin:<id>/<name>` agent source, and that no new

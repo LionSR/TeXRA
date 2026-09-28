@@ -229,6 +229,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       policy: 'ask',
       bypasses: { toolEdit: true, bash: true, superYolo: false },
       own: {},
+      goal: [],
     });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },

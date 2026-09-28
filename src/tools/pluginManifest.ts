@@ -128,7 +128,6 @@ export const MANIFEST = [
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,
     continuation: true,
-    sessionLayer: true,
     rows: true,
   },
   {

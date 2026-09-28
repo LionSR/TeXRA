@@ -49,7 +49,6 @@ const PLUGIN_SERVICES: readonly {
     users:
       /^src\/tools\/(?:github\/|registry\.ts$)|^src\/controllers\/settingsView\/githubSubscriptions\.ts$/,
   },
-  { tag: 'GoalGrants', users: /^src\/tools\/(?:goal|plan)\// },
   { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
   { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
 ];

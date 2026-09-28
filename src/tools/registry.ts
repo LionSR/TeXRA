@@ -32,7 +32,6 @@ import {
 } from '@tools/agentCliSessionStores';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
-import { goalGrantsLayer } from '@tools/goal/goalAutoApproval';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { sha256 } from '@tools/catalogEntries';
@@ -249,7 +248,6 @@ const PLUGIN_PROCESS_LAYERS = {
 /** The session services of each plugin whose manifest entry declares
  *  `sessionLayer`: one build per open session. */
 const PLUGIN_SESSION_LAYERS = {
-  goal: goalGrantsLayer,
   codex: codexThreadsLayer,
   'claude-agent': claudeAgentSessionsLayer,
 } as const satisfies {

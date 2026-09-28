@@ -12,7 +12,6 @@ import {
   codexThreadsLayer,
 } from '@tools/agentCliSessionStores';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
-import { goalGrantsLayer } from '@tools/goal/goalAutoApproval';
 import { PluginHold } from '@tools/toolTable';
 
 /** A test session's services live for the test: a hold holds nothing. */
@@ -42,7 +41,6 @@ const unreadGitHubSubscriptions = new Proxy(
 
 /** Every plugin's services over the session's `Runs`, as a step pins them. */
 export const testPluginServicesLayer = Layer.mergeAll(
-  goalGrantsLayer,
   codexThreadsLayer,
   claudeAgentSessionsLayer,
   Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
@@ -50,11 +48,11 @@ export const testPluginServicesLayer = Layer.mergeAll(
 
 /**
  * The plugin services of the session whose `Runs` a call is served, as a
- * step pins them: the session's own builds, which outlive the call (a goal
- * grant is revoked only when its layer is released), beside the unread
+ * step pins them: the session's own builds, which outlive the call, beside
+ * the unread
  * GitHub tables, which are process services.
  */
-const ALL: ReadonlySet<string> = new Set(['goal', 'codex', 'claude-agent']);
+const ALL: ReadonlySet<string> = new Set(['codex', 'claude-agent']);
 export const testCallPluginServices = Layer.merge(
   Layer.effectContext(
     Effect.flatMap(Runs, (runs) =>

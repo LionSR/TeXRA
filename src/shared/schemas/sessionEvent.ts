@@ -181,16 +181,15 @@ export const ApprovalPolicySnapshotSchema = z.object({
   /** Each kind's effective value, own or inherited: what surfaces show. */
   bypasses: ApprovalBypassesSchema,
   /**
-   * The run's own value per kind, where it has one (absent: it defers to its
-   * ancestry): `on` a human granted, `off` an explicit override, `autonomous`
-   * a grant an autonomous goal made. A resume in a new process restores
-   * exactly the `on` and `off` values; an autonomous grant stays off until a
-   * human re-arms it.
+   * The run's own human value per kind, where it has one (absent: it defers
+   * to its ancestry): `on` granted, `off` an explicit override. A resume in
+   * a new process restores exactly these.
    */
-  own: z.partialRecord(
-    z.enum(APPROVAL_BYPASS_KINDS),
-    z.enum(['on', 'off', 'autonomous']),
-  ),
+  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), z.enum(['on', 'off'])),
+  /** The kinds the run's autonomous goal grants it, over its own values
+   *  until the goal ends or a human decides that kind. Never restored: a
+   *  resume leaves them off until a human re-arms the goal. */
+  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)),
 });
 export type ApprovalPolicySnapshot = z.infer<
   typeof ApprovalPolicySnapshotSchema
@@ -543,7 +542,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 34;
+export const SESSION_EVENT_FORMAT = 35;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
