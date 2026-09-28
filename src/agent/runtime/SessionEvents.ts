@@ -179,9 +179,13 @@ export const sessionEventsLayer = Layer.effect(
     // no other process commits to the run, so what it tracks stays whole.
     const followUps = new Map<AggregateId, RunRows>();
     const hydrated = new Set<AggregateId>();
+    // Runs whose terminal row is committed: what releases a `senderEnd` hold.
+    const ended = new Set<AggregateId>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
+        if (row.type === 'run.end') ended.add(row.aggregateId);
         if (row.type === 'run.removed') {
+          ended.add(row.aggregateId);
           open.delete(row.aggregateId);
           followUps.delete(row.aggregateId);
           hydrated.delete(row.aggregateId);
@@ -370,6 +374,7 @@ export const sessionEventsLayer = Layer.effect(
         followUps.get(aggregateId)?.followUps ?? [],
       followUpNamed: (aggregateId, followUpId) =>
         followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
+      runEnded: (aggregateId) => ended.has(aggregateId),
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
@@ -398,6 +403,24 @@ export const sessionEventsLayer = Layer.effect(
             ],
             followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
           });
+          // A held row's sender may have ended in an earlier process: read
+          // its terminal row once, so the hold is decided from the rows.
+          const senders = new Set(
+            (followUps.get(aggregateId)?.followUps ?? []).flatMap(
+              ({ holdUntil, content: { from } }) =>
+                holdUntil === 'senderEnd' && from.kind === 'run'
+                  ? [qualifyAggregateId('run', from.runId)]
+                  : [],
+            ),
+          );
+          for (const sender of senders) {
+            if (ended.has(sender)) continue;
+            const terminal = yield* log.readAggregate(sender, 1, [
+              'run.end',
+              'run.removed',
+            ]);
+            if (terminal.length > 0) ended.add(sender);
+          }
           hydrated.add(aggregateId);
         }),
       listing: () =>

@@ -17,7 +17,8 @@ export interface FollowUpRowPort {
   readonly detach: (job: Effect.Effect<void>) => void;
   /** The run's pending follow-ups (`SessionEvents.pendingFollowUps`). */
   readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
-  /** Whether the run's terminal row has folded (or the run is gone). */
+  /** Whether a committed terminal row of the run is known here; a run with
+   *  none known is not ended. */
   readonly ended: (runId: RunId) => boolean;
   /** The run's parent as the session view folds it; `null` at top level. */
   readonly parentOf: (runId: RunId) => RunId | null | undefined;

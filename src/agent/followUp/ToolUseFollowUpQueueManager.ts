@@ -102,14 +102,10 @@ type FollowUpSubmission =
 
 interface FollowUpSubmitOptions {
   /**
-   * `deferred` admits the rows held until their sending run has ended
-   * (`holdUntil: 'senderEnd'`): a child loop whose own finalize must land
-   * before the parent can wake (#8093) takes this path, then re-submits the
-   * same delivery id once finalization completes, which offers the rows its
-   * terminal row has released. `immediate` (the default) offers as soon as
-   * the rows commit. `none` wakes nobody and holds the rows until a take
-   * also carries an instruction (`holdUntil: 'instruction'`), parked or busy.
-   * The hold is on the row, so it outlives this process.
+   * `immediate` (the default) offers as soon as the rows commit. `deferred`
+   * holds them on the row until their sending run has ended (#8093: a
+   * finalizing child's result, re-submitted after its finalize). `none`
+   * holds them until a take also carries an instruction.
    */
   readonly liveOffer?: 'immediate' | 'deferred' | 'none';
 }
@@ -345,6 +341,12 @@ export class ToolUseFollowUpQueue {
     return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
   }
 
+  /** A run's terminal row just folded (any process's commit): the
+   *  `senderEnd` rows it held are released, so every waiting take reads. */
+  wakeHeldFrom(): void {
+    for (const entry of this.entries.values()) entry.input?.notify();
+  }
+
   /** Consume, with no turn, the run's pending deliveries from `childRunId`
    *  (`turnDeliveryId`): the run already took the result another way (a wait
    *  that returned it). One publisher job, so no admission interleaves. */
@@ -498,9 +500,8 @@ export class ToolUseFollowUpQueue {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        // A held row is offered by whatever releases it: its sender's
-        // re-submission once that run has ended (a replay of the held row,
-        // stamped with no new hold), or the next instruction's own offer.
+        // A held row is offered by what releases it (`wakeHeldFrom`, a
+        // re-submission, the next instruction's offer).
         if (owner !== undefined && holdUntil === undefined)
           admitted.input?.notify();
       }

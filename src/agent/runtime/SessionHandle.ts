@@ -49,7 +49,6 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
@@ -339,10 +338,9 @@ export class SessionHandle {
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(() => job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
-      ended: (runId) => {
-        const status = viewOf(runId)?.status;
-        return status === undefined || isTerminalOutcomePhase(status);
-      },
+      ended: (runId) =>
+        graph.events.runEnded(run(runId)) ||
+        viewOf(runId)?.durableOutcome != null,
       parentOf: (runId) => viewOf(runId)?.parentId,
       named: (runId, followUpId) =>
         graph.events.followUpNamed(run(runId), followUpId),
@@ -1113,9 +1111,11 @@ export class SessionHandle {
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       // The sweep and host notifications belong to the authoring process.
+      const target = aggregateTarget(event.aggregateId);
+      // A sender's end releases its held rows: wake their takes.
+      if (event.type === 'run.end') this.followUps.wakeHeldFrom();
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
-      const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run' || event.type !== 'run.end') return;
       // A throwing listener is logged and never stops the ones after it.
       yield* Effect.forEach(
