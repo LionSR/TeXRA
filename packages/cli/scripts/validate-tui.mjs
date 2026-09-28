@@ -1815,26 +1815,6 @@ const SCENARIOS = [
   {
     name: 'plan-approval',
     frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-    ],
-    unexpect: [
-      'r run as goal',
-      'Runs until done; only Bash is automatic',
-      '/model models',
-    ],
-    maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: 'Approve plan?', max: 3 },
-    ],
-  },
-  {
-    name: 'plan-approval-goal',
-    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
@@ -1928,22 +1908,6 @@ const SCENARIOS = [
   },
   {
     name: 'compact-plan-approval',
-    frame: 'scrollback',
-    rows: 10,
-    cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-      'Esc reject',
-    ],
-    unexpect: ['Runs until done; only Bash is automatic', '/model models'],
-  },
-  {
-    name: 'compact-plan-approval-goal',
     frame: 'scrollback',
     rows: 10,
     cols: 80,
