@@ -3,7 +3,16 @@
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
 
-import { Cause, Data, Deferred, Effect, Exit, Option, Stream } from 'effect';
+import {
+  Cause,
+  Data,
+  Deferred,
+  Effect,
+  Exit,
+  Option,
+  Scope,
+  Stream,
+} from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import {
@@ -249,6 +258,10 @@ export interface ChatSessionControllerInit {
   /** Disposable owner shared with the TUI session lifecycle. */
   readonly disposables: DisposableStore;
 
+  /** The process's shutdown scope: the interaction host closes there, so
+   *  every exit path, signal or graceful, awaits its close. */
+  readonly shutdownScope: Scope.Scope;
+
   /** Serial queue for follow-up message delivery (cleared on resume). */
   readonly followUpQueue: FollowUpDeliveryQueue;
 
@@ -330,6 +343,7 @@ export function createChatSessionController(
     runtimeSession,
     getSessionContext,
     disposables,
+    shutdownScope,
     followUpQueue,
     initialAgent,
     initialModel,
@@ -534,9 +548,12 @@ export function createChatSessionController(
   // approval path after its root finalizes, with no per-turn generation.
   const sessionContext = getSessionContext();
   const presentationHost = createCliRuntimeHost(runtime, sessionContext);
-  disposables.add(() => {
-    runtime.runFork(presentationHost.close());
-  });
+  runtime.runSync(
+    Scope.addFinalizer(
+      shutdownScope,
+      Effect.suspend(() => presentationHost.close()),
+    ),
+  );
   disposables.add(
     runtime.runSync(
       runtimeSession.interactions.use(

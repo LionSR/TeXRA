@@ -391,6 +391,7 @@ export async function runChat(
     runtimeSession,
     getSessionContext: currentSessionContext,
     disposables,
+    shutdownScope: services.shutdownScope,
     followUpQueue,
     initialAgent: agent,
     initialModel: model,

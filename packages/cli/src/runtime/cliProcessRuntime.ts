@@ -64,6 +64,7 @@ import {
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -224,11 +225,23 @@ export function installCliProcessRuntime(
     // init that may join an already-installed runtime. The built-in agent
     // directories read straight out of the CLI package's `dist/resources`;
     // the platform-less entries pass no resources root and load no agents.
-    const agentDirectories = new AgentDirectoryService({
-      channel: 'cli',
-      resourcesPath: options?.resourcesPath ?? '',
-      customDirectoryStore: { get: () => Effect.succeed(undefined) },
-    });
+    // The custom directory is the one the other hosts read, from the shared
+    // application state this runtime serves.
+    const agentDirectoriesLayer = Layer.effect(
+      AgentDirectories,
+      Effect.map(
+        AppState,
+        (state) =>
+          new AgentDirectoryService({
+            channel: 'cli',
+            resourcesPath: options?.resourcesPath ?? '',
+            customDirectoryStore: {
+              get: () =>
+                state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
+            },
+          }),
+      ),
+    );
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: globalStoragePath,
@@ -250,7 +263,7 @@ export function installCliProcessRuntime(
       // wires: it forwards to the chat TUI's handler whenever one is
       // mounted, whichever entry installed this runtime.
       agentResume: cliAgentResume,
-      agentDirectories: AgentDirectories.layer(agentDirectories),
+      agentDirectories: agentDirectoriesLayer,
       setup: {
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns. The

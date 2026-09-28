@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
@@ -12,7 +12,12 @@ import {
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
+import {
+  consoleLogSink,
+  setLogSink,
+  silentLogSink,
+  writeLogLine,
+} from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
@@ -152,14 +157,30 @@ export type CliPlatformServices = SettingsStores & {
  * it is tearing down.
  */
 export async function runCliPlatformShutdownSequence(): Promise<void> {
+  // Each step is best effort, so a failure never stops termination, but it
+  // is said: the process runtime is gone by the flushes, so the warning goes
+  // straight to the log sink rather than through a runtime's logger.
+  const bestEffort = (step: string, effect: Effect.Effect<void>) =>
+    effect.pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() =>
+          writeLogLine(
+            'WARN',
+            'cli',
+            `Shutdown: ${step} failed`,
+            Cause.pretty(cause),
+          ),
+        ),
+      ),
+    );
   await Effect.runPromise(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
-      yield* Effect.ignoreCause(cliPlatformShutdown);
+      yield* bestEffort('closing the platform', cliPlatformShutdown);
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushTextStderr());
+      yield* bestEffort('flushing stderr', flushTextStderr());
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushNdjsonStdout());
+      yield* bestEffort('flushing stdout', flushNdjsonStdout());
     }),
   );
 }
