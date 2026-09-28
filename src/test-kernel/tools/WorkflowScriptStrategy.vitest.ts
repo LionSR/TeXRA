@@ -81,12 +81,12 @@ function checkpointIdFor(name: string): string {
 const billingRunAgent: WorkflowScriptStrategyParams['createRunAgent'] =
   (hooks) => (invocation) =>
     Effect.sync(() => {
-      hooks.onCost(invocation, finalResult.usage?.totalCost);
+      hooks.onCost(invocation, finalResult.usage?.totalCost ?? 0);
       return finalResult;
     });
 
 function fakePorts() {
-  return { notify: vi.fn(), recordCost: vi.fn() };
+  return { notify: vi.fn() };
 }
 
 let workflowControls: WorkflowControlRegistry;
@@ -167,7 +167,6 @@ describe('createWorkflowScriptStrategy', () => {
     'runs a live call, settles its journal cost, and delivers the result',
     () =>
       Effect.gen(function* () {
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'strategy-test',
@@ -175,10 +174,7 @@ describe('createWorkflowScriptStrategy', () => {
           }),
         );
 
-        const turn = yield* launchStrategy(strategy, ports);
-
-        // The live-attempt candidate and final journal agree on the total.
-        expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+        const turn = yield* launchStrategy(strategy);
 
         const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
         expect(delivery).toContain('"category": "workflow"');
@@ -257,7 +253,6 @@ return yield* agent('Solve.', {
         script,
         runAgent: () => Effect.succeed(finalResult),
       });
-      const ports = fakePorts();
       const strategy = createWorkflowScriptStrategy(
         strategyParams({
           name: 'strategy-test',
@@ -268,11 +263,10 @@ return yield* agent('Solve.', {
         }),
       );
 
-      const turn = yield* launchStrategy(strategy, ports);
+      const turn = yield* launchStrategy(strategy);
 
-      expect(ports.recordCost).toHaveBeenCalledOnce();
-      expect(ports.recordCost).toHaveBeenCalledWith(0);
       const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
+      expect(delivery).toContain('"costUsd":0,');
       expect(delivery).toContain('Reused: saved call');
       expect(delivery).toContain(
         '"files":[{"path":"paper.tex","added":12,"removed":8}]',
@@ -358,7 +352,6 @@ throw new Error('script failed after replay')`;
           }),
         );
         expect(seedError.message).toContain('script failed after replay');
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'retained-settlement',
@@ -368,12 +361,11 @@ throw new Error('script failed after replay')`;
           }),
         );
 
-        const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
+        const launchError = yield* Effect.flip(launchStrategy(strategy));
         expect(launchError.message).toContain('script failed after replay');
-        // Failure recovery excludes the pre-run journal from this invocation.
-        expect(ports.recordCost).toHaveBeenCalledWith(0);
-
         const errText = strategy.formatError(null, new Error('boom'));
+        // Failure recovery excludes the pre-run journal from this invocation.
+        expect(errText).toContain('"costUsd":0,');
         expect(errText).toContain(
           "journaled under meta.name 'retained-settlement'",
         );
@@ -440,7 +432,6 @@ return yield* agent('malformed stale')`;
             diffs: [],
           },
         };
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name,
@@ -452,15 +443,14 @@ yield* agent('current file')
 throw new Error('current revision failed')`,
             createRunAgent: (hooks) => (invocation) =>
               Effect.sync(() => {
-                hooks.onCost(invocation, currentResult.usage?.totalCost);
+                hooks.onCost(invocation, currentResult.usage?.totalCost ?? 0);
                 return currentResult;
               }),
           }),
         );
 
-        const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
+        const launchError = yield* Effect.flip(launchStrategy(strategy));
         expect(launchError.message).toContain('current revision failed');
-        expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
         const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain('current.tex');
         expect(errText).not.toContain('stale.tex');
@@ -492,7 +482,6 @@ throw new Error('current revision failed')`,
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => commitSpy.mockRestore()),
         );
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'journal-write-failure',
@@ -501,13 +490,12 @@ throw new Error('current revision failed')`,
           }),
         );
 
-        const launchError = yield* Effect.flip(launchStrategy(strategy, ports));
+        const launchError = yield* Effect.flip(launchStrategy(strategy));
         expect(launchError.message).toContain(
           'Failed to persist workflow journal entry 0',
         );
-        expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
-
         const errText = strategy.formatError(null, new Error('boom'));
+        expect(errText).toContain('"costUsd":0.42');
         expect(errText).toContain('"outcome":"failed"');
         expect(errText).toContain('"total":1,"ok":0');
         expect(errText).toContain('"failed":1');
@@ -522,7 +510,6 @@ throw new Error('current revision failed')`,
   description: 'tests malformed journal cost settlement',
 }
 return yield* agent('saved call')`;
-      const ports = fakePorts();
       const strategy = createWorkflowScriptStrategy(
         strategyParams({
           name: 'malformed-cost',
@@ -535,15 +522,15 @@ return yield* agent('saved call')`;
         }),
       );
 
-      const malformedError = yield* Effect.flip(
-        launchStrategy(strategy, ports),
-      );
+      const malformedError = yield* Effect.flip(launchStrategy(strategy));
       expect(malformedError.message).toContain(
         'Workflow agent() result is not a run result',
       );
-      // The live candidate, then the failure path's settlement of that same
-      // retained spend: the malformed result never reached the journal.
-      expect(ports.recordCost.mock.calls).toEqual([[0.2], [0.2]]);
+      // The failure path settles the retained live spend: the malformed
+      // result never reached the journal.
+      expect(strategy.formatError(null, malformedError)).toContain(
+        '"costUsd":0.2',
+      );
 
       // A well-formed but failed RunEnd fails the same way, naming its outcome
       // and error, rather than resolving an `{ outcome: 'failed' }` envelope.
@@ -695,7 +682,6 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
             }
           }
         });
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'strategy-test',
@@ -704,7 +690,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           }),
         );
 
-        const launch = yield* Effect.forkChild(launchStrategy(strategy, ports));
+        const launch = yield* Effect.forkChild(launchStrategy(strategy));
         yield* fake.attemptStarted(1);
         workflowControls.control(grandchildRunId, 'retry');
 
@@ -718,7 +704,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         expect(fake.attempts()).toBe(2);
         expect(completedTaskCosts).toHaveLength(1);
         expect(completedTaskCosts[0]).toBeCloseTo(0.6);
-        expect(ports.recordCost.mock.calls).toEqual([[0.1], [0.6], [0.6]]);
+        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
+        expect(delivery).toContain('"costUsd":0.6');
       }),
   );
 
@@ -734,7 +721,6 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         const fake = controllableRunAgent({
           attemptRunIds: [logicalRunId, attemptRunId],
         });
-        const ports = fakePorts();
         const settled = yield* Deferred.make<void>();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
@@ -744,7 +730,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         );
 
         const launch = yield* Effect.forkChild(
-          launchStrategy(strategy, ports).pipe(
+          launchStrategy(strategy).pipe(
             Effect.tap(() => Deferred.succeed(settled, undefined)),
           ),
         );
@@ -774,7 +760,6 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         const fake = controllableRunAgent({
           attemptRunIds: [grandchildRunId],
         });
-        const ports = fakePorts();
         const strategy = createWorkflowScriptStrategy(
           strategyParams({
             name: 'strategy-test',
@@ -782,7 +767,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           }),
         );
 
-        const launch = yield* Effect.forkChild(launchStrategy(strategy, ports));
+        const launch = yield* Effect.forkChild(launchStrategy(strategy));
         yield* fake.attemptStarted(1);
         // Model tokens were spent before the user skipped the attempt.
         fake.onCost(0.42);
@@ -790,7 +775,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
 
         const turn = yield* Fiber.join(launch);
         expect(turn.result).toBe('Skipped');
-        expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
+        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
+        expect(delivery).toContain('"costUsd":0.42');
       }),
   );
 });

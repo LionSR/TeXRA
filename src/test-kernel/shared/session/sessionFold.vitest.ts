@@ -1419,9 +1419,7 @@ const TURN_ROWS: readonly SessionEvent[] = [
     type: 'tool.intent',
     payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
   },
-  settlement('call-a', {
-    stateMutation: [{ op: 'add', path: ['usage', 'totalCost'], amount: 0.5 }],
-  }),
+  settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
   message({
     kind: 'append',
@@ -1729,8 +1727,8 @@ describe('foldRunState', () => {
             }),
           ),
         );
-        // 0.25 stamped + 0.5 added by the settlement + 0.25 stamped.
-        expect(state?.usage.totalCost).toBe(1);
+        // Each priced response's stamp, and nothing else.
+        expect(state?.usage.totalCost).toBe(0.5);
         expect(state?.usage.totalCacheMissInputTokens).toBe(9);
         expect(state?.usage.totalServerToolRequests).toBe(3);
         expect(state?.usage.firstInputTokens).toBe(10);
@@ -1812,8 +1810,8 @@ describe('foldRunState', () => {
     expect(state?.pendingIntents).toEqual({});
     expect(state?.usage.totalInputTokens).toBe(10);
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
-    // The turn's stamped price plus the settlement's `add` operation.
-    expect(state?.usage.totalCost).toBe(0.75);
+    // The turn's stamped price: a settlement adds nothing to it.
+    expect(state?.usage.totalCost).toBe(0.25);
     expect(state?.at).toBe('turn.end');
     expect(state?.turn).toBe(1);
     // Incremental and cold folds are the same computation.
@@ -1893,17 +1891,8 @@ describe('foldRunState', () => {
     expect(
       rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
     ).toBe(false);
-    // The run's usage totals are derived from priced responses and additive
-    // tool costs (D12): a settlement adds to them and never rewrites them.
-    expect(
-      rowAccepted(
-        settlement('call-a', {
-          stateMutation: [
-            { op: 'add', path: ['usage', 'totalCost'], amount: 1 },
-          ],
-        }),
-      ),
-    ).toBe(true);
+    // The run's usage totals are derived from its priced responses alone
+    // (D12): a settlement never touches them.
     expect(
       rowAccepted(
         settlement('call-a', {

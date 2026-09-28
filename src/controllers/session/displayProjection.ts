@@ -2,7 +2,7 @@
  * The display tier's SQL: the listing read (7.2) and the projection of a
  * run's spend every display read unions in. A run with a ledger stores its
  * usage once, on each priced `model.message` response and `model.compaction`
- * summary (and a child's cost on the `tool.result` that adds it); every
+ * summary, and a child's on its own run, never its parent's; every
  * display read derives the per-call `usage` rows renderers fold from those
  * rows, here, in SQL, so no reader decodes a response only to read its usage. The listing instead carries one
  * row per run, its spend so far, which {@link totalRunUsage} sums.
@@ -40,9 +40,7 @@ export const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key
 /**
  * The `usage` rows a run with a ledger never stores, projected from the rows
  * that hold its spend: one per priced `model.message` response or
- * `model.compaction` summary, from the row's own `usage`, and one per
- * `tool.result` that adds a child's cost
- * to the run (the one usage operation a settlement makes). Each keeps its
+ * `model.compaction` summary, from the row's own `usage`. Each keeps its
  * source row's envelope, so its identity is that row's (aggregate, seq).
  * `json_patch` drops the fields a response left out. Every display read
  * unions it in; a ledger read never sees it.
@@ -72,21 +70,6 @@ FROM event e
 WHERE (e.type = 'model.compaction.1' OR (e.type = 'model.message.1'
     AND json_extract(e.data, '$.payload.kind') = 'response'))
   AND json_type(e.data, '$.payload.usage') = 'object'
-UNION ALL
-SELECT "commit", aggregate_id, seq, 'usage.1', origin, at,
-  json_object('usage', json_object('inputTokens', 0, 'outputTokens', 0,
-    'cost', cost))
-FROM (
-  SELECT e."commit", e.aggregate_id, e.seq, e.origin, e.at, (
-    SELECT total(json_extract(op.value, '$.amount'))
-    FROM json_each(e.data, '$.payload.stateMutation') op
-    WHERE json_extract(op.value, '$.op') = 'add'
-      AND json_extract(op.value, '$.path[0]') = 'usage'
-      AND json_extract(op.value, '$.path[1]') = 'totalCost'
-  ) AS cost
-  FROM event e WHERE e.type = 'tool.result.1'
-)
-WHERE cost > 0
 )`;
 
 /**

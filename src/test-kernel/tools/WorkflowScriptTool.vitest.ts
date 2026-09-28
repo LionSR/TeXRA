@@ -152,7 +152,6 @@ return yield* agent('saved call')`;
 function toolLayer(stopAfterCycle = false) {
   return nativeToolTestLayer({
     toolCallId: 'tool-call',
-    hooks: { recordSubagentCost: vi.fn() },
     run: {
       runId: parentRunId,
       session: testDefaultSession(),
@@ -520,7 +519,6 @@ describe('WorkflowScriptTool', () => {
         // omits it — the native subagent strategy declares one unconditionally,
         // even for a workflow-category child).
         expect(loopParams.strategy.runTurn).toBeUndefined();
-        expect(loopParams.recordCost).toEqual(expect.any(Function));
 
         expect(result).toMatchObject({
           status: 'executed',

@@ -751,10 +751,11 @@ export function createWorkflowScriptAgentRunner(
   checkpointId: string,
   run: WorkflowRunIdentity,
   hooks?: {
-    /** Fires per live child on success and failure with its total cost. */
+    /** Fires once per live child attempt, whatever its outcome, with the
+     *  cost its own run's rows add up to. */
     readonly onCost?: (
       invocation: WorkflowAgentInvocation,
-      costUsd: number | undefined,
+      costUsd: number,
     ) => void;
   },
 ): (
@@ -807,15 +808,6 @@ export function createWorkflowScriptAgentRunner(
                   session,
                 );
               },
-              onCost: (costUsd) => {
-                hooks?.onCost?.(invocation, costUsd);
-                // Stamp progressive spend onto the live attempt so a
-                // failed/cancelled/retried attempt still shows what it consumed
-                // even when run never reaches the success path below.
-                if (costUsd !== undefined) {
-                  invocation.report({ costUsd });
-                }
-              },
             };
           }),
       });
@@ -837,7 +829,9 @@ export function createWorkflowScriptAgentRunner(
         // `RunEnd.usage` is the run ledger's folded totals, absent only for
         // a run that never opened a ledger, so absence is the recorded fact
         // "no spend" rather than an unknown defaulted here.
-        invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
+        const costUsd = result.usage?.totalCost ?? 0;
+        hooks?.onCost?.(invocation, costUsd);
+        invocation.report({ costUsd });
       }
       if (result.outcome !== 'completed') {
         return yield* new WorkflowSubagentUnsuccessful({

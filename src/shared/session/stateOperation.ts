@@ -24,15 +24,5 @@ export function mutate(
       [key]: child,
     }));
   }
-  switch (op.op) {
-    case 'set':
-      return Result.succeed({ ...node, [key]: op.value });
-    case 'add': {
-      const current = node[key];
-      if (typeof current !== 'number') {
-        return Result.fail(`add targets a non-number ${op.path.join('.')}`);
-      }
-      return Result.succeed({ ...node, [key]: current + op.amount });
-    }
-  }
+  return Result.succeed({ ...node, [key]: op.value });
 }

@@ -141,7 +141,7 @@ export interface WorkflowScriptStrategyParams {
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
-      costUsd: number | undefined,
+      costUsd: number,
     ) => void;
   }) => (
     invocation: WorkflowAgentInvocation,
@@ -259,7 +259,7 @@ export function createWorkflowScriptStrategy(
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
-    launch: (ports, signal) =>
+    launch: (_ports, signal) =>
       Effect.gen(function* () {
         startedAt = Date.now();
         // Physical-attempt callbacks are the current-invocation boundary: replay
@@ -272,7 +272,7 @@ export function createWorkflowScriptStrategy(
           );
         const runAgent = params.createRunAgent({
           onCost: (invocation, costUsd) => {
-            ports.recordCost(attemptCost.record(invocation, costUsd ?? 0));
+            attemptCost.record(invocation, costUsd);
           },
         });
 
@@ -344,9 +344,11 @@ export function createWorkflowScriptStrategy(
         const settleAttempt = Effect.try({
           try: () => {
             const journal = attemptJournal();
-            const costUsd = attemptCost.total(journal);
-            ports.recordCost(costUsd);
-            return { journal, board: projection.tally(), costUsd };
+            return {
+              journal,
+              board: projection.tally(),
+              costUsd: attemptCost.total(journal),
+            };
           },
           catch: ensureError,
         }).pipe(

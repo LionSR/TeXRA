@@ -71,8 +71,8 @@ function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
 type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
 
 interface WorkflowAttemptCostTracker {
-  /** Record one physical child attempt and return this tool invocation's live total. */
-  record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
+  /** Record one physical child attempt. */
+  record(invocation: WorkflowAttemptIdentity, costUsd: number): void;
   /**
    * Return this tool invocation's final total. Replayed/recovered journal
    * entries with no physical-attempt callback contribute zero.
@@ -82,32 +82,22 @@ interface WorkflowAttemptCostTracker {
 
 /**
  * Track one tool invocation's physical attempts in callback order per journal
- * key. The production child runner emits exactly one callback for every
- * physical attempt, including `undefined` cost (normalized to zero), and emits
- * none for replay or stable recovery. For a completed key, all callbacks but
- * the last are discarded retries; only the last can correspond to the journal
- * result, so its charge is `max(observer, journal)` rather than another sum.
- * `record` and `total` therefore return comparable attempt-scoped USD totals
- * for the loop-owned best-value latch without charging historical entries.
- *
- * This is the workflow path's conversion step in the shared cost contract
- * (`ChildRunPorts` in `@agent/runtime/childRunLoop`): the loop retains
- * max(best) over *cumulative* observations, so this tracker turns the
- * engine's per-attempt deltas into invocation-cumulative totals before they
- * reach `recordCost`. `total()` never undercuts the live-observed sum — the
- * journal fallback only raises a completed key's last attempt.
+ * key, for the delivery summary's cost line. The agent runner emits exactly
+ * one callback for every physical attempt, with the cost its run's rows add
+ * up to, and none for replay or stable recovery. For a completed key, all
+ * callbacks but the last are discarded retries; only the last can correspond
+ * to the journal result, so its charge is `max(observer, journal)` rather
+ * than another sum. The summary is display: every attempt's spend is already
+ * on its own run, where session totals read it.
  */
 export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   const attemptsByIdentity = new Map<string, number[]>();
-  let observedTotalUsd = 0;
 
   return {
     record: (invocation, costUsd) => {
-      observedTotalUsd += costUsd;
       const attempts = attemptsByIdentity.get(invocation.key) ?? [];
       attempts.push(costUsd);
       attemptsByIdentity.set(invocation.key, attempts);
-      return observedTotalUsd;
     },
     total: (finalJournal) => {
       const journalIdentities = new Set<string>();

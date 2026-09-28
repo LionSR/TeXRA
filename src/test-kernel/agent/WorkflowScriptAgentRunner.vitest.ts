@@ -1015,9 +1015,8 @@ describe('createWorkflowScriptAgentRunner', () => {
         const report = reportSpy();
         mocks.executeSubagentInBand.mockImplementationOnce((options) =>
           Effect.gen(function* () {
-            const prepared = yield* options.prepare();
-            prepared.onCost?.(0.25);
-            return launched(options.runId, result);
+            yield* options.prepare();
+            return launched(options.runId, { ...result, usage: spent(0.25) });
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -1025,10 +1024,8 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         yield* runner(call);
 
-        expect(onCost).toHaveBeenCalledWith(call, 0.25);
-        // Progressive onCost stamps the live snapshot attempt (not only success),
-        // and the terminal result cost is stamped after it (same value here).
-        expect(reported(report, 'costUsd')).toEqual([0.25, 0]);
+        expect(onCost).toHaveBeenCalledExactlyOnceWith(call, 0.25);
+        expect(reported(report, 'costUsd')).toEqual([0.25]);
       }),
   );
 

@@ -113,7 +113,7 @@ function stubRuns(): any {
 }
 
 function fakePorts(): ChildRunPorts {
-  return { notify: () => {}, recordCost: () => {} };
+  return { notify: () => {} };
 }
 
 function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {

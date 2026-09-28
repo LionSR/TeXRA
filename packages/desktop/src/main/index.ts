@@ -38,7 +38,6 @@ import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { ExternalOpenFailed, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { DisposableStore } from '@platform/disposable';
 import type {
   AgentDirectoriesPort,
   StateStore,
@@ -300,19 +299,22 @@ function createWindow(options: {
     },
   });
   mainWindow = window;
-  // Window root: every resource scoped to this BrowserWindow registers here at
-  // creation, and the `closed` handler disposes the store (LIFO) instead of
-  // running a hand-ordered teardown ledger.
-  const windowResources = new DisposableStore();
+  // Window root: every resource tied to this BrowserWindow (its fibers, its
+  // subscriptions, its session attachments and IPC listener) is a finalizer
+  // or a child of this scope, and the `closed` handler closes it; its
+  // finalizers run in the reverse of their registration.
+  const windowScope = Scope.makeUnsafe();
+  const onWindowClosed = (release: () => void): void =>
+    runtime.runSync(Scope.addFinalizer(windowScope, Effect.sync(release)));
   // Project root: the resources bound to the project the window shows (its
-  // title, its settings surface and their subscriptions) live in this scope,
-  // which is closed and replaced when the window switches projects.
+  // title, its settings surface and their subscriptions) live in this child
+  // of the window's scope, closed and replaced when the window switches
+  // projects.
   let projectScope: Scope.Closeable | undefined;
   let attachedProject: DesktopProject | undefined;
-  windowResources.add(() => {
+  onWindowClosed(() => {
     attachedProject = undefined;
     settingsIpcRef.current = undefined;
-    if (projectScope) runtime.runFork(Scope.close(projectScope, Exit.void));
   });
   const ipcRef: {
     current?: { postToRenderer(message: unknown): void };
@@ -386,7 +388,7 @@ function createWindow(options: {
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
   };
-  // Detached so the launch does not wait on it; reports its own defects.
+  // Forked so the launch does not wait on it; reports its own defects.
   const refreshFunnelAfterLaunch: Effect.Effect<void> = Effect.suspend(() => {
     const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
     if (!refresh) return Effect.void;
@@ -397,7 +399,7 @@ function createWindow(options: {
       Effect.catchDefect((defect) =>
         Effect.sync(() => reportAsyncError(defect)),
       ),
-      Effect.forkDetach,
+      Effect.forkIn(windowScope),
       Effect.asVoid,
     );
   });
@@ -432,6 +434,9 @@ function createWindow(options: {
       },
     }).pipe(
       Effect.catch((error) => Effect.sync(() => reportBackgroundError(error))),
+      // Its dialog is this window's: a check still running when the window
+      // closes stops with it, and the next window checks again.
+      Effect.forkIn(windowScope),
     ),
   );
   const previewOptions = {
@@ -527,15 +532,14 @@ function createWindow(options: {
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
   };
-  const desktopAuth = windowResources.add(
-    createDesktopSupabaseAuth({
-      router: protocolLifecycle.router,
-      auth: options.supabaseAuth,
-      store: options.pendingOAuthStore,
-      host: desktopAuthHost,
-      runtime,
-    }),
-  );
+  const desktopAuth = createDesktopSupabaseAuth({
+    router: protocolLifecycle.router,
+    auth: options.supabaseAuth,
+    store: options.pendingOAuthStore,
+    host: desktopAuthHost,
+    runtime,
+  });
+  onWindowClosed(() => desktopAuth.dispose());
   /**
    * Sole owner of the desktop sign-in provider choice. Every sign-in entry
    * point (login banner, credential settings) routes
@@ -585,7 +589,7 @@ function createWindow(options: {
     );
   };
 
-  revealProjectRun.current = (key, runId) => {
+  const revealRun = (key: string, runId: RunId) => {
     const project =
       key === options.projects.fallback().key
         ? options.projects.fallback()
@@ -604,6 +608,13 @@ function createWindow(options: {
       ),
     );
   };
+  // Held by the process's attention wiring, so a closed window lets go of it
+  // rather than keeping its whole graph alive until the next window opens.
+  revealProjectRun.current = revealRun;
+  onWindowClosed(() => {
+    if (revealProjectRun.current === revealRun)
+      revealProjectRun.current = undefined;
+  });
 
   /** The renderer reports dirtiness for the addressed project, including a
    *  hidden one. Only explicit closure releases its resources. */
@@ -897,7 +908,7 @@ function createWindow(options: {
       projectBindings.set(key, bindProject(project));
     }
   };
-  windowResources.add(() => {
+  onWindowClosed(() => {
     for (const binding of projectBindings.values()) {
       binding.dispose();
     }
@@ -949,7 +960,7 @@ function createWindow(options: {
     const documentBinding = projectBindings.get(project.key);
     const previousScope = projectScope;
     attachedProject = project;
-    const owner = Scope.makeUnsafe();
+    const owner = Scope.forkUnsafe(windowScope);
     projectScope = owner;
     const postForActiveProject = (message: unknown) => {
       if (projectScope !== owner) return false;
@@ -1230,7 +1241,7 @@ function createWindow(options: {
   );
   onboardingIpcRef.current = onboardingIpc;
   // The funnel is host state every open project's snapshot carries (8.1).
-  windowResources.add(
+  onWindowClosed(
     onboardingIpc.onFunnelChange((state) =>
       Effect.forEach(
         [...projectBindings.values()],
@@ -1442,7 +1453,7 @@ function createWindow(options: {
       runtime.runFork(binding.port.receive(message));
     },
   });
-  windowResources.add(() => {
+  onWindowClosed(() => {
     promptController.dispose();
     hostBridge.dispose();
   });
@@ -1452,10 +1463,6 @@ function createWindow(options: {
   // Subscribed last: the first change it sees may bind a project, which
   // needs every window surface above. Its first element is the state just
   // attached, so it changes nothing.
-  const followScope = Scope.makeUnsafe();
-  windowResources.add(() => {
-    runtime.runFork(Scope.close(followScope, Exit.void));
-  });
   runtime.runFork(
     Stream.runForEach(
       SubscriptionRef.changes(options.projects.state),
@@ -1466,33 +1473,35 @@ function createWindow(options: {
         }).pipe(
           Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
         ),
-    ).pipe(Effect.forkIn(followScope)),
+    ).pipe(Effect.forkIn(windowScope)),
   );
   installMenu(SubscriptionRef.getUnsafe(options.projects.state).recent);
   window.once('closed', () => {
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    runtime.runSync(
-      Effect.try({
-        try: () => windowResources.dispose(),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => reportBackgroundError(error)),
-        ),
-      ),
-    );
     if (mainWindow === window) {
       mainWindow = null;
       if (process.platform === 'darwin') {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    // Resume the quit once Electron has finished closing this window. A quit
-    // requested from inside `closed` lands before the window leaves the
-    // window list, so Electron abandons it and emits `window-all-closed`
-    // instead of `will-quit`, which on macOS leaves the process running.
-    if (continueQuit) setImmediate(continueQuit);
+    runtime.runFork(
+      Scope.close(windowScope, Exit.void).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => reportBackgroundError(Cause.squash(cause))),
+        ),
+        // Resume the quit once the window's resources are released and
+        // Electron has finished closing it. A quit requested from inside
+        // `closed` lands before the window leaves the window list, so
+        // Electron abandons it and emits `window-all-closed` instead of
+        // `will-quit`, which on macOS leaves the process running.
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (continueQuit) setImmediate(continueQuit);
+          }),
+        ),
+      ),
+    );
   });
   let windowPresented = false;
   const presentWindow = (): void => {

@@ -71,8 +71,7 @@ export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
  * The priced usage the writer stamped on one completed turn, summed into the
  * run totals. The package's `turn.usage` is deliberately not the input: it
  * carries token counts and provider-specific extras but no runtime price, so
- * folding it would make a resumed run's `totalCost` the sum of `tool.result`
- * add operations alone. Every field of the totals is named here, so a new
+ * folding it would leave a resumed run's `totalCost` at zero. Every field of the totals is named here, so a new
  * metric on either schema is a compile error rather than a silent zero.
  */
 export function addTurnUsage(

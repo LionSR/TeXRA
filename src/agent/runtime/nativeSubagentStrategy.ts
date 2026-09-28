@@ -105,7 +105,6 @@ export function createNativeSubagentStrategy(
   let cachedDelivery: string | undefined;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
-    ports: ChildRunPorts,
     call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
   ) {
     lastResult = undefined;
@@ -117,7 +116,6 @@ export function createNativeSubagentStrategy(
           lastResult = result;
           cachedBuilt = undefined;
           cachedDelivery = undefined;
-          ports.recordCost(result.usage?.totalCost);
         }),
       ),
     );
@@ -161,7 +159,6 @@ export function createNativeSubagentStrategy(
     continuous: true,
     launch: (ports, _signal, turns) =>
       runNative(
-        ports,
         Effect.gen(function* () {
           const engine = yield* AgentEngine;
           const executeOptions: ExecuteAgentOptions = {
@@ -179,7 +176,6 @@ export function createNativeSubagentStrategy(
                   lastResult = turn;
                   cachedBuilt = undefined;
                   cachedDelivery = undefined;
-                  ports.recordCost(turn.usage?.totalCost);
                   return turns.onTurnBoundary(turn);
                 }),
             },
