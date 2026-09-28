@@ -97,6 +97,13 @@ export interface ToolPlugin {
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
   readonly agents?: true;
+  /** Install and sign-in copy and actions for the dashboard and
+   *  `texra tools`; only a probed plugin (one with `availability`) has any. */
+  readonly setup?: ToolPluginSetup;
+}
+
+/** How a user gets a probed plugin's dependency installed and signed in. */
+export interface ToolPluginSetup {
   readonly installGuide?: string;
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
@@ -162,6 +169,18 @@ type _ToolNamesAreUniqueAcrossPlugins = AssertNoSharedToolNames<{
 type _ToggleablePluginsAreProbed = AssertNever<
   Exclude<
     Extract<ToolPluginEntry, { readonly toggleable: true }>['id'],
+    Extract<ToolPluginEntry, { readonly availability: object }>['id']
+  >
+>;
+
+/**
+ * Setup copy is shown only for a probed plugin (the dashboard lists and
+ * `texra tools` reads only those), so a plugin with `setup` declares
+ * `availability`; the error names the plugin ids that do not.
+ */
+type _SetupPluginsAreProbed = AssertNever<
+  Exclude<
+    Extract<ToolPluginEntry, { readonly setup: object }>['id'],
     Extract<ToolPluginEntry, { readonly availability: object }>['id']
   >
 >;
