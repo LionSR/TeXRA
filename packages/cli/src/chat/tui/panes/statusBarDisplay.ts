@@ -575,8 +575,7 @@ function childListBindingsText(
     ? keyHintText({ key: 'x', action: 'kill' })
     : undefined;
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
-  const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
-  const escBinding = keyHintText({ key: 'Esc', action: 'input' });
+  const inputBinding = keyHintText({ key: 'Tab/Esc', action: 'input' });
   return firstFittingCandidate({
     candidates: [
       statusBarBindingRow([
@@ -584,19 +583,17 @@ function childListBindingsText(
         enterBinding,
         expandBinding,
         killBinding,
-        tabBinding,
-        escBinding,
+        inputBinding,
         ctrlCBinding,
       ]),
       selectionKillable &&
         statusBarBindingRow([
           selectBinding,
           killBinding,
-          tabBinding,
-          escBinding,
+          inputBinding,
           ctrlCBinding,
         ]),
-      statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
+      statusBarBindingRow([enterBinding, inputBinding, ctrlCBinding]),
       ctrlCBinding,
     ],
     fallback: ctrlCBinding,

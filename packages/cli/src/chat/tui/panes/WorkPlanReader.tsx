@@ -14,7 +14,6 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 
-import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 
 /** Render the complete work plan loaded from committed events. */
@@ -60,7 +59,7 @@ export function WorkPlanReader({
       : undefined;
   const layout = readerLayout({
     availableRows,
-    frameWidth: formFrameWidth(columns),
+    frameWidth: Math.max(1, columns),
     hints: READER_SCROLL_HINTS,
     title,
   });
