@@ -95,6 +95,60 @@ WHERE e.type = 'run.snapshot.1'
   ), json_extract(e.data, '$.payload.runtime.modelId'))
 )`;
 
+/** A snapshot row's model, spelled as `event_snapshot_model` indexes it. */
+const SNAPSHOT_MODEL = (alias: string) =>
+  `json_extract(${alias}.data, '$.payload.runtime.modelId')`;
+
+/** Whether snapshot `l`'s run has a snapshot whose model sorts `op` its
+ *  own: one seek in `event_snapshot_model`. */
+const OTHER_MODEL = (op: '<' | '>') => `EXISTS (
+    SELECT 1 FROM event o
+    WHERE o.aggregate_id = l.aggregate_id AND o.type = 'run.snapshot.1'
+      AND ${SNAPSHOT_MODEL('o')} ${op} ${SNAPSHOT_MODEL('l')})`;
+
+/**
+ * The listing's {@link MODEL_ROWS}: each run's latest projected `run.model`
+ * row, read without walking its history. With `m` the model of the run's
+ * latest snapshot and `x` its latest snapshot of another model (a
+ * snapshot's `modelId` is a required string, so `<>` is `IS NOT`),
+ * a run with no `x` never switched and projects nothing; otherwise its
+ * latest change is the first snapshot after `x`: its predecessor is `x`,
+ * and every snapshot after it keeps `m`. That row is the one `MODEL_ROWS`
+ * projects there, with its envelope. Whether an `x` exists is one seek in
+ * `event_snapshot_model`, so a run that never switched costs its latest
+ * snapshot; one that did walks back only to its last switch. The joins are
+ * `CROSS JOIN`s to hold that order: a store is never `ANALYZE`d, and without
+ * statistics the planner scans `event` first, row by row.
+ */
+const LATEST_MODEL_ROWS = `(
+SELECT c."commit" AS "commit", c.aggregate_id AS aggregateId, c.seq,
+  'run.model.1' AS type, c.origin AS origin, c.at,
+  json_object('model', ${SNAPSHOT_MODEL('c')}) AS data
+FROM (
+  SELECT l.aggregate_id AS aggregateId, (
+    SELECT p.seq FROM event p INDEXED BY event_agg_type_seq
+    WHERE p.aggregate_id = l.aggregate_id AND p.type = 'run.snapshot.1'
+      AND ${SNAPSHOT_MODEL('p')} <> ${SNAPSHOT_MODEL('l')}
+    ORDER BY p.seq DESC LIMIT 1
+  ) AS x
+  FROM (
+    SELECT s.aggregate_id AS aggregateId, (
+      SELECT MAX(seq) FROM event
+      WHERE aggregate_id = s.aggregate_id AND type = 'run.snapshot.1'
+    ) AS seq
+    FROM event_sequence s
+  ) latest
+  CROSS JOIN event l ON l.aggregate_id = latest.aggregateId
+    AND l.seq = latest.seq
+  WHERE ${OTHER_MODEL('<')} OR ${OTHER_MODEL('>')}
+) switched
+CROSS JOIN event c ON c.aggregate_id = switched.aggregateId AND c.seq = (
+  SELECT MIN(n.seq) FROM event n
+  WHERE n.aggregate_id = switched.aggregateId AND n.type = 'run.snapshot.1'
+    AND n.seq > switched.x
+)
+)`;
+
 /** Every projected display row: a run's spend and its model changes. */
 export const PROJECTED_ROWS = `(SELECT * FROM ${USAGE_ROWS}
 UNION ALL SELECT * FROM ${MODEL_ROWS})`;
@@ -118,7 +172,7 @@ GROUP BY aggregateId
 
 /** The listing: each run's latest listing rows, its open requests and
  *  queued follow-ups, its spend (`RUN_USAGE`) and its current model where
- *  it switched (`MODEL_ROWS`), in commit order. */
+ *  it switched (`LATEST_MODEL_ROWS`), in commit order. */
 export const READ_LISTING = `
 WITH latest AS (
   SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -147,9 +201,7 @@ WITH latest AS (
   UNION ALL
   SELECT * FROM ${RUN_USAGE}
   UNION ALL
-  SELECT "commit", aggregateId, seq, type, origin, at, data FROM (
-    SELECT *, MAX("commit") FROM ${MODEL_ROWS} GROUP BY aggregateId
-  )
+  SELECT * FROM ${LATEST_MODEL_ROWS}
 )
 SELECT * FROM selected
 ORDER BY "commit"

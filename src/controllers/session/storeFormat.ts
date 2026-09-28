@@ -190,6 +190,10 @@ export const pragmaValue = Effect.fnUntraced(function* (
  * back after its aggregate was collected. The logical key stays this store's
  * lookup key. `commit` is a local cursor only: it orders this file's rows and
  * names nothing outside it.
+ *
+ * `event_snapshot_model` indexes each `run.snapshot` by its model, so the
+ * listing finds a run's last model switch without reading its history
+ * (`LATEST_MODEL_ROWS`). An index is added to an existing store on open.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS input_history (
@@ -233,6 +237,9 @@ CREATE TABLE IF NOT EXISTS current_value (
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
 CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
 CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
+CREATE INDEX IF NOT EXISTS event_snapshot_model
+  ON event(aggregate_id, json_extract(data, '$.payload.runtime.modelId'), seq)
+  WHERE type = 'run.snapshot.1';
 `;
 
 export const applySchema = Effect.fnUntraced(function* (
