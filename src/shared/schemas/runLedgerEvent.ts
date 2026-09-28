@@ -279,6 +279,9 @@ export const ModelCompactionPayloadSchema = z
     continuationDropped: z
       .enum(['history-replaced', 'protocol-has-no-continuation'])
       .nullable(),
+    /** The summary call's priced usage, folded into `RunState.usage` as a
+     *  response's is; `null` for a switch, which calls no model. */
+    usage: NormalizedUsageSchema.nullable(),
   })
   .refine(
     (p) => p.continuation === null || p.continuationDropped === null,

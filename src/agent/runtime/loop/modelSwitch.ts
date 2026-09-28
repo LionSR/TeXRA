@@ -73,6 +73,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           continuation: null,
           continuationDropped:
             state.continuation === null ? null : 'history-replaced',
+          usage: null,
         },
       },
       ...(config === null ? [] : [config]),

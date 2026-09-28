@@ -4,12 +4,13 @@
  * LaTeX text connector. Every use is one non-streaming turn, text in, text
  * out; the model is bound through the same route the run loop binds under.
  *
- * Helper turns are unmetered: no ledger row and no usage log, as before.
+ * A helper call is gated, priced and reported to the usage log like every
+ * model call; it writes no ledger row, because it belongs to no run's history.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Data, Effect, Schedule, type Scope } from 'effect';
-import { completedTurn } from '@texra-ai/llm/turn';
+import { Data, Effect, type Scope } from 'effect';
 
+import { writeLogLine } from '@logger/logSink';
 import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
@@ -17,11 +18,13 @@ import {
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
+import type { UsageLog } from '@shared/usageLog';
 
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
-import { classifyModelFailure } from './run/modelFailure';
+import { callModel, type UsageAttribution } from './run/modelCall';
 import { turnText } from './run/turnText';
+import type { SessionHandle } from './SessionHandle';
 import type { HttpClient } from 'effect/unstable/http';
 
 /**
@@ -42,7 +45,7 @@ export class HelperModelUnavailable extends Data.TaggedError(
  * A helper has no persisted conversation format; it never takes the tool-use
  * output haircut.
  */
-export const helperModel = Effect.fn('helperModel')(function* (
+const helperModel = Effect.fn('helperModel')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<
   BoundModel,
@@ -77,42 +80,47 @@ interface HelperPrompt {
   readonly systemPrompt?: string;
 }
 
-/**
- * The bounded retry helper turns run under: they execute outside the run's
- * `ModelInvoker`, so they keep their own two attempts over provider errors
- * the runtime classifies as automatically retryable.
- */
-const HELPER_RETRY = Schedule.exponential('500 millis', 2).pipe(
-  Schedule.jittered,
-);
-const HELPER_RETRIES = 2;
+/** Pricing warnings of a call no run's trace can show. */
+const HELPER_LOG = {
+  warn: (message: string) => writeLogLine('WARN', 'HelperModel', message),
+  debug: (message: string) => writeLogLine('DEBUG', 'HelperModel', message),
+};
 
-/** One non-streaming completion on a bound helper model: its text. */
-export const helperCompletion = Effect.fn('helperCompletion')(function* (
-  bound: BoundModel,
-  { userPrompt, systemPrompt }: HelperPrompt,
-): Effect.fn.Return<string, Error> {
-  const resolved = yield* bound.model.prepareTurn({
-    ...(systemPrompt === undefined ? {} : { system: systemPrompt }),
-    messages: [{ role: 'user', content: [{ kind: 'text', text: userPrompt }] }],
-  });
-  if (resolved.mode !== 'foreground') {
-    return yield* Effect.fail(
-      new Error('A helper turn prepared as background work.'),
-    );
-  }
-  const turn = yield* completedTurn(bound.model.streamTurn(resolved)).pipe(
-    Effect.retry({
-      schedule: HELPER_RETRY,
-      times: HELPER_RETRIES,
-      // Stamped with the bound route, as the loop stamps its own attempts:
-      // SuperGrok and Kimi Code share their API-key host, so without it an
-      // exhausted plan's 429 reads as an ordinary rate limit and the helper
-      // repeats a request that cannot succeed.
-      while: (error) =>
-        classifyModelFailure(error, bound.usageRoute).autoRetryable,
-    }),
-  );
-  // The turn's assistant text, from the same leaf the run loop reads.
-  return turnText(turn);
-});
+/**
+ * One helper call: bind the configured helper model for this call alone and
+ * run one completion through the invoker's call path (`run/modelCall.ts`),
+ * gated on the session's retry gate, priced and reported to the usage log as
+ * `attribution`. No row is written. Returns the turn's assistant text.
+ */
+export const helperCall = Effect.fn('helperCall')(
+  function* (
+    session: Pick<SessionHandle, 'modelRetries' | 'roots'>,
+    stores: ModelOptionStores,
+    { userPrompt, systemPrompt }: HelperPrompt,
+    attribution: UsageAttribution,
+  ): Effect.fn.Return<
+    string,
+    HelperModelUnavailable | Error,
+    Scope.Scope | LanguageModel | HttpClient.HttpClient | UsageLog
+  > {
+    const { turn } = yield* callModel({
+      purpose: 'helper',
+      bound: yield* helperModel(stores),
+      request: {
+        mode: 'foreground',
+        ...(systemPrompt === undefined ? {} : { system: systemPrompt }),
+        messages: [
+          { role: 'user', content: [{ kind: 'text', text: userPrompt }] },
+        ],
+      },
+      gate: session.modelRetries,
+      settings: session.roots,
+      attribution,
+      logger: HELPER_LOG,
+    });
+    // The turn's assistant text, from the same leaf the run loop reads.
+    return turnText(turn);
+  },
+  // The binding is this call's alone: released as soon as it answers.
+  Effect.scoped,
+);

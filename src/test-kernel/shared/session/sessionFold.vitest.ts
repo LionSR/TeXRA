@@ -1571,6 +1571,7 @@ describe('foldRunState', () => {
                 cause,
                 continuation: null,
                 continuationDropped: null,
+                usage: null,
               },
             }),
           );
@@ -1615,6 +1616,7 @@ describe('foldRunState', () => {
             cause: 'context-limit',
             continuation: null,
             continuationDropped,
+            usage: null,
           },
         });
         // C6: the response row is the production source of the anchor, so the

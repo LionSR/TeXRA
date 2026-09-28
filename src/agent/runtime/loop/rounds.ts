@@ -49,6 +49,7 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { compactIfNeeded } from '../run/compaction';
 import { turnText } from '../run/turnText';
 import { appendRow, stepRow, type SnapshotPatch } from './rows';
+import type { ModelInvoker } from '../ModelInvoker';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
 import type { RunCell } from './runProgram';
@@ -111,7 +112,7 @@ interface RoundTurns {
   ) => Effect.Effect<
     { readonly state: RunState; readonly done: boolean },
     Error,
-    RoundServices | RunLedger
+    RoundServices | RunLedger | ModelInvoker
   >;
 }
 
@@ -147,7 +148,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
   const overflowRetry = Effect.fn('rounds.overflowRetry')(function* (
     initial: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState | null, Error, RunLedger> {
+  ): Effect.fn.Return<RunState | null, Error, RunLedger | ModelInvoker> {
     if (initial.overflowRecoveredAtTurn === initial.turn) {
       logger.warn(
         'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',

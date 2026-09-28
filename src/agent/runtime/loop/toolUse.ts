@@ -62,7 +62,6 @@ import {
 import {
   loadRun,
   makeRunCell,
-  recordServedUsage,
   settleRun,
   stagedBy,
   stoppedBy,
@@ -344,7 +343,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<
     TurnExit,
     Error,
-    AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
+    | AgentRun
+    | RunLedger
+    | ProcessServices
+    | Runs
+    | ModelInvoker
+    | WorkspaceFs
+    | StorageFs
   > {
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
@@ -407,6 +412,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           | RunLedger
           | ProcessServices
           | Runs
+          | ModelInvoker
           | WorkspaceFs
           | StorageFs
         > {
@@ -551,7 +557,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (outcome.kind === 'failed') {
           return { state, outcome: 'failed' } as const;
         }
-        yield* recordServedUsage(run, state, outcome.usage);
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.

@@ -22,7 +22,6 @@ import {
   declaredToolNames,
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
-import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
@@ -152,7 +151,6 @@ export interface AgentRunShape {
    * plain slot: the host's request is synchronous.
    */
   readonly pendingModelSwitch: { value: string | null };
-  readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
 }
 
@@ -333,7 +331,6 @@ export const agentRunLayer = (
         declinedRoutes,
         scope,
         pendingModelSwitch,
-        usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
       };
     }),

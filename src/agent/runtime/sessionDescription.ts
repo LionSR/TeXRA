@@ -10,7 +10,7 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
+import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -21,6 +21,7 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
+import type { UsageLog } from '@shared/usageLog';
 import {
   isNonEmptyString,
   truncateWithEllipsis,
@@ -110,15 +111,27 @@ export const generateSessionDescription = Effect.fn(
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, never, LanguageModel | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  void,
+  never,
+  LanguageModel | HttpClient.HttpClient | UsageLog
+> {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
-    const bound = yield* helperModel(stores);
-    const text = yield* helperCompletion(bound, {
-      userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
-      systemPrompt: SYSTEM_PROMPT,
-    });
+    const text = yield* helperCall(
+      session,
+      stores,
+      {
+        userPrompt: buildUserPrompt(
+          config.agent,
+          agentDescription,
+          instruction,
+        ),
+        systemPrompt: SYSTEM_PROMPT,
+      },
+      { agentName: config.agent, runId },
+    );
     if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);
     if (!description) return;
@@ -141,7 +154,6 @@ export const generateSessionDescription = Effect.fn(
       withLogChannel(CHANNEL),
     );
   }).pipe(
-    Effect.scoped,
     Effect.catch((error) => warnFailure(error)),
     Effect.catchDefect((defect) => warnFailure(defect)),
   );

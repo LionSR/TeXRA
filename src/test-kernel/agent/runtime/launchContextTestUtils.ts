@@ -9,17 +9,15 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeStores } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 /**
  * The zero-priced OpenAI model every runtime fixture bills against, shaped
- * as the binding `UsageMonitor.recordUsage` reads.
+ * as the binding the invoker's usage report reads.
  */
 export const testModelInfo = {
   config: {
@@ -86,15 +84,6 @@ export function createTestLaunchContext({
     initialUserMessageForTranscript: undefined,
     toolPolicy: {},
     attachedMemoryMisses: [],
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
     modelConfig: buildTestModelConfig(),
     modelCompatibilityKey: null,
   };

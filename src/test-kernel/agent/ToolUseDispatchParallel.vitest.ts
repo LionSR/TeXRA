@@ -62,7 +62,6 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import type { PluginServices } from '@platform/processRuntime';
 import { DatabaseWriteFailed } from '@shared/session/database';
@@ -78,7 +77,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
   testRunTools,
@@ -282,15 +280,6 @@ function agentRun(
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: pendingSwitch },
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
     callbacks: {},
   };
 }

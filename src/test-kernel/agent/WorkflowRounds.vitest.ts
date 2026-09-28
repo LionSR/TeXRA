@@ -29,7 +29,6 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
@@ -54,7 +53,6 @@ import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -310,6 +308,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
       const run = yield* AgentRun;
       const aggregateId = rowAggregate(run.runId);
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -427,15 +426,6 @@ function agentRunTestLayer(init: LoopInit) {
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'correct', agentCategory: AgentCategory.Workflow },
-        ),
         callbacks: {},
       } satisfies AgentRunShape;
     }),
