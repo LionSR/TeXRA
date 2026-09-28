@@ -137,30 +137,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     refreshAfterMutation: () => refreshAfterAgentMutation(),
   });
 
-  const createFromTemplate = (category: 'workflow' | 'toolUse') =>
-    Effect.gen(function* () {
-      const name = yield* bindings.prompt.input({
-        prompt: templateAgentNamePrompt(category),
-        placeHolder: 'my_agent',
-      });
-      if (!name) return;
-      const invalid = validateTemplateAgentName(name);
-      if (invalid) return yield* present.alert(invalid);
-      // The custom agent directory is the user's choice, outside every root,
-      // so it is created through the process filesystem.
-      const customDir = yield* customDirectory;
-      yield* FileSystem.FileSystem.use((fs) =>
-        fs.makeDirectory(customDir, { recursive: true }),
-      );
-      const written = yield* writeTemplateAgentFile(
-        { category, name, customDir },
-        ports.resourcesPath,
-      );
-      if (!written.ok) return yield* present.alert(written.message);
-      yield* bindings.openPath(written.filePath);
-      yield* refreshAfterAgentMutation();
-    });
-
   const handlers = {
     setAgentEnabled: (message) =>
       present.reported(
@@ -219,11 +195,28 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     createAgent: (message) =>
       present.reported(
         'Failed to create agent',
-        message.mode === 'template'
-          ? createFromTemplate(message.category)
-          : bindings
-              .createAgentWithAI(message.category)
-              .pipe(Effect.andThen(refreshAfterAgentMutation())),
+        Effect.gen(function* () {
+          const name = yield* bindings.prompt.input({
+            prompt: templateAgentNamePrompt(message.category),
+            placeHolder: 'my_agent',
+          });
+          if (!name) return;
+          const invalid = validateTemplateAgentName(name);
+          if (invalid) return yield* present.alert(invalid);
+          // The custom agent directory is the user's choice, outside every root,
+          // so it is created through the process filesystem.
+          const customDir = yield* customDirectory;
+          yield* FileSystem.FileSystem.use((fs) =>
+            fs.makeDirectory(customDir, { recursive: true }),
+          );
+          const written = yield* writeTemplateAgentFile(
+            { category: message.category, name, customDir },
+            ports.resourcesPath,
+          );
+          if (!written.ok) return yield* present.alert(written.message);
+          yield* bindings.openPath(written.filePath);
+          yield* refreshAfterAgentMutation();
+        }),
       ),
     viewRemoteAgentPrompt: (message) =>
       present.reported(

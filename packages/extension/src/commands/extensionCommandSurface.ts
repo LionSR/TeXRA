@@ -8,7 +8,6 @@ import {
   signIn as authSignIn,
   signOut as authSignOut,
 } from '@commands/auth/authCommands';
-import { handleCreateAgentWithAI as agentHandleCreateAgentWithAI } from '@commands/agent/agentCreatorCommands';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
@@ -38,7 +37,6 @@ import {
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -55,7 +53,6 @@ import {
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
-  globalState: StateStore,
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
@@ -114,14 +111,6 @@ export function createExtensionCommandActions(
         secrets,
         refreshAfterProviderKeyChange,
         provider,
-      ),
-    createAgentWithAI: (category) =>
-      agentHandleCreateAgentWithAI(
-        context,
-        globalState,
-        category,
-        secrets,
-        session,
       ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.

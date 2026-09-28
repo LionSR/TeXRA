@@ -92,9 +92,8 @@ export interface AppSignalPayloads {
    * moved carries no information.
    *
    * Emitted by the in-process roster writers that bypass the settings
-   * round-trip: `apply_team`, which the setup agent runs mid-conversation,
-   * and the agent-creator prompt that adds a new agent to the dropdown; and
-   * by the tool registry (`toolRegistryLayer`) once it has reloaded the agent
+   * round-trip: `apply_team`, which the setup agent runs mid-conversation;
+   * and by the tool registry (`toolRegistryLayer`) once it has reloaded the agent
    * catalog after a tool switch or the plugin install record changed, in
    * this process or another.
    * Settings-originated changes repaint through their own handler and do not

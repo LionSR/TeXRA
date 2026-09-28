@@ -15,8 +15,6 @@ const packageDir = 'package/';
 // Templates only the VS Code extension and the desktop app read. None of
 // these belongs in the CLI tarball.
 const EXTENSION_ONLY_TEMPLATES = new Set([
-  'dist/resources/templates/agentCreatorToolUse.yaml',
-  'dist/resources/templates/agentCreatorWorkflow.yaml',
   'dist/resources/templates/agentTemplate-toolUse.yaml',
   'dist/resources/templates/agentTemplate-workflowSingle.yaml',
   'dist/resources/templates/chatExport.tex',

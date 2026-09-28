@@ -196,15 +196,6 @@ export class SettingsViewMessageHandler {
           Effect.asVoid(
             signInWithSubscription(session.roots, this.channel, providerId),
           ),
-        createAgentWithAI: (category) =>
-          Effect.tryPromise({
-            try: () =>
-              vscode.commands.executeCommand(
-                'texra.createAgentWithAI',
-                category,
-              ),
-            catch: ensureError,
-          }),
         customAgentDirChanged: Effect.gen(function* () {
           yield* agentDirectories.refreshAfterDirChange();
           const { refreshCustomAgentRoot } = yield* Effect.promise(

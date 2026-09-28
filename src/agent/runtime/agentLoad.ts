@@ -15,7 +15,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
-import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { agentKey, AgentCategory } from '@shared/schemas';
@@ -26,44 +26,6 @@ import { inertToolsWarning } from './agentSettingTools';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
-
-/**
- * Parses YAML text and validates that it represents a full agent definition,
- * failing when it does not. Inheriting definitions stay partial: only a root
- * definition is held to the full settings/prompts schemas.
- */
-export const validateAgentYamlContent = Effect.fn(
-  'agentLoad.validateAgentYamlContent',
-)(function* (content: string): Effect.fn.Return<void, Error> {
-  const parsed = parseYamlWith(content, AgentDefinitionSchema);
-  if (Result.isFailure(parsed)) {
-    return yield* Effect.fail(
-      new Error(`Failed to parse agent YAML: ${parsed.failure.message}`, {
-        cause: parsed.failure,
-      }),
-    );
-  }
-  const data = parsed.success;
-  if (data.inherits) return;
-
-  const settings = yield* Effect.try({
-    try: () => {
-      const settings = AgentSettingSchema.parse(data.settings);
-      AgentPromptSchema.parse(data.prompts);
-      return settings;
-    },
-    catch: ensureError,
-  });
-  yield* logInertTools(settings);
-});
-
-/** Report the load-time warning {@link inertToolsWarning} returns. */
-function logInertTools(settings: AgentSetting): Effect.Effect<void> {
-  const warning = inertToolsWarning(settings);
-  return warning === undefined
-    ? Effect.void
-    : Effect.logWarning(warning).pipe(withLogChannel(CHANNEL));
-}
 
 /** Loads and parses a YAML file from an absolute path. */
 const loadYaml = Effect.fn('agentLoad.loadYaml')(function* (
@@ -208,6 +170,9 @@ export const loadAgentSettingAndPrompts = Effect.fn(
       ] as [AgentSetting, AgentPrompt],
     catch: ensureError,
   });
-  yield* logInertTools(parsed[0]);
+  const inertWarning = inertToolsWarning(parsed[0]);
+  if (inertWarning !== undefined) {
+    yield* Effect.logWarning(inertWarning).pipe(withLogChannel(CHANNEL));
+  }
   return parsed;
 });

@@ -9,13 +9,7 @@
       "@agent/storage"
     ],
     "desktop": ["@agent/index", "@agent/runtime", "@agent/storage"],
-    "extension": [
-      "@agent/implementations/agentCreator/agentCreatorFlow",
-      "@agent/index",
-      "@agent/runtime",
-      "@agent/storage",
-      "@agent/templates"
-    ],
+    "extension": ["@agent/index", "@agent/runtime", "@agent/storage"],
     "agent": [
       "@agent/core/definition/AgentConfig",
       "@agent/core/definition/AgentDataclass",

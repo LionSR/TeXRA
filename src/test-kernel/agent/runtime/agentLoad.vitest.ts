@@ -8,10 +8,7 @@ import { afterAll, beforeAll, describe, afterEach, vi } from 'vitest';
 
 import { getAgent, loadAgents, refresh } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import {
-  loadAgentSettingAndPrompts,
-  validateAgentYamlContent,
-} from '@agent/runtime/agentLoad';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -62,55 +59,6 @@ const tempDirs: string[] = [];
 
 afterAll(async () => {
   await cleanupTempDirs(tempDirs);
-});
-
-describe('validateAgentYamlContent', () => {
-  it.effect(
-    'rejects root settings that only satisfy the partial YAML schema',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.flip(
-          validateAgentYamlContent(
-            [
-              'name: bad_tool_use_root',
-              'settings:',
-              '  agentCategory: toolUse',
-              '  rounds: 2',
-              '',
-            ].join('\n'),
-          ),
-        );
-      }),
-  );
-
-  it.effect(
-    'keeps inherited child settings partial before parent merging',
-    () =>
-      validateAgentYamlContent(
-        [
-          'name: child',
-          'inherits: parent',
-          'settings:',
-          '  rounds: 2',
-          'prompts:',
-          '  userRequest: Override the parent request.',
-          '',
-        ].join('\n'),
-      ),
-  );
-
-  it.effect('validates root agents after resolving raw tool names', () =>
-    validateAgentYamlContent(
-      [
-        'name: root_tool_use',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools:',
-        '    - grep',
-        '',
-      ].join('\n'),
-    ),
-  );
 });
 
 describe('loadAgentSettingAndPrompts', () => {

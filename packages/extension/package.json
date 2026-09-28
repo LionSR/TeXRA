@@ -256,12 +256,6 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.createAgentWithAI",
-        "title": "Create AI Agent",
-        "category": "TeXRA",
-        "icon": "$(sparkle)"
-      },
-      {
         "command": "texra.setApiKey",
         "title": "Set API Key",
         "category": "TeXRA"
@@ -510,10 +504,6 @@
         },
         {
           "command": "texra.execute",
-          "when": "false"
-        },
-        {
-          "command": "texra.createAgentWithAI",
           "when": "false"
         },
         {

@@ -52,14 +52,10 @@ export interface ToolPlugin {
   readonly name: string;
   readonly category: ToolCategory;
   readonly description: string;
-  /** Checked for availability but listed on no Tools dashboard, and offered
-   *  as no agent-creator tool group. */
+  /** Checked for availability but listed on no Tools dashboard. */
   readonly hidden?: boolean;
   /** Product hosts whose Tools dashboard does not list the plugin. */
   readonly unavailableHosts?: readonly SettingHost[];
-  /** Lowercase substrings of a new agent's description that make the agent
-   *  creator preselect this plugin's tool group. */
-  readonly keywords?: readonly string[];
   /** Settings rows the plugin's dashboard card renders inline, in order:
    *  each a settings-view catalog key and the row's short label (the card
    *  already names the plugin, so 'Model' rather than 'Claude Code model'). */

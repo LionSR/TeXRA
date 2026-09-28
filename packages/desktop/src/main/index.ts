@@ -1098,10 +1098,6 @@ function createWindow(options: {
           onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
         ),
       ),
-      createAgentWithAI: () =>
-        showErrorMessage(
-          'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
-        ),
       customAgentDirChanged: Effect.void,
       remoteCatalog: {
         canAccess: () => options.supabaseAuth.authenticated,

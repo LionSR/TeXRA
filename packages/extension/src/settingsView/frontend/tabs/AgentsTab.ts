@@ -148,11 +148,8 @@ export class AgentsTab extends LitElement {
     });
   }
 
-  private handleCreateAgent(category: AgentCategory, template = false): void {
-    postMessage(
-      SETTINGS_VIEW_COMMANDS.CREATE_AGENT,
-      template ? { category, mode: 'template' } : { category },
-    );
+  private handleCreateAgent(category: AgentCategory): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, { category });
   }
 
   private handleChangeCustomDir(): void {
@@ -195,22 +192,13 @@ export class AgentsTab extends LitElement {
     description: string,
     icon: TeXRAIconName,
   ): TemplateResult {
-    const actions = html`
-      ${renderLabeledActionButton({
-        icon: 'file-circle-plus',
-        text: 'Create from template',
-        kind: 'secondary',
-        appearance: 'outlined',
-        onClick: () => this.handleCreateAgent(category, true),
-      })}
-      ${renderLabeledActionButton({
-        icon: 'plus',
-        text: 'Create agent',
-        kind: 'primary',
-        appearance: 'filled',
-        onClick: () => this.handleCreateAgent(category),
-      })}
-    `;
+    const actions = renderLabeledActionButton({
+      icon: 'file-circle-plus',
+      text: 'Create from template',
+      kind: 'primary',
+      appearance: 'filled',
+      onClick: () => this.handleCreateAgent(category),
+    });
     return html`
       <section
         id="${category}-agents-section"
@@ -261,7 +249,7 @@ export class AgentsTab extends LitElement {
       ${renderSettingsSectionHeading({
         title: 'Agent library',
         description:
-          'Choose which agents appear in the agent selector, or create your own.',
+          'Choose which agents appear in the agent selector, or create your own from a template. To have one drafted for you, run the creator agent.',
         icon: 'robot',
       })}
       <div class="settings-section">

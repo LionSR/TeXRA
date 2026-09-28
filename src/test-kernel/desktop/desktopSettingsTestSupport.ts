@@ -30,7 +30,6 @@ export function createStubSettingsBindings(
     pickFolder: () => Effect.succeed(undefined),
     refreshCatalogs: noOpEffect,
     refreshCredentialStatus: Effect.void,
-    createAgentWithAI: noOpEffect,
     customAgentDirChanged: Effect.void,
     remoteCatalog: {
       canAccess: () => Effect.succeed(false),

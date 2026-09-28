@@ -45,7 +45,6 @@ function makeActions(): ExtensionCommandActions {
     removeApiKey: asyncNoop(),
     showProgressView: asyncNoop(),
     setApiKey: asyncNoop(),
-    createAgentWithAI: asyncNoop(),
     execute: asyncNoop(),
   };
 }

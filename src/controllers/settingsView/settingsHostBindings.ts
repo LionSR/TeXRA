@@ -54,7 +54,6 @@ export interface SettingsHostBindings {
   readonly refreshCredentialStatus: HostEffect;
   /** Run one subscription's sign-in, its routing preference included. */
   signInSubscription(providerId: SubscriptionProviderId): HostEffect;
-  createAgentWithAI(category: 'workflow' | 'toolUse'): HostEffect;
   /** The custom agent directory setting changed. */
   readonly customAgentDirChanged: HostEffect;
   readonly remoteCatalog: {
