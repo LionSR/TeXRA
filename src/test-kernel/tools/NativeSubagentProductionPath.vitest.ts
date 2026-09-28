@@ -826,7 +826,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              recovery: yield* queueRecovery(runId, 'Keep this unconsumed input.'),
+              recovery: yield* queueRecovery(
+                runId,
+                'Keep this unconsumed input.',
+              ),
             }),
           ),
         ).toEqual({

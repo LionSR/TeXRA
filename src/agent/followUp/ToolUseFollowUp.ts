@@ -353,12 +353,17 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const routed = yield* admitFollowUp(runId, item, options, ownerSession);
   let dispatch: Exclude<Admission, { status: 'no_session' }>;
   if ('status' in routed && routed.status === 'no_session') {
-    // No live flow here: the persisted facts decide. A user's message to a
-    // run that stopped with a checkpoint continues it, admitted the way a
-    // waiting run's is; any other run refuses with its worded reason. Only
-    // the one run the user acted on is inspected.
+    // No live flow here: the persisted facts decide. Only the user's own
+    // message continues a run that stopped with a checkpoint, admitted the
+    // way a waiting run's is: a run's message never restarts work the user
+    // stopped. Anything else refuses with its worded reason. Only the one
+    // run addressed is inspected.
     const classification = yield* classifyRun(runId, ownerSession);
-    if (classification.kind !== 'resumable' || options.mode !== undefined) {
+    if (
+      classification.kind !== 'resumable' ||
+      options.mode !== undefined ||
+      item.from.kind !== 'user'
+    ) {
       return {
         status: 'failed',
         reason: yield* recordRunRefusal(runId, ownerSession, classification),

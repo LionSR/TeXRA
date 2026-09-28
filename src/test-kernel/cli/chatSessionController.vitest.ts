@@ -1141,9 +1141,24 @@ describe('createChatSessionController', () => {
   });
 
   it('continues the stopped conversation through the session, in order, once the stopped generation settles', async () => {
-    // Typed while the stop settles: both messages wait for the stopped
-    // generation, then go to the session's own admission for that run, one
-    // after the other; the chat keeps no copy of them.
+    // Typed while the stop settles: the first waits for the stopped
+    // generation, then goes to the session's own admission for that run; the
+    // admission resumed it, so the second goes to the resumed run directly,
+    // never waiting on its drain. The chat keeps no copy of either.
+    holdRun('a11111' as RunId);
+    installSession({
+      view: installableViewRef(),
+      runs: {
+        getActiveIds: mocks.getActiveRunIds,
+        getHandle: mocks.getRunHandle,
+        isLive: () => false,
+        // The resumed run never drains while the test runs.
+        awaitDrained: vi
+          .fn()
+          .mockReturnValueOnce(Effect.void)
+          .mockReturnValue(Effect.never),
+      },
+    });
     const teardown = pendingRunClaim();
     const session = makeSession({
       runId: 'a11111' as RunId,
@@ -1178,6 +1193,6 @@ describe('createChatSessionController', () => {
       ]),
     );
     expect(mocks.executeAgent).not.toHaveBeenCalled();
-    await vi.waitFor(() => expect(chatTuiCanStartRootRun(session)).toBe(true));
+    expect(session.interruptedRunId).toBeUndefined();
   });
 });

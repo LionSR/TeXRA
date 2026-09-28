@@ -995,6 +995,15 @@ export function createChatSessionController(
             );
           if (outcome.kind === 'sent') {
             delivered = true;
+            // The session took the message and resumed the run: it is no
+            // longer the stopped conversation, and the next message goes to
+            // it live rather than waiting for it to drain.
+            if (
+              continuing &&
+              outcome.value.wake == null &&
+              session.interruptedRunId === interrupted
+            )
+              session.interruptedRunId = undefined;
             const presentation = presentFollowUpResult(
               outcome.value.status === 'sent'
                 ? { status: 'sent' }
