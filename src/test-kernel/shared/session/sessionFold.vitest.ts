@@ -740,9 +740,9 @@ describe('sessionFold', () => {
   });
 
   it("sums a run's priced turns once each, on a cold read and on replay", () => {
-    // Each `usage` row is one priced turn, and the listing reads every one,
-    // so the fold sums them, keyed by seq so a row both reads bring counts
-    // once.
+    // Each `usage` row a replay reads is one priced turn; the listing reads
+    // the run's total, on its newest priced row. A turn the run's high-water
+    // commit already covers counts nothing.
     const log = new Log();
     const start = log.emit(CHILD, 2000, {
       type: 'run.start',
@@ -769,14 +769,14 @@ describe('sessionFold', () => {
       reasoningTokens: 0,
     };
 
-    // The cold listing read: start plus every usage row.
+    // The cold listing read: start plus the run's total.
     const listing = foldAll([
       { _tag: 'event', read: 'listing', event: start },
-      ...rounds.map((event) => ({
-        _tag: 'event' as const,
-        read: 'listing' as const,
-        event,
-      })),
+      {
+        _tag: 'event',
+        read: 'listing',
+        event: { ...rounds[2]!, usage: total } as DisplaySessionEvent,
+      },
     ]);
     expect(runView(listing, CHILD).usage).toStrictEqual(total);
 

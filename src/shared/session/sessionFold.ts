@@ -255,9 +255,6 @@ interface SessionIndexes {
    *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
-  /** Each run's priced turns by seq: a `usage` row the listing and an
-   *  aggregate replay both deliver counts once; `RunView.usage` sums them. */
-  readonly turns: Map<RunId, Set<number>>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
@@ -286,7 +283,6 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       byOwner: new Map(),
       claims: new Map(),
       rows: new Map(),
-      turns: new Map(),
       latest: new Map(),
       local: { self: [], dead: [], unreadable: [] },
       head: null,
@@ -1261,12 +1257,16 @@ function foldDurable(
   if (isSharedRunRow(event)) {
     own = applyRowFacts(view, before, event);
   } else if (event.type === 'usage') {
-    const { turns } = sessionIndexesOf(view);
-    const priced = turns.get(runId) ?? new Set<number>();
-    own = priced.has(event.seq)
-      ? before
-      : { ...before, usage: sumUsageStats([before.usage, event.usage]) };
-    turns.set(runId, priced.add(event.seq));
+    // The listing's row is the run's spend through its commit; every other
+    // read's row is one priced turn. `latest` above is the run's high-water
+    // commit, so a turn one read already counted never counts twice.
+    own = {
+      ...before,
+      usage:
+        read === 'listing'
+          ? event.usage
+          : sumUsageStats([before.usage, event.usage]),
+    };
   } else {
     applySessionSlices(view, runId, event);
     own = applyOwnArm(before, event);
@@ -1371,7 +1371,6 @@ function foldRunRemoved(
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
   sessionIndexesOf(view).rows.delete(run.id);
-  sessionIndexesOf(view).turns.delete(run.id);
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

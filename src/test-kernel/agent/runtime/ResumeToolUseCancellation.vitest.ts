@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  readView: vi.fn(),
+  readRunRecords: vi.fn(),
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUse: vi.fn(),
@@ -96,7 +96,6 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { emptySessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -149,11 +148,11 @@ const LANE_SESSION = {
   acquireClaims: (id: AggregateId) =>
     Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
   holdRunClaim: SessionHandle.prototype.holdRunClaim,
-  // The resumed run reads its parent edge off the session's cold fold, so the
+  // The resumed run reads its parent edge off the run's records, so the
   // lineage fixture is that read.
-  readView: (...args: unknown[]) =>
+  readRunRecords: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => mocks.readView(...args),
+      try: () => mocks.readRunRecords(...args),
       catch: ensureError,
     }),
   status: {},
@@ -211,7 +210,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         createToolUseResumeData({ runId, agentConfig }),
     );
     mocks.releaseClaims.mockReturnValue(Effect.void);
-    mocks.readView.mockReset().mockResolvedValue(emptySessionView('resume'));
+    mocks.readRunRecords.mockReset().mockResolvedValue([]);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -227,7 +226,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     Effect.gen(function* () {
       const storageError = new Error('run lineage unavailable');
       const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
-      mocks.readView.mockRejectedValueOnce(storageError);
+      mocks.readRunRecords.mockRejectedValueOnce(storageError);
 
       expect(yield* Effect.flip(resumeToolUseFromResumeData(snapshot))).toBe(
         storageError,

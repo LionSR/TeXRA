@@ -155,8 +155,9 @@ export const loadRun = (
 ): Effect.Effect<RunEntry, Error, RunLedger | AgentRun> =>
   Effect.gen(function* () {
     const ledger = yield* RunLedger;
-    if (resume) yield* ledger.acquire(runId);
-    const loaded = yield* ledger.load(runId);
+    const loaded = resume
+      ? yield* ledger.acquire(runId)
+      : yield* ledger.load(runId);
     if (loaded !== null && loaded.phase !== null) {
       if (!resume) {
         return yield* Effect.fail(

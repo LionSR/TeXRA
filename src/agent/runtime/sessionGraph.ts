@@ -101,9 +101,11 @@ export interface SessionGraph {
   ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
   /** Every committed row of one aggregate, ledger-private rows included:
    *  the read behind the keyed private records and the checkpoint journal,
-   *  which fold over the whole aggregate rather than the latest of a type. */
+   *  which fold over the whole aggregate rather than the latest of a type.
+   *  With `types`, only those rows, through the type index. */
   readonly aggregateRows: (
     id: AggregateId,
+    types?: readonly SessionEvent['type'][],
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /** One aggregate's display rows, with the `usage` rows its priced
    *  responses project: what a renderer or an export replays. */

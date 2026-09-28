@@ -55,7 +55,6 @@ import {
   ownerIdentity,
   aggregateTarget,
   aggregateId as qualifyAggregateId,
-  listingTypeOf,
   referencedAggregates,
   type AggregateId,
   type JsonValue,
@@ -84,7 +83,14 @@ import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { appStateChangeFeed } from './appStateChanges';
 import { localDatabasePath } from './localDatabasePath';
-import { USAGE_ROWS } from './usageProjection';
+import {
+  EVENT_COLUMNS,
+  LISTING_GROUP,
+  LISTING_TYPES,
+  READ_LISTING,
+  USAGE_ROWS,
+  totalRunUsage,
+} from './displayProjection';
 import {
   applySchema,
   assertStoreFormat,
@@ -97,56 +103,6 @@ const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
-  e.seq, e.type, e.origin AS origin, e.at, e.data`;
-/** Listing arms of the present vocabulary; requests and follow-ups are sets. */
-const LISTING_TYPES = SessionEventDraftSchema.options
-  .map((schema) => schema.shape.type.value)
-  .filter(
-    (type) =>
-      listingTypeOf({ type }) !== null &&
-      type !== 'request.opened' &&
-      type !== 'request.decided' &&
-      type !== 'followup.queued' &&
-      type !== 'followup.consumed',
-  )
-  .map((type) => `${type}.1`);
-/** Latest per aggregate, type and family (`listingKeyOf`). */
-const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key'),
-  json_extract(data, '$.plugin'), json_extract(data, '$.kind')`;
-const READ_LISTING = `
-WITH latest AS (
-  SELECT aggregate_id, type, MAX(seq) AS seq FROM event
-  WHERE type IN (SELECT value FROM json_each(?))
-  GROUP BY ${LISTING_GROUP}
-), selected AS (
-  SELECT ${EVENT_COLUMNS} FROM latest
-  JOIN event e ON e.aggregate_id = latest.aggregate_id
-    AND e.type = latest.type AND e.seq = latest.seq
-  UNION ALL
-  SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'request.opened.1' AND NOT EXISTS (
-    SELECT 1 FROM event decided
-    WHERE decided.aggregate_id = e.aggregate_id
-      AND decided.type = 'request.decided.1'
-      AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
-  )
-  UNION ALL
-  SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'followup.queued.1' AND NOT EXISTS (
-    SELECT 1 FROM event consumed
-    WHERE consumed.aggregate_id = e.aggregate_id
-      AND consumed.type = 'followup.consumed.1'
-      AND json_extract(consumed.data, '$.followUpId') = json_extract(e.data, '$.followUpId')
-  )
-  UNION ALL
-  SELECT ${EVENT_COLUMNS} FROM event e WHERE e.type = 'usage.1'
-  UNION ALL
-  SELECT * FROM ${USAGE_ROWS}
-)
-SELECT * FROM selected
-ORDER BY "commit"
-`;
 const READ_STATE = `
 SELECT s.aggregate_id AS aggregateId, s.uid, s.owner_id AS ownerId,
   s.closed, s.parent_id AS parentId,
@@ -278,8 +234,10 @@ export const databaseLayer = (
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
+        prepare = (row: Record<string, unknown>) => row,
       ): Effect.Effect<SessionEvent[], SqlError> =>
         exec(statement, params).pipe(
+          Effect.map((rows) => rows.map(prepare)),
           Effect.flatMap((rows) => {
             const fresh: string[] = [];
             const kept = rows.map(decodeEvent).filter((event) => {
@@ -338,9 +296,10 @@ export const databaseLayer = (
         WHERE e.type IN (SELECT value FROM json_each(?))
         UNION ALL SELECT * FROM ${USAGE_ROWS}) r
         WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
-      const displayTypes = JSON.stringify(
-        DISPLAY_EVENT_TYPES.map((type) => `${type}.1`),
-      );
+      const storedTypes = (types: readonly string[]) =>
+        JSON.stringify(types.map((type) => `${type}.1`));
+      const listingTypes = JSON.stringify(LISTING_TYPES);
+      const displayTypes = storedTypes(DISPLAY_EVENT_TYPES);
       // Each type's latest listing row on one open run (creation, status and
       // tombstone beside its private records; no transcript row); closed: absent.
       const runRecords = `
@@ -358,6 +317,13 @@ export const databaseLayer = (
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
+      // Named: for an `IN` list the planner walks the aggregate's seq index.
+      const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
+        INDEXED BY event_agg_type_seq WHERE e.aggregate_id = ? AND e.seq >= ?
+          AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
+      // A tombstone closes its run and stays its last row until collected.
+      const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type = 'run.removed.1' ORDER BY e."commit"`;
       // One aggregate's display rows, its projected `usage` rows among them.
       const displayAggregate = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
@@ -852,9 +818,10 @@ export const databaseLayer = (
             }),
           ),
         readListing: () =>
-          query(decodedRows(READ_LISTING, [JSON.stringify(LISTING_TYPES)])),
+          query(decodedRows(READ_LISTING, [listingTypes], totalRunUsage)),
+        readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
-          query(decodedRows(runRecords, [id, JSON.stringify(LISTING_TYPES)])),
+          query(decodedRows(runRecords, [id, listingTypes])),
         readRunSnapshot: (id) =>
           query(
             Effect.gen(function* () {
@@ -954,8 +921,12 @@ export const databaseLayer = (
               Effect.map((row) => (row ? decodeEvent(row) : undefined)),
             ),
           ),
-        readAggregate: (id, fromSeq) =>
-          query(decodedRows(aggregate, [id, fromSeq])),
+        readAggregate: (id, fromSeq, types) =>
+          query(
+            types === undefined
+              ? decodedRows(aggregate, [id, fromSeq])
+              : decodedRows(typedRows, [id, fromSeq, storedTypes(types)]),
+          ),
         readDisplayAggregate: (id, fromSeq) =>
           query(
             decodedRows(displayAggregate, [displayTypes, id, fromSeq]).pipe(

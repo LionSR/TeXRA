@@ -88,15 +88,16 @@ export class RunLedger extends Context.Service<
   {
     /**
      * The claim gate, called before any resume side effect: resume acquires
-     * the run aggregate's current claim first, then calls `load`. Without it
-     * a second process can fold a run's state, re-dispatch a barrier tool,
-     * and learn only at its first append that the claim never moved, after
-     * the side effect.
+     * the run aggregate's current claim first, and continues from the state
+     * it answers, `load`'s answer from the same read. Without it a second
+     * process can fold a run's state, re-dispatch a barrier tool, and learn
+     * only at its first append that the claim never moved, after the side
+     * effect.
      */
     readonly acquire: (
       run: RunId,
     ) => Effect.Effect<
-      void,
+      RunState | null,
       RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
     >;
     /**

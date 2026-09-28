@@ -85,14 +85,12 @@ export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
   function* (
     database: Pick<
       Context.Service.Shape<typeof Database>,
-      'readListing' | 'collectDeletion'
+      'readPendingDeletions' | 'collectDeletion'
     >,
     storage: string,
   ) {
     const fs = yield* FileSystem.FileSystem;
-    const listing = yield* database.readListing();
-    for (const event of listing) {
-      if (event.type !== 'run.removed') continue;
+    for (const event of yield* database.readPendingDeletions()) {
       yield* database
         .collectDeletion(event.aggregateId, event.commit, (ids) =>
           removeRunDirectories(fs, storage, ids),

@@ -296,9 +296,12 @@ export class Database extends Context.Service<
       id: InquiryThreadId,
       change: (current: InquiryThreadRecord | null) => Result.Result<A, Error>,
     ) => Effect.Effect<Result.Result<A, Error>, DatabaseWriteFailed>;
+    /** One aggregate's rows from `fromSeq`, or only those of `types`
+     *  through the `(aggregate_id, type, seq)` index, in seq order. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
+      types?: readonly SessionEvent['type'][],
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** One aggregate's display rows in seq order, with the `usage` rows its
      *  priced responses project: what a renderer replays. */
@@ -336,6 +339,11 @@ export class Database extends Context.Service<
     ) => Effect.Effect<
       Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
       DatabaseReadFailed | DatabaseWriteFailed
+    >;
+    /** C9: the `run.removed` tombstones cleanup has not collected. */
+    readonly readPendingDeletions: () => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseReadFailed
     >;
     /** C9: claim a closed root, clean its recorded runs, then cascade
      *  only if the same tombstone and claim still hold. Cleanup failure keeps

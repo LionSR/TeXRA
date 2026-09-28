@@ -263,6 +263,47 @@ function notOwnerDetail(failure: DatabaseNotOwner): string {
   return `held by ${failure.ownerId}`;
 }
 
+/** The refusal of rows that do not fold. */
+const inconsistent = (runId: RunId, cause: RunLedgerInconsistent) =>
+  new RunLedgerRefused({
+    reason: 'inconsistent',
+    runId,
+    detail: cause.detail,
+    cause,
+  });
+
+/** `load`'s answer for a run's folded rows, which `acquire` shares. */
+const loaded = (
+  run: RunId,
+  folded: ReturnType<typeof foldRunState>,
+): Effect.Effect<RunState | null, RunLedgerRefused> =>
+  Effect.gen(function* () {
+    if (Result.isFailure(folded))
+      return yield* inconsistent(run, folded.failure);
+    const state = folded.success;
+    // Queued follow-ups alone do not open a run: a launch that has not
+    // committed its first batch is still the fresh-run branch (`phase` is
+    // null). Return that unopened state so the caller can seed pending
+    // input; after a restart there is no in-memory copy of those rows.
+    if (state === null) return null;
+    if (state.phase === null && state.rowsBeforeSnapshot === 0) return state;
+    if (state.phase === null) {
+      return yield* inconsistent(
+        run,
+        new RunLedgerInconsistent({
+          reason: 'out-of-order',
+          detail: 'ledger rows without an opening flow.snapshot',
+          commit: state.commit,
+        }),
+      );
+    }
+    if (state.messages.length > 0) {
+      const refusal = unprepared(run, state.messages);
+      if (refusal !== null) return yield* refusal;
+    }
+    return state;
+  });
+
 export const runLedgerLayer: Layer.Layer<
   RunLedger,
   never,
@@ -308,16 +349,17 @@ export const runLedgerLayer: Layer.Layer<
       // asked died with that owner. Taking the claim retires exactly those
       // as cancelled, so the surfaces still offering them settle instead of
       // outliving the process that asked. Rows that do not fold are `load`'s
-      // refusal, one call below every caller.
+      // refusal, answered here from the same read.
       const rows = yield* log.readAggregate(aggregate, 1);
       // The same read seeds the publisher's pending follow-ups: what an
       // earlier owner left queued is delivered by this one.
       yield* events.hydrateFollowUps(aggregate, taken.length > 0, rows);
       const folded = foldRunState(null, rows);
-      if (Result.isFailure(folded) || folded.success === null) return;
+      if (Result.isFailure(folded) || folded.success === null)
+        return yield* loaded(run, folded);
       const unbound = unboundRequests(folded.success);
-      if (unbound.length === 0) return;
-      yield* events
+      if (unbound.length === 0) return yield* loaded(run, folded);
+      const cancelled = yield* events
         .publish(
           unbound.map((requestId) => ({
             type: 'request.decided' as const,
@@ -340,6 +382,8 @@ export const runLedgerLayer: Layer.Layer<
             ),
           ),
         );
+      // The cancellations fold onto the same read: the run is read once.
+      return yield* loaded(run, foldRunState(folded.success, cancelled));
     });
 
     const latestSnapshot = Effect.fn('RunLedger.latestSnapshot')(function* (
@@ -350,40 +394,7 @@ export const runLedgerLayer: Layer.Layer<
 
     const load = Effect.fn('RunLedger.load')(function* (run: RunId) {
       const rows = yield* log.readAggregate(qualifyAggregateId('run', run), 1);
-      const folded = foldRunState(null, rows);
-      if (Result.isFailure(folded)) {
-        return yield* new RunLedgerRefused({
-          reason: 'inconsistent',
-          runId: run,
-          detail: folded.failure.detail,
-          cause: folded.failure,
-        });
-      }
-      const state = folded.success;
-      // Queued follow-ups alone do not open a run: a launch that has not
-      // committed its first batch is still the fresh-run branch (`phase` is
-      // null). Return that unopened state so the caller can seed pending
-      // input; after a restart there is no in-memory copy of those rows.
-      if (state === null) return null;
-      if (state.phase === null && state.rowsBeforeSnapshot === 0) return state;
-      if (state.phase === null) {
-        const cause = new RunLedgerInconsistent({
-          reason: 'out-of-order',
-          detail: 'ledger rows without an opening flow.snapshot',
-          commit: state.commit,
-        });
-        return yield* new RunLedgerRefused({
-          reason: 'inconsistent',
-          runId: run,
-          detail: cause.detail,
-          cause,
-        });
-      }
-      if (state.messages.length > 0) {
-        const refusal = unprepared(run, state.messages);
-        if (refusal !== null) return yield* refusal;
-      }
-      return state;
+      return yield* loaded(run, foldRunState(null, rows));
     });
 
     const appendBatch = Effect.fn('RunLedger.appendBatch')(function* (
@@ -415,12 +426,7 @@ export const runLedgerLayer: Layer.Layer<
       // it still means "this batch was not written".
       const candidate = foldRunState(state, candidates(state, rows));
       if (Result.isFailure(candidate)) {
-        return yield* new RunLedgerRefused({
-          reason: 'inconsistent',
-          runId: run,
-          detail: candidate.failure.detail,
-          cause: candidate.failure,
-        });
+        return yield* inconsistent(run, candidate.failure);
       }
       if (candidate.success === null) {
         return yield* Effect.die(

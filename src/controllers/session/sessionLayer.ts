@@ -368,7 +368,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
               ),
           claimOwner: (id) =>
             eventLog.claimOwner(qualifyAggregateId('run', id)),
-          aggregateRows: (id) => eventLog.readAggregate(id, 1),
+          aggregateRows: (id, types) => eventLog.readAggregate(id, 1, types),
           displayRows: (id) => eventLog.readDisplayAggregate(id, 1),
           publish: (events) =>
             publish(events).pipe(Effect.flatMap(settlePublication)),

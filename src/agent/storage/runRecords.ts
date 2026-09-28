@@ -57,8 +57,8 @@ interface ChildTurnState {
 /**
  * Fold the run's `child.turn` rows through the shared attempt fold:
  * `accepted` opens the turn, `settled` closes it and becomes the last
- * completed one. Reads the whole aggregate, because the last completed turn
- * can belong to an earlier attempt than the active one — which is also why
+ * completed one. Reads every `child.turn` row, because the last completed
+ * turn can belong to an earlier attempt than the active one — which is also why
  * it reads the fold's open/settled pair rather than its high-water mark: a
  * child's series restarts with every attempt.
  */
@@ -66,7 +66,7 @@ export function readChildTurnState(
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
-  return session.readAggregate(aggregateId('run', runId)).pipe(
+  return session.readAggregate(aggregateId('run', runId), ['child.turn']).pipe(
     Effect.map((rows) => {
       const turns = foldAttempts(rows, (row) =>
         row.type === 'child.turn'
@@ -107,8 +107,9 @@ export function runEndFromEvents(
 
 /**
  * A run's persisted parent edge: the fold's (`run.start.parent`, severed by
- * a later `run.detach`), read cold so a read racing the live fold's first
- * replay still sees it.
+ * a later `run.detach`, and dropped once the parent is no longer listed),
+ * read cold from the two runs' records so a read racing the live fold's
+ * first replay still sees it.
  *
  * The one rule every resume family shares, and the one site that derives it:
  * a resumed run takes its lineage from the log, never from its caller, who
@@ -120,7 +121,14 @@ export function runEndFromEvents(
  */
 export const persistedParentRunId = Effect.fn('persistedParentRunId')(
   function* (session: SessionHandle, runId: RunId) {
-    return (yield* session.readView([])).runs.get(runId)?.parentId ?? undefined;
+    const edge = (yield* session.readRunRecords(runId)).findLast(
+      (row) => row.type === 'run.start' || row.type === 'run.detach',
+    );
+    if (edge?.type !== 'run.start' || edge.parent === null) return undefined;
+    const parent = edge.parent.id;
+    return (yield* getRunRecords(session, parent).exists())
+      ? parent
+      : undefined;
   },
 );
 
@@ -226,27 +234,21 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      */
     isRemoved: (): Effect.Effect<boolean, DatabaseReadFailed> =>
       session
-        .readAggregate(id)
-        .pipe(
-          Effect.map((rows) => rows.some((row) => row.type === 'run.removed')),
-        ),
+        .readAggregate(id, ['run.removed'])
+        .pipe(Effect.map((rows) => rows.length > 0)),
     /**
      * How many times this run has been activated: once when registration
      * committed it, once more for every resume. It is the identity of a
      * lifecycle, which the terminal row alone cannot give — a resume that
      * ran to its own end usually ends `completed` too, so a caller holding a
      * result cannot separate the row that carried it from a later row of the
-     * same outcome. Reads the aggregate, because the record read keeps only
-     * the latest row of each type.
+     * same outcome. Reads every `run.activate` row, because the record read
+     * keeps only the latest row of each type.
      */
     countActivations: (): Effect.Effect<number, DatabaseReadFailed> =>
       session
-        .readAggregate(id)
-        .pipe(
-          Effect.map(
-            (rows) => rows.filter((row) => row.type === 'run.activate').length,
-          ),
-        ),
+        .readAggregate(id, ['run.activate'])
+        .pipe(Effect.map((rows) => rows.length)),
     readRunRecord: readRecord,
     readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
       readRecord().pipe(
