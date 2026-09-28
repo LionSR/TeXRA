@@ -263,12 +263,11 @@ export const ModelMessagePayloadSchema = z
 /* ------------------------------------------------------- model.compaction */
 
 /**
- * The only row that shortens history. `keepPrefix` exists so a compaction
- * that keeps the head of the history (a model switch keeps all of it) does
- * not re-store the conversation, media inlined as base64. Nothing here
- * checks that the resulting history is preparable: that check is the
- * ledger's, at the write boundary and on cold load (D11), because a payload
- * cannot see the prefix it keeps.
+ * The only row that shortens history; `usage` is its summary call's priced
+ * usage, folded as a response's (`null`: a switch calls no model). `keepPrefix`
+ * spares a compaction that keeps the head (a switch keeps all of it) storing
+ * the conversation again. Whether the result is preparable is the ledger's
+ * check (D11), at write and cold load: a payload cannot see its prefix.
  */
 export const ModelCompactionPayloadSchema = z
   .strictObject({
@@ -279,8 +278,6 @@ export const ModelCompactionPayloadSchema = z
     continuationDropped: z
       .enum(['history-replaced', 'protocol-has-no-continuation'])
       .nullable(),
-    /** The summary call's priced usage, folded into `RunState.usage` as a
-     *  response's is; `null` for a switch, which calls no model. */
     usage: NormalizedUsageSchema.nullable(),
   })
   .refine(

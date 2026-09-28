@@ -34,7 +34,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
-import { ModelInvoker } from '../ModelInvoker';
+import type { ModelInvoker } from '../ModelInvoker';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
 import type { TurnRequest } from '@texra-ai/llm/turn';
@@ -144,6 +144,8 @@ interface CompactionInput {
   readonly ledger: RunLedger['Service'];
   readonly logger: AgentTrace;
   readonly bound: BoundModel;
+  /** The run's invoker, which makes the summary call. */
+  readonly invoker: ModelInvoker['Service'];
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
   /** The system text and tools of the turn about to be issued: the input
@@ -178,8 +180,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   input: CompactionInput,
 ): Effect.fn.Return<
   RunState,
-  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed,
-  ModelInvoker
+  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed
 > {
   const { runId, ledger, logger, bound, force } = input;
   const percent = yield* readSettingFrom<number>(
@@ -261,7 +262,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   // The summary is a model call like any other: the invoker gates, prices
   // and reports it, and its usage rides the row below.
   const summarized = yield* Effect.exit(
-    (yield* ModelInvoker).call('compaction', {
+    input.invoker.call('compaction', {
       mode: 'foreground',
       system: COMPACTION_SYSTEM_PROMPT,
       messages: [

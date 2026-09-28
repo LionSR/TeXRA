@@ -343,13 +343,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<
     TurnExit,
     Error,
-    | AgentRun
-    | RunLedger
-    | ProcessServices
-    | Runs
-    | ModelInvoker
-    | WorkspaceFs
-    | StorageFs
+    AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
@@ -412,7 +406,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           | RunLedger
           | ProcessServices
           | Runs
-          | ModelInvoker
           | WorkspaceFs
           | StorageFs
         > {
@@ -524,6 +517,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 ledger,
                 logger,
                 bound,
+                invoker,
                 stores: session.roots,
                 system: step.system,
                 tools,
