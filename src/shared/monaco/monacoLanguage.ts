@@ -9,6 +9,13 @@
 // workers (~12MB) into the extension build even though the tree-shaker then
 // dropped `loadMonaco` itself as unreachable. Keeping the table here means
 // importing it costs a switch statement, not a build artifact.
+//
+// `@utils/core` is the one exception: it's dependency-free (`pathe` +
+// `nanoid`), does no `import('...?worker')` of its own, and is already on the
+// browser-safe allowlist this module's webview consumers are held to, so it
+// carries none of the risk above.
+
+import { getBasename } from '@utils/core';
 
 /**
  * Monaco language id for a file path, covering the extensions TeXRA users
@@ -17,7 +24,7 @@
  * mapping across every host — do not add a second one.
  */
 export function monacoLanguageForPath(filePath: string): string {
-  const name = filePath.replaceAll('\\', '/').split('/').at(-1) ?? '';
+  const name = getBasename(filePath);
   const lowerName = name.toLowerCase();
   if (lowerName === 'dockerfile') return 'dockerfile';
   if (lowerName === 'makefile') return 'makefile';
