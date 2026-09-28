@@ -15,6 +15,7 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 
+import { sameModelOrigin, type TurnRequest } from '@texra-ai/llm/turn';
 import {
   logContextManagementEvent,
   startCompactionActivity,
@@ -37,7 +38,6 @@ import { rowAggregate, type Message } from '../loop/rows';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
-import type { TurnRequest } from '@texra-ai/llm/turn';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
@@ -213,10 +213,10 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
           ...(input.system !== undefined ? { system: input.system } : {}),
           messages: conversation,
           ...(input.tools !== undefined ? { tools: input.tools } : {}),
+          // The turn's own rule (`ModelInvoker`): a continuation from another
+          // deployment or codec is dropped, so the count leaves it out too.
           ...(state.continuation !== null &&
-          state.continuation.origin.protocol === bound.origin.protocol &&
-          state.continuation.origin.requestedModel ===
-            bound.origin.requestedModel
+          sameModelOrigin(state.continuation.origin, bound.origin)
             ? { continuation: state.continuation }
             : {}),
         }),
