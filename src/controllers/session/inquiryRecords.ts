@@ -18,22 +18,32 @@ import { ensureError } from '@utils/errors/errorMessage';
 const QUESTION_PREVIEW_CHARS = 200;
 
 /** Every operation runs on the process's one handle on the global root. */
-function inquiryOperations(
-  database: Context.Service.Shape<typeof GlobalDatabase>,
-): Context.Service.Shape<typeof InquiryRecords> {
+function inquiryOperations({
+  values,
+}: Context.Service.Shape<typeof GlobalDatabase>): Context.Service.Shape<
+  typeof InquiryRecords
+> {
+  /** One thread's transition under the write lock; `null` writes nothing. */
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,
     change: (current: InquiryThreadRecord | null, timestamp: string) => A,
   ) =>
     Effect.gen(function* () {
       const timestamp = DateTime.formatIso(yield* DateTime.now);
-      const result = yield* database.updateInquiryRecord(id, (current) =>
+      return yield* values.modify('inquiry', id, (current) =>
         Result.try({
-          try: () => change(current, timestamp),
+          try: () => {
+            const next = change(current ?? null, timestamp);
+            if (next === null) return [next] as const;
+            if (next.threadId !== id)
+              throw new Error(
+                'An inquiry transition cannot change its thread identity.',
+              );
+            return [next, next] as const;
+          },
           catch: ensureError,
         }),
       );
-      return yield* Effect.fromResult(result);
     });
 
   function normalizeSessionLinks(
@@ -212,7 +222,10 @@ function inquiryOperations(
   function readExternalInquiryThread(threadId: string) {
     const parsed = InquiryThreadIdSchema.safeParse(threadId);
     if (!parsed.success) return Effect.succeed(null);
-    return database.readInquiryRecord(parsed.data);
+    return Effect.map(
+      values.get('inquiry', parsed.data),
+      (record) => record ?? null,
+    );
   }
 
   function manifestToSummary(
@@ -244,7 +257,7 @@ function inquiryOperations(
     >[0],
   ) {
     return Effect.gen(function* () {
-      const all = yield* database.listInquiryRecords();
+      const all = (yield* values.list('inquiry')).map(({ value }) => value);
 
       const filtered = all.filter((m) => {
         if (params.status !== 'any' && m.status !== params.status) return false;

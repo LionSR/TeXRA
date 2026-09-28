@@ -46,7 +46,7 @@ function controller(
   const getAgents =
     overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
   return new AgentRosterController({
-    workspaceState,
+    repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
     getPresets: () => Effect.succeed([preset]),

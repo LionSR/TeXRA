@@ -301,14 +301,14 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
 // =============================================================================
 
 /**
- * The two state slots the durable roster resolves against: the workspace's own
+ * The two state slots the durable roster resolves against: the repository's
  * selection and the cross-workspace defaults. Every roster read is answered for
  * the workspace whose slots the caller hands over, so a process holding several
  * sessions never answers one paper's question with another's roster.
  */
 export type AgentRosterStores = Pick<
   WorkspaceRoots,
-  'workspaceState' | 'globalState'
+  'repoState' | 'globalState'
 >;
 
 /**
@@ -322,13 +322,13 @@ export function createWorkspaceAgentRosterController(
   roots: AgentRosterStores,
   getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
 ): AgentRosterController<AgentEntry> {
-  const { workspaceState, globalState } = roots;
+  const { repoState, globalState } = roots;
   return new AgentRosterController({
-    workspaceState,
+    repoState,
     globalState,
     getAgents,
     getPresets: () =>
-      workspaceState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+      repoState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
     resolveAgent: getCategoryAgent,
   });
 }

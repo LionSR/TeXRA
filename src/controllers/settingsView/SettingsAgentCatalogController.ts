@@ -36,7 +36,7 @@ interface SettingsAgentCatalogEntry {
 }
 
 interface SettingsAgentCatalogControllerDeps {
-  workspaceState: StateStore;
+  repoState: StateStore;
   roster: AgentRosterController<SettingsAgentCatalogEntry>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   now?: () => number;
@@ -56,7 +56,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.workspaceState.get<unknown>(
+        yield* this.deps.repoState.get<unknown>(
           WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
           [],
         ),
@@ -181,7 +181,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         ),
       };
 
-      return yield* this.deps.workspaceState
+      return yield* this.deps.repoState
         .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
           Result.succeed([...presetRecords(stored), preset]),
         )
@@ -196,7 +196,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
       return yield* this.deps.roster
         .removeTeamPreset(presetId, () =>
-          this.deps.workspaceState
+          this.deps.repoState
             .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
               Result.succeed(
                 presetRecords(stored).filter(

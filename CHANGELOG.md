@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Settings reset once with this build, and later updates keep them.**
+  TeXRA's saved settings, remembered desktop projects, open inquiry threads
+  and update-check record start fresh the first time this build runs;
+  session history starts over too. From now on, a TeXRA update that clears
+  session history leaves settings alone. Repository settings (the git commit
+  identity, subagent worktrees, the Codex and Claude Code controls, and the
+  agent roster and teams) are now shared by every worktree of a repository
+  on all three hosts; the CLI reads the git identity from them instead of
+  `.texra/config.json`, so set it again with `/config` or the settings view.
 - **Agent prompt templates lose `{{ MODEL }}`, `{{ ROUNDS }}` and
   `{{ DEFAULT_BIB_PATH }}`.** None of TeXRA's agents used them; a custom
   agent that does now renders them empty. The default bibliography is named

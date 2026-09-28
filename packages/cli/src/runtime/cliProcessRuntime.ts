@@ -125,19 +125,14 @@ const refuseGlobalRecord = (operation: string) =>
 const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
   GlobalDatabase,
 )({
-  appendAll: () => refuseGlobalRecord('appendAll'),
-  readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
-  appStateChanges: () =>
-    Stream.fromEffect(refuseGlobalRecord('appStateChanges')),
-  updateAppStateKey: () => refuseGlobalRecord('updateAppStateKey'),
+  values: {
+    get: () => refuseGlobalRecord('values.get'),
+    modify: () => refuseGlobalRecord('values.modify'),
+    list: () => refuseGlobalRecord('values.list'),
+    changes: () => Stream.fromEffect(refuseGlobalRecord('values.changes')),
+  },
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
-  readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
-  readUpdateCheck: () => refuseGlobalRecord('readUpdateCheck'),
-  recordUpdateCheck: () => refuseGlobalRecord('recordUpdateCheck'),
-  readInquiryRecord: () => refuseGlobalRecord('readInquiryRecord'),
-  listInquiryRecords: () => refuseGlobalRecord('listInquiryRecords'),
-  updateInquiryRecord: () => refuseGlobalRecord('updateInquiryRecord'),
 });
 
 /**
@@ -251,7 +246,7 @@ export function installCliProcessRuntime(
         : Layer.effect(
             AppState,
             Effect.map(GlobalDatabase, (database) =>
-              appStateStoreFromDatabase(globalStoragePath, database),
+              appStateStoreFromDatabase(globalStoragePath, database.values),
             ),
           ),
       auth,

@@ -42,8 +42,14 @@ export interface WorkspaceRoots {
   /** Workspace-scoped key-value state. */
   readonly workspaceState: StateStore;
   /**
-   * Process-wide application state: the third of the three slots the settings
-   * catalog resolves a row against (`config`, `workspaceState`, `globalState`).
+   * Settings shared by every checkout of this workspace's git repository
+   * (the catalog's `repoState` slot), in the global database.
+   */
+  readonly repoState: StateStore;
+  /**
+   * Process-wide application state: one of the slots the settings catalog
+   * resolves a row against (`config`, `workspaceState`, `repoState`,
+   * `globalState`).
    * Process-wide by construction like {@link globalStorage}, and carried here
    * rather than as a process-wide value so a caller that has resolved its roots holds
    * every slot. Inside Effect the owner is the `AppState` service.

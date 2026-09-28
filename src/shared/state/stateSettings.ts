@@ -27,7 +27,10 @@ import {
 import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentModePresetSchema,
+  AgentRosterSelectionSchema,
   AgentSkillsEnabledSchema,
+  HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   ChatgptCodexContextWindowSchema,
@@ -50,6 +53,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
+  INHERITED_AGENT_ROSTER,
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
@@ -80,7 +84,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * One row carries the catalog facts that used to be answered in six places:
  *
  * - **`slots`** — where each host stores the value (`config` /
- *   `workspaceState` / `globalState`). Replaces the old `store` + `cliStore`
+ *   `workspaceState` / `repoState` / `globalState`). Replaces the old `store` + `cliStore`
  *   pair and the caller-chosen slot the git identity reader once took.
  * - **`honoredBy`** — whose *runtime* actually reads the key, with the reading
  *   file as evidence. Replaces `CLI_CORE_SETTING_PATHS`,
@@ -109,8 +113,14 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 const SETTING_HOSTS = ['vscode', 'cli', 'desktop', 'sdk'] as const;
 export type SettingHost = (typeof SETTING_HOSTS)[number];
 
-/** Storage slot a setting is read from / written to. */
-export type SettingStore = 'config' | 'workspaceState' | 'globalState';
+/**
+ * Storage slot a setting is read from / written to. `repoState` is shared by
+ * every checkout of one git repository (keyed by its root in the global
+ * database), so a repository has one value on every host and in every
+ * worktree.
+ */
+export type SettingStore =
+  'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 /** Storage slot per host. Absent means the host does not store the key. */
 type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
@@ -800,21 +810,10 @@ const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 /**
- * The one documented slot divergence in the catalog, carried by the git
- * identity rows: the extension and desktop store them in WorkspaceState —
- * where `WorktreeStateStore` additionally shares them across every worktree of
- * a repository, so one clone has one agent commit identity — while the CLI
- * reads them from `.texra/config.json`, which is where an existing user's
- * values already live. Do not move these rows to `config`: `.texra/` is
- * gitignored by default, so the project config file is per-checkout, not
- * repository-level, and the move would silently drop the worktree sharing.
+ * Repository-level settings (git identity, worktrees, coding-agent controls,
+ * roster): one value per repository on every host and in every worktree.
  */
-const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
-  vscode: 'workspaceState',
-  desktop: 'workspaceState',
-  cli: 'config',
-  sdk: 'config',
-};
+const REPO_STATE_SLOTS = sameSlot('repoState');
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
@@ -867,7 +866,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -880,7 +879,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -891,7 +890,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -902,10 +901,32 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: everyHost(GIT_WORKTREE_READER),
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
+
+  // --- Agent roster ----------------------------------------------------------
+  // Written and read by the roster and the settings view's agent catalog,
+  // which no catalog-driven UI renders.
+  {
+    key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/roster/AgentRosterController.ts'),
+  },
+  {
+    key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    schema: z.array(AgentModePresetSchema).prefault([]),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/index/agentRegistry.ts'),
+  },
+  {
+    key: WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
+    schema: HiddenCustomAgentKeysSchema.prefault([]),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/roster/rosterWorkspaceState.ts'),
+  },
 
   // --- Multi-agent coordination --------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
@@ -913,7 +934,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // §2.1): they describe how *this user* wants child runs handled, not anything
   // about a particular checkout, so no worktree-scoping need is documented on
   // either row. Before the move the extension smuggled that same intent past a
-  // `workspaceState` slot via `WORKTREE_SHARED_KEYS`, while the Node hosts
+  // `workspaceState` slot via a worktree-shared key list, while the Node hosts
   // scoped the value per workspace-path hash — one row, two meanings.
   surfacedSetting({
     key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
@@ -960,7 +981,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex sandbox mode',
     description: 'Filesystem access mode used when TeXRA launches Codex.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -971,7 +992,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex reasoning effort',
     description: 'Reasoning effort hint passed to Codex runs.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -982,7 +1003,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex approval policy',
     description: 'When Codex should ask for approval before risky actions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: [
       'Auto approve',
@@ -998,7 +1019,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -1011,7 +1032,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code permission mode',
     description: 'Permission policy used by Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: [
       'Prompt for risky actions',
@@ -1027,7 +1048,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code reasoning effort',
     description: 'Reasoning effort hint passed to Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
     surfaces: { settingsView: 'approval', cliConfig: true },

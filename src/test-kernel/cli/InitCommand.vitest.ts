@@ -135,6 +135,7 @@ describe('CLI init command', () => {
         secrets: host.secrets,
         globalState: host.roots.globalState,
         workspaceState: host.roots.workspaceState,
+        repoState: host.roots.repoState,
         runtime: testRuntime(),
       }),
     );

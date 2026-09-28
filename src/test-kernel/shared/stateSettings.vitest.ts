@@ -56,6 +56,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
   'workspaceState',
+  'repoState',
   'globalState',
 ]);
 
@@ -338,7 +339,7 @@ describe('settingsAccess', () => {
   const assertResetRestoresDefault = Effect.fn(function* (options: {
     key: string;
     host: SettingHost;
-    storeName: 'config' | 'workspaceState';
+    storeName: 'config' | 'workspaceState' | 'repoState';
     expectedDefault: unknown;
   }) {
     const fake = makeFakeSettingsStores();
@@ -356,31 +357,12 @@ describe('settingsAccess', () => {
 
   it.effect('routes extension writes to the canonical store', () =>
     Effect.gen(function* () {
-      const { stores, config, workspaceState } = makeFakeSettingsStores();
+      const { stores, config, repoState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* writeSetting(entry, false, stores);
-      assert.equal(yield* isStored(workspaceState, entry.key), true);
+      assert.equal(yield* isStored(repoState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
       assert.equal(yield* readSetting(entry, stores), false);
-    }),
-  );
-
-  it.effect('routes CLI writes to the CLI slot (config)', () =>
-    Effect.gen(function* () {
-      const { stores, config, workspaceState } = makeFakeSettingsStores();
-      const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      yield* writeSetting(entry, false, { ...stores, host: 'cli' });
-      assert.equal(yield* isStored(config, entry.key), true);
-      assert.equal(yield* isStored(workspaceState, entry.key), false);
-      // The config write used the default 'workspace' target.
-      assert.deepEqual(config.inspect(entry.key), {
-        globalValue: undefined,
-        workspaceValue: false,
-      });
-      assert.equal(
-        yield* readSetting(entry, { ...stores, host: 'cli' }),
-        false,
-      );
     }),
   );
 
@@ -427,12 +409,12 @@ describe('settingsAccess', () => {
     }),
   );
 
-  it.effect('reset deletes a config-slot (ConfigProvider) key too', () =>
+  it.effect('reset deletes a repository-slot key too', () =>
     Effect.gen(function* () {
       yield* assertResetRestoresDefault({
         key: WorkspaceStateKey.GIT_MARK_COMMITS,
         host: 'cli',
-        storeName: 'config',
+        storeName: 'repoState',
         expectedDefault: true,
       });
     }),
@@ -522,6 +504,7 @@ describe('settingsAccess', () => {
             host: 'vscode' as const,
             config,
             workspaceState: new FakeStateStore(),
+            repoState: new FakeStateStore(),
             globalState: new FakeStateStore(),
           };
           assert.equal(yield* readSetting(entry, stores), true, key);

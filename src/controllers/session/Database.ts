@@ -57,11 +57,12 @@ import {
   aggregateId as qualifyAggregateId,
   referencedAggregates,
   type AggregateId,
-  type JsonValue,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
-  type StoredValue,
+  CURRENT_VALUE_SCHEMAS,
+  type CurrentValue,
+  type CurrentValueFamily,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
@@ -78,10 +79,11 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  type CurrentValues,
 } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { appStateChangeFeed } from './appStateChanges';
+import { currentValueChangeFeed } from './appStateChanges';
 import { localDatabasePath } from './localDatabasePath';
 import {
   EVENT_COLUMNS,
@@ -160,6 +162,26 @@ ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
+/** Replace one current value in place. */
+const UPSERT_VALUE = `
+INSERT INTO current_value (family, key, value, at) VALUES (?, ?, ?, ?)
+ON CONFLICT(family, key) DO UPDATE SET value = excluded.value, at = excluded.at
+`;
+/** One current value, decoded by its family's schema: a row that no longer
+ *  decodes fails the read naming itself. */
+function decodeValue<F extends CurrentValueFamily>(
+  family: F,
+  row: Readonly<Record<string, unknown>>,
+): CurrentValue<F> {
+  const parsed = parseJsonWith(
+    z.string().parse(row.value),
+    CURRENT_VALUE_SCHEMAS[family],
+  );
+  if (Result.isSuccess(parsed)) return parsed.success as CurrentValue<F>;
+  throw new Error(
+    `Stored ${family} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+  );
+}
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, origin, at, data)
@@ -576,9 +598,6 @@ export const databaseLayer = (
       ) =>
         Effect.forEach(prepared, ({ draft, payload }) =>
           Effect.gen(function* () {
-            if (borrowsClaim(draft)) {
-              yield* exec(claim, [identity.ownerId, draft.aggregateId, null]);
-            }
             if (draft.type === 'inquiryThreadUpdated') {
               // Inquiry writes borrow their claim for this transaction only.
               yield* exec(claim, [identity.ownerId, draft.aggregateId, null]);
@@ -679,12 +698,6 @@ export const databaseLayer = (
               return yield* invariant(
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
-            if (borrowsClaim(draft)) {
-              yield* exec(release, [
-                JSON.stringify([draft.aggregateId]),
-                identity.ownerId,
-              ]);
-            }
             if (draft.type === 'workflow.script') {
               // The checkpoint outlives the workflow run's attempts but not the
               // run that invoked it: hang it under that run so its deletion
@@ -738,60 +751,85 @@ export const databaseLayer = (
         at: number,
       ) =>
         Effect.andThen(assertStoreFormat(sql, path), appendRows(prepared, at));
-      /** One row's stored value, refused when the row is not that family's:
-       *  the schema ties each family to its aggregate kind. */
-      const storedValue = <K extends StoredValue['key']>(
-        row: Readonly<Record<string, unknown>>,
-        key: K,
-      ) => {
-        const event = decodeEvent(row);
-        if (event.type !== 'state.value.set' || event.state.key !== key)
-          throw new Error(`Stored row is not a ${key} value`);
-        return event as Extract<SessionEvent, { type: 'state.value.set' }> & {
-          state: Extract<StoredValue, { key: K }>;
-        };
-      };
-      const latestEventRow = (id: AggregateId) =>
+      const valueRow = (family: CurrentValueFamily, key: string) =>
         execOne(
-          `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-          [id],
+          'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
+          [family, key],
         );
-      /** The latest value of one `kind` aggregate, or `undefined` when none
-       *  has been written. */
-      const readStoredValue = <K extends StoredValue['key']>(
-        kind: K,
-        id: string,
+      const readValue = <F extends CurrentValueFamily>(
+        family: F,
+        key: string,
       ) =>
-        latestEventRow(qualifyAggregateId(kind, id)).pipe(
-          Effect.map((row) => (row ? storedValue(row, kind).state : undefined)),
-        );
-      /** Appends `state` as the latest value of its `state.key` aggregate. */
-      const appendStoredValue = (id: string, state: StoredValue) =>
-        Effect.gen(function* () {
-          const draft = {
-            type: 'state.value.set',
-            aggregateId: qualifyAggregateId(state.key, id),
-            state,
-          } as const;
-          const at = yield* Clock.currentTimeMillis;
-          yield* appendPrepared([prepareEventDraft(draft)], at);
-        });
-      const readAppStateKey = (key: string) =>
-        readStoredValue('app-state', key).pipe(
-          Effect.map((state): JsonValue | undefined =>
-            state === undefined || state.value.kind === 'undefined'
-              ? undefined
-              : state.value.value,
+        valueRow(family, key).pipe(
+          Effect.map((row) =>
+            row === undefined ? undefined : decodeValue(family, row),
           ),
         );
-      const readUpdateCheck = (host: string) =>
-        readStoredValue('update-check', host).pipe(
-          Effect.map((state) => (state ? state.record : null)),
+      const modifyValue = <F extends CurrentValueFamily, A, E>(
+        family: F,
+        key: string,
+        change: (
+          current: CurrentValue<F> | undefined,
+        ) => Result.Result<
+          readonly [A] | readonly [A, CurrentValue<F> | undefined],
+          E
+        >,
+      ) =>
+        transact(
+          Effect.gen(function* () {
+            const row = yield* valueRow(family, key);
+            const result = change(
+              row === undefined ? undefined : decodeValue(family, row),
+            );
+            if (Result.isFailure(result) || result.success.length === 1)
+              return result;
+            const next = result.success[1];
+            if (next === undefined) {
+              yield* exec(
+                'DELETE FROM current_value WHERE family = ? AND key = ?',
+                [family, key],
+              );
+              return result;
+            }
+            const value = JSON.stringify(
+              CURRENT_VALUE_SCHEMAS[family].parse(next),
+            );
+            if (row?.value !== value) {
+              yield* exec(UPSERT_VALUE, [
+                family,
+                key,
+                value,
+                yield* Clock.currentTimeMillis,
+              ]);
+            }
+            return result;
+          }),
+        ).pipe(
+          Effect.flatMap((result) =>
+            Result.isSuccess(result)
+              ? Effect.succeed(result.success[0])
+              : Effect.fail(result.failure),
+          ),
         );
-      const readInquiryRecord = (id: string) =>
-        readStoredValue('global-inquiry', id).pipe(
-          Effect.map((state) => (state ? state.record : null)),
-        );
+      const values: CurrentValues = {
+        get: (family, key) => query(readValue(family, key)),
+        modify: modifyValue as CurrentValues['modify'],
+        list: (family) =>
+          query(
+            exec(
+              'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
+              [family],
+            ).pipe(
+              Effect.map((rows) =>
+                rows.map((row) => ({
+                  key: z.string().parse(row.key),
+                  value: decodeValue(family, row),
+                })),
+              ),
+            ),
+          ),
+        changes: currentValueChangeFeed(level, execOne),
+      };
       return {
         observedCommit,
         movedAside,
@@ -833,69 +871,7 @@ export const databaseLayer = (
               return event;
             }),
           ),
-        readAppStateKey: (key) => query(readAppStateKey(key)),
-        appStateChanges: appStateChangeFeed(level, execOne),
-        updateAppStateKey: (key, change) =>
-          transact(
-            Effect.gen(function* () {
-              const result = change(yield* readAppStateKey(key));
-              if (Result.isFailure(result)) return result;
-              yield* appendStoredValue(key, {
-                key: 'app-state',
-                value: result.success,
-              });
-              return result;
-            }),
-          ),
-        readUpdateCheck: (host) => query(readUpdateCheck(host)),
-        recordUpdateCheck: (host, change) =>
-          transact(
-            Effect.gen(function* () {
-              const current = yield* readUpdateCheck(host);
-              const record = {
-                lastCheckedAt:
-                  change.type === 'checked'
-                    ? change.at
-                    : (current?.lastCheckedAt ?? null),
-                lastNotifiedVersion:
-                  change.type === 'notified'
-                    ? change.version
-                    : (current?.lastNotifiedVersion ?? null),
-              };
-              yield* appendStoredValue(host, { key: 'update-check', record });
-            }),
-          ),
-        readInquiryRecord: (id) => query(readInquiryRecord(id)),
-        listInquiryRecords: () =>
-          query(
-            Effect.gen(function* () {
-              const rows = yield* exec(
-                `SELECT ${EVENT_COLUMNS} FROM event e JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event WHERE type = 'state.value.set.1' AND json_extract(data, '$.state.key') = 'global-inquiry' GROUP BY aggregate_id) latest USING (aggregate_id, seq) ORDER BY e."commit"`,
-                [],
-              );
-              return rows.map(
-                (r) => storedValue(r, 'global-inquiry').state.record,
-              );
-            }),
-          ),
-        updateInquiryRecord: (id, change) =>
-          transact(
-            Effect.gen(function* () {
-              const current = yield* readInquiryRecord(id);
-              const result = change(current);
-              if (Result.isSuccess(result) && result.success !== null) {
-                if (result.success.threadId !== id)
-                  return yield* invariant(
-                    'An inquiry transition cannot change its thread identity.',
-                  );
-                yield* appendStoredValue(id, {
-                  key: 'global-inquiry',
-                  record: result.success,
-                });
-              }
-              return result;
-            }),
-          ),
+        values,
         readInputHistory: () => query(historyRows),
         appendInputHistory: ({ at, value }) =>
           transact(
@@ -914,12 +890,6 @@ export const databaseLayer = (
                 );
               }
             }),
-          ),
-        readDesktopProjects: (id) =>
-          query(
-            latestEventRow(id).pipe(
-              Effect.map((row) => (row ? decodeEvent(row) : undefined)),
-            ),
           ),
         readAggregate: (id, fromSeq, types) =>
           query(
@@ -1210,11 +1180,6 @@ export const globalDatabaseLayer = (
 function prepareEventDraft(input: SessionEventDraft) {
   const draft = SessionEventDraftSchema.parse(input);
   return { draft, payload: payloadOf(draft) };
-}
-/** A stored-value write holds its aggregate's claim only for the transaction
- *  that carries it; a run's claim, by contrast, its sequence row keeps. */
-function borrowsClaim(draft: SessionEventDraft): boolean {
-  return draft.type === 'state.value.set';
 }
 /**
  * Refuse an inquiry update its thread's latest row does not admit. Returns

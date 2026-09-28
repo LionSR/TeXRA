@@ -8,8 +8,3 @@ export const UpdateCheckRecordSchema = z.object({
   lastNotifiedVersion: z.string().min(1).nullable(),
 });
 export type UpdateCheckRecord = z.infer<typeof UpdateCheckRecordSchema>;
-const UpdateCheckChangeSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('checked'), at: z.int().nonnegative() }),
-  z.object({ type: z.literal('notified'), version: z.string().min(1) }),
-]);
-export type UpdateCheckChange = z.infer<typeof UpdateCheckChangeSchema>;
