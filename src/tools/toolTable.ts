@@ -96,7 +96,7 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
 
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
- * servers, whose tools the catalog contributes under its one id and every
+ * servers, if any, whose tools the catalog contributes under its one id and every
  * tool-use run is offered (`@tools/liveTools`). `key` changes exactly when
  * what it would start does, which replaces its servers.
  */
@@ -107,12 +107,11 @@ export interface InstalledToolPlugin {
 }
 
 /**
- * The installed plugins that load now, read at each step: the ids of all of
- * them, those with servers to start, and why each enabled one that does not
- * load is held back.
+ * The installed plugins that load now, read at each step, each with the
+ * servers it starts (none for one that ships only skills), and why each
+ * enabled one that does not load is held back.
  */
 export type InstalledToolReader = Effect.Effect<{
-  readonly loaded: readonly string[];
   readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;

@@ -263,6 +263,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A re-trusted plugin's changed MCP server answers the next request** —
+  after you edit an installed plugin's server code and trust it again, the
+  chat's next request calls the new server, not the old one, even when its
+  command, settings and tools look the same. A plugin being started while
+  you disable it no longer shows its tools to any request.
+
 - **The `creator` agent works in the terminal and the desktop app** — it can
   now see the built-in agents and its reference docs and save the new agent
   into your custom agents folder, as it already could in VS Code. Before, its

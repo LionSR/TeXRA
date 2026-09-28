@@ -13,16 +13,16 @@
  * - **Rebuild.** A change never patches a generation: it builds the next one
  *   from every active contribution and publishes it on `current`.
  * - **Pin.** `pin` holds the current generation, and the resources `acquire`
- *   builds for it, for the caller's scope. Generations are reference counted
- *   by digest, so readers of equal generations share one acquisition, and a
- *   generation nothing pins any more is released (it drains) even when
- *   `current` has moved on.
+ *   builds for it, for the caller's scope. Each published generation is
+ *   reference counted as itself, never by its contents, so readers of the
+ *   same generation share one acquisition, a rebuild whose entries are equal
+ *   still acquires its own, and a generation nothing pins any more is
+ *   released (it drains) even when `current` has moved on.
  */
 import {
   Data,
   Effect,
   Equal,
-  Hash,
   RcMap,
   type Scope,
   SubscriptionRef,
@@ -44,8 +44,6 @@ class RegistryConflict extends Data.TaggedError('RegistryConflict')<{
 export interface Generation<K, V> {
   /** Increases with every rebuild in this process. */
   readonly id: number;
-  /** A digest of `entries`: equal digests mean equal entries. */
-  readonly digest: string;
   readonly entries: ReadonlyMap<K, V>;
   /** The owner of each entry. */
   readonly owners: ReadonlyMap<K, string>;
@@ -72,20 +70,6 @@ interface Contribution<K, V> {
   readonly entries: ReadonlyMap<K, V>;
 }
 
-/** The generation key the pin map counts by: its digest alone. */
-class GenerationKey<K, V> implements Equal.Equal {
-  constructor(readonly generation: Generation<K, V>) {}
-  [Equal.symbol](that: Equal.Equal): boolean {
-    return (
-      that instanceof GenerationKey &&
-      that.generation.digest === this.generation.digest
-    );
-  }
-  [Hash.symbol](): number {
-    return Hash.string(this.generation.digest);
-  }
-}
-
 /** Each owner's latest open contribution, in first-contribution order. */
 const effective = <K, V>(
   contributions: readonly Contribution<K, V>[],
@@ -97,12 +81,10 @@ const effective = <K, V>(
 };
 
 /**
- * A registry in the caller's scope. `digest` names a set of entries;
- * `acquire` builds a generation's resources when it is first pinned, released
- * when the last pin of that digest closes.
+ * A registry in the caller's scope. `acquire` builds a generation's resources
+ * when it is first pinned, released when its last pin closes.
  */
 export const makeRegistry = Effect.fnUntraced(function* <K, V, A>(options: {
-  readonly digest: (entries: ReadonlyMap<K, V>) => string;
   readonly acquire: (
     generation: Generation<K, V>,
   ) => Effect.Effect<A, never, Scope.Scope>;
@@ -120,16 +102,18 @@ export const makeRegistry = Effect.fnUntraced(function* <K, V, A>(options: {
       }
     }
     nextId += 1;
-    return { id: nextId, digest: options.digest(entries), entries, owners };
+    // Its identity as a pin key: two builds are never the same generation,
+    // since each may carry resources the other does not.
+    return Equal.byReference({ id: nextId, entries, owners });
   };
   const contributions = yield* SynchronizedRef.make<
     readonly Contribution<K, V>[]
   >([]);
   const current = yield* SubscriptionRef.make(build([]));
   const pins = yield* RcMap.make({
-    lookup: (key: GenerationKey<K, V>) =>
-      Effect.map(options.acquire(key.generation), (resources) => ({
-        generation: key.generation,
+    lookup: (generation: Generation<K, V>) =>
+      Effect.map(options.acquire(generation), (resources) => ({
+        generation,
         resources,
       })),
   });
@@ -141,7 +125,7 @@ export const makeRegistry = Effect.fnUntraced(function* <K, V, A>(options: {
   const registry: Registry<K, V, A> = {
     current,
     pin: Effect.flatMap(SubscriptionRef.get(current), (generation) =>
-      RcMap.get(pins, new GenerationKey(generation)),
+      RcMap.get(pins, generation),
     ),
     contribute: (owner, entries) =>
       Effect.acquireRelease(

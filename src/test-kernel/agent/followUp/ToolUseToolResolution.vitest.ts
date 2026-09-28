@@ -246,7 +246,6 @@ describe('tool-use tool resolution', () => {
         const nextScope = yield* Scope.make();
         const next = yield* Scope.provide(resolve(), nextScope);
         expect(names(next)).toEqual([]);
-        expect(next.generation.digest).not.toBe(first.generation.digest);
         const child = yield* Scope.provide(resolve(first.offered), nextScope);
         expect(names(child)).toEqual([]);
 

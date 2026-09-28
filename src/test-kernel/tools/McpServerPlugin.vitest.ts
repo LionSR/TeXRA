@@ -158,10 +158,9 @@ describe('MCP server plugins', () => {
         // while the open run keeps the server it started with.
         writeConfig('b');
         const editedPin = yield* Scope.make();
-        const edited = yield* open(editedPin);
+        yield* open(editedPin);
         const editedPid = Number(readFileSync(pidFile, 'utf8'));
         expect(editedPid).not.toBe(pid);
-        expect(edited.generation.digest).not.toBe(resolved.generation.digest);
         yield* Scope.close(editedPin, Exit.void);
 
         // The call goes through the loop's guard: a bash request the
