@@ -56,7 +56,8 @@ import type { SessionHandle } from '../SessionHandle';
  * beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  /** The host cannot answer an approval prompt: the gates deny what they
+   *  would present. Which tools a step offers reads the session live. */
   readonly approvalPromptsUnavailable?: boolean;
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
@@ -94,7 +95,7 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
-  readonly toolInputs: StepToolInputs;
+  readonly toolInputs: Omit<StepToolInputs, 'approvalPromptsUnavailable'>;
   /**
    * The run's current step: the tools it offers and the pin that holds its
    * catalog generation, replaced by each new step. A delegated child reads
@@ -225,10 +226,8 @@ export const agentRunLayer = (
         .hold(workflow ? [] : declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
-      const toolInputs: StepToolInputs = {
+      const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
-        approvalPromptsUnavailable:
-          ctx.toolPolicy.approvalPromptsUnavailable === true,
         host: session.roots.host,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]

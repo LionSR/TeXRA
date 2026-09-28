@@ -1037,6 +1037,24 @@ describe('headless delegation', () => {
       ),
   );
 
+  it.effect('approves a proposal under the yolo policy without asking', () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const session = createTestSession();
+        session.setApprovalPolicy('yolo');
+        const decider = answerOpenedRequests(session, { action: 'approve' });
+        yield* Effect.addFinalizer(() =>
+          decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
+        );
+        const result = yield* callDelegateReview(parentRunContext({ session }));
+
+        yield* session.runs.awaitDrained();
+        expect(decider.openedKinds).toEqual([]);
+        expect(result.status).toBe('executed');
+      }),
+    ),
+  );
+
   it.effect(
     'rejects an approved model override unavailable in the active API mode',
     () =>

@@ -275,12 +275,17 @@ describe('approval prompt hooks', () => {
   );
 
   it.effect(
-    'does not run the before-prompt hook for auto-approved events',
+    'denies a request still listed pending when the run has nobody to ask',
     () =>
       Effect.gen(function* () {
+        // A request opened before the host changed is listed pending; a
+        // prompt on a closed stdin would never settle it.
         const tracker = trackPromptEvents();
         useCliHostInteractions(
-          context({ approvalPolicy: 'yolo' }),
+          context({
+            mode: 'headless',
+            approvalPrompt: tracker.answerWith('y'),
+          }),
           tracker.hooks,
         );
         const result = yield* openRequest({
@@ -288,25 +293,8 @@ describe('approval prompt hooks', () => {
           data: agentProposal(),
         });
 
-        expect(result).toEqual({ action: 'approve' });
+        expect(result).toMatchObject({ action: 'deny' });
         expect(tracker.events).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'routes automatic proposal rejection through the headless interaction port',
-    () =>
-      Effect.gen(function* () {
-        useCliHostInteractions(context({ approvalPolicy: 'never' }));
-        const result = yield* openRequest({
-          kind: 'proposal',
-          data: agentProposal(),
-        });
-
-        expect(result).toEqual({
-          action: 'deny',
-          reason: 'Denied by TeXRA approval policy.',
-        });
       }),
   );
 });

@@ -5,15 +5,16 @@
  * `view.requests` until a `request.decided` answers it. This host watches
  * that list and answers each request with the prompt the operator sees. The
  * session already settled what its approval policy decides, so what is listed
- * needs a person. Nothing else is staged: the port it attaches presents
- * events, mirrors bypass state, and holds a tool edit's preview so the diff
- * can be printed.
+ * needs a person, or a denial on a run with nobody to ask. Nothing else is
+ * staged: the port it attaches presents events, mirrors bypass state, and
+ * holds a tool edit's preview so the diff can be printed.
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -145,6 +146,8 @@ export function createHeadlessCliHostInteractions(
   // without that step, so mirror the seed here. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
   session.setApprovalPolicy(context.approvalPolicy);
+  /** Only an interactive run can answer a prompt. */
+  const promptsUnavailable = context.mode !== 'interactive';
   /** Requests this host has taken on, pruned as the fold drops them. */
   const acted = new Set<string>();
   /** The preview a tool edit's durable payload cannot carry. */
@@ -187,13 +190,21 @@ export function createHeadlessCliHostInteractions(
     },
   );
 
-  /** One pending request, answered: policy first, then the prompt. Returns
-   *  whether the decision reached the ledger. */
+  /** One pending request, answered: denied when this run has nobody to ask
+   *  (a request opened before the host or policy changed is listed pending,
+   *  and a prompt on a closed stdin never settles), else by the prompt.
+   *  Returns whether the decision reached the ledger. */
   const answer = Effect.fn('approvalAdapter.answer')(function* (
     runId: RunId,
     payload: AnswerablePayload,
   ) {
     const requestId = payload.data.requestId;
+    if (promptsUnavailable) {
+      return yield* decide(runId, requestId, {
+        action: 'deny',
+        reason: texraApprovalDenialMessage('deny-unpresentable'),
+      });
+    }
     const ask = (content: CliApprovalContent) =>
       askApproval(context, content, hooks);
     switch (payload.kind) {
@@ -299,8 +310,7 @@ export function createHeadlessCliHostInteractions(
 
   return {
     emit: hooks.emit,
-    // Only an interactive run can answer a prompt.
-    approvalPromptsUnavailable: context.mode !== 'interactive',
+    approvalPromptsUnavailable: promptsUnavailable,
     approvalDenied: (denial, runId) =>
       warnApprovalDenied(session, context, denial, runId),
     presentToolEdit(request) {

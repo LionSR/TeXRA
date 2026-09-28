@@ -287,12 +287,14 @@ All notable changes to this project will be documented in this file.
 - **`yolo` and `never` mean the same on every host.** The session decides
   the approval policy when a plan, delegation, question or model-error retry
   opens, so the extension and desktop now match the terminal: `never` denies
-  them, `yolo` approves plans and delegations, and `yolo` never answers a
-  question or a retry for you. Under `never`, tools that need approval are no
-  longer offered to the model on the extension and desktop either, and a
-  policy change made while a request is already waiting leaves that request
-  for you to answer. The npm package denies retries by policy instead of
-  through its own listener.
+  them, `yolo` approves plans and delegations, and `yolo` denies a question
+  or a retry rather than answer it for you, so under `yolo` the extension and
+  desktop no longer show the Retry panel or an `ask_user` question. Under
+  `never`, tools that need approval are no longer offered to the model on the
+  extension and desktop either, and a policy change made while a request is
+  already waiting leaves that request for you to answer (a headless run
+  denies it). The npm package denies retries by policy instead of through its
+  own listener.
 
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session

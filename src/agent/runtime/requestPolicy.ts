@@ -6,7 +6,8 @@
  *
  * A command or edit reaches the session's door already decided by its tool,
  * which alone holds the approvals setting and the run's scoped bypass, and a
- * delegation proposal by its flow (`proposalFlow.ts`); those present.
+ * delegation proposal by its flow (`proposalFlow.ts`, `yolo` included); those
+ * present.
  */
 
 import {
@@ -51,10 +52,10 @@ export function withholdsApprovalTools(session: SessionHandle): boolean {
   );
 }
 
-/** The policy's answer for one request: a plan or a proposal follows the
- *  executable rule (`never` denies, `yolo` approves, `ask` presents or, with
- *  nobody to ask, denies), and a question or a retry is never answered on a
- *  person's behalf. */
+/** The policy's answer for one request: a plan follows the executable rule
+ *  (`never` denies, `yolo` approves, `ask` presents or, with nobody to ask,
+ *  denies), and a question or a retry is denied under `yolo` rather than
+ *  answered on a person's behalf. */
 function answerFor(
   session: SessionHandle,
   payload: PermissionPayload,
@@ -66,8 +67,7 @@ function answerFor(
   | undefined {
   const policy = session.approvalPolicy;
   switch (payload.kind) {
-    case 'planApproval':
-    case 'proposal': {
+    case 'planApproval': {
       const decision = decideTexraApproval({
         policy,
         promptRequired: true,
@@ -115,6 +115,7 @@ function answerFor(
         denial: { kind: 'retry', deny: decision.deny },
       };
     }
+    case 'proposal':
     case 'toolEdit':
     case 'bash':
     case 'externalInquiry':

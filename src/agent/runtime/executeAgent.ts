@@ -41,7 +41,6 @@ import {
   type ResumeData,
 } from './SessionResumeRetrieval';
 import { modelInvokerLayer } from './ModelInvoker';
-import { withholdsApprovalTools } from './requestPolicy';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
@@ -350,8 +349,9 @@ export function executeAgent(
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
-        // The session's policy over what its host can answer.
-        approvalPromptsUnavailable: withholdsApprovalTools(options.session),
+        // The session's host decides whether an approval can be asked.
+        approvalPromptsUnavailable:
+          options.session.interactions.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
         parentOffered: options.parentOffered,
       },
@@ -501,7 +501,8 @@ export function resumeToolUseFromResumeData(
       resumed: true,
       session: runSession,
       toolPolicy: {
-        approvalPromptsUnavailable: withholdsApprovalTools(runSession),
+        approvalPromptsUnavailable:
+          runSession.interactions.approvalPromptsUnavailable,
       },
     });
     return yield* runWithLifecycle(
