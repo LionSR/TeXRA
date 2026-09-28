@@ -121,6 +121,11 @@ describe('requestBashApproval queueing', () => {
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const runId = generateRunId();
         let policyDenials = 0;
+        yield* session.interactions.use({
+          approvalDenied: () => {
+            policyDenials += 1;
+          },
+        });
         session.setApprovalPolicy('never');
         session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
         const requests = yield* watchBashRequests(session);
@@ -135,9 +140,6 @@ describe('requestBashApproval queueing', () => {
                 runId,
                 session,
                 toolPolicy: {},
-                onApprovalPolicyDenial: () => {
-                  policyDenials += 1;
-                },
               },
             }),
           ),

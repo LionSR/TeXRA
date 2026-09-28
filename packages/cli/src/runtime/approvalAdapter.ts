@@ -3,11 +3,11 @@
  *
  * A run asks a person with `request.opened`; the fold lists it in
  * `view.requests` until a `request.decided` answers it. This host watches
- * that list and answers each request from the terminal — the policy's own
- * decision when there is nobody to ask, otherwise the prompt the operator
- * sees — and stages nothing else: the port it attaches presents events,
- * mirrors bypass state, and holds a tool edit's preview so the diff can be
- * printed.
+ * that list and answers each request with the prompt the operator sees. The
+ * session already settled what its approval policy decides, so what is listed
+ * needs a person. Nothing else is staged: the port it attaches presents
+ * events, mirrors bypass state, and holds a tool edit's preview so the diff
+ * can be printed.
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
@@ -26,16 +26,11 @@ import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  cliApprovalPromptsUnavailable,
-  settleExecutable,
-  settleHumanInputDenial,
-  settleRetry,
-} from './approval/settleApprovals';
-import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
   askApproval,
   queueCliApprovalQuestion,
+  warnApprovalDenied,
 } from './approval/approvalPrompts';
 import {
   buildAgentProposalApprovalContent,
@@ -214,29 +209,21 @@ export function createHeadlessCliHostInteractions(
           requestId,
           yield* ask(yield* toolEditContent(payload)),
         );
-      case 'planApproval': {
-        const settled = settleExecutable(session, context, runId);
+      case 'planApproval':
         return yield* decide(
           runId,
           requestId,
-          settled ??
-            (yield* ask({
-              summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
-            })),
+          yield* ask({
+            summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+          }),
         );
-      }
-      case 'proposal': {
-        const settled = settleExecutable(session, context, runId);
+      case 'proposal':
         return yield* decide(
           runId,
           requestId,
-          settled ??
-            (yield* ask(buildAgentProposalApprovalContent(payload.data))),
+          yield* ask(buildAgentProposalApprovalContent(payload.data)),
         );
-      }
       case 'retry': {
-        const settled = settleRetry(session, payload.data, context);
-        if (settled) return yield* decide(runId, requestId, settled);
         // The pre-prompt hook fires here and again inside `askApproval`; that
         // double call is pre-existing retry behavior, not a bug to "fix".
         hooks.beforePrompt?.();
@@ -256,16 +243,12 @@ export function createHeadlessCliHostInteractions(
           cause: note ?? null,
         });
       }
-      case 'userQuestion': {
-        const denial = settleHumanInputDenial(session, context, runId);
+      case 'userQuestion':
         return yield* decide(
           runId,
           requestId,
-          denial
-            ? { action: 'deny', reason: denial.reason }
-            : yield* askHeadlessUserQuestion(payload.data, context, hooks),
+          yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
-      }
     }
   });
 
@@ -316,10 +299,10 @@ export function createHeadlessCliHostInteractions(
 
   return {
     emit: hooks.emit,
-    // What the session withholds on every run it launches or resumes.
-    get approvalPromptsUnavailable() {
-      return cliApprovalPromptsUnavailable(session, context);
-    },
+    // Only an interactive run can answer a prompt.
+    approvalPromptsUnavailable: context.mode !== 'interactive',
+    approvalDenied: (denial, runId) =>
+      warnApprovalDenied(session, context, denial, runId),
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },

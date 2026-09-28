@@ -37,8 +37,8 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // A GitHub delivery into its poller's own set.
   'src/tools/github/PollingSourceBase.ts': 1,
   // The package boundary: the awaiter of `runAgent` (whose run starts at
-  // the door), the view drain a `Run` owns, and a session's retry denier.
-  'packages/agent/src/effect/sessionPrograms.ts': 3,
+  // the door) and the view drain a `Run` owns.
+  'packages/agent/src/effect/sessionPrograms.ts': 2,
 };
 
 /**

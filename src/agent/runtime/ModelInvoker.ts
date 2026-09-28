@@ -78,6 +78,7 @@ import { UsageLog } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
+import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
@@ -978,10 +979,14 @@ export const modelInvokerLayer = (): Layer.Layer<
             ...retryRows(runId, state, pendingRetry('waiting'), {
               lastError: info,
             }),
-            // The invoker's own answer, recorded like any other.
+            // The invoker's own answer, or the policy's, recorded like any
+            // other.
             ...(automatic
               ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-              : []),
+              : policyDecidedRows(session, runId, {
+                  kind: 'retry',
+                  data: request,
+                })),
           ]);
         }
         const state = yield* cell.current;

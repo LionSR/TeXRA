@@ -352,10 +352,10 @@ const openStep = Effect.fn('Step.open')(function* (
     run.logger.warn(message);
   }
   if (withheldChanged)
-    run.onApprovalPolicyDenial?.({
-      kind: 'withheldTools',
-      tools: step.withheld,
-    });
+    run.session.interactions.approvalDenied(
+      { kind: 'withheldTools', tools: step.withheld },
+      run.runId,
+    );
   return {
     tools,
     continuation: step.continuation?.continuation ?? null,

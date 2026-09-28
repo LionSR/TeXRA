@@ -28,7 +28,6 @@ import {
   presentFollowUpResult,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { cliApprovalDenialHandler } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -441,16 +440,6 @@ export function createChatSessionController(
     ),
   );
 
-  const setupRunHost = (
-    runId: RunId,
-  ): {
-    readonly onDenial: ReturnType<typeof cliApprovalDenialHandler>;
-    readonly finalize: () => void;
-  } => ({
-    onDenial: cliApprovalDenialHandler(runtimeSession, sessionContext, runId),
-    finalize: (): void => session.markRunCompleted(),
-  });
-
   // -----------------------------------------------------------------------
   // startRootRun
   // -----------------------------------------------------------------------
@@ -458,7 +447,6 @@ export function createChatSessionController(
   const startRootRun = (config: AgentConfigPayload): void => {
     session.interruptedRunId = undefined;
     const runId = generateRunId();
-    const { onDenial, finalize } = setupRunHost(runId);
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds the `await` of a `Deferred` the run chain completes.
@@ -482,7 +470,6 @@ export function createChatSessionController(
             {
               session: runtimeSession,
               enforceCategory: true,
-              onApprovalPolicyDenial: onDenial,
               onRunResolved: (resolvedRunId) => {
                 // Each chat round mints a fresh root run id, so
                 // bash/tool-edit/super-YOLO bypass, which is
@@ -509,7 +496,7 @@ export function createChatSessionController(
         }),
         reportRunFailure,
       ).pipe(
-        Effect.ensuring(Effect.sync(finalize)),
+        Effect.ensuring(Effect.sync(() => session.markRunCompleted())),
         // The claim settles with the run's own exit, so a waiter reads what
         // the run did rather than what a promise adapter made of it.
         settleClaimOnExit(claimedRun),
@@ -577,8 +564,6 @@ export function createChatSessionController(
           return;
         }
 
-        const { onDenial, finalize } = setupRunHost(id);
-
         // Adopting the resumed stream is the mutation a refusal must not cost:
         // `resumeRun` calls this only once the saved state loaded, so the
         // refusal reaches the chat the user is looking at instead of a cleared
@@ -611,7 +596,6 @@ export function createChatSessionController(
           Effect.gen(function* () {
             const result = yield* agentRuns.resume(id, {
               session: runtimeSession,
-              onApprovalPolicyDenial: onDenial,
               onResumeResolved: adoptResumedRun,
               isCancellationRequested: () => session.stopRequested,
             });
@@ -630,7 +614,7 @@ export function createChatSessionController(
             Effect.ensuring(
               Effect.sync(() => {
                 restoreSuperseded();
-                finalize();
+                session.markRunCompleted();
               }),
             ),
             // The slot was claimed synchronously above; it settles with this
@@ -714,7 +698,6 @@ export function createChatSessionController(
       preparingRoot?.runId === run.id ? preparingRoot : undefined;
     releasePreparingRoot(preparing);
     if (!session.tryClaimRootRunSlot(Deferred.await(adopted))) return;
-    const { finalize } = setupRunHost(run.id);
     session.runId = run.id;
     if (session.interruptedRunId === run.id)
       session.interruptedRunId = undefined;
@@ -733,7 +716,7 @@ export function createChatSessionController(
           ? runOutcomeExitCode(status)
           : CliExitCode.Success;
       }).pipe(
-        Effect.ensuring(Effect.sync(finalize)),
+        Effect.ensuring(Effect.sync(() => session.markRunCompleted())),
         settleClaimOnExit(adopted),
       ),
     );

@@ -41,6 +41,7 @@ import {
   type ResumeData,
 } from './SessionResumeRetrieval';
 import { modelInvokerLayer } from './ModelInvoker';
+import { withholdsApprovalTools } from './requestPolicy';
 import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
@@ -93,7 +94,6 @@ function runLayerFor(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         tools: shared.tools,
-        onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
           onProgress: (update) => {
             // A UI-only signal, suppressed in the transcript fold: the session
@@ -279,8 +279,6 @@ interface SubagentRunOptions {
    * record instead.
    */
   parentOffered?: readonly OfferedTool[];
-  /** Record that this run met an approval-policy denial (see `AgentRun`). */
-  onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
   /** Session owning this run's coordination state. */
   readonly session: SessionHandle;
   /** Fires once with the run's id right after its handle is tracked. */
@@ -352,9 +350,8 @@ export function executeAgent(
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
-        // The session's host decides whether an approval can be asked.
-        approvalPromptsUnavailable:
-          options.session.interactions.approvalPromptsUnavailable,
+        // The session's policy over what its host can answer.
+        approvalPromptsUnavailable: withholdsApprovalTools(options.session),
         stopAfterCycle: options.stopAfterCycle,
         parentOffered: options.parentOffered,
       },
@@ -504,8 +501,7 @@ export function resumeToolUseFromResumeData(
       resumed: true,
       session: runSession,
       toolPolicy: {
-        approvalPromptsUnavailable:
-          runSession.interactions.approvalPromptsUnavailable,
+        approvalPromptsUnavailable: withholdsApprovalTools(runSession),
       },
     });
     return yield* runWithLifecycle(

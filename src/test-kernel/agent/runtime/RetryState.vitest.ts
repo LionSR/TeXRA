@@ -890,17 +890,15 @@ describe('ModelInvoker retry', () => {
 
   // A denial does not retry and — crucially — is NOT a user cancel, so the
   // run resumes to RUNNING to let the failure terminalize (#7331); a
-  // cancelled zero-output run would report COMPLETED.
+  // cancelled zero-output run would report COMPLETED. The session's policy
+  // makes it, in the batch that opens the request: no surface answers.
   it.effect('classifies a policy retry denial as failed, not cancelled', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'deny',
-        reason: 'Denied by TeXRA approval policy.',
-      }));
+      session.setApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
       ]);
@@ -921,7 +919,6 @@ describe('ModelInvoker retry', () => {
       // terminalize (#7331).
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
-      requests.detach();
       yield* closeSessionOf(session);
     }),
   );

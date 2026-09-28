@@ -37,7 +37,6 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
@@ -85,12 +84,6 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /**
-   * Record that this run met an approval-policy denial: a request settled as
-   * denied, or approval-gated tools were withheld from the model when the
-   * run resolved its tools.
-   */
-  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -160,7 +153,6 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
-  readonly onApprovalPolicyDenial?: AgentRunShape['onApprovalPolicyDenial'];
 }
 
 /**
@@ -336,7 +328,6 @@ export const agentRunLayer = (
         toolPolicy: ctx.toolPolicy,
         workingDirectory: ctx.workingDirectory,
         delegationAgentScope: ctx.delegationAgentScope,
-        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         opening: ctx.opening,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,

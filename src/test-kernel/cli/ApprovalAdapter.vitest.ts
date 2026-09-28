@@ -95,19 +95,18 @@ function ensureRun(runId: RunId) {
   });
 }
 
-function approvalLayer(runId: RunId, onApprovalPolicyDenial?: () => void) {
+function approvalLayer(runId: RunId) {
   return nativeToolTestLayer({
     workingDirectory: '/tmp',
     run: {
       runId,
       session: testDefaultSession(),
       toolPolicy: {},
-      onApprovalPolicyDenial,
     },
   });
 }
 
-function requestNewProofEdit(onApprovalPolicyDenial?: () => void) {
+function requestNewProofEdit() {
   return Effect.gen(function* () {
     yield* ensureRun(ROOT_RUN);
     return yield* requestToolEditApproval({
@@ -116,7 +115,7 @@ function requestNewProofEdit(onApprovalPolicyDenial?: () => void) {
       proposedContent: '\\section{Proof}\nA concise proof.\n',
       sourceTool: 'write_file',
       runId: ROOT_RUN,
-    }).pipe(Effect.provide(approvalLayer(ROOT_RUN, onApprovalPolicyDenial)));
+    }).pipe(Effect.provide(approvalLayer(ROOT_RUN)));
   });
 }
 
@@ -228,20 +227,21 @@ afterEach(() => {
 
 describe('human input approval policy', () => {
   it.effect(
-    'reports a shared edit-policy denial through the run-context hook',
+    'warns the operator of a shared edit-policy denial through the host',
     () =>
       Effect.gen(function* () {
         const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
         useCliHostInteractions(ctx);
-        let policyDenials = 0;
+        const stderr = stubStderrWrites();
 
-        const result = yield* requestNewProofEdit(() => {
-          policyDenials += 1;
-        });
+        const result = yield* requestNewProofEdit();
         // A policy refusal with nobody to ask is a denial, not a person's
         // rejection: the model reads the reason and routes around it.
         expect(result).toMatchObject({ action: 'deny' });
-        expect(policyDenials).toBe(1);
+        expect(stderr).toHaveBeenCalledTimes(1);
+        expect(String(stderr.mock.calls[0]?.[0])).toContain(
+          'Command or edit denied',
+        );
         // The model routes around the denial, so the run's exit code is untouched.
         expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(
           CliExitCode.Success,
@@ -331,80 +331,6 @@ describe('retry request classification (#7331)', () => {
     });
   }
 
-  it.effect(
-    'denies (not cancels) a retry when no human input is available',
-    () =>
-      Effect.gen(function* () {
-        const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
-        const result = yield* requestHeadlessRetry(ctx);
-
-        // A policy/headless auto-denial is a deny, not a user cancel: the model
-        // receives the reason as feedback instead of the turn being abandoned.
-        expect(result).toEqual({
-          action: 'deny',
-          reason: 'Denied by TeXRA approval policy.',
-        });
-      }),
-  );
-
-  it.effect.each([
-    { approvalPolicy: 'never' as const, mode: 'interactive' as const },
-    { approvalPolicy: 'ask' as const, mode: 'headless' as const },
-  ])(
-    'preserves the credential denial reason in $approvalPolicy/$mode mode',
-    ({ approvalPolicy, mode }) =>
-      Effect.gen(function* () {
-        const result = yield* requestHeadlessRetry(
-          context({ approvalPolicy, mode }),
-          { errorDetails: credentialExhaustedRetry.errorDetails },
-        );
-
-        expect(result).toEqual({
-          action: 'deny',
-          reason: 'Retry skipped: credential exhausted or unauthorized.',
-        });
-      }),
-  );
-
-  it.effect(
-    'denies a yolo retry without changing provider-failure exit classification',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* requestHeadlessRetry(
-          context({ approvalPolicy: 'yolo' }),
-        );
-
-        expect(result).toEqual({
-          action: 'deny',
-          reason:
-            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-        });
-        expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(
-          CliExitCode.AgentError,
-        );
-      }),
-  );
-
-  it.effect.each([
-    credentialExhaustedRetry.errorDetails,
-    { message: 'Unauthorized', statusCode: 401 },
-    { message: 'Forbidden', statusCode: 403 },
-  ])(
-    'preserves the credential denial reason for yolo credential/auth failure %#',
-    (errorDetails) =>
-      Effect.gen(function* () {
-        const result = yield* requestHeadlessRetry(
-          context({ approvalPolicy: 'yolo' }),
-          { errorDetails },
-        );
-
-        expect(result).toEqual({
-          action: 'deny',
-          reason: 'Retry skipped: credential exhausted or unauthorized.',
-        });
-      }),
-  );
-
   it.effect('cancels a retry the interactive user explicitly rejects', () =>
     Effect.gen(function* () {
       const result = yield* requestHeadlessRetry(
@@ -414,46 +340,6 @@ describe('retry request classification (#7331)', () => {
       // The operator's note rides the cancellation: a dismissed retry is
       // their call, and the reason they gave is the cause.
       expect(result).toEqual({ action: 'cancel', cause: 'not now' });
-    }),
-  );
-});
-
-describe('bounded yolo retry batches (#9532)', () => {
-  it.effect('denies every representative run sharing one policy adapter', () =>
-    Effect.gen(function* () {
-      // Representative runs share the session's CLI policy adapter. This
-      // proves stream-agnostic bounding, not delegation inheritance: the
-      // second run's request is denied exactly as the first one's was, so
-      // neither can buy a second automatic batch off the other's decision.
-      useCliHostInteractions(context({ approvalPolicy: 'yolo' }));
-
-      const decisions = yield* Effect.forEach(
-        ['a00002', 'a00003'] as RunId[],
-        (runId) =>
-          openRequestOn(runId, {
-            kind: 'retry',
-            data: {
-              requestId: `retry-${runId}`,
-              runId,
-              operation: 'Model invocation',
-              errorMessage: 'permanent provider failure',
-            },
-          }),
-        { concurrency: 'unbounded' },
-      );
-
-      expect(decisions).toEqual([
-        {
-          action: 'deny',
-          reason:
-            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-        },
-        {
-          action: 'deny',
-          reason:
-            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-        },
-      ]);
     }),
   );
 });

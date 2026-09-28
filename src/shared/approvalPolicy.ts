@@ -114,14 +114,23 @@ export function decideTexraApproval(input: {
 }
 
 /**
- * What an approval-policy denial closed, as a run reports it to its host: a
- * command or edit, a delegation proposal, or the approval-gated tools
- * withheld from the model when the run resolved its tools.
+ * What an approval-policy denial closed, as the session reports it to its
+ * host: a command, edit or plan, a delegation proposal, the approval-gated
+ * tools withheld from the model when the run resolved its tools, the human
+ * retry permit after a model error, or a question the model asked the user.
  */
 export type ApprovalPolicyDenial =
   | { readonly kind: 'executable' }
   | { readonly kind: 'proposal' }
-  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] };
+  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
+  | {
+      readonly kind: 'retry';
+      readonly deny: Exclude<TexraRetryApprovalDecision, 'present'>['deny'];
+    }
+  | {
+      readonly kind: 'humanInput';
+      readonly deny: Exclude<TexraHumanInputDecision, 'present'>['deny'];
+    };
 
 /**
  * Decide one delegation proposal. `never` denies it as it denies every other
@@ -186,7 +195,7 @@ export function texraRetryDenialMessage(
   }
 }
 
-export type TexraHumanInputDecision =
+type TexraHumanInputDecision =
   | 'present'
   | {
       readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';

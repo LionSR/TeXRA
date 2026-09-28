@@ -123,10 +123,23 @@ export function getExhaustionReason(
 }
 
 /** Whether an identical retry needs a credential or route change first. */
-export function isCredentialExhausted(
+function isCredentialExhausted(
   errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
 ): boolean {
   return getExhaustionReason(errorDetails) !== undefined;
+}
+
+/** Whether retrying past the automatic attempts needs a credential or route
+ *  change first: an exhausted credential, or a 401 or 403. */
+export function isCredentialRetryFailure(
+  errorDetails:
+    Pick<ProviderError, 'classification' | 'statusCode'> | undefined,
+): boolean {
+  return (
+    isCredentialExhausted(errorDetails) ||
+    errorDetails?.statusCode === 401 ||
+    errorDetails?.statusCode === 403
+  );
 }
 
 /**
