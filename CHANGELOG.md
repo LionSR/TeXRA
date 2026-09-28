@@ -263,6 +263,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The `creator` agent works in the terminal and the desktop app** — it can
+  now see the built-in agents and its reference docs and save the new agent
+  into your custom agents folder, as it already could in VS Code. Before, its
+  instructions named no folders and saving outside the project was refused.
+
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
   underlying cause, such as the history file being locked by another process.
@@ -564,6 +569,11 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **The Create agent with AI wizard is removed** — the Agents tab's
+  **Create agent** button and the `texra.createAgentWithAI` command are gone.
+  To have an agent drafted for you, run the built-in `creator` agent, which
+  writes and tests the YAML in a recorded run; **Create from template** in the
+  Agents tab still starts a new agent file.
 - **Removed: the Agent Review panel in Source Control** — the Find Issues
   section, its commands, the `changeReviewer` agent and the "Automatically
   review your changes after each commit" setting are gone. To review a
@@ -577,7 +587,7 @@ All notable changes to this project will be documented in this file.
   (`Ctrl+Alt+M`, replacing Show Launcher and New Session), **Show Sessions**
   (`Ctrl+Alt+P`), **Open Sessions in Editor**, **Open Settings**, and
   **Format Current LaTeX File**. The per-tab settings commands, Execute Agent,
-  View Profile, Sign Out, Remove API Key and Create AI Agent stay bound (to
+  View Profile, Sign Out and Remove API Key stay bound (to
   keys, buttons and links) but leave the palette; Settings owns them. Removed:
   Toggle Sessions Drawer and its `Ctrl+Alt+T` key (the panel's Sessions
   button does it), Indent All LaTeX Files, Import or Create LaTeX Project,

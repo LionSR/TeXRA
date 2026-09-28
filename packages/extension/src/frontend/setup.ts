@@ -1,124 +1,14 @@
-import * as path from 'node:path';
-
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  AgentDirectories,
-  type AgentDirectoriesFailed,
-  type StateStore,
-} from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { StateStore } from '@platform/interfaces';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'extension';
-
-/** External-root registration options for the custom agents directory. */
-const CUSTOM_AGENT_ROOT_OPTIONS = {
-  kind: 'custom',
-  writable: true,
-  label: 'Custom agents',
-} as const;
-
-/**
- * Register agent directories + bundled reference docs with the external-roots
- * allowlist so the creator tool-use agent can read/write them through the
- * standard file tools (read_file, write_file, grep, glob, edit_file).
- *
- * The built-in directories are the packaged ones, so this only needs the
- * extension's resources path to be resolvable.
- */
-export const registerAgentDirectoryRoots = Effect.fnUntraced(function* (
-  context: vscode.ExtensionContext,
-) {
-  const agentDirectories = yield* AgentDirectories;
-  const registrations: Array<
-    Effect.Effect<
-      void,
-      AgentDirectoriesFailed,
-      GlobalStorageFs | FileSystem.FileSystem
-    >
-  > = [
-    Effect.flatMap(agentDirectories.builtIn(), (directory) =>
-      Effect.sync(() =>
-        registerExternalRoot(directory, {
-          kind: 'builtInWorkflow',
-          writable: false,
-          label: 'Built-in workflow agents',
-        }),
-      ),
-    ),
-    Effect.flatMap(agentDirectories.builtInToolUse(), (directory) =>
-      Effect.sync(() =>
-        registerExternalRoot(directory, {
-          kind: 'builtInToolUse',
-          writable: false,
-          label: 'Built-in tool-use agents',
-        }),
-      ),
-    ),
-    Effect.flatMap(agentDirectories.custom(), (directory) =>
-      Effect.sync(() =>
-        registerExternalRoot(directory, CUSTOM_AGENT_ROOT_OPTIONS),
-      ),
-    ),
-    Effect.sync(() =>
-      registerExternalRoot(
-        path.join(context.extensionPath, 'resources', 'docs', 'agent-creation'),
-        {
-          kind: 'agentDocs',
-          writable: false,
-          label: 'Agent creation docs',
-        },
-      ),
-    ),
-  ];
-
-  // Register each root independently so one failing directory resolution
-  // (e.g. a misconfigured custom agents path) does not take out the others —
-  // the creator agent still needs its reference docs and built-in examples.
-  yield* Effect.forEach(
-    registrations,
-    (register) =>
-      register.pipe(
-        Effect.catchCause((cause) =>
-          Effect.logError(
-            `Failed to register agent directory root: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(CHANNEL)),
-        ),
-      ),
-    { discard: true },
-  );
-});
-
-/**
- * Re-register the custom agents directory after the user changes its
- * location via Settings. Registering the same `kind` overwrites the
- * previous slot, so no separate unregister step is needed.
- */
-export function refreshCustomAgentRoot(): Effect.Effect<
-  void,
-  never,
-  AgentDirectories | GlobalStorageFs | FileSystem.FileSystem
-> {
-  return AgentDirectories.use((directories) => directories.custom()).pipe(
-    Effect.andThen((custom) =>
-      Effect.sync(() =>
-        registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS),
-      ),
-    ),
-    Effect.catchCause((cause) =>
-      Effect.logError(
-        `Failed to refresh custom agents root: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(CHANNEL)),
-    ),
-  );
-}
 
 /** Prepare the host environment and recommend LaTeX Workshop when useful.
  *  Never fails: each step logs its own failure and the next still runs. */

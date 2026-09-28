@@ -131,13 +131,6 @@ export const commandCatalog = [
     },
   },
   {
-    id: 'texra.createAgentWithAI',
-    extensionRegistry: true,
-    title: 'Create AI Agent',
-    category: 'TeXRA',
-    icon: '$(sparkle)',
-  },
-  {
     id: 'texra.setApiKey',
     extensionRegistry: true,
     title: 'Set API Key',

@@ -51,7 +51,6 @@ export function registerCommands(
     context,
     createExtensionCommandActions(
       context,
-      globalState,
       settingsViewProvider,
       progressViewProvider,
       secrets,

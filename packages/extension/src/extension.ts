@@ -44,10 +44,7 @@ import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
-import {
-  initializeLatexSupport,
-  registerAgentDirectoryRoots,
-} from '@frontend/setup';
+import { initializeLatexSupport } from '@frontend/setup';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
@@ -629,9 +626,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   FileLister.initialize(context, runtimeSession);
 
-  // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
-  // directories, and loadAgents scans them.
-  yield* registerAgentDirectoryRoots(context);
   const agentIndexLoaded = yield* loadAgents({ includeRemote: false }).pipe(
     Effect.as(true),
     Effect.catchCause((cause) =>

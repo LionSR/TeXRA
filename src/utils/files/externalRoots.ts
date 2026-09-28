@@ -12,8 +12,9 @@ import { isPathWithin } from '@utils/core/pathCore';
  * operate on absolute paths that fall inside it, while paths outside the
  * registry keep their current "stay within the workspace" rejection.
  *
- * Registration happens in the VS Code activation layer (see frontend/setup.ts);
- * the registry itself is platform-agnostic.
+ * The agent-catalog follower every host's process runtime builds
+ * (`@tools/agentCatalogFollower`) registers the agent directories; skill
+ * discovery registers skill roots. The registry itself is platform-agnostic.
  *
  * Security notes
  * --------------

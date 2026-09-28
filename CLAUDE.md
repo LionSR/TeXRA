@@ -221,11 +221,11 @@ takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
 `Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
 tool calls. `output/` is the documents plugin a workflow round runs
-(`documentRounds.ts`) and its output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
-filename: it is one linear async function (`runAgentCreator`) with a single
-production caller. Provider APIs are reached only through the `packages/llm`
-`Model` that `runtime/run/modelBinding.ts` binds; the helper paths
-(`helperModel`, `agentCreatorFlow`) bind through that same route. Agents are configured by YAML in
+(`documentRounds.ts`) and its output pipeline. Provider APIs are reached
+only through the `packages/llm` `Model` that `runtime/run/modelBinding.ts`
+binds; the `helperModel` path binds through that same route. New agents come
+from the built-in `creator` tool-use agent or the settings view's "Create from
+template". Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.
 

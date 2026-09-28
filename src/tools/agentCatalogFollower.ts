@@ -12,7 +12,16 @@
  * before its first reload, it registers the tool plugins' agent directories
  * under that root (`<resources>/plugins/<id>/agents`), so no load or reload
  * scans without them.
+ *
+ * It also registers the agent directories with the file tools' external-root
+ * allowlist, for every host alike: the packaged built-in agents and the
+ * agent-creation docs read-only, the custom agents directory writable. The
+ * `creator` agent reads and writes them through the ordinary file tools, and
+ * its prompt names them (`CUSTOM_AGENTS_DIR`, …). The custom directory is a
+ * global setting, so it is registered again whenever that setting changes.
  */
+import * as path from 'node:path';
+
 import { Cause, Effect, Layer, Schedule, Stream } from 'effect';
 
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
@@ -23,12 +32,62 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { TOOL_PLUGINS } from '@tools/plugins';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { registerExternalRoot } from '@utils/files/externalRoots';
+
+/** Register one agent directory root; a failure is logged and leaves the
+ *  other roots registered. */
+const registerRoot = <E, R>(
+  directory: Effect.Effect<string, E, R>,
+  options: Parameters<typeof registerExternalRoot>[1],
+) =>
+  directory.pipe(
+    Effect.flatMap((absolutePath) =>
+      Effect.sync(() => registerExternalRoot(absolutePath, options)),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.logError(
+        `Failed to register the ${options.label.toLowerCase()} directory with the file tools: ${toErrorMessage(Cause.squash(cause))}`,
+      ),
+    ),
+  );
 
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;
-    const { resourcesRoot } = yield* AgentDirectories;
+    const directories = yield* AgentDirectories;
+    const { resourcesRoot } = directories;
     if (resourcesRoot === undefined || resourcesRoot === '') return;
+    const registerCustomRoot = registerRoot(directories.custom(), {
+      kind: 'custom',
+      writable: true,
+      label: 'Custom agents',
+    });
+    yield* Effect.all(
+      [
+        registerRoot(directories.builtIn(), {
+          kind: 'builtInWorkflow',
+          writable: false,
+          label: 'Built-in workflow agents',
+        }),
+        registerRoot(directories.builtInToolUse(), {
+          kind: 'builtInToolUse',
+          writable: false,
+          label: 'Built-in tool-use agents',
+        }),
+        registerRoot(
+          Effect.succeed(path.join(resourcesRoot, 'docs', 'agent-creation')),
+          { kind: 'agentDocs', writable: false, label: 'Agent creation docs' },
+        ),
+        registerCustomRoot,
+      ],
+      { discard: true },
+    );
+    // Registering the same kind replaces its slot, so a changed setting
+    // needs no unregister step.
+    yield* appState.changes([GlobalStateKey.CUSTOM_AGENT_DIR]).pipe(
+      Stream.runForEach(() => registerCustomRoot),
+      Effect.forkScoped,
+    );
     installPluginAgentDirectories(
       resourcesRoot,
       TOOL_PLUGINS.flatMap((plugin) =>

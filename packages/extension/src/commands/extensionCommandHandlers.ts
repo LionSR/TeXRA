@@ -130,7 +130,6 @@ export interface ExtensionCommandActions {
   removeApiKey(): CommandProgram;
   showProgressView(inPlace: boolean): CommandProgram;
   setApiKey(provider: ApiProvider | undefined): CommandProgram;
-  createAgentWithAI(category: AgentCategory): CommandProgram;
   execute(input: unknown): CommandProgram;
 }
 
@@ -224,11 +223,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     z.tuple([z.enum(API_PROVIDERS).optional()]),
     (actions: ExtensionCommandActions, provider?: ApiProvider) =>
       actions.setApiKey(provider),
-  ),
-  'texra.createAgentWithAI': definedHandler(
-    z.tuple([AgentCategorySchema.optional()]),
-    (actions: ExtensionCommandActions, category?: AgentCategory) =>
-      actions.createAgentWithAI(category ?? 'workflow'),
   ),
   'texra.execute': definedHandler(
     z.tuple([z.unknown().optional()]),

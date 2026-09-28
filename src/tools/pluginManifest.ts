@@ -44,7 +44,6 @@ export const MANIFEST = [
     toolNames: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
     name: 'File & Shell Operations',
     category: 'file',
-    keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
     description:
       'Read, write, edit files and run shell commands. Includes glob/grep search.',
   },
@@ -57,7 +56,6 @@ export const MANIFEST = [
     ],
     name: 'LaTeX Extraction',
     category: 'latex',
-    keywords: ['latex', 'figure', 'tikz', 'bibliography', 'bib', 'extract'],
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
   },
@@ -66,7 +64,6 @@ export const MANIFEST = [
     toolNames: ['diagnostics'],
     name: 'LaTeX Diagnostics',
     category: 'latex',
-    keywords: ['diagnostic', 'compile'],
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
   },
@@ -75,7 +72,6 @@ export const MANIFEST = [
     toolNames: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source'],
     name: 'ArXiv Search & Download',
     category: 'academic',
-    keywords: ['arxiv', 'paper', 'research', 'literature', 'review', 'survey'],
     description:
       'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
   },
@@ -84,15 +80,6 @@ export const MANIFEST = [
     toolNames: ['crossref_search'],
     name: 'Crossref Citation Lookup',
     category: 'academic',
-    keywords: [
-      'crossref',
-      'paper',
-      'research',
-      'literature',
-      'cite',
-      'doi',
-      'journal',
-    ],
     description:
       'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
   },
@@ -101,7 +88,6 @@ export const MANIFEST = [
     toolNames: ['web_search', 'web_fetch'],
     name: 'Web Search & Fetch',
     category: 'web',
-    keywords: ['web', 'search', 'internet', 'online', 'url', 'fetch', 'browse'],
     description:
       'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
   },
@@ -119,16 +105,6 @@ export const MANIFEST = [
     promptSection: true,
     name: 'Memory, Tasks & Delegation',
     category: 'workflow',
-    keywords: [
-      'memory',
-      'todo',
-      'track',
-      'delegate',
-      'orchestrat',
-      'pipeline',
-      'multi-agent',
-      'chain',
-    ],
     description:
       'Persistent memory across sessions, task tracking with to-do lists, and delegate work to sub-agents.',
   },
@@ -142,7 +118,6 @@ export const MANIFEST = [
     injectedWhen: { plan: true },
     name: 'Goal Mode',
     category: 'workflow',
-    keywords: ['plan', 'goal', 'autonomous', 'objective'],
     description:
       'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
     setup: Object.freeze({
@@ -181,14 +156,6 @@ export const MANIFEST = [
     toolNames: ['wolfram'],
     name: 'Wolfram Language',
     category: 'computation',
-    keywords: [
-      'math',
-      'compute',
-      'calculate',
-      'wolfram',
-      'symbolic',
-      'equation',
-    ],
     description:
       'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
     setup: Object.freeze({
@@ -208,7 +175,6 @@ export const MANIFEST = [
     ],
     name: 'Zotero Integration',
     category: 'ai-agents',
-    keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
     setup: Object.freeze({
@@ -239,7 +205,6 @@ export const MANIFEST = [
     ],
     name: 'Lean 4 Proof Assistant',
     category: 'lean',
-    keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
     description:
       'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',
     setup: Object.freeze({
@@ -276,7 +241,6 @@ export const MANIFEST = [
     toolNames: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
     name: 'Multi-Agent Workflow',
     category: 'workflow',
-    keywords: ['orchestrat', 'pipeline', 'multi-agent', 'fan out', 'parallel'],
     description:
       'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
     setup: Object.freeze({
@@ -295,7 +259,6 @@ export const MANIFEST = [
     toolNames: ['github_subscription'],
     name: 'GitHub Activity Subscription',
     category: 'ai-agents',
-    keywords: ['github', 'pull request'],
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
     setup: Object.freeze({
@@ -318,7 +281,6 @@ export const MANIFEST = [
     toolNames: ['inquiry'],
     name: 'External Inquiry',
     category: 'ai-agents',
-    keywords: ['second opinion', 'chatgpt', 'gemini', 'grok', 'deep think'],
     description:
       'Use premium chat subscriptions such as ChatGPT Pro, Claude Opus, Gemini Deep Think, and Grok without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
     setup: Object.freeze({
@@ -334,7 +296,6 @@ export const MANIFEST = [
     toolNames: ['codex'],
     name: 'OpenAI Codex CLI',
     category: 'ai-agents',
-    keywords: ['codex'],
     settings: [
       [WorkspaceStateKey.CODEX_SANDBOX_MODE, 'Sandbox mode'],
       [WorkspaceStateKey.CODEX_REASONING_EFFORT, 'Reasoning effort'],
@@ -379,7 +340,6 @@ export const MANIFEST = [
     toolNames: ['claude_code'],
     name: 'Claude Code CLI',
     category: 'ai-agents',
-    keywords: ['claude code'],
     settings: [
       [WorkspaceStateKey.CLAUDE_AGENT_MODEL, 'Model'],
       [WorkspaceStateKey.CLAUDE_AGENT_EFFORT, 'Reasoning effort'],
