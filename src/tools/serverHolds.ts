@@ -15,12 +15,14 @@ import { entriesOf, sha256, type ToolEntry } from '@tools/catalogEntries';
 import type { Generation, Registry } from '@tools/liveRegistry';
 import type { InstalledToolPlugin, LoadedPlugin } from '@tools/toolTable';
 
-/** An installed plugin loaded at a key: its contribution, which closes under
- *  the catalog's lock, and its server holds, which close after it (a
- *  release takes the lock). */
+/** An installed plugin loaded at a key: its servers' tools, which enter the
+ *  catalog only when the load is accepted (`publish`), its contribution,
+ *  which closes under the catalog's lock, and its server holds, which close
+ *  after it (a release takes the lock). */
 export interface InstalledLoad {
   readonly id: string;
   readonly key: string;
+  readonly entries: ReadonlyMap<string, ToolEntry>;
   readonly contribution: Scope.Closeable;
   readonly holds: Scope.Closeable;
   /** Why a server offers no tools, or the plugin was not loaded. */
@@ -161,20 +163,15 @@ export function makeServerHolds(catalog: {
           ),
         { discard: true },
       ),
-    /** Load an installed plugin at its key: hold its servers and contribute
-     *  their tools under its one id. */
+    /** Prepare an installed plugin at its key: hold its servers, privately
+     *  until the load is published. */
     loadInstalled: (plugin: InstalledToolPlugin) =>
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
-          // Both scopes are this call's until it returns: a failure or an
+          // The holds are this call's until it returns: a failure or an
           // interruption at any point (only the server starts are
           // interruptible) closes them, and so stops what they hold.
           const holds = yield* Scope.fork(scope);
-          const contribution = yield* Scope.fork(scope);
-          const drop = Effect.andThen(
-            Scope.close(contribution, Exit.void),
-            Scope.close(holds, Exit.void),
-          );
           const held = yield* restore(
             Effect.forEach(plugin.servers, (server) =>
               Effect.acquireRelease(
@@ -183,29 +180,31 @@ export function makeServerHolds(catalog: {
                 { interruptible: true },
               ),
             ).pipe(Scope.provide(holds)),
-          ).pipe(Effect.onError(() => drop));
-          const conflict = yield* locked(
-            contribute(
-              plugin.id,
-              new Map(
-                held.flatMap(({ id, revision, tools }) => [
-                  ...entriesOf(plugin.id, tools, { revision, server: id }),
-                ]),
-              ),
-              contribution,
-            ),
-          ).pipe(Effect.onError(() => drop));
+          ).pipe(Effect.onError(() => Scope.close(holds, Exit.void)));
           return {
             id: plugin.id,
             key: plugin.key,
-            contribution,
+            entries: new Map(
+              held.flatMap(({ id, revision, tools }) => [
+                ...entriesOf(plugin.id, tools, { revision, server: id }),
+              ]),
+            ),
+            contribution: yield* Scope.fork(scope),
             holds,
-            failures: [
-              ...held.flatMap(({ failure }) => failure ?? []),
-              ...(conflict === undefined ? [] : [conflict]),
-            ],
+            failures: held.flatMap(({ failure }) => failure ?? []),
           } satisfies InstalledLoad;
         }),
+      ),
+    /** Contribute an accepted load's tools under its plugin's one id, under
+     *  the catalog's lock: what a load prepares is in no generation before
+     *  it is accepted as current. */
+    publish: (load: InstalledLoad) =>
+      Effect.map(
+        contribute(load.id, load.entries, load.contribution),
+        (conflict): InstalledLoad =>
+          conflict === undefined
+            ? load
+            : { ...load, failures: [...load.failures, conflict] },
       ),
   };
 }

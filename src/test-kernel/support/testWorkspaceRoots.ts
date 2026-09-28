@@ -49,6 +49,9 @@ const VIEW: WorkspaceRoots = Object.freeze({
   get workspaceState() {
     return requireInstalled().workspaceState;
   },
+  get repoState() {
+    return requireInstalled().repoState;
+  },
   get globalState() {
     return requireInstalled().globalState;
   },

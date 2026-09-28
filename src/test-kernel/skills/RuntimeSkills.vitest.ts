@@ -17,7 +17,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { resolveToolPath } from '@tools/pathResolution';
-import { grantSkillRoots } from '@utils/files/externalRoots';
+import { skillRoots, type StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
@@ -186,12 +186,12 @@ describe('runtime skills', () => {
     expect(catalogText(result.catalog)).not.toContain('skill-200');
   });
 
-  // Fails if a skill root one run granted admits file access to another run
-  // of the same project, if scoping cuts off the granting run itself, or if
-  // a grant outlives the listing or activation that made it. The skill sits
-  // outside the project, so only the external-root allowlist can admit it.
+  // Fails if a skill root one step admits reaches a call without it (another
+  // run of the same project, or a later step that no longer lists it), or if
+  // the step holding it cannot read it. The skill sits outside the project,
+  // so only the step's roots can admit it.
   it.effect(
-    "admits a run's listed or activated skill directory to that run only",
+    "admits a step's listed or activated skill directory to its calls only",
     () =>
       Effect.gen(function* () {
         const skillsRoot = yield* Effect.promise(createTempRoot);
@@ -208,32 +208,29 @@ describe('runtime skills', () => {
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
           runCatalog(projectA),
         ).pipe(Effect.provide(nodePlatformLayer));
-        const grant = (listed: typeof catalog) =>
-          grantSkillRoots(
-            'run-a',
+        const rootsOf = (listed: typeof catalog) => {
+          const { roots, refused } = skillRoots(
             listed.flatMap(({ name, directory }) =>
               directory === null ? [] : [{ name, directory }],
             ),
           );
-        expect(grant(catalog)).toEqual([]);
-        const resolveFrom = (runId: string) =>
+          expect(refused).toEqual([]);
+          return roots;
+        };
+        const resolveFrom = (stepRoots: readonly StepRoot[]) =>
           resolveToolPath(
             {
               roots: { ...testWorkspaceRoots(), workspace: projectA },
-              run: { runId },
+              stepRoots,
             },
             skillPath,
           );
 
-        expect((yield* resolveFrom('run-a')).external?.writable).toBe(false);
-        expect(yield* Effect.flip(resolveFrom('run-b'))).toBeInstanceOf(
-          ToolError,
+        expect((yield* resolveFrom(rootsOf(catalog))).external?.writable).toBe(
+          false,
         );
-        // A step that no longer lists the skill withdraws the grant.
-        grant([]);
-        expect(yield* Effect.flip(resolveFrom('run-a'))).toBeInstanceOf(
-          ToolError,
-        );
+        // Another run's call, or a step that no longer lists the skill.
+        expect(yield* Effect.flip(resolveFrom([]))).toBeInstanceOf(ToolError);
         // A skill the user activated by name is granted again, even unlisted.
         const activated = yield* activatedSkillEntries(
           [
@@ -243,9 +240,9 @@ describe('runtime skills', () => {
           testWorkspaceRoots(),
         ).pipe(Effect.provide(nodePlatformLayer));
         expect(activated.map(({ name }) => name)).toEqual(['shared-notes']);
-        expect(grant(activated)).toEqual([]);
-        expect((yield* resolveFrom('run-a')).external?.writable).toBe(false);
-        grant([]);
+        expect(
+          (yield* resolveFrom(rootsOf(activated))).external?.writable,
+        ).toBe(false);
       }),
   );
 });

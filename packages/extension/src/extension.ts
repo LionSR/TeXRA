@@ -36,6 +36,7 @@ import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
+  openRepoStateStore,
 } from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { fromHost } from '@controllers/session/hostCallFailure';
@@ -94,7 +95,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -175,7 +175,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const appState = Layer.effect(
     AppState,
     Effect.map(GlobalDatabase, (database) =>
-      appStateStoreFromDatabase(globalStorage, database),
+      appStateStoreFromDatabase(globalStorage, database.values),
     ),
   );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
@@ -285,13 +285,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         storage,
         globalStorage,
         config,
-        workspaceState: workspaceRoot
-          ? yield* openWorktreeStateStore(
-              projectState,
-              globalState,
-              workspaceRoot,
-            )
-          : projectState,
+        workspaceState: projectState,
+        repoState: yield* openRepoStateStore(workspaceRoot, storage),
         globalState,
       });
       // The once-per-process installs, in the order the shared bootstrap owns.

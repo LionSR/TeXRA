@@ -59,7 +59,7 @@ function planLoadedCliMultiAgentPresets(
  */
 export function loadCliMultiAgentRunPlan(
   init: MultiAgentRunPlanInit,
-  workspaceState: StateStore,
+  repoState: StateStore,
   options: { readonly reloadRemoteAgents?: boolean } = {},
 ) {
   return Effect.gen(function* () {
@@ -68,7 +68,7 @@ export function loadCliMultiAgentRunPlan(
     // agent catalog, never the workspace's team presets, so a preset that was
     // found here cannot go missing under it.
     const preset = findTeamPreset(
-      yield* readCliMultiAgentPresets(workspaceState),
+      yield* readCliMultiAgentPresets(repoState),
       init.preset,
     );
     if (!preset) {

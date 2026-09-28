@@ -37,7 +37,6 @@ import {
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { reprobeOnCredentialChange } from '@tools/credentialReprobe';
 import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
@@ -85,10 +84,4 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   yield* seedDisabledToolDefaults(init.roots.globalState);
-  // A credential a tool plugin declares (the GitHub token) re-probes every
-  // open workspace when any store writes it. Process-lifetime, like the
-  // secret store whose writes it follows, so it is detached from this call.
-  yield* Effect.forkDetach(reprobeOnCredentialChange, {
-    startImmediately: true,
-  });
 });

@@ -313,10 +313,7 @@ type AgentDirectoryVars = Pick<
 >;
 
 function getAgentDirectoryVars(): AgentDirectoryVars {
-  const KIND_TO_VAR: Record<
-    Exclude<ExternalRootKind, 'skill'>,
-    keyof AgentDirectoryVars
-  > = {
+  const KIND_TO_VAR: Record<ExternalRootKind, keyof AgentDirectoryVars> = {
     builtInWorkflow: 'BUILTIN_WORKFLOW_DIR',
     builtInToolUse: 'BUILTIN_TOOLUSE_DIR',
     custom: 'CUSTOM_AGENTS_DIR',
@@ -328,9 +325,8 @@ function getAgentDirectoryVars(): AgentDirectoryVars {
     CUSTOM_AGENTS_DIR: '',
     AGENT_DOCS_DIR: '',
   };
-  for (const root of listExternalRoots()) {
-    if (root.kind !== 'skill') vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
-  }
+  for (const root of listExternalRoots())
+    vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
   return vars;
 }
 

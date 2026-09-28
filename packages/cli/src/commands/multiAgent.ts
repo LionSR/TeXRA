@@ -87,7 +87,7 @@ const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
 ) {
   const { plans, remoteCatalogRefreshAttempted } =
     yield* loadCliMultiAgentPresetPlanSet(
-      yield* readCliMultiAgentPresets(services.workspaceState),
+      yield* readCliMultiAgentPresets(services.repoState),
     );
 
   emitCliResult(context, {
@@ -108,7 +108,7 @@ const runMultiAgentShow = Effect.fn('runMultiAgentShow')(function* (
   const { plan, remoteCatalogRefreshAttempted } =
     yield* loadCliMultiAgentRunPlan(
       { preset: presetIdOrName },
-      services.workspaceState,
+      services.repoState,
     );
 
   emitCliResult(context, {
@@ -135,7 +135,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
   const { plan, remoteCatalogRefreshAttempted } =
-    yield* loadCliMultiAgentRunPlan(init, services.workspaceState, {
+    yield* loadCliMultiAgentRunPlan(init, services.repoState, {
       reloadRemoteAgents: !rejectsHeadlessAsk,
     });
   if (rejectsHeadlessAsk) {

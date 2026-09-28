@@ -65,18 +65,10 @@ import {
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-/** What a delivered batch changes: the user instruction it carries, when
- *  a user wrote one, and the run's activated skills, when it activated
- *  any. */
-interface Delivery {
-  readonly instruction: string | undefined;
-  readonly activated: readonly SkillCatalogEntry[] | undefined;
-}
-
 /** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch with a snapshot carrying `recorded`, the addresses of what
- *  they store; `delivered` logs them once durable and returns what they
- *  change. */
+ *  its own batch with a snapshot carrying `recorded`, the addresses of the
+ *  instruction and activated skills they store: the one record of what the
+ *  delivery changes. `delivered` logs them once durable. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
   readonly recorded: Partial<
@@ -84,15 +76,14 @@ export interface JoinedFollowUps {
   >;
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
-  readonly delivered: () => Delivery;
+  readonly delivered: () => void;
 }
 
-export interface ConsumedFollowUps extends Delivery {
+export interface ConsumedFollowUps {
   readonly state: RunState;
   /** False when every item was a progress notice of an ended child: the
    *  batch was consumed without a message, and no turn follows. */
   readonly turn: boolean;
-  readonly synthetic: boolean;
 }
 
 export interface FollowUps {
@@ -311,10 +302,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         ...(turn ? [appendRow(runId, [built.message])] : []),
       ],
       // The user's rows are durable; the transcript shows what was asked.
-      delivered: () => {
-        logFollowUps(followUps, built.kinds);
-        return { instruction, activated };
-      },
+      delivered: () => logFollowUps(followUps, built.kinds),
     };
   });
 
@@ -346,12 +334,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           : []),
       ]),
     );
-    return {
-      state: committed,
-      turn: joined.turn,
-      ...joined.delivered(),
-      synthetic: batch.synthetic,
-    };
+    joined.delivered();
+    return { state: committed, turn: joined.turn };
   });
 
   return {

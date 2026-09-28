@@ -52,6 +52,7 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
         globalStorage: installed.globalStorage,
         config: installed.config,
         workspaceState: installed.workspaceState,
+        repoState: installed.repoState,
         globalState: installed.globalState,
       },
       transcriptMode: init.transcriptMode ?? {

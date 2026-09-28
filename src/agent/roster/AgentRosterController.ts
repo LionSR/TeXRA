@@ -49,7 +49,7 @@ export class InvalidAgentTeamError extends Error {}
 export interface AgentRosterControllerDeps<
   Entry extends AgentRosterEntry = AgentRosterEntry,
 > {
-  readonly workspaceState: StateStore;
+  readonly repoState: StateStore;
   readonly globalState: StateStore;
   readonly getAgents: (category: AgentCategory) => Entry[];
   /** The workspace's persisted custom presets, raw; `teamPresets` parses. */
@@ -107,7 +107,7 @@ export class AgentRosterController<
   }
 
   private getSelection() {
-    return readAgentRosterSelection(this.deps.workspaceState);
+    return readAgentRosterSelection(this.deps.repoState);
   }
 
   getDefaultTeamId() {
@@ -142,7 +142,7 @@ export class AgentRosterController<
       return [
         ...entries,
         ...(yield* unlistedCustomAgents(
-          this.deps.workspaceState,
+          this.deps.repoState,
           this.deps.getAgents(category),
           entries.map(agentKeyOf),
         )),
@@ -205,7 +205,7 @@ export class AgentRosterController<
           ? unique(identifiers)
           : this.resolveIdentifiers(category, identifiers).keys;
       const unlisted = yield* unlistedCustomAgents(
-        this.deps.workspaceState,
+        this.deps.repoState,
         this.deps.getAgents(category),
         keys,
       );
@@ -306,7 +306,7 @@ export class AgentRosterController<
     selection: AgentRosterSelection,
   ): Effect.Effect<void, StateWriteFailed> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
-    return this.deps.workspaceState.update(
+    return this.deps.repoState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       parsed,
     );
@@ -316,7 +316,7 @@ export class AgentRosterController<
     selection: AgentRosterSelection,
   ): Effect.Effect<void, StateWriteFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       this.writeSelection(selection),
     );
   }
@@ -344,11 +344,11 @@ export class AgentRosterController<
     agentKeys: ByCategory<AgentRosterCategorySelection>,
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       Effect.gen({ self: this }, function* () {
         for (const category of AGENT_CATEGORIES) {
           yield* recordCustomChoices(
-            this.deps.workspaceState,
+            this.deps.repoState,
             this.deps.getAgents(category),
             agentKeys[category],
           );
@@ -369,7 +369,7 @@ export class AgentRosterController<
     enabledKeys: readonly string[],
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       // The untouched categories' keys are a read of the selection, so it has
       // to happen while the lane is held: `byCategory` evaluates its callback
       // at construction, which is before the lane is acquired. Two calls
@@ -377,7 +377,7 @@ export class AgentRosterController<
       // pre-lane snapshot and one update would be lost.
       Effect.gen({ self: this }, function* () {
         yield* recordCustomChoices(
-          this.deps.workspaceState,
+          this.deps.repoState,
           this.deps.getAgents(category),
           enabledKeys,
         );
@@ -398,12 +398,9 @@ export class AgentRosterController<
   /** Every agent, the hidden custom ones included. */
   setAll(): Effect.Effect<void, StateWriteFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       Effect.andThen(
-        this.deps.workspaceState.update(
-          WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
-          [],
-        ),
+        this.deps.repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, []),
         this.writeSelection({ kind: 'all' }),
       ),
     );
@@ -420,7 +417,7 @@ export class AgentRosterController<
     readonly enabled: boolean;
   }): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       Effect.gen({ self: this }, function* () {
         const selections = yield* Effect.all(
           byCategory((category) => this.effectiveCategorySelection(category)),
@@ -441,7 +438,7 @@ export class AgentRosterController<
           target.splice(index, 1);
         }
         yield* recordCustomChoices(
-          this.deps.workspaceState,
+          this.deps.repoState,
           this.deps.getAgents(input.category),
           target,
         );
@@ -460,7 +457,7 @@ export class AgentRosterController<
     removePreset: () => Effect.Effect<void, StateWriteFailed>,
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
-      this.deps.workspaceState,
+      this.deps.repoState,
       Effect.gen({ self: this }, function* () {
         const selection = yield* this.getSelection();
         const clearSelection =

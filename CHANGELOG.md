@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Settings reset once with this build, and later updates keep them.**
+  TeXRA's saved settings, remembered desktop projects, open inquiry threads
+  and update-check record start fresh the first time this build runs;
+  session history starts over too. From now on, a TeXRA update that clears
+  session history leaves settings alone. Repository settings (the git commit
+  identity, subagent worktrees, the Codex and Claude Code controls, and the
+  agent roster and teams) are now shared by every worktree of a repository
+  on all three hosts; the CLI reads the git identity from them instead of
+  `.texra/config.json`, so set it again with `/config` or the settings view.
 - **Agent prompt templates lose `{{ MODEL }}`, `{{ ROUNDS }}` and
   `{{ DEFAULT_BIB_PATH }}`.** None of TeXRA's agents used them; a custom
   agent that does now renders them empty. The default bibliography is named
@@ -263,6 +272,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A re-trusted plugin's changed MCP server answers the next request** —
+  after you edit an installed plugin's server code and trust it again, the
+  chat's next request calls the new server, not the old one, even when its
+  command, settings and tools look the same. A plugin being started while
+  you disable it no longer shows its tools to any request.
+
 - **The `creator` agent works in the terminal and the desktop app** — it can
   now see the built-in agents and its reference docs and save the new agent
   into your custom agents folder, as it already could in VS Code. Before, its
@@ -284,7 +299,11 @@ All notable changes to this project will be documented in this file.
 - **Closing TeXRA or opening many sessions no longer leaves background
   processes using CPU** — the check for which external tools are installed
   could leave a search running after TeXRA quit, one more for every session
-  opened. Tools installed while TeXRA runs are found on Re-check.
+  opened. A re-check right after installing a tool now finds it, whether
+  from Re-check or from the setup assistant. A tool whose status detail
+  stalls is reported as unknown after 20 seconds instead of holding the
+  whole check, and saving a GitHub token updates the tools offered in every
+  open project, also for apps built on the Agent SDK.
 
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the

@@ -49,6 +49,8 @@ export interface NodeWorkspaceRootsInit {
    */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly workspaceState: StateStore;
+  /** The repository settings (`WorkspaceRoots.repoState`). */
+  readonly repoState: StateStore;
   /** The process's application state store (`WorkspaceRoots.globalState`). */
   readonly globalState: StateStore;
 }
@@ -72,6 +74,7 @@ export function createNodeWorkspaceRoots(
         ? new JsonConfigProvider(init.config)
         : init.config,
     workspaceState: init.workspaceState,
+    repoState: init.repoState,
     globalState: init.globalState,
   };
 }

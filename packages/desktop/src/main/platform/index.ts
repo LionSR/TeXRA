@@ -8,6 +8,7 @@ import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   appStateStoreFromDatabase,
   openProjectStateStore,
+  openRepoStateStore,
 } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -171,7 +172,7 @@ export const initializeElectronPlatform = Effect.fn(
     appState: Layer.effect(
       AppState,
       Effect.map(GlobalDatabase, (database) =>
-        appStateStoreFromDatabase(globalStorage, database),
+        appStateStoreFromDatabase(globalStorage, database.values),
       ),
     ),
     auth: supabaseAuth,
@@ -218,6 +219,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
+      repoState: yield* openRepoStateStore(undefined, storage),
       globalState: globalStateStore,
     });
     yield* bootstrapHost({

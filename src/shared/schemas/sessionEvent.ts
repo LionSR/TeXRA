@@ -41,11 +41,7 @@ import { FollowUpContentSchema } from './followUp';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
-import {
-  PersistedJsonValueSchema,
-  RunFactSchema,
-  StoredValueSchema,
-} from './rowValues';
+import { PersistedJsonValueSchema, RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
@@ -113,15 +109,7 @@ export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 /** C2 separates independent lifecycles even when their logical ids coincide:
  *  `run` is keyed by the run id, every other kind by its own logical id. */
-const AggregateKindSchema = z.enum([
-  'run',
-  'workflow-checkpoint',
-  'inquiry',
-  'desktop-projects',
-  'global-inquiry',
-  'update-check',
-  'app-state',
-]);
+const AggregateKindSchema = z.enum(['run', 'workflow-checkpoint', 'inquiry']);
 type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
   .tuple([AggregateKindSchema, z.string().min(1)])
@@ -531,30 +519,11 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     'workflow-checkpoint',
   ),
 ]);
-/**
- * The latest value of one stored key: one aggregate per value, so
- * latest-per-key is latest-per-aggregate and no listing needs to group by
- * anything but the aggregate.
- */
-const StateValueSetDraftSchema = z
-  .object({
-    aggregateId: AggregateIdSchema,
-    stageId: z.string().optional(),
-    type: z.literal('state.value.set'),
-    state: StoredValueSchema,
-  })
-  .refine((row) => aggregateTarget(row.aggregateId).kind === row.state.key, {
-    error: 'A stored value lives on the aggregate kind its key names',
-    // A cross-field rule reads both fields, so it applies only once both
-    // parsed: a corrupt `state` is already refused on its own terms.
-    when: (payload) => payload.issues.length === 0,
-  });
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
   ...WorkflowCheckpointDraftSchema.options,
-  StateValueSetDraftSchema,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -581,7 +550,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 33;
+export const SESSION_EVENT_FORMAT = 35;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -590,7 +559,6 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...WorkflowCheckpointDraftSchema.options.map((schema) =>
     schema.extend(envelope),
   ),
-  StateValueSetDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

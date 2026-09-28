@@ -84,6 +84,7 @@ type RendererMessage = unknown;
 interface SettingsFixtureOverrides {
   globalState?: StateStore;
   workspaceState?: StateStore;
+  repoState?: StateStore;
   config?: ConfigProvider;
   bindings?: Partial<Bindings>;
   postToRenderer?: (message: RendererMessage) => void;
@@ -97,6 +98,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
     globalState = new FakeStateStore(),
     workspaceState = new FakeStateStore(),
+    repoState = new FakeStateStore(),
     config = new FakeScopedConfigProvider(),
     postToRenderer = () => undefined,
   } = overrides;
@@ -108,6 +110,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       storage: '/workspace/settings-ipc/storage',
       config,
       workspaceState,
+      repoState,
       globalState,
     },
   });
@@ -222,13 +225,13 @@ describe('desktop settings IPC', () => {
   });
 
   it('posts only for settings readiness', async () => {
-    const workspaceState = new FakeStateStore({
+    const repoState = new FakeStateStore({
       [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
       [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
     });
 
     const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
+      repoState,
     });
 
     expect(posted).toEqual([]);
@@ -296,10 +299,10 @@ describe('desktop settings IPC', () => {
     'round-trips Git author writes through workspace state and refreshes the renderer',
     () =>
       Effect.gen(function* () {
-        const workspaceState = new FakeStateStore();
+        const repoState = new FakeStateStore();
 
         const { settings, posted } = createCapturedSettingsFixture({
-          workspaceState,
+          repoState,
         });
 
         expect(
@@ -314,7 +317,7 @@ describe('desktop settings IPC', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME),
+            repoState.get(WorkspaceStateKey.GIT_AUTHOR_NAME),
           ),
         ).toBe('Desktop TeXRA');
         expect(posted.at(-1)).toMatchObject({
@@ -334,7 +337,7 @@ describe('desktop settings IPC', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS),
+            repoState.get(WorkspaceStateKey.GIT_MARK_COMMITS),
           ),
         ).toBe(false);
 
@@ -349,7 +352,7 @@ describe('desktop settings IPC', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
+            repoState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
           ),
         ).toBe(true);
       }),
@@ -557,13 +560,13 @@ describe('desktop settings IPC', () => {
   );
 
   it('posts the Tools and LaTeX pages and approval settings on readiness', async () => {
-    const workspaceState = new FakeStateStore({
+    const repoState = new FakeStateStore({
       [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
     });
     const config = new FakeScopedConfigProvider();
     config.seedWorkspace('texra.toolUse.requireBashApproval', false);
     const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
+      repoState,
       config,
     });
 

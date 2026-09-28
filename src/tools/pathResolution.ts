@@ -13,6 +13,7 @@ import {
   canonicalizePath,
   findExternalRoot,
   type MatchedExternalRoot,
+  type StepRoot,
 } from '@utils/files/externalRoots';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import {
@@ -61,15 +62,16 @@ export function parseWorkingDirectory(
 /**
  * The call fields a tool path resolves against: the session's roots (its
  * workspace folder and the setting slots containment policy is read from),
- * the run's working directory, and the run itself, whose own skill grants
- * admit a skill directory. A tool's `ToolCall` satisfies it structurally.
+ * the run's working directory, and the read-only roots the call's step
+ * admits (the skills it lists or its user activated; none outside a run).
+ * A tool's `ToolCall` satisfies it structurally.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`assembleAgentLaunchContext`).
  */
 export interface ToolPathCall {
   readonly roots: { readonly workspace: string | undefined } & SettingsStores;
   readonly workingDirectory?: string;
-  readonly run?: { readonly runId: string };
+  readonly stepRoots?: readonly StepRoot[];
 }
 
 /** A resolved tool path plus the POSIX form a tool shows for it. */
@@ -116,7 +118,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
             return {
               kind: 'outside-root',
               absolutePath: input,
-              match: findExternalRoot(input, call.run?.runId),
+              match: findExternalRoot(input, call.stepRoots),
               outsideMessage: 'Workspace path is not available.',
             };
           }
@@ -128,7 +130,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
           return {
             kind: 'outside-root',
             absolutePath: resolved.absolutePath,
-            match: findExternalRoot(resolved.absolutePath, call.run?.runId),
+            match: findExternalRoot(resolved.absolutePath, call.stepRoots),
             outsideMessage: `Path must stay within the ${scope}.`,
           };
         }
@@ -144,7 +146,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
           return {
             kind: 'outside-root',
             absolutePath: physical,
-            match: findExternalRoot(physical, call.run?.runId),
+            match: findExternalRoot(physical, call.stepRoots),
             outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
           };
         }
@@ -154,7 +156,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
             absolute: resolved.absolutePath,
             fsPath: call.workingDirectory ? resolved.absolutePath : relative,
           },
-          call.run?.runId,
+          call.stepRoots,
         );
       },
       catch: ensureError,
@@ -220,10 +222,10 @@ function externalInfo(
  */
 function annotateExternalPermission(
   resolution: WorkspacePathResolution,
-  runId: string | undefined,
+  stepRoots: readonly StepRoot[] | undefined,
 ): WorkspacePathResolution {
   if (resolution.external) return resolution;
-  const match = findExternalRoot(resolution.absolute, runId);
+  const match = findExternalRoot(resolution.absolute, stepRoots);
   if (!match) return resolution;
   return { ...resolution, external: externalInfo(match) };
 }

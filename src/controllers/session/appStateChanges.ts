@@ -1,26 +1,32 @@
-/** The change feed of a root database's app-state keys. */
+/** The change feed of a root database's current values. */
 import { Duration, Effect, Schedule, Stream, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
-import { aggregateId } from '@shared/schemas';
+import type { CurrentValueFamily } from '@shared/schemas';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 
-/** A failed marker read's backoff: 250 ms doubling, at most 30 s. */
+/** A failed read's backoff: 250 ms doubling, at most 30 s. */
 const READ_RETRY = Schedule.exponential('250 millis').pipe(
   Schedule.modifyDelay(({ duration }) =>
     Effect.succeed(Duration.min(duration, Duration.seconds(30))),
   ),
 );
 
+/** The keys' rows as one text, in key order: equal exactly when no value
+ *  changed. */
+const SNAPSHOT = `SELECT json_group_array(json_array(key, value)) AS snapshot
+  FROM (SELECT key, value FROM current_value
+        WHERE family = ? AND key IN (SELECT value FROM json_each(?))
+        ORDER BY key)`;
+
 /**
- * A root database's `appStateChanges`, over its wake level and its
- * connection: each wake reads the keys' latest commit (off
- * `event_agg_commit`), and only a new one emits. A failed read is logged
- * and read again, holding the wake until it reads: the marker only moves
- * on a successful read, so no commit goes unobserved.
+ * A root database's `values.changes`, over its wake level and its
+ * connection: each wake reads the keys' current rows, and only a changed
+ * snapshot emits. A failed read is logged and read again, holding the wake
+ * until it reads, so no change goes unobserved.
  */
-export const appStateChangeFeed =
+export const currentValueChangeFeed =
   (
     level: SubscriptionRef.SubscriptionRef<number>,
     execOne: (
@@ -28,22 +34,12 @@ export const appStateChangeFeed =
       params: readonly unknown[],
     ) => Effect.Effect<Readonly<Record<string, unknown>> | undefined, SqlError>,
   ) =>
-  (keys: readonly string[]): Stream.Stream<void> => {
-    const ids = JSON.stringify(
-      keys.map((key) => aggregateId('app-state', key)),
-    );
-    const latest = execOne(
-      `SELECT MAX("commit") AS "commit" FROM event
-       WHERE aggregate_id IN (SELECT value FROM json_each(?))`,
-      [ids],
-    ).pipe(
-      Effect.map((row) =>
-        z
-          .int()
-          .nonnegative()
-          .nullable()
-          .parse(row?.commit ?? null),
-      ),
+  (
+    family: CurrentValueFamily,
+    keys: readonly string[],
+  ): Stream.Stream<void> => {
+    const snapshot = execOne(SNAPSHOT, [family, JSON.stringify(keys)]).pipe(
+      Effect.map((row) => z.string().parse(row?.snapshot)),
       Effect.tapError((error) =>
         Effect.logWarning(
           `Could not read whether ${keys.join(', ')} changed; retrying.`,
@@ -53,12 +49,12 @@ export const appStateChangeFeed =
         ),
       ),
       // Until it reads: a wake is never consumed by a failed read, so every
-      // commit is observed. The backoff is the database poll's own.
+      // change is observed. The backoff is the database poll's own.
       Effect.retry(READ_RETRY),
       Effect.orDie,
     );
     return SubscriptionRef.changes(level).pipe(
-      Stream.mapEffect(() => latest),
+      Stream.mapEffect(() => snapshot),
       Stream.changesWith((a, b) => a === b),
       Stream.as(undefined),
     );

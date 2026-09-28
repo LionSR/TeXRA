@@ -55,9 +55,9 @@ export function serializeWorkspaceWrite<A, E>(
  * overwrites the selection the mutation just committed. The mutations own
  * every durable write.
  */
-export function readAgentRosterSelection(workspaceState: StateStore) {
+export function readAgentRosterSelection(repoState: StateStore) {
   return Effect.gen(function* () {
-    const raw = yield* workspaceState.get<unknown>(
+    const raw = yield* repoState.get<unknown>(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     );
     if (raw === undefined) return INHERITED_AGENT_ROSTER;
@@ -79,10 +79,10 @@ interface RosterEntry {
 /** The hidden keys, read like the roster selection: a malformed value is
  *  reported and read as none. */
 function readHidden(
-  workspaceState: StateStore,
+  repoState: StateStore,
 ): Effect.Effect<Set<string>, StateReadFailed> {
   return Effect.gen(function* () {
-    const raw = yield* workspaceState.get<unknown>(
+    const raw = yield* repoState.get<unknown>(
       WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
     );
     if (raw === undefined) return new Set<string>();
@@ -104,11 +104,11 @@ function listNames(listed: readonly string[], entry: RosterEntry): boolean {
 /** The custom agents among `entries` that `listed` leaves out and the user
  *  did not hide: shown all the same. */
 export function unlistedCustomAgents<Entry extends RosterEntry>(
-  workspaceState: StateStore,
+  repoState: StateStore,
   entries: readonly Entry[],
   listed: readonly string[],
 ): Effect.Effect<Entry[], StateReadFailed> {
-  return Effect.map(readHidden(workspaceState), (hidden) =>
+  return Effect.map(readHidden(repoState), (hidden) =>
     entries.filter(
       (entry) =>
         entry.source === AGENT_SOURCE.CUSTOM &&
@@ -124,12 +124,12 @@ export function unlistedCustomAgents<Entry extends RosterEntry>(
  * shows them all. The caller holds the roster's write lane.
  */
 export function recordCustomChoices(
-  workspaceState: StateStore,
+  repoState: StateStore,
   entries: readonly RosterEntry[],
   selection: 'all' | readonly string[],
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
-    const hidden = yield* readHidden(workspaceState);
+    const hidden = yield* readHidden(repoState);
     for (const entry of entries) {
       if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
       const key = agentKeyOf(entry);
@@ -137,7 +137,7 @@ export function recordCustomChoices(
         hidden.delete(key);
       else hidden.add(key);
     }
-    yield* workspaceState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
+    yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
       ...hidden,
     ]);
   });

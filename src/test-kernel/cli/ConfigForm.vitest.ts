@@ -439,10 +439,10 @@ describe('CliConfigForm API-key status lifecycle', () => {
 describe('/config slash command wiring', () => {
   it.live('wires the roster and reads through the injected CLI stores', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores('cli');
-      // Seed the git-author config slot the CLI reads from. Awaited, so the
-      // read below cannot race the write.
-      yield* config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
+      const { stores, repoState } = makeFakeSettingsStores('cli');
+      // Seed the repository slot the CLI reads the git settings from.
+      // Awaited, so the read below cannot race the write.
+      yield* repoState.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
       registerBuiltinSlashCommands({
         secrets: new FakeSecrets(),
@@ -500,36 +500,41 @@ describe('/config slash command wiring', () => {
 
   it.live('persists writes through the accessor to the CLI store', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores('cli');
+      const { stores, repoState } = makeFakeSettingsStores('cli');
       const props = yield* Effect.promise(() => openConfigFormProps(stores));
       const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* props.writeValue(markCommits, false);
 
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
-        true,
+      expect(
+        yield* isStored(repoState, WorkspaceStateKey.GIT_MARK_COMMITS),
+      ).toBe(true);
+      expect(yield* repoState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
+        false,
       );
-      expect(config.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     }),
   );
 
   it.live('resets a git setting by deleting the stored key', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores('cli');
+      const { stores, repoState } = makeFakeSettingsStores('cli');
       const props = yield* Effect.promise(() => openConfigFormProps(stores));
       const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
       yield* props.writeValue(authorName, 'someone-else');
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
-        true,
-      );
+      expect(
+        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
+      ).toBe(true);
 
       yield* props.resetValue(authorName);
       // The key is deleted, so reads fall back to the default identity.
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
-        false,
-      );
       expect(
-        config.get(WorkspaceStateKey.GIT_AUTHOR_NAME, DEFAULT_GIT_AUTHOR_NAME),
+        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
+      ).toBe(false);
+      expect(
+        yield* repoState.get(
+          WorkspaceStateKey.GIT_AUTHOR_NAME,
+          DEFAULT_GIT_AUTHOR_NAME,
+        ),
       ).toBe(DEFAULT_GIT_AUTHOR_NAME);
     }),
   );

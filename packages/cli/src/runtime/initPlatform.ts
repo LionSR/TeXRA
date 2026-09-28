@@ -10,7 +10,10 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { openProjectStateStore } from '@controllers/session/appStateStore';
+import {
+  openProjectStateStore,
+  openRepoStateStore,
+} from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -112,7 +115,7 @@ export type CliPlatformServices = SettingsStores & {
   readonly globalStorage: string;
   /**
    * The stores this root opened, handed over rather than read back. `config`,
-   * `workspaceState` and `globalState` are the three slots a catalog setting
+   * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
    * resolves against, so a read or write through `readSettingFrom` /
    * `writeSettingTo` answers for this process's project, from the record
    * the caller holds rather than any process-wide lookup.
@@ -338,6 +341,7 @@ export function initCliPlatform(
           const workspaceState = yield* openProjectStateStore(storage).pipe(
             Scope.provide(projectScope),
           );
+          const repoState = yield* openRepoStateStore(context.cwd, storage);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` layered over the user-level
@@ -350,6 +354,7 @@ export function initCliPlatform(
             globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
+            repoState,
             globalState,
           });
           // The one open of the process session, over the roots published below,
@@ -438,6 +443,7 @@ export function initCliPlatform(
       host: roots.host,
       config: roots.config,
       workspaceState: roots.workspaceState,
+      repoState: roots.repoState,
       // The pure path calculator over this process's storage root (no mkdir),
       // so every CLI entry, including the ones that find the roots already
       // installed, names one root without touching the filesystem again.

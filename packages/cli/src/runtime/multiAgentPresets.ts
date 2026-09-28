@@ -59,9 +59,9 @@ const MULTI_AGENT_LOGIN_HINT = `Hint: ${RESEARCHER_ACCESS.label} sign-in may loa
  * the surface that opened it (a command's installed roots, the chat session's
  * roots) rather than being read off the calling context.
  */
-export function readCliMultiAgentPresets(workspaceState: StateStore) {
+export function readCliMultiAgentPresets(repoState: StateStore) {
   return Effect.gen(function* () {
-    const customRaw = yield* workspaceState.get<unknown>(
+    const customRaw = yield* repoState.get<unknown>(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     );
     return launchableTeamPresets(customRaw);
@@ -70,15 +70,13 @@ export function readCliMultiAgentPresets(workspaceState: StateStore) {
 
 /** Resolve the current display name for a persisted team identity. */
 export function readCliMultiAgentPresetName(
-  workspaceState: StateStore,
+  repoState: StateStore,
   presetId: string | undefined,
 ) {
   return Effect.gen(function* () {
     if (!presetId) return undefined;
-    return findTeamPreset(
-      yield* readCliMultiAgentPresets(workspaceState),
-      presetId,
-    )?.name;
+    return findTeamPreset(yield* readCliMultiAgentPresets(repoState), presetId)
+      ?.name;
   });
 }
 

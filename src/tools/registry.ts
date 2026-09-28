@@ -332,16 +332,13 @@ export const toolRegistryLayer = (
       const appState = yield* AppState;
       // Resolved once per process, on the first run that declares an MCP tool.
       const envKey = yield* Effect.cached(revisionKey(appState));
-      // The installed plugins a step loads: the enabled, trusted ones with
-      // MCP servers, keyed by what they would start, and why each other
-      // enabled one loads nothing.
+      // The installed plugins a step loads: the enabled, trusted ones, each
+      // keyed by what it would start, and why each other enabled one loads
+      // nothing. One that ships only skills loads with no servers.
       const installed: InstalledToolReader = Effect.gen(function* () {
         const load = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-        const loaded = load.loadable.map(({ record }) =>
-          installedPluginId(record.name),
-        );
         const withServers = load.loadable.filter(
           ({ plugin }) => plugin.mcpServers.length > 0,
         );
@@ -349,24 +346,21 @@ export const toolRegistryLayer = (
           ...load.withheld,
           ...withServers.flatMap(({ plugin }) => plugin.warnings),
         ];
-        if (withServers.length === 0) return { loaded, plugins: [], warnings };
-        const key = yield* Effect.result(envKey);
-        if (key._tag === 'Failure')
-          return {
-            loaded,
-            plugins: [],
-            warnings: [
-              ...warnings,
-              `No installed plugin's MCP servers start: ${key.failure.message}`,
-            ],
-          };
+        const key =
+          withServers.length === 0 ? undefined : yield* Effect.result(envKey);
+        if (key?._tag === 'Failure')
+          warnings.push(
+            `No installed plugin's MCP servers start: ${key.failure.message}`,
+          );
         return {
-          loaded,
-          plugins: withServers.map(({ record, plugin, trust }) => {
+          plugins: load.loadable.map(({ record, plugin, trust }) => {
             const id = installedPluginId(record.name);
-            const servers = plugin.mcpServers.map((server) =>
-              mcpPlugin(server, key.success, id),
-            );
+            const servers =
+              key?._tag === 'Success'
+                ? plugin.mcpServers.map((server) =>
+                    mcpPlugin(server, key.success, id),
+                  )
+                : [];
             return {
               id,
               key: sha256({

@@ -21,6 +21,7 @@
  * a parallel-safe call without a result re-runs.
  */
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
+import { z } from 'zod';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -55,6 +56,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
+import { stored } from '../run/requestContext';
 import { localCallsOf, parseCallArguments, type LocalCall } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -95,11 +97,6 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
-
-export interface TurnContext {
-  readonly workspace: AgentWorkspaceState;
-  readonly userInstruction: string | undefined;
-}
 
 interface DispatchOutcome {
   readonly state: RunState;
@@ -250,7 +247,7 @@ function settlementContent(
  *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
-  turn: TurnContext,
+  workspace: AgentWorkspaceState,
   step: StepTools,
   joined?: Pick<JoinedFollowUps, 'rows' | 'recorded'> | null,
 ): Effect.fn.Return<
@@ -266,6 +263,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
   const calls = localCallsOf(pending.turn);
+  // The calls answer the instruction the committed state records.
+  const at = initial.flow?.state.instruction;
+  const userInstruction =
+    run.config.rootUserInstruction ??
+    (at ? stored(initial, at, z.string()) : run.config.instruction);
   // Concurrent settlements of one parallel partition serialize under the
   // cell's lock and each folds onto the latest state, so a settlement that
   // carries the workspace it mutated records it in the order batches commit.
@@ -289,7 +291,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       {
         op: 'set',
         path: ['state', 'stateSlices', 'workspaceSnapshot'],
-        value: turn.workspace.toSnapshot({ excludeAssemblyStrings: true }),
+        value: workspace.toSnapshot({ excludeAssemblyStrings: true }),
       },
     ];
   };
@@ -427,7 +429,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       }
       subagentCost += costUsd;
     };
-    turn.workspace.interactions.recordToolCall();
+    workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
       result = {
@@ -436,8 +438,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
       };
     } else {
-      // Guard first, in the same call context: a refused path or an
-      // unapproved command settles the call without the body running.
+      // Guard first, under the step's roots and plugin services: a refused
+      // path or unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
         Effect.scoped(
           guardedToolCall(tool, parsedInput).pipe(
@@ -445,14 +447,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               roots: run.session.roots,
               run,
               workingDirectory: run.workingDirectory,
-              tracker: turn.workspace.interactions,
-              workPlanState: turn.workspace.workPlan,
-              userInstruction:
-                run.config.rootUserInstruction ?? turn.userInstruction,
+              stepRoots: step.stepRoots,
+              tracker: workspace.interactions,
+              workPlanState: workspace.workPlan,
+              userInstruction,
               toolCallId: fact.callId,
               hooks: { onToolOutput, recordSubagentCost },
             }),
-            // The step's plugin layers' services.
             Effect.provide(step.services),
           ),
         ),
@@ -503,7 +504,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         }),
       ),
     );
-    const trackedEdits = turn.workspace.interactions.recordEdits(
+    const trackedEdits = workspace.interactions.recordEdits(
       result.status === 'executed' ? result.edits : undefined,
     );
     const editedFiles = trackedEdits.map((path) => ({
@@ -535,7 +536,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         if (exists) validLocations.push(location);
       }
       if (validLocations.length) {
-        turn.workspace.media.addMediaFiles(validLocations);
+        workspace.media.addMediaFiles(validLocations);
       }
     }
     const attachments = yield* captureAttachments(
@@ -947,15 +948,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   }
   const group: Message = { role: 'tool', results };
   const flow = settledState.flow?.state;
-  if (flow === undefined) {
+  if (flow === undefined)
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
-  }
   const stateSlices =
     flow.stateSlices === null
       ? null
       : {
           ...flow.stateSlices,
-          workspaceSnapshot: turn.workspace.toSnapshot({
+          workspaceSnapshot: workspace.toSnapshot({
             excludeAssemblyStrings: true,
           }),
         };

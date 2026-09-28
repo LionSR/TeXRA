@@ -418,7 +418,7 @@ export function createExtensionHostRequests(
             ).pipe(Effect.map((choice) => choice ?? 'cancel')),
           signInForRemoteAgentCatalog: runSignInCommand,
         },
-        session.roots.workspaceState,
+        session.roots.repoState,
         session.roots.storage,
       );
       yield* runValidated(

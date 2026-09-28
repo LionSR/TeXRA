@@ -603,7 +603,7 @@ export function createDesktopHostRequests(
           const launch = yield* prepareSurfaceLaunch(
             request,
             host,
-            session.roots.workspaceState,
+            session.roots.repoState,
             session.roots.storage,
           );
           const approval = launchApprovalOptions(request, session.approvals);

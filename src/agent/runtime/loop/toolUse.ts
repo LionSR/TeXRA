@@ -43,7 +43,6 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
-import { releaseSkillRoots } from '@utils/files/externalRoots';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -70,7 +69,7 @@ import {
   stoppedBy,
   type RunCell,
 } from './runProgram';
-import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
+import { dispatchPendingResponse } from './toolUseDispatch';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
@@ -151,36 +150,37 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  // Recorded facts a restore reads back (catalog, misses, instruction, skills).
+  // Recorded facts a restore reads back (catalog, misses).
   let catalog = run.opening?.catalog ?? [];
   let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
-  let instruction = run.config.instruction;
-  let activated = run.opening?.activated ?? [];
   let systemPrompt: string | undefined;
   let response = '';
   // A `/compact` the host admitted: done at the next model boundary.
   let compactionRequested = false;
 
-  /** The family state every snapshot of this run carries. */
-  const flowState = (): ToolUseFlowState => ({
-    stateSlices: {
-      workspaceSnapshot: workspace.toSnapshot({
-        excludeAssemblyStrings: true,
-      }),
-    },
-    ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
-    ...(catalog.length > 0 ? { skills: sha256(catalog) } : {}),
-    ...(instruction !== run.config.instruction
-      ? { instruction: sha256(instruction) }
-      : {}),
-    ...(activated.length > 0 ? { activated: sha256(activated) } : {}),
-    ...(memoryMisses.length > 0 ? { memoryMisses } : {}),
-    ...(run.structured.value !== undefined
-      ? { structured: run.structured.value }
-      : {}),
-  });
+  /** The family state every snapshot of this run carries. The instruction
+   *  and activated skills are the folded state's: only the transaction that
+   *  consumes a delivery changes them. */
+  const flowState = (state: RunState): ToolUseFlowState => {
+    const { instruction, activated } = state.flow?.state ?? {};
+    return {
+      stateSlices: {
+        workspaceSnapshot: workspace.toSnapshot({
+          excludeAssemblyStrings: true,
+        }),
+      },
+      ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
+      ...(catalog.length > 0 ? { skills: sha256(catalog) } : {}),
+      ...(instruction !== undefined ? { instruction } : {}),
+      ...(activated !== undefined ? { activated } : {}),
+      ...(memoryMisses.length > 0 ? { memoryMisses } : {}),
+      ...(run.structured.value !== undefined
+        ? { structured: run.structured.value }
+        : {}),
+    };
+  };
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
-    snapshotRow(runId, state, { ...patch, state: flowState() });
+    snapshotRow(runId, state, { ...patch, state: flowState(state) });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -192,14 +192,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
-  // What a step's system text is built from; its skill grants end with us.
+  // What a step's system text and skill roots are built from.
   const system: RunSystem = {
     base: () => systemPrompt,
     catalog: () => catalog,
-    activated: () => activated,
+    // The opening's before its snapshot records them.
+    activated: (state) => {
+      if (state.flow === null) return run.opening?.activated ?? [];
+      const { activated } = state.flow.state;
+      return activated ? stored(state, activated, SkillCatalogSchema) : [];
+    },
     isChild,
   };
-  yield* Effect.addFinalizer(() => Effect.sync(() => releaseSkillRoots(runId)));
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
     Effect.tap(stepFor(run, state, rounds !== null, kind, system), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())
@@ -301,6 +305,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         return { bound, content, offered: step.rows };
       }),
     );
+    const activated = run.opening?.activated ?? [];
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
@@ -316,7 +321,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: flowState(),
+        state: {
+          ...flowState(opening),
+          ...(activated.length > 0 ? { activated: sha256(activated) } : {}),
+        },
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
@@ -334,12 +342,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       );
     systemPrompt = flow.system && stored(state, flow.system, z.string());
     catalog = flow.skills ? stored(state, flow.skills, SkillCatalogSchema) : [];
-    activated = flow.activated
-      ? stored(state, flow.activated, SkillCatalogSchema)
-      : [];
     memoryMisses = flow.memoryMisses ?? [];
-    if (flow.instruction)
-      instruction = stored(state, flow.instruction, z.string());
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
@@ -364,12 +367,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state.phase === 'halted';
     /** Round mode's round: the turn's own count less one. */
     const index = begins ? state.turn : state.turn - 1;
-    const turnContext: TurnContext = {
-      workspace,
-      get userInstruction() {
-        return instruction;
-      },
-    };
     let continuedAt: number | null = null;
     let finalToolAttempted = false;
     workspace.workPlan.setOnUpdate({
@@ -484,14 +481,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const joined = followUps && (yield* followUps.joinStopped(state));
           const dispatched = yield* dispatchPendingResponse(
             cell,
-            turnContext,
+            workspace,
             (yield* openStep(state, 'dispatch')).tools,
             joined,
           );
           state = dispatched.state;
-          const delivered = joined?.delivered();
-          instruction = delivered?.instruction ?? instruction;
-          activated = delivered?.activated ?? activated;
+          joined?.delivered();
           if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
@@ -667,8 +662,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
           state = yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;
-          instruction = consumed.instruction ?? instruction;
-          activated = consumed.activated ?? activated;
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns

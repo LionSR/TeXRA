@@ -41,6 +41,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   GlobalDatabase,
   ProjectDatabases,
+  type CurrentValues,
   type Database,
   type DatabaseOpenFailed,
 } from '@shared/session/database';
@@ -400,7 +401,9 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     toolTableLayer(toolTable({}, { goal: goalContinuation })),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
-    Layer.mock(GlobalDatabase, {}),
+    Layer.mock(GlobalDatabase, {
+      values: {} as CurrentValues,
+    }),
     Layer.effect(
       ProjectDatabases,
       RcMap.make({

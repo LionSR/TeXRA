@@ -408,19 +408,16 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 });
 
 /** Dispatch the pending response of an opened run. */
-const dispatch = (kit: DispatchKit, userInstruction?: string) =>
+const dispatch = (kit: DispatchKit) =>
   makeRunCell(kit.runId, kit.state).pipe(
     Effect.flatMap((cell) =>
-      dispatchPendingResponse(
-        cell,
-        { workspace: kit.workspace, userInstruction },
-        {
-          definitions: [],
-          registry: kit.tools,
-          offered: [],
-          services: Context.empty() as Context.Context<PluginServices>,
-        },
-      ),
+      dispatchPendingResponse(cell, kit.workspace, {
+        definitions: [],
+        registry: kit.tools,
+        offered: [],
+        services: Context.empty() as Context.Context<PluginServices>,
+        stepRoots: [],
+      }),
     ),
     Effect.provide(kit.layer),
   );
@@ -587,10 +584,7 @@ describe('tool-use dispatch', () => {
         rootUserInstruction: 'Do not use files or external tools.',
       });
 
-      yield* dispatch(
-        kit,
-        'Wrapped child instruction with prior handoff boilerplate.',
-      );
+      yield* dispatch(kit);
 
       expect(observedInstruction).toBe('Do not use files or external tools.');
       expect(observedTrace).toBe(noopTrace);

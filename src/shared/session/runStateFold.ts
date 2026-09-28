@@ -246,7 +246,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'workflow.script': true,
   'workflow.journal': true,
   'workflow.attempt': true,
-  'state.value.set': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 

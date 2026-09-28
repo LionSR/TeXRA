@@ -148,10 +148,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     );
   }
 
-  // Skill directories are named, with their paths, by the skill catalog.
-  const externalRoots = listExternalRoots().filter(
-    (root) => root.kind !== 'skill',
-  );
+  const externalRoots = listExternalRoots();
   if (externalRoots.length > 0) {
     lines.push('');
     lines.push(

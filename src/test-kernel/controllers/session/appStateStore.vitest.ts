@@ -3,6 +3,9 @@
  * reads back from the root's database, and what a second writer on the same
  * database does to a live reader, and when its owner's scope releases it.
  */
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { it } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Result, Scope } from 'effect';
 import { describe, expect } from 'vitest';
@@ -28,7 +31,10 @@ describe('application state on SQLite', () => {
         ),
       ),
       (context) =>
-        appStateStoreFromDatabase(storage, Context.get(context, Database)),
+        appStateStoreFromDatabase(
+          storage,
+          Context.get(context, Database).values,
+        ),
     );
   const openStore = (storage: string) =>
     openAppStateStore(storage).pipe(
@@ -86,6 +92,25 @@ describe('application state on SQLite', () => {
       expect(
         [...(yield* one.get<string[]>('texra.disabledTools'))].sort(),
       ).toEqual(['a', 'b']);
+    }),
+  );
+
+  it.live('keeps settings when an older event format is moved aside', () =>
+    Effect.gen(function* () {
+      const storage = yield* Effect.promise(() =>
+        makeTempDir('texra-app-state-', tempDirs),
+      );
+      yield* Effect.scoped(
+        Effect.flatMap(openStore(storage), (store) =>
+          store.update('texra.memory.enabled', false),
+        ),
+      );
+      // An earlier build's stamp: the next open moves its event rows aside.
+      const file = new DatabaseSync(join(storage, 'texra.db'));
+      file.exec('PRAGMA user_version = 1');
+      file.close();
+      const reopened = yield* openStore(storage);
+      expect(yield* reopened.get('texra.memory.enabled')).toBe(false);
     }),
   );
 
