@@ -95,7 +95,6 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     options: DesktopAgentRunOptions,
   ): Effect.fn.Return<DesktopAgentRun, never, Scope.Scope> {
     const { session, host, runtime } = options;
-    let disposed = false;
 
     /**
      * Each arm answers with the program that presents its notice; the session
@@ -131,7 +130,6 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
     ): HostPresentation {
-      if (disposed) return undefined;
       return presentationEventHandlers[event](payload);
     }
 
@@ -201,11 +199,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         releaseToolEdit: (requestId) =>
           withProcessServices(runtime, toolEditApprovals.release(requestId)),
       }),
-      (detach) =>
-        Effect.sync(() => {
-          disposed = true;
-          detach();
-        }),
+      (detach) => Effect.sync(detach),
     );
 
     /**

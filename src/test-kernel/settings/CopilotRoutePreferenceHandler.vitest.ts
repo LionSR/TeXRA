@@ -138,6 +138,8 @@ function createHandler(): SettingsViewMessageHandler {
     {
       refreshCatalogs: mocks.refreshCatalogs,
       refreshApiKeyStatus: Effect.void,
+      revealRun: () => Effect.succeed('missing'),
+      runLabel: () => undefined,
     },
   );
   return handler;

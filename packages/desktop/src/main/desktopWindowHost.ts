@@ -4,7 +4,7 @@
 // rather than each reaching for Electron's `dialog` and `shell`.
 
 import { app, dialog, shell, type BrowserWindow } from 'electron';
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { ExternalOpenFailed, type NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -69,6 +69,17 @@ export function createDesktopWindowHost(options: {
       ),
     );
   };
+
+  /** A program whose failure or defect reaches the async-error report; an
+   *  interrupt is its window closing, and reports nothing. */
+  const reported = <E, R>(
+    program: Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, never, R> =>
+    Effect.catchCause(program, (cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.void
+        : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
+    );
 
   const previewOptions = {
     shell,
@@ -186,6 +197,7 @@ export function createDesktopWindowHost(options: {
     /** The request-side `openExternal`: its failure is the caller's. */
     openExternalUrl: requestPreviewHost.openExternal,
     reportAsyncError,
+    reported,
     reportBackgroundError,
     openExternalProgram,
     openExternalInBackground,

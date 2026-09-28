@@ -186,6 +186,16 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         workspacePath: project.root,
         showOpenFileDialog: host.openFileDialog,
       });
+      // The bridge drains the requests in flight, uninterruptibly, when it
+      // closes, and a launch request lives as long as its run: a window that
+      // closes must neither wait for a run to end nor stop it. So the bridge
+      // has a scope of its own, closed off the window's release: the drain
+      // ends after the window is gone, as the runs it waits on do, and its
+      // answers, whose port is gone, are dropped.
+      const bridgeScope = yield* Scope.make();
+      yield* Effect.addFinalizer(() =>
+        Effect.asVoid(Effect.forkDetach(Scope.close(bridgeScope, Exit.void))),
+      );
       // Install the recipient before host requests publish the recorder's
       // state.
       const bridge = yield* SessionBridge.make({
@@ -193,7 +203,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
-      });
+      }).pipe(Scope.provide(bridgeScope));
       yield* Effect.forkScoped(workspace.followFilesWritten, {
         startImmediately: true,
       });
@@ -274,7 +284,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       yield* Effect.addFinalizer(() => Effect.sync(hostRequests.dispose));
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their disposal, as
-      // the extension's `dispose` orders them.
+      // the extension's `dispose` orders them; awaited, unlike the bridge's.
       const port = yield* Effect.acquireRelease(
         bridge.attach({
           id: `window:${host.window.id}`,

@@ -4,14 +4,7 @@
 // close is the window's teardown, awaited by whoever closes it (see
 // `desktopWindows.ts`). Finalizers run in the reverse of their registration.
 
-import {
-  Cause,
-  Effect,
-  Scope,
-  Semaphore,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
@@ -235,8 +228,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       Menu.buildFromTemplate(
         buildDesktopMenuTemplate(shellActions, {
           roots: recent,
-          open: (root) => navigation.spawnReporting(navigation.open(root)),
-          clear: () => navigation.spawnReporting(projects.clearRecent()),
+          open: (root) => spawn(host.reported(navigation.open(root))),
+          clear: () => spawn(host.reported(projects.clearRecent())),
         }),
       ),
     );
@@ -328,18 +321,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             // The one run site for every namespace's program, and its one
             // report: a failure or defect reaches the window's async-error
             // reporter.
-            if (program)
-              spawn(
-                program.pipe(
-                  Effect.catchCause((cause) =>
-                    Cause.hasInterruptsOnly(cause)
-                      ? Effect.void
-                      : Effect.sync(() =>
-                          host.reportAsyncError(Cause.squash(cause)),
-                        ),
-                  ),
-                ),
-              );
+            if (program) spawn(host.reported(program));
             return;
           }
           // A session message names its project: that project's port answers
@@ -368,13 +350,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // attached, so it changes nothing.
   yield* Effect.forkScoped(
     Stream.runForEach(SubscriptionRef.changes(projects.state), (state) =>
-      followProjects(state).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.void
-            : Effect.sync(() => host.reportAsyncError(Cause.squash(cause))),
-        ),
-      ),
+      host.reported(followProjects(state)),
     ),
   );
   installMenu(SubscriptionRef.getUnsafe(projects.state).recent);
