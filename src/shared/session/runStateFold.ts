@@ -26,6 +26,7 @@ import {
   type ModelCompatibilityKey,
   type OfferedTool,
   type PendingRetry,
+  type RunSnapshotPayload,
   type RetryErrorInfo,
   type RunUsageTotals,
   type SessionEvent,
@@ -151,6 +152,9 @@ export type RunState = RunPosition & {
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
+  /** The latest `run.snapshot` as written: the loop state beside it moves
+   *  with each `tool.result` mutation, this does not. */
+  readonly lastSnapshot: RunSnapshotPayload | null;
   /** Ledger rows folded into this state: zero means nothing but queued
    *  input has folded, which is what tells an unopened run from a broken one. */
   readonly rowsBeforeSnapshot: number;
@@ -254,6 +258,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   round: 0,
   commit,
   snapshotCommit: null,
+  lastSnapshot: null,
   rowsBeforeSnapshot: 0,
   phase: null,
   modelId: null,
@@ -417,6 +422,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...advance(state),
         snapshotCommit: commit,
+        lastSnapshot: p,
         phase: state.phase ?? 'initial',
         family: p.family,
         ...p.runtime,

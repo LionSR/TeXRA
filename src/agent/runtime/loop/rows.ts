@@ -105,8 +105,9 @@ export interface SnapshotPatch {
  * The one `run.snapshot` constructor. Runtime fields come from the folded
  * state unless the patch moves them; the loop state is the one the run last
  * wrote unless the patch rewrites it. A snapshot that would record exactly
- * what the fold already holds is not written: the answer is empty, and a
- * caller spreads it into its batch.
+ * what the latest one written holds is not written: the answer is empty, and
+ * a caller spreads it into its batch. The comparison is against that row, not
+ * the folded loop state, which a `tool.result` has already moved.
  */
 export function snapshotRow(
   runId: RunId,
@@ -137,24 +138,13 @@ export function snapshotRow(
         : state.lastError,
     declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
   };
-  const unchanged =
-    state.snapshotCommit !== null &&
-    state.family === 'toolUse' &&
-    isDeepStrictEqual(loop, state.loop) &&
-    isDeepStrictEqual(runtime, {
-      modelId: state.modelId,
-      modelCompatibilityKey: state.modelCompatibilityKey,
-      lastError: state.lastError,
-      declinedRoutes: state.declinedRoutes,
-    });
-  if (unchanged) return [];
-  return [
-    {
-      type: 'run.snapshot',
-      aggregateId: rowAggregate(runId),
-      payload: { family: 'toolUse', runtime, state: loop },
-    },
-  ];
+  const payload: RunSnapshotPayload = {
+    family: 'toolUse',
+    runtime,
+    state: loop,
+  };
+  if (isDeepStrictEqual(payload, state.lastSnapshot)) return [];
+  return [{ type: 'run.snapshot', aggregateId: rowAggregate(runId), payload }];
 }
 
 /**
