@@ -9,6 +9,7 @@ import {
 import { AppState } from '@platform/interfaces';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingHost } from '@shared/state/stateSettings';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   fakeHostAppState,
@@ -32,7 +33,7 @@ describe('tool-use tool resolution', () => {
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
-      host?: 'cli' | 'desktop' | 'vscode' | undefined;
+      host?: SettingHost;
       injectTools?: boolean;
     },
   ) {
@@ -96,12 +97,12 @@ describe('tool-use tool resolution', () => {
             },
           ),
         ).toEqual(['ask_user_question', 'bash', 'grep', 'write_file']);
-        // A process no composition root named withholds every host-bound
-        // tool rather than guessing it is the extension.
+        // The agent package embedded in another process is offered none of
+        // the tools that need a product host's surfaces.
         expect(
           yield* resolveNames(['bash', 'inquiry', 'send_to_terminal'], {
             approvalPromptsUnavailable: false,
-            host: undefined,
+            host: 'sdk',
           }),
         ).toEqual(['bash']);
       }),

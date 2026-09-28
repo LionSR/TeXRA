@@ -250,6 +250,7 @@ function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
   return {
     ...init,
     roots: {
+      host: roots.host,
       workspace: roots.workspace,
       storage: roots.storage,
       globalStorage: roots.globalStorage,

@@ -12,9 +12,18 @@
  * so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */
+import type { SettingHost } from '@shared/state/stateSettings';
+
 import type { ConfigProvider, StateStore } from './interfaces';
 
 export interface WorkspaceRoots {
+  /**
+   * The product host this process is, named by its composition root. The
+   * catalog rows whose slot differs by host and the tool gate's
+   * `unavailableHosts` read it from here, so a read answers for the host that
+   * opened these roots rather than for a default.
+   */
+  readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
   /** Application-owned storage for this project's TeXRA 1.0 state. Custom

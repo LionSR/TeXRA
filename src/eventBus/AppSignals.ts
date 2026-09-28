@@ -2,7 +2,7 @@ import { Deferred, Effect, PubSub } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
- * tool availability, workspace-file writes). Not for run/session progress
+ * credentials, workspace-file writes). Not for run/session progress
  * events — those extend `AgentEvent` (`agent/trace/`) or `SessionFact`
  * (`SessionEvents` in `agent/runtime/`), per the VS Code-free-zone rule in
  * CLAUDE.md.
@@ -69,8 +69,8 @@ export interface AppSignalPayloads {
    * TUI (an `apiKey.*` change bumps the subscription-preference version its
    * status bar reads), and `@tools/credentialReprobe` on every host (a key a
    * plugin lists in `reprobeOnSecrets`, such as the GitHub token, re-probes
-   * tool availability for each held workspace, which the next run's tool list
-   * reads from cache).
+   * tool availability for each held workspace, which the next step's tool
+   * list reads from the `ToolAvailability` service).
    */
   credentialChanged: { key: string };
 
@@ -85,17 +85,6 @@ export interface AppSignalPayloads {
    * that could go stale.
    */
   githubSubscriptionsChanged: undefined;
-
-  /**
-   * External tool availability was re-probed. Frontends refresh their
-   * dashboards from the updated cache.
-   *
-   * Consumed by: extension and desktop settings views — this is the sole
-   * repaint path for both Tools dashboards, so every re-probe reaches the UI
-   * regardless of which input changed. Not the CLI: it has no tools
-   * dashboard; availability is read per-run when a tool is invoked.
-   */
-  toolAvailabilityChanged: undefined;
 
   /**
    * The workspace agent roster changed outside a settings round-trip. Keyless

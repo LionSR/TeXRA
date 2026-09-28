@@ -181,10 +181,11 @@ describe('PRPollingSource annotation pagination', () => {
     'leaves queued annotation runs in place when the page budget is exhausted',
     () =>
       Effect.gen(function* () {
-        const source =
-          new PRPollingSource() as unknown as AnnotationDrainSource;
+        const source = new PRPollingSource(
+          undefined,
+          new AnnotationFetchBudget(0, 60_000),
+        ) as unknown as AnnotationDrainSource;
         source.has = vi.fn().mockReturnValue(true);
-        yield* PRPollingSource.resetAnnotationFetchBudgetForTests(0);
         const runs = [checkRun(7), checkRun(8)];
         const state = drainState(runs);
 

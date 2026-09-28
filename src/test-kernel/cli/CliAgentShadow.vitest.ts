@@ -258,7 +258,7 @@ describe('CLI agent validation with a shadowed name', () => {
         const context = {
           // The roster slots only gate visibility, which this registry leaves
           // unconfigured, so empty chat slots resolve the same names as the host.
-          stores: makeFakeSettingsStores().stores,
+          stores: makeFakeSettingsStores('cli').stores,
           session: {
             runSettled: undefined,
             runCompleted: false,
@@ -280,7 +280,7 @@ describe('CLI agent validation with a shadowed name', () => {
       Effect.gen(function* () {
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const { stores } = makeFakeSettingsStores();
+        const { stores } = makeFakeSettingsStores('cli');
         const delayedState = {
           ...stores.globalState,
           get: <T>(key: string, defaultValue?: T) =>

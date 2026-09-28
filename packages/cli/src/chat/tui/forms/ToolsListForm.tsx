@@ -9,8 +9,8 @@ import {
   readCliToolStatuses,
   setCliToolEnabled,
 } from '@cli/runtime/tools';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
 
@@ -19,10 +19,11 @@ import { AsyncListForm } from './_shared/ListForm';
 interface ToolsListFormProps {
   readonly availableRows?: number;
   /**
-   * The global state the toggle writes. Ink components run no Effect, so the
-   * process store arrives as a prop from the surface that opened the form.
+   * The session's stores: the global state the toggle writes, and the host
+   * and configuration the probes read. Ink components run no Effect, so they
+   * arrive as a prop from the surface that opened the form.
    */
-  readonly state: StateStore;
+  readonly stores: SettingsStores;
   /**
    * The process runtime the tool probes run on, and whose `AppState` is that
    * same store, from the same surface.
@@ -30,9 +31,6 @@ interface ToolsListFormProps {
   readonly runtime: ProcessRuntime;
   /** The session's workspace folder, for the probes that need one. */
   readonly workspaceRoot: string | undefined;
-  /** That same workspace's configuration, which the Zotero probe reads its
-   *  port from. */
-  readonly config: ConfigProvider;
   readonly onClose: () => void;
 }
 
@@ -70,8 +68,9 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       loadingLabel="Checking tool integrations..."
       load={() =>
         readCliToolStatuses({
-          workspaceRoot: props.workspaceRoot,
-          config: props.config,
+          workspace: props.workspaceRoot,
+          config: props.stores.config,
+          host: props.stores.host,
         })
       }
       runtime={props.runtime}
@@ -93,7 +92,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
         const tool = tools.find((candidate) => candidate.id === id);
         const enabled = tool ? cliToolEnabled(tool) : null;
         if (enabled !== null) {
-          update(setCliToolEnabled(props.state, id, !enabled));
+          update(setCliToolEnabled(props.stores.globalState, id, !enabled));
         }
       }}
       onCancel={props.onClose}

@@ -6,6 +6,7 @@ import { AppState, AgentDirectories } from '@platform/interfaces';
 import { UsageLog } from '@shared/usageLog';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { initTestProcessRuntime } from './testProcessRuntime';
+import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentDirectories,
@@ -66,6 +67,7 @@ const runtime = installProcessRuntime({
   agentResume: fakeHostAgentResume,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
   setup: fakeSetupPlatform,
+  toolAvailability: unprobedToolAvailability,
   // The harness reports no usage; the telemetry suite starts its own.
   usageLog: UsageLog.disabled,
   globalDatabase: globalDatabaseLayer(globalStorage),

@@ -46,6 +46,7 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
     openSessionEffect({
       ...init,
       roots: init.roots ?? {
+        host: installed.host,
         workspace: installed.workspace,
         storage: `${installed.storage}/test-sessions/${opened}`,
         globalStorage: installed.globalStorage,

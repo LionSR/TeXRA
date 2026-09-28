@@ -7,7 +7,6 @@ import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
-import { THREE_DAYS_MS } from '@utils/config/constants';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem
@@ -45,6 +44,8 @@ function pastedImageFileName(fileName: string): string {
   }
   return fileName;
 }
+
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
  * Delete the files under `directory` older than three days. Never fails the

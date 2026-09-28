@@ -110,7 +110,7 @@ import type { CommandId } from '@shared/commands/catalog';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { refreshToolAvailability } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -301,6 +301,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ),
       );
       const roots = createNodeWorkspaceRoots({
+        host: 'vscode',
         workspacePath: workspaceRoot,
         storage,
         globalStorage,
@@ -316,7 +317,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       });
       // The once-per-process installs, in the order the shared bootstrap owns.
       yield* bootstrapHost({
-        host: 'vscode',
         roots,
         skills: {
           resourcesPath: path.join(context.extensionPath, 'resources'),
@@ -700,10 +700,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // fire-and-forget async work through this program, which logs a failed
   // refresh instead of letting it become an unhandled rejection.
   const refreshToolAvailabilityLogged = (trigger: string) =>
-    refreshToolAvailability({
-      workspaceRoot: runtimeSession.roots.workspace,
-      config: runtimeSession.roots.config,
-    }).pipe(
+    Effect.flatMap(ToolAvailability, (availability) =>
+      availability.refresh(runtimeSession.roots),
+    ).pipe(
       Effect.catchCause((cause) =>
         Effect.logError(
           `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,

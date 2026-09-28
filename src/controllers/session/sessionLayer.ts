@@ -37,7 +37,6 @@ import {
 } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 
-import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
@@ -92,12 +91,10 @@ import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
   interruptedWorkflowCall,
-  ownerIdentity,
   RUN_OUTCOME,
   TOOL_CALL_STATUS,
   type AggregateId,
   type CommitOrdinal,
-  type OwnerId,
   type RunId,
   type RunOutcome,
   type SessionCloseReport,
@@ -106,8 +103,6 @@ import {
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { closesRunWindow } from '@shared/session/runRows';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
@@ -127,6 +122,8 @@ import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
+import { toolAvailabilityLayer } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { toolRegistryLayer, type HostPluginLayers } from '@tools/registry';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
@@ -136,6 +133,7 @@ import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
 import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
+import { ownerLiveness } from './ownerLiveness';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 import {
@@ -156,9 +154,6 @@ const logFailure =
   (message: string, log = Effect.logWarning) =>
   (data: unknown) =>
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
-
-/** How often the owners the view names are re-probed (PRD 5.2). */
-const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 
 /**
  * Which session an entry is: its storage root, the value `SessionView.key`
@@ -202,69 +197,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
  * `closeSession` needs that, a synchronous read cannot have it.
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
-
-/** The owner ids of the non-terminal runs another process wrote. */
-function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
-  const foreign = [...view.runs.values()].flatMap((run) =>
-    run.ownerId !== null &&
-    run.ownerId !== self &&
-    !isTerminalOutcomePhase(run.status)
-      ? [run.ownerId]
-      : [],
-  );
-  return [...new Set(foreign)].sort();
-}
-
-/**
- * The liveness prober (PRD 5.2, contract C5): every owner the view names on a
- * non-terminal run other than this process, proved by `kill(pid, 0)` plus the
- * start-identity check per distinct owner, never per run. Probed whenever that
- * owner set changes and on an interval between changes. Alive and unprovable
- * owners hold their runs; only an explicit death verdict permits an
- * interrupted classification. It writes `dead`; `unreadable` is the status
- * machine's.
- */
-const ownerLiveness = Layer.effectDiscard(
-  Effect.gen(function* () {
-    const view = yield* SessionViewService;
-    const local = yield* LocalRuntimeSource;
-    const identity = yield* ProcessIdentity;
-    const probe = Effect.gen(function* () {
-      const owners = foreignOwners(
-        yield* SubscriptionRef.get(view.ref),
-        identity.ownerId,
-      );
-      const dead: OwnerId[] = [];
-      for (const owner of owners) {
-        const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
-        if (liveness === 'dead') dead.push(owner);
-      }
-      const snapshot = yield* SubscriptionRef.get(local.ref);
-      if (
-        snapshot.dead.length === dead.length &&
-        snapshot.dead.every((owner, i) => owner === dead[i])
-      ) {
-        return;
-      }
-      yield* SubscriptionRef.set(local.ref, { ...snapshot, dead });
-    });
-    const ownerSetChanges = SubscriptionRef.changes(view.ref).pipe(
-      Stream.map((current) =>
-        foreignOwners(current, identity.ownerId).join(' '),
-      ),
-      Stream.changes,
-    );
-    yield* Effect.forkScoped(
-      Stream.merge(
-        ownerSetChanges,
-        Stream.tick(OWNER_LIVENESS_PROBE_INTERVAL),
-      ).pipe(
-        Stream.mapEffect(() => probe),
-        Stream.runDrain,
-      ),
-    );
-  }),
-);
 
 /**
  * The handle of one root, over the root's graph: the session is the entry's
@@ -730,6 +662,10 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
+      // Probed beside the open, so no step waits for it (the gate withholds
+      // nothing on its account until it answers).
+      const availability = yield* ToolAvailability;
+      yield* Effect.forkScoped(availability.refresh(key.open.roots));
       return Context.make(Session, session);
     }),
   );
@@ -1109,6 +1045,9 @@ interface ProcessRuntimeOptions {
    * reached it anyway fails naming the missing host wiring.
    */
   readonly inlineComments?: InlineCommentProvider;
+  /** The dependency probes every tool gate and Tools dashboard read: absent,
+   *  every host's; a test harness passes one that starts no probe. */
+  readonly toolAvailability?: typeof toolAvailabilityLayer;
   /**
    * The host's Lean language services, built and closed with the runtime.
    * Absent, the direct `lake env lean --server` pool over this install's
@@ -1172,6 +1111,7 @@ export function installProcessRuntime({
   setup,
   editorModel,
   inlineComments,
+  toolAvailability = toolAvailabilityLayer,
   lean = directLeanLanguageServices(),
   usageLog,
   globalDatabase: globalDatabaseOption,
@@ -1227,6 +1167,8 @@ export function installProcessRuntime({
         // runtime, its finalizer drains the queue while the account plane is
         // up, and it is ahead of `services` so that plane and HTTP reach it.
         Layer.provideMerge(usageLog),
+        // Its probes read the Lean port and the services below.
+        Layer.provideMerge(toolAvailability),
         // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),
         Layer.provideMerge(services),

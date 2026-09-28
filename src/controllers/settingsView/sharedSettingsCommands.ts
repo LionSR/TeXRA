@@ -72,7 +72,6 @@ import {
 } from '@shared/settingsView/settingsViewMessages';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
-import { refreshToolAvailability } from '@tools/toolAvailability';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 
@@ -124,7 +123,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   // ── Controllers ──
 
   const profile = new SettingsProfileController({
-    host: ports.host,
     stores: roots,
     loadProviderKeyStatuses: loadApiKeyStatusMap(secrets, API_PROVIDERS),
   });
@@ -138,7 +136,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const usage = new SubscriptionUsageService({ secrets, stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
   const gitPage = settingsGitCommands({ bindings, present, secrets });
-  const toolsPage = settingsToolCommands({ host: ports.host, roots, bindings });
+  const toolsPage = settingsToolCommands({ roots, bindings });
   const pluginsPage = settingsPluginCommands({
     roots,
     bindings,
@@ -159,7 +157,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     modelSelection.buildModelSelectionMessage(),
   );
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
-    bindings.post(buildSettingsSnapshotMessage(snapshot, roots, ports.host));
+    bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
   const postSkills = bindings.post(
     Effect.map(
       Effect.all([ports.skillDisplay, pluginsPage.list]),
@@ -392,13 +390,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           level: message.level,
         })
         .pipe(Effect.andThen(postModelSelection)),
-    // The Tools page repaints on the `toolAvailabilityChanged` signal this
-    // re-probe emits (`repaintOn`).
-    recheckToolStatus: () =>
-      refreshToolAvailability({
-        workspaceRoot: roots.workspace,
-        config: roots.config,
-      }),
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),
 
@@ -471,12 +462,14 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       ),
     /** Settle a repaint nobody awaits, reported as a message's would be. */
     settle,
+    /** The Tools page following its workspace's availability results, for
+     *  the host to hold while the view lives. */
+    followToolAvailability: toolsPage.followToolAvailability(settle),
     /**
      * What each app signal this view follows repaints: a run that binds a
      * GitHub subscription, the setup agent's `apply_team`, a provider key
      * written by any writer (the setup agent's `unset_api_key`, another
-     * window), the editor's language models, and a tool re-probe, whoever
-     * triggered it. OAuth tokens and other
+     * window) and the editor's language models. OAuth tokens and other
      * secrets are not provider keys, so they repaint nothing. The host
      * subscribes (controllers do not import the signal bus) and settles
      * each repaint through {@link settle}.
@@ -492,7 +485,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           : refreshAfterProviderKeyChange(provider);
       },
       languageModelsChanged: () => postModelSelection,
-      toolAvailabilityChanged: () => toolsPage.postToolDashboard,
     },
   };
 }

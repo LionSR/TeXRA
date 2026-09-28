@@ -244,7 +244,9 @@ export class SettingsViewMessageHandler {
     this.handlerRegistry = this.createHandlerRegistry(context);
 
     const { repaintOn, settle } = this.body;
+    const following = runtime.runFork(this.body.followToolAvailability);
     context.subscriptions.push(
+      { dispose: () => runtime.runFork(Fiber.interrupt(following)) },
       ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
         (signal) =>
           subscribeAppSignal(runtime, signal, (payload) => {

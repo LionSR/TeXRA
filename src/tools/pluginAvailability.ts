@@ -42,7 +42,6 @@ import {
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
-import { processHost } from '@utils/config/platformSettings';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -100,7 +99,7 @@ function leanReady(prerequisites: Lean4Prerequisites): boolean {
 }
 
 export const LEAN4_AVAILABILITY = prerequisitesChecks({
-  probe: () =>
+  probe: (inputs) =>
     Effect.gen(function* () {
       const setup = yield* SetupPlatform;
       const lean = yield* LeanLanguageServices;
@@ -108,7 +107,7 @@ export const LEAN4_AVAILABILITY = prerequisitesChecks({
         setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
       const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
       // Only the VS Code build drives Lean through the extension.
-      const requiresExtension = processHost() === 'vscode';
+      const requiresExtension = inputs.host === 'vscode';
       return {
         extensionAvailable,
         lakeAvailable,
@@ -173,7 +172,7 @@ export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
   // clearing it re-probes the Tools tab and the next run's tool list.
   reprobeOnSecrets: [GITHUB_TOKEN_STORAGE_KEY],
   ...prerequisitesChecks({
-    probe: ({ workspaceRoot }) => getGitHubPRPrerequisites(workspaceRoot),
+    probe: ({ workspace }) => getGitHubPRPrerequisites(workspace),
     // Without a workspace to ask about, the token is still answerable.
     fallback: () => getGitHubPRPrerequisites(undefined),
     check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,

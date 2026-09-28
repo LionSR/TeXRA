@@ -273,7 +273,7 @@ function appProps(): AppProps {
     // The status bar's subscription probe never runs in these key-routing
     // suites; the App only requires the stores to be present.
     secrets: new FakeSecrets(),
-    stores: makeFakeSettingsStores().stores,
+    stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     session: testDefaultSession(),
     onSubmit: vi.fn(),

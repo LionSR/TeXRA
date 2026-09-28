@@ -324,6 +324,7 @@ export function initCliPlatform(
           // `~/.texra/v1/global-storage/config.json`. One provider per process is
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
+            host: 'cli',
             workspacePath: context.cwd,
             storage,
             globalStorage: resolveGlobalStoragePath(storageRoot),
@@ -365,7 +366,6 @@ export function initCliPlatform(
           // first-install tool seed) must fail while they are still private,
           // as the seed did when this body owned it.
           yield* bootstrapHost({
-            host: 'cli',
             roots,
             skills: {
               resourcesPath: context.resourcesPath,
@@ -415,6 +415,7 @@ export function initCliPlatform(
     );
     const cliServices: CliPlatformServices = {
       runtime,
+      host: roots.host,
       config: roots.config,
       workspaceState: roots.workspaceState,
       // The pure path calculator over this process's storage root (no mkdir),

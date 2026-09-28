@@ -368,6 +368,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { LanguageModel },
     { SetupPlatform },
     { SupabaseAuth },
+    { unprobedToolAvailability },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -378,6 +379,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/languageModel'),
     import('@tools/setup/platform'),
     import('@auth/SupabaseAuth'),
+    import('./toolAvailabilityTestLayer'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -433,6 +435,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AgentResume.layer(fakeHostAgentResume),
     AgentDirectories.layer(fakeHostAgentDirectories),
     SetupPlatform.layer(fakeSetupPlatform),
+    unprobedToolAvailability,
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly
     // provides its own view innermost.

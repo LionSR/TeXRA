@@ -18,7 +18,6 @@ import {
 } from '@shared/constants/latexToolchain';
 import { executed } from '@tools/core/result';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
-import { processHost } from '@utils/config/platformSettings';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
 
@@ -106,7 +105,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const { auth, coreTools, missingCore, latexWorkshopInstalled } = core;
 
   const summary = {
-    host: processHost() ?? null,
+    host: roots.host,
     os: {
       platform: hostInfo.platform,
       arch: hostInfo.arch,

@@ -33,7 +33,7 @@ import { TOOL_PLUGINS } from '@tools/plugins';
 const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
-const settings = makeFakeSettingsStores().stores;
+const settings = makeFakeSettingsStores('cli').stores;
 async function writeSkill(
   root: string,
   dirName: string,
@@ -227,7 +227,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         expect(result.errors).toEqual([]);
 
         // A switched-off plugin is one unit: its skills go with its tools.
-        const { stores } = makeFakeSettingsStores();
+        const { stores } = makeFakeSettingsStores('cli');
         yield* stores.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
           'lean4',
         ]);
@@ -295,7 +295,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             'The bundled copy.',
           );
         });
-        const stores = makeFakeSettingsStores().stores;
+        const stores = makeFakeSettingsStores('cli').stores;
         // The run catalog over the installed plugins as they load now.
         const catalogNow = () =>
           loadRuntimeSkillCatalog({

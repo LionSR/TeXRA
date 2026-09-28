@@ -23,8 +23,14 @@
  * re-registered by code at every startup.
  */
 
+// Third-party imports
+import { Effect, Result } from 'effect';
+import { z } from 'zod';
+
 // Local imports
+import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import { MANIFEST } from '@tools/pluginManifest';
@@ -197,5 +203,39 @@ export function switchedOffPlugins(
 ): ReadonlySet<string> {
   return new Set(
     [...disabled].filter((id) => findToolPlugin(id)?.availability != null),
+  );
+}
+
+const DisabledToolIdsSchema = z.array(z.string());
+
+/**
+ * The switch record as stored, checked: the ids the user holds off, or
+ * `undefined` while nothing (neither the first-install seed nor the user)
+ * has written it. A present value that is not a list of ids is corruption and
+ * fails as the read, rather than reading as "nothing off", which would switch
+ * every opt-in plugin on.
+ */
+export function storedDisabledTools(
+  stored: unknown,
+): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
+  if (stored === undefined) return Result.succeed(undefined);
+  const parsed = DisabledToolIdsSchema.safeParse(stored);
+  return parsed.success
+    ? Result.succeed(new Set(parsed.data))
+    : Result.fail(
+        new StateReadFailed({
+          key: GlobalStateKey.DISABLED_TOOLS,
+          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${z.prettifyError(parsed.error)}`,
+          cause: parsed.error,
+        }),
+      );
+}
+
+/** The plugin ids the user switched off in `store`'s record; none while it
+ *  is absent. */
+export function readDisabledTools(store: StateStore) {
+  return store.get<unknown>(GlobalStateKey.DISABLED_TOOLS).pipe(
+    Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
+    Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
   );
 }

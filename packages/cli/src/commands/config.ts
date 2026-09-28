@@ -67,10 +67,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
     yield* Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
-      Effect.map(readSetting(entry, stores, 'cli'), (value) => [
-        entry.key,
-        value,
-      ]),
+      Effect.map(readSetting(entry, stores), (value) => [entry.key, value]),
     ),
   );
   const record = { settings, agents };

@@ -102,8 +102,11 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * `settingSlot(entry, host)`.
  */
 
-/** The product hosts, spelled once: for settings and `unavailableHosts`. */
-const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
+/**
+ * The product hosts, spelled once: for settings and `unavailableHosts`.
+ * `sdk` is the agent package embedded in someone else's process.
+ */
+const SETTING_HOSTS = ['vscode', 'cli', 'desktop', 'sdk'] as const;
 export type SettingHost = (typeof SETTING_HOSTS)[number];
 
 /** Storage slot a setting is read from / written to. */
@@ -253,7 +256,7 @@ export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
 
 /** Every host stores the setting in the same slot. */
 function sameSlot(store: SettingStore): SettingSlots {
-  return { vscode: store, cli: store, desktop: store };
+  return { vscode: store, cli: store, desktop: store, sdk: store };
 }
 
 /**
@@ -810,6 +813,7 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
   vscode: 'workspaceState',
   desktop: 'workspaceState',
   cli: 'config',
+  sdk: 'config',
 };
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
@@ -1295,7 +1299,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/toolAvailability.ts'),
+    honoredBy: everyHost('src/tools/plugins.ts'),
     openForm: 'tools',
     surfaces: { cliConfig: true },
   }),

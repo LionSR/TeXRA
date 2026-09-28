@@ -16,7 +16,6 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
 import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
 import * as setupPlatformModule from '@tools/setup/platform';
-import * as platformSettings from '@utils/config/platformSettings';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -82,12 +81,11 @@ describe('setup credential reporting', () => {
           installPlatform(
             {
               env: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
+              host: 'cli',
             },
             { setup: createFakeSetupPlatform() },
           ),
         );
-        vi.spyOn(platformSettings, 'processHost').mockReturnValue('cli');
-
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
           Effect.provide(nativeToolTestLayer()),
         );

@@ -31,6 +31,9 @@ function requireInstalled(): WorkspaceRoots {
 }
 
 const VIEW: WorkspaceRoots = Object.freeze({
+  get host() {
+    return requireInstalled().host;
+  },
   get workspace() {
     return requireInstalled().workspace;
   },

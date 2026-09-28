@@ -1,39 +1,55 @@
 /**
- * External tool availability checks with caching.
+ * External tool availability: the process's `ToolAvailability` service.
  *
  * Runs every group's checks concurrently — one shared `probe` per group feeds
  * its `check` (availability), `statusLabel` (badge), and `detailCheck`
- * (human-readable detail) — caches the results, and broadcasts
- * `toolAvailabilityChanged` when inputs change so subscribed UIs refresh
- * without re-probing. What to check is each plugin's `availability` in
+ * (human-readable detail) — and holds each workspace's last results in one
+ * `SubscriptionRef`. What to check is each plugin's `availability` in
  * {@link @tools/plugins}.
  *
- * Used by:
- *   - Tool dashboard — runs fresh checks via `runExternalToolChecks()`
- *   - Agent tool resolver — reads the last results via
- *     `getUnavailableToolNamesCached()`
+ * The composition root builds the service with the process runtime, so every
+ * host probes the same way: each session forks a probe of its workspace when
+ * it opens, the credential re-probe and the host triggers (an extension
+ * installed, a folder opened, the Re-check button) refresh it, the tool
+ * resolver reads the last results and the Tools dashboard follows them. No
+ * UI has to be open for a run to be offered what its workspace can run.
  *
- * The cache is keyed by workspace root: the probes read the workspace (the
+ * Results are keyed by workspace root: the probes read the workspace (the
  * GitHub group asks whether it is a git repository, Zotero reads its
  * configuration), so on a multi-project host one workspace's results must
  * not answer for another's.
  */
 
 // Third-party imports
-import { Cause, Duration, Effect, Result } from 'effect';
+import {
+  Cause,
+  Duration,
+  Effect,
+  Layer,
+  Result,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { TOOL_PLUGINS, type ToolPlugin } from '@tools/plugins';
+import {
+  storedDisabledTools,
+  TOOL_PLUGINS,
+  type ToolPlugin,
+} from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
   ToolProbeError,
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
+import {
+  ToolAvailability,
+  type AvailabilityResults,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailabilityService';
 import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,39 +65,14 @@ const CHANNEL = 'toolAvailability';
 const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
 // ============================================================
-// Result type
+// Switches
 // ============================================================
-
-/** Result of running a single external tool check. */
-export interface ExternalToolCheckResult {
-  readonly id: string;
-  readonly tools: readonly string[];
-  readonly name: string;
-  readonly status: 'available' | 'not-found' | 'unknown';
-  /** Short status label for the dashboard badge, when the default is too generic. */
-  readonly statusLabel?: string;
-  /** Human-readable status detail from the group's `detailCheck`, if any. */
-  readonly statusDetail?: string;
-}
-
-// ============================================================
-// Check execution + cache
-// ============================================================
-
-/** A plugin with an external dependency to probe. */
-type ProbedToolPlugin = ToolPlugin & {
-  readonly availability: ToolAvailabilityChecks;
-};
-
-/** The plugins the availability layer probes, in manifest order. */
-const PROBED_PLUGINS = TOOL_PLUGINS.filter(
-  (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
-);
 
 /**
  * Switch a tool plugin on or off in the global state store the caller
  * holds. Every process sharing it follows the write (`AppState.changes`);
- * runs read the switch at their next step.
+ * runs read the switch at their next step. A record that does not validate
+ * refuses the change, so it is never written over and lost.
  */
 export function setToolEnabled(
   toolId: string,
@@ -89,17 +80,20 @@ export function setToolEnabled(
   store: StateStore,
 ) {
   return store
-    .modify(GlobalStateKey.DISABLED_TOOLS, (stored) => {
-      const disabled = new Set((stored as string[] | undefined) ?? []);
-      if (enabled) disabled.delete(toolId);
-      else disabled.add(toolId);
-      return Result.succeed([...disabled]);
-    })
+    .modify(GlobalStateKey.DISABLED_TOOLS, (stored) =>
+      Result.map(storedDisabledTools(stored), (current) => {
+        const disabled = new Set(current);
+        if (enabled) disabled.delete(toolId);
+        else disabled.add(toolId);
+        return [...disabled];
+      }),
+    )
     .pipe(Effect.asVoid);
 }
 
 /**
- * Seed the disabled-tool list for first-time users only, on any host.
+ * Seed the disabled-tool list for first-time users only, on every host and
+ * in the agent package.
  *
  * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
  * opt-in and seeded as disabled on a fresh install, unless it is
@@ -113,10 +107,9 @@ export function setToolEnabled(
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
-    const disabledTools = yield* state.get<string[]>(
-      GlobalStateKey.DISABLED_TOOLS,
-    );
-    if (disabledTools !== undefined) return;
+    const stored = yield* state.get<unknown>(GlobalStateKey.DISABLED_TOOLS);
+    if ((yield* Effect.fromResult(storedDisabledTools(stored))) !== undefined)
+      return;
 
     const defaults = TOOL_PLUGINS.filter(
       (plugin) => plugin.toggleable && !plugin.onByDefault,
@@ -128,106 +121,90 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   },
 );
 
+// ============================================================
+// The service
+// ============================================================
+
+/** A plugin with an external dependency to probe. */
+type ProbedToolPlugin = ToolPlugin & {
+  readonly availability: ToolAvailabilityChecks;
+};
+
+/** The plugins the availability layer probes, in manifest order. */
+const PROBED_PLUGINS = TOOL_PLUGINS.filter(
+  (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
+);
+
 /**
- * Coalescing cache of one workspace's last probe results — the only source
- * for its availability answers. Encapsulated as a class, not bare module-level
- * `let`s, per AGENTS.md "No bare module-level mutable singletons in tested
- * code"; same shape as `AnnotationFetchBudget` in
- * `@tools/github/annotationFetchBudget`.
+ * One workspace root's single-flight probe: callers join the probe in flight,
+ * and one that arrives after it started reading its inputs schedules a
+ * follow-up, so the results end on the latest state and a stale probe cannot
+ * overwrite a fresh one by finishing last.
  */
-class ToolAvailabilityCache {
-  private lastResults: ExternalToolCheckResult[] | null = null;
-  private readonly probes = new SharedAttempt<
-    ExternalToolCheckResult[],
-    never
-  >();
-  private pendingRerun = false;
-
-  /**
-   * Run all external tool checks in parallel. See {@link runExternalToolChecks}
-   * for the full coalescing contract this implements.
-   */
-  runChecks(
-    inputs: ToolProbeInputs,
-  ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-    return Effect.suspend(() => {
-      // The latch resets in the segment that claims the slot, not on the
-      // detached fiber: a caller joining before that fiber's first step
-      // must not have its rerun wiped.
-      this.pendingRerun = this.probes.inFlight;
-      return this.probes.run(() => this.probeUntilSettled(inputs));
-    });
-  }
-
-  /** Recurses instead of looping: a caller joining mid-probe can set
-   *  `pendingRerun` again before this settles, same as the `do...while` it
-   *  replaces. */
-  private probeUntilSettled(
-    inputs: ToolProbeInputs,
-  ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-    // Every group probes at once and no group's failure cancels a sibling,
-    // because each one resolves to a result of its own.
-    return Effect.forEach(
-      PROBED_PLUGINS,
-      (plugin) => probeToolGroup(plugin, inputs),
-      { concurrency: 'unbounded' },
-    ).pipe(
-      Effect.flatMap((results) => {
-        this.lastResults = results;
-        if (!this.pendingRerun) return Effect.succeed(results);
-        this.pendingRerun = false;
-        return this.probeUntilSettled(inputs);
-      }),
-    );
-  }
-
-  /** Read the last check results without re-probing. */
-  getLastResults(): ExternalToolCheckResult[] | null {
-    return this.lastResults;
-  }
+interface ProbeLane {
+  readonly attempt: SharedAttempt<readonly ExternalToolCheckResult[], never>;
+  pendingRerun: boolean;
 }
 
 /**
- * Process-wide, one cache per workspace root (`undefined` = no folder open),
- * created on first use; same lifetime as the module.
+ * The process's {@link ToolAvailability}, built once over the services the
+ * probes read: every host's composition root installs it with the process
+ * runtime.
  */
-const toolAvailabilityCaches = new Map<
-  string | undefined,
-  ToolAvailabilityCache
->();
-
-function cacheFor(workspaceRoot: string | undefined): ToolAvailabilityCache {
-  let cache = toolAvailabilityCaches.get(workspaceRoot);
-  if (!cache) {
-    cache = new ToolAvailabilityCache();
-    toolAvailabilityCaches.set(workspaceRoot, cache);
-  }
-  return cache;
-}
-
-/**
- * Run all external tool checks in parallel.
- * Always returns fresh `check` + `detailCheck` probes and updates the
- * availability cache.
- *
- * Concurrent calls are coalesced: while a probe is in flight, additional
- * callers join the same deferred and receive its results. If any caller
- * arrives AFTER the active probe started reading inputs, a follow-up probe
- * is scheduled so the cache ultimately reflects the most recent state and
- * a stale probe can't overwrite a fresh one by finishing last.
- *
- * Called by the tool dashboard (needs per-group results) and
- * {@link refreshToolAvailability}. Also populates the cache read by
- * `getUnavailableToolNamesCached()`.
- *
- * @returns Per-group results with availability status and an optional
- *   human-readable `statusDetail`.
- */
-export function runExternalToolChecks(
-  inputs: ToolProbeInputs,
-): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-  return cacheFor(inputs.workspaceRoot).runChecks(inputs);
-}
+export const toolAvailabilityLayer: Layer.Layer<
+  ToolAvailability,
+  never,
+  ToolProbeServices
+> = Layer.effect(
+  ToolAvailability,
+  Effect.gen(function* () {
+    const services = yield* Effect.context<ToolProbeServices>();
+    const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
+    const lanes = new Map<string | undefined, ProbeLane>();
+    // Recurses instead of looping: a caller joining mid-probe can set
+    // `pendingRerun` again before this settles.
+    const probeUntilSettled = (
+      lane: ProbeLane,
+      inputs: ToolProbeInputs,
+    ): Effect.Effect<readonly ExternalToolCheckResult[]> =>
+      Effect.forEach(
+        PROBED_PLUGINS,
+        (plugin) => probeToolGroup(plugin, inputs),
+        // Every group probes at once and no group's failure cancels a
+        // sibling, because each one resolves to a result of its own.
+        { concurrency: 'unbounded' },
+      ).pipe(
+        Effect.provideContext(services),
+        Effect.tap((probed) =>
+          SubscriptionRef.update(results, (held) =>
+            new Map(held).set(inputs.workspace, probed),
+          ),
+        ),
+        Effect.flatMap((probed) => {
+          if (!lane.pendingRerun) return Effect.succeed(probed);
+          lane.pendingRerun = false;
+          return probeUntilSettled(lane, inputs);
+        }),
+      );
+    return {
+      results,
+      refresh: (inputs) =>
+        Effect.suspend(() => {
+          let lane = lanes.get(inputs.workspace);
+          if (lane === undefined) {
+            lane = { attempt: new SharedAttempt(), pendingRerun: false };
+            lanes.set(inputs.workspace, lane);
+          }
+          const claimed = lane;
+          // The latch resets in the segment that claims the slot, not on the
+          // detached fiber: a caller joining before that fiber's first step
+          // must not have its rerun wiped.
+          claimed.pendingRerun = claimed.attempt.inFlight;
+          return claimed.attempt.run(() => probeUntilSettled(claimed, inputs));
+        }),
+    };
+  }),
+);
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
   {
@@ -316,56 +293,5 @@ function resolveOptionalStatus(
         Effect.as(undefined),
       ),
     ),
-  );
-}
-
-/**
- * Return the workspace's last check results without re-probing. Returns null
- * if checks haven't been run for that workspace yet.
- */
-export function getLastCheckResults(
-  workspaceRoot: string | undefined,
-): ExternalToolCheckResult[] | null {
-  return toolAvailabilityCaches.get(workspaceRoot)?.getLastResults() ?? null;
-}
-
-/**
- * Re-probe external tools and broadcast `toolAvailabilityChanged` so any
- * subscribed UI (Tools tab) and runtime caches refresh. Call this whenever
- * an input to the availability checks changes (GitHub token, workspace
- * git-repo status, extension install state) — mutators don't have to know
- * which UIs depend on the result.
- *
- * Coalescing and follow-up-probe scheduling happen inside
- * `runExternalToolChecks`, so the dashboard-load probe and a refresh-triggered
- * probe can't race.
- */
-export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
-  function* (inputs: ToolProbeInputs) {
-    yield* runExternalToolChecks(inputs);
-    emitAppSignal('toolAvailabilityChanged', undefined);
-  },
-);
-
-/**
- * Non-blocking read — derives the unavailable tool names from the workspace's
- * last check results, or an empty set if no probe has completed for it yet.
- * Never triggers I/O.
- *
- * Only includes tools whose external dependency is missing (not-found).
- * Disabled tools are NOT included — the caller handles those separately
- * as the plugins switched off in the live catalog (`@tools/liveTools`).
- *
- * Used by the agent tool resolver to avoid blocking the first tool-use
- * flow on network probes. External tools that are actually missing will
- * fail at call time with a clear error — same as pre-dashboard behavior.
- */
-export function getUnavailableToolNamesCached(
-  workspaceRoot: string | undefined,
-): ReadonlySet<string> {
-  return new Set<string>(
-    (getLastCheckResults(workspaceRoot) ?? [])
-      .filter((result) => result.status === 'not-found')
-      .flatMap((result) => result.tools),
   );
 }

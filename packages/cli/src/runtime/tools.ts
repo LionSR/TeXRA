@@ -33,7 +33,7 @@ export interface CliToolGuide {
  * probes that need them.
  */
 export function readCliToolStatuses(probeInputs: ToolProbeInputs) {
-  return Effect.map(buildToolDashboardItems('cli', probeInputs), (items) =>
+  return Effect.map(buildToolDashboardItems(probeInputs), (items) =>
     items.filter((item) => item.requiresSetup),
   );
 }
