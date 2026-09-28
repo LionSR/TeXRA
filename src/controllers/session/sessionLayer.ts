@@ -662,10 +662,9 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
       );
-      // Probed beside the open, so no step waits for it (the gate withholds
-      // nothing on its account until it answers).
-      const availability = yield* ToolAvailability;
-      yield* Effect.forkScoped(availability.refresh(key.open.roots));
+      // Held for the session's life and probed beside the open, so no step
+      // waits for it (the gate withholds nothing until it answers).
+      yield* (yield* ToolAvailability).hold(key.open.roots);
       return Context.make(Session, session);
     }),
   );

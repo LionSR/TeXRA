@@ -8,7 +8,7 @@
  * resolver, a composition root's type or a test harness's stand-in, loads
  * none of that graph.
  */
-import { Context, type Effect, type SubscriptionRef } from 'effect';
+import { Context, type Effect, type Scope, type SubscriptionRef } from 'effect';
 
 import type { ToolProbeInputs } from './toolProbes';
 
@@ -45,5 +45,14 @@ export class ToolAvailability extends Context.Service<
     readonly refresh: (
       inputs: ToolProbeInputs,
     ) => Effect.Effect<readonly ExternalToolCheckResult[]>;
+    /**
+     * Keep `roots`' results for the caller's scope and probe them now,
+     * without waiting: a session holds its roots for its life. Only a held
+     * root's results are kept, and a root's are dropped when its last holder
+     * closes, so the map is bounded by the open sessions.
+     */
+    readonly hold: (
+      roots: ToolProbeInputs,
+    ) => Effect.Effect<void, never, Scope.Scope>;
   }
 >()('@texra/tools/ToolAvailability') {}

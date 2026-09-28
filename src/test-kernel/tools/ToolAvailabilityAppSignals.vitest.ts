@@ -1,7 +1,16 @@
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
-import { Context, Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { ConfigProvider } from '@platform/interfaces';
@@ -103,7 +112,7 @@ describe('tool availability service', () => {
         );
         const availability = yield* availabilityService;
         const session = (workspace: string | undefined) => ({
-          roots: { workspace, config: probeInputs.config, host: 'cli' },
+          roots: { ...probeInputs, workspace },
         });
         // Two projects plus the no-workspace session; the second session on
         // `/a` shares its results, so it is probed once.
@@ -116,6 +125,14 @@ describe('tool availability service', () => {
         sessionGraph.initSessionOwner({
           list: () => Effect.succeed(sessions),
         } as never);
+        // Each session holds its roots, which probes them once on open.
+        for (const { roots } of sessions) yield* availability.hold(roots);
+        const probedAll = SubscriptionRef.changes(availability.results).pipe(
+          Stream.filter(() => probedRoots.length === 3),
+          Stream.runHead,
+        );
+        yield* probedAll;
+        probedRoots.length = 0;
         const reprobe = yield* Effect.forkChild(
           reprobeOnCredentialChange.pipe(
             Effect.provideService(ToolAvailability, availability),
@@ -128,10 +145,7 @@ describe('tool availability service', () => {
         emitAppSignal('credentialChanged', { key: 'unrelated.key' });
         emitAppSignal('credentialChanged', { key: 'token.key' });
 
-        yield* SubscriptionRef.changes(availability.results).pipe(
-          Stream.filter((held) => held.size === 3),
-          Stream.runHead,
-        );
+        yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
         sessionGraph.initSessionOwner(undefined);
         yield* Fiber.interrupt(reprobe);
@@ -206,8 +220,13 @@ describe('tool availability service', () => {
 
         expect(yield* statuses(undefined)).toBeUndefined();
 
+        // A root no session holds is answered, not remembered.
         yield* availability.refresh(probeInputs);
+        expect(yield* statuses(undefined)).toBeUndefined();
 
+        const hold = yield* Scope.make();
+        yield* availability.hold(probeInputs).pipe(Scope.provide(hold));
+        yield* availability.refresh(probeInputs);
         expect(yield* statuses(undefined)).toEqual([
           ['present-tool', 'available'],
           ['missing-tool', 'not-found'],
@@ -215,6 +234,9 @@ describe('tool availability service', () => {
         // The probes read the workspace, so one workspace's results never
         // answer for another's on a multi-project host.
         expect(yield* statuses('/other/project')).toBeUndefined();
+        // The last holder leaving drops the root's results.
+        yield* Scope.close(hold, Exit.void);
+        expect(yield* statuses(undefined)).toBeUndefined();
       }).pipe(Effect.provide(probeServices)),
   );
 

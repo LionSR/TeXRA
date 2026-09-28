@@ -16,6 +16,10 @@ export const unprobedToolAvailability = Layer.effect(
     SubscriptionRef.make<
       ReadonlyMap<string | undefined, readonly ExternalToolCheckResult[]>
     >(new Map()),
-    (results) => ({ results, refresh: () => Effect.succeed([]) }),
+    (results) => ({
+      results,
+      refresh: () => Effect.succeed([]),
+      hold: () => Effect.void,
+    }),
   ),
 );

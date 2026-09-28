@@ -144,6 +144,9 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
 interface ProbeLane {
   readonly attempt: SharedAttempt<readonly ExternalToolCheckResult[], never>;
   pendingRerun: boolean;
+  /** Callers in the lane: it leaves its map when the last one settles, as a
+   *  `withPerKeyLane` lane does. */
+  callers: number;
 }
 
 /**
@@ -161,6 +164,8 @@ export const toolAvailabilityLayer: Layer.Layer<
     const services = yield* Effect.context<ToolProbeServices>();
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
     const lanes = new Map<string | undefined, ProbeLane>();
+    // How many holders keep each root's results (see `hold`).
+    const holders = new Map<string | undefined, number>();
     // Recurses instead of looping: a caller joining mid-probe can set
     // `pendingRerun` again before this settles.
     const probeUntilSettled = (
@@ -175,9 +180,13 @@ export const toolAvailabilityLayer: Layer.Layer<
         { concurrency: 'unbounded' },
       ).pipe(
         Effect.provideContext(services),
+        // Only a held root's results are kept: one no session holds is
+        // answered, not remembered.
         Effect.tap((probed) =>
           SubscriptionRef.update(results, (held) =>
-            new Map(held).set(inputs.workspace, probed),
+            holders.has(inputs.workspace)
+              ? new Map(held).set(inputs.workspace, probed)
+              : held,
           ),
         ),
         Effect.flatMap((probed) => {
@@ -186,22 +195,61 @@ export const toolAvailabilityLayer: Layer.Layer<
           return probeUntilSettled(lane, inputs);
         }),
       );
+    const refresh = (inputs: ToolProbeInputs) =>
+      Effect.suspend(() => {
+        const key = inputs.workspace;
+        const lane = lanes.get(key) ?? {
+          attempt: new SharedAttempt(),
+          pendingRerun: false,
+          callers: 0,
+        };
+        lanes.set(key, lane);
+        lane.callers += 1;
+        // The latch resets in the segment that claims the slot, not on the
+        // detached fiber: a caller joining before that fiber's first step
+        // must not have its rerun wiped.
+        lane.pendingRerun = lane.attempt.inFlight;
+        return lane.attempt
+          .run(() => probeUntilSettled(lane, inputs))
+          .pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                lane.callers -= 1;
+                if (lane.callers === 0 && lanes.get(key) === lane)
+                  lanes.delete(key);
+              }),
+            ),
+          );
+      });
     return {
       results,
-      refresh: (inputs) =>
-        Effect.suspend(() => {
-          let lane = lanes.get(inputs.workspace);
-          if (lane === undefined) {
-            lane = { attempt: new SharedAttempt(), pendingRerun: false };
-            lanes.set(inputs.workspace, lane);
-          }
-          const claimed = lane;
-          // The latch resets in the segment that claims the slot, not on the
-          // detached fiber: a caller joining before that fiber's first step
-          // must not have its rerun wiped.
-          claimed.pendingRerun = claimed.attempt.inFlight;
-          return claimed.attempt.run(() => probeUntilSettled(claimed, inputs));
-        }),
+      refresh,
+      hold: (roots) =>
+        Effect.acquireRelease(
+          Effect.sync(() =>
+            holders.set(
+              roots.workspace,
+              (holders.get(roots.workspace) ?? 0) + 1,
+            ),
+          ),
+          () =>
+            Effect.suspend(() => {
+              const left = (holders.get(roots.workspace) ?? 1) - 1;
+              if (left > 0) {
+                holders.set(roots.workspace, left);
+                return Effect.void;
+              }
+              holders.delete(roots.workspace);
+              return SubscriptionRef.update(results, (held) => {
+                const next = new Map(held);
+                next.delete(roots.workspace);
+                return next;
+              });
+            }),
+        ).pipe(
+          Effect.andThen(Effect.forkScoped(refresh(roots))),
+          Effect.asVoid,
+        ),
     };
   }),
 );
