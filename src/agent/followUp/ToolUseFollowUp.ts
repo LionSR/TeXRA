@@ -8,10 +8,7 @@ import {
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  presentRunFailure,
-  trackTerminalResultPresentation,
-} from '@agent/runtime/terminalResultToast';
+import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import { ownerPid, type RunId } from '@shared/schemas';
 import {
@@ -113,8 +110,8 @@ const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
  * parent through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
- * reason, a fault as a failure unless the run's own terminal result already
- * presented it. A fault answers as a refusal, so the caller reads one fact:
+ * reason, a fault as a failure unless the session's terminal-result presenter
+ * took it. A fault answers as a refusal, so the caller reads one fact:
  * whether the run took the resume. A recovery it did not take goes back for
  * the next attempt. The attempt is cancelled for good once the run has left
  * the session's view: a run id deleted and re-created is not the run it was
@@ -136,10 +133,6 @@ export function resumeOnSession(
       runMissing ||= session.runView(runId) === undefined;
       return runMissing || options.isCancellationRequested?.() === true;
     };
-    const terminalResult = trackTerminalResultPresentation(
-      session,
-      (event) => event.runId === runId,
-    );
     return Effect.flatMap(AgentEngine, (engine) =>
       engine.resumeClaimedRun(runId, { ...options, isCancellationRequested }),
     ).pipe(
@@ -164,9 +157,7 @@ export function resumeOnSession(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
           Effect.andThen(
-            terminalResult.reportUnhandled(() =>
-              presentRunFailure(session.interactions, error, 'Resume failed: '),
-            ) ?? Effect.void,
+            presentRunFailure(session.interactions, error, 'Resume failed: '),
           ),
           Effect.as(RESUME_REFUSED),
         );
@@ -178,7 +169,6 @@ export function resumeOnSession(
             session.followUps.release(lease, 'recoverable');
         }),
       ),
-      Effect.ensuring(Effect.sync(terminalResult.dispose)),
     );
   });
   return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
@@ -259,27 +249,44 @@ function admitFollowUp(
       );
     }
 
-    const admission =
-      options.mode === 'live_notification' ? 'live_owner' : 'recoverable';
-    return Effect.map(
-      ownerSession.followUps.submit(runId, item, admission),
-      (submission): Admission => {
-        if (submission.kind === 'duplicate') return { status: 'sent' };
-        if (submission.kind === 'refused') {
-          return {
-            status: 'failed',
-            reason: submission.reason ?? 'not_resumable',
-          };
-        }
-        if (submission.kind !== 'queued' || !submission.lease) {
-          return { status: 'queued' };
-        }
-        return {
-          resume: startFollowUpWake(runId, submission.lease, ownerSession),
-        };
-      },
+    return admitQueued(
+      runId,
+      item,
+      options.mode === 'live_notification' ? 'live_owner' : 'recoverable',
+      ownerSession,
     );
   });
+}
+
+/**
+ * Queue a submission on a run no live flow here holds: a waiting or resuming
+ * run, or one a user's message continues. A `recoverable` admission claims
+ * the run's recovery when no consumer holds it, and that claim wakes it.
+ */
+function admitQueued(
+  runId: RunId,
+  item: FollowUpQueueInput,
+  admission: 'live_owner' | 'recoverable',
+  ownerSession: SessionHandle,
+): Effect.Effect<Exclude<Admission, { status: 'no_session' }>, Error> {
+  return Effect.map(
+    ownerSession.followUps.submit(runId, item, admission),
+    (submission) => {
+      if (submission.kind === 'duplicate') return { status: 'sent' };
+      if (submission.kind === 'refused') {
+        return {
+          status: 'failed',
+          reason: submission.reason ?? 'not_resumable',
+        };
+      }
+      if (submission.kind !== 'queued' || !submission.lease) {
+        return { status: 'queued' };
+      }
+      return {
+        resume: startFollowUpWake(runId, submission.lease, ownerSession),
+      };
+    },
+  );
 }
 
 /**
@@ -337,37 +344,39 @@ export function recordRunRefusal(
   }
 }
 
-/**
- * Word the refusal of a run with no live flow here from the persisted
- * facts: who holds the run, and whether a checkpoint is left. Read only on
- * the failure path; an unreadable fact is `not_resumable`. Only the one run
- * the user acted on is inspected.
- */
-const classifyRefusal = Effect.fn('classifyRefusal')(function* (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<FollowUpFailureReason, Error> {
-  const classification = yield* classifyRun(runId, session);
-  return yield* recordRunRefusal(runId, session, classification);
-});
-
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const ownerSession = options.session;
-  const dispatch = yield* admitFollowUp(runId, item, options, ownerSession);
+  const routed = yield* admitFollowUp(runId, item, options, ownerSession);
+  let dispatch: Exclude<Admission, { status: 'no_session' }>;
+  if ('status' in routed && routed.status === 'no_session') {
+    // No live flow here: the persisted facts decide. Only the user's own
+    // message continues a run that stopped with a checkpoint, admitted the
+    // way a waiting run's is: a run's message never restarts work the user
+    // stopped. Anything else refuses with its worded reason. Only the one
+    // run addressed is inspected.
+    const classification = yield* classifyRun(runId, ownerSession);
+    if (
+      classification.kind !== 'resumable' ||
+      options.mode !== undefined ||
+      item.from.kind !== 'user'
+    ) {
+      return {
+        status: 'failed',
+        reason: yield* recordRunRefusal(runId, ownerSession, classification),
+      };
+    }
+    dispatch = yield* admitQueued(runId, item, 'recoverable', ownerSession);
+  } else {
+    dispatch = routed;
+  }
   if ('resume' in dispatch) {
     return (yield* dispatch.resume)
       ? { status: 'queued' }
       : { status: 'queued', wake: 'failed' };
-  }
-  if (dispatch.status === 'no_session') {
-    return {
-      status: 'failed',
-      reason: yield* classifyRefusal(runId, ownerSession),
-    };
   }
   return dispatch;
 });

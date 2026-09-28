@@ -39,7 +39,6 @@ const mocks = vi.hoisted(() => ({
   getActiveRunIds: vi.fn(),
   getRunHandle: vi.fn(),
   detachHostInteractions: vi.fn(),
-  attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
@@ -48,8 +47,6 @@ const mocks = vi.hoisted(() => ({
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToRun: vi.fn(),
   reportRequestDefect: vi.fn(),
-  followUpSubmit: vi.fn(),
-  wake: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -75,10 +72,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import {
-  describeFollowUpFailure,
-  type FollowUpRecoveryLease,
-} from '@agent/followUp';
+import { describeFollowUpFailure } from '@agent/followUp';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -209,18 +203,6 @@ function runSubmit(
   return testRuntime().runPromise(ctrl.submit(line));
 }
 
-/** An admitted interruption's settlement, as the composer awaits it. */
-function awaitAdmission(
-  completion: Deferred.Deferred<'resumed' | 'queued' | 'refused'>,
-): Promise<boolean> {
-  return testRuntime().runPromise(
-    Effect.map(
-      Deferred.await(completion),
-      (delivery) => delivery === 'resumed',
-    ),
-  );
-}
-
 /** The claimed root run's settlement, run the way the exit drain runs it. */
 function awaitRunSettled(session: TuiSession): Promise<void> {
   return testRuntime().runPromise(session.runSettled ?? Effect.void);
@@ -309,9 +291,6 @@ function makeInit(
     agentRuns: {
       launch: (...args: unknown[]) => mocks.runAgent(...args),
       resume: (...args: unknown[]) => mocks.resumeRun(...args),
-      wake: (...args: unknown[]) => mocks.wake(...args),
-      attachResultToast: (...args: unknown[]) =>
-        mocks.attachTerminalResultToast(...args),
       records: (...args: unknown[]) => {
         const records = mocks.getRunRecords(...args);
         return {
@@ -374,6 +353,7 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     getHandle: mocks.getRunHandle,
     // No run of these fixtures is live here: the chat adopts none.
     isLive: () => false,
+    awaitDrained: () => Effect.void,
   };
   mocks.sessionStub.mockReturnValue({
     roots: testWorkspaceRoots(),
@@ -382,17 +362,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),
     },
     requests: { request: mocks.request },
-    followUps: {
-      claimRecovery: vi.fn((runId: RunId) => ({
-        runId,
-        kind: 'recovery' as const,
-      })),
-      useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
-      release: vi.fn(),
-      submitBatch: mocks.followUpSubmit.mockReturnValue(
-        Effect.succeed({ kind: 'queued' }),
-      ),
-    },
     approvals: { registerRunParent: vi.fn() },
     runs,
     // The parent edge the resume path reads cold, off the same seeded view
@@ -465,73 +434,11 @@ const defaultResumeRun = (_runId: RunId, options: ResumeRunOptions) =>
     // after its own retrieval succeeded, so every stand-in that reaches a launch
     // must run the hook or the caller never adopts the run.
     if (options.onResumeResolved) yield* options.onResumeResolved();
-    options.onFollowUpQueueReady?.({
-      runId: '7e5701' as RunId,
-      kind: 'recovery',
-    });
     return STARTED;
   });
 
 function resumeWithAutoResumeData(): void {
   mocks.resumeRun.mockImplementation(defaultResumeRun);
-}
-
-function makeInterruptedController(
-  runSettled: RootRunSettled,
-  runCompleted: boolean,
-) {
-  const session = makeSession({
-    runId: 'a11111' as RunId,
-    interruptedRunId: 'a11111' as RunId,
-    runSettled,
-    runCompleted,
-    stopRequested: true,
-  });
-  resumeWithAutoResumeData();
-  return {
-    ctrl: createChatSessionController(makeInit({ session })),
-    session,
-  };
-}
-
-/** A message into the interrupted run that the session could not wake: the
- *  run keeps it queued and stays the interrupted conversation. */
-async function retainInterruptedFollowUp(
-  ctrl: ReturnType<typeof createChatSessionController>,
-  text: string,
-): Promise<void> {
-  mocks.wake.mockReturnValueOnce(Effect.succeed(false));
-  const admission = ctrl.admitInterruptedFollowUp({
-    from: { kind: 'user' as const },
-    text,
-  });
-  expect(admission.kind).toBe('accepted');
-  if (admission.kind !== 'accepted') return;
-  await expect(awaitAdmission(admission.completion)).resolves.toBe(false);
-}
-
-/** The next message into the interrupted run joins its queue and wakes it. */
-async function expectInterruptedRetry(
-  ctrl: ReturnType<typeof createChatSessionController>,
-): Promise<void> {
-  const retry = ctrl.admitInterruptedFollowUp({
-    from: { kind: 'user' as const },
-    text: 'Retry.',
-  });
-  expect(retry.kind).toBe('accepted');
-  if (retry.kind !== 'accepted') return;
-  await expect(awaitAdmission(retry.completion)).resolves.toBe(true);
-  expect(mocks.followUpSubmit).toHaveBeenLastCalledWith(
-    'a11111',
-    [{ text: 'Retry.', from: { kind: 'user' } }],
-    'live_owner',
-  );
-  expect(mocks.wake).toHaveBeenLastCalledWith(
-    'a11111',
-    expect.objectContaining({ runId: 'a11111' }),
-    expect.anything(),
-    expect.any(Function),
-  );
 }
 
 describe('CLI terminal outcome resolution', () => {
@@ -653,7 +560,6 @@ describe('createChatSessionController', () => {
       emit: vi.fn(),
     });
     mocks.getActiveRunIds.mockReturnValue([]);
-    mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.request.mockImplementation(() =>
       Effect.succeed<Outcome>({ kind: 'done' }),
@@ -663,7 +569,6 @@ describe('createChatSessionController', () => {
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
-    mocks.wake.mockReturnValue(Effect.succeed(true));
     installResumeRunStore();
     seedView(viewWith([]));
     rootRunId.set(undefined);
@@ -697,7 +602,6 @@ describe('createChatSessionController', () => {
         const childRun = 'c00001' as RunId;
         const { session: runtimeSession, runs } = installOwnerSession();
         const disposeAdapter = vi.fn();
-        const detachResultToast = vi.fn();
         const presentationHost = {
           emit: vi.fn(),
           close: mocks.presentationHostClose,
@@ -707,7 +611,6 @@ describe('createChatSessionController', () => {
         mocks.createTuiHostInteractions.mockReturnValue({
           dispose: disposeAdapter,
         });
-        mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
 
         const rootRunResult =
           createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
@@ -782,8 +685,6 @@ describe('createChatSessionController', () => {
           vi.waitFor(() => expect(runs.getHandle(childRun)?.parent).toBeNull()),
         );
         expect(disposeAdapter).not.toHaveBeenCalled();
-        // The result presenter, like the host, lives for the chat session.
-        expect(detachResultToast).not.toHaveBeenCalled();
         expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
         // The request opens on the child's own aggregate, which the launch
@@ -825,7 +726,6 @@ describe('createChatSessionController', () => {
 
         disposables.dispose();
         expect(disposeAdapter).toHaveBeenCalledOnce();
-        expect(detachResultToast).toHaveBeenCalledOnce();
         yield* Scope.close(shutdownScope, Exit.void);
         expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
         runs.dispose();
@@ -986,46 +886,6 @@ describe('createChatSessionController', () => {
 
     expect(session.runId).toBe('aaaaaa');
     expect(session.interruptedRunId).toBeUndefined();
-    expect(
-      ctrl.admitInterruptedFollowUp({
-        from: { kind: 'user' as const },
-        text: 'Route normally.',
-      }),
-    ).toEqual({
-      kind: 'not_interrupted',
-    });
-  });
-
-  it('transfers an admitted interruption batch to manual resume', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl } = makeInterruptedController(teardown.settled, true);
-    const manualResumed = createDeferred();
-    const baseResumeRun = mocks.resumeRun.getMockImplementation();
-    mocks.resumeRun.mockImplementation((...args: unknown[]) => {
-      if (args[0] === 'aaaaaa') manualResumed.resolve();
-      return baseResumeRun!(...args);
-    });
-    const admission = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'Preserve this accepted message.',
-    });
-    expect(admission.kind).toBe('accepted');
-    if (admission.kind !== 'accepted') return;
-
-    const manualResume = runResume(ctrl, 'aaaaaa' as RunId);
-    await teardown.settle();
-
-    await manualResume;
-    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    await manualResumed.promise;
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'aaaaaa',
-      expect.objectContaining({
-        extraFollowUps: [
-          { text: 'Preserve this accepted message.', from: { kind: 'user' } },
-        ],
-      }),
-    );
   });
 
   it('honors a Ctrl-C issued while resume() is still rehydrating and never starts the resumed run', async () => {
@@ -1280,156 +1140,59 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
-  it('holds a message submitted while interruption teardown finishes', async () => {
+  it('continues the stopped conversation through the session, in order, once the stopped generation settles', async () => {
+    // Typed while the stop settles: the first waits for the stopped
+    // generation, then goes to the session's own admission for that run; the
+    // admission resumed it, so the second goes to the resumed run directly,
+    // never waiting on its drain. The chat keeps no copy of either.
+    holdRun('a11111' as RunId);
+    installSession({
+      view: installableViewRef(),
+      runs: {
+        getActiveIds: mocks.getActiveRunIds,
+        getHandle: mocks.getRunHandle,
+        isLive: () => false,
+        // The resumed run never drains while the test runs.
+        awaitDrained: vi
+          .fn()
+          .mockReturnValueOnce(Effect.void)
+          .mockReturnValue(Effect.never),
+      },
+    });
     const teardown = pendingRunClaim();
-    const { ctrl, session } = makeInterruptedController(
-      teardown.settled,
-      false,
-    );
-
-    const admission = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'Do not drop this message.',
+    const session = makeSession({
+      runId: 'a11111' as RunId,
+      interruptedRunId: 'a11111' as RunId,
+      runSettled: teardown.settled,
+      stopRequested: true,
     });
-    expect(admission.kind).toBe('accepted');
-    expect(mocks.followUpSubmit).not.toHaveBeenCalled();
-
-    session.markRunCompleted();
-    await teardown.settle();
-    if (admission.kind !== 'accepted') return;
-    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    expect(mocks.followUpSubmit).toHaveBeenCalledWith(
-      'a11111',
-      [{ text: 'Do not drop this message.', from: { kind: 'user' } }],
-      'live_owner',
-    );
-    expect(mocks.wake).toHaveBeenCalledOnce();
-  });
-
-  it('batches parallel messages into one interrupted resume', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl, session } = makeInterruptedController(
-      teardown.settled,
-      false,
-    );
-
-    const first = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'First message.',
-    });
-    const second = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'Second message.',
-    });
-    expect(first.kind).toBe('accepted');
-    expect(second.kind).toBe('accepted');
-    if (first.kind !== 'accepted' || second.kind !== 'accepted') return;
-    expect(second.completion).toBe(first.completion);
-
-    session.markRunCompleted();
-    await teardown.settle();
-    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
-    expect(mocks.followUpSubmit).toHaveBeenCalledOnce();
-    expect(mocks.followUpSubmit).toHaveBeenCalledWith(
-      'a11111',
-      [
-        { text: 'First message.', from: { kind: 'user' } },
-        { text: 'Second message.', from: { kind: 'user' } },
-      ],
-      'live_owner',
-    );
-    expect(mocks.wake).toHaveBeenCalledOnce();
-  });
-
-  it('sends a message typed while the run resumes to the resumed run', async () => {
-    const resume = createDeferred<boolean>();
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    const resumeCalled = createDeferred();
-    mocks.wake.mockImplementationOnce(() => {
-      resumeCalled.resolve();
-      return Effect.promise(() => resume.promise);
-    });
-
-    const first = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'Resume now.',
-    });
-    expect(first.kind).toBe('accepted');
-    if (first.kind !== 'accepted') return;
-    await resumeCalled.promise;
-
-    // The run holds the first batch but not yet the slot: the routing stays
-    // on the resumed run rather than starting a new conversation.
-    const late = ctrl.admitInterruptedFollowUp({
-      from: { kind: 'user' as const },
-      text: 'Also this.',
-    });
-    expect(late).toMatchObject({ kind: 'accepted', runId: 'a11111' });
-    expect(session.interruptedRunId).toBe('a11111');
-    resume.resolve(true);
-    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
-    await vi.waitFor(() =>
-      expect(mocks.followUpSubmit).toHaveBeenLastCalledWith(
-        'a11111',
-        [{ text: 'Also this.', from: { kind: 'user' } }],
-        'live_owner',
-      ),
-    );
-    expect(mocks.wake).toHaveBeenCalledOnce();
-    expect(session.interruptedRunId).toBeUndefined();
-  });
-
-  it('retains the interrupted conversation after a failed resume', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    expect(session.interruptedRunId).toBe('a11111');
-    await expectInterruptedRetry(ctrl);
-    expect(session.interruptedRunId).toBeUndefined();
-  });
-
-  it('discards retained interrupted follow-ups when the chat is cleared', async () => {
-    const { ctrl } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'Discard me.');
-    ctrl.clearInterruptedRecovery();
-
-    expect(
-      ctrl.admitInterruptedFollowUp({
-        from: { kind: 'user' as const },
-        text: 'Fresh chat.',
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
       }),
-    ).toEqual({
-      kind: 'not_interrupted',
-    });
-  });
-
-  it('keeps retained follow-ups ahead of a retry after manual resume rollback', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    mocks.setCliHelperModel.mockReturnValueOnce(
-      Effect.fail(new Error('load failed')),
     );
-    await runResume(ctrl, 'aaaaaa' as RunId);
-    // The rollback rides the run chain now that the rehydration runs inside
-    // `resumeRun`'s adoption hook, so the retry follows the settled resume.
-    await awaitRunSettled(session);
-    await expectInterruptedRetry(ctrl);
-  });
+    const sent: string[] = [];
+    mocks.request.mockImplementation((req: RuntimeRequest) =>
+      Effect.sync((): Outcome => {
+        if (req.kind === 'followUp.send') sent.push(`${req.runId} ${req.text}`);
+        return { kind: 'followUp', status: 'queued' };
+      }),
+    );
 
-  it('keeps the seeded batch when manual resume is refused', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    // A refusal that never reaches the follow-up queue hands the seeded batch
-    // back; nothing else owns it, so the resume must put it and the
-    // interrupted run back or the input typed during the interruption is
-    // lost.
-    mocks.resumeRun
-      .mockReset()
-      .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
+    await runSubmit(ctrl, 'Do not drop this message.');
+    await runSubmit(ctrl, 'And this one.');
+    expect(sent).toEqual([]);
 
-    await runResume(ctrl, 'aaaaaa' as RunId);
-
-    expect(mocks.resumeRun).toHaveBeenCalledWith('aaaaaa', expect.anything());
-    await vi.waitFor(() => expect(session.interruptedRunId).toBe('a11111'));
-    await expectInterruptedRetry(ctrl);
+    session.markRunCompleted();
+    await teardown.settle();
+    await vi.waitFor(() =>
+      expect(sent).toEqual([
+        'a11111 Do not drop this message.',
+        'a11111 And this one.',
+      ]),
+    );
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+    expect(session.interruptedRunId).toBeUndefined();
   });
 });

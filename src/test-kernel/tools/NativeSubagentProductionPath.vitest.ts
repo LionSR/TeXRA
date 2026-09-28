@@ -431,6 +431,17 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
  * point while its final delivery wakes the parent, so the claim, not the
  * lane, is the durable boundary these assertions read against.
  */
+/** Queue a user's input on a stopped run: the recovery its admission claims. */
+function queueRecovery(runId: RunId, text: string) {
+  return session.followUps
+    .submit(runId, { text, from: { kind: 'user' } }, 'recoverable')
+    .pipe(
+      Effect.map((queued) =>
+        queued.kind === 'queued' ? queued.lease : undefined,
+      ),
+    );
+}
+
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
     expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
@@ -742,12 +753,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              extraFollowUps: [
-                {
-                  text: 'Continue after restart.',
-                  from: { kind: 'user' as const },
-                },
-              ],
+              recovery: yield* queueRecovery(runId, 'Continue after restart.'),
             }),
           ),
         );
@@ -820,12 +826,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              extraFollowUps: [
-                {
-                  text: 'Keep this unconsumed input.',
-                  from: { kind: 'user' as const },
-                },
-              ],
+              recovery: yield* queueRecovery(
+                runId,
+                'Keep this unconsumed input.',
+              ),
             }),
           ),
         ).toEqual({

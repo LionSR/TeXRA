@@ -24,7 +24,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
+import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
@@ -496,42 +496,36 @@ export const createHostRunActions = (
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
             // A failure after start has no waiter: warn, and present it
-            // unless the run's terminal result already did. The tracker
-            // opens at start, inside the fiber whose exit disposes it.
-            let terminalResult:
-              ReturnType<typeof trackTerminalResultPresentation> | undefined;
+            // through the session's presenter, which skips a failure its run's
+            // terminal result already showed.
+            let launched = false;
             const requestFiber = yield* Effect.forkDetach(
               runAgentRequest(
                 { config: { ...config, model } },
                 {
                   ownApiKeyFallback: true,
-                  onRun: (launchedRunId) =>
+                  onRun: () =>
                     Effect.sync(() => {
-                      terminalResult = trackTerminalResultPresentation(
-                        session,
-                        (event) => event.runId === launchedRunId,
-                      );
+                      launched = true;
                       Deferred.doneUnsafe(runStarted, Effect.void);
                     }),
                 },
               ).pipe(
                 Effect.onExit((exit) => {
-                  const tracker = terminalResult;
-                  if (tracker === undefined) return Effect.void;
-                  return Effect.gen(function* () {
-                    if (Exit.isSuccess(exit)) return;
-                    if (Cause.hasInterruptsOnly(exit.cause)) return;
-                    const message = toErrorMessage(Cause.squash(exit.cause));
-                    yield* Effect.logWarning(
-                      `Own-key replacement of run ${runId} failed: ${message}`,
-                    );
-                    yield* tracker.reportUnhandled(() =>
-                      ports.showWarning(`Your own-key run failed: ${message}`),
-                    ) ?? Effect.void;
-                  }).pipe(
-                    Effect.ignore({ log: 'Warn' }),
+                  if (!launched || Exit.isSuccess(exit)) return Effect.void;
+                  if (Cause.hasInterruptsOnly(exit.cause)) return Effect.void;
+                  const error = Cause.squash(exit.cause);
+                  return Effect.logWarning(
+                    `Own-key replacement of run ${runId} failed: ${toErrorMessage(error)}`,
+                  ).pipe(
+                    Effect.andThen(
+                      presentRunFailure(
+                        session.interactions,
+                        error,
+                        'Your own-key run failed: ',
+                      ),
+                    ),
                     withLogChannel(CHANNEL),
-                    Effect.ensuring(Effect.sync(tracker.dispose)),
                   );
                 }),
               ),

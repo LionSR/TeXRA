@@ -16,11 +16,7 @@ import {
 } from 'effect';
 
 import { getCategoryAgent, refresh } from '@agent/index';
-import {
-  attachTerminalResultToast,
-  PdfOpenFailed,
-  type SessionHandle,
-} from '@agent/runtime';
+import { PdfOpenFailed, type SessionHandle } from '@agent/runtime';
 import {
   BundledViewContentProvider,
   getCombinedLocalResourceRoots,
@@ -415,18 +411,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
       }),
     );
-    // Terminal-error toasts come from the run's `result` event: this
-    // re-emits `requestShow*` through the session's interactions, reaching
-    // the presentation dispatch above exactly once.
-    const detachTerminalResultToast = attachTerminalResultToast(
-      session,
-      session.interactions,
-      { replayWhenAttached: true },
-    );
-    this.disposables.push(
-      { dispose: detachHostInteractions },
-      { dispose: detachTerminalResultToast },
-    );
+    this.disposables.push({ dispose: detachHostInteractions });
 
     this.watchWorkspace();
     ProgressViewProvider._instance = this;

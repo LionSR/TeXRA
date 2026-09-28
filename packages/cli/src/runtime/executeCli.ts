@@ -1,11 +1,10 @@
 import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import {
-  attachTerminalResultToast,
   runAgent,
   SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
-  trackTerminalResultPresentation,
+  terminalFailurePresented,
   validateRunRequest,
   type AgentConfigPayload,
   type RunAgentOptions,
@@ -304,16 +303,6 @@ export function executeCliRequest(
         },
       }),
     );
-    // Present terminal-error toasts from the run's `result` event through the
-    // presentationHost path (so ndjson / logger output is unchanged).
-    const detachResultToast = attachTerminalResultToast(
-      session,
-      session.interactions,
-    );
-    const terminalResult = trackTerminalResultPresentation(
-      session,
-      (event) => event.runId === request.runId,
-    );
     const detachSessionProgressProjection =
       runContext.outputFormat === 'ndjson'
         ? yield* attachCliSessionProgressProjection(session)
@@ -579,8 +568,6 @@ export function executeCliRequest(
     // Run exactly once: the early detach below is taken only on a path that
     // then throws or returns before the success tail that `ensuring`s it.
     const detachPresentation = Effect.gen(function* () {
-      detachResultToast();
-      terminalResult.dispose();
       detachRunProgressRenderer();
       yield* detachSessionProgressProjection;
       detachWorkflowPlainOutput();
@@ -608,20 +595,21 @@ export function executeCliRequest(
         refusal = err; // a refused resume: the caller's usage exit
       } else if (!(err instanceof AgentError)) {
         primaryRunFailure = { error: err };
-      } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
+      } else if (
+        !failurePresented &&
+        !hasErrorPresentationClaimed(err) &&
+        !terminalFailurePresented(err)
+      ) {
         // A failure before registration (agent or model resolution) has no
-        // `result` event; one after registration is presented by the result
-        // toast, which sets `failurePresented`. A launch failure that already
-        // presented itself through a targeted notification
-        // (model-not-recognized, agent-not-found) is marked claimed at its
-        // throw site -- this CLI-local flag only tracks `requestShowError`, so
-        // it would otherwise re-surface that failure a second time here.
-        const unhandled = terminalResult.reportUnhandled(() =>
-          session.interactions.emit('requestShowError', {
-            message: toErrorMessage(err),
-          }),
-        );
-        if (unhandled) yield* unhandled;
+        // `result` event; one after registration carries the session
+        // presenter's receipt. A launch failure that already presented itself
+        // through a targeted notification (model-not-recognized,
+        // agent-not-found) is marked claimed at its throw site -- this
+        // CLI-local flag only tracks `requestShowError`, so it would otherwise
+        // re-surface that failure a second time here.
+        yield* session.interactions.emit('requestShowError', {
+          message: toErrorMessage(err),
+        });
       }
     }
 
