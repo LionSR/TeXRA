@@ -16,7 +16,6 @@ import type {
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
-import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId,
@@ -75,7 +74,7 @@ export interface ResumeRunOptions extends Pick<
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
   /** Recovery ownership synchronously claimed by the submission boundary. */
-  readonly recovery?: RecoveryContinuation;
+  readonly recovery?: FollowUpRecoveryLease;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
   /**
@@ -302,7 +301,7 @@ const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
 const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
   function* (
     session: SessionHandle,
-    recovery: RecoveryContinuation,
+    recovery: FollowUpRecoveryLease,
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
@@ -428,10 +427,15 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;
       if (parentRunId === undefined) {
+        // Released on the run's own fiber, before it leaves the registry, so a
+        // run no longer live here holds no lease; a refused launch never ran.
         const root = yield* session.runs.launch(
           runId,
-          resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
-          Effect.onExit(releaseRecovery),
+          resumeToolUseFromResumeData(resume, {
+            ...launchOptions,
+            onIdle,
+          }).pipe(Effect.onExit(releaseRecovery)),
+          Effect.onError((cause) => releaseRecovery(Exit.failCause(cause))),
         );
         rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
         completion = root;

@@ -22,7 +22,6 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
-import { AgentResume } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   ToolError,
@@ -85,7 +84,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, ToolError, AgentResume> {
+  ): Effect.fn.Return<ToolResult, ToolError> {
     const { id, prompt, callerRunId, labels, session } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
@@ -144,7 +143,7 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
       releaseClaim?: () => void,
     ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolCall | AgentResume> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -207,7 +206,7 @@ export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* <TTurn>(
   params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, ToolError, Runs | AgentResume> {
+): Effect.fn.Return<ToolResult, ToolError, Runs> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = yield* agentCliChildRunId(params);
@@ -370,7 +369,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | S | ToolCall | AgentResume> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolCall> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, params.toolCall, (run) =>

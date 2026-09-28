@@ -5,13 +5,11 @@ import { afterEach, describe, expect } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume } from '@platform/interfaces';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { fakeHostAgentResume } from '@test/support/setupPlatform';
 import {
   createTestSession,
   publishTestRunStart,
@@ -96,7 +94,7 @@ describe('tool-use follow-up progress events', () => {
           {
             session,
           },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        );
 
         expect(result).toEqual({ status: 'sent' });
         const input = session.followUps.attachInput(runId, lease)!;
@@ -133,7 +131,7 @@ describe('tool-use follow-up progress events', () => {
           {
             session: testDefaultSession(),
           },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        );
 
         // The run's own terminal row is the refusal: it finished.
         expect(result).toEqual({ status: 'failed', reason: 'finished' });
@@ -165,7 +163,7 @@ describe('tool-use follow-up progress events', () => {
           {
             session: testDefaultSession(),
           },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        );
 
         // The fake platform's resume port refuses, so the input stays queued
         // behind a failed wake.

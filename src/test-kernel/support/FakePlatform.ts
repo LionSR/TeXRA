@@ -17,7 +17,6 @@ import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentDirectoriesPort,
-  type AgentResumePort,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
@@ -460,8 +459,7 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
-    /** The two process ports, as `FakeHost` holds them. */
-    readonly agentResume?: AgentResumePort;
+    /** The language-model port, as `FakeHost` holds it. */
     readonly languageModel?: LanguageModelPort;
     readonly setup?: SetupPlatformShape;
     /** The account plane the host's `SupabaseAuth` service reads. Absent hosts

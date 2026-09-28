@@ -11,6 +11,7 @@ import {
 } from 'effect';
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
+import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage';
 import {
   validateRunRequest,
@@ -21,6 +22,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
@@ -29,12 +31,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import type { StateReadFailed } from '@platform/interfaces';
-import {
-  AgentResume,
-  type AgentResumeFailed,
-  type AppState,
-} from '@platform/interfaces';
+import type { AppState, StateReadFailed } from '@platform/interfaces';
 import { Secrets, type SecretsFailed } from '@platform/secrets';
 import {
   AgentCategory,
@@ -129,6 +126,8 @@ export interface HostRunActionPorts {
       onRun?: (runId: RunId) => Effect.Effect<void>;
     },
   ): Effect.Effect<void, Error>;
+  /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
+  openWorkflowOutput(result: AgentFlowResult): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed
@@ -153,11 +152,7 @@ export interface HostRunActionPorts {
 export interface HostRunActions {
   resume(
     runId: RunId,
-  ): Effect.Effect<
-    void,
-    AgentResumeFailed | RequestRefusal | RunConfigUnreadable,
-    AgentResume
-  >;
+  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
   runNew(
     runId: RunId,
   ): Effect.Effect<
@@ -216,10 +211,7 @@ export interface HostRunActions {
     getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
   restoreProposal(proposal: unknown): Effect.Effect<AgentConfig, Rejected>;
-  sendFollowUp(
-    runId: RunId,
-    text: string,
-  ): Effect.Effect<void, never, AgentResume>;
+  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export const createHostRunActions = (
@@ -617,19 +609,25 @@ export const createHostRunActions = (
         return Effect.forkDetach(deliver).pipe(Effect.asVoid);
       },
       /**
-       * Resume a settled run, of either category, through the resume port:
-       * it continues the run's own rows. The launcher only starts fresh runs.
+       * Resume a settled run, of either category, on the session that holds
+       * it: it continues the run's own rows. A run that does not take it
+       * refuses the request (its reason already told); a workflow settles
+       * with its whole run, whose output opens then.
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resumed');
-        // `false` is a run that did not start: the request is refused, not done.
-        if (!(yield* (yield* AgentResume).tryResumeRun(runId)))
+        const resumed = yield* resumeOnSession(runId, { session });
+        if (!('started' in resumed) || !resumed.delivered)
           return yield* Effect.fail(
             new Unavailable({
               runId,
               reason: 'This run could not be resumed.',
             }),
           );
+        if (resumed.result)
+          yield* ports
+            .openWorkflowOutput(resumed.result)
+            .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');

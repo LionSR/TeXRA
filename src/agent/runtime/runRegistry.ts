@@ -193,8 +193,8 @@ interface RunEntry {
  *  layer in that session's scope and provided as {@link Runs}. */
 export class RunRegistry {
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Completed when the last entry leaves ({@link awaitDrained}). */
-  private emptied: Deferred.Deferred<void> | undefined;
+  /** {@link awaitDrained}'s waiters: by run, and `''` for the last entry. */
+  private readonly drains = new Map<string, Deferred.Deferred<void>>();
   /** The stops begun for each run, one token apiece, so of two overlapping
    *  stops the first to settle cannot admit a child the second's snapshot
    *  already left behind. */
@@ -244,14 +244,15 @@ export class RunRegistry {
     if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
-      if (this.entries.size === 0) this.completeDrain();
+      this.completeDrain(runId);
+      if (this.entries.size === 0) this.completeDrain('');
     }
   }
 
-  private completeDrain(): void {
-    const emptied = this.emptied;
-    this.emptied = undefined;
-    if (emptied !== undefined) Deferred.doneUnsafe(emptied, Effect.void);
+  private completeDrain(key: string): void {
+    const drained = this.drains.get(key);
+    this.drains.delete(key);
+    if (drained) Deferred.doneUnsafe(drained, Effect.void);
   }
 
   /** Register a fiber in `slot` on its entry; its own exit erases it. */
@@ -453,11 +454,9 @@ export class RunRegistry {
   }
 
   /**
-   * The one launch door (R2): every run starts here, at once, on the
-   * session's context (the `fork` port), never its caller's. It runs after
-   * earlier work on the run's lane and refuses with `RunLive` in the step
-   * that claims it; a claim that survives lifts the run's stop marks.
-   * `settle` wraps the admission, so a refusal reaches the caller's own exit.
+   * The one launch door (R2): every run starts here, on the session's context
+   * ({@link fork}), after earlier work on its lane. It refuses with `RunLive`
+   * as it claims; a surviving claim lifts the stop marks. `settle` wraps it.
    */
   launch<A, E, R extends AgentRunServices, B, E2>(
     runId: RunId,
@@ -466,14 +465,14 @@ export class RunRegistry {
       admitted: Effect.Effect<A, E | Error, R>,
     ) => Effect.Effect<B, E2, R>,
   ): Effect.Effect<Fiber.Fiber<B, E2>> {
-    return Effect.sync(() =>
-      this.init.fork(
-        settle(this.admit(runId, program, false)).pipe(
-          Effect.provideService(Runs, this),
-        ) as Effect.Effect<B, E2, ProcessServices>,
-      ),
-    );
+    return this.fork(settle(this.admit(runId, program, false)));
   }
+
+  /** {@link launch}'s fork, admitting no run: a resume attempt admits its own. */
+  readonly fork = <A, E>(program: Effect.Effect<A, E, AgentRunServices>) =>
+    Effect.sync(() =>
+      this.init.fork(program.pipe(Effect.provideService(Runs, this))),
+    );
 
   /** {@link launch}, awaited: the caller's interruption stops the run. */
   launchRun<A, E, R extends AgentRunServices>(
@@ -974,14 +973,15 @@ export class RunRegistry {
     this.closing = true;
   }
 
-  /** Resolve once every owner has left: every fiber, hold, handle,
-   *  activation and lane. The size test and the install of {@link emptied}
-   *  share one synchronous step, so a last run leaving is never missed. */
-  awaitDrained(): Effect.Effect<void> {
+  /** Resolve once every owner of `runId` (or of every run) has left. */
+  awaitDrained(runId?: RunId): Effect.Effect<void> {
     return Effect.suspend(() => {
-      if (this.entries.size === 0) return Effect.void;
-      this.emptied ??= Deferred.makeUnsafe<void>();
-      return Deferred.await(this.emptied);
+      const key = runId ?? '';
+      if (!(runId ? this.entries.has(runId) : this.entries.size))
+        return Effect.void;
+      const drained = this.drains.get(key) ?? Deferred.makeUnsafe<void>();
+      this.drains.set(key, drained);
+      return Deferred.await(drained);
     });
   }
 
@@ -998,7 +998,7 @@ export class RunRegistry {
     }
     this.waiting.clear();
     this.entries.clear();
-    this.completeDrain();
+    for (const key of [...this.drains.keys()]) this.completeDrain(key);
     this.stopping.clear();
   }
 }

@@ -27,7 +27,6 @@ import {
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
-import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   aggregateId,
@@ -476,7 +475,7 @@ function commitPark(
 
 /**
  * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
- * await the resumed parent's entire turn (`agentResume.tryResumeRun` → …
+ * await the resumed parent's entire turn (`resumeOnSession` → …
  * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
  * child (terminal/failed turns) must resolve the wake only AFTER that
  * finalize completes; otherwise a resumed parent that immediately waits on
@@ -651,7 +650,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   session: SessionHandle,
   runId: RunId,
   trace: AgentTrace | undefined,
-): Effect.fn.Return<void, Error, AgentResume> {
+): Effect.fn.Return<void, Error> {
   if (!pending) return;
   const targetRunId = pending.parent.current ?? undefined;
   if (!targetRunId) {
@@ -709,11 +708,7 @@ function onceAborted<A, E>(
  */
 export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   params: ChildRunLoopParams<TTurn, R>,
-): Effect.Effect<
-  Fiber.Fiber<TTurn | undefined, Error>,
-  Error,
-  R | Runs | AgentResume
-> {
+): Effect.Effect<Fiber.Fiber<TTurn | undefined, Error>, Error, R | Runs> {
   const runSession = params.session;
   const runId = params.runId;
   // The launch's unwind bookkeeping lives beside the generator, not inside

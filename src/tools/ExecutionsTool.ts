@@ -25,7 +25,6 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
-import { AgentResume } from '@platform/interfaces';
 import { StorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
@@ -177,7 +176,7 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  Runs | FileSystem.FileSystem | StorageFs | AgentResume
+  Runs | FileSystem.FileSystem | StorageFs
 > {
   const segments = getPathSegments(input.path);
   const [namespace, id, resource, ...rest] = segments;

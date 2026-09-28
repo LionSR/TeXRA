@@ -87,6 +87,13 @@ export interface HostInteractions {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): HostPresentation;
+  /**
+   * This host has no channel that can answer an approval prompt (an embedder
+   * with no surface). A session fact, not a launch option: every run the
+   * session launches or resumes, whatever triggered it, is offered no
+   * approval-gated tool while such a host is attached.
+   */
+  readonly approvalPromptsUnavailable?: boolean;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -252,6 +259,12 @@ export class SessionHostInteractions implements HostInteractions {
         ? this.queuePresentationReplay(present)
         : Effect.void;
     });
+  }
+
+  get approvalPromptsUnavailable(): boolean {
+    return (
+      this.activeAttachment?.interactions.approvalPromptsUnavailable === true
+    );
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {

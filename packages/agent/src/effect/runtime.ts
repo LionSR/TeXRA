@@ -30,7 +30,6 @@ import {
   AppState,
   AgentDirectories,
   type AgentDirectoriesPort,
-  type AgentResumePort,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -63,8 +62,6 @@ export interface AgentPlatform {
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
-  /** The port this process's `AgentResume` service forwards to. */
-  readonly agentResume: AgentResumePort;
   /** The bridge its `LanguageModel` service serves; an embedder with no
    *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
   readonly languageModel: LanguageModelPort;
@@ -226,7 +223,6 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     // signed-out, as the uninitialized facade did for an embedder.
     auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
-    agentResume: platform.agentResume,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
     toolMissingReporter: platform.toolMissingHandler,
     setup: PACKAGE_SETUP,

@@ -28,9 +28,6 @@ const LAUNCH_ROOTS = ['src/agent', 'src/tools', 'packages/agent/src'] as const;
 const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 
 const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
-  // The wake of a queued follow-up: the host's resume port, which launches
-  // the run through the door; this fiber only outlives the admitting caller.
-  'src/agent/followUp/ToolUseFollowUp.ts': 1,
   // The child's cost observer, detached from the loop's uninterruptible tail.
   'src/agent/runtime/childRunLoop.ts': 1,
   // A host presentation notice, reported rather than awaited.

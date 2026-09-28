@@ -37,7 +37,6 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   ClaudeAgentEffortSchema,
@@ -523,7 +522,6 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | ToolCall
   | Runs
   | ClaudeAgentSessions
-  | AgentResume
   | ChildProcessSpawner
   | FileSystem.FileSystem
 > {
@@ -591,12 +589,7 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  | Secrets
-  | ToolCall
-  | Runs
-  | AgentResume
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
+  Secrets | ToolCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;

@@ -69,11 +69,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
-    // The two process ports `composeProcess` serves: this platform resumes
-    // nothing and has no editor behind it.
-    agentResume: {
-      tryResumeRun: () => Effect.succeed(false),
-    },
+    // No editor behind this platform.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     mcpConfigPath: mcpConfigPathOf(options.storageDir),
     agentDirectories: {

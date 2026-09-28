@@ -71,7 +71,6 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   emptyRunEndOutput,
@@ -289,13 +288,7 @@ const startLoop = (
     agentName: 'fake',
     strategy,
     ...extras,
-  }).pipe(
-    Effect.provideService(Runs, session.runs),
-    // No host resume in these fixtures: the port declines every wake.
-    Effect.provideService(AgentResume, {
-      tryResumeRun: () => Effect.succeed(false),
-    }),
-  );
+  }).pipe(Effect.provideService(Runs, session.runs));
 
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
@@ -599,7 +592,6 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy, {
           childRun,
         });
-        const tryResumeRun = vi.fn(() => Effect.succeed(false));
         yield* Deferred.await(launchStarted);
 
         try {
@@ -611,7 +603,7 @@ describe('childRunLoop E2E fixtures', () => {
               {
                 session,
               },
-            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            ),
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
@@ -620,7 +612,7 @@ describe('childRunLoop E2E fixtures', () => {
               PARENT_RUN_ID,
               { text: 'restore me', from: { kind: 'user' as const } },
               { session },
-            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            ),
           ).toMatchObject({ status: 'failed' });
           expect(
             yield* realSubmitFollowUp(
@@ -630,7 +622,7 @@ describe('childRunLoop E2E fixtures', () => {
                 from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
               },
               { session },
-            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            ),
           ).toMatchObject({ status: 'failed' });
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['active parent']);
 
@@ -651,7 +643,7 @@ describe('childRunLoop E2E fixtures', () => {
                 {
                   session,
                 },
-              ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+              ),
             ).toEqual({ status: 'queued', wake: 'failed' });
           } finally {
             releaseNativeChild();
@@ -1156,7 +1148,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         // Regression: parent continuation submission can await the ENTIRE resumed
-        // turn (`agentResume.tryResumeRun` → … → `resumeToolUseFromResumeData`).
+        // turn (`resumeOnSession` → … → `resumeToolUseFromResumeData`).
         // Before #8093, the loop awaited split enqueue/wake work inline in the
         // turn loop, and only finalized this child (untracking its run
         // handle) afterward in the outer `finally` — so a resumed parent that

@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
   type RunId,
@@ -80,8 +79,7 @@ export interface FollowUpConsumerLease {
   readonly kind: FollowUpConsumerKind;
 }
 
-export interface FollowUpRecoveryLease
-  extends FollowUpConsumerLease, RecoveryContinuation {
+export interface FollowUpRecoveryLease extends FollowUpConsumerLease {
   readonly kind: 'recovery';
 }
 
@@ -203,7 +201,7 @@ export class ToolUseFollowUpQueue {
   }
 
   useRecovery(
-    recovery: RecoveryContinuation,
+    recovery: FollowUpRecoveryLease,
   ): FollowUpRecoveryLease | undefined {
     const entry = this.entries.get(recovery.runId);
     return entry?.owner === recovery &&

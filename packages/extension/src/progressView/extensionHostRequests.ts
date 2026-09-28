@@ -209,8 +209,7 @@ export function createExtensionHostRequests(
    * Launch a validated fresh request directly, as the desktop's
    * `runValidated` does: the surface's launch and the shared run actions
    * both reach `runAgent` here. The launch program takes its process services from this
-   * runtime's context on the fiber that runs it, as the resume port's program
-   * does.
+   * runtime's context on the fiber that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
     request,
@@ -230,6 +229,11 @@ export function createExtensionHostRequests(
     createHostRunActions({
       session,
       runValidated,
+      openWorkflowOutput: (result) =>
+        withProcessServices(
+          runtime,
+          openFinalOutputIfAvailable(session.roots)(result),
+        ),
       loadModelOptions: () =>
         withProcessServices(
           runtime,

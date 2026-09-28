@@ -290,7 +290,6 @@ function start(
           runValidatedAgent(
             { config, runId },
             {
-              approvalPromptsUnavailable: true,
               // The run's trace is built with this tap, so it hears the run
               // from its first event.
               onTraceEvent: (event) => {
@@ -445,6 +444,9 @@ export function makeSessions(
         );
         const handle = yield* openSessionEffect({
           roots: resolved,
+          // No surface here can answer an approval prompt: every run of this
+          // session, launched or resumed, is offered no approval-gated tool.
+          interactions: { approvalPromptsUnavailable: true },
           transcriptMode: {
             kind: 'ephemeral',
             reason: 'npm package consumer',

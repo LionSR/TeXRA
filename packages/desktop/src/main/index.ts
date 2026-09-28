@@ -64,7 +64,6 @@ import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from './desktopProjectRecords.js';
-import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import {
   DesktopAttentionPort,
@@ -161,9 +160,6 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 const moduleDirname = import.meta.dirname;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
-/** Window-owned post-launch funnel refresh. The process resume owner reads
- *  this; createWindow assigns it when onboarding IPC exists. */
-const afterLaunchFunnelRefresh: { current?: Effect.Effect<void> } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
@@ -1291,7 +1287,6 @@ function createWindow(options: {
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  afterLaunchFunnelRefresh.current = refreshFunnelAfterLaunch;
   // The funnel is host state every open project's snapshot carries (8.1).
   windowResources.add(
     onboardingIpc.onFunnelChange((state) =>
@@ -1594,25 +1589,12 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // Opened by the startup program below; a startup that fails before it
       // runs the shutdown handlers that read it.
       let projects: DesktopProjectRegistry | undefined;
-      // Read through thunks: the resume owner is the port that
-      // `initializeElectronPlatform` installs, so it exists before either.
-      const processResumeOwner = new DesktopProcessResumeOwner({
-        sessions: () =>
-          (projects ? [projects.fallback(), ...projects.list()] : []).map(
-            (p) => p.session,
-          ),
-        runtime: () => runtime,
-        onLaunchSettled: Effect.suspend(
-          () => afterLaunchFunnelRefresh.current ?? Effect.void,
-        ),
-      });
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
       const { runtime, processScope, initialize } =
-        yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
+        yield* initializeElectronPlatform(moduleDirname);
       // The process's shutdown is this scope's close. Its finalizers run in
-      // the reverse of their registration: the resume owner stops taking
-      // resumes, every session closes (its runs stopped and settled, its
+      // the reverse of their registration: every session closes (its runs stopped and settled, its
       // artifacts flushed), the recording stops, the external-editor patch
       // directories every window's diff host recorded are removed, every
       // project is released (or, before the registry opened, the fallback
@@ -1648,10 +1630,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         reported('stopping the active recording', hostDraftRequests.shutdown),
       );
       yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
-      yield* Scope.addFinalizer(
-        shutdownScope,
-        Effect.sync(() => processResumeOwner.disable()),
-      );
 
       // Until the initial window is fully wired, any startup failure (platform
       // init included) runs the shutdown an ordinary application exit does.

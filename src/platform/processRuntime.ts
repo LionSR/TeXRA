@@ -43,14 +43,14 @@ import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import type { AgentDirectories, AgentResume, AppState } from './interfaces';
+import type { AgentDirectories, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the account plane, the resume port, the
+ * cohort-A tags beside the records, the account plane, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
@@ -80,7 +80,6 @@ export type ProcessServices =
   | Secrets
   | AppState
   | LanguageModel
-  | AgentResume
   | AgentDirectories
   | SetupPlatform
   | AgentEngine

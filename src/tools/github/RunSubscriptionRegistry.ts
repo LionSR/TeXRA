@@ -18,7 +18,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import { AgentResume, type Disposable } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 
@@ -113,87 +113,82 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     session: SessionHandle,
-  ): Effect.Effect<boolean, never, Secrets | AgentResume> {
-    // The resume port is captured now: onEvent fires from the source-owned poll
-    // loop, whose context has no AgentResume.
-    return Effect.flatMap(AgentResume, (agentResume) =>
-      Effect.suspend(() => {
-        const key = this.opts.keyOf(input);
-        const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
-        const existing = bound.get(key);
-        if (existing) {
-          this.ensureReleaseHook(session);
-          const previousOwner = existing.owner;
-          existing.owner = session;
-          if (previousOwner !== session) {
-            this.decrementSessionRefCount(previousOwner);
-            this.incrementSessionRefCount(session);
-            this.detachReleaseHookIfUnused(previousOwner);
-          }
-          this.opts.source.updateSubscription?.(input, existing.onEvent);
-          return Effect.succeed(false);
+  ): Effect.Effect<boolean, never, Secrets> {
+    return Effect.suspend(() => {
+      const key = this.opts.keyOf(input);
+      const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();
+      const existing = bound.get(key);
+      if (existing) {
+        this.ensureReleaseHook(session);
+        const previousOwner = existing.owner;
+        existing.owner = session;
+        if (previousOwner !== session) {
+          this.decrementSessionRefCount(previousOwner);
+          this.incrementSessionRefCount(session);
+          this.detachReleaseHookIfUnused(previousOwner);
         }
-        const onEvent = (text: string): Effect.Effect<void> => {
-          // Invoked synchronously on the emit turn (see PollEventListener):
-          // capture the binding and its owner now — bind() reassigns the owner
-          // on rebind, and the delivery belongs to the session the event came
-          // through. Only the delivery itself runs in the source-owned FiberSet.
-          const subscription = bound.get(key);
-          if (!subscription) return Effect.void;
-          const owner = subscription.owner;
-          // The identifiers ride in the message: the sink renders `data` with
-          // sorted keys under a length bound, so beside an error's stack they
-          // would be the part truncated away.
-          const reportDeliveryFailure = (err: unknown) =>
-            Effect.logWarning(
-              `Failed to deliver subscription follow-up for ${key} (run ${runId})`,
-            ).pipe(
-              Effect.annotateLogs({ data: { err } }),
-              withLogChannel(this.opts.name),
-            );
-          const from = { kind: 'notification', source: 'github' } as const;
-          return submitFollowUp(
-            runId,
-            { text, from },
-            {
-              session: owner,
-              mode: 'live_notification',
-            },
+        this.opts.source.updateSubscription?.(input, existing.onEvent);
+        return Effect.succeed(false);
+      }
+      const onEvent = (text: string): Effect.Effect<void> => {
+        // Invoked synchronously on the emit turn (see PollEventListener):
+        // capture the binding and its owner now — bind() reassigns the owner
+        // on rebind, and the delivery belongs to the session the event came
+        // through. Only the delivery itself runs in the source-owned FiberSet.
+        const subscription = bound.get(key);
+        if (!subscription) return Effect.void;
+        const owner = subscription.owner;
+        // The identifiers ride in the message: the sink renders `data` with
+        // sorted keys under a length bound, so beside an error's stack they
+        // would be the part truncated away.
+        const reportDeliveryFailure = (err: unknown) =>
+          Effect.logWarning(
+            `Failed to deliver subscription follow-up for ${key} (run ${runId})`,
           ).pipe(
-            Effect.provideService(AgentResume, agentResume),
-            Effect.asVoid,
-            Effect.catch(reportDeliveryFailure),
-            // A defect (e.g. publish throwing) got the same warn through the old
-            // promise chain's .catch; keep one message for both channels.
-            Effect.catchDefect(reportDeliveryFailure),
+            Effect.annotateLogs({ data: { err } }),
+            withLogChannel(this.opts.name),
           );
-        };
-        return this.opts.source.subscribe(input, onEvent).pipe(
-          Effect.flatMap((disposable) => {
-            const subscription: BoundSubscription = {
-              disposable,
-              onEvent,
-              owner: session,
-            };
-            bound.set(key, subscription);
-            this.perRun.set(runId, bound);
-            this.incrementSessionRefCount(session);
-            this.ensureReleaseHook(session);
-            return Effect.logInfo(
-              `Bound subscription ${key} → run ${runId}`,
-            ).pipe(
-              withLogChannel(this.opts.name),
-              Effect.andThen(
-                Effect.sync(() => {
-                  this.emitBindingsChanged();
-                  return true;
-                }),
-              ),
-            );
-          }),
+        const from = { kind: 'notification', source: 'github' } as const;
+        return submitFollowUp(
+          runId,
+          { text, from },
+          {
+            session: owner,
+            mode: 'live_notification',
+          },
+        ).pipe(
+          Effect.asVoid,
+          Effect.catch(reportDeliveryFailure),
+          // A defect (e.g. publish throwing) got the same warn through the old
+          // promise chain's .catch; keep one message for both channels.
+          Effect.catchDefect(reportDeliveryFailure),
         );
-      }),
-    );
+      };
+      return this.opts.source.subscribe(input, onEvent).pipe(
+        Effect.flatMap((disposable) => {
+          const subscription: BoundSubscription = {
+            disposable,
+            onEvent,
+            owner: session,
+          };
+          bound.set(key, subscription);
+          this.perRun.set(runId, bound);
+          this.incrementSessionRefCount(session);
+          this.ensureReleaseHook(session);
+          return Effect.logInfo(
+            `Bound subscription ${key} → run ${runId}`,
+          ).pipe(
+            withLogChannel(this.opts.name),
+            Effect.andThen(
+              Effect.sync(() => {
+                this.emitBindingsChanged();
+                return true;
+              }),
+            ),
+          );
+        }),
+      );
+    });
   }
 
   /** Returns true if a subscription existed and was removed. */

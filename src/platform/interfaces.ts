@@ -11,7 +11,7 @@ import {
   Stream,
   type Result,
 } from 'effect';
-import type { AgentSource, RunId } from '@shared/schemas';
+import type { AgentSource } from '@shared/schemas';
 
 import type { GlobalStorageFs } from './rootedFs';
 
@@ -244,73 +244,6 @@ export class AgentDirectories extends Context.Service<
     directories: AgentDirectoriesPort,
   ): Layer.Layer<AgentDirectories> {
     return Layer.succeed(AgentDirectories)(directories);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Agent resume
-// ---------------------------------------------------------------------------
-
-/**
- * Host capability for resuming an agent stream from its persisted snapshot.
- *
- * Implemented by the VS Code host (and any other host) so VS Code-free code
- * (e.g. the inquiry continuation injector) can trigger auto-resume without
- * importing the host-level command pipeline.
- */
-export interface RecoveryContinuation {
-  readonly runId: RunId;
-  readonly kind: 'recovery';
-}
-
-/**
- * A host's resume attempt faulted before it could answer. Distinct from the
- * `false` {@link AgentResumePort.tryResumeRun} answers: `false` is this
- * process declining a run it can classify, while this is the attempt itself
- * failing, which the caller cannot read off the boolean.
- */
-export class AgentResumeFailed extends Data.TaggedError('AgentResumeFailed')<{
-  readonly runId: RunId;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-export interface AgentResumePort {
-  /**
-   * Attempt to resume a WAITING / children-running stream from its
-   * persisted snapshot. Resolves true if the host accepted the request
-   * (i.e. the resume command dispatched successfully).
-   *
-   * Resolves false if the stream cannot be resumed (no snapshot found,
-   * already active/resuming, etc.) — callers should fall back to leaving
-   * the message queued for the next manual resume. The failure channel is
-   * reserved for the attempt faulting, so a caller that only wants the
-   * retry decision still learns when the decision itself could not be made.
-   */
-  tryResumeRun(
-    runId: RunId,
-    recovery?: RecoveryContinuation,
-  ): Effect.Effect<boolean, AgentResumeFailed>;
-}
-
-/**
- * The process's agent-resume port as an Effect service
- * (`@texra/platform/AgentResume`), provided once by the composition root
- * through `installProcessRuntime`. The shape is the port itself: a program
- * that resumes a persisted run yields the port's own Effect and matches
- * {@link AgentResumeFailed}.
- *
- * `layer` takes the port itself, for the same reason `Secrets.layer` does:
- * every root builds its resume port before it installs the runtime that
- * serves it, so the service is the value the root already holds, not a thunk
- * resolved per member call.
- */
-export class AgentResume extends Context.Service<
-  AgentResume,
-  AgentResumePort
->()('@texra/platform/AgentResume') {
-  static layer(port: AgentResumePort): Layer.Layer<AgentResume> {
-    return Layer.succeed(AgentResume)(port);
   }
 }
 

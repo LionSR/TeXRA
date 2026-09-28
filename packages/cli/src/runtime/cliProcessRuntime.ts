@@ -72,7 +72,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readCliVersion } from './cliContext';
 import { CliSecrets, cliSecretsPath } from './cliSecrets';
 import { setCliLogRuntime, writeTextStderr } from './logSinks';
-import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
@@ -259,10 +258,6 @@ export function installCliProcessRuntime(
       // A terminal has no editor language models; the CLI's platform installs
       // the same port.
       languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-      // The one resume port, shared with the platform `initCliPlatform`
-      // wires: it forwards to the chat TUI's handler whenever one is
-      // mounted, whichever entry installed this runtime.
-      agentResume: cliAgentResume,
       agentDirectories: agentDirectoriesLayer,
       setup: {
         // The one closure left over the runtime being installed, and a real

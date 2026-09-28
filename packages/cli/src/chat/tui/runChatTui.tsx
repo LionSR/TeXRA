@@ -17,7 +17,6 @@ import {
 } from '@cli/runtime/cliContext';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { setCliAgentResumeHandler } from '@cli/runtime/cliAgentResume';
 import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -402,7 +401,6 @@ export async function runChat(
     stores: services,
     runtime,
   });
-  disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();

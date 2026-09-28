@@ -13,12 +13,8 @@ import {
   type FollowUpConsumerLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/runRegistry';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  AgentResume,
-  AgentResumeFailed,
-  type AgentResumePort,
-} from '@platform/interfaces';
 import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -37,20 +33,36 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-function mockTryResume(): Mock<
-  () => Effect.Effect<boolean, AgentResumeFailed>
-> {
+function mockTryResume(): Mock<() => Effect.Effect<boolean, Error>> {
   return vi.fn(() => Effect.succeed(true));
 }
 
-/** Provide a case's resume port as the `AgentResume` service the wake reads:
- *  production takes the process service; a suite substitutes it. */
+type TryResume = (
+  runId: RunId,
+  recovery: unknown,
+) => Effect.Effect<boolean, Error>;
+
+/** The case's answer to the one resume a wake reaches: whether the run took
+ *  it. The fake session's fork serves it as the engine's resume. */
+let tryResume: TryResume = () => Effect.succeed(false);
+
 const withResumePort =
-  (tryResumeRun: AgentResumePort['tryResumeRun']) =>
-  <A, E, R>(
-    effect: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, Exclude<R, AgentResume>> =>
-    Effect.provideService(effect, AgentResume, { tryResumeRun });
+  (resume: TryResume) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Effect.suspend(() => {
+      tryResume = resume;
+      return effect;
+    });
+
+/** The engine a fake session's fork runs a resume attempt on. */
+const caseEngine = {
+  resumeClaimedRun: (runId: RunId, options: { readonly recovery?: unknown }) =>
+    Effect.map(tryResume(runId, options.recovery), (resumed) =>
+      resumed
+        ? { started: true, delivered: true }
+        : { failed: 'not_resumable' },
+    ),
+} as unknown as AgentEngine['Service'];
 
 /**
  * The admission boundary over a recorded session plane: one serializer (a
@@ -159,7 +171,18 @@ let recorded = recordedFollowUps();
 function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
   recorded = recordedFollowUps();
   return {
-    runs: { getToolUseFollowUpTarget: () => target },
+    runs: {
+      getToolUseFollowUpTarget: () => target,
+      // The session's fork: the attempt outlives the fiber that asked.
+      fork: (program: Effect.Effect<unknown, unknown, AgentEngine>) =>
+        Effect.forkDetach(
+          Effect.provideService(program, AgentEngine, caseEngine),
+          { startImmediately: true },
+        ),
+    },
+    runView: () => ({}),
+    onResult: () => () => {},
+    interactions: { emit: () => Effect.void },
     readRunRecords: () => Effect.succeed([]),
     // No database behind this fixture, so the claim read fails and the
     // refusal is the unclassified one, as it was when the ownership fact
@@ -360,14 +383,14 @@ describe('submitFollowUp', () => {
             }),
           ),
         );
-        // The host is asked in the step that admits the input, so the
+        // The session is asked in the step that admits the input, so the
         // interrupt below lands on a wake already in flight.
         yield* Deferred.await(started);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
-        // The wake is detached: it answers the decline and settles the lease
-        // even though the fiber that dispatched it is gone.
+        // The wake runs on the session's fork: it answers the decline and
+        // settles the lease even though the fiber that dispatched it is gone.
         yield* settle;
 
         const successor = session.followUps.claimLive(runId, 'child');
@@ -377,7 +400,7 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('releases recovery when tryResumeRun fails', () =>
+  it.effect('releases recovery when the resume faults', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
@@ -387,15 +410,7 @@ describe('submitFollowUp', () => {
           { text: 'keep this input', from: { kind: 'user' as const } },
           { session },
         ).pipe(
-          withResumePort(() =>
-            Effect.fail(
-              new AgentResumeFailed({
-                runId,
-                message: 'resume prep failed',
-                cause: new Error('resume prep failed'),
-              }),
-            ),
-          ),
+          withResumePort(() => Effect.fail(new Error('resume prep failed'))),
         ),
       ).toEqual({ status: 'queued', wake: 'failed' });
       expect(session.followUps.claimLive(runId, 'child')).toBeDefined();

@@ -14,11 +14,7 @@ import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type {
-  AgentDirectoriesPort,
-  AgentResumePort,
-  StateStore,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
@@ -99,7 +95,7 @@ interface ElectronPlatformInitResult {
 
 export const initializeElectronPlatform = Effect.fn(
   'initializeElectronPlatform',
-)(function* (moduleDirname: string, agentResume: AgentResumePort) {
+)(function* (moduleDirname: string) {
   const userDataPath = app.getPath('userData');
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
@@ -181,7 +177,6 @@ export const initializeElectronPlatform = Effect.fn(
     auth: supabaseAuth,
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    agentResume,
     agentDirectories: agentDirectoriesLayer,
     setup: setupAuth.platform,
     // Desktop model traffic goes to the same Supabase usage log the extension

@@ -28,11 +28,7 @@ import {
 } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
-import type {
-  AgentDirectoriesPort,
-  AgentResumePort,
-  StateStore,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -80,9 +76,8 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
-  /** The two ports a real root hands `installProcessRuntime`, held here as
-   *  its own locals. */
-  readonly agentResume: AgentResumePort;
+  /** The language-model port a real root hands `installProcessRuntime`,
+   *  held here as its own local. */
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
   /** The host's account plane; absent hosts answer signed-out. */
@@ -133,7 +128,6 @@ export function createFakeHost(
     workspaceState,
     globalState,
     secrets,
-    agentResume,
     languageModel,
     setup,
     auth,
@@ -148,7 +142,6 @@ export function createFakeHost(
     }),
     secrets: secrets ?? new FakeSecrets(options.secrets),
     env: options.env ?? {},
-    agentResume: agentResume ?? { tryResumeRun: () => Effect.succeed(false) },
     languageModel: languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...(setup ? { setup } : {}),
     ...(auth ? { auth } : {}),
@@ -297,16 +290,6 @@ export const fakeHostLanguageModel: LanguageModelPort = {
     installedHost().languageModel.onDidChange(listener),
 };
 
-/** The `AgentResume` service of every test runtime, delegating per call for
- *  the same reason `fakeHostSecrets` does: hosts change per test, the
- *  runtime does not. */
-export const fakeHostAgentResume: AgentResumePort = {
-  tryResumeRun: (runId, recovery) =>
-    Effect.suspend(() =>
-      installedHost().agentResume.tryResumeRun(runId, recovery),
-    ),
-};
-
 /** The `AgentDirectories` service of every test runtime, delegating per call
  *  for the same reason `fakeHostSecrets` does: hosts change per test, the
  *  runtime does not. */
@@ -364,7 +347,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AgentDirectories, AgentResume, AppState },
+    { AgentDirectories, AppState },
     { LanguageModel },
     { SetupPlatform },
     { SupabaseAuth },
@@ -402,7 +385,15 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     Layer.mock(UpdateCheckRecords, {}),
-    Layer.mock(AgentEngine, {}),
+    // A wake resumes as in production. The module is read per call, so a
+    // suite's own mock or spy of it is the resume the wake reaches.
+    Layer.mock(AgentEngine, {
+      resumeClaimedRun: (runId, options) =>
+        Effect.flatMap(
+          Effect.promise(() => import('@agent/runtime/resumeRun')),
+          (resume) => resume.resumeClaimedRun(runId, options),
+        ),
+    }),
     // An empty tool table (the real one loads every tool), with goal mode's
     // continuation: a suite that resolves a run's tools runs on the session
     // graph's runtime or provides `toolRegistryLayer`.
@@ -432,7 +423,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),
     LanguageModel.layer(fakeHostLanguageModel),
-    AgentResume.layer(fakeHostAgentResume),
     AgentDirectories.layer(fakeHostAgentDirectories),
     SetupPlatform.layer(fakeSetupPlatform),
     unprobedToolAvailability,

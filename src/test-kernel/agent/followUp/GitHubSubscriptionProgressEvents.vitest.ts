@@ -22,14 +22,10 @@ import {
 } from '@eventBus/AppSignals';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import {
-  fakeHostAgentResume,
-  fakeHostSecrets,
-} from '@test/support/setupPlatform';
+import { fakeHostSecrets } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
@@ -262,10 +258,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', session)
-        .pipe(
-          Effect.provideService(Secrets, fakeHostSecrets),
-          Effect.provideService(AgentResume, fakeHostAgentResume),
-        );
+        .pipe(Effect.provideService(Secrets, fakeHostSecrets));
       expect(source.keyListenerCount()).toBe(1);
 
       registry.dispose();
@@ -291,10 +284,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -327,16 +317,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         yield* registry
           .bind(runId, 'owner/repo', firstSession)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -376,10 +360,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         process.once('unhandledRejection', unhandledRejection);
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         // emit() awaits the delivery program, so the recovery has run by the
         // time it resolves — no settle-and-hope.

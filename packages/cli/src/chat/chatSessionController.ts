@@ -8,7 +8,7 @@ import {
   Data,
   Deferred,
   Effect,
-  Exit,
+  Fiber,
   Option,
   Scope,
   Stream,
@@ -27,6 +27,7 @@ import {
 import {
   describeFollowUpFailure,
   presentFollowUpResult,
+  startFollowUpWake,
   type FollowUpQueueInput,
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
@@ -47,15 +48,16 @@ import {
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
-import {
-  AgentResumeFailed,
-  type AgentResumePort,
-  type RecoveryContinuation,
-} from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { acceptsFollowUp } from '@shared/session/sessionView';
+import {
+  acceptsFollowUp,
+  isLiveRun,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -80,7 +82,6 @@ import {
 } from './tui/state/cliState';
 import {
   chatTuiCanStartRootRun,
-  type RootRunSettled,
   type TuiSession,
 } from './tui/state/sessionRunState';
 import {
@@ -107,32 +108,43 @@ type InterruptedFollowUp = Pick<
   'text' | 'mediaFiles' | 'displayText' | 'from'
 >;
 
+/** What became of messages sent into an interrupted conversation: the run
+ *  took them and resumed; they are queued on the run but it did not resume
+ *  (a later resume delivers them); or they were not queued at all. */
+type InterruptedDelivery = 'resumed' | 'queued' | 'refused';
+
 type InterruptedFollowUpAdmission =
   | { readonly kind: 'not_interrupted' }
   | {
       readonly kind: 'accepted';
       readonly runId: RunId;
-      readonly completion: Deferred.Deferred<boolean, AgentResumeFailed>;
+      readonly completion: Deferred.Deferred<InterruptedDelivery>;
     };
 
 interface InterruptedContinuationBatch {
   readonly runId: RunId;
+  /** Typed during the interruption: queued on the run as one admission. */
   readonly followUps: InterruptedFollowUp[];
+  /** Typed once {@link followUps} went to the run's queue, before the run
+   *  holds the slot: sent to it when it does. */
+  readonly late: InterruptedFollowUp[];
+  /** {@link followUps} are sealed into the write to the run's queue. */
+  sealed: boolean;
+  /** The user stopped: the wake is cancelled, or refused where it stands. */
+  stopped: boolean;
+  /** The root-run slot this continuation holds while it prepares, so the
+   *  chat reads as busy (Ctrl-C stops, it does not exit) until the resumed
+   *  run takes the slot over or the continuation ends. */
+  slot?: Deferred.Deferred<void, Error>;
   /** Settled with the continuation's own exit, so a waiter reads what the
    *  resume did rather than what a promise adapter made of it. */
-  readonly completion: Deferred.Deferred<boolean, AgentResumeFailed>;
+  readonly completion: Deferred.Deferred<InterruptedDelivery>;
   superseded: boolean;
 }
 
 interface SupersededInterruptedRecovery {
   readonly runId: RunId;
   readonly followUps: readonly InterruptedFollowUp[];
-}
-
-interface AutoResumeOptions {
-  readonly recovery?: RecoveryContinuation;
-  readonly extraFollowUps?: readonly InterruptedFollowUp[];
-  readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -222,13 +234,6 @@ export interface ChatSessionController {
   clearInterruptedRecovery(): void;
 
   /**
-   * Attempt to resume a queued follow-up target. This is the CLI's
-   * agent-resume port while a chat is mounted, so it is the port's own
-   * program: it answers true only when this controller accepts the target
-   * resume, and it claims the root-run slot in its first synchronous step.
-   */
-  readonly tryResumeRun: AgentResumePort['tryResumeRun'];
-  /**
    * The composer's submit path (PRD 10.1): a slash command, the first
    * instruction of a fresh root run, a message into an interrupted root, or
    * a `followUp.send` request onto the focused stream.
@@ -287,6 +292,7 @@ export interface ChatSessionControllerInit {
   readonly agentRuns?: {
     readonly launch: typeof runAgent;
     readonly resume: typeof resumeRun;
+    readonly wake: typeof startFollowUpWake;
     readonly attachResultToast: typeof attachTerminalResultToast;
     readonly records: typeof getRunRecords;
   };
@@ -357,6 +363,7 @@ export function createChatSessionController(
   const agentRuns = {
     launch: runAgent,
     resume: resumeRun,
+    wake: startFollowUpWake,
     attachResultToast: attachTerminalResultToast,
     records: getRunRecords,
     ...init.agentRuns,
@@ -423,10 +430,10 @@ export function createChatSessionController(
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
     const runId = session.interruptedRunId;
-    const followUps = [
-      ...pendingInterruptedFollowUps,
-      ...(interruptedContinuation?.followUps ?? []),
-    ];
+    const batch = interruptedContinuation;
+    // A committed batch is the run's already; only what came after is not.
+    const unsent = batch?.sealed ? batch.late : (batch?.followUps ?? []);
+    const followUps = [...pendingInterruptedFollowUps, ...unsent];
     pendingInterruptedFollowUps = [];
     if (interruptedContinuation) {
       interruptedContinuation.superseded = true;
@@ -465,43 +472,10 @@ export function createChatSessionController(
     }
   };
 
-  // A cancelled root can publish completion just before its run settles.
-  // During that narrow interval its teardown can still overwrite a
-  // successor's root-slot state. Retain every unsettled interrupted generation
-  // so a later interruption cannot discard an earlier blocker.
-  const recoveryBlockedByInterruptedRuns = new Set<RootRunSettled>();
-  const blockRecoveryUntilInterruptedRunSettles = (): void => {
-    const interruptedRun = session.runSettled;
-    if (
-      !interruptedRun ||
-      session.runCompleted ||
-      recoveryBlockedByInterruptedRuns.has(interruptedRun)
-    ) {
-      return;
-    }
-    recoveryBlockedByInterruptedRuns.add(interruptedRun);
-    runtime.runFork(
-      interruptedRun.pipe(
-        Effect.exit,
-        Effect.map(() => {
-          recoveryBlockedByInterruptedRuns.delete(interruptedRun);
-        }),
-      ),
-    );
-  };
-
-  // Cancellation of an admitted automatic resume is monotone for that
-  // attempt. `/clear` may reset the shared session fields while asynchronous
-  // preparation is still running, but it must not re-enable lease admission.
-  let activeAutoResumeCancellation:
-    { cancellationRequested: boolean } | undefined;
-
   const requestStop = (): void => {
-    blockRecoveryUntilInterruptedRunSettles();
-    if (activeAutoResumeCancellation) {
-      activeAutoResumeCancellation.cancellationRequested = true;
-    }
     session.stopRequested = true;
+    // A pending continuation of the interrupted conversation stops with it.
+    if (interruptedContinuation) interruptedContinuation.stopped = true;
   };
 
   // -----------------------------------------------------------------------
@@ -567,33 +541,22 @@ export function createChatSessionController(
     ),
   );
 
-  // Per launch: attach the root's terminal-result presenter until it
-  // finalizes. The root terminal result is
-  // published before its run promise settles, and children (runs with a
-  // parent) never toast, so the listener has no work after the root finalizes
-  // and must not overlap a later root's listener.
+  // One terminal-result presenter for the session's life, attached before
+  // any run of it can end: a root the session resumes on its own can fail
+  // before the chat has adopted it, and its result is presented all the same.
+  // Children (runs with a parent) never toast.
+  disposables.add(
+    agentRuns.attachResultToast(runtimeSession, runtimeSession.interactions),
+  );
   const setupRunHost = (
     runId: RunId,
   ): {
     readonly approval: ReturnType<typeof cliToolUseApprovalOptions>;
     readonly finalize: () => void;
-  } => {
-    const detachResultToast = agentRuns.attachResultToast(
-      runtimeSession,
-      runtimeSession.interactions,
-    );
-    return {
-      approval: cliToolUseApprovalOptions(
-        runtimeSession,
-        sessionContext,
-        runId,
-      ),
-      finalize: (): void => {
-        detachResultToast();
-        session.markRunCompleted();
-      },
-    };
-  };
+  } => ({
+    approval: cliToolUseApprovalOptions(runtimeSession, sessionContext, runId),
+    finalize: (): void => session.markRunCompleted(),
+  });
 
   // -----------------------------------------------------------------------
   // startRootRun
@@ -665,36 +628,22 @@ export function createChatSessionController(
   // resume
   // -----------------------------------------------------------------------
 
-  // Deliberately not folded together with `tryResumeRun` below. The two read
-  // as near-duplicates because they call the same helpers in a similar order,
-  // but every step that touches the recovery lease differs, and the
-  // differences are the contracts, not incidental drift:
-  //  - Completion contract. This program forks the run chain and completes at
-  //    rehydration (fire-and-forget, per the interface docstring); the port
-  //    awaits its deferred so its caller reads a boolean, and classifies a
-  //    defect into `AgentResumeFailed` for the caller's retry decision.
-  //  - Recovery transfer. A manual resume supersedes unconditionally, seeds
-  //    the batch as `extraFollowUps`, and restores it whenever the queue never
-  //    took over. A wake supersedes only with no queue-ready callback, writes
-  //    the batch through `submitBatch`, and restores only when that one write
-  //    fails or is refused. Two protocols, two restore predicates.
-  //  - Adoption point. Config is adopted inside `onResumeResolved`, which
-  //    `resumeRun` calls only once the saved state loaded; a wake adopts
-  //    before the call and leaves the local transcript alone.
-  //  - Refusals. A manual resume names its reason in the transcript; a wake
-  //    answers `false` silently and has no category check.
-  // Unifying them takes one knob per bullet on the `handBackUnusedRecovery` /
-  // `restoreInterruptedRecovery` pairing, where a double hand-back or a missed
-  // restore silently loses the follow-ups typed during an interruption. Don't
-  // merge these two bodies.
+  // The user's resume of a conversation they pick. Config is adopted inside
+  // `onResumeResolved`, which `resumeRun` calls only once the saved state
+  // loaded; the batch typed during an interruption rides as
+  // `extraFollowUps` and is restored whenever the queue never took it over.
   const resume = (id: RunId): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
     // claim are one uninterrupted synchronous callback (see
     // tryClaimRootRunSlot) that no other fiber can land between, and a
-    // concurrent tryResumeRun() (or another resume()) can never observe this
+    // root the session resumes (or another resume()) can never observe this
     // call suspended between "checked available" and "claimed".
     Effect.suspend(() => {
+      // A continuation of the interrupted conversation that has not reached
+      // its run yet gives way: this resume supersedes it below.
+      const preparing = interruptedContinuation;
+      if (preparing && !preparing.sealed) releaseBatchSlot(preparing);
       const claimedRun = Deferred.makeUnsafe<void, Error>();
       if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
         // The slot is taken, so the deferred this attempt made is dropped
@@ -841,172 +790,160 @@ export function createChatSessionController(
     session.runExitCode = runOutcomeExitCode(outcome);
   });
 
+  /** Hold the slot for a continuation's run, once the slot is free: a
+   *  Ctrl-C then stops it (by id, wherever its resume has got to) instead of
+   *  leaving an idle chat. */
+  const claimBatchSlot = (batch: InterruptedContinuationBatch): void => {
+    if (batch.slot) return;
+    const slot = Deferred.makeUnsafe<void, Error>();
+    if (!session.tryClaimRootRunSlot(Deferred.await(slot))) return;
+    batch.slot = slot;
+    session.runId = batch.runId;
+  };
+
+  /** Give back the slot an interrupted continuation held while preparing. */
+  const releaseBatchSlot = (batch: InterruptedContinuationBatch): void => {
+    const slot = batch.slot;
+    if (slot === undefined) return;
+    batch.slot = undefined;
+    session.markRunCompleted();
+    Deferred.doneUnsafe(slot, Effect.void);
+  };
+
   /**
-   * The controller's implementation of the CLI's agent-resume port.
-   *
-   * `Effect.suspend` is what keeps the claim handshake synchronous: its body
-   * is the program's first step, so the availability check and the claim are
-   * one uninterrupted synchronous callback that no other fiber can land
-   * between. The program then suspends on the deferred the detached run
-   * chain settles, so the caller's own fiber never carries the resumed turn
-   * and an interrupted caller cannot interrupt a started resume.
+   * Hand an interrupted conversation's routing to its resumed run: the markers
+   * clear, and what was typed while it resumed goes to it. Runs once, when
+   * the run holds the root slot, or when the wake returns if it never did.
    */
-  const tryResumeRun = (
-    runId: RunId,
-    options: AutoResumeOptions = {},
-  ): Effect.Effect<boolean, AgentResumeFailed> =>
-    Effect.suspend(() => {
-      // Do not let a recovery wake claim the slot after the interrupted root
-      // publishes completion but before that root's teardown settles. The
-      // captured settlement remains authoritative even if `/clear` resets the
-      // mutable session state in the meantime.
-      if (options.recovery && recoveryBlockedByInterruptedRuns.size > 0) {
-        return Effect.succeed(false);
-      }
-      const autoResumeRun = Deferred.makeUnsafe<boolean, AgentResumeFailed>();
-      // Claim the root-run slot as the FIRST statement of this step, before
-      // the program suspends below, see tryClaimRootRunSlot and the matching
-      // comment in resume().
-      if (
-        !session.tryClaimRootRunSlot(
-          Effect.asVoid(Deferred.await(autoResumeRun)),
-        )
-      ) {
-        // Same as in resume(): the deferred this attempt made is dropped
-        // unsettled, since no resume path will complete it now.
-        return Effect.succeed(false);
-      }
-      const attemptCancellation = { cancellationRequested: false };
-      activeAutoResumeCancellation = attemptCancellation;
-      const isCancellationRequested = (): boolean =>
-        attemptCancellation.cancellationRequested || session.stopRequested;
-
-      let finalize = (): void => session.markRunCompleted();
-      let recovery: FollowUpRecoveryLease | undefined;
-      let recoveryHandedOff = false;
-      const attempt = Effect.gen(function* () {
-        recovery = options.recovery
-          ? runtimeSession.followUps.useRecovery(options.recovery)
-          : runtimeSession.followUps.claimRecovery(runId, true);
-        if (!recovery) return false;
-        // Transfer accepted input before hydration yields. A waiting admission
-        // must see the new queue owner before it can attempt a second resume.
-        if (!options.onFollowUpQueueReady) {
-          const previous = supersedeInterruptedRecovery();
-          if (previous?.followUps.length) {
-            // One admission, one transaction: the batch is queued whole, or
-            // nothing was written and it stays this controller's.
-            const submitted = yield* runtimeSession.followUps
-              .submitBatch(runId, previous.followUps, 'live_owner')
-              .pipe(
-                Effect.tapError(() =>
-                  Effect.sync(() => restoreInterruptedRecovery(previous)),
-                ),
-              );
-            if (submitted.kind === 'refused') {
-              restoreInterruptedRecovery(previous);
-              return false;
-            }
-          }
-        }
-
-        const config = yield* agentRuns
-          .records(runtimeSession, runId)
-          .readConfig();
-        // A workflow run resumes headless (`texra resume`), never in a chat.
-        if (config?.agentCategory !== AgentCategory.ToolUse) return false;
-        if (isCancellationRequested()) return false;
-        // The parent edge as the fold holds it, read cold: a resume at
-        // startup must not race the live fold's first replay.
-        const parentRunId = (yield* runtimeSession.readView([])).runs.get(
-          runId,
-        )?.parentId;
-
-        yield* adoptRunConfig(config, 'history');
-
-        const runHost = setupRunHost(runId);
-        finalize = runHost.finalize;
-        session.runId = runId;
-        if (!parentRunId) {
-          rootRunId.set(runId);
-        }
-        // A follow-up wake may target a stream the user /clear-ed;
-        // resuming it un-retires it (the empty patch drops the retired mark),
-        // matching the explicit resume path, or focusRun would refuse
-        // and the resumed run would stay invisible.
-        focusRun(runId);
-        session.runExitCode = CliExitCode.Success;
-
-        yield* setCliHelperModel(stores.globalState, config.model);
-        recoveryHandedOff = true;
-        const result = yield* agentRuns.resume(runId, {
-          session: runtimeSession,
-          ...runHost.approval,
-          recovery,
-          extraFollowUps: options.extraFollowUps,
-          onFollowUpQueueReady: options.onFollowUpQueueReady,
-          isCancellationRequested,
-        });
-
-        if ('started' in result && result.delivered) {
-          yield* settleResumedTurn(result);
-          return true;
-        }
-        if (isCancellationRequested()) {
-          session.runExitCode = CliExitCode.Interrupted;
-        }
-        return false;
-      });
-      // Detached on the process runtime, as the wake's own chain: the port's
-      // caller reads the answer off the deferred instead of hosting the run.
-      runtime.runFork(
-        recoverRun(attempt, (error) => {
-          reportRunFailure(error);
-          return false;
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              handBackUnusedRecovery(recovery, recoveryHandedOff);
-              finalize();
-              if (activeAutoResumeCancellation === attemptCancellation) {
-                activeAutoResumeCancellation = undefined;
-              }
-            }),
+  const handOffInterruptedBatch = (batch: InterruptedContinuationBatch) => {
+    if (interruptedContinuation !== batch) return;
+    interruptedContinuation = undefined;
+    if (session.interruptedRunId === batch.runId)
+      session.interruptedRunId = undefined;
+    const late = batch.late.splice(0);
+    if (late.length === 0) return;
+    runtime.runFork(
+      runtimeSession.followUps
+        .submitBatch(batch.runId, late, 'live_owner')
+        .pipe(
+          Effect.flatMap((submitted) =>
+            submitted.kind === 'refused'
+              ? Effect.fail(new Error(describeFollowUpFailure('not_resumable')))
+              : Effect.void,
           ),
-          // The one place a resume attempt is classified: an answer is the
-          // port's boolean, and anything else -- a defect, an interrupted
-          // chain -- is the port's fault, which is what the caller's retry
-          // decision reads.
-          Effect.onExit((exit) =>
+          Effect.catch((error) =>
             Effect.sync(() => {
-              const answer: Effect.Effect<boolean, AgentResumeFailed> =
-                Exit.isSuccess(exit)
-                  ? Effect.succeed(exit.value)
-                  : Effect.fail(
-                      new AgentResumeFailed({
-                        runId,
-                        message: toErrorMessage(Cause.squash(exit.cause)),
-                        cause: Cause.squash(exit.cause),
-                      }),
-                    );
-              Deferred.doneUnsafe(autoResumeRun, answer);
+              restoreInterruptedRecovery({
+                runId: batch.runId,
+                followUps: late,
+              });
+              reportRunFailure(error);
             }),
           ),
         ),
-      );
+    );
+  };
 
-      return Deferred.await(autoResumeRun);
+  /** Adopt a resumed run's configuration and helper model. A run the
+   *  session wakes on its own is adopted when it turns live; the chat's own
+   *  wake adopts before waking. */
+  const adoptRunRecord = (runId: RunId) =>
+    Effect.gen(function* () {
+      const config = yield* agentRuns
+        .records(runtimeSession, runId)
+        .readConfig();
+      if (!config) return;
+      yield* adoptRunConfig(config, 'history');
+      yield* setCliHelperModel(stores.globalState, config.model);
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Resumed run ${runId}: its configuration could not be adopted: ${toErrorMessage(error)}`,
+        ),
+      ),
+    );
+
+  /**
+   * A top-level run the session resumed in this process (a follow-up wake,
+   * the interrupted conversation's own batch among them) is this chat's root
+   * the way its own launch is. While the root-run slot is free the chat
+   * adopts it: focus and configuration, and the slot held until the run has
+   * left the session's registry, its fiber settled and its queue released.
+   * The resume itself is the session's; the chat only reacts. A run counts
+   * from the level where it is live both in the registry and in the view, so
+   * neither a child detached while running (live already) nor a stale
+   * terminal row is adopted.
+   */
+  const adoptResumedRoot = (run: RunView): void => {
+    const adopted = Deferred.makeUnsafe<void, Error>();
+    // A continuation preparing this run hands its slot to the run, and a
+    // stop the user asked of it meanwhile lands on the run.
+    const preparing =
+      interruptedContinuation?.runId === run.id
+        ? interruptedContinuation
+        : undefined;
+    if (preparing) releaseBatchSlot(preparing);
+    if (!session.tryClaimRootRunSlot(Deferred.await(adopted))) return;
+    const { finalize } = setupRunHost(run.id);
+    session.runId = run.id;
+    rootRunId.set(run.id);
+    focusRun(run.id);
+    if (preparing?.stopped) {
+      session.stopRequested = true;
+      interruptActiveRun();
+    }
+    if (interruptedContinuation?.runId === run.id)
+      handOffInterruptedBatch(interruptedContinuation);
+    const ended = runtimeSession.viewChanges.pipe(
+      Stream.map((view) => view.runs.get(run.id)),
+      Stream.filter((current) => current === undefined || !isLiveRun(current)),
+      Stream.runHead,
+    );
+    runtime.runFork(
+      Effect.gen(function* () {
+        yield* adoptRunRecord(run.id);
+        const status = Option.getOrUndefined(yield* ended)?.status;
+        yield* runtimeSession.runs.awaitDrained(run.id);
+        session.runExitCode = isTerminalOutcomePhase(status)
+          ? runOutcomeExitCode(status)
+          : CliExitCode.Success;
+      }).pipe(
+        Effect.ensuring(Effect.sync(finalize)),
+        settleClaimOnExit(adopted),
+      ),
+    );
+  };
+  let liveHere = new Set<RunId>();
+  const observeResumedRoots = (view: SessionView): Effect.Effect<void> =>
+    Effect.sync(() => {
+      const previous = liveHere;
+      liveHere = new Set(
+        [...view.runs.values()]
+          .filter((run) => isLiveRun(run) && runtimeSession.runs.isLive(run.id))
+          .map((run) => run.id),
+      );
+      for (const id of liveHere) {
+        const run = view.runs.get(id);
+        if (!previous.has(id) && run?.parentId === null) adoptResumedRoot(run);
+      }
     });
+  const resumedRoots = runtime.runFork(
+    Stream.runForEach(runtimeSession.viewChanges, observeResumedRoots),
+  );
+  disposables.add(() => {
+    runtime.runFork(Fiber.interrupt(resumedRoots));
+  });
 
   const admitInterruptedFollowUp = (
     followUp: InterruptedFollowUp,
   ): InterruptedFollowUpAdmission => {
     if (interruptedContinuation) {
-      interruptedContinuation.followUps.push(followUp);
+      const batch = interruptedContinuation;
+      (batch.sealed ? batch.late : batch.followUps).push(followUp);
       return {
         kind: 'accepted',
-        runId: interruptedContinuation.runId,
-        completion: interruptedContinuation.completion,
+        runId: batch.runId,
+        completion: batch.completion,
       };
     }
 
@@ -1017,36 +954,100 @@ export function createChatSessionController(
     const batch: InterruptedContinuationBatch = {
       runId: session.interruptedRunId,
       followUps: [...pendingInterruptedFollowUps, followUp],
-      completion: Deferred.makeUnsafe<boolean, AgentResumeFailed>(),
+      late: [],
+      sealed: false,
+      stopped: false,
+      completion: Deferred.makeUnsafe<InterruptedDelivery>(),
       superseded: false,
     };
     pendingInterruptedFollowUps = [];
+    /** Put what the run does not hold back with the interrupted routing. */
+    const restore = (followUps: readonly InterruptedFollowUp[]): void => {
+      if (batch.superseded) return;
+      session.interruptedRunId = batch.runId;
+      pendingInterruptedFollowUps.push(...followUps);
+    };
+    // Read before this continuation takes the slot over.
+    const interruptedSettled = session.runSettled;
+    const deliver = Effect.gen(function* () {
+      // Best-effort settle-wait on the interrupted run: its outcome
+      // (including any failure) is already reported by the run's own
+      // recovery.
+      yield* Effect.ignoreCause(interruptedSettled ?? Effect.void);
+      if (batch.superseded) return 'resumed' as const;
+      if (batch.stopped) {
+        restore(batch.followUps);
+        return 'refused' as const;
+      }
+      claimBatchSlot(batch);
+      // The batch joins the interrupted run's queue as one admission under
+      // a recovery this chat claims, and the session wakes the run. The
+      // routing stays on this batch until the resumed run holds the slot.
+      const recovery = runtimeSession.followUps.claimRecovery(
+        batch.runId,
+        true,
+      );
+      if (!recovery) {
+        restore(batch.followUps);
+        return 'refused' as const;
+      }
+      // Sealed before the write: what arrives while it runs is late, not a
+      // message the snapshot below never carried.
+      batch.sealed = true;
+      const submitted = yield* runtimeSession.followUps
+        .submitBatch(batch.runId, batch.followUps, 'live_owner')
+        .pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Queuing the interrupted conversation's messages failed: ${toErrorMessage(error)}`,
+            ).pipe(Effect.as({ kind: 'refused' } as const)),
+          ),
+        );
+      if (submitted.kind === 'refused') {
+        runtimeSession.followUps.release(recovery, 'recoverable');
+        restore([...batch.followUps, ...batch.late.splice(0)]);
+        return 'refused' as const;
+      }
+      // Cleared or stopped while the write ran: the rows are the run's, and
+      // nothing wakes it.
+      if (batch.superseded || batch.stopped) {
+        runtimeSession.followUps.release(recovery, 'recoverable');
+        restore(batch.late.splice(0));
+        return 'queued' as const;
+      }
+      // The resumed run's configuration and helper model are in place before
+      // its first step.
+      yield* adoptRunRecord(batch.runId);
+      const woken = yield* agentRuns
+        .wake(batch.runId, recovery, runtimeSession, () => batch.stopped)
+        .pipe(
+          Effect.catchDefect((defect) =>
+            Effect.logWarning('The interrupted conversation did not wake').pipe(
+              Effect.annotateLogs({ data: defect }),
+              Effect.as(false),
+            ),
+          ),
+        );
+      if (woken) {
+        handOffInterruptedBatch(batch);
+        return 'resumed' as const;
+      }
+      // Queued on the run, which a later resume delivers from its rows; what
+      // was typed meanwhile never reached it and goes back to the input.
+      if (interruptedContinuation === batch)
+        interruptedContinuation = undefined;
+      restore(batch.late.splice(0));
+      return 'queued' as const;
+    });
+    // Set before the program runs: with the interrupted run already settled
+    // it can run to its end inside `runFork`, and its exit clears this.
+    interruptedContinuation = batch;
+    claimBatchSlot(batch);
     runtime.runFork(
-      Effect.gen(function* () {
-        // Best-effort settle-wait on the interrupted run: its outcome
-        // (including any failure) is already reported by the run's own
-        // recovery.
-        yield* Effect.ignoreCause(session.runSettled ?? Effect.void);
-        if (batch.superseded) return true;
-        let followUpQueueReady = false;
-        const resumed = yield* tryResumeRun(batch.runId, {
-          extraFollowUps: batch.followUps,
-          onFollowUpQueueReady: () => {
-            followUpQueueReady = true;
-            session.interruptedRunId = undefined;
-            if (interruptedContinuation === batch) {
-              interruptedContinuation = undefined;
-            }
-          },
-        });
-        if (!resumed && !batch.superseded && !followUpQueueReady) {
-          session.interruptedRunId = batch.runId;
-          pendingInterruptedFollowUps.push(...batch.followUps);
-        }
-        return resumed;
-      }).pipe(
+      deliver.pipe(
         Effect.ensuring(
           Effect.sync(() => {
+            releaseBatchSlot(batch);
             if (interruptedContinuation === batch) {
               interruptedContinuation = undefined;
             }
@@ -1055,7 +1056,6 @@ export function createChatSessionController(
         settleClaimOnExit(batch.completion),
       ),
     );
-    interruptedContinuation = batch;
     return {
       kind: 'accepted',
       runId: batch.runId,
@@ -1194,8 +1194,22 @@ export function createChatSessionController(
         from: { kind: 'user' },
       });
       if (interruptedAdmission.kind === 'accepted') {
-        const resumed = yield* Deferred.await(interruptedAdmission.completion);
-        if (resumed) return;
+        const delivery = yield* Deferred.await(interruptedAdmission.completion);
+        if (delivery === 'resumed') return;
+        // Queued on the run: the message, and any skill it carries, is the
+        // run's now, so nothing goes back to the input.
+        if (delivery === 'queued') {
+          const queued = presentFollowUpResult({
+            status: 'queued',
+            wake: 'failed',
+          });
+          if (queued.severity !== 'none')
+            appendLocalAssistantTranscript(
+              queued.message,
+              interruptedAdmission.runId,
+            );
+          return;
+        }
         restoreReservedSkillActivations();
         appendLocalAssistantTranscript(
           'The interrupted conversation could not be restored. Use /resume to retry it, or /clear to start a new conversation.',
@@ -1376,8 +1390,6 @@ export function createChatSessionController(
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();
     },
-    tryResumeRun: (runId, recovery) =>
-      tryResumeRun(runId, recovery ? { recovery } : {}),
     submit,
     activateSkill,
     clearPendingSkills: () => {
