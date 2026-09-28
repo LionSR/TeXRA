@@ -259,32 +259,24 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
     /**
-     * The workspace files the run edited: the edits its ledger folds into
-     * the loop state's workspace snapshot (each `tool.result` sets it, each
-     * turn-end snapshot restates it), the one record of them. A run with no
-     * ledger edited nothing here; an unreadable ledger is logged and reads
-     * as no files, as {@link runEndOf} reads its usage.
+     * The workspace files the run edited: the edits its latest `run.snapshot`
+     * restates in the loop state's workspace snapshot, the one record of
+     * them, read as one indexed row. A run with no snapshot (no ledger, or
+     * a closed run) edited nothing here.
      */
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      runRows.pipe(
-        Effect.flatMap((rows) =>
-          Effect.gen(function* () {
-            const folded = foldRunState(null, rows);
-            if (Result.isFailure(folded)) {
-              yield* Effect.logWarning(
-                'Failed to fold the run edits from its ledger rows',
-              ).pipe(
-                Effect.annotateLogs({ runId, error: folded.failure.message }),
-              );
-              return [];
-            }
-            const edits =
-              folded.success?.loop?.stateSlices?.workspaceSnapshot.interactions
-                .edits ?? [];
-            return RunWorkspaceFilesSchema.parse(edits.map((e) => e.path));
-          }),
+      session.ledger
+        .latestSnapshot(runId)
+        .pipe(
+          Effect.map((row) =>
+            RunWorkspaceFilesSchema.parse(
+              (
+                row?.payload.state.stateSlices?.workspaceSnapshot.interactions
+                  .edits ?? []
+              ).map((edit) => edit.path),
+            ),
+          ),
         ),
-      ),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the
