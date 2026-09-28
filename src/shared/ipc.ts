@@ -61,7 +61,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Installed plugin actions (install, enable, disable, update, remove)
   PLUGIN_ACTION: 'pluginAction',
   // GitHub token commands (for PR subscription tool)
-  GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
   UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
   SET_GITHUB_TOKEN: 'setGitHubToken',
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
@@ -73,7 +72,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   SIGN_OUT_SUBSCRIPTION: 'signOutSubscription',
   SET_SUBSCRIPTION_PREFERENCE: 'setSubscriptionPreference',
   GET_SUBSCRIPTION_USAGE: 'getSubscriptionUsage',
-  GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',
   OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',

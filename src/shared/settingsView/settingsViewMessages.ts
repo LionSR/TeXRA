@@ -370,7 +370,6 @@ export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 /** Individual tool within a group — carries an optional description for tooltips. */
 const ToolInfoSchema = z.object({
   name: z.string(),
-  description: z.string().optional(),
 });
 
 /** One setup action exposed by a tool dashboard card. */
@@ -714,9 +713,6 @@ export type ToolCommandKind = z.infer<
   typeof RunToolCommandMessageSchema
 >['kind'];
 // GitHub token messages (for PR subscription tool)
-const GetGitHubTokenStatusMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
-);
 const SetGitHubTokenMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
 );
@@ -744,9 +740,6 @@ const GetSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: z.boolean().optional(),
 });
-const GetPRSubscriptionsMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
-);
 const UnsubscribePRMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
   key: z.string().min(1),
@@ -843,7 +836,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
     // GitHub token messages
-    GetGitHubTokenStatusMessageSchema,
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
@@ -852,7 +844,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SignOutSubscriptionMessageSchema,
     SetSubscriptionPreferenceMessageSchema,
     GetSubscriptionUsageMessageSchema,
-    GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
     // Generic catalog-driven scalar-setting write

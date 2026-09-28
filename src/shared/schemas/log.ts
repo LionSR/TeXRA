@@ -26,7 +26,6 @@ export const MESSAGE_TYPES = {
   ERROR: 'error',
   INTERNAL: 'internal',
   CONTEXT_MANAGEMENT: 'contextManagement',
-  CONTEXT_STATE: 'contextState',
   // Legacy protocol spelling retained for stored histories and consumers.
   WORKFLOW_TASK: 'workflowTask',
   DEFAULT: 'default',

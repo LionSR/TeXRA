@@ -43,3 +43,31 @@ test('desktop main bundle completes its startup state write', async () => {
     cleanupDirectory(userDataPath);
   }
 });
+
+test('desktop renderer boots past unreadable saved renderer state', async () => {
+  // Two cold launches of one profile: each alone can take most of the
+  // default budget.
+  test.setTimeout(150_000);
+  const { workspacePath, userDataPath } = createIsolatedProfile();
+  let launched: LaunchedApp | undefined;
+
+  try {
+    // Seed the renderer's own `localStorage` through a first launch of the
+    // same profile: the shell's collapsed-rail key is read at module load.
+    launched = await launchTexraApp({ workspacePath, userDataPath });
+    await launched.page.evaluate(() => {
+      window.localStorage.setItem('shell', '{not json');
+    });
+    await closeTexraApp(launched);
+    launched = undefined;
+
+    // `launchTexraApp` waits for the renderer's ready marker and a visible
+    // window, so a blank window fails the relaunch itself.
+    launched = await launchTexraApp({ workspacePath, userDataPath });
+    await expect(launched.page.locator('.shell-frame')).toBeVisible();
+  } finally {
+    if (launched) await closeTexraApp(launched);
+    cleanupDirectory(workspacePath);
+    cleanupDirectory(userDataPath);
+  }
+});

@@ -51,7 +51,6 @@ export function settingsGitCommands(ports: {
   );
 
   const handlers = {
-    getGitHubTokenStatus: () => postGitHubTokenStatus,
     setGitHubToken: () =>
       Effect.gen(function* () {
         const token = yield* bindings.prompt.input({
@@ -82,7 +81,6 @@ export function settingsGitCommands(ports: {
             Effect.andThen(postGitHubTokenStatus),
           ),
       ),
-    getPRSubscriptions: () => postGitHubSubscriptions,
     unsubscribePR: ({ key }) =>
       Effect.flatMap(unsubscribeGitHubKey(key), (removed) =>
         removed === 0

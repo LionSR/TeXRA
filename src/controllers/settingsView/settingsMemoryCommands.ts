@@ -27,12 +27,8 @@ export function settingsMemoryCommands(ports: {
   const postMemoryData = bindings.post(memory.getMemoryDataMessage());
   // The controller answers a mutation the user declined (a cancelled
   // delete, a pin over the cap) with `null` after prompting.
-  const postMemoryMutation = (
-    mutation: Effect.Effect<
-      SettingsViewOutboundMessage | null,
-      never,
-      StorageFs
-    >,
+  const postMemoryMutation = <E>(
+    mutation: Effect.Effect<SettingsViewOutboundMessage | null, E, StorageFs>,
   ) =>
     Effect.flatMap(mutation, (message) =>
       message == null ? Effect.void : bindings.post(Effect.succeed(message)),

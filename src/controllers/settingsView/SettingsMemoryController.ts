@@ -69,22 +69,19 @@ export class SettingsMemoryController {
       this: SettingsMemoryController,
       input: { storagePath: string; displayPath: string },
     ) {
-      // A declined delete is `false`, a value. `PromptFailed` is not matched
-      // here for the same reason the memory reads are `orDie`: the memory tab
-      // has no recovery for a window that cannot show a dialog, so it reaches
-      // the host edge as the host's own fault rather than as a silent no-op.
-      const confirmed = yield* Effect.orDie(
-        this.deps.prompt.confirm(`Delete "${input.displayPath}"?`, {
-          modal: true,
-          confirmLabel: 'Delete',
-        }),
+      // A declined delete is `false`, a value. A prompt that cannot show and
+      // a failed remove stay typed, so the Memory page's handler reports the
+      // failure and reposts the list the view is waiting on.
+      const confirmed = yield* this.deps.prompt.confirm(
+        `Delete "${input.displayPath}"?`,
+        { modal: true, confirmLabel: 'Delete' },
       );
       if (!confirmed) return null;
 
       const storagePath = resolveMemoryStoragePath(input.storagePath);
       // On the memory tree's lane, as every memory tool command is: a delete
       // from here never races an agent's edit beneath it.
-      yield* Effect.orDie(deleteMemoryPath(storagePath).pipe(onMemoryTreeLane));
+      yield* deleteMemoryPath(storagePath).pipe(onMemoryTreeLane);
       return yield* this.getMemoryDataMessage();
     },
   );

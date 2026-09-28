@@ -58,8 +58,6 @@ export function createExtensionCommandActions(
   secrets: PlatformSecrets,
   session: SessionHandle,
 ): ExtensionCommandActions {
-  const refreshAfterProviderKeyChange = (provider: string) =>
-    settingsViewProvider.refreshAfterProviderKeyChange(provider);
   // The walkthrough and the docs page are VS Code calls; each is one
   // foreign edge lifted here.
   const fromPromise = (run: () => PromiseLike<unknown>) =>
@@ -101,17 +99,10 @@ export function createExtensionCommandActions(
     extractTikzFigures: () => latexExtractTikzFigures(session),
     compileTikzFigures: () => latexCompileTikzFigures(session),
     cloneOverleafProject: () => gitCloneOverleafProject(session, secrets),
-    removeApiKey: () =>
-      apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
+    removeApiKey: () => apiRemoveApiKey(session.roots, secrets),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
-    setApiKey: (provider) =>
-      apiSetApiKey(
-        session.roots,
-        secrets,
-        refreshAfterProviderKeyChange,
-        provider,
-      ),
+    setApiKey: (provider) => apiSetApiKey(session.roots, secrets, provider),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>

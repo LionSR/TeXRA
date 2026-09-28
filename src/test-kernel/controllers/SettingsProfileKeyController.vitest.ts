@@ -20,7 +20,6 @@ async function createController(options?: {
   hosts: ReturnType<typeof createFakeUIHosts>;
   secrets: FakeSecrets;
   deleted: string[];
-  refreshCount: () => number;
 }> {
   const hosts = createFakeUIHosts({
     inputResponses: options?.inputResponses,
@@ -28,7 +27,6 @@ async function createController(options?: {
   });
   const secrets = new FakeSecrets();
   const deleted: string[] = [];
-  let refreshCount = 0;
 
   const originalSet = secrets.set.bind(secrets);
   secrets.set = (key, value) =>
@@ -54,15 +52,10 @@ async function createController(options?: {
         Effect.succeed(provider === 'openai' ? 'OpenAI' : provider),
       getProviderKeyUrl: (provider) =>
         Effect.succeed(options?.urls?.[provider]),
-      refreshAfterKeyChange: () =>
-        Effect.sync(() => {
-          refreshCount += 1;
-        }),
     }),
     hosts,
     secrets,
     deleted,
-    refreshCount: () => refreshCount,
   };
 }
 
@@ -82,19 +75,17 @@ function storeFailure(
 }
 
 describe('SettingsProfileKeyController', () => {
-  it.effect('stores provider keys and refreshes dependent state', () =>
+  it.effect('stores provider keys', () =>
     Effect.gen(function* () {
-      const { controller, hosts, secrets, refreshCount } =
-        yield* Effect.promise(() =>
-          createController({
-            inputResponses: ['  sk-real-openai-key  '],
-          }),
-        );
+      const { controller, hosts, secrets } = yield* Effect.promise(() =>
+        createController({
+          inputResponses: ['  sk-real-openai-key  '],
+        }),
+      );
 
       yield* controller.setProviderKey('openai');
 
       assert.equal(yield* secrets.get('apiKey.openai'), 'sk-real-openai-key');
-      assert.equal(refreshCount(), 1);
       assert.equal(hosts.prompt.inputs[0]?.options.password, true);
     }),
   );
@@ -103,7 +94,7 @@ describe('SettingsProfileKeyController', () => {
   // graphical hosts happily wrote `sk-xxxxxx` into the secret store.
   it.effect('reports a placeholder key instead of storing it', () =>
     Effect.gen(function* () {
-      const { controller, secrets, refreshCount } = yield* Effect.promise(() =>
+      const { controller, secrets } = yield* Effect.promise(() =>
         createController(),
       );
 
@@ -112,40 +103,34 @@ describe('SettingsProfileKeyController', () => {
       );
 
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);
-      assert.equal(refreshCount(), 0);
       assert.match(failure.message, /Failed to set OpenAI API key/);
       assert.match(String(failure.cause), /looks like a placeholder/);
     }),
   );
 
-  it.effect(
-    'removes provider keys after confirmation and refreshes dependent state',
-    () =>
-      Effect.gen(function* () {
-        const { controller, deleted, refreshCount } = yield* Effect.promise(
-          () => createController(),
-        );
+  it.effect('removes provider keys after confirmation', () =>
+    Effect.gen(function* () {
+      const { controller, deleted } = yield* Effect.promise(() =>
+        createController(),
+      );
 
-        yield* controller.removeProviderKey('openai');
+      yield* controller.removeProviderKey('openai');
 
-        assert.deepEqual(deleted, ['apiKey.openai']);
-        assert.equal(refreshCount(), 1);
-      }),
+      assert.deepEqual(deleted, ['apiKey.openai']);
+    }),
   );
 
   it.effect('does nothing when provider key removal is not confirmed', () =>
     Effect.gen(function* () {
-      const { controller, deleted, refreshCount, hosts } =
-        yield* Effect.promise(() =>
-          createController({
-            confirmResponses: [false],
-          }),
-        );
+      const { controller, deleted, hosts } = yield* Effect.promise(() =>
+        createController({
+          confirmResponses: [false],
+        }),
+      );
 
       yield* controller.removeProviderKey('openai');
 
       assert.deepEqual(deleted, []);
-      assert.equal(refreshCount(), 0);
       assert.equal(hosts.prompt.messages.length, 0);
     }),
   );
@@ -158,20 +143,16 @@ describe('SettingsProfileKeyController', () => {
     'propagates interruption instead of reporting a cancelled write',
     () =>
       Effect.gen(function* () {
-        const { controller, secrets, refreshCount } = yield* Effect.promise(
-          () => createController({ inputResponses: ['sk-real-openai-key'] }),
+        const { controller, secrets } = yield* Effect.promise(() =>
+          createController({ inputResponses: ['sk-real-openai-key'] }),
         );
         secrets.set = () => Effect.interrupt;
 
         const exit = yield* Effect.exit(controller.setProviderKey('openai'));
 
-        assert.deepEqual(
-          {
-            interrupted:
-              Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause),
-            refreshes: refreshCount(),
-          },
-          { interrupted: true, refreshes: 0 },
+        assert.equal(
+          Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause),
+          true,
         );
       }),
   );

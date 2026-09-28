@@ -141,12 +141,23 @@ const startupTeamPanel = createStartupTeamPanel({
 // the left sidebar, while files and tools share one optional right workbench.
 
 // The renderer's own interaction state survives a reload in
-// `localStorage`; the preload bridge's `getState` is in-memory only.
+// `localStorage`; the preload bridge's `getState` is in-memory only. These
+// reads run at module load, so an unreadable entry (storage that throws, or a
+// value that is not JSON) falls back to the default loudly instead of leaving
+// the window blank.
 const rendererState: KeyValueStore = {
   get<T>(key: string, defaultValue?: T): T {
-    const raw = window.localStorage.getItem(key);
-    if (raw === null) return defaultValue as T;
-    return JSON.parse(raw) as T;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null) return defaultValue as T;
+      return JSON.parse(raw) as T;
+    } catch (error) {
+      console.warn(
+        `[desktop] Saved renderer state "${key}" is unreadable; falling back to defaults.`,
+        error,
+      );
+      return defaultValue as T;
+    }
   },
   update(key, value) {
     if (value === undefined) window.localStorage.removeItem(key);
