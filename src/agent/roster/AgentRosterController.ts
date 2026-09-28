@@ -8,7 +8,6 @@ import type {
 } from '@platform/interfaces';
 import type {
   AgentCategory,
-  AgentModePreset,
   AgentRosterCategorySelection,
   AgentRosterSelection,
   AgentSource,
@@ -16,7 +15,6 @@ import type {
 } from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
-  AGENT_SOURCE,
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
@@ -35,9 +33,11 @@ import { unique } from '@utils/core';
 import {
   forgetHiddenAgent,
   readAgentRosterSelection,
+  selectedIdentifiers,
   recordCustomChoices,
   serializeWorkspaceWrite,
   unlistedCustomAgents,
+  visibleAgents,
 } from './rosterWorkspaceState';
 
 export interface AgentRosterEntry {
@@ -67,21 +67,6 @@ export interface AgentRosterControllerDeps<
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
-}
-
-function selectedIdentifiers(
-  selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
-  category: AgentCategory,
-  presets: readonly AgentModePreset[],
-): readonly string[] | undefined {
-  if (selection.kind === 'all') return undefined;
-  if (selection.kind === 'custom') {
-    const categorySelection = selection.agentKeys[category];
-    return categorySelection === 'all' ? undefined : categorySelection;
-  }
-  const preset = presets.find((candidate) => candidate.id === selection.teamId);
-  if (!preset) return undefined;
-  return preset.agents[category];
 }
 
 export class AgentRosterController<
@@ -139,7 +124,12 @@ export class AgentRosterController<
         category,
         yield* this.allPresets(),
       );
-      if (identifiers === undefined) return yield* this.unhidden(category);
+      if (identifiers === undefined) {
+        return yield* visibleAgents(
+          this.deps.repoState,
+          this.deps.getAgents(category),
+        );
+      }
       const { entries } = this.resolveIdentifiers(category, identifiers);
       return [
         ...entries,
@@ -189,20 +179,6 @@ export class AgentRosterController<
     });
   }
 
-  /** Every agent of the category except the custom ones the user hid. */
-  private unhidden(category: AgentCategory) {
-    return Effect.gen({ self: this }, function* () {
-      const agents = this.deps.getAgents(category);
-      const shownCustom = new Set(
-        yield* unlistedCustomAgents(this.deps.repoState, agents, []),
-      );
-      return agents.filter(
-        (agent) =>
-          agent.source !== AGENT_SOURCE.CUSTOM || shownCustom.has(agent),
-      );
-    });
-  }
-
   private selectionKeys(
     selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
     category: AgentCategory,
@@ -215,10 +191,9 @@ export class AgentRosterController<
       );
       if (identifiers === undefined) {
         // `all` stays symbolic until a hidden custom agent needs a list.
-        const visible = yield* this.unhidden(category);
-        return visible.length === this.deps.getAgents(category).length
-          ? undefined
-          : visible.map(agentKeyOf);
+        const all = this.deps.getAgents(category);
+        const shown = yield* visibleAgents(this.deps.repoState, all);
+        return shown.length === all.length ? undefined : shown.map(agentKeyOf);
       }
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
