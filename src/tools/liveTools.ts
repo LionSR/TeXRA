@@ -39,6 +39,7 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory } from '@shared/schemas';
 import {
@@ -98,10 +99,11 @@ export class LiveTools extends Context.Service<
         /** Why each enabled installed plugin, or one of its servers, offers
          *  no tools; empty unless the installed plugins were loaded. */
         readonly warnings: readonly string[];
-        /** The ids of the installed plugins the catalog has accepted, those
-         *  that ship only skills included; empty unless the installed
+        /** The installed plugins the catalog has accepted, by id, as read
+         *  when accepted, those that ship only skills included: the source
+         *  of the step's installed skills. Empty unless the installed
          *  plugins were loaded. */
-        readonly installed: readonly string[];
+        readonly installed: ReadonlyMap<string, LoadablePlugin>;
       },
       E,
       Scope.Scope
@@ -154,10 +156,13 @@ const liveToolsLayer = (
       const builtIns = new Map<string, Scope.Closeable>();
       const installed = new Map<string, InstalledLoad>();
       // Each step's read of the installed plugins is numbered as it begins,
-      // and only a read newer than the last one applied is applied: a slow
-      // load from an older read never reverts a newer one.
+      // and only a read newer than the last one applied decides what is
+      // wanted (each plugin's key): a slow load from an older read never
+      // reverts a newer one, and is still adopted when the newer read wants
+      // what it loaded (a switch follower's read, which loads nothing).
       let reads = 0;
       let applied = 0;
+      let wanted: ReadonlyMap<string, string> = new Map();
       // The catalog's lock: what runs under it is short and uninterruptible,
       // so a cancelled step never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
@@ -290,18 +295,21 @@ const liveToolsLayer = (
             );
             return yield* locked(
               Effect.gen(function* () {
-                if (reading && readId <= applied) {
-                  // A newer read was applied meanwhile: this one is stale.
-                  for (const load of started) yield* retire(load);
-                } else if (reading) {
+                if (reading && readId > applied) {
                   applied = readId;
-                  const wanted = new Map(
+                  wanted = new Map(
                     read.plugins.map(({ id, key }) => [id, key]),
                   );
+                }
+                if (reading) {
                   for (const load of started) {
                     const current = installed.get(load.id);
-                    // A concurrent step loaded this key first: keep its load.
-                    if (current?.key === load.key) {
+                    // Not wanted by the latest read, or a concurrent step
+                    // loaded this key first: keep what is there.
+                    if (
+                      wanted.get(load.id) !== load.key ||
+                      current?.key === load.key
+                    ) {
                       yield* retire(load);
                       continue;
                     }
@@ -341,7 +349,11 @@ const liveToolsLayer = (
                   continuations: generation,
                   sections: pinned.generation,
                   layersFor,
-                  installed: loading ? [...installed.keys()] : [],
+                  installed: new Map(
+                    loading
+                      ? [...installed].map(([id, { source }]) => [id, source])
+                      : [],
+                  ),
                   warnings: [
                     ...read.warnings,
                     ...(loading

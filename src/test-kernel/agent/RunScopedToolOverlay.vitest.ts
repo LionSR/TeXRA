@@ -202,7 +202,6 @@ describe('run-scoped tool resolution', () => {
             'request',
             {
               base: () => undefined,
-              catalog: () => [],
               isChild: () => false,
               activated: () => [],
             },

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { listedSkillNames, type SessionHandle } from '@agent/runtime';
+import type { SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
@@ -71,7 +71,7 @@ const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
   runId: RunId | undefined,
 ) {
   const state = runId === undefined ? null : yield* session.ledger.load(runId);
-  return state === null ? [] : yield* listedSkillNames(state);
+  return state?.offeredSkills ?? [];
 });
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(

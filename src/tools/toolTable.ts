@@ -10,6 +10,7 @@ import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
@@ -97,13 +98,15 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
  * servers, if any, whose tools the catalog contributes under its one id and every
- * tool-use run is offered (`@tools/liveTools`). `key` changes exactly when
- * what it would start does, which replaces its servers.
+ * tool-use run is offered (`@tools/liveTools`), and the plugin as read, whose
+ * skills the step lists. `key` changes exactly when what it would start or
+ * ship does, which replaces its servers and its skills.
  */
 export interface InstalledToolPlugin {
   readonly id: string;
   readonly key: string;
   readonly servers: readonly LoadedPlugin[];
+  readonly source: LoadablePlugin;
 }
 
 /**

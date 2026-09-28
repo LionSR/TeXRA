@@ -298,7 +298,6 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         opening: {
           inputs: {},
-          catalog: [],
           activated: [],
           attachedMemoryMisses: [],
         },
@@ -474,7 +473,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       overflowRecoveredAtTurn: null,
       offeredTools: null,
       offeredContinuation: null,
-      offeredSections: [],
+      offeredSkills: [],
       offeredSystem: null,
       contents: {},
     };

@@ -298,11 +298,13 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         const stores = makeFakeSettingsStores('cli').stores;
         // The run catalog over the installed plugins as they load now.
         const catalogNow = () =>
-          loadRuntimeSkillCatalog({
-            workspacePath: resources,
-            settings: stores,
-            installed: readInstalledPluginLoad(stores),
-          });
+          Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>
+            loadRuntimeSkillCatalog({
+              workspacePath: resources,
+              settings: stores,
+              plugins,
+            }),
+          );
         const env = {
           globalState: stores.globalState,
           globalStorage: resources,

@@ -9,11 +9,12 @@ import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
-import { SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
+import { ACTIVATED_SKILLS_MAX, SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
 import { FileLocationSchema } from './output';
+import { QualifiedSkillNameSchema } from './skillName';
 import {
   type RunUsageTotals,
   TokenCountSchema,
@@ -167,20 +168,17 @@ export const AttachedMemoryMissSchema = z.object({
 });
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
 
-/** One skill in a run's catalog, as the prompt lists it, with the plugin
+/** One skill in a step's catalog, as the prompt lists it, with the plugin
  *  that ships it (null for a core source) and the directory tools may read
- *  while a step lists it (null when the workspace already holds it). */
-const SkillCatalogEntrySchema = z.strictObject({
-  plugin: z.string().min(1).nullable(),
-  name: z.string().min(1),
-  text: z.string(),
-  directory: z.string().min(1).nullable(),
-});
-export type SkillCatalogEntry = z.infer<typeof SkillCatalogEntrySchema>;
-
-/** A tool-use run's skill catalog, read once at open with every plugin's
- *  skills and recorded as a `context.blob` its snapshots address. */
-export const SkillCatalogSchema = z.array(SkillCatalogEntrySchema);
+ *  while a step lists or activated it (null when the workspace already
+ *  holds it). A step discovers its catalog; the system text it sends and
+ *  the names it lists are what is recorded. */
+export interface SkillCatalogEntry {
+  readonly plugin: string | null;
+  readonly name: string;
+  readonly text: string;
+  readonly directory: string | null;
+}
 
 /**
  * The catalog entries a step lists: those of core sources and of the
@@ -240,17 +238,17 @@ export const ToolUseSnapshotStateSchema = z.object({
    *  (`stepInstructions`): a `context.blob` of the run, never restated in
    *  every snapshot. */
   system: Sha256Schema.optional(),
-  /** The address of the run's skill catalog (`SkillCatalogSchema`), a
-   *  `context.blob` of the run: each step lists part of it. */
-  skills: Sha256Schema.optional(),
   /** The address of the instruction the run's latest turn answers, a
    *  `context.blob` recorded when a delivery changes it; absent while it is
    *  the launch's. */
   instruction: Sha256Schema.optional(),
-  /** The address of the skills the run's user activated, a `context.blob`
-   *  (`SkillCatalogSchema`) recorded with the delivery that activated them;
-   *  each step grants one while its plugin, if any, still contributes. */
-  activated: Sha256Schema.optional(),
+  /** The names of the skills the run's user activated, recorded with the
+   *  delivery that activated them: each step resolves them against its own
+   *  catalog, and grants one while its plugin, if any, still contributes. */
+  activated: z
+    .array(QualifiedSkillNameSchema)
+    .max(ACTIVATED_SKILLS_MAX)
+    .optional(),
   /** The attached memories the opening could not read. */
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */

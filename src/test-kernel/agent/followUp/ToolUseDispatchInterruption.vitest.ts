@@ -244,7 +244,6 @@ function agentRunTestLayer(init: HarnessInit) {
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
         opening: {
           inputs: {},
-          catalog: [],
           activated: [],
           attachedMemoryMisses: [],
         },

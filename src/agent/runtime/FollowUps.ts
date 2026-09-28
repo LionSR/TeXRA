@@ -37,10 +37,9 @@ import {
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import {
-  SkillCatalogSchema,
+  ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
   type RunId,
-  type SkillCatalogEntry,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
@@ -48,12 +47,11 @@ import type { RunLedger } from '@shared/session/runLedger';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
-import { activatedSkillEntries } from '@skills/runtimeSkills';
+import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@tools/catalogEntries';
-import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 
-import { blobRows, stored } from './run/requestContext';
+import { blobRows } from './run/requestContext';
 import {
   appendRow,
   rowAggregate,
@@ -62,12 +60,14 @@ import {
   type Message,
   type ToolUseFlowState,
 } from './loop/rows';
+import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch with a snapshot carrying `recorded`, the addresses of the
- *  instruction and activated skills they store: the one record of what the
+ *  its own batch with a snapshot carrying `recorded`, the address of the
+ *  instruction they store and the activated skills' names: the one record
+ *  of what the
  *  delivery changes. `delivered` logs them once durable. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
@@ -254,26 +254,26 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const instruction = userFollowUpInstruction(
       followUps.map((followUp) => followUp.content),
     );
-    // A skill the user activated, resolved now against discovery, joins the
-    // run's recorded activations; each step rechecks its plugin.
-    const found = yield* activatedSkillEntries(
-      followUps
-        .filter(({ content }) => isInstruction(content))
-        .map(({ content }) => content.text),
-      run.session.roots.workspace,
-      run.session.roots,
+    // A skill the user activated, and the run's current step resolves,
+    // joins the run's recorded activations by name, the latest
+    // `ACTIVATED_SKILLS_MAX` kept; each step resolves them again.
+    const found = yield* resolveActivations(
+      run,
+      activatedSkillNames(
+        followUps
+          .filter(({ content }) => isInstruction(content))
+          .map(({ content }) => content.text),
+      ),
     );
-    let activated: readonly SkillCatalogEntry[] | undefined;
-    if (found.length > 0) {
-      const recorded = state.flow?.state.activated;
-      const current = yield* Effect.try({
-        try: () =>
-          recorded ? stored(state, recorded, SkillCatalogSchema) : [],
-        catch: ensureError,
-      });
-      const names = new Set(found.map(({ name }) => name));
-      activated = [...current.filter(({ name }) => !names.has(name)), ...found];
-    }
+    const current = state.flow?.state.activated ?? [];
+    const activated = found.some((name) => !current.includes(name))
+      ? [
+          ...new Set([
+            ...current.filter((name) => !found.includes(name)),
+            ...found,
+          ]),
+        ].slice(-ACTIVATED_SKILLS_MAX)
+      : undefined;
     return {
       turn,
       // The pointers commit beside the blobs: no crash separates them. The
@@ -287,12 +287,11 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
                   ? undefined
                   : sha256(instruction),
             }),
-        ...(activated === undefined ? {} : { activated: sha256(activated) }),
+        ...(activated === undefined ? {} : { activated }),
       },
       rows: [
         ...blobRows(runId, state, [
           ...(instruction === undefined ? [] : [instruction]),
-          ...(activated === undefined ? [] : [activated]),
         ]),
         ...all.map((followUp) => ({
           type: 'followup.consumed' as const,

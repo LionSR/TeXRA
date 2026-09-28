@@ -80,7 +80,6 @@ export function createTestLaunchContext({
     parentStage: logger.openStage(`Run: ${config.agent}`),
     opening: {
       inputs: {},
-      catalog: [],
       activated: [],
       attachedMemoryMisses: [],
     },

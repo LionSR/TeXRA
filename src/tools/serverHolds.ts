@@ -11,6 +11,7 @@ import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner
 
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { entriesOf, sha256, type ToolEntry } from '@tools/catalogEntries';
 import type { Generation, Registry } from '@tools/liveRegistry';
 import type { InstalledToolPlugin, LoadedPlugin } from '@tools/toolTable';
@@ -22,6 +23,7 @@ import type { InstalledToolPlugin, LoadedPlugin } from '@tools/toolTable';
 export interface InstalledLoad {
   readonly id: string;
   readonly key: string;
+  readonly source: LoadablePlugin;
   readonly entries: ReadonlyMap<string, ToolEntry>;
   readonly contribution: Scope.Closeable;
   readonly holds: Scope.Closeable;
@@ -184,6 +186,7 @@ export function makeServerHolds(catalog: {
           return {
             id: plugin.id,
             key: plugin.key,
+            source: plugin.source,
             entries: new Map(
               held.flatMap(({ id, revision, tools }) => [
                 ...entriesOf(plugin.id, tools, { revision, server: id }),
