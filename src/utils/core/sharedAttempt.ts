@@ -1,5 +1,5 @@
 // Third-party imports
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, type Scope } from 'effect';
 
 /**
  * Single-flight for an Effect program: concurrent callers of {@link run}
@@ -19,9 +19,16 @@ import { Deferred, Effect } from 'effect';
  * share one synchronous segment, so a second caller can never mint a second
  * attempt and an interrupt can never land between claiming the slot and
  * starting the fiber that settles it.
+ *
+ * An owner that holds a scope passes it, and the attempt then runs in that
+ * scope rather than detached from everything: still out of every caller's
+ * reach, but interrupted when the owner closes, so work that spawns child
+ * processes cannot outlive the runtime that started it.
  */
 export class SharedAttempt<A, E> {
   private slot: Deferred.Deferred<A, E> | null = null;
+
+  constructor(private readonly owner?: Scope.Scope) {}
 
   /** Join the attempt in flight, or start one with `make`. */
   run<R>(make: () => Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
@@ -31,17 +38,18 @@ export class SharedAttempt<A, E> {
         if (existing) return restore(Deferred.await(existing));
         const deferred = Deferred.makeUnsafe<A, E>();
         this.slot = deferred;
-        return Effect.flatMap(
-          Effect.forkDetach(
-            Effect.suspend(make).pipe(
-              Effect.onExit((exit) =>
-                Effect.sync(() => {
-                  if (this.slot === deferred) this.slot = null;
-                  Deferred.doneUnsafe(deferred, exit);
-                }),
-              ),
-            ),
+        const attempt = Effect.suspend(make).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              if (this.slot === deferred) this.slot = null;
+              Deferred.doneUnsafe(deferred, exit);
+            }),
           ),
+        );
+        return Effect.flatMap(
+          this.owner === undefined
+            ? Effect.forkDetach(attempt)
+            : Effect.forkIn(attempt, this.owner),
           () => restore(Deferred.await(deferred)),
         );
       }),

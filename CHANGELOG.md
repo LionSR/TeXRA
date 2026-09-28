@@ -274,6 +274,11 @@ All notable changes to this project will be documented in this file.
   trust, and are readable only by the chat that activated or lists it, not
   by another chat in the same folder.
 
+- **Closing TeXRA or opening many sessions no longer leaves background
+  processes using CPU** — the check for which external tools are installed
+  could leave a search running after TeXRA quit, one more for every session
+  opened. Tools installed while TeXRA runs are found on Re-check.
+
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
   underlying cause, such as the history file being locked by another process.
