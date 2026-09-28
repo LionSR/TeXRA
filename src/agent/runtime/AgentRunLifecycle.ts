@@ -34,14 +34,14 @@ import {
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { RunHandle } from './RunHandle';
-import { Runs } from './runRegistry';
+import { Runs, type AgentRunServices } from './runRegistry';
+import { receiveTerminalFailure } from './terminalResultToast';
 import {
   buildTerminalFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
 import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
-import type { AgentRunServices } from './runRegistry';
 
 const CHANNEL = 'agentRunLifecycle';
 
@@ -427,8 +427,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             error: info,
           }
         : undefined;
-      // One finalize covers all three exits below (subagent / abort / throw);
-      // hosts toast from the `run.end` row (`terminalResultToast`).
+      // One finalize covers the three exits below; its row is the toast's.
       const finalized = yield* finalizeTerminal({
         outcome,
         error,
@@ -449,7 +448,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         );
       }
 
-      return yield* Effect.fail(new AgentError(errorMsg, { cause: err }));
+      const failure = new AgentError(errorMsg, { cause: err });
+      receiveTerminalFailure(failure, finalized);
+      return yield* Effect.fail(failure);
     });
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its

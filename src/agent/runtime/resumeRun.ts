@@ -10,10 +10,7 @@ import {
   recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
-import type {
-  FollowUpQueueInput,
-  FollowUpRecoveryLease,
-} from '@agent/followUp/ToolUseFollowUpQueueManager';
+import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -77,18 +74,6 @@ export interface ResumeRunOptions extends Pick<
   readonly recovery?: FollowUpRecoveryLease;
   /** Monotone per-attempt cancellation signal: once true it stays true. */
   readonly isCancellationRequested?: () => boolean;
-  /**
-   * Input behind the run's existing queue. It remains the caller's until
-   * {@link onFollowUpQueueReady}; refusals before that point must restore it.
-   * Afterwards untaken input stays durable on the run (`delivered: false`).
-   */
-  readonly extraFollowUps?: readonly FollowUpQueueInput[];
-  /**
-   * Fires once the recovery lease is held and `extraFollowUps` are queued
-   * on the run, before the resumed generation launches: the one signal that
-   * the run has taken ownership of them.
-   */
-  readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
    * Rearrange the host only after state retrieval and ownership checks have
    * accepted this run. Failures propagate; cancellation is re-read afterwards.
@@ -396,20 +381,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     );
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
-      // Admit the whole batch atomically, or leave it with the caller.
-      const extra = options.extraFollowUps ?? [];
-      if (extra.length > 0) {
-        const submitted = yield* followUps.submitBatch(
-          runId,
-          extra,
-          'live_owner',
-        );
-        if (submitted.kind === 'refused') return 'owned_elsewhere' as const;
-      }
-      yield* Effect.try({
-        try: () => options.onFollowUpQueueReady?.(queueLease),
-        catch: ensureError,
-      });
       for (const input of yield* queuedInput) admitted.add(input.followUpId);
       const idle = yield* Deferred.make<void>();
       const launchOptions = {
@@ -482,7 +453,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     return yield* Effect.fail(resumed.failure);
   }
   const settled = resumed.success;
-  if (settled === 'owned_elsewhere') return { failed: settled };
   if (cancelledAtFlowAttachment) return REFUSED;
   const waiting = settled === RUN_PHASE.WAITING;
   const undelivered =

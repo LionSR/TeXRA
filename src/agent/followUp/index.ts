@@ -3,12 +3,10 @@
  *
  * One curated barrel the hosts (CLI, desktop, extension) import instead of
  * deep-reaching each follow-up module by path: submitting a follow-up to a
- * live or resumable stream (`submitFollowUp`), waking a run under a recovery
- * the host claimed (`startFollowUpWake`), wording a refusal
- * (`describeFollowUpFailure`, `presentFollowUpResult`), plus the queue-input and recovery-lease
- * types hosts name at their session seams — decoupling host code from the
- * follow-up internals' file layout, per the module-level barrel pattern set
- * by `@agent/runtime` (#10011). The R-b deep-import width ratchet
+ * live or resumable stream (`submitFollowUp`) and wording a refusal
+ * (`describeFollowUpFailure`, `presentFollowUpResult`), decoupling host code
+ * from the follow-up internals' file layout, per the module-level barrel
+ * pattern set by `@agent/runtime` (#10011). The R-b deep-import width ratchet
  * (`config/ratchets/host-agent-import-baseline.json`) records each host's
  * single `@agent/followUp` specifier; the former `ToolUseFollowUp` and
  * `ToolUseFollowUpQueueManager` deep imports collapsed to this door.
@@ -21,10 +19,5 @@
 export {
   describeFollowUpFailure,
   presentFollowUpResult,
-  startFollowUpWake,
   submitFollowUp,
 } from './ToolUseFollowUp';
-export type {
-  FollowUpQueueInput,
-  FollowUpRecoveryLease,
-} from './ToolUseFollowUpQueueManager';

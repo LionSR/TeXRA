@@ -26,7 +26,6 @@ import {
   buildAgentLaunchContext as buildAgentLaunchContextEffect,
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import { TraceEmitter } from '@agent/trace';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
@@ -288,15 +287,7 @@ describe('AgentLaunchContext', () => {
         const recording = createRecordingHost();
         const session = createTestSession();
         yield* session.interactions.use(recording.interactions);
-        const detachToast = attachTerminalResultToast(
-          session,
-          session.interactions,
-        );
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(detachToast).pipe(
-            Effect.andThen(closeSessionOf(session)),
-          ),
-        );
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, EXECUTION_ID);
         yield* session.settlePublications();
         mocks.resolve.mockReturnValueOnce(

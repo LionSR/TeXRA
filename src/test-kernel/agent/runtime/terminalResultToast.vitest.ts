@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ResultEvent } from '@agent/trace';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
@@ -23,7 +22,7 @@ function result(over: Partial<ResultEvent>): ResultEvent {
 }
 
 /**
- * Publish one terminal result through the same seam every host wires and
+ * Publish one terminal result through the session's own presenter and
  * return the presentation events it produced.
  */
 async function toastsFor(
@@ -36,7 +35,6 @@ async function toastsFor(
     emitted.push({ event: name, payload });
   });
   const detachHost = Effect.runSync(session.interactions.use({ emit }));
-  const detachToast = attachTerminalResultToast(session, session.interactions);
   const committed = new Promise<void>((resolve) =>
     session.onResult(() => Effect.sync(() => resolve())),
   );
@@ -47,7 +45,6 @@ async function toastsFor(
     session.publish([{ ...row, aggregateId: aggregateId('run', runId) }]);
     await committed;
   } finally {
-    detachToast();
     detachHost();
     await Effect.runPromise(closeSessionOf(session));
   }

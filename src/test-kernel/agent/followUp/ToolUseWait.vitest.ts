@@ -856,6 +856,43 @@ describe('a parked root run', () => {
     }),
   );
 
+  it.effect('answers a follow-up consumed just before the loop exited', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const first = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* first.park(0);
+      yield* Fiber.interrupt(first.fiber);
+
+      // The rows `FollowUps.consume` commits, and then nothing: the process
+      // ended before the turn that answers them began.
+      const parked = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      if (parked === null) throw new Error('The run has no ledger.');
+      yield* session.ledger.appendBatch(runId, parked, [
+        appendRow(runId, [
+          { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
+        ]),
+        snapshotRow(runId, parked, { runtime: { lastError: null } }),
+        stepRow(runId, parked, 'turn.ready'),
+      ]);
+
+      const resumed = yield* forkLoop({
+        runId,
+        session,
+        resume: true,
+        script: [textTurn('answered')],
+      });
+      yield* resumed.park(0);
+      yield* Fiber.interrupt(resumed.fiber);
+
+      expect(resumed.requests).toHaveLength(1);
+    }),
+  );
+
   it.effect('parks a run a retry cancelled, rather than leaving it there', () =>
     Effect.gen(function* () {
       const session = quietSession();

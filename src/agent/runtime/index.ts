@@ -58,9 +58,8 @@ export { classifyRun } from './runClassification';
 
 // terminalResultToast
 export {
-  attachTerminalResultToast,
   presentRunFailure,
-  trackTerminalResultPresentation,
+  terminalFailurePresented,
 } from './terminalResultToast';
 
 // resumeRun

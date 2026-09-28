@@ -14,9 +14,9 @@
  * `halted` step at every exit that ends the run.
  *
  * Resume reads only row data off the fold: a `waiting` phase re-enters the
- * wait, an open attempt without a response invokes again under its gate, a
- * pending response dispatches what is unsettled, and a halted run that is
- * launched again waits for the input that resumes it.
+ * wait (a batch consumed at `turn.ready` runs its turn), an unanswered open
+ * attempt invokes again under its gate, a pending response dispatches what
+ * is unsettled, and a halted run launched again waits for its input.
  *
  * A workflow agent's run is this loop in round mode (`./rounds`): the same
  * turn, run once per round by the round loop, with no tools and no input.
@@ -602,7 +602,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
-        const parked = state.phase === 'waiting' || state.phase === 'halted';
+        const parked =
+          (state.phase === 'waiting' || state.phase === 'halted') &&
+          state.step !== 'turn.ready';
         // The invoker commits the run's failure fact and the input that
         // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
@@ -611,8 +613,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // its loop has already delivered the turn offered at the boundary.
           if (isChild() && afterError && !followUps.hasQueued())
             return finish(state, RUN_OUTCOME.FAILED);
-          // Activation clears the visible step. Restore an already idle cursor
-          // before acknowledging it; no new model turn is needed to park it.
+          // Activation clears the visible step: restore an idle cursor's park.
           if (restoring && !followUps.hasQueued())
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
           restoring &&= followUps.hasQueued();
@@ -630,8 +631,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 .pipe(Effect.provide(step.tools.services));
             }
           }
-          // Every park is idle, a failed turn's included: a resume
-          // acknowledges at the first one.
+          // Every park is idle, a failed turn's too: a resume acks the first.
           run.callbacks.onIdle?.();
           if (run.toolPolicy.stopAfterCycle) {
             return finish(

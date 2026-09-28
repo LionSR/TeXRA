@@ -94,6 +94,7 @@ import {
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
+import { presentTerminalResults } from './terminalResultToast';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionGraph } from './sessionGraph';
 import type { SessionApprovals } from './runApprovalQueue';
@@ -346,6 +347,7 @@ export class SessionHandle {
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
+    presentTerminalResults(this);
   }
 
   /**

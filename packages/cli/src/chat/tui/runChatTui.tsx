@@ -420,7 +420,6 @@ export async function runChat(
     const meta = sessionMetaSignal.get();
     if (isRunPending) chatController.stop();
     followUpQueue.clear();
-    chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
     resetCliState(meta);

@@ -269,6 +269,20 @@ All notable changes to this project will be documented in this file.
   command, settings and tools look the same. A plugin being started while
   you disable it no longer shows its tools to any request.
 
+- **A message typed after you stop a chat continues that conversation, in
+  order** — the terminal hands it to the session, which queues it on the
+  stopped run and resumes it once the stop has finished; a second message
+  typed meanwhile follows the first. A message the session cannot take goes
+  back to the input with the reason, and one that is queued but could not
+  resume the run stays queued rather than being sent again. A conversation
+  that stopped just after taking your message answers it when resumed,
+  instead of waiting for another one.
+
+- **A run's failure is reported once, in every app** — the desktop app now
+  shows the actionable notice (for example, a missing API key) when a resumed
+  run fails at once, and a failed own-key retry shows the same notice rather
+  than a second, generic warning.
+
 - **The `creator` agent works in the terminal and the desktop app** — it can
   now see the built-in agents and its reference docs and save the new agent
   into your custom agents folder, as it already could in VS Code. Before, its
