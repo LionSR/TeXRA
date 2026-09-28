@@ -242,7 +242,12 @@ function agentRunTestLayer(init: HarnessInit) {
         // The launch stores a real run carries; no fixture reads through them.
         stores: hostStores(),
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        opening: { inputs: {}, catalog: [], attachedMemoryMisses: [] },
+        opening: {
+          inputs: {},
+          catalog: [],
+          activated: [],
+          attachedMemoryMisses: [],
+        },
         initialUserMessageForTranscript: 'Run the tools.',
         fileService: new RunFileService(init.runId, init.session.roots),
         ...testRunTools(hostStores(), init.tools),

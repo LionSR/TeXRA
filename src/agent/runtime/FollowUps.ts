@@ -36,15 +36,22 @@ import {
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
-import type { MediaAttachmentKind, RunId } from '@shared/schemas';
+import {
+  SkillCatalogSchema,
+  type MediaAttachmentKind,
+  type RunId,
+  type SkillCatalogEntry,
+} from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { RunLedger } from '@shared/session/runLedger';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
+import { activatedSkillEntries } from '@skills/runtimeSkills';
+import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
-import { blobRows } from './run/requestContext';
+import { blobRows, stored } from './run/requestContext';
 import {
   appendRow,
   rowAggregate,
@@ -55,23 +62,29 @@ import {
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
+/** What a delivered batch changes: the user instruction it carries, when
+ *  a user wrote one, and the run's activated skills, when it activated
+ *  any. */
+interface Delivery {
+  readonly instruction: string | undefined;
+  readonly activated: readonly SkillCatalogEntry[] | undefined;
+}
+
 /** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch; `delivered` logs them once durable and returns the user
- *  instruction they carry. */
+ *  its own batch; `delivered` logs them once durable and returns what they
+ *  change. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
-  readonly delivered: () => string | undefined;
+  readonly delivered: () => Delivery;
 }
 
-export interface ConsumedFollowUps {
+export interface ConsumedFollowUps extends Delivery {
   readonly state: RunState;
   /** False when every item was a progress notice of an ended child: the
    *  batch was consumed without a message, and no turn follows. */
   readonly turn: boolean;
-  /** The user instruction of the batch, when a user wrote one. */
-  readonly instruction: string | undefined;
   readonly synthetic: boolean;
 }
 
@@ -208,8 +221,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   };
 
   /** The rows that consume one batch: its `followup.consumed` rows, the one
-   *  user message they become, and the instruction they carry, stored in
-   *  the same batch so the snapshot that names it never outlives it. */
+   *  user message they become, and the instruction and skill activations
+   *  they carry, stored in the same batch so the snapshot that names them
+   *  never outlives them. */
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
     state: RunState,
     batch: FollowUpBatch,
@@ -242,12 +256,33 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const instruction = userFollowUpInstruction(
       followUps.map((followUp) => followUp.content),
     );
+    // A skill the user activated, resolved now against discovery, joins the
+    // run's recorded activations; each step rechecks its plugin.
+    const found = yield* activatedSkillEntries(
+      followUps
+        .filter(({ content }) => isInstruction(content))
+        .map(({ content }) => content.text),
+      run.session.roots.workspace,
+      run.session.roots,
+    );
+    let activated: readonly SkillCatalogEntry[] | undefined;
+    if (found.length > 0) {
+      const recorded = state.flow?.state.activated;
+      const current = yield* Effect.try({
+        try: () =>
+          recorded ? stored(state, recorded, SkillCatalogSchema) : [],
+        catch: ensureError,
+      });
+      const names = new Set(found.map(({ name }) => name));
+      activated = [...current.filter(({ name }) => !names.has(name)), ...found];
+    }
     return {
       turn,
       rows: [
-        ...(instruction === undefined
-          ? []
-          : blobRows(runId, state, [instruction])),
+        ...blobRows(runId, state, [
+          ...(instruction === undefined ? [] : [instruction]),
+          ...(activated === undefined ? [] : [activated]),
+        ]),
         ...all.map((followUp) => ({
           type: 'followup.consumed' as const,
           aggregateId: rowAggregate(runId),
@@ -258,7 +293,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => {
         logFollowUps(followUps, built.kinds);
-        return instruction;
+        return { instruction, activated };
       },
     };
   });
@@ -289,7 +324,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     return {
       state: committed,
       turn: joined.turn,
-      instruction: joined.delivered(),
+      ...joined.delivered(),
       synthetic: batch.synthetic,
     };
   });

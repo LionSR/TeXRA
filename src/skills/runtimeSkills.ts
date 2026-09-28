@@ -233,27 +233,18 @@ export function loadEnabledRuntimeSkills(
   );
 }
 
-/** The names of the skills a user activated in `text`: each
- *  `<skill_activation>` block names its skill as
- *  {@link formatRuntimeSkillActivation} writes it. */
-export const activatedSkillNames = (text: string): string[] =>
-  text.includes('<skill_activation>')
-    ? [
-        ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
-      ].map(([, name]) => name)
-    : [];
-
 /**
- * The directory tools may read while a run lists or activated the skill: its
- * physical place, when outside the workspace, which already holds the rest.
- * One whose place cannot be verified is not granted, which is worth a
- * warning, not a run.
+ * One discovered skill as a run records it: its plugin, name and listing
+ * text, and the directory tools may read while a step lists or activated
+ * it: its physical place, when outside the workspace, which already holds
+ * the rest. One whose place cannot be verified is not granted, which is
+ * worth a warning, not a run.
  */
-const skillDirectory = (
+const catalogEntry = (
   fs: FileSystem.FileSystem,
   workspaceRoot: string | undefined,
-  skill: SourcedSkill['skill'],
-) =>
+  { skill, source }: SourcedSkill,
+): Effect.Effect<SkillCatalogEntry> =>
   fs.realPath(skill.baseDir).pipe(
     Effect.map((real) =>
       workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)
@@ -268,35 +259,45 @@ const skillDirectory = (
         null,
       ),
     ),
+    Effect.map((directory) => ({
+      plugin: source.plugin ?? null,
+      name: skill.name,
+      text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
+      directory,
+    })),
   );
 
 /**
- * The directories of the `named` skills a user activated that discovery
- * still enables, for the run that received the activation to grant.
+ * The skills a user activated in `texts` (each `<skill_activation>` block
+ * names its skill as {@link formatRuntimeSkillActivation} writes it) that
+ * discovery enables now, as the run records them: each step grants one
+ * while its plugin, if any, still contributes. No activation, no discovery.
  */
-export const activatedSkillDirectories = Effect.fn('skills.activated')(
-  function* (
-    named: ReadonlySet<string>,
-    workspaceRoot: string | undefined,
-    stores: SettingsStores,
-  ) {
-    const enabled = yield* loadEnabledRuntimeSkills(
-      workspaceRoot,
-      yield* readInstalledPluginLoad(stores),
-      yield* readDisabledSkills(stores),
-    );
-    const fs = yield* FileSystem.FileSystem;
-    const found = yield* Effect.forEach(
-      enabled.skills.filter(({ skill }) => named.has(skill.name)),
-      ({ skill }) =>
-        Effect.map(skillDirectory(fs, workspaceRoot, skill), (directory) =>
-          directory === null ? [] : [{ name: skill.name, directory }],
-        ),
-      { concurrency: 'unbounded' },
-    );
-    return found.flat();
-  },
-);
+export const activatedSkillEntries = Effect.fn('skills.activated')(function* (
+  texts: readonly string[],
+  workspaceRoot: string | undefined,
+  stores: SettingsStores,
+) {
+  const named = new Set(
+    texts.flatMap((text) =>
+      [
+        ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
+      ].map(([, name]) => name),
+    ),
+  );
+  if (named.size === 0) return [];
+  const enabled = yield* loadEnabledRuntimeSkills(
+    workspaceRoot,
+    yield* readInstalledPluginLoad(stores),
+    yield* readDisabledSkills(stores),
+  );
+  const fs = yield* FileSystem.FileSystem;
+  return yield* Effect.forEach(
+    enabled.skills.filter(({ skill }) => named.has(skill.name)),
+    (entry) => catalogEntry(fs, workspaceRoot, entry),
+    { concurrency: 'unbounded' },
+  );
+});
 
 export function formatRuntimeSkillActivation({
   skill,
@@ -353,19 +354,9 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     });
     const fs = yield* FileSystem.FileSystem;
     return {
-      // Each entry names the directory tools may read while a step lists
-      // the skill (`grantSkillRoots`).
       catalog: yield* Effect.forEach(
         catalog,
-        ({ skill, source }) =>
-          skillDirectory(fs, run.workspacePath, skill).pipe(
-            Effect.map((directory) => ({
-              plugin: source.plugin ?? null,
-              name: skill.name,
-              text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
-              directory,
-            })),
-          ),
+        (entry) => catalogEntry(fs, run.workspacePath, entry),
         { concurrency: 'unbounded' },
       ),
       issues: result.errors,

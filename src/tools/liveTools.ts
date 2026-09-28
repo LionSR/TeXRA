@@ -99,7 +99,7 @@ export class LiveTools extends Context.Service<
         /** Why each enabled installed plugin, or one of its servers, offers
          *  no tools; empty unless the installed plugins were loaded. */
         readonly warnings: readonly string[];
-        /** The ids of the installed plugins this step's read loads; empty
+        /** The ids of the installed plugins the applied read loads; empty
          *  unless the installed plugins were loaded. */
         readonly installed: readonly string[];
       },
@@ -158,6 +158,9 @@ const liveToolsLayer = (
       // load from an older read never reverts a newer one.
       let reads = 0;
       let applied = 0;
+      // The installed plugins the applied read loads: what a stale read
+      // returns in place of its own, so it cannot restore a withdrawn one.
+      let loaded: readonly string[] = [];
       // The catalog's lock: what runs under it is short and uninterruptible,
       // so a cancelled step never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
@@ -315,6 +318,7 @@ const liveToolsLayer = (
                   for (const load of started) yield* retire(load);
                 } else if (reading) {
                   applied = readId;
+                  loaded = read.loaded;
                   const wanted = new Map(
                     read.plugins.map(({ id, key }) => [id, key]),
                   );
@@ -360,7 +364,7 @@ const liveToolsLayer = (
                   continuations: generation,
                   sections: pinned.generation,
                   layersFor,
-                  installed: loading ? read.loaded : [],
+                  installed: loading ? loaded : [],
                   warnings: [
                     ...read.warnings,
                     ...(loading

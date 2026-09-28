@@ -247,6 +247,10 @@ export const ToolUseSnapshotStateSchema = z.object({
    *  `context.blob` recorded when a delivery changes it; absent while it is
    *  the launch's. */
   instruction: Sha256Schema.optional(),
+  /** The address of the skills the run's user activated, a `context.blob`
+   *  (`SkillCatalogSchema`) recorded with the delivery that activated them;
+   *  each step grants one while its plugin, if any, still contributes. */
+  activated: Sha256Schema.optional(),
   /** The attached memories the opening could not read. */
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
