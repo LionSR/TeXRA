@@ -75,7 +75,7 @@
     "src/shared/constants/latexToolchain.ts": 559,
     "src/shared/runs/workflowRunModel.ts": 588,
     "src/shared/schemas/runLedgerEvent.ts": 523,
-    "src/shared/schemas/sessionEvent.ts": 808,
+    "src/shared/schemas/sessionEvent.ts": 766,
     "src/shared/session/runStateFold.ts": 795,
     "src/shared/session/sessionFold.ts": 1484,
     "src/shared/session/surface.ts": 511,
