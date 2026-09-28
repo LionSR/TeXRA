@@ -284,7 +284,7 @@ export function initCliPlatform(
     // Every command renders its own output, so the platform's log lines go
     // nowhere; `quietLogs` is only the user's `--quiet`, which the shutdown
     // handler below reads.
-    setLogSink(silentLogSink);
+    setLogSink(silentLogSink, { trusted: true });
 
     // The one Effect runtime of this process (PRD 7.7) comes first: the stores
     // below open as Effect programs, and the session graph and every
