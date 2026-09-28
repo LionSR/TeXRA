@@ -37,6 +37,7 @@ import {
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 
 import type {
@@ -108,8 +109,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       ]);
     });
 
+  // The file tools admit the new directory before the change reports done,
+  // so a `creator` run launched right after can write there.
   const afterCustomDirChange = Effect.andThen(
-    bindings.customAgentDirChanged,
+    Effect.andThen(registerCustomAgentRoot, bindings.customAgentDirChanged),
     allSettledVoid<Error, ProcessServices>([
       postCustomDir,
       refreshAfterAgentMutation(),
