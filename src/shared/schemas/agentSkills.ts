@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { Sha256Schema } from './offeredTools';
 import { SkillNameSchema } from './skillName';
 
 export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
@@ -21,7 +22,7 @@ export const AgentSkillsEnabledSchema = z
  */
 const PluginTrustSchema = z.object({
   version: z.string().nullable(),
-  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  digest: Sha256Schema,
 });
 export type PluginTrust = z.infer<typeof PluginTrustSchema>;
 

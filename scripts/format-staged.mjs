@@ -132,21 +132,21 @@ function writeIfUnchanged(path, expected, content) {
  * merge-file inputs. */
 function normalizeLf(buffer) {
   if (!buffer.includes(CRLF)) return buffer;
-  return Buffer.from(buffer.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+  return Buffer.from(buffer.toString('utf8').replaceAll('\r\n', '\n'), 'utf8');
 }
 
 /** Return `content` using the working-tree copy's line-ending convention. */
 function withWorktreeEol(content, worktree) {
   const lf = normalizeLf(content);
   if (!worktree.includes(CRLF)) return lf;
-  return Buffer.from(lf.toString('utf8').replace(/\n/g, '\r\n'), 'utf8');
+  return Buffer.from(lf.toString('utf8').replaceAll('\n', '\r\n'), 'utf8');
 }
 
 /** True when `buffer` mixes CRLF and bare-LF newlines. */
 function hasMixedEol(buffer) {
   if (!buffer.includes(CRLF)) return false;
   const text = buffer.toString('utf8');
-  return text.replace(/\r\n/g, '').includes('\n');
+  return text.replaceAll('\r\n', '').includes('\n');
 }
 
 /** Strip a leading UTF-8 BOM before parsing JSON/YAML config content. */
@@ -162,7 +162,7 @@ function normalizedEquals(a, b) {
 /** Return `path` relative to the repo root with forward slashes, or null when
  * it lives outside the repository. */
 function relToCwd(path) {
-  const rel = relative(process.cwd(), path).replace(/\\/g, '/');
+  const rel = relative(process.cwd(), path).replaceAll('\\', '/');
   if (rel.startsWith('../') || rel === '..') return null;
   return rel;
 }
@@ -171,7 +171,7 @@ function relToCwd(path) {
  * forward slashes, so `./x`/`../x` and `.\x`/`..\x` classify the same way and
  * POSIX path resolution treats them identically. */
 function normalizeSpecifier(spec) {
-  return spec.replace(/\\/g, '/');
+  return spec.replaceAll('\\', '/');
 }
 
 /** True for `./x` and `../x` dependency specifiers, in either slash style. */
