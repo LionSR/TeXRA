@@ -43,7 +43,6 @@ import {
 import {
   applyRunRow,
   closesRunWindow,
-  endsRun,
   foldRunRows,
   freshRunRows,
   FOLLOW_UP_TYPES,
@@ -182,27 +181,31 @@ export const sessionEventsLayer = Layer.effect(
     // no other process commits to the run, so what it tracks stays whole.
     const followUps = new Map<AggregateId, RunRows>();
     const hydrated = new Set<AggregateId>();
-    // Runs whose latest lifecycle ended (what releases a `senderEnd` hold),
-    // and runs whose input is closed: both as the rows say, latest wins.
-    const ended = new Set<AggregateId>();
-    const closed = new Set<AggregateId>();
-    const setLifecycle = (
-      id: AggregateId,
-      rows: readonly Pick<SessionEvent, 'type'>[],
-    ) => {
-      const standing = lifecycleOf(rows);
-      if (standing.ended) ended.add(id);
-      else ended.delete(id);
-      if (standing.closed) closed.add(id);
-      else closed.delete(id);
+    // Each run's lifecycle standing (ended: what releases a `senderEnd`
+    // hold; closed: its input), one fold of its lifecycle rows by commit:
+    // this publisher's commits, reads where a claim moves here, and the
+    // fold-gated tail's rows from every process. A row at or below the
+    // commit already applied changes nothing, so a lagging source never
+    // rolls a newer standing back. A collected aggregate has no rows left.
+    const lifecycles = new Map<
+      AggregateId,
+      ReturnType<typeof lifecycleOf> & { readonly commit: CommitOrdinal }
+    >();
+    const collected = new Set<AggregateId>();
+    const foldLifecycle = (rows: readonly SessionEvent[]) => {
+      for (const row of rows) {
+        if (!(RUN_LIFECYCLE_TYPES as readonly string[]).includes(row.type))
+          continue;
+        const at = lifecycles.get(row.aggregateId);
+        if (at && row.commit <= at.commit) continue;
+        const next = lifecycleOf([row], at);
+        lifecycles.set(row.aggregateId, { ...next, commit: row.commit });
+      }
     };
     const track = (rows: readonly SessionEvent[]) => {
+      foldLifecycle(rows);
       for (const row of rows) {
-        if (row.type === 'run.activate') setLifecycle(row.aggregateId, [row]);
-        if (endsRun(row)) ended.add(row.aggregateId);
-        if (row.type === 'followup.closed') closed.add(row.aggregateId);
         if (row.type === 'run.removed') {
-          closed.add(row.aggregateId);
           open.delete(row.aggregateId);
           followUps.delete(row.aggregateId);
           hydrated.delete(row.aggregateId);
@@ -391,8 +394,12 @@ export const sessionEventsLayer = Layer.effect(
         followUps.get(aggregateId)?.followUps ?? [],
       followUpNamed: (aggregateId, followUpId) =>
         followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
-      runEnded: (aggregateId) => ended.has(aggregateId),
-      inputClosed: (aggregateId) => closed.has(aggregateId),
+      runEnded: (aggregateId) =>
+        collected.has(aggregateId) ||
+        lifecycles.get(aggregateId)?.ended === true,
+      inputClosed: (aggregateId) =>
+        lifecycles.get(aggregateId)?.closed === true,
+      foldLifecycle: (row) => foldLifecycle([row]),
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
@@ -422,8 +429,7 @@ export const sessionEventsLayer = Layer.effect(
             followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
           });
           // The run's own input standing, from its committed rows.
-          setLifecycle(
-            aggregateId,
+          foldLifecycle(
             yield* log.readAggregate(aggregateId, 1, [...RUN_LIFECYCLE_TYPES]),
           );
           // A held row's sender may have ended in an earlier process: its
@@ -438,14 +444,15 @@ export const sessionEventsLayer = Layer.effect(
             ),
           );
           for (const sender of senders) {
-            if (ended.has(sender)) continue;
             const rows = yield* log.readAggregate(sender, 1, [
               ...RUN_LIFECYCLE_TYPES,
             ]);
-            const collected =
+            foldLifecycle(rows);
+            if (
               rows.length === 0 &&
-              (yield* log.aggregateState([sender])).length === 0;
-            if (collected || lifecycleOf(rows).ended) ended.add(sender);
+              (yield* log.aggregateState([sender])).length === 0
+            )
+              collected.add(sender);
           }
           hydrated.add(aggregateId);
         }),

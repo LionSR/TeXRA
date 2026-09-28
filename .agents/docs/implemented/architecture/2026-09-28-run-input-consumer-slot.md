@@ -199,10 +199,15 @@ else does.
 
 **Teardown writes `followup.closed`; deletion reads `run.removed`.**
 `terminalize` (a torn-down park with nothing queued) forgets the entry and
-writes `followup.closed` under the run's claim. Deletion calls `forget`,
-and its `run.removed` row is the close. `followup.reopened` wasn't needed:
-a claim reopens the run in memory (it creates the entry), and a
-`run.activate` clears the closed flag in the fold. `lifecycleOf` in
+writes `followup.closed` under the run's claim, in one publisher job that
+gives the slot's hold back only after the row commits, so no other process
+can take the claim between the teardown and its row. Deletion calls
+`forget`, and its `run.removed` row is the close. `followup.reopened`
+wasn't needed: a run's slot, while held, admits regardless of the flag,
+and a `run.activate` clears it. An entry with no slot holds no claim, so it
+never answers "closed" from memory: an admission to it reads the flag, and
+reads it again once it holds the claim (a claim that moved here re-reads
+the run's rows first), so another process's close is seen. `lifecycleOf` in
 `runRows.ts` reads both flags from a run's `run.activate`, `run.end`,
 `run.removed` and `followup.closed` rows, latest lifecycle first.
 `SessionEvents` keeps the flags from committed rows and hydrates them when
@@ -210,10 +215,15 @@ a claim moves to this process. So a closed run refuses a producer that is
 not a claim across restarts and processes, which the in-memory set could
 not do. This behavior is new: before, a restart forgot the close.
 
-**"Ended" means the latest lifecycle.** A `run.activate` clears a sender's
-ended flag, both in the fold (`SessionEvents`) and in the queue's
-`endedSenders` (`observeLifecycle`). So a result held from a reactivated
-child waits for that lifecycle's own `run.end`, not an earlier one.
+**"Ended" means the latest lifecycle, with one owner.** `SessionEvents`
+keeps one lifecycle standing per run, folded from its lifecycle rows by
+commit: this process's commits, the reads at hydration, and the fold-gated
+tail's rows from every process (`foldLifecycle`). A row at or below the
+commit already applied is ignored, so a lagging source never rolls a newer
+standing back. The queue keeps no copy; a folded terminal row only wakes
+the takes (`wakeTakes`). So a result held from a reactivated child waits
+for that lifecycle's own `run.end`, and an activation another process
+commits reopens the sender here too.
 
 **Collected tombstones.** Deletion cleanup (`collectDeletion`) does collect
 a deleted root's aggregates, including a sender's `run.removed` row. The

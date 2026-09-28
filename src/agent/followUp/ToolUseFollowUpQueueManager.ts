@@ -6,12 +6,11 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import { runRelation } from '@shared/session/runRelation';
-import { endsRun, type QueuedFollowUp } from '@shared/session/runRows';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 import { isInstruction } from './followUpMessages';
@@ -133,8 +132,6 @@ interface FollowUpSubmitOptions {
 export class ToolUseFollowUpQueue {
   private readonly entries = new Map<RunId, QueueEntry>();
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
-  /** Senders the fold showed ended ({@link observeLifecycle}). */
-  private readonly endedSenders = new Set<RunId>();
   private disposed = false;
   /** Log on the session's publisher: release paths also run off-fiber. */
   private readonly log = (entry: Effect.Effect<void>): void =>
@@ -326,7 +323,6 @@ export class ToolUseFollowUpQueue {
         ({ holdUntil, content }) =>
           holdUntil !== 'senderEnd' ||
           content.from.kind !== 'run' ||
-          this.endedSenders.has(content.from.runId) ||
           this.port.ended(content.from.runId),
       );
     const asked = rows.some(
@@ -335,12 +331,9 @@ export class ToolUseFollowUpQueue {
     return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
   }
 
-  /** A row the fold folded (any process): an end releases the sender's
-   *  holds and wakes every take; an activation starts a new lifecycle. */
-  observeLifecycle(sender: RunId, row: Pick<SessionEvent, 'type'>): void {
-    if (row.type === 'run.activate') this.endedSenders.delete(sender);
-    if (!endsRun(row)) return;
-    this.endedSenders.add(sender);
+  /** A run's terminal row folded (any process): its held rows may be
+   *  takeable now, so every waiting take looks again. */
+  wakeTakes(): void {
     for (const entry of this.entries.values()) entry.input?.notify();
   }
 
@@ -400,15 +393,13 @@ export class ToolUseFollowUpQueue {
       Error
     > {
       if (this.disposed) return { kind: 'refused' };
-      let entry = this.entries.get(runId);
-      const unowned = entry === undefined;
-      if (!entry) {
-        if (admission === 'live_owner' || this.port.inputClosed(runId)) {
-          return { kind: 'refused' };
-        }
-        entry = this.createEntry(runId);
-      }
-      const admitted = entry;
+      const found = this.entries.get(runId);
+      // A run no slot here holds answers "closed" from its rows, not from
+      // memory: asked again once this admission holds its claim.
+      const closed = () => !found?.slot && this.port.inputClosed(runId);
+      if ((!found && admission === 'live_owner') || closed())
+        return { kind: 'refused' };
+      const admitted = found ?? this.createEntry(runId);
       // A running loop or child holds the run's claim for as long as it holds
       // the lease; every other admission claims the run before writing.
       const holder = admitted.slot?.lease.kind;
@@ -440,7 +431,7 @@ export class ToolUseFollowUpQueue {
           stamped,
           replayable,
           consumerHoldsClaim,
-          unowned,
+          closed,
           append,
         ),
       );
@@ -501,7 +492,7 @@ export class ToolUseFollowUpQueue {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        // A held row is offered by what releases it (`observeLifecycle`, ...).
+        // A held row is offered by what releases it (`wakeTakes`, ...).
         if (owner !== undefined && holdUntil === undefined)
           admitted.input?.notify();
       }
@@ -543,7 +534,7 @@ export class ToolUseFollowUpQueue {
     followUps: readonly QueuedFollowUp[],
     replayable: ReadonlySet<string>,
     consumerHoldsClaim: boolean,
-    unowned: boolean,
+    closed: () => boolean,
     append: Append,
   ): Effect.Effect<
     | 'closed'
@@ -559,8 +550,8 @@ export class ToolUseFollowUpQueue {
       const releaseClaim = consumerHoldsClaim
         ? null
         : yield* port.acquireClaim(runId);
-      // Closed in an earlier process: the claim's hydrate read it.
-      if (unowned && port.inputClosed(runId)) {
+      // Closed elsewhere: the claim's hydrate read it when the claim moved.
+      if (closed()) {
         if (releaseClaim) yield* this.releaseClaim(runId, releaseClaim);
         return 'closed' as const;
       }
@@ -607,8 +598,12 @@ export class ToolUseFollowUpQueue {
     });
   }
 
-  /** Forget the run and write its `followup.closed` under its claim. */
+  /** Forget the run and write its `followup.closed` under its claim, in
+   *  one publisher job that gives the slot's hold back only after. */
   private finishTerminalize(runId: RunId): void {
+    const slot = this.entries.get(runId)?.slot;
+    const hold = slot?.hold;
+    if (slot) slot.hold = undefined;
     this.forget(runId);
     const run = aggregateId('run', runId);
     this.port.detach((append) =>
@@ -622,6 +617,7 @@ export class ToolUseFollowUpQueue {
             `Run ${runId}: its closed input was not recorded`,
           ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
+        Effect.ensuring(hold ? this.releaseClaim(runId, hold) : Effect.void),
       ),
     );
   }

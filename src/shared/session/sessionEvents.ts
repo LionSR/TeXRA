@@ -140,15 +140,18 @@ export class SessionEvents extends Context.Service<
     readonly pendingFollowUps: (
       aggregateId: AggregateId,
     ) => readonly QueuedFollowUp[];
-    /** Whether a committed terminal row (`run.end`, or `run.removed`) for
-     *  the run aggregate is known here: this publisher's own commits, and,
-     *  for the senders of held follow-ups, a read at {@link hydrateFollowUps}.
-     *  A run with no such row known is not ended. */
+    /** Whether the run's latest lifecycle ended (`run.end` / `run.removed`
+     *  after its latest `run.activate`), or its deleted aggregate was
+     *  collected, as the rows known here say: this publisher's commits, a
+     *  read at {@link hydrateFollowUps} for the run and its held senders,
+     *  and {@link foldLifecycle}. A run with no such row known is not ended. */
     readonly runEnded: (aggregateId: AggregateId) => boolean;
     /** Whether the run's input is closed (`followup.closed` or `run.removed`
-     *  since its latest `run.activate`), known on the same terms as
-     *  {@link runEnded}; for the run itself, once its claim moved here. */
+     *  since its latest `run.activate`), known on the same terms. */
     readonly inputClosed: (aggregateId: AggregateId) => boolean;
+    /** A row the fold-gated tail folded, from any process: its lifecycle
+     *  standing, applied only past the commit already known. */
+    readonly foldLifecycle: (row: SessionEvent) => void;
     /** Whether a row of the aggregate named this follow-up id, queued or
      *  consumed: the replay key, kept with {@link pendingFollowUps} and
      *  whole on the same terms. */
@@ -208,5 +211,6 @@ export type SessionEventReads = Pick<
   | 'followUpNamed'
   | 'runEnded'
   | 'inputClosed'
+  | 'foldLifecycle'
   | 'hydrateFollowUps'
 >;

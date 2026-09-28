@@ -226,15 +226,15 @@ export const RUN_LIFECYCLE_TYPES = [
   'run.activate',
   'followup.closed',
 ] as const;
-/** A run's lifecycle standing from its rows in commit order: ended when its
- *  latest `run.end` / `run.removed` follows its latest `run.activate`, and
- *  input-closed when a `followup.closed` or `run.removed` does. */
-export function lifecycleOf(rows: readonly Pick<SessionEvent, 'type'>[]): {
-  readonly ended: boolean;
-  readonly closed: boolean;
-} {
-  let ended = false;
-  let closed = false;
+/** A run's lifecycle standing from its rows in commit order, after `from`:
+ *  ended when its latest `run.end` / `run.removed` follows its latest
+ *  `run.activate`, and input-closed when a `followup.closed` or
+ *  `run.removed` does. */
+export function lifecycleOf(
+  rows: readonly Pick<SessionEvent, 'type'>[],
+  from = { ended: false, closed: false },
+): { readonly ended: boolean; readonly closed: boolean } {
+  let { ended, closed } = from;
   for (const { type } of rows) {
     if (type === 'run.activate') ended = closed = false;
     if (endsRun({ type })) ended = true;
