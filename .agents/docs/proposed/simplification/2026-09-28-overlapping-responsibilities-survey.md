@@ -60,10 +60,11 @@ because the file's own header warns "no `monaco-editor` import of any kind"
 (importing the table used to drag ~12MB of Monaco language workers into
 the extension build via Vite's eager `import('...?worker')` handling) and
 the note wanted a maintainer to confirm `@utils/core` doesn't carry that
-risk before landing the swap. It doesn't: `@utils/core` is dependency-free
-(`pathe` + `nanoid`), does no dynamic `import('...?worker')`, and is
-already the allowlisted browser-safe util this module's webview consumers
-are held to (`BROWSER_SAFE_UTILS` in `eslint.config.mjs`). That's confirmed
+risk before landing the swap. It doesn't: `@utils/core` pulls in only the
+small, browser-safe `pathe` + `nanoid`, does no dynamic
+`import('...?worker')`, and is already the allowlisted browser-safe util
+this module's webview consumers are held to (`BROWSER_SAFE_UTILS` in
+`eslint.config.mjs`). That's confirmed
 by inspection, not assumption, so the fix ships in this PR rather than
 staying a documented-only candidate: one file changed, one regression test
 added for the trailing-slash case, `npm run typecheck`, the full

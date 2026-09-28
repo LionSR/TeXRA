@@ -10,10 +10,10 @@
 // dropped `loadMonaco` itself as unreachable. Keeping the table here means
 // importing it costs a switch statement, not a build artifact.
 //
-// `@utils/core` is the one exception: it's dependency-free (`pathe` +
-// `nanoid`), does no `import('...?worker')` of its own, and is already on the
-// browser-safe allowlist this module's webview consumers are held to, so it
-// carries none of the risk above.
+// `@utils/core` is the one exception: it pulls in only the small,
+// browser-safe `pathe` + `nanoid`, does no `import('...?worker')` of its
+// own, and is already on the browser-safe allowlist this module's webview
+// consumers are held to, so it carries none of the risk above.
 
 import { getBasename } from '@utils/core';
 
