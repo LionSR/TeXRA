@@ -15,7 +15,7 @@ import type { HttpClient } from 'effect/unstable/http';
  * Polls the public `texra-ai/texra-desktop-releases` repo's latest GitHub
  * release and, when it is newer than the running build, hands the release
  * off to a caller-supplied `notify` callback (a native dialog with a
- * download link — see `createWindow` in `index.ts`). Deliberately NOT a full
+ * download link — see `announceRelease` in `desktopWindowHost.ts`). Deliberately NOT a full
  * updater: no download, no install, no feed files. Disable entirely with
  * `TEXRA_NO_UPDATE_CHECK=1`, mirroring the CLI's `updateChecker.ts`.
  */
@@ -25,7 +25,7 @@ const RELEASES_API_URL =
 /**
  * Known-constant releases page, always opened verbatim instead of the
  * unauthenticated API response's `html_url` — see `notify` wiring in
- * `index.ts`. Never build a URL to open from network-provided data.
+ * `desktopWindowHost.ts`. Never build a URL to open from network-provided data.
  */
 export const DESKTOP_RELEASES_PAGE_URL =
   'https://github.com/texra-ai/texra-desktop-releases/releases';
@@ -64,30 +64,9 @@ interface CheckForDesktopUpdateOptions {
   >;
 }
 
-let desktopUpdateCheckNotify:
-  CheckForDesktopUpdateOptions['notify'] | undefined;
-
-/** One check owns the work; later windows supply the current dialog parent. */
-export const checkForDesktopUpdate = (options: CheckForDesktopUpdateOptions) =>
-  Effect.suspend(() => {
-    // A check already in flight owns it; either way this window supplies the
-    // dialog parent the next notification goes to.
-    const alreadyRunning = desktopUpdateCheckNotify !== undefined;
-    desktopUpdateCheckNotify = options.notify;
-    if (alreadyRunning) return Effect.void;
-    return runDesktopUpdateCheck({
-      ...options,
-      notify: (release) => desktopUpdateCheckNotify?.(release),
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          desktopUpdateCheckNotify = undefined;
-        }),
-      ),
-    );
-  });
-
-const runDesktopUpdateCheck = ({
+/** One check. The window that runs it owns it: it stops when that window
+ * closes, and the next window checks again. */
+export const checkForDesktopUpdate = ({
   currentVersion,
   isPackaged,
   notify,

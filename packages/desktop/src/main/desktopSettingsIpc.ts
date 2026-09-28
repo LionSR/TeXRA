@@ -16,7 +16,7 @@ import { createSettingsViewBody } from '@controllers/settingsView/sharedSettings
 import { onAppSignal } from '@eventBus/AppSignals';
 import type { ExternalOpenFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { unsupported } from '@shared/utils/dispatcher';
@@ -25,6 +25,7 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DesktopMessageHandler } from './desktopIpcTypes.js';
+import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
@@ -62,7 +63,8 @@ export interface DesktopSettingsIpcOptions {
   readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
-  readonly runtime: ProcessRuntime;
+  /** Runs this surface's background work on fibers of the scope it opens in. */
+  readonly spawn: DesktopSpawn;
 }
 
 type SettingsViewBody = ReturnType<typeof createSettingsViewBody>;
@@ -75,7 +77,7 @@ export interface DesktopSettingsIpc
 /**
  * The settings surface of one project, with its app-signal subscriptions
  * forked into the caller's scope. They belong to the window's project
- * binding, not to the process: `createWindow` runs again on macOS dock
+ * binding, not to the process: the window opens again on macOS dock
  * reactivation, so a listener that outlived its scope would post to a
  * destroyed window's renderer and, for `githubTokenInvalid`, raise a dialog
  * against a `BrowserWindow` that no longer exists.
@@ -83,7 +85,7 @@ export interface DesktopSettingsIpc
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): Effect.Effect<DesktopSettingsIpc, never, Scope.Scope | ProcessServices> {
-  const { bindings, runtime, signInPresentation } = options;
+  const { bindings, spawn, signInPresentation } = options;
 
   /**
    * Show one informational part of a sign-in without waiting for it: failing
@@ -95,7 +97,7 @@ export function createDesktopSettingsIpc(
     displayName: string,
     present: Effect.Effect<void, Error>,
   ) => {
-    runtime.runFork(
+    spawn(
       present.pipe(
         Effect.catch((failure) =>
           bindings.notify.showErrorMessage(
@@ -199,7 +201,7 @@ export function createDesktopSettingsIpc(
     ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map((signal) =>
       onAppSignal(signal, (payload) => {
         const work = repaintOn[signal](payload as never);
-        if (work) runtime.runFork(settle(work));
+        if (work) spawn(settle(work));
       }),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
@@ -207,7 +209,7 @@ export function createDesktopSettingsIpc(
     // holds a token, and rejection leaves the secret in place, so re-posting
     // it would repaint the same "token set" badge.
     onAppSignal('githubTokenInvalid', ({ message }) => {
-      runtime.runFork(
+      spawn(
         bindings.notify
           .showErrorMessage(gitHubTokenRejectedMessage(message))
           .pipe(

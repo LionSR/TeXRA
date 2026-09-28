@@ -45,7 +45,7 @@ interface DesktopSupabaseAuth {
   dispose(): void;
 }
 
-export interface DesktopSupabaseAuthHost extends Pick<
+interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 > {

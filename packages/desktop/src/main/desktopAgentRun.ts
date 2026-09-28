@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Cause, Effect, Fiber, Stream } from 'effect';
+import { Cause, Effect, Scope, Stream } from 'effect';
 
 import {
   type RunEndResult,
@@ -40,6 +40,7 @@ import {
   presentDesktopFinalOutput,
   type DesktopAgentLaunchOptions as DesktopRunOptions,
 } from './desktopAgentLaunch.js';
+import { desktopSpawner } from './desktopWindows.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const CHANNEL = 'DesktopAgentRun';
@@ -82,142 +83,159 @@ export interface DesktopAgentRun {
    *  staged preview: the approval applies the proposed file as the user left
    *  it. The host arm calls `handleAction` directly, as the extension does. */
   readonly toolEditApprovals: ToolEditApprovalController;
-  dispose(): void;
 }
 
-export function createDesktopAgentRun(
-  options: DesktopAgentRunOptions,
-): DesktopAgentRun {
-  const { session, host, runtime } = options;
-  let disposed = false;
+/**
+ * The run wiring of one paper, in the scope that opens it: closing the scope
+ * detaches the host interactions, stops the session-event follower and
+ * settles once every staged tool-edit preview is gone.
+ */
+export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
+  function* (
+    options: DesktopAgentRunOptions,
+  ): Effect.fn.Return<DesktopAgentRun, never, Scope.Scope> {
+    const { session, host, runtime } = options;
+    let disposed = false;
 
-  /**
-   * Each arm answers with the program that presents its notice; the session
-   * forks it, so nothing here settles a dialog on a fiber of its own. Where
-   * the failure is reported depends on the arm: the two dialog members
-   * report their own (a dialog rejects when its window is torn down beneath
-   * it, and the host binds them through `awaitOrReport`), so the programs
-   * they hand back cannot fail; `openPath` fails in its own channel and the
-   * session's fork warn-logs it.
-   */
-  const presentationEventHandlers: PresentationEventHandlers<
-    RuntimePresentationEventPayloads,
-    HostPresentation
-  > = {
-    // The desktop shell keeps the conversation canvas permanently on
-    // screen, so there is no separate progress surface to reveal.
-    requestEnsureProgressView: () => undefined,
-    requestShowError: ({ message, docsCommand }) =>
-      host.showErrorDialog(message, docsCommand),
-    // An instruction is actionable guidance, not a failure, so it uses
-    // the info-style dialog with each action token as a real button.
-    requestShowInstruction: (instruction) =>
-      host.showInstructionDialog(instruction.message, instruction.actions),
-    showAgentConfigBanner: ({ agentName, category }) =>
-      options.showAgentConfigBanner({ agentName, category }),
-    // Desktop has no editor integration to preview through, so the
-    // resolved path goes to the preview-with-fallback host directly.
-    requestOpenFile: (data: RequestOpenFilePayload) =>
-      host.openPath(data.location.absolutePath),
-  };
+    /**
+     * Each arm answers with the program that presents its notice; the session
+     * forks it, so nothing here settles a dialog on a fiber of its own. Where
+     * the failure is reported depends on the arm: the two dialog members
+     * report their own (a dialog rejects when its window is torn down beneath
+     * it, and the host binds them through `awaitOrReport`), so the programs
+     * they hand back cannot fail; `openPath` fails in its own channel and the
+     * session's fork warn-logs it.
+     */
+    const presentationEventHandlers: PresentationEventHandlers<
+      RuntimePresentationEventPayloads,
+      HostPresentation
+    > = {
+      // The desktop shell keeps the conversation canvas permanently on
+      // screen, so there is no separate progress surface to reveal.
+      requestEnsureProgressView: () => undefined,
+      requestShowError: ({ message, docsCommand }) =>
+        host.showErrorDialog(message, docsCommand),
+      // An instruction is actionable guidance, not a failure, so it uses
+      // the info-style dialog with each action token as a real button.
+      requestShowInstruction: (instruction) =>
+        host.showInstructionDialog(instruction.message, instruction.actions),
+      showAgentConfigBanner: ({ agentName, category }) =>
+        options.showAgentConfigBanner({ agentName, category }),
+      // Desktop has no editor integration to preview through, so the
+      // resolved path goes to the preview-with-fallback host directly.
+      requestOpenFile: (data: RequestOpenFilePayload) =>
+        host.openPath(data.location.absolutePath),
+    };
 
-  function handlePresentationEvent<K extends RuntimePresentationEvent>(
-    event: K,
-    payload: RuntimePresentationEventPayloads[K],
-  ): HostPresentation {
-    if (disposed) return undefined;
-    return presentationEventHandlers[event](payload);
-  }
+    function handlePresentationEvent<K extends RuntimePresentationEvent>(
+      event: K,
+      payload: RuntimePresentationEventPayloads[K],
+    ): HostPresentation {
+      if (disposed) return undefined;
+      return presentationEventHandlers[event](payload);
+    }
 
-  // The tool-edit preview: staged copies of the original and proposed
-  // content the review pane diffs. The request itself is the session's
-  // (`request.opened` folds into the view), and a surface's `request.decide`
-  // settles it there; the staged preview is discarded when the request
-  // resolves, whichever way.
-  const toolEditApprovals = new ToolEditApprovalController({
-    host: new DesktopToolEditApprovalHost({
-      ui: {
-        ...options.toolEditPreview,
-        showErrorMessage: host.showErrorMessage,
-      },
-      decide: (runId, requestId, decision) =>
-        session.requests
-          .request({ kind: 'request.decide', runId, requestId, decision })
-          .pipe(Effect.asVoid),
-      runtime,
-    }),
-  });
-  const sessionEvents = runtime.runFork(
-    Stream.runForEach(session.events.all(session.now()), (event) =>
-      toolEditApprovals.handleSessionEvent(event),
-    ),
-  );
-  // Attached for the window's life, before the first run of this window
-  // asks anything. This host presents only the tool-edit preview; every
-  // other request (bash, plan, proposal, retry, question) is listed by the
-  // fold and answered by a surface's `request.decide`.
-  const detachHostInteractions = runtime.runSync(
-    session.interactions.use({
-      emit: handlePresentationEvent,
-      // Staging runs on a fiber of this window's runtime: the session hands
-      // the request over and does not wait, and a staging failure is logged
-      // here rather than left to a fiber nobody reads.
-      presentToolEdit: (request) => {
-        runtime.runFork(
-          toolEditApprovals
-            .present(request)
-            .pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning('Failed to stage the tool-edit preview').pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
+    // The tool-edit preview: staged copies of the original and proposed
+    // content the review pane diffs. The request itself is the session's
+    // (`request.opened` folds into the view), and a surface's `request.decide`
+    // settles it there; the staged preview is discarded when the request
+    // resolves, whichever way.
+    const spawn = desktopSpawner(runtime, yield* Scope.Scope);
+    const toolEditApprovals = new ToolEditApprovalController({
+      host: new DesktopToolEditApprovalHost({
+        ui: {
+          ...options.toolEditPreview,
+          showErrorMessage: host.showErrorMessage,
+        },
+        decide: (runId, requestId, decision) =>
+          session.requests
+            .request({ kind: 'request.decide', runId, requestId, decision })
+            .pipe(Effect.asVoid),
+        spawn,
+      }),
+    });
+    yield* Effect.addFinalizer(() =>
+      withProcessServices(runtime, toolEditApprovals.dispose()),
+    );
+    yield* Effect.forkScoped(
+      withProcessServices(
+        runtime,
+        Stream.runForEach(session.events.all(session.now()), (event) =>
+          toolEditApprovals.handleSessionEvent(event),
+        ),
+      ),
+      { startImmediately: true },
+    );
+    // Attached for the window's life, before the first run of this window
+    // asks anything. This host presents only the tool-edit preview; every
+    // other request (bash, plan, proposal, retry, question) is listed by the
+    // fold and answered by a surface's `request.decide`.
+    yield* Effect.acquireRelease(
+      session.interactions.use({
+        emit: handlePresentationEvent,
+        // Staging runs on a fiber of this window's runtime: the session hands
+        // the request over and does not wait, and a staging failure is logged
+        // here rather than left to a fiber nobody reads.
+        presentToolEdit: (request) => {
+          spawn(
+            toolEditApprovals
+              .present(request)
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning(
+                    'Failed to stage the tool-edit preview',
+                  ).pipe(
+                    Effect.annotateLogs({ data: Cause.squash(cause) }),
+                    withLogChannel(CHANNEL),
+                  ),
                 ),
               ),
-            ),
-        );
-      },
-      // An open that never committed leaves the staged preview with no
-      // decision to release it; this is that release, composed rather than
-      // run so the session's own fiber waits for the diff view and the temp
-      // files behind it to go. The controller's programs take this window's
-      // services from the runtime's context, which the session that composes
-      // them does not carry.
-      releaseToolEdit: (requestId) =>
-        withProcessServices(runtime, toolEditApprovals.release(requestId)),
-    }),
-  );
+          );
+        },
+        // An open that never committed leaves the staged preview with no
+        // decision to release it; this is that release, composed rather than
+        // run so the session's own fiber waits for the diff view and the temp
+        // files behind it to go. The controller's programs take this window's
+        // services from the runtime's context, which the session that composes
+        // them does not carry.
+        releaseToolEdit: (requestId) =>
+          withProcessServices(runtime, toolEditApprovals.release(requestId)),
+      }),
+      (detach) =>
+        Effect.sync(() => {
+          disposed = true;
+          detach();
+        }),
+    );
 
-  /**
-   * The launch, settling with the run. `onRunCompleted` fires on every
-   * settlement, as the old `finally` did — after the launch, including
-   * `setFirstRunDone`. Do not hook session.onResult: that fires from run.end
-   * inside finalizeTerminal, before the flag write.
-   */
-  function runValidated(
-    request: ValidatedRunRequest,
-    runOptions: DesktopRunOptions = {},
-  ): Effect.Effect<void, Error> {
-    return launchDesktopAgent(
-      request,
-      { session, runtime },
-      {
-        onRunResolved: options.onLaunched,
-        ...runOptions,
-      },
-    ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
-  }
+    /**
+     * The launch, settling with the run. `onRunCompleted` fires on every
+     * settlement, as the old `finally` did — after the launch, including
+     * `setFirstRunDone`. Do not hook session.onResult: that fires from run.end
+     * inside finalizeTerminal, before the flag write.
+     */
+    function runValidated(
+      request: ValidatedRunRequest,
+      runOptions: DesktopRunOptions = {},
+    ): Effect.Effect<void, Error> {
+      return launchDesktopAgent(
+        request,
+        { session, runtime },
+        {
+          onRunResolved: options.onLaunched,
+          ...runOptions,
+        },
+      ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
+    }
 
-  return {
-    runValidated,
-    openWorkflowOutput: (result) =>
-      withProcessServices(runtime, presentDesktopFinalOutput(session)(result)),
-    toolEditApprovals,
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      detachHostInteractions();
-      runtime.runFork(Fiber.interrupt(sessionEvents));
-      runtime.runFork(toolEditApprovals.dispose());
-    },
-  };
-}
+    return {
+      runValidated,
+      openWorkflowOutput: (result) =>
+        withProcessServices(
+          runtime,
+          presentDesktopFinalOutput(session)(result),
+        ),
+      toolEditApprovals,
+    };
+  },
+);
