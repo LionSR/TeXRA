@@ -45,6 +45,8 @@ setupPlatform({
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
   recordStores: new Map<string, ReturnType<typeof getRunRecords>>(),
+  /** Each fake store's `run.report` slot, which a suite seeds directly. */
+  reports: new Map<string, string | null>(),
   startChildRunLoop: vi.fn(),
   createChildRun: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
@@ -67,16 +69,11 @@ vi.mock('@agent/storage', async (importOriginal) => {
     getRunRecords: (_session: unknown, id: string) => {
       const existing = mocks.recordStores.get(id);
       if (existing) return existing;
-      let report: string | null = null;
       const records = createFakeRunRecords({
-        readReport: () => Effect.succeed(report),
-        writeReport: (value) =>
-          Effect.sync(() => {
-            report = value;
-          }),
+        readReport: () => Effect.sync(() => mocks.reports.get(id) ?? null),
         clearReport: () =>
           Effect.sync(() => {
-            report = null;
+            mocks.reports.set(id, null);
           }),
       });
       mocks.recordStores.set(id, records);
@@ -321,6 +318,7 @@ beforeEach(async () => {
   await Effect.runPromise(session.settlePublications());
   vi.clearAllMocks();
   mocks.recordStores.clear();
+  mocks.reports.clear();
   await mkdir(WORKSPACE_ROOT, { recursive: true });
   await writeFile(inWorkspace('paper.tex'), '\\documentclass{article}');
   await writeFile(inWorkspace('references.bib'), '@book{example}');
@@ -718,7 +716,7 @@ describe('WorkflowScriptTool', () => {
         );
         const runId = runIdFor('interrupted-resume');
         const store = getRunRecords(testDefaultSession(), runId);
-        yield* store.writeReport('stale success from the prior attempt');
+        mocks.reports.set(runId, 'stale success from the prior attempt');
         vi.spyOn(store, 'readRunEnd').mockReturnValue(
           Effect.succeed({
             outcome: RUN_OUTCOME.FAILED,

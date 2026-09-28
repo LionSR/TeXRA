@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   exists: vi.fn(),
   listRuns: vi.fn(),
-  readCliResumedModel: vi.fn(),
   assembleTrace: vi.fn(),
 }));
 
@@ -61,19 +60,6 @@ vi.mock('@agent/storage', async () => {
       readReport: () => Effect.tryPromise(() => mocks.readReport()),
     })),
     listRuns: mocks.listRuns,
-  };
-});
-
-// `cliRunStanding` stays real: it is the rule under test on both surfaces,
-// and it decides from the row's own facts without touching storage.
-vi.mock('@cli/runtime/toolUseResumeData', async () => {
-  const actual = await vi.importActual<
-    typeof import('@cli/runtime/toolUseResumeData')
-  >('@cli/runtime/toolUseResumeData');
-  return {
-    ...actual,
-    readCliResumedModel: () =>
-      Effect.tryPromise(() => mocks.readCliResumedModel()),
   };
 });
 
@@ -319,7 +305,6 @@ describe('CLI history runtime', () => {
     mocks.readResult.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliResumedModel.mockResolvedValue(undefined);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -339,9 +324,6 @@ describe('CLI history runtime', () => {
         entry: entries[0],
       },
     ]);
-    // The listing reads no resume data at all: `resumable` comes from the
-    // checkpoint stat the listing already carries.
-    expect(mocks.readCliResumedModel).not.toHaveBeenCalled();
   });
 
   it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {

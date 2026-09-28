@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { retrieveSessionResumeData, type AgentConfig } from '@agent/runtime';
+import type { AgentConfig } from '@agent/runtime';
 
 import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { foldRunRows } from '@shared/session/runRows';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
 
@@ -145,32 +145,4 @@ export const isTerminalWorkflowCheckpoint = Effect.fn(
     ),
   );
   return verdict === RUN_OUTCOME.FAILED;
-});
-
-/**
- * The model a resume of this run would actually use. A tool-use session that
- * was switched to another model records that only inside its checkpoint, so
- * `history show` parses it — one parse for the one run asked about — while a
- * listing reports the model the run started under.
- *
- * Never throws: a checkpoint that cannot be loaded has no model to report, and
- * refusing such a run is the open path's job, not this row's.
- */
-export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
-  session: SessionHandle,
-  id: RunId,
-  config: AgentConfig,
-): Effect.fn.Return<string | undefined> {
-  return yield* retrieveSessionResumeData(id, config, session).pipe(
-    Effect.map((resume) =>
-      resume && config.agentCategory === AgentCategory.ToolUse
-        ? resume.agentConfig.model
-        : undefined,
-    ),
-    Effect.catch((error) =>
-      Effect.logDebug(
-        `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
-    ),
-  );
 });

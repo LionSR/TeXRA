@@ -11,6 +11,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
@@ -42,8 +43,8 @@ describe('canonical run records', () => {
       agentCategory: 'toolUse',
       instruction: 'private instruction',
     });
-    await run(records.writeRunRecord(config));
-    await run(records.writeReport('private report'));
+    await run(seedRunRecord(session, runId, config));
+    await run(seedReport(session, runId, 'private report'));
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
     const visible = await run(Stream.runCollect(session.events.listing()));
@@ -61,14 +62,15 @@ describe('canonical run records', () => {
     () =>
       Effect.gen(function* () {
         const records = getRunRecords(session, runId);
-        yield* records.writeRunRecord(
+        yield* seedRunRecord(
+          session,
+          runId,
           AgentConfigFieldsSchema.parse({
             agent: 'worker',
             agentCategory: 'toolUse',
           }),
         );
-        yield* records.writeReport('retained report bytes');
-        yield* records.writeWorkspaceFiles(['output.tex']);
+        yield* seedReport(session, runId, 'retained report bytes');
         yield* records.writeResultMeta({
           producer: 'subagent',
           agentName: 'worker',
@@ -114,10 +116,14 @@ describe('canonical run records', () => {
 
   it('resets a prior report explicitly without replacing another metadata value', async () => {
     const records = getRunRecords(session, runId);
-    await run(records.writeReport('old report'));
-    await run(records.writeWorkspaceFiles([' a.tex ', 'a.tex', 'b.tex']));
+    await run(seedReport(session, runId, 'old report'));
+    const config = AgentConfigFieldsSchema.parse({
+      agent: 'worker',
+      agentCategory: 'toolUse',
+    });
+    await run(seedRunRecord(session, runId, config));
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
-    expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
+    expect(await run(records.readConfig())).toEqual(config);
   });
 });

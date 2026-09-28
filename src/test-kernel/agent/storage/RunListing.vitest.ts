@@ -19,6 +19,7 @@ import {
 import { AgentCategory } from '@shared/schemas';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedRunRecord } from '@test/support/runRecordSeeds';
 
 function config(
   agent: string,
@@ -101,9 +102,7 @@ async function writeRun(
     identity: { kind: 'agent', agent: agentConfig?.agent ?? 'assistant' },
   });
   if (agentConfig)
-    await Effect.runPromise(
-      getRunRecords(session, id).writeRunRecord(agentConfig),
-    );
+    await Effect.runPromise(seedRunRecord(session, id, agentConfig));
 }
 
 describe('run listing normalization', () => {
@@ -238,7 +237,7 @@ describe('run listing normalization', () => {
           identity: { kind: 'process', tool: 'assistant' },
         }),
       );
-      yield* processStore.writeRunRecord(config('assistant'));
+      yield* seedRunRecord(session, processId, config('assistant'));
       yield* Effect.promise(() =>
         writeRun(customBashAgentId, '2026-07-15T08:00:00.000Z', config('bash')),
       );
@@ -286,7 +285,10 @@ describe('run listing normalization', () => {
             identity: { kind: 'process', tool: 'bash' },
           }),
         );
-        yield* store.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
+        yield* seedRunRecord(session, id, {
+          name: 'bash',
+          instruction: 'ls -la',
+        });
 
         const entries = yield* listRuns(session);
         const entry = entries.find((candidate) => candidate.id === id);
