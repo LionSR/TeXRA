@@ -190,18 +190,108 @@ export function matchesHook(
   return names.some((name) => pattern.test(name));
 }
 
-/** TeXRA's tools that have a Claude Code counterpart, by TeXRA name: what
- *  `tool_name` carries, so a plugin's `Bash` matcher sees `bash`. */
-const CLAUDE_TOOL_NAMES: Readonly<Record<string, string>> = {
-  bash: 'Bash',
-  read_file: 'Read',
-  write_file: 'Write',
-  edit_file: 'Edit',
-  glob: 'Glob',
-  grep: 'Grep',
-  web_fetch: 'WebFetch',
-  web_search: 'WebSearch',
+/** A tool input, field by field. */
+type Fields = Readonly<Record<string, unknown>>;
+
+/** The fields of `keys` the input carries, under the same names. */
+const same =
+  (...keys: readonly string[]) =>
+  (input: Fields): Fields =>
+    Object.fromEntries(keys.map((key) => [key, input[key]]));
+
+/** A file path made absolute against the workspace; absent stays absent. */
+type Absolute = (path: unknown) => unknown;
+
+/**
+ * TeXRA's tools that have a Claude Code counterpart, by TeXRA name: the name
+ * a plugin's matcher and `tool_name` see, and the call's input under the
+ * field names and meanings the Claude Code hooks reference documents for
+ * that tool, file paths absolute. A TeXRA-only field (`literal`,
+ * `max_results`) has no counterpart and is not sent.
+ */
+const CLAUDE_TOOLS: Readonly<
+  Record<
+    string,
+    {
+      readonly name: string;
+      readonly input: (i: Fields, abs: Absolute) => Fields;
+    }
+  >
+> = {
+  bash: {
+    name: 'Bash',
+    input: same('command', 'description', 'timeout', 'run_in_background'),
+  },
+  read_file: {
+    name: 'Read',
+    input: (input, abs) => {
+      const range = (input.range ?? {}) as { start?: unknown; end?: unknown };
+      const start = typeof range.start === 'number' ? range.start : undefined;
+      const end = typeof range.end === 'number' ? range.end : undefined;
+      return {
+        file_path: abs(input.path),
+        offset: start,
+        limit:
+          start !== undefined && end !== undefined
+            ? end - start + 1
+            : undefined,
+      };
+    },
+  },
+  write_file: {
+    name: 'Write',
+    input: (input, abs) => ({
+      file_path: abs(input.path),
+      content: input.content,
+    }),
+  },
+  edit_file: {
+    name: 'Edit',
+    input: (input, abs) => ({
+      file_path: abs(input.path),
+      old_string: input.old_str,
+      new_string: input.new_str,
+      replace_all: input.replace_all,
+    }),
+  },
+  glob: {
+    name: 'Glob',
+    input: (input, abs) => ({ pattern: input.pattern, path: abs(input.path) }),
+  },
+  grep: {
+    name: 'Grep',
+    input: (input, abs) => ({
+      ...same(
+        ...['pattern', 'glob', 'output_mode', '-A', '-B', '-C', '-n', '-i'],
+        ...['type', 'head_limit', 'offset', 'multiline'],
+      )(input),
+      path: abs(input.path),
+    }),
+  },
+  web_fetch: { name: 'WebFetch', input: same('url', 'prompt') },
+  web_search: { name: 'WebSearch', input: same('query') },
 };
 
-export const claudeToolName = (name: string): string =>
-  CLAUDE_TOOL_NAMES[name] ?? name;
+/**
+ * A call as a Claude Code hook sees it: for a tool with a Claude Code
+ * counterpart, that tool's name and its input translated (absent fields
+ * dropped); any other tool, or an input that is not an object, keeps its
+ * TeXRA name and input unchanged.
+ */
+export function claudeToolCall(
+  name: string,
+  input: unknown,
+  abs: Absolute,
+): { readonly toolName: string; readonly toolInput: unknown } {
+  const tool = CLAUDE_TOOLS[name];
+  if (tool === undefined || typeof input !== 'object' || input === null)
+    return { toolName: name, toolInput: input };
+  return {
+    toolName: tool.name,
+    toolInput: Object.fromEntries(
+      Object.entries(tool.input(input as Fields, abs)).filter(
+        ([, value]) => value != null,
+      ),
+    ),
+  };
+}

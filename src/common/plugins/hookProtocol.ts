@@ -198,6 +198,12 @@ const joined = (parts: readonly (string | undefined)[]) => {
 function effectOf(event: HookEvent, output: HookOutput) {
   const ignored: string[] = [];
   if (output.continue === false) ignored.push('continue: false');
+  for (const field of [
+    'stopReason',
+    'suppressOutput',
+    'terminalSequence',
+  ] as const)
+    if (output[field] !== undefined) ignored.push(field);
   let deny: string | null = null;
   let context: string | null = null;
   switch (event) {
@@ -231,6 +237,8 @@ function effectOf(event: HookEvent, output: HookOutput) {
         ignored.push('updatedToolOutput');
       if (hso?.updatedMCPToolOutput !== undefined)
         ignored.push('updatedMCPToolOutput');
+      if (hso?.classifierContext !== undefined)
+        ignored.push('classifierContext');
       break;
     }
     case 'UserPromptSubmit': {
@@ -240,6 +248,8 @@ function effectOf(event: HookEvent, output: HookOutput) {
         ignored.push('decision: "block" (blocking a prompt)');
       if (prompt.hookSpecificOutput?.sessionTitle !== undefined)
         ignored.push('sessionTitle');
+      if (prompt.hookSpecificOutput?.suppressOriginalPrompt !== undefined)
+        ignored.push('suppressOriginalPrompt');
       break;
     }
     case 'SessionStart': {

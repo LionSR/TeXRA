@@ -414,7 +414,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     };
     workspace.interactions.recordToolCall();
     // Its step's PreToolUse hooks, recorded before the approval and the body.
-    const pre = tool && (yield* preToolUse(run, cell, step, fact, parsedInput));
+    const pre =
+      tool &&
+      (yield* preToolUse(run, cell, step, fact, responseId, parsedInput));
     if (pre && pre.rows.length > 0) yield* append(pre.rows);
     let result: ToolResult;
     if (pre && pre.denied !== null) {
@@ -430,7 +432,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       // path or unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          guardedToolCall(tool, parsedInput).pipe(
+          guardedToolCall(tool, parsedInput, pre?.bodyStarts).pipe(
             Effect.provideService(ToolCall, {
               roots: run.session.roots,
               run,
@@ -857,7 +859,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           logger,
         ),
         // What the call's hooks add, after its result.
-        ...callHookText(settledState, fact.callId),
+        ...callHookText(settledState, responseId, fact.callId),
       ],
     };
   });

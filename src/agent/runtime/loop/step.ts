@@ -60,7 +60,7 @@ import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { rowAggregate } from './rows';
-import type { StepHook } from './hooks';
+import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
 /** The tools one step offers. */
@@ -178,8 +178,9 @@ function heldToRecord(
  * Open the run's next step: apply the switches and pin the generation they
  * produce, as one step (`LiveTools.pinSwitched`), release the previous
  * step's pin, and resolve what it offers.
- * `recorded` holds a resumed activation's first step to it; `holding` says
- * the hold outlives this step (a park's). The rows
+ * `recorded` holds a resumed activation's first step to it, and
+ * `recordedHooks` a resumed dispatch to the hooks its calls were offered
+ * under; `holding` says the hold outlives this step (a park's). The rows
  * are what the loop appends before a request: the new offered set, when it
  * differs from `state`'s.
  */
@@ -189,6 +190,7 @@ const openStep = Effect.fn('Step.open')(function* (
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
   runSystem: RunSystem,
+  recordedHooks: readonly string[] | null = null,
 ) {
   const live = yield* LiveTools;
   const { roots } = run.session;
@@ -271,6 +273,8 @@ const openStep = Effect.fn('Step.open')(function* (
       : (recordedSkills?.flatMap((name) => byName.get(name) ?? []) ??
         catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS));
     const activated = names.flatMap((name) => byName.get(name) ?? []);
+    const hooks = stepHooks(pinned.installed, recordedHooks);
+    for (const note of hooks.notes) run.logger.warn(note);
     return {
       tools: {
         ...tools,
@@ -281,17 +285,9 @@ const openStep = Effect.fn('Step.open')(function* (
             ? []
             : [{ absolutePath: directory, label: `Skill ${name}` }],
         ),
-        hooks: [...pinned.installed]
-          .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
-          .flatMap(([plugin, { record, plugin: resolved }]) =>
-            resolved.hooks.hooks.map((hook) => ({
-              plugin,
-              name: record.name,
-              root: record.path,
-              hook,
-            })),
-          ),
+        hooks: hooks.hooks,
       },
+      hooks: hooks.identities,
       warnings: [
         ...pinned.warnings,
         ...resolved.warnings,
@@ -347,7 +343,8 @@ const openStep = Effect.fn('Step.open')(function* (
     toolsChanged ||
     skillsChanged ||
     state.offeredContinuation !== continuation ||
-    state.offeredSystem !== address;
+    state.offeredSystem !== address ||
+    step.hooks.join('\0') !== state.offeredHooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
@@ -393,6 +390,7 @@ const openStep = Effect.fn('Step.open')(function* (
               continuation,
               skills,
               system: address,
+              hooks: step.hooks,
             },
           } satisfies RunLedgerDraft,
         ]
@@ -444,6 +442,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     held ? state.offeredTools : null,
     held && kind === 'park',
     runSystem,
+    held && kind === 'dispatch' ? state.offeredHooks : null,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });

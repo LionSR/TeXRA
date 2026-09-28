@@ -26,7 +26,7 @@ import { whichOnExtendedPath } from '@utils/system/platformPaths';
 
 // Local imports - plugin reading
 import { envDigest, type McpServerConfig } from './mcpServers';
-import { hookFiles } from './pluginHooks';
+import { pinHook } from './pluginHooks';
 import { escapes, PluginError, type ResolvedPlugin } from './pluginManifest';
 
 const sha256 = (value: string | Uint8Array) =>
@@ -187,11 +187,13 @@ export const pluginDigest = (
         external,
       })),
     );
+    // Each hook's exact text, and what a static one runs outside the plugin.
     const hooks = yield* Effect.forEach(plugin.hooks.hooks, (hook) =>
-      Effect.map(hookFiles(root, hook), (named) => ({
+      Effect.map(pinHook(root, hook), (pin) => ({
         id: hook.id,
-        // A workspace file is read when the hook runs: it is not pinned.
-        files: named.filter(({ kind }) => kind !== 'workspace'),
+        command: hook.command,
+        args: hook.args ?? null,
+        pin,
       })),
     );
     return sha256(stableStringify({ files, servers, hooks }) ?? '');

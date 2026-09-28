@@ -8,10 +8,12 @@
  * in the batch that the point belongs to; a point the run already recorded
  * is never run again, and its recorded effect is used instead.
  */
+import * as path from 'node:path';
+
 import { Clock, Effect, FileSystem, SynchronizedRef } from 'effect';
 
 import {
-  claudeToolName,
+  claudeToolCall,
   matchesHook,
   type ConfiguredHook,
 } from '@common/plugins/hookConfig';
@@ -21,7 +23,13 @@ import {
   type HookInput,
 } from '@common/plugins/hookProtocol';
 import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
-import type { HookOutcomePayload, ToolResult } from '@shared/schemas';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import {
+  SUPPORTED_HOOK_EVENTS,
+  type HookEvent,
+  type HookOutcomePayload,
+  type ToolResult,
+} from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { rowAggregate } from './rows';
@@ -38,7 +46,83 @@ export interface StepHook {
   readonly name: string;
   /** The plugin directory. */
   readonly root: string;
+  /** The plugin's trust digest: a changed script is a different hook. */
+  readonly revision: string;
   readonly hook: ConfiguredHook;
+  /** A hook the offering step recorded that is gone or changed now: it is
+   *  not run, and a `PreToolUse` one denies the call it would have seen. */
+  readonly stale?: true;
+}
+
+/** A hook's identity, as `tools.offered` records the step's set. */
+const identityOf = (step: StepHook) =>
+  `${step.plugin}@${step.revision}#${step.hook.id}`;
+
+/** A recorded hook that no installed plugin offers as it was. */
+const staleHook = (identity: string): StepHook => {
+  const [head = '', id = ''] = identity.split('#');
+  const [plugin = '', revision = ''] = head.split('@');
+  const named = id.split('/').at(-3) ?? '';
+  const event: HookEvent = (
+    SUPPORTED_HOOK_EVENTS as readonly string[]
+  ).includes(named)
+    ? (named as HookEvent)
+    : 'PreToolUse';
+  return {
+    plugin,
+    name: plugin,
+    root: '',
+    revision,
+    stale: true,
+    hook: {
+      id,
+      event,
+      matcher: undefined,
+      command: '',
+      args: undefined,
+      timeoutSeconds: 0,
+    },
+  };
+};
+
+/**
+ * A step's hooks: the command hooks of the installed plugins it accepted,
+ * by plugin id, and their identities, which its `tools.offered` row records.
+ * A step that dispatches a resumed response is held to what the offering
+ * step recorded (`held`): it runs the recorded hooks still installed as
+ * they were, none added since, and in place of each recorded `PreToolUse`
+ * hook that is gone or changed a stale one that denies the call; `notes`
+ * name them.
+ */
+export function stepHooks(
+  installed: ReadonlyMap<string, LoadablePlugin>,
+  held: readonly string[] | null,
+) {
+  const current = [...installed]
+    .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
+    .flatMap(([plugin, { record, plugin: resolved, trust }]) =>
+      resolved.hooks.hooks.map((hook): StepHook => ({
+        plugin,
+        name: record.name,
+        root: record.path,
+        revision: trust.digest,
+        hook,
+      })),
+    );
+  if (held === null)
+    return { hooks: current, identities: current.map(identityOf), notes: [] };
+  const recorded = new Set(held);
+  const kept = current.filter((step) => recorded.has(identityOf(step)));
+  const present = new Set(kept.map(identityOf));
+  const gone = held.filter((identity) => !present.has(identity));
+  return {
+    hooks: [...kept, ...gone.map(staleHook)],
+    identities: [...held],
+    notes: gone.map(
+      (identity) =>
+        `Hook ${identity} was pinned when this call was offered and is gone or changed now: a PreToolUse hook denies the call instead of running.`,
+    ),
+  };
 }
 
 /** What the hooks of one point decided, and the rows that record it. */
@@ -109,11 +193,20 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
     matched,
     (step) =>
       Effect.gen(function* () {
-        const { run: ended, durationMs } = yield* runHook(step.hook, stdin, {
-          pluginRoot: step.root,
-          projectDir: workspace,
-          pluginData: pluginDataDir(globalStorage, step.name),
-        });
+        const { run: ended, durationMs } = step.stale
+          ? {
+              run: {
+                kind: 'unstartable' as const,
+                message:
+                  'the hook this call was offered under is gone or changed',
+              },
+              durationMs: 0,
+            }
+          : yield* runHook(step.hook, stdin, {
+              pluginRoot: step.root,
+              projectDir: workspace,
+              pluginData: pluginDataDir(globalStorage, step.name),
+            });
         const verdict = interpretHookRun(event, ended);
         if (verdict.warning !== null)
           run.logger.warn(`${verdict.warning} (plugin ${step.name})`);
@@ -137,7 +230,10 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
           durationMs,
           status: verdict.status,
           exitCode: ended.kind === 'exited' ? ended.exitCode : null,
-          deny: verdict.deny,
+          deny:
+            step.stale && event === 'PreToolUse'
+              ? 'the hook that governed this call when it was offered is gone or changed, so the call is not run'
+              : verdict.deny,
           context: verdict.context,
           ignored: verdict.ignored,
           stderr: stderr === '' ? null : stderr,
@@ -298,37 +394,53 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   cell: Pick<RunCell, 'current'>,
   step: Pick<StepTools, 'hooks'>,
   call: { readonly callId: string; readonly toolName: string },
+  responseId: string,
   toolInput: unknown,
 ) {
-  const toolName = claudeToolName(call.toolName);
+  const { toolName, toolInput: claudeInput } = claudeToolCall(
+    call.toolName,
+    toolInput,
+    (file) =>
+      typeof file === 'string'
+        ? path.resolve(run.session.roots.workspace ?? '', file)
+        : file,
+  );
   const names = [toolName, call.toolName];
   const base = {
     ...inputBase(run),
     tool_name: toolName,
-    tool_input: toolInput,
+    tool_input: claudeInput,
     tool_use_id: call.callId,
   };
+  // Call ids are unique within one response only.
+  const at = `${responseId}/${call.callId}`;
   const pre = yield* hooksAt(
     run,
     yield* cell.current,
     step.hooks,
-    `PreToolUse:${call.callId}`,
+    `PreToolUse:${at}`,
     { ...base, hook_event_name: 'PreToolUse' },
     names,
   );
-  const startedAt = yield* Clock.currentTimeMillis;
+  // `duration_ms` is the body's alone: timed after approval and PreToolUse.
+  let startedAt: number | undefined;
+  const bodyStarts = Effect.map(Clock.currentTimeMillis, (now) => {
+    startedAt = now;
+  });
   const after = Effect.fn('Hooks.postToolUse')(function* (result: ToolResult) {
     if (pre.deny !== null || result.status !== 'executed') return [];
     const post = yield* hooksAt(
       run,
       yield* cell.current,
       step.hooks,
-      `PostToolUse:${call.callId}`,
+      `PostToolUse:${at}`,
       {
         ...base,
         hook_event_name: 'PostToolUse',
         tool_response: result,
-        duration_ms: (yield* Clock.currentTimeMillis) - startedAt,
+        ...(startedAt === undefined
+          ? {}
+          : { duration_ms: (yield* Clock.currentTimeMillis) - startedAt }),
       },
       names,
     );
@@ -342,14 +454,18 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
           error: `Blocked by a PreToolUse hook: ${pre.deny}`,
           diagnostics: { code: 'hook_denied', tool: call.toolName },
         };
-  return { rows: pre.rows, denied, after };
+  return { rows: pre.rows, denied, bodyStarts, after };
 });
 
 /** The text part a call's recorded hooks add after its result, if any. */
-export const callHookText = (state: RunState, callId: string): InputPart[] => {
+export const callHookText = (
+  state: RunState,
+  responseId: string,
+  callId: string,
+): InputPart[] => {
   const { context } = effectOf([
-    ...(state.hookOutcomes[`PreToolUse:${callId}`] ?? []),
-    ...(state.hookOutcomes[`PostToolUse:${callId}`] ?? []),
+    ...(state.hookOutcomes[`PreToolUse:${responseId}/${callId}`] ?? []),
+    ...(state.hookOutcomes[`PostToolUse:${responseId}/${callId}`] ?? []),
   ]);
   return partsOf(context);
 };

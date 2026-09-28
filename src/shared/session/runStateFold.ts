@@ -197,6 +197,7 @@ export type RunState = RunPosition & {
   /** The names of the skills it listed. */
   readonly offeredSkills: readonly string[];
   readonly offeredSystem: string | null; // its system text's address
+  readonly offeredHooks: readonly string[]; // the hooks it pinned
   /** The run's `context.blob` rows: model-facing content by address. */
   readonly contents: Readonly<Record<string, JsonValue>>;
   /** The `hook.outcome` rows by point: a recorded point never runs again. */
@@ -285,6 +286,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   offeredContinuation: null,
   offeredSkills: [],
   offeredSystem: null,
+  offeredHooks: [],
   contents: {},
   hookOutcomes: {},
 });
@@ -657,6 +659,7 @@ function foldRow(
         offeredContinuation: row.payload.continuation,
         offeredSkills: row.payload.skills,
         offeredSystem: row.payload.system,
+        offeredHooks: row.payload.hooks,
       });
     case 'context.blob': {
       const { digest, value } = row.payload;

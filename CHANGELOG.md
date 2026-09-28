@@ -172,24 +172,19 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **Claude Code plugin hooks run** — an installed Claude Code or Codex
-  plugin that ships command hooks (`hooks/hooks.json`) can now be enabled.
-  Its `SessionStart` and `UserPromptSubmit` hooks can add context to the
-  prompt, `PreToolUse` hooks can deny a tool call with a reason the model
-  reads (they never approve one: the approval policy still decides), and
-  `PostToolUse` hooks can add feedback to a tool result. `Stop` and
-  `SubagentStop` hooks are notified when a turn ends. Each hook runs as its
-  own process in the workspace, with only `PATH`, `HOME` and the
-  `CLAUDE_*` plugin paths in its environment and none of your API keys, and
-  its whole process group is killed at its timeout. The trust prompt lists
-  every hook and each script it runs outside the plugin; editing any of
-  them asks for trust again. Each hook's outcome is recorded in the run, so
-  resuming a run never runs a recorded hook twice, and enabling or
-  disabling a hooks plugin reaches open runs at their next step.
-  `texra plugin show <name>` lists the hooks and the ones TeXRA does not
-  run (other events, `http`/`prompt`/`agent` hooks, `async` hooks). Plugins
-  with LSP servers still cannot be enabled. Session history from earlier
-  builds is cleared the first time this build opens a workspace.
+- **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
+  that ships hooks now works in TeXRA. Its hooks can add notes to what you
+  ask, block a tool call they object to (the agent is told why), and add
+  notes to a tool's result. They cannot approve anything on your behalf:
+  your approval setting still decides. Enabling such a plugin shows each
+  hook and the scripts it runs; anything whose script TeXRA cannot pin down
+  is shown as its exact command, and changing a hook or its scripts asks
+  you to trust the plugin again. Hooks never see your API keys, and one
+  that hangs is stopped. Enabling or disabling a plugin reaches open
+  conversations at their next step. `texra plugin show <name>` lists a
+  plugin's hooks and the ones TeXRA does not run. Plugins with language
+  servers still cannot be enabled. Session history from earlier builds is
+  cleared the first time this build opens a workspace.
 - **Tool changes reach open conversations** — switching Memory or a Tools
   plugin on or off (in the settings, or with `texra tools enable|disable`
   from another shell) now takes effect at the conversation's next step

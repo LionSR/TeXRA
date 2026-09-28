@@ -31,7 +31,7 @@ import {
 } from './installRecord';
 import { revisionKey, type McpServerConfig } from './mcpServers';
 import { externalFiles, pluginDigest } from './pluginDigest';
-import { hookFiles } from './pluginHooks';
+import { hookShell, NO_SHELL, pinHook } from './pluginHooks';
 import {
   countSkills,
   PluginError,
@@ -66,7 +66,7 @@ const codeRefusal = (name: string, plugin: ResolvedPlugin) =>
 
 /** A hook's event, matcher and command, as the prompt and a listing show it. */
 export const describeHook = (hook: ConfiguredHook) =>
-  `${hook.event}${hook.matcher ? ` [${hook.matcher}]` : ''}: runs \`${[hook.command, ...(hook.args ?? [])].join(' ')}\` (timeout ${hook.timeoutSeconds}s)`;
+  `${hook.event}${hook.matcher ? ` [${hook.matcher}]` : ''}: runs \`${[hook.command, ...(hook.args ?? [])].join(' ')}\` (timeout ${hook.timeoutSeconds}s)${hook.args === undefined && hookShell() === null ? `; ${NO_SHELL}` : ''}`;
 
 const describeServer = (server: McpServerConfig) =>
   `${server.name.replace(/^plugin_[^_]+_/, '')}: runs \`${[server.command, ...server.args].join(' ')}\`${
@@ -115,18 +115,25 @@ const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
       );
       for (const hook of hooks) {
         lines.push(`  ${describeHook(hook)}`);
-        for (const file of yield* hookFiles(record.path, hook)) {
-          if (file.kind === 'external')
-            lines.push(
-              `    runs ${file.path}, outside the plugin (trusted by its content: an edit asks again)`,
-            );
-          else if (file.kind === 'program')
+        const pin = yield* pinHook(record.path, hook);
+        if (pin.kind === 'dynamic') {
+          lines.push(
+            `    cannot pin what this runs (${pin.reason}): trust covers its exact text, ${JSON.stringify([hook.command, ...(hook.args ?? [])].join(' '))}, and a change to it asks again`,
+          );
+          continue;
+        }
+        for (const file of pin.files) {
+          if (file.kind === 'program')
             lines.push(
               `    program: ${file.path} (trusted by its path, size and date, not its content)`,
             );
+          else if (file.sha256 === null)
+            lines.push(
+              `    names ${file.path}, outside the plugin, which does not exist now (creating it asks again)`,
+            );
           else
             lines.push(
-              `    workspace file: ${file.path} (read when the hook runs, not covered by trust)`,
+              `    runs ${file.path}, outside the plugin (trusted by its content: an edit asks again)`,
             );
         }
       }
@@ -137,7 +144,7 @@ const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
         ...unsupported.map((line) => `  ${line}`),
       );
     lines.push(
-      'Trust covers this version, every file in the plugin, its servers’ settings and the scripts its hooks run: a change to any of them asks again.',
+      'Trust covers this version, every file in the plugin, its servers’ settings, each hook’s text and the scripts its hooks run: a change to any of them asks again.',
     );
     if (plugin.ignored.length > 0)
       lines.push(`Not loaded: ${plugin.ignored.join(', ')}`);

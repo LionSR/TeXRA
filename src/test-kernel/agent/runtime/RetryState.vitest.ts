@@ -340,6 +340,7 @@ const freshState = (): RunState => ({
   offeredSystem: null,
   contents: {},
   hookOutcomes: {},
+  offeredHooks: [],
 });
 
 interface InvokerKit {

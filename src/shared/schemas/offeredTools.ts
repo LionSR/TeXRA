@@ -48,6 +48,9 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
    *  base text with every section rendered: a section reworded by an update
    *  is a new offered set. Null when the run sends none. */
   system: Sha256Schema.nullable(),
+  /** The installed plugins' hooks the step pinned, each as
+   *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
+  hooks: z.array(z.string().min(1)).readonly(),
 });
 
 /**

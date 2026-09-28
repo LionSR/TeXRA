@@ -65,13 +65,35 @@ ignored. Handler types other than `command` (`http`, `mcp_tool`, `prompt`,
 Matchers follow the reference: `*`, an empty string, or no matcher matches
 everything. A string of letters, digits, `_`, `-`, spaces, `,` and `|` is an
 exact list. Anything else is an unanchored JavaScript regular expression.
-TeXRA's own tool names are offered as the Claude Code names where one
-exists: `bash` becomes `Bash`, `read_file` becomes `Read`, `write_file`
-becomes `Write`, `edit_file` becomes `Edit`, and likewise `Glob`, `Grep`,
-`WebFetch` and `WebSearch`. The matcher is tested against both names, so
-`Bash` and `bash` both match. `tool_name` carries the Claude Code name. The
-`if` field is not evaluated. The hook then runs for every call its matcher
-matches, which the reference allows when it cannot tell what a command runs.
+The matcher is tested against both a tool's Claude Code name and its TeXRA
+name, so `Bash` and `bash` both match. The `if` field is not evaluated. The
+hook then runs for every call its matcher matches, which the reference
+allows when it cannot tell what a command runs.
+
+A TeXRA tool with a Claude Code counterpart reaches a hook as that tool:
+`tool_name` is the Claude Code name, and `tool_input` is translated to the
+fields the reference documents for it. A hook that checks `file_path`
+therefore sees the path on a `Read`, `Write` or `Edit`. File paths are made
+absolute against the workspace, as the reference promises. A field with no
+counterpart is not sent. Every other tool, MCP tools included, keeps its
+TeXRA name and its own input. `tool_response` on `PostToolUse` is TeXRA's
+result, not translated.
+
+| TeXRA tool   | Claude Code tool | `tool_input`                                                                                                                                      |
+| ------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bash`       | `Bash`           | `command`, `description`, `timeout`, `run_in_background` (same names)                                                                             |
+| `read_file`  | `Read`           | `path` → `file_path`; `range.start` → `offset`; `range.end - range.start + 1` → `limit`                                                           |
+| `write_file` | `Write`          | `path` → `file_path`; `content`                                                                                                                   |
+| `edit_file`  | `Edit`           | `path` → `file_path`; `old_str` → `old_string`; `new_str` → `new_string`; `replace_all`                                                           |
+| `glob`       | `Glob`           | `pattern`; `path` (absolute)                                                                                                                      |
+| `grep`       | `Grep`           | `pattern`, `glob`, `output_mode`, `-A`, `-B`, `-C`, `-n`, `-i`, `type`, `head_limit`, `offset`, `multiline`; `path` (absolute); `literal` dropped |
+| `web_fetch`  | `WebFetch`       | `url`, `prompt`                                                                                                                                   |
+| `web_search` | `WebSearch`      | `query`; `max_results` dropped                                                                                                                    |
+
+`stopReason`, `suppressOutput`, `terminalSequence`,
+`suppressOriginalPrompt` and `classifierContext` are output controls v1 does
+not act on. Like the other fields above, they are recorded as ignored and
+warned about.
 
 Malformed output is never a silent default. Stdout that starts with `{` and
 ends with `}` is parsed as JSON, and invalid JSON or a schema mismatch is a
@@ -85,7 +107,10 @@ line of stderr, unless the JSON is valid, in which case the JSON decides.
 
 A hook runs through Effect's `ChildProcess` in its own scope, inside the
 run loop's fiber for the step, so interrupting the step closes it. Shell
-form (no `args`) runs `sh -c <command>`, and the shell expands the
+form (no `args`) runs `/bin/sh -c <command>` on macOS and Linux. On Windows
+it runs under `bash` from `PATH` (Git Bash). Without it, a shell-form hook
+cannot start: `texra plugin show` and the trust prompt say so, and each run
+records it as `unstartable`. The shell expands the
 placeholders (`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PROJECT_DIR}`,
 `${CLAUDE_PLUGIN_DATA}`) from the environment, where they are exported.
 Exec form runs `command` with `args` and no shell, with the placeholders
@@ -97,8 +122,10 @@ process group.
 - On a timeout, an interrupt, or scope close, the whole process group gets
   SIGTERM, then SIGKILL two seconds later. A grandchild the script started
   dies with it.
-- The spawner also signals the group after a normal exit, so a background
-  child left behind by a finished hook does not outlive it.
+- Output is read until the hook exits, then for at most 250 ms more. A
+  background child that inherited the pipes is not waited for: the scope
+  closes and the group is killed whether or not the pipes reached EOF. A
+  timeout does the same.
 - Matching hooks for one event run concurrently, as in the reference.
 - Output is capped at 10,000 characters per stream (the reference's cap for
   context).
@@ -126,18 +153,34 @@ process group.
 Enabling a hooks plugin goes through the trust flow that exists today. The
 digest already hashes every file in the plugin. Two additions:
 
-- **Referenced files are resolved.** For each command hook, every path the
-  command names is resolved after the placeholders are expanded. That covers
-  the exec-form `command` and `args`, and the shell-split tokens of the
-  shell form. Resolution follows symlinks.
-  - A path inside the plugin is covered by the digest.
-  - A path that leaves the plugin, directly or through a symlink, is listed
-    in the trust prompt with its resolved path. Its content hash joins the
-    digest, so editing it asks for trust again.
-  - A bare command name (`node`, `python3`) is resolved on `PATH`. It is
-    listed and pinned by path, size and date, as MCP server commands are.
-  - A path under `${CLAUDE_PROJECT_DIR}`, or a relative path, is a
-    workspace file. The prompt names it as not covered by trust.
+- **Each hook is classified as static or dynamic, conservatively.** There
+  is no shell parser. Anything that is not clearly static is dynamic.
+  - A shell-form command is static only when every word is plain:
+    letters, digits and `_ . / : = + , @ % -`. That rules out quoting,
+    `$` expansion, substitution, globbing, redirection and operators. The
+    plugin root is allowed as `"${CLAUDE_PLUGIN_ROOT}"`, or unquoted when
+    the root path is itself plain.
+  - An exec-form command is static unless a word names
+    `CLAUDE_PROJECT_DIR` or `CLAUDE_PLUGIN_DATA`.
+  - In both forms these are dynamic:
+    - a program that launches another (`env`, `xargs`, `npx`, `sudo`,
+      `make`, `git`, …);
+    - an interpreter (`sh`, `bash`, `node`, `python3`, …) given inline
+      code (`-c`, `-e`, `-m`, …), or given no script by absolute path;
+    - a relative path;
+    - a program not found on `PATH`.
+  - **Static:** the program and every path it names resolve without running
+    anything. Resolution follows symlinks.
+    - A path inside the plugin is covered by the digest.
+    - A path that leaves the plugin is listed in the trust prompt with its
+      resolved path, and its content hash, or its absence, joins the
+      digest. Editing or creating it asks for trust again.
+    - A program found on `PATH` is listed and pinned by path, size and
+      date, as MCP server commands are.
+  - **Dynamic:** what it runs cannot be pinned. The prompt shows the exact
+    command text, labelled "cannot pin what this runs", with the reason.
+    The digest covers that text, so a dynamic hook runs only after the user
+    trusts it, and any change to its text asks again.
 - **The prompt lists the hooks.** It shows each supported hook as its
   event, matcher and command, then the unsupported entries.
 
@@ -151,17 +194,32 @@ prompt and stop hooks run under the run's current step. So enabling or
 disabling a hooks plugin takes effect at the next step, as a tool switch
 does.
 
+Each step records its hook set in its `tools.offered` row, as
+`<plugin>@<trust digest>#<hook>`. The row is written again whenever the set
+changes.
+
+A resumed response's pending calls are dispatched under the hooks that
+response's step recorded. This mirrors `heldToRecord` for tools:
+
+- Hooks still installed with the same identity run.
+- Hooks added since do not run.
+- A recorded `PreToolUse` hook that is gone or changed denies the call,
+  and the step warns. Without it, a policy gate the call was offered under
+  would silently disappear.
+
 ## Recorded rows
 
 Each hook invocation writes one `hook.outcome` row on the run's ledger,
 through the run's one writer (`RunLedger.appendBatch`). The row carries:
 
 - `point`: the event plus its site: `SessionStart`, `UserPromptSubmit:open`,
-  `UserPromptSubmit:<follow-up id>`, `PreToolUse:<call id>`,
-  `PostToolUse:<call id>`, `Stop:<turn>`;
+  `UserPromptSubmit:<follow-up id>`, `PreToolUse:<response id>/<call id>`,
+  `PostToolUse:<response id>/<call id>`, `Stop:<turn>`. Call ids are unique
+  only within one response, so the response id is part of the key;
 - `event`, `plugin` and `hook`: the handler's position in the plugin's
   configuration;
-- `durationMs`;
+- `durationMs`. `duration_ms` in `PostToolUse` input times the tool's body
+  only, from after its approval and `PreToolUse`;
 - `status`: `ok`, `blocked` (exit 2), `failed` (other non-zero), `timeout`,
   `malformed`, or `unstartable`;
 - `exitCode`;
