@@ -6,12 +6,6 @@
 import { Cause, Effect } from 'effect';
 
 import { formatError } from '@common/errors/errorFormatUtils';
-import type { SignInFailed } from '@common/errors/signInFailed';
-import type {
-  TeamAvailabilityChoice,
-  TeamCatalogPortFailed,
-} from '@common/teams/TeamAvailabilityPreflight';
-import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { LatexRecommendedStatus } from '@controllers/settingsView/LatexToolingController';
 import type {
@@ -56,13 +50,6 @@ export interface SettingsHostBindings {
   signInSubscription(providerId: SubscriptionProviderId): HostEffect;
   /** The custom agent directory setting changed. */
   readonly customAgentDirChanged: HostEffect;
-  readonly remoteCatalog: {
-    canAccess(): Effect.Effect<boolean>;
-    signIn(): Effect.Effect<boolean, SignInFailed>;
-  };
-  chooseTeamAvailability(
-    prompt: TeamAvailabilityPrompt,
-  ): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   /** Select a run in the host's run view. */
   revealRun(runId: RunId): HostEffect<'revealed' | 'missing' | 'unavailable'>;
   runLabel(runId: RunId): string | undefined;

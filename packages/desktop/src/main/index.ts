@@ -22,10 +22,8 @@ import {
 } from 'effect';
 import { z } from 'zod';
 import { closeAllSessions, presentRunFailure } from '@agent/runtime';
-import { loadAgents, refresh } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { SignInFailed } from '@common/errors/signInFailed';
-import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
 import {
   SessionBridge,
@@ -154,7 +152,6 @@ import {
   postDesktopSettingsView,
   type DesktopInboundRoute,
 } from '../shared/desktopCommandSurface.js';
-import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
@@ -255,8 +252,6 @@ function createWindow(options: {
    * runs settles on it, and every handler and service below is handed it.
    */
   runtime: ProcessRuntime;
-  /** See ElectronPlatformInitResult.setupAuth. */
-  setupAuth: DesktopSetupAuth;
 }): void {
   const activeProject = () => options.projects.active();
   // This window's handle on the process runtime, as its opener handed it over.
@@ -363,7 +358,6 @@ function createWindow(options: {
     showInfoMessage,
     showWarningMessage,
     confirmDialog,
-    presentTeamAvailabilityPrompt,
     showErrorDialog,
     showInstructionDialog,
     pickTranscriptExportFormat,
@@ -519,21 +513,11 @@ function createWindow(options: {
         return;
     }
   };
-  let teamSignInPending = false;
-  /** Every surface an account change touches, as one program: the agent
-   *  catalog, the settings view, then the onboarding funnel. */
+  /** Every surface an account change touches, as one program: the settings
+   *  view, then the onboarding funnel. */
   const refreshDesktopAuthSurfaces = () =>
     Effect.gen(function* () {
-      // Sign-in: a signed-out load already stamped the catalog as including
-      // remote, so only a forced refetch picks up the new account's agents.
-      // Sign-out also lands here, after the coordinator dropped the remote
-      // entries; refetching then would re-stamp a signed-out catalog.
-      if (!teamSignInPending && (yield* options.supabaseAuth.authenticated)) {
-        yield* refresh({ includeRemote: true });
-      }
-      yield* settingsIpcRef.current?.refreshAfterAuthChange({
-        deferAgentCatalog: teamSignInPending,
-      }) ?? Effect.void;
+      yield* settingsIpcRef.current?.refreshAfterAuthChange() ?? Effect.void;
       yield* onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void;
     });
   const desktopAuthHost: DesktopSupabaseAuthHost = {
@@ -554,7 +538,7 @@ function createWindow(options: {
   );
   /**
    * Sole owner of the desktop sign-in provider choice. Every sign-in entry
-   * point (login banner, credential settings, remote-agent catalog) routes
+   * point (login banner, credential settings) routes
    * here so the desktop offers the same providers as the extension quick pick
    * and the CLI select instead of assuming one account type.
    */
@@ -571,37 +555,6 @@ function createWindow(options: {
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
     });
-  const signInFailed = (cause: unknown) =>
-    new SignInFailed({
-      message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
-      cause,
-    });
-  const signInForRemoteAgentCatalog = (): Effect.Effect<
-    boolean,
-    SignInFailed
-  > =>
-    Effect.gen(function* () {
-      const provider = yield* Effect.tryPromise({
-        try: chooseOAuthProvider,
-        catch: signInFailed,
-      });
-      if (provider === undefined) return false;
-      teamSignInPending = true;
-      return yield* Effect.gen(function* () {
-        const signedIn = yield* desktopAuth.signInAndWaitForSession(provider);
-        return signedIn && (yield* options.supabaseAuth.authenticated);
-      }).pipe(
-        Effect.mapError(signInFailed),
-        Effect.ensuring(
-          Effect.sync(() => {
-            teamSignInPending = false;
-          }),
-        ),
-      );
-    });
-  windowResources.add(
-    options.setupAuth.registerSignIn(signInForRemoteAgentCatalog),
-  );
   const folderPickerDefaultPath = () =>
     activeProject().root ?? app.getPath('home');
 
@@ -732,12 +685,6 @@ function createWindow(options: {
     openPath: previewHost.openPath,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file', project }),
-    chooseTeamAvailability: (unavailableNames) =>
-      presentTeamAvailabilityPrompt(
-        teamAvailabilityPrompt(unavailableNames),
-        project,
-      ),
-    signInForRemoteAgentCatalog,
     // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
@@ -1095,11 +1042,6 @@ function createWindow(options: {
         ),
       ),
       customAgentDirChanged: Effect.void,
-      remoteCatalog: {
-        canAccess: () => options.supabaseAuth.authenticated,
-        signIn: signInForRemoteAgentCatalog,
-      },
-      chooseTeamAvailability: presentTeamAvailabilityPrompt,
       // Selection is the surface's: a settings jump asks the shown project's
       // surface to select the run, and reports a run the view no longer holds
       // as missing.
@@ -1704,7 +1646,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 resourcesPath: platformInit.resourcesPath,
                 mainDir: platformInit.mainDir,
                 runtime,
-                setupAuth: platformInit.setupAuth,
               });
             reopenMainWindow();
             app.on('activate', () => {

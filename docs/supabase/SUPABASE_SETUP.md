@@ -483,8 +483,9 @@ For end users, the process is simple:
 1. **No configuration needed** - the Supabase endpoints are compiled in
 2. **Sign in**: Run `TeXRA: Sign In` command
 3. **Authenticate** via browser (GitHub/Google)
-4. **Use agents**: remote agents the account can access appear in the agent
-   catalog; see the [Remote Agents guide](../guide/remote-agents.md)
+4. **Use agents**: in released versions that still load hosted agents, the
+   remote agents the account can access appear in the agent catalog. Current
+   versions bundle every agent and never call the catalog.
 
 ---
 

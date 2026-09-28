@@ -9,7 +9,6 @@ import {
   type AgentEntry,
   type AgentRosterStores,
 } from '@agent/index';
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { AGENT_CATEGORIES, agentKeyOf, AgentCategory } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -125,13 +124,6 @@ export function checkCliAgentLaunch(
 /**
  * Resolve a CLI-visible agent from the registry.
  *
- * CLI commands start with a local-only load so signed-out users avoid remote
- * auth/network work. Missing agents still get a remote-inclusive fallback, and
- * signed-in sessions reload bare names: bundled outranks remote in source
- * priority, but a workspace roster that selects a remote entry by key makes
- * the visible tier answer a bare name with it, which a local-only catalog
- * cannot see.
- *
  * A launch category resolves through the launch resolver, so validation lands
  * on the exact entry the launch will load; without one this is a display
  * lookup and stays category-blind.
@@ -146,21 +138,6 @@ export function resolveCliAgent(
   lookupCategory?: AgentCategory,
 ) {
   return Effect.gen(function* () {
-    yield* loadAgents({ includeRemote: false });
-    const agent = yield* lookupCliAgent(stores, name, lookupCategory);
-
-    // Keep the local hit only when a remote-inclusive reload could not change
-    // it: a source-qualified name already pins its tier, and a signed-out
-    // session has no remote catalog to prefer. Every other case (including a
-    // local miss) falls through to the full load below.
-    if (
-      agent &&
-      (name.includes(':') ||
-        !(yield* Effect.flatMap(SupabaseAuth, (auth) => auth.authenticated)))
-    ) {
-      return agent;
-    }
-
     yield* loadAgents();
     return yield* lookupCliAgent(stores, name, lookupCategory);
   });
@@ -195,10 +172,7 @@ export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
       name,
       AgentCategory.Workflow,
     );
-    // The pass above already loaded the catalog this lookup reads: it returns
-    // before the remote-inclusive reload only for a source-qualified name (which
-    // pins one cache key, so it cannot also hit here) or a signed-out session
-    // (which has no remote catalog to add).
+    // The pass above already loaded the catalog this lookup reads.
     const toolUse = yield* resolveAgentForLaunch(
       stores,
       AgentCategory.ToolUse,
@@ -253,7 +227,7 @@ export function loadCliAgentList(
 ) {
   const includeHidden = options.includeHidden === true;
   return Effect.gen(function* () {
-    yield* loadAgents(includeHidden ? undefined : { includeRemote: false });
+    yield* loadAgents();
 
     const agents = yield* collectCliAgents(
       stores,

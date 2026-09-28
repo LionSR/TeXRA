@@ -9,7 +9,7 @@ import type { AgentSource, AgentCategory } from '@shared/schemas';
 export interface AgentEntry {
   name: string;
   source: AgentSource;
-  path: string; // absolute path to YAML (empty for remote)
+  path: string; // absolute path to the definition file
   category: AgentCategory;
   description?: string;
   tools?: string[]; // tool names for tool-use agents

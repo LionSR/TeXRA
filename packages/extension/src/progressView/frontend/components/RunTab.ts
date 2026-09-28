@@ -9,7 +9,6 @@ import {
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
@@ -250,12 +249,6 @@ export class RunTab extends LitElement {
                 }</span
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
-              ${when(
-                run.isRemote,
-                () => html`
-                  ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'run-tab-remote', className: 'remote-agent' })}
-                `,
-              )}
             </div>
             ${
               run.statusDetail
@@ -271,13 +264,7 @@ export class RunTab extends LitElement {
               ? `Category: ${this.decorator.label}`
               : this.decorator.label
           }</wa-tooltip
-        >${when(
-          run.isRemote,
-          () =>
-            html`<wa-tooltip for="run-tab-remote"
-              >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
-            >`,
-        )}
+        >
         ${
           run.group === 'interrupted' && !run.readOnly
             ? html`<wa-button

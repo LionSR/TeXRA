@@ -21,7 +21,6 @@ import {
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
   attachDroppedFiles,
@@ -58,10 +57,8 @@ import {
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
@@ -407,17 +404,6 @@ export function createExtensionHostRequests(
       }
       const prepared = yield* prepareSurfaceLaunch(
         request,
-        {
-          showInfoMessage: (message) => vscodeUi.showInfoMessage(message),
-          // A dismissed launch notification is a cancellation here; the
-          // settings view keeps `undefined` as "ask again".
-          chooseTeamAvailability: (unavailableNames) =>
-            chooseTeamAvailabilityViaDialog(
-              teamAvailabilityPrompt(unavailableNames),
-              { modal: false },
-            ).pipe(Effect.map((choice) => choice ?? 'cancel')),
-          signInForRemoteAgentCatalog: runSignInCommand,
-        },
         session.roots.repoState,
         session.roots.storage,
       );

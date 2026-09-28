@@ -2,10 +2,7 @@ import { it } from '@effect/vitest';
 import { describe, expect, vi } from 'vitest';
 
 import { Effect } from 'effect';
-import {
-  applyTeamRosterWithPreflight,
-  type TeamRosterApplicationDeps,
-} from '@common/teams/TeamRosterApplication';
+import { applyTeamRoster } from '@common/teams/TeamRosterApplication';
 import type { AgentModePreset } from '@shared/schemas';
 
 const preset: AgentModePreset = {
@@ -17,7 +14,6 @@ const preset: AgentModePreset = {
     workflow: [],
     toolUse: ['orchestrator'],
   },
-  texraHostedAgents: ['orchestrator'],
 };
 
 const unresolved = {
@@ -25,146 +21,35 @@ const unresolved = {
   missingAgents: { workflow: [], toolUse: ['orchestrator'] },
 };
 
-const resolved = {
-  agentKeys: { workflow: [], toolUse: ['remote:orchestrator'] },
-  missingAgents: { workflow: [], toolUse: [] },
-};
-
-function makeDeps(
-  overrides: Partial<Omit<TeamRosterApplicationDeps, 'catalog'>> & {
-    catalog?: Partial<TeamRosterApplicationDeps['catalog']>;
-  } = {},
-): TeamRosterApplicationDeps {
-  const { catalog, ...rest } = overrides;
-  return {
-    catalog: {
-      resolvePreset: () =>
-        Effect.succeed({ ok: true, preset, resolution: unresolved }),
-      commitPreset: vi.fn(() => Effect.void),
-      ...catalog,
-    },
-    loadLocalCatalog: () => Effect.void,
-    canAccessRemoteCatalog: () => Effect.succeed(false),
-    choose: () => Effect.succeed('cancel' as const),
-    signIn: () => Effect.succeed(false),
-    forceRefreshRemoteCatalog: () => Effect.void,
-    ...rest,
-  };
-}
-
 describe('team roster application', () => {
-  it.effect('signs in, forces one refresh, and commits exactly once', () =>
+  it.effect('loads the catalog, then commits the preset once', () =>
     Effect.gen(function* () {
       const calls: string[] = [];
-      let refreshed = false;
       const commitPreset = vi.fn(() =>
         Effect.sync(() => {
           calls.push('commit');
         }),
       );
 
-      const result = yield* applyTeamRosterWithPreflight(
-        'research',
-        makeDeps({
-          catalog: {
-            resolvePreset: () =>
-              Effect.succeed({
-                ok: true,
-                preset,
-                resolution: refreshed ? resolved : unresolved,
-              }),
-            commitPreset,
-          },
-          loadLocalCatalog: () =>
-            Effect.sync(() => {
-              calls.push('local-load');
-            }),
-          choose: () =>
-            Effect.sync(() => {
-              calls.push('choose');
-              return 'sign-in' as const;
-            }),
-          signIn: () =>
-            Effect.sync(() => {
-              calls.push('sign-in');
-              return true;
-            }),
-          forceRefreshRemoteCatalog: () =>
-            Effect.sync(() => {
-              calls.push('forced-refresh');
-              refreshed = true;
-            }),
-        }),
-      );
+      const result = yield* applyTeamRoster('research', {
+        catalog: {
+          resolvePreset: () =>
+            Effect.succeed({ ok: true, preset, resolution: unresolved }),
+          commitPreset,
+        },
+        loadCatalog: () =>
+          Effect.sync(() => {
+            calls.push('load');
+          }),
+      });
 
       expect(result).toEqual({
         status: 'applied',
         preset,
-        resolution: resolved,
+        resolution: unresolved,
       });
-      expect(calls).toEqual([
-        'local-load',
-        'choose',
-        'sign-in',
-        'forced-refresh',
-        'commit',
-      ]);
-      expect(commitPreset).toHaveBeenCalledOnce();
+      expect(calls).toEqual(['load', 'commit']);
       expect(commitPreset).toHaveBeenCalledWith(preset);
     }),
-  );
-
-  it.effect('cancels before refresh or roster writes', () =>
-    Effect.gen(function* () {
-      const commitPreset = vi.fn(() => Effect.void);
-      let forcedRefresh = false;
-      const signIn = vi.fn();
-
-      const result = yield* applyTeamRosterWithPreflight(
-        'research',
-        makeDeps({
-          catalog: { commitPreset },
-          signIn,
-          forceRefreshRemoteCatalog: () =>
-            Effect.sync(() => {
-              forcedRefresh = true;
-            }),
-        }),
-      );
-
-      expect(result).toEqual({ status: 'cancelled', preset });
-      expect(signIn).not.toHaveBeenCalled();
-      expect(forcedRefresh).toBe(false);
-      expect(commitPreset).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'proceeds on a provided "continue" choice without prompting or signing in',
-    () =>
-      Effect.gen(function* () {
-        const choose = vi.fn();
-        const signIn = vi.fn();
-        const commitPreset = vi.fn(() => Effect.void);
-
-        const result = yield* applyTeamRosterWithPreflight(
-          'research',
-          makeDeps({
-            catalog: { commitPreset },
-            providedChoice: 'continue',
-            choose,
-            signIn,
-          }),
-        );
-
-        expect(result).toEqual({
-          status: 'applied',
-          preset,
-          resolution: unresolved,
-        });
-        expect(choose).not.toHaveBeenCalled();
-        expect(signIn).not.toHaveBeenCalled();
-        expect(commitPreset).toHaveBeenCalledWith(preset);
-      }),
   );
 });

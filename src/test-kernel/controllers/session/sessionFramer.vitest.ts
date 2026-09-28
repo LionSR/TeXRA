@@ -94,7 +94,6 @@ const runStart: SessionEventDraft = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
-  isRemote: false,
   parent: null,
 };
 

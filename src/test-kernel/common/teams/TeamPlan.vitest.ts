@@ -9,7 +9,6 @@ import {
   resolveTeamLaunch,
   teamAvailability,
   teamLaunchBlockReason,
-  teamPlanHasGaps,
   teamPlanStatus,
   type TeamCatalogAgent,
   type TeamRunPlan,
@@ -47,7 +46,6 @@ function preset(overrides: Partial<TeamPreset> = {}): TeamPreset {
     name: 'Custom Team',
     description: 'A custom team.',
     icon: 'bookmark',
-    texraHostedAgents: [],
     agents: {
       workflow: ['writer'],
       toolUse: ['lead', 'member'],
@@ -153,7 +151,7 @@ describe('planTeamRun', () => {
         workflow: [],
         toolUse: [
           agent('research', { tools: delegateTools }),
-          agent('orchestrator', { source: 'remote', tools: delegateTools }),
+          agent('orchestrator', { tools: delegateTools }),
         ],
       },
     });
@@ -210,13 +208,13 @@ describe('planTeamRun', () => {
     });
     const missing = planOver(preset(), {
       ...options,
-      agentOverride: 'remote:lead',
+      agentOverride: 'plugin:lead',
     });
 
     expect(selected.rootAgent).toBe(customLead);
     expect(selected.missingAgentOverride).toBeUndefined();
     expect(missing.rootAgent).toBe(customLead);
-    expect(missing.missingAgentOverride).toBe('remote:lead');
+    expect(missing.missingAgentOverride).toBe('plugin:lead');
   });
 
   it('appends an override root once and deduplicates by canonical key', () => {
@@ -253,18 +251,15 @@ describe('planTeamRun', () => {
 });
 
 describe('plan status and launchability', () => {
-  it('detects gaps when TeXRA-hosted and local members are both missing', () => {
+  it('detects gaps when members are missing', () => {
     const plan = manualPlan({
-      preset: preset({
-        texraHostedAgents: ['hosted-workflow', 'hosted-tool'],
-      }),
       missingAgents: {
-        workflow: ['hosted-workflow', 'local-workflow'],
-        toolUse: ['hosted-tool', 'local-tool'],
+        workflow: ['local-workflow'],
+        toolUse: ['local-tool'],
       },
     });
 
-    expect(teamPlanHasGaps(plan)).toBe(true);
+    expect(teamPlanStatus(plan)).not.toBe('available');
   });
 
   it('returns all three launch-block reasons', () => {
@@ -336,63 +331,6 @@ describe('plan status and launchability', () => {
 });
 
 describe('loadTeamOptions', () => {
-  it.effect(
-    'refreshes a gapped plan when remote access exists and builds final options',
-    () =>
-      Effect.gen(function* () {
-        let ensured = false;
-        let refreshed = false;
-        const custom = preset();
-
-        const options = yield* loadTeamOptions({
-          customPresetsRaw: [custom],
-          ensureCatalogLoaded: () =>
-            Effect.sync(() => {
-              ensured = true;
-            }),
-          resolveAgent: fromCatalog((category) => {
-            if (!refreshed) return [];
-            return category === 'workflow'
-              ? [agent('writer', { source: 'builtInWorkflow' })]
-              : [agent('lead', { tools: delegateTools }), agent('member')];
-          }),
-          canAccessRemoteCatalog: () => Effect.succeed(true),
-          refreshRemote: () =>
-            Effect.sync(() => {
-              refreshed = true;
-            }),
-        });
-
-        expect(ensured).toBe(true);
-        expect(refreshed).toBe(true);
-        expect(
-          options.find((option) => option.value === custom.id),
-        ).toMatchObject({
-          disabled: undefined,
-          unavailableMembers: [],
-        });
-      }),
-  );
-
-  it.effect('does not refresh gapped plans without remote catalog access', () =>
-    Effect.gen(function* () {
-      let refreshed = false;
-
-      yield* loadTeamOptions({
-        customPresetsRaw: [preset()],
-        ensureCatalogLoaded: () => Effect.void,
-        resolveAgent: () => undefined,
-        canAccessRemoteCatalog: () => Effect.succeed(false),
-        refreshRemote: () =>
-          Effect.sync(() => {
-            refreshed = true;
-          }),
-      });
-
-      expect(refreshed).toBe(false);
-    }),
-  );
-
   it.effect('loads the catalog before planning team options', () =>
     Effect.gen(function* () {
       let loaded = false;
@@ -408,8 +346,6 @@ describe('loadTeamOptions', () => {
             loaded = true;
           }),
         resolveAgent,
-        canAccessRemoteCatalog: () => Effect.succeed(false),
-        refreshRemote: () => Effect.void,
       });
 
       expect(resolveAgent).toHaveBeenCalled();
@@ -427,8 +363,6 @@ describe('loadTeamOptions', () => {
           ],
           ensureCatalogLoaded: () => Effect.void,
           resolveAgent: () => undefined,
-          canAccessRemoteCatalog: () => Effect.succeed(false),
-          refreshRemote: () => Effect.void,
         });
 
         expect(options.map((option) => option.value)).toEqual([
@@ -456,20 +390,8 @@ describe('resolveTeamLaunch', () => {
       resolveAgent: fromCatalog((category) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
       ),
-      canAccessRemoteCatalog: () => Effect.succeed(false),
-      refreshRemote: () => Effect.void,
-      choose: () => Effect.succeed('cancel' as const),
-      signIn: () => Effect.succeed(false),
       ...overrides,
     };
-  }
-
-  /** A custom team whose single workflow member is missing and TeXRA-hosted. */
-  function hostedWriterPreset(): TeamPreset {
-    return preset({
-      agents: { workflow: ['hosted-writer'], toolUse: ['lead', 'member'] },
-      texraHostedAgents: ['hosted-writer'],
-    });
   }
 
   it.effect('returns execution-scoped fields for a ready team', () =>
@@ -484,97 +406,9 @@ describe('resolveTeamLaunch', () => {
           },
           cli: { multiAgentPresetId: 'custom-team' },
         },
-        partial: false,
         missingNames: [],
       });
     }),
-  );
-
-  it.effect('continues with available members and reports a partial team', () =>
-    Effect.gen(function* () {
-      const hostedPreset = preset({
-        agents: {
-          workflow: ['writer', 'hosted-writer'],
-          toolUse: ['lead', 'member'],
-        },
-        texraHostedAgents: ['hosted-writer'],
-      });
-
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({
-            customPresetsRaw: [hostedPreset],
-            choose: () => Effect.succeed('continue' as const),
-          }),
-        ),
-      ).toMatchObject({
-        status: 'ready',
-        partial: true,
-        missingNames: ['hosted-writer'],
-      });
-    }),
-  );
-
-  it.effect(
-    'uses a provided continue choice without invoking the interactive port',
-    () =>
-      Effect.gen(function* () {
-        const choose = vi.fn(() => Effect.succeed(undefined));
-        expect(
-          yield* resolveTeamLaunch(
-            launchArgs({
-              customPresetsRaw: [hostedWriterPreset()],
-              providedChoice: 'continue',
-              choose,
-            }),
-          ),
-        ).toMatchObject({ status: 'ready', partial: true });
-        expect(choose).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect('treats an explicit cancel or dismissed choice as cancelled', () =>
-    Effect.gen(function* () {
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({
-            customPresetsRaw: [hostedWriterPreset()],
-          }),
-        ),
-      ).toEqual({ status: 'cancelled' });
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({
-            customPresetsRaw: [hostedWriterPreset()],
-            choose: () => Effect.succeed(undefined),
-          }),
-        ),
-      ).toEqual({ status: 'cancelled' });
-    }),
-  );
-
-  it.effect(
-    'reports hosted members still unavailable after remote refresh',
-    () =>
-      Effect.gen(function* () {
-        let refreshed = false;
-        expect(
-          yield* resolveTeamLaunch(
-            launchArgs({
-              customPresetsRaw: [hostedWriterPreset()],
-              canAccessRemoteCatalog: () => Effect.succeed(true),
-              refreshRemote: () =>
-                Effect.sync(() => {
-                  refreshed = true;
-                }),
-            }),
-          ),
-        ).toEqual({
-          status: 'unavailable',
-          unavailableNames: ['hosted-writer'],
-        });
-        expect(refreshed).toBe(true);
-      }),
   );
 
   it.effect('reports an unknown team without consulting catalog ports', () =>

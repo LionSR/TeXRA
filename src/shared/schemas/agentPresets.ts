@@ -29,8 +29,6 @@ export const AgentModePresetSchema = z.object({
   description: z.string(),
   icon: z.enum(AGENT_MODE_PRESET_ICON_NAMES),
   agents: z.record(AgentCategorySchema, z.array(z.string())),
-  /** Members whose definitions may be supplied by TeXRA's remote catalog. */
-  texraHostedAgents: z.array(z.string()),
 });
 
 export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
@@ -82,7 +80,6 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
       'orchestrator',
     ],
   },
-  texraHostedAgents: [],
 };
 
 /**
@@ -110,7 +107,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'leanOrchestrator',
       ],
     },
-    texraHostedAgents: [],
   },
   {
     id: 'physicist',
@@ -139,7 +135,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'search',
       ],
     },
-    texraHostedAgents: ['generic', 'devise', 'apply', 'criticize'],
   },
   {
     id: 'mathematician',
@@ -168,7 +163,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'orchestrator',
       ],
     },
-    texraHostedAgents: ['generic', 'devise', 'apply', 'criticize'],
   },
   {
     id: 'cs-ml',
@@ -192,7 +186,6 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'progressCheck',
       ],
     },
-    texraHostedAgents: ['criticize', 'generic', 'devise', 'apply'],
   },
   {
     id: 'software-engineer',
@@ -210,6 +203,5 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'codeSimplifier',
       ],
     },
-    texraHostedAgents: [],
   },
 ];

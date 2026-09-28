@@ -152,13 +152,11 @@ describe('child run progress events', () => {
             aggregateId: qualifyAggregateId('run', runId),
             identity: { kind: 'process', tool: 'bash' },
             category: AgentCategory.ToolUse,
-            isRemote: false,
             // The whole parent edge, stamped on the birth fact.
             parent: expect.objectContaining({ id: parentRunId }),
           }),
         );
-        // The activation beside the existence fact, with no `isRemote`: the
-        // frozen NDJSON line for a child never carried one.
+        // The activation beside the existence fact.
         expect(
           eventsOfType(
             yield* Effect.promise(() => recorded.read()),

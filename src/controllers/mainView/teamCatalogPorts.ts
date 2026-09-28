@@ -1,7 +1,6 @@
 // Local imports
 import { Effect } from 'effect';
-import { getCategoryAgent, loadAgents, refresh } from '@agent/index';
-import { supabaseAuthenticated } from '@auth/SupabaseAuth';
+import { getCategoryAgent, loadAgents } from '@agent/index';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -9,8 +8,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
  * Live team-catalog ports shared by every host's main view. Launch resolution
  * (`resolveTeamLaunch`) and team-option loading (`loadTeamOptions`) must plan
  * against the same catalog, so both build their ports here: the workspace
- * presets are re-read on each call and the agent/auth ports stay live
- * functions. Hosts add only their dialog glue (choose/signIn) on top.
+ * presets are re-read on each call and the agent ports stay live functions.
  */
 export function createTeamCatalogPorts(repoState: StateStore) {
   return Effect.gen(function* () {
@@ -20,8 +18,6 @@ export function createTeamCatalogPorts(repoState: StateStore) {
       ),
       ensureCatalogLoaded: () => loadAgents(),
       resolveAgent: getCategoryAgent,
-      canAccessRemoteCatalog: () => supabaseAuthenticated,
-      refreshRemote: () => refresh({ includeRemote: true }),
     };
   });
 }

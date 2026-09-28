@@ -93,8 +93,8 @@ The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
 their provider rows with their usage meters. TeXRA account sign-in is on the
-**General** page. It unlocks the hosted research-agent catalog and does not
-supply model access.
+**General** page. It is optional: it supplies no model access, and every agent
+ships bundled.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys

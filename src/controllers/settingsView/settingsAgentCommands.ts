@@ -23,7 +23,6 @@ import {
   validateTemplateAgentName,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
@@ -221,19 +220,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* refreshAfterAgentMutation();
         }),
       ),
-    viewRemoteAgentPrompt: (message) =>
-      present.reported(
-        'Failed to view remote agent prompt',
-        Effect.gen(function* () {
-          const config = yield* fetchRemoteAgentPromptYaml(message.agentName);
-          if (config == null) {
-            return yield* present.alert(
-              'Authentication required. Sign in using "TeXRA: Sign In".',
-            );
-          }
-          yield* bindings.showReadOnlyYaml(`${message.agentName}.yaml`, config);
-        }),
-      ),
     setCustomAgentDir: () =>
       present.reported(
         'Failed to set custom agent directory',
@@ -263,12 +249,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to apply agent team',
         applySettingsTeamRoster(message.presetId, {
           catalog,
-          loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-          canAccessRemoteCatalog: bindings.remoteCatalog.canAccess,
-          signIn: bindings.remoteCatalog.signIn,
-          forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+          loadCatalog: () => loadAgents(),
           presentation: {
-            chooseTeamAvailability: bindings.chooseTeamAvailability,
             showInfoMessage: present.notice,
             showErrorMessage: present.alert,
           },

@@ -7,26 +7,17 @@ import {
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 
 // Local imports - team launch
-import type {
-  TeamAvailabilityChoice,
-  TeamCatalogPortFailed,
-} from '@common/teams/TeamAvailabilityPreflight';
 import {
-  formatPartialTeamLaunchMessage,
   formatTeamLaunchBlockedMessage,
-  formatTeamUnavailableMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
 
 // Local imports - main-view run
-import type { SignInFailed } from '@common/errors/signInFailed';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 
 // Local imports - shared types and errors
-import type { MessageHost } from '@hosts/uiHosts';
-import { withLogChannel } from '@logger/effectLog';
 import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
@@ -37,7 +28,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
+import { Rejected } from '@shared/session/requestErrors';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isPastedImage } from '@utils/files/pastedImageName';
@@ -45,20 +36,9 @@ import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 
-const CHANNEL = 'MainViewRunLaunch';
-
 type LaunchPreparation =
   | { valid: true; request: ValidatedRunRequest }
   | { valid: false; message: string; docsCommand?: string };
-
-/** Host interactions needed by the shared team-launch decision sequence. */
-export interface MainViewRunLaunchHost {
-  chooseTeamAvailability(
-    unavailableNames: readonly string[],
-  ): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
-  signInForRemoteAgentCatalog(): Effect.Effect<boolean, SignInFailed>;
-  showInfoMessage: MessageHost['showInfoMessage'];
-}
 
 /** Turn the launcher's selections into a validated run request. */
 function buildLaunchRequest(
@@ -149,7 +129,6 @@ export function launchApprovalOptions(
 /** Both GUI hosts launch the selections carried by the requesting surface. */
 export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
-  host: MainViewRunLaunchHost,
   repoState: StateStore,
   /** The requesting session's storage root, carried as data: the pasted-image
    *  paths it names are joined onto it rather than resolved from an ambient
@@ -157,12 +136,11 @@ export function prepareSurfaceLaunch(
   storageRoot: string,
 ): Effect.Effect<
   ValidatedRunRequest,
-  Rejected | Cancelled | StateReadFailed,
+  Rejected | StateReadFailed,
   AgentCatalogServices
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
-    let infoMessage: string | undefined;
     if (launch.launchTarget !== 'team') {
       // AgentConfigSchema prefaults agent/model; reject missing UI selections
       // before schema parsing so the user sees the real form problem.
@@ -183,9 +161,6 @@ export function prepareSurfaceLaunch(
       const resolution = yield* resolveTeamLaunch({
         teamId,
         ...(yield* createTeamCatalogPorts(repoState)),
-        choose: (unavailableNames) =>
-          host.chooseTeamAvailability(unavailableNames),
-        signIn: host.signInForRemoteAgentCatalog,
       }).pipe(
         Effect.catch((error) =>
           Effect.fail(
@@ -196,8 +171,6 @@ export function prepareSurfaceLaunch(
         ),
       );
       switch (resolution.status) {
-        case 'cancelled':
-          return yield* new Cancelled();
         case 'unknown-team':
           return yield* new Rejected({
             reason: formatUnknownTeamMessage(teamId),
@@ -205,13 +178,6 @@ export function prepareSurfaceLaunch(
         case 'blocked':
           return yield* new Rejected({
             reason: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-          });
-        case 'unavailable':
-          return yield* new Rejected({
-            reason: formatTeamUnavailableMessage(
-              teamId,
-              resolution.unavailableNames,
-            ),
           });
         case 'ready':
           // The renderer's selected agent is intentionally ignored: the
@@ -227,10 +193,6 @@ export function prepareSurfaceLaunch(
                 storageRoot,
                 resolution.fields,
               );
-          if (resolution.partial)
-            infoMessage = formatPartialTeamLaunchMessage(
-              resolution.missingNames,
-            );
           break;
         default:
           return assertNever(
@@ -246,22 +208,6 @@ export function prepareSurfaceLaunch(
           docsCommand: preparation.docsCommand,
         }),
       });
-    }
-    if (infoMessage) {
-      // Fire-and-forget, as the `void` promise was: the launch does not wait
-      // on the notice, and a host that cannot show it leaves a warn rather
-      // than failing the launch.
-      yield* Effect.forkDetach(
-        host
-          .showInfoMessage(infoMessage)
-          .pipe(
-            Effect.catchTag('NotificationFailed', (failure) =>
-              Effect.logWarning(
-                `The partial team launch notice could not be shown: ${failure.message}`,
-              ).pipe(withLogChannel(CHANNEL)),
-            ),
-          ),
-      );
     }
     return preparation.request;
   });

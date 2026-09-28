@@ -291,7 +291,6 @@ than failing quietly:
   persisted tool-use session is host-side functionality today.
 - **No language-model port.** `nodePlatform` wires the unavailable port, so a
   host that needs host-provided models must supply its own.
-- **Remote agents are not loaded** — the local `agentsDir` only.
 
 ## License
 

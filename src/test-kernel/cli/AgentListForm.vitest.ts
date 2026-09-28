@@ -9,12 +9,12 @@ import {
 describe('CLI AgentListForm row budget', () => {
   const visibleAgents = [
     { value: 'builtInToolUse:chat', label: 'chat' },
-    { value: 'remote:lean', label: 'lean' },
+    { value: 'plugin:lean', label: 'lean' },
   ];
 
   it('resolves the current visible agent from bare names or canonical keys', () => {
     expect(currentVisibleAgent(visibleAgents, 'chat')?.label).toBe('chat');
-    expect(currentVisibleAgent(visibleAgents, 'remote:lean')?.label).toBe(
+    expect(currentVisibleAgent(visibleAgents, 'plugin:lean')?.label).toBe(
       'lean',
     );
     expect(
@@ -25,7 +25,7 @@ describe('CLI AgentListForm row budget', () => {
   it('does not match arbitrary labels when canonical names differ', () => {
     const agentsWithReadableLabel = [
       {
-        value: 'remote:review',
+        value: 'plugin:review',
         label: 'Readable review label',
       },
     ];
@@ -34,7 +34,7 @@ describe('CLI AgentListForm row budget', () => {
       currentVisibleAgent(agentsWithReadableLabel, 'Readable review label'),
     ).toBeUndefined();
     expect(currentVisibleAgent(agentsWithReadableLabel, 'review')?.value).toBe(
-      'remote:review',
+      'plugin:review',
     );
     expect(
       hiddenCurrentAgentHint(agentsWithReadableLabel, 'Readable review label'),

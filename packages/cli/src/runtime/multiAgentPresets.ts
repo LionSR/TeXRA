@@ -8,7 +8,6 @@ import {
   availableTeamMemberCount,
   teamAvailability,
   teamLaunchBlockReason,
-  teamPlanHasGaps,
   teamPlanStatus,
   type TeamAgentAvailability,
   type TeamAvailability,
@@ -22,15 +21,10 @@ import {
 import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { filterNotNullish } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 export type CliMultiAgentPresetRunPlan = TeamRunPlan<AgentEntry>;
-
-interface CliMultiAgentPresetFormatOptions {
-  readonly includeLoginHint?: boolean;
-}
 
 interface CliMultiAgentTeamLaunchBlockMessageOptions {
   readonly requestedPreset?: string;
@@ -51,7 +45,6 @@ interface CliMultiAgentPresetListRecord extends TeamPreset {
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
 const MULTI_AGENT_SHOW_HINT =
   'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
-const MULTI_AGENT_LOGIN_HINT = `Hint: ${RESEARCHER_ACCESS.label} sign-in may load additional remote team agents.`;
 
 /**
  * The team presets of the workspace whose state the caller holds: the built-in
@@ -108,7 +101,6 @@ function formatCliMultiAgentPresetAvailabilityPart(
 
 export function formatCliMultiAgentPresetList(
   plans: readonly CliMultiAgentPresetRunPlan[],
-  options: CliMultiAgentPresetFormatOptions = {},
 ): string {
   if (plans.length === 0) return 'No multi-agent presets found.';
 
@@ -121,13 +113,13 @@ export function formatCliMultiAgentPresetList(
     ].join('\t'),
   );
 
-  const hint = cliMultiAgentPresetListHint(plans, options);
-  return hint ? [...rows, '', hint].join('\n') : rows.join('\n');
+  return plans.some((plan) => teamPlanStatus(plan) !== 'available')
+    ? [...rows, '', MULTI_AGENT_SHOW_HINT].join('\n')
+    : rows.join('\n');
 }
 
 export function formatCliMultiAgentPresetInspection(
   plan: CliMultiAgentPresetRunPlan,
-  options: CliMultiAgentPresetFormatOptions = {},
 ): string {
   const availableWorkflowAgents = availablePresetAgents(
     plan.preset.agents.workflow,
@@ -138,7 +130,7 @@ export function formatCliMultiAgentPresetInspection(
     plan.missingAgents.toolUse,
   );
 
-  const lines = [
+  return [
     `${plan.preset.name} (${plan.preset.id})`,
     `Source: ${plan.preset.source}`,
     `Description: ${plan.preset.description}`,
@@ -152,11 +144,7 @@ export function formatCliMultiAgentPresetInspection(
     formatAgentNames(plan.missingAgents.workflow),
     'Missing tool-use agents:',
     formatAgentNames(plan.missingAgents.toolUse),
-  ];
-  if (cliMultiAgentPresetShouldIncludeLoginHint(plan, options)) {
-    lines.push('', MULTI_AGENT_LOGIN_HINT);
-  }
-  return lines.join('\n');
+  ].join('\n');
 }
 
 export function cliMultiAgentPresetNdjsonRecords(
@@ -237,31 +225,3 @@ function formatAgentNames(names: readonly string[]): string {
   return names.map((name) => `  ${name}`).join('\n');
 }
 
-function cliMultiAgentPresetListHint(
-  plans: readonly CliMultiAgentPresetRunPlan[],
-  options: CliMultiAgentPresetFormatOptions,
-): string | undefined {
-  const hasIncompletePreset = plans.some(
-    (plan) => teamPlanStatus(plan) !== 'available',
-  );
-  const hints = [
-    hasIncompletePreset ? MULTI_AGENT_SHOW_HINT : undefined,
-    plans.some((plan) =>
-      cliMultiAgentPresetShouldIncludeLoginHint(plan, options),
-    )
-      ? MULTI_AGENT_LOGIN_HINT
-      : undefined,
-  ].filter(filterNotNullish);
-  return hints.length > 0 ? hints.join('\n') : undefined;
-}
-
-function cliMultiAgentPresetShouldIncludeLoginHint(
-  plan: CliMultiAgentPresetRunPlan,
-  options: CliMultiAgentPresetFormatOptions,
-): boolean {
-  return (
-    (options.includeLoginHint ?? true) &&
-    plan.preset.source === 'built-in' &&
-    teamPlanHasGaps(plan)
-  );
-}

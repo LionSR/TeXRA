@@ -1,4 +1,3 @@
-import type { MainViewRunLaunchHost } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import type { DiffViewHost, MessageHost, PromptFailed } from '@hosts/uiHosts';
@@ -9,8 +8,7 @@ import type { Effect } from 'effect';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 
 /** Required desktop capabilities used throughout an agent run. */
-export interface DesktopAgentRunHost
-  extends MainViewRunLaunchHost, MessageHost {
+export interface DesktopAgentRunHost extends MessageHost {
   /**
    * Presents an instruction (e.g. a missing API key) as an actionable
    * dialog: each token in `actions` becomes a button — dispatched to the

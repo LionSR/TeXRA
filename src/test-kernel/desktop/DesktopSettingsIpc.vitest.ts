@@ -723,22 +723,6 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it.effect('holds the agent catalog refresh for a pending team sign-in', () =>
-    Effect.gen(function* () {
-      const refreshCatalogs = vi.fn(() => Effect.void);
-      const { settings } = createSettingsFixture({
-        bindings: { refreshCatalogs },
-      });
-
-      yield* withProcessServices(
-        testRuntime(),
-        settings.refreshAfterAuthChange({ deferAgentCatalog: true }),
-      );
-      // The credential half only: the launchers' catalogs, once.
-      expect(refreshCatalogs).toHaveBeenCalledOnce();
-    }),
-  );
-
   it('keeps a workspace-scoped row unwritten while no folder is open', async () => {
     const config = new FakeScopedConfigProvider();
     const showInfoMessage = vi.fn(() => Effect.void);

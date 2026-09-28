@@ -31,7 +31,7 @@ export const ONBOARDING_CHOICE_CHATGPT = {
 } as const;
 
 /**
- * The TeXRA account you sign in to for the hosted research-agent catalog.
+ * The TeXRA account. Optional: every agent ships bundled.
  */
 export const RESEARCHER_ACCESS = {
   label: 'TeXRA account',

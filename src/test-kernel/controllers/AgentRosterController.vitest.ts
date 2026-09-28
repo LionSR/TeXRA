@@ -36,7 +36,6 @@ const preset: AgentModePreset = {
     workflow: ['write'],
     toolUse: ['lead'],
   },
-  texraHostedAgents: [],
 };
 
 function controller(
@@ -267,7 +266,7 @@ describe('AgentRosterController', () => {
           workflow: [],
           toolUse: [
             { category: 'toolUse', source: 'custom', name: 'review' },
-            { category: 'toolUse', source: 'remote', name: 'review' },
+            { category: 'toolUse', source: 'plugin', name: 'review' },
           ],
         };
         const roster = controller(
@@ -276,7 +275,7 @@ describe('AgentRosterController', () => {
               kind: 'custom',
               agentKeys: {
                 workflow: [],
-                toolUse: ['remote:review'],
+                toolUse: ['plugin:review'],
               },
             },
             // Hidden, so only the exact identity decides what shows.
@@ -286,7 +285,7 @@ describe('AgentRosterController', () => {
         );
 
         expect(yield* roster.getVisibleAgents('toolUse')).toEqual([
-          { category: 'toolUse', source: 'remote', name: 'review' },
+          { category: 'toolUse', source: 'plugin', name: 'review' },
         ]);
       }),
   );

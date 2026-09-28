@@ -5,8 +5,6 @@
 import { type BrowserWindow, dialog } from 'electron';
 import { Effect } from 'effect';
 
-import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
-import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
@@ -103,39 +101,6 @@ export function createDesktopDialogs(
             cause,
           }),
       }).pipe(Effect.map((result) => result.response === 0)),
-    /**
-     * Sole owner of the native unavailable-member prompt. Both the main-view
-     * launch path and settings path route here so wording and button labels
-     * cannot drift. The Electron dialog is the team-availability `choose`
-     * port's own foreign edge, so it is wrapped here once and raises the
-     * port's `TeamCatalogPortFailed`.
-     */
-    presentTeamAvailabilityPrompt: (
-      prompt: TeamAvailabilityPrompt,
-      project?: string,
-    ): Effect.Effect<
-      'sign-in' | 'continue' | 'cancel',
-      TeamCatalogPortFailed
-    > =>
-      Effect.tryPromise({
-        try: async () => {
-          const { response } = await dialog.showMessageBox(window, {
-            type: prompt.severity,
-            message: prompt.message,
-            ...inProject(project),
-            buttons: prompt.actions.map((action) => action.label),
-            defaultId: 0,
-            cancelId: 2,
-          });
-          return prompt.actions[response]?.choice ?? 'cancel';
-        },
-        catch: (cause) =>
-          new TeamCatalogPortFailed({
-            member: 'choose',
-            message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      }),
     /**
      * A failure is an 'error' dialog; a refusal that names a docs page
      * (`docsCommand`, e.g. a launch without an input file) adds a guide

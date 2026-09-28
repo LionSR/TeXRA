@@ -29,7 +29,7 @@ export type CliAgentRosterRecord = AgentRosterSnapshot & {
 export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
   roots: SettingsStores,
 ) {
-  yield* loadAgents({ includeRemote: false });
+  yield* loadAgents();
   const roster = createWorkspaceAgentRosterController(roots);
   return {
     ...(yield* roster.snapshot()),

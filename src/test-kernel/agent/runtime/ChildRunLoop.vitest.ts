@@ -133,7 +133,6 @@ const foldParentPhase = (active: boolean) =>
             type: 'run.activate',
             aggregateId,
             category: AgentCategory.ToolUse,
-            isRemote: false,
           }
         : {
             type: 'run.end',

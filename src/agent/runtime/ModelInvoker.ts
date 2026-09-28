@@ -290,7 +290,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             logger,
             runId,
             modelName: bound.modelId,
-            isRemote: run.config.agentSource === 'remote',
             roots: session.roots,
           },
           fileOptions: { continuationCount: round, baseName },

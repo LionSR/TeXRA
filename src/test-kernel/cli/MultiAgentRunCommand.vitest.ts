@@ -32,7 +32,6 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 const mocks = vi.hoisted(() => ({
   executeCliToolUseConfig: vi.fn(),
   withExpandedRunInputs: vi.fn(),
-  teamPlanHasGaps: vi.fn(),
   canLaunchTeam: vi.fn(),
   findTeamPreset: vi.fn(() => ({
     id: 'mathematician',
@@ -69,7 +68,6 @@ vi.mock('@common/teams/TeamPlan', async (importOriginal) => {
     canLaunchTeam: mocks.canLaunchTeam,
     planTeamRun: mocks.planTeamRun,
     planTeamRuns: mocks.planTeamRuns,
-    teamPlanHasGaps: mocks.teamPlanHasGaps,
   };
 });
 
@@ -126,8 +124,6 @@ let authProbes: boolean[] = [];
 
 const { runMultiAgentPreset: nativeRun } =
   await import('@cli/commands/multiAgent');
-const { loadCliMultiAgentRunPlan } =
-  await import('@cli/runtime/multiAgentRunPlan');
 
 type MultiAgentRunInit = Parameters<typeof nativeRun>[1];
 
@@ -270,7 +266,6 @@ describe('CLI multi-agent run command', () => {
       inputFiles: ['problem.tex'],
       contextFiles: [],
     });
-    mocks.teamPlanHasGaps.mockReturnValue(false);
     mocks.canLaunchTeam.mockReturnValue(true);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValue(
       'blocked preset message',
@@ -387,32 +382,6 @@ describe('CLI multi-agent run command', () => {
     });
   });
 
-  it.effect(
-    'marks run-plan resolution when authenticated gaps triggered a remote load',
-    () =>
-      Effect.gen(function* () {
-        mocks.teamPlanHasGaps.mockReturnValueOnce(true);
-        authProbes.push(true);
-
-        const result = yield* loadCliMultiAgentRunPlan(
-          { preset: 'mathematician' },
-          installedHost().roots.workspaceState,
-        ).pipe(Effect.provide(fakeProcessServices()));
-
-        expect(result.remoteCatalogRefreshAttempted).toBe(true);
-        expect(result.plan.rootAgent?.name).toBe('orchestrator');
-        expect(agentCatalogMock.loadAgents).toHaveBeenNthCalledWith(1, {
-          includeRemote: false,
-        });
-        // The remote-inclusive reload goes through `refresh()`, not a second
-        // `loadAgents()`.
-        expect(agentCatalogMock.refresh).toHaveBeenCalledWith({
-          includeRemote: true,
-        });
-        expect(mocks.planTeamRun).toHaveBeenCalledTimes(2);
-      }),
-  );
-
   it('refuses headless ask before launching a team run', async () => {
     const exitCode = await runPreset(
       {
@@ -428,9 +397,7 @@ describe('CLI multi-agent run command', () => {
     );
     expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledOnce();
     expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith({
-      includeRemote: false,
-    });
+    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });
@@ -514,9 +481,9 @@ describe('CLI multi-agent run command', () => {
         agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
       }),
       message:
-        'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
+        'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or create a runnable team root before launching this preset.',
       followUpAdvice:
-        'Install or sign in for a runnable team root before launching this preset.',
+        'Install or create a runnable team root before launching this preset.',
       unexpectedWarning: 'WARN team delegation unavailable',
     });
   });

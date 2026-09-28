@@ -42,7 +42,6 @@ import { Effect, Layer, Stream } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';
-import { SignInFailed } from '@common/errors/signInFailed';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
@@ -57,22 +56,18 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
 import { CliSecrets, cliSecretsPath } from './cliSecrets';
-import { setCliLogRuntime, writeTextStderr } from './logSinks';
-import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
+import { setCliLogRuntime } from './logSinks';
+import { ensureCliSupabaseAuth } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
 
@@ -254,32 +249,7 @@ export function installCliProcessRuntime(
       // the same port.
       languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
       agentDirectories: agentDirectoriesLayer,
-      setup: {
-        // The one closure left over the runtime being installed, and a real
-        // one: signing in runs a program on it, long after this returns. The
-        // account plane it reports on is the one built above, which is also
-        // the plane this runtime serves as `SupabaseAuth`.
-        // The shared sign-in coordinator runs on the process services this
-        // install builds, and the setup port hands back a service-free
-        // program, so the services are provided from the runtime itself.
-        signIn: () =>
-          withProcessServices(
-            runtime,
-            signInCliSupabase(runtime, {
-              noBrowser: false,
-              // No panel owns this sign-in, so the URL goes to stderr.
-              writeProgress: writeTextStderr,
-            }).pipe(Effect.andThen(auth.authenticated)),
-          ).pipe(
-            Effect.mapError(
-              (cause) =>
-                new SignInFailed({
-                  message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            ),
-          ),
-      },
+      setup: {},
       // CLI model traffic goes to the same Supabase usage log the extension
       // writes to, tagged with editorType 'cli' and the CLI version. The
       // runtime's disposal drains the queue, and that disposal is the last

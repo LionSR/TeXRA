@@ -109,7 +109,6 @@ export function publishTestRunStart(
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       category: 'toolUse',
-      isRemote: false,
       parent: options.parent == null ? null : { id: options.parent },
     },
   ]);

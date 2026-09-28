@@ -57,7 +57,6 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
             aggregateId: aggregateId('run', id),
             identity: meta.identity,
             category: 'toolUse',
-            isRemote: false,
             userFollowUpSupport: 'unsupported',
             parent:
               meta.parentRunId === undefined ? null : { id: meta.parentRunId },

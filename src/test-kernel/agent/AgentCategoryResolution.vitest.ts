@@ -102,7 +102,7 @@ describe('cross-category agent resolution', () => {
     await Effect.runPromise(
       Effect.provide(
         Effect.provideService(
-          refresh({ includeRemote: false }),
+          refresh(),
           GlobalStorageFs,
           {} as RootedFileSystem,
         ).pipe(
@@ -174,7 +174,7 @@ describe('cross-category agent resolution', () => {
           hostStores(),
           AgentCategory.ToolUse,
           'assistant',
-          'remote',
+          'plugin',
         );
         expect(stale?.source).toBe('builtInToolUse');
 

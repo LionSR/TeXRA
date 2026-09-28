@@ -91,7 +91,7 @@ export const RESEARCHER_ACCESS_AUTH = {
   signInExample: `sign in to your ${RESEARCHER_ACCESS.label}`,
   deviceSignInExample: `sign in to your ${RESEARCHER_ACCESS.label} over SSH`,
   credentialsOnlyExample: `sign in to your ${RESEARCHER_ACCESS.label} (credentials only)`,
-  loginDescription: `Remote agents through your ${RESEARCHER_ACCESS.label}`,
+  loginDescription: `Sign in to your ${RESEARCHER_ACCESS.label}`,
   deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
   signOutDescription: `Sign out of your ${RESEARCHER_ACCESS.label}`,
   statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,

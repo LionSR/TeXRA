@@ -1,26 +1,16 @@
 // Third-party imports
-import * as path from 'node:path';
-
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber, Logger } from 'effect';
-import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import { AgentDirectories, AppState } from '@platform/interfaces';
-import { AgentCategory } from '@shared/schemas';
+import { Effect, Exit, Fiber } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { FakeStateStore } from '@test/support/FakePlatform';
 
 // Local imports
-import {
-  createFakeWorkspaceRoots,
-  FakeSecrets,
-} from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
 } from '@test/support/fsTestUtils';
-import { REPO_ROOT } from '@test/support/repoScan';
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import {
   LeanLanguageServices,
@@ -84,34 +74,6 @@ const mocks = vi.hoisted(() => {
     signInWithOAuth: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
   };
-});
-
-const tempDirs = useTempDirs();
-
-// The sign-out invalidation runs real: it rebuilds the local catalog over the
-// directories the AgentDirectories service names, so the suite provides the
-// bundled resources with an empty custom dir standing in for a workspace
-// without custom agents.
-let customAgentsDir: string;
-
-const bundledAgentDirectories = (): {
-  readonly custom: () => Effect.Effect<string, never>;
-  readonly customConfigured: () => Effect.Effect<boolean, never>;
-  readonly builtIn: () => Effect.Effect<string, never>;
-  readonly builtInToolUse: () => Effect.Effect<string, never>;
-} => ({
-  custom: () => Effect.succeed(customAgentsDir),
-  customConfigured: () => Effect.succeed(false),
-  builtIn: () =>
-    Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
-  builtInToolUse: () =>
-    Effect.succeed(
-      path.join(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-    ),
-});
-
-beforeAll(async () => {
-  customAgentsDir = await makeTempDir('texra-cli-auth-agents-', tempDirs);
 });
 
 vi.mock('@auth/config', () => ({
@@ -214,7 +176,7 @@ async function loadSupabaseAuth() {
       }),
       // Plain in-memory ownership tables; the auth edge binds nothing.
       gitHubSubscriptionsLayer,
-      SetupPlatform.layer({ signIn: () => Effect.succeed(false) }),
+      SetupPlatform.layer({}),
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
@@ -289,36 +251,6 @@ describe('CLI Supabase auth', () => {
       }),
   );
 
-  it.effect('removes cached remote agents after sign-out', () =>
-    Effect.gen(function* () {
-      const { signOutCliSupabase } = yield* Effect.promise(() =>
-        loadSupabaseAuth(),
-      );
-      // The real invalidation rebuilds the local catalog over the directories
-      // the AgentDirectories service names. The rebuild is the observable the
-      // mock's call count stood in for: a fresh registry serves no agents
-      // until it runs.
-      const { getAgentsByCategory } = yield* Effect.promise(
-        () => import('@agent/index'),
-      );
-      expect(getAgentsByCategory(AgentCategory.ToolUse)).toHaveLength(0);
-      const { globalStorage } = createFakeWorkspaceRoots();
-
-      yield* signOutCliSupabase().pipe(
-        Effect.provide(globalStorageFsTestLayer(globalStorage)),
-        Effect.provide(nodePlatformLayer),
-        Effect.provide(testHttpClientLayer),
-        Effect.provideService(AgentDirectories, bundledAgentDirectories()),
-        Effect.provideService(AppState, new FakeStateStore()),
-      );
-
-      expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-      expect(
-        getAgentsByCategory(AgentCategory.ToolUse).map((entry) => entry.name),
-      ).toContain('assistant');
-    }),
-  );
-
   it.effect.each([
     {
       name: 'reports a service outage instead of a signed-out session',
@@ -341,43 +273,6 @@ describe('CLI Supabase auth', () => {
         authenticated: false,
         sessionState,
       });
-    }),
-  );
-
-  it.effect('completes sign-out when the local catalog rebuild fails', () =>
-    Effect.gen(function* () {
-      const { signOutCliSupabase } = yield* Effect.promise(() =>
-        loadSupabaseAuth(),
-      );
-      const warnings: unknown[] = [];
-      const capture = Logger.make((options) => {
-        if (options.logLevel === 'Warn') warnings.push(options.message);
-      });
-      const { globalStorage } = createFakeWorkspaceRoots();
-      // The invalidation owns the best-effort guard, defects included: the
-      // directory port dying mid-rebuild must not fail sign-out.
-      const rebuildDies = {
-        custom: () => Effect.die(new Error('local rebuild failed')),
-        customConfigured: () => Effect.succeed(false),
-        builtIn: () => Effect.die(new Error('local rebuild failed')),
-        builtInToolUse: () => Effect.die(new Error('local rebuild failed')),
-      };
-
-      expect(
-        yield* signOutCliSupabase().pipe(
-          Effect.provide(globalStorageFsTestLayer(globalStorage)),
-          Effect.provide(nodePlatformLayer),
-          Effect.provide(testHttpClientLayer),
-          Effect.provideService(AgentDirectories, rebuildDies),
-          Effect.provideService(AppState, new FakeStateStore()),
-          Effect.withLogger(capture),
-        ),
-      ).toBeUndefined();
-
-      expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-      expect(warnings).toContainEqual([
-        'Local agent catalog rebuild failed after sign-out: local rebuild failed',
-      ]);
     }),
   );
 });

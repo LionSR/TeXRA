@@ -159,7 +159,6 @@ export const runTabStyles = css`
     display: var(--run-tab-meta-display, flex);
   }
 
-  .tab-meta .remote-agent,
   .tab-meta .run-kind {
     margin-inline-start: var(--wa-space-2xs);
   }

@@ -25,7 +25,6 @@ const guideSidebar = [
         link: '/guide/agent-architecture.md',
       },
       { text: 'Custom Agents', link: '/guide/custom-agents' },
-      { text: 'Remote Agents', link: '/guide/remote-agents' },
       {
         text: 'Multi-agent workflows',
         link: '/guide/multi-agent-workflows',

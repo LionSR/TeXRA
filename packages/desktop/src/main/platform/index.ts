@@ -36,10 +36,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
-import {
-  createDesktopSetupAuth,
-  type DesktopSetupAuth,
-} from '../desktopSetupAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import {
@@ -86,12 +82,6 @@ interface ElectronPlatformInitResult {
   resourcesPath: string;
   /** The directory of the built main bundle, beside its preload and renderer. */
   mainDir: string;
-  /**
-   * The setup sign-in registration installed with the runtime. Each window
-   * registers its own sign-in flow here, since the flow needs the window to
-   * anchor its dialogs to and no window exists at install time.
-   */
-  setupAuth: DesktopSetupAuth;
 }
 
 export const initializeElectronPlatform = Effect.fn(
@@ -160,7 +150,6 @@ export const initializeElectronPlatform = Effect.fn(
         }),
     ),
   );
-  const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
@@ -179,7 +168,7 @@ export const initializeElectronPlatform = Effect.fn(
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer,
-    setup: setupAuth.platform,
+    setup: {},
     // Desktop model traffic goes to the same Supabase usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
     // The runtime's disposal drains the queue, so a queue shorter than one
@@ -236,7 +225,6 @@ export const initializeElectronPlatform = Effect.fn(
       dataRoot,
       resourcesPath,
       mainDir,
-      setupAuth,
     };
   });
   return { runtime, processScope, initialize };

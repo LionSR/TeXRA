@@ -86,7 +86,6 @@ export class AgentSelectionPanel extends LitElement {
 
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
-    AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
     AGENT_SOURCE.BUILT_IN_TOOL_USE,
     AGENT_SOURCE.PLUGIN,
@@ -314,21 +313,6 @@ export class AgentSelectionPanel extends LitElement {
             postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
               agentName: agent.name,
               agentSource: agent.source,
-            }),
-        },
-      },
-      {
-        when: agent.source === AGENT_SOURCE.REMOTE && !agent.hasPath,
-        button: {
-          icon: 'file-lines',
-          text: 'View prompt',
-          label: "View the remote agent's prompt definition",
-          title: "View the remote agent's prompt definition (read-only)",
-          className: 'agent-action-btn',
-          kind: 'ghost',
-          onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT, {
-              agentName: agent.name,
             }),
         },
       },

@@ -370,19 +370,13 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     );
     yield* Effect.addFinalizer(() => Effect.sync(() => agentLogger.close()));
 
-    const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and first activation; a
     // resume appends its activation here. It is durable before the run
     // resolves, so nothing drains here (lost facts are the terminal drain's),
     // and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
       yield* Effect.uninterruptible(
-        commitResumedActivation(
-          session,
-          runId,
-          setting.agentCategory,
-          isRemote,
-        ),
+        commitResumedActivation(session, runId, setting.agentCategory),
       );
     }
 

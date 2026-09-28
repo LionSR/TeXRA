@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Local imports
-import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -18,10 +17,7 @@ import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
 } from '@controllers/auth/pendingOAuthStore';
-import type {
-  AgentCatalogServices,
-  ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -181,15 +177,11 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 });
 
 /**
- * Sign out of the TeXRA account: clear the stored session, then refresh the
- * local agent catalog. A plane the composition root never built, and a
- * storage rejection, both fail as the error the caller reports.
+ * Sign out of the TeXRA account: clear the stored session. A plane the
+ * composition root never built, and a storage rejection, both fail as the
+ * error the caller reports.
  */
-export function signOutCliSupabase(): Effect.Effect<
-  void,
-  Error,
-  AgentCatalogServices
-> {
+export function signOutCliSupabase(): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({
       try: () => cliSupabaseAuth().coordinator,
@@ -198,7 +190,6 @@ export function signOutCliSupabase(): Effect.Effect<
     yield* authCoordinator
       .clearSession()
       .pipe(Effect.mapError(unwrapAuthPortCause));
-    yield* invalidateRemoteAgentsAfterSignOut();
   });
 }
 
