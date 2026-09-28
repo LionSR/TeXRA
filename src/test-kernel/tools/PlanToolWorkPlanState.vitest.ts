@@ -247,7 +247,6 @@ describe('PlanTool — update (plan approval)', () => {
             }).pipe(Effect.orDie),
           );
 
-          expect(permission.goalEnabled).toBe(true);
           decide({ action: 'approve_and_goal' });
 
           const outcome = yield* result;

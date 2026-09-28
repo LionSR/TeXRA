@@ -166,7 +166,6 @@ const RETRY_APPROVAL_CHATGPT =
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
-const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const PLAN_APPROVAL_OBJECTIVE =
   process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
   [
@@ -957,7 +956,6 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
     requestId: 'harness-plan-approval',
     runId: HARNESS_RUN_ID,
-    goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
       objective: PLAN_APPROVAL_OBJECTIVE,
     },
