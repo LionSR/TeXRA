@@ -27,6 +27,7 @@ import {
   Effect,
   Layer,
   Result,
+  Scope,
   SubscriptionRef,
 } from 'effect';
 
@@ -159,6 +160,10 @@ export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolProbeServices>();
+    // Probes run in the layer's scope: out of every caller's reach, but
+    // interrupted when the runtime is disposed, so a probe's child process
+    // is stopped with its host instead of outliving it.
+    const layerScope = yield* Scope.Scope;
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
     const lanes = new Map<string | undefined, ProbeLane>();
     // How many holders keep each root's results (see `hold`).
@@ -196,7 +201,7 @@ export const toolAvailabilityLayer: Layer.Layer<
       Effect.suspend(() => {
         const key = inputs.workspace;
         const lane = lanes.get(key) ?? {
-          attempt: new SharedAttempt(),
+          attempt: new SharedAttempt(layerScope),
           pendingRerun: false,
         };
         lanes.set(key, lane);
