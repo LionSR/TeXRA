@@ -49,8 +49,10 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { activatedSkillEntries } from '@skills/runtimeSkills';
+import { sha256 } from '@tools/catalogEntries';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
+
 import { blobRows, stored } from './run/requestContext';
 import {
   appendRow,
@@ -58,6 +60,7 @@ import {
   snapshotRow,
   stepRow,
   type Message,
+  type ToolUseFlowState,
 } from './loop/rows';
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -71,10 +74,14 @@ interface Delivery {
 }
 
 /** A batch as the rows that consume it, for a caller that commits them in
- *  its own batch; `delivered` logs them once durable and returns what they
+ *  its own batch with a snapshot carrying `recorded`, the addresses of what
+ *  they store; `delivered` logs them once durable and returns what they
  *  change. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
+  readonly recorded: Partial<
+    Pick<ToolUseFlowState, 'instruction' | 'activated'>
+  >;
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
   readonly delivered: () => Delivery;
@@ -278,6 +285,19 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     }
     return {
       turn,
+      // The pointers commit beside the blobs: no crash separates them. The
+      // launch's instruction is the absence of one.
+      recorded: {
+        ...(instruction === undefined
+          ? {}
+          : {
+              instruction:
+                instruction === run.config.instruction
+                  ? undefined
+                  : sha256(instruction),
+            }),
+        ...(activated === undefined ? {} : { activated: sha256(activated) }),
+      },
       rows: [
         ...blobRows(runId, state, [
           ...(instruction === undefined ? [] : [instruction]),
@@ -315,7 +335,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         // the next turn's snapshot does not read the run as still failed.
         ...(joined.turn
           ? [
-              snapshotRow(runId, state, { runtime: { lastError: null } }),
+              snapshotRow(runId, state, {
+                runtime: { lastError: null },
+                ...(state.flow
+                  ? { state: { ...state.flow.state, ...joined.recorded } }
+                  : {}),
+              }),
               stepRow(runId, state, 'turn.ready'),
             ]
           : []),

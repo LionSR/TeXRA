@@ -486,7 +486,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             cell,
             turnContext,
             (yield* openStep(state, 'dispatch')).tools,
-            joined?.rows,
+            joined,
           );
           state = dispatched.state;
           const delivered = joined?.delivered();

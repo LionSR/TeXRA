@@ -72,6 +72,7 @@ import {
   type Message,
 } from './rows';
 import type { StepTools } from './step';
+import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 import type { RunCell } from './runProgram';
@@ -245,14 +246,13 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Dispatch every unsettled call of the pending response under `step`'s
- *  tools (`./step`), then deliver, with the `joined` rows committed after
- *  the tool group. */
+/** Dispatch the pending response's unsettled calls under `step`'s tools,
+ *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   turn: TurnContext,
   step: StepTools,
-  joined: readonly RunLedgerDraft[] = [],
+  joined?: Pick<JoinedFollowUps, 'rows' | 'recorded'> | null,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -961,10 +961,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
-    ...joined,
+    ...(joined?.rows ?? []),
     snapshotRow(runId, state, {
       phase: 'results.ready',
-      state: { ...flow, stateSlices },
+      state: { ...flow, stateSlices, ...joined?.recorded },
     }),
     stepRow(runId, state, 'results.ready'),
   ]);
