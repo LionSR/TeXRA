@@ -170,6 +170,7 @@ export interface InvokeRequest {
   readonly round: number;
   /** The debug file base name of the family issuing the turn. */
   readonly debugName: string;
+  readonly fullTranscript?: boolean;
 }
 
 interface InvocationResponse {
@@ -314,11 +315,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
 
       /**
-       * The semantic request an attempt admits: this run's history as the
-       * ledger folded it, plus the caller's system, tools and stop sequences
-       * and the continuation the last response left, when the binding still
-       * matches its whole origin. A resume rebuilds the admitted turn from
-       * the same inputs, so no row has to carry a second copy of the history.
+       * The semantic request an attempt admits: the folded history, the
+       * caller's system, tools and stop sequences, and the last response's
+       * continuation while the binding matches its whole origin. A resume
+       * rebuilds it from the same inputs, so no row copies the history.
        */
       const turnRequestFor = (
         state: RunState,
@@ -333,7 +333,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
           : {}),
-        ...(state.continuation !== null &&
+        ...(request.fullTranscript !== true &&
+        state.continuation !== null &&
         sameModelOrigin(state.continuation.origin, bound.origin)
           ? { continuation: state.continuation }
           : {}),
@@ -1064,9 +1065,8 @@ export const modelInvokerLayer = (): Layer.Layer<
       > {
         const state = yield* cell.current;
         const operationId = `model-operation-${generateShortId()}`;
-        // One initial attempt plus the configured number of automatic
-        // retries; the schema bounds the setting to [0, 5] and falls back to
-        // the default on anything else, so the limit is always >= 1.
+        // One initial attempt plus the configured automatic retries; the
+        // setting is bounded to [0, 5], so the limit is always >= 1.
         const limit =
           1 +
           (yield* readSettingFrom<number>(
@@ -1074,15 +1074,15 @@ export const modelInvokerLayer = (): Layer.Layer<
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
           ));
         let automaticAttempts = 0;
-        // An open attempt with no response is an invocation whose outcome the
-        // process never saw: the next attempt continues its numbering, and its
-        // gate state below says whether a human must admit it first.
+        let sent = request;
+        // An open attempt with no response is an invocation the process never
+        // saw finish: the next attempt continues its numbering, and its gate
+        // state below says whether a human must admit it first.
         const open = state.openAttempt;
         const invocationId = open?.invocation.invocationId ?? randomUUID();
         let attempt = open === null ? 1 : open.invocation.attempt + 1;
-        // An open attempt the provider accepted as background work is observed
-        // first, under its recorded deadline; only a failure of that
-        // observation (or a gate a human already holds) leads to a new attempt.
+        // An open attempt accepted as background work is observed first, under
+        // its recorded deadline; only its failure (or a held gate) starts anew.
         let observing =
           open !== null && open.accepted !== null && state.pendingRetry === null
             ? { invocation: open.invocation, accepted: open.accepted }
@@ -1183,7 +1183,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             invocation = { invocationId, attempt };
             attempt += 1;
             exit = yield* Effect.exit(
-              gatedAttempt(cell, invocation, request, bound, operationId),
+              gatedAttempt(cell, invocation, sent, bound, operationId),
             );
           }
           if (Exit.isSuccess(exit)) return exit.value;
@@ -1200,8 +1200,19 @@ export const modelInvokerLayer = (): Layer.Layer<
           }
           lastFailure = error.failure.formatted;
           failedAttempt = invocation;
-          automaticAttempts += 1;
           const { failure } = error;
+          if (
+            failure.storedResponseGone &&
+            sent.fullTranscript !== true &&
+            (yield* cell.current).continuation !== null
+          ) {
+            logger.warn(
+              `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
+            );
+            sent = { ...request, fullTranscript: true };
+            continue;
+          }
+          automaticAttempts += 1;
           if (isUserAbort(failure.error))
             return { kind: 'cancelled', state: yield* cell.current };
           if (failure.autoRetryable && automaticAttempts < limit) {

@@ -284,6 +284,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Resuming after a vendor deleted its stored response no longer fails.**
+  When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
+  Google) is refused because the vendor no longer holds it, TeXRA logs a
+  warning and retries once with the full transcript.
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session
   on a run another TeXRA window held. Every surface now offers the same
