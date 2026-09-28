@@ -32,6 +32,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 
 import {
+  forgetHiddenAgent,
   readAgentRosterSelection,
   recordCustomChoices,
   serializeWorkspaceWrite,
@@ -389,6 +390,13 @@ export class AgentRosterController<
         });
       }),
     );
+  }
+
+  /** A custom agent the user deleted: its hidden choice goes with it. */
+  forgetDeletedAgent(
+    name: string,
+  ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
+    return forgetHiddenAgent(this.deps.repoState, name);
   }
 
   /** Every agent, the hidden custom ones included. */
