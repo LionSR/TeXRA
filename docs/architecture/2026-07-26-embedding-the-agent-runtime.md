@@ -477,7 +477,7 @@ The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
 `proposal`, `planApproval`, `externalInquiry`, `userQuestion`
 (`src/shared/schemas/progressView/data.ts:106-128`). Every kind but
 `externalInquiry` parks the tool or turn that opened it
-(`requestParksItsCaller`, `:144-150`); an external inquiry is answered later
+(`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
 and parks nothing.
 
 ### Removing the requests: `approvalPromptsUnavailable`
@@ -487,12 +487,15 @@ passes to `session.interactions.use({...})`, as in the §1 example; it is a
 field of `HostInteractions` (`src/agent/runtime/HostInteractions.ts:96`), not
 an option of `runAgent`, and `RunAgentOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
-host's answer live (`HostInteractions.ts:264-267`), and it is `false` while no
-host is attached. While it is `true`, every `requiresApproval` tool is
-withheld from the model before the first turn, so a run cannot open the
-requests those tools would raise. It is a fact of the session, not a launch
-option: `executeAgent` reads the getter into the run context on a fresh launch
-and on a resume (`src/agent/runtime/executeAgent.ts:356-357`, `:507-508`), so
+host's answer (`HostInteractions.ts:264-267`), and it is `false` while no host
+is attached. The getter is sampled once when each launch or resume starts:
+`executeAgent` copies it into the run's `toolPolicy`
+(`src/agent/runtime/executeAgent.ts:356-357`, `:507-508`), and the run keeps
+that value, so attaching or detaching a host afterwards does not change the
+tools an in-progress run has. When the sampled value is `true`, every
+`requiresApproval` tool is withheld from the model before the first turn, so
+a run cannot open the requests those tools would raise. It is a fact of the
+session, not a launch option, so
 a delegated child, which runs on its parent's session, and a run the session
 wakes on its own get the same answer. The run layer forwards it to tool
 resolution (`src/agent/runtime/run/AgentRun.ts:238-239`), and
@@ -530,9 +533,11 @@ and from a terminal prompt otherwise
 
 Stopping the run (`session.runs.stop(runId)`, with the id
 `RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
-the run, and the fold drops a closed run's open requests with it
-(`projectRequests`, `src/shared/session/sessionFold.ts:1138-1153`). That is
-the cancellation path, not a substitute for answering a run that should
+the run. It does not answer or close the run's open requests: only a
+`request.decided` row resolves one (`projectRequests`,
+`src/shared/session/sessionFold.ts:1138-1156`, rebuilds a run's list from its
+unresolved rows), so an unanswered request stays listed until then. Stopping
+is the cancellation path, not a substitute for answering a run that should
 continue.
 
 ### Why there is no runtime default
