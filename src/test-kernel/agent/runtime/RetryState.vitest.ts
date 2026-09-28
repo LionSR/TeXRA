@@ -56,7 +56,6 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
@@ -75,11 +74,11 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { UsageLog } from '@shared/usageLog';
 import type { RunState } from '@shared/session/runStateFold';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -239,6 +238,7 @@ function boundModel(
       'gpt54',
     ]),
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -296,18 +296,13 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
+    swapModel: (next) =>
+      SynchronizedRef.updateAndGetEffect(model, (current) =>
+        Effect.scoped(next(current)),
+      ),
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: null },
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
-    ),
     callbacks: {},
   };
 }
@@ -385,7 +380,12 @@ const openRun = Effect.fn('openRun')(function* (
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
-      Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+      Layer.mergeAll(
+        Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+        UsageLog.disabled,
+        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+        testHttpClientLayer,
+      ),
     ),
     Layer.merge(Layer.succeed(RunLedger, session.ledger)),
   );

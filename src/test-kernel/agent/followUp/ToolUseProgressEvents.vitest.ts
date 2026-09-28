@@ -27,7 +27,6 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
@@ -39,7 +38,6 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
   testRunTools,
@@ -104,6 +102,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -175,6 +174,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -228,6 +228,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                         cause: 'context-limit' as const,
                         continuation: null,
                         continuationDropped: null,
+                        usage: null,
                       },
                     },
                   ]
@@ -323,18 +324,13 @@ function agentRunTestLayer(init: LoopInit) {
         finalToolName: init.finalToolName ?? null,
         structured: init.structured ?? { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
-        ),
         callbacks: {},
       } satisfies AgentRunShape;
     }),

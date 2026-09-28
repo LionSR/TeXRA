@@ -214,12 +214,14 @@ describe('run listing normalization', () => {
             identity: { kind: 'agent', agent: 'assistant' },
             record: agentConfig,
             status: 'ready',
+            // The model the run is on is the view's (its snapshots', else its
+            // launch model), not a second copy of the record's.
+            model: agentConfig.model,
             checkpointPresent: false,
           },
         ]);
         expect(entries.filter(isUserVisibleRun)).toHaveLength(1);
         expect(entries[0]).not.toHaveProperty('agent');
-        expect(entries[0]).not.toHaveProperty('model');
         expect(entries[0]).not.toHaveProperty('category');
       }),
   );

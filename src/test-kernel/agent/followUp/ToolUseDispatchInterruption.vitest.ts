@@ -30,7 +30,6 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
@@ -40,7 +39,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
   testRunTools,
@@ -104,6 +102,7 @@ function testBoundModel(): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -149,6 +148,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -253,18 +253,13 @@ function agentRunTestLayer(init: HarnessInit) {
         finalToolName: null,
         structured: { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
-        ),
         callbacks: {},
       } satisfies AgentRunShape;
     }),

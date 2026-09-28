@@ -17,7 +17,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
 import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
 import {
@@ -37,7 +36,6 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import { UsageLog } from '@shared/usageLog';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -69,7 +67,6 @@ type LaunchResolvedRunFacts = Pick<
   | 'stores'
   | 'opening'
   | 'initialUserMessageForTranscript'
-  | 'usageMonitor'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
@@ -327,7 +324,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
-    Secrets | AppState | UsageLog | FileSystem.FileSystem | Scope.Scope
+    Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
     const { config, setting, prompt, agentEntry, modelConfig, installed } =
       input.definition;
@@ -457,18 +454,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       );
     });
 
-    const usageMonitor = new UsageMonitor(
-      {
-        logger: agentLogger,
-        runId,
-        config: session.roots.config,
-        usageLog: yield* UsageLog,
-      },
-      {
-        agentName: config.agent,
-        agentCategory: setting.agentCategory,
-      },
-    );
     const context: AgentLaunchContext = {
       runId,
       session,
@@ -489,7 +474,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       opening,
       attachedMemoryMisses:
         opening?.attachedMemoryMisses ?? recorded?.memoryMisses ?? [],
-      usageMonitor,
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,

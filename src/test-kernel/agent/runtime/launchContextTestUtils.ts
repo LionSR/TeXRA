@@ -1,5 +1,4 @@
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -9,34 +8,11 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeStores } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-
-/**
- * The zero-priced OpenAI model every runtime fixture bills against, shaped
- * as the binding `UsageMonitor.recordUsage` reads.
- */
-export const testModelInfo = {
-  config: {
-    provider: ModelProvider.OPENAI,
-    name: 'test-model',
-    fullName: 'Test Model',
-    inputPrice: 0,
-    openRouterOnly: false,
-    requiresResponsesAPI: false,
-    capabilities: {
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
-      supportsReasoning: false,
-      cacheDiscountFactor: 0,
-    },
-  },
-};
 
 interface TestLaunchContextInit {
   runId: RunId;
@@ -86,15 +62,6 @@ export function createTestLaunchContext({
     initialUserMessageForTranscript: undefined,
     toolPolicy: {},
     attachedMemoryMisses: [],
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
     modelConfig: buildTestModelConfig(),
     modelCompatibilityKey: null,
   };

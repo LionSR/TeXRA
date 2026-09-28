@@ -71,6 +71,6 @@ export type AgentEvent =
       | 'response.finalized'
       | 'domain'
     >
-  /** Mutable persisted run config changed after run.start, e.g. model switch. */
+  /** Mutable persisted run config changed after run.start. */
   | (TraceArm<'run.config'> & { readonly runId: RunId })
   | StreamChunkEvent;

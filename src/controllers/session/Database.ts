@@ -90,7 +90,7 @@ import {
   LISTING_GROUP,
   LISTING_TYPES,
   READ_LISTING,
-  USAGE_ROWS,
+  PROJECTED_ROWS,
   totalRunUsage,
 } from './displayProjection';
 import {
@@ -316,7 +316,7 @@ export const databaseLayer = (
       // it binds once: Node 22's `node:sqlite` cannot bind a numbered `?NNN`.
       const display = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
-        UNION ALL SELECT * FROM ${USAGE_ROWS}) r
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}) r
         WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
       const storedTypes = (types: readonly string[]) =>
         JSON.stringify(types.map((type) => `${type}.1`));
@@ -349,7 +349,7 @@ export const databaseLayer = (
       // One aggregate's display rows, its projected `usage` rows among them.
       const displayAggregate = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
-        UNION ALL SELECT * FROM ${USAGE_ROWS}) r
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}) r
         WHERE r.aggregateId = ? AND r.seq >= ? ORDER BY seq`;
       // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
       const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
@@ -367,7 +367,7 @@ export const databaseLayer = (
       ]);
       const inputRows = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
-        UNION ALL SELECT * FROM ${USAGE_ROWS}
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}
         UNION ALL SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
           AND e.type NOT IN (SELECT value FROM json_each(?))) r

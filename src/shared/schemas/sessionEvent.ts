@@ -305,6 +305,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),
+  durable('run.model', { model: z.string().min(1) }), // projected (`MODEL_ROWS`), never stored
   /**
    * The parent edge severed: a child promoted to the top level by a stop
    * that detaches its children. The only fact after `run.start` that moves
@@ -542,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 36;
+export const SESSION_EVENT_FORMAT = 37;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

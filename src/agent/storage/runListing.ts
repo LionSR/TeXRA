@@ -43,6 +43,9 @@ interface RunListingBase {
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
+  /** The model the run is on, as the view folds it: its latest snapshot's
+   *  (`run.model`), else the one it was launched with. */
+  model?: string;
   /**
    * Whether a `flow.snapshot` row exists on the run aggregate — one indexed
    * read per row, never a fold. This is what a listing needs to advertise
@@ -151,6 +154,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           status: run.status,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
+          ...(run.model === null ? {} : { model: run.model }),
           checkpointPresent,
         };
         const identity = run.identity;

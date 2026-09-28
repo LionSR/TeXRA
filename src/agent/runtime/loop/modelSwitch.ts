@@ -4,9 +4,8 @@
  * holds the run's state.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Effect, Scope, SynchronizedRef } from 'effect';
+import { Effect, SynchronizedRef } from 'effect';
 
-import { configChange } from '@agent/storage/runLifecycle';
 import {
   resolveModelRoute,
   routeCompatibilityKey,
@@ -15,13 +14,16 @@ import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { bindModel, releaseBindingUploads } from '../run/modelBinding';
+import { bindModel } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/unstable/http';
 import type { RunCell } from './runProgram';
 
 /** Record a host-admitted model switch: the compaction that drops the
- *  continuation, the snapshot naming the new model, then the live swap. */
+ *  continuation and the snapshot naming the new model, committed inside the
+ *  swap, so the new binding goes into force only once its rows have. The
+ *  snapshot's `modelId` is the run's one model fact; the run's configuration
+ *  row keeps the model it was launched with. */
 export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   function* (
     state: RunState,
@@ -46,46 +48,42 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (!nextConfig) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
-    const next = yield* bindModel({
-      config: nextConfig,
-      stores: run.stores,
-      compatibilityKey: current.compatibilityKey,
-      declinedRoutes: state.declinedRoutes,
-      agentCategory: run.config.agentCategory,
-      temperature: run.setting.temperature,
-    }).pipe(Scope.provide(run.scope));
-    // The snapshot's model id is the loop's model fact; the run's
-    // configuration row, which a listing, a resume and every renderer read,
-    // changes with it in the same batch, so no reader sees one without the
-    // other.
-    const config = yield* configChange(run.session, run.runId, {
-      ...run.config,
-      model: next.modelId,
-    });
-    const switched = yield* cell.append([
-      {
-        type: 'model.compaction',
-        aggregateId: rowAggregate(run.runId),
-        payload: {
-          keepPrefix: state.messages.length,
-          messages: [],
-          cause: 'model-switch',
-          continuation: null,
-          continuationDropped:
-            state.continuation === null ? null : 'history-replaced',
-        },
-      },
-      ...(config === null ? [] : [config]),
-      snapshot(state, {
-        phase: state.phase ?? 'model.ready',
-        runtime: {
-          modelId: next.modelId,
-          modelCompatibilityKey: next.compatibilityKey,
-        },
+    let switched = state;
+    yield* run.swapModel(() =>
+      Effect.gen(function* () {
+        const next = yield* bindModel({
+          config: nextConfig,
+          stores: run.stores,
+          compatibilityKey: current.compatibilityKey,
+          declinedRoutes: state.declinedRoutes,
+          agentCategory: run.config.agentCategory,
+          temperature: run.setting.temperature,
+        });
+        switched = yield* cell.append([
+          {
+            type: 'model.compaction',
+            aggregateId: rowAggregate(run.runId),
+            payload: {
+              keepPrefix: state.messages.length,
+              messages: [],
+              cause: 'model-switch',
+              continuation: null,
+              continuationDropped:
+                state.continuation === null ? null : 'history-replaced',
+              usage: null,
+            },
+          },
+          snapshot(state, {
+            phase: state.phase ?? 'model.ready',
+            runtime: {
+              modelId: next.modelId,
+              modelCompatibilityKey: next.compatibilityKey,
+            },
+          }),
+        ]);
+        return next;
       }),
-    ]);
-    yield* SynchronizedRef.set(run.model, next);
-    yield* releaseBindingUploads(current.model, current.modelId);
+    );
     return switched;
   },
 );

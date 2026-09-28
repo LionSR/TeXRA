@@ -933,8 +933,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'run.removed':
-      // Existence cannot become more true (5.2, "Duplicates"): a second
-      // start is a no-op. The rest move session slices alone.
+      // Existence cannot become more true (5.2); the rest move session slices.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running window
@@ -957,10 +956,10 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       };
     }
     case 'run.config': {
-      // A background process has no model; every other run shows its own.
+      // A process has no model; any other run keeps a `run.model` it holds.
       const { config } = event;
-      const model =
-        run.identity.kind === 'process' ? null : (config.model ?? null);
+      const kept = run.model ?? config.model ?? null;
+      const model = run.identity.kind === 'process' ? null : kept;
       return {
         ...run,
         model,
@@ -969,6 +968,12 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         inputFiles: config.inputFiles ?? [],
       };
     }
+    case 'run.model':
+      return {
+        ...run,
+        model: event.model,
+        modelLabel: getModelLabel(event.model),
+      };
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
     case 'context.state':
@@ -984,8 +989,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         },
       };
     case 'run.fact': {
-      // Each family (and each `plugin.fact` kind) is a latest-only listing
-      // key of its own: the newest row replaces what the view holds.
+      // Each family (and `plugin.fact` kind) is its own latest-only key.
       const fact = event.fact;
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
@@ -1004,8 +1008,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
         : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
     case 'run.detach':
-      // The edge severed: the child is top level from here (one run model,
-      // section 3.2). A run never acquires a new parent.
+      // The edge severed (one run model, 3.2); a run never gets a new parent.
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
       return { ...run, description: event.description };
@@ -1219,13 +1222,12 @@ function foldDurable(
     read !== 'listing' &&
     (isTranscriptEvent(event) ||
       phaseMoveOf(event) !== null ||
-      event.type === 'run.config')
+      ['run.config', 'run.model'].includes(event.type))
       ? foldTraceEvent(view, event, deferred)
       : false;
   const listingType = listingKeyOf(event);
   if (listingType === null) return traceChanged;
-  // Listing facts are ordered by commit per (aggregate, listing type),
-  // whichever read delivered them (5.2, "Duplicates").
+  // Ordered by commit per (aggregate, listing type), whatever the read (5.2).
   const listingKey = `${event.aggregateId}/${listingType}`;
   const { latest } = sessionIndexesOf(view);
   const newest = latest.get(listingKey);

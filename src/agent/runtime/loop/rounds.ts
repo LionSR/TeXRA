@@ -49,6 +49,7 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { compactIfNeeded } from '../run/compaction';
 import { turnText } from '../run/turnText';
 import { appendRow, stepRow, type SnapshotPatch } from './rows';
+import { ModelInvoker } from '../ModelInvoker';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
 import type { RunCell } from './runProgram';
@@ -127,6 +128,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
   run: AgentRunShape,
 ) {
   const { runId, setting, logger, session, prompt } = run;
+  const invoker = yield* ModelInvoker;
   if (setting.agentCategory !== AgentCategory.Workflow) {
     return yield* Effect.die(new Error('Round mode requires a workflow run.'));
   }
@@ -166,6 +168,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
         ledger: yield* RunLedger,
         logger,
         bound: yield* SynchronizedRef.get(run.model),
+        invoker,
         stores: session.roots,
         system: undefined,
         tools: [],

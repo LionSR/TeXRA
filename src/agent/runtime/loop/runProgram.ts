@@ -12,7 +12,6 @@ import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   RUN_OUTCOME,
-  type NormalizedUsage,
   type RunId,
   type RunOutcome,
   type SessionEvent,
@@ -27,7 +26,7 @@ import {
 } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { AgentRun, type AgentRunShape } from '../run/AgentRun';
+import { AgentRun } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
 import { haltedStepRow } from './rows';
 import type { FollowUps } from '../FollowUps';
@@ -113,25 +112,6 @@ export const makeRunCell = (
             : Effect.succeed(folded.success);
         }),
     } satisfies RunCell;
-  });
-
-/**
- * Record one round's usage against the binding that served it. A manual retry
- * may have rebound the model inside the invoker, so the price is charged
- * against `run.model`'s current value rather than whatever the round started
- * with. The totals are the ledger's folded ones, response time included.
- * Both loops call this after a successful round.
- */
-export const recordServedUsage = (
-  run: Pick<AgentRunShape, 'model' | 'usageMonitor'>,
-  state: RunState,
-  latestUsage: NormalizedUsage | null,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const served = yield* SynchronizedRef.get(run.model);
-    yield* Effect.sync(() =>
-      run.usageMonitor.recordUsage(state.usage, latestUsage, served),
-    );
   });
 
 /** Why a run the ledger holds no rows for cannot be continued. */

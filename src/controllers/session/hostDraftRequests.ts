@@ -16,6 +16,7 @@ import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
+import type { UsageLog } from '@shared/usageLog';
 import {
   recordingsDir,
   startRecording,
@@ -99,17 +100,18 @@ export class HostDraftRequests {
     | StorageFs
     | HttpClient.HttpClient
     | ChildProcessSpawner
+    | UsageLog
   > {
     switch (request.kind) {
       case 'polish': {
-        // The helper model behind the polish is resolved against the session's
-        // setting slots and the process secret store; a host port takes no
-        // services, so the secret store is read here.
-        const stores = {
-          ...session.roots,
-          secrets: yield* Secrets,
-        };
-        const text = yield* polishTextWithAI(request.text, stores).pipe(
+        // A host port takes no services, so the secret store the helper
+        // model is resolved against is read here.
+        const secrets = yield* Secrets;
+        const text = yield* polishTextWithAI(
+          request.text,
+          session,
+          secrets,
+        ).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };

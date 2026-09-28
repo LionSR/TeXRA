@@ -83,8 +83,7 @@ export type RunLedgerDraft = Extract<
       | 'stream.end'
       | 'request.opened'
       | 'request.decided'
-      | 'followup.consumed'
-      | 'run.config';
+      | 'followup.consumed';
   }
 >;
 
@@ -178,8 +177,8 @@ export type RunState = RunPosition & {
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
-  /** Derived (D12): the priced usage stamped on every `response` row plus
-   *  `tool.result` `add` operations. No snapshot carries it. */
+  /** Derived (D12): the priced usage on every `response` and `model.compaction`
+   *  row plus `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
   /** The turn the last `context-window` compaction (one per round) hit. */
   readonly overflowRecoveredAtTurn: number | null;
@@ -196,7 +195,7 @@ export type RunState = RunPosition & {
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
-type CardRowType = 'tool.start' | 'tool.end' | 'stream.end' | 'run.config';
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
@@ -217,6 +216,7 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.start': true,
   'run.activate': true,
   'run.config': true,
+  'run.model': true,
   'run.detach': true,
   'run.end': true,
   'run.removed': true,
@@ -587,6 +587,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ...advance(current),
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
+        usage: addTurnUsage(current.usage, p.usage),
         ...(p.cause === 'context-window'
           ? { overflowRecoveredAtTurn: current.turn }
           : {}),

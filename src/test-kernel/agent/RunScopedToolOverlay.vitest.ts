@@ -79,6 +79,7 @@ function validationLaunch(
 /** A model that records the tools it was offered and then stops the run. */
 function observingInvokerLayer(seen: InvokeRequest[]) {
   return Layer.succeed(ModelInvoker, {
+    call: () => Effect.die(new Error('No compaction in this scenario.')),
     invoke: (cell, request) =>
       Effect.gen(function* () {
         seen.push(request);

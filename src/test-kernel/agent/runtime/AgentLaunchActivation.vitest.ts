@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
-  helperCompletion: vi.fn(),
-  helperModel: vi.fn(),
+  helperCall: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
@@ -26,8 +25,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
-  helperModel: mocks.helperModel,
-  helperCompletion: mocks.helperCompletion,
+  helperCall: mocks.helperCall,
 }));
 // Only the regression test below replaces `runFlowWithLifecycle`; every other
 // launch in this suite fails during launch-assembly, before the lifecycle, and
@@ -40,7 +38,6 @@ vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
 });
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -309,10 +306,7 @@ describe('native agent launch activation', () => {
       Effect.gen(function* () {
         const gate = yield* Deferred.make<string>();
         const descriptionStarted = yield* Deferred.make<void>();
-        mocks.helperModel.mockImplementationOnce(() =>
-          Effect.succeed({} as BoundModel),
-        );
-        mocks.helperCompletion.mockImplementationOnce(() =>
+        mocks.helperCall.mockImplementationOnce(() =>
           Deferred.succeed(descriptionStarted, undefined).pipe(
             Effect.andThen(Deferred.await(gate)),
           ),

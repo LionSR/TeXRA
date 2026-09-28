@@ -62,7 +62,6 @@ import {
 import {
   loadRun,
   makeRunCell,
-  recordServedUsage,
   settleRun,
   stagedBy,
   stoppedBy,
@@ -518,6 +517,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 ledger,
                 logger,
                 bound,
+                invoker,
                 stores: session.roots,
                 system: step.system,
                 tools,
@@ -551,7 +551,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (outcome.kind === 'failed') {
           return { state, outcome: 'failed' } as const;
         }
-        yield* recordServedUsage(run, state, outcome.usage);
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.

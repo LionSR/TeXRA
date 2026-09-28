@@ -14,6 +14,7 @@ import {
 } from '@platform/languageModel';
 import { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
+import { UsageLog } from '@shared/usageLog';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -63,6 +64,7 @@ const processStores = Layer.mergeAll(
   // real signature's `LanguageModel` requirement.
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
+  UsageLog.disabled,
   // The recorder is mocked, so nothing is spawned.
   scriptedSpawnerLayer(() => ({})).layer,
 );
@@ -76,6 +78,7 @@ const storesWithoutCredential = Layer.mergeAll(
   Layer.succeed(StorageFs)({} as RootedFileSystem),
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
+  UsageLog.disabled,
   scriptedSpawnerLayer(() => ({})).layer,
 );
 

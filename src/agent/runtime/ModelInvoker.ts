@@ -1,18 +1,19 @@
 /**
- * The one service that touches the llm `Model`. One `invoke` is one model
- * invocation with its billed attempts: the `TurnRequest` assembled from the
- * folded `RunState`, `prepareTurn`, the `attempt` row committed before the
- * request leaves the process (F1), `identified` when the provider names the
- * response, the stream bridged into the trace, and the `response` row with
- * its dispatch facts and priced usage committed before any tool runs.
+ * The one service that touches the llm `Model`; every call carries a purpose
+ * (`run/modelCall.ts`). One `invoke` is one turn with its billed attempts: the
+ * `TurnRequest` assembled from the folded `RunState`, `prepareTurn`, the
+ * `attempt` row committed before the request leaves the process (F1),
+ * `identified` when the provider names the response, the stream bridged into
+ * the trace, and the `response` row with its dispatch facts and priced usage
+ * committed before any tool runs. `call` is a compaction summary on the same
+ * binding, gate and pricing, recorded by its caller.
  *
- * Two owners of retry, as before. Owner A is automatic and route-scoped: a
- * bounded batch of attempts under the session's `ModelRetryGate`, so sibling
- * runs on one credential share cooling. Owner B is a human and indefinite,
- * and it is durable here: the prompt is admitted by a `request.opened`
- * row whose `model.retry` permit walks
- * `waiting` -> `authorized` -> `started`. A decision survives a restart, an
- * unused permit survives one, and a consumed permit never buys a second
+ * Two owners of retry. Owner A is automatic and route-scoped: a bounded batch
+ * of attempts under the session's `ModelRetryGate`, so sibling runs on one
+ * credential share cooling. Owner B is a human and indefinite, and durable:
+ * the prompt is admitted by a `request.opened` row whose `model.retry` permit
+ * walks `waiting` -> `authorized` -> `started`. A decision survives a restart,
+ * an unused permit survives one, and a consumed permit never buys a second
  * billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
@@ -28,7 +29,6 @@ import {
   type FileSystem,
   Layer,
   Result,
-  Scope,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -74,6 +74,7 @@ import {
   type RunLedgerRefused,
 } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { UsageLog } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -82,12 +83,20 @@ import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
   backgroundDelivery,
   bindModel,
-  releaseBindingUploads,
   type BoundModel,
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
+import {
+  beforeNextAttempt,
+  callModel,
+  reportUsage,
+  RETRY_BACKOFF_MS,
+  routePolicies,
+  type CallPurpose,
+  type CallResult,
+} from './run/modelCall';
 import { priceTurnUsage } from './run/pricing';
-import { turnText } from './run/turnText';
+import { turnReasoning, turnText } from './run/turnText';
 import {
   attemptRows,
   checkRecordedRequest,
@@ -104,7 +113,6 @@ import {
 } from './loop/rows';
 import type { RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/unstable/http';
-import type { RoutePolicy } from './ModelRetryGate';
 
 /**
  * Credential source a retry decision picked: the account the run is already
@@ -120,9 +128,6 @@ const PERSONAL_RETRY = {
   type: 'request.decided',
   decision: { action: 'retry', credentials: 'personal' },
 } as const;
-
-/** Base delay between automatic attempts; the gate scales its own on top. */
-const RETRY_BACKOFF_MS = 1000;
 
 /**
  * The output-budget preflight's constants (R4), as the retired handler
@@ -207,19 +212,14 @@ export class ModelInvoker extends Context.Service<
       InvokeError,
       FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
     >;
+    /** One call outside a turn (a compaction summary) on the run's binding. */
+    readonly call: (
+      purpose: Exclude<CallPurpose, 'turn'>,
+      request: TurnRequest,
+      declinedRoutes: readonly DeclinableUsageRoute[],
+    ) => Effect.Effect<CallResult, Error>;
   }
 >()('@texra/agent/ModelInvoker') {}
-
-function turnReasoning(turn: TurnResult): string {
-  if (turn.kind !== 'http') return '';
-  return turn.content
-    .flatMap((part) =>
-      part.kind === 'reasoning'
-        ? (part.content ?? part.summary).map((piece) => piece.text)
-        : [],
-    )
-    .join('\n');
-}
 
 /** A failed attempt's classification; the rows it left are in the cell. */
 class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
@@ -244,7 +244,7 @@ type RetryLifecycleEvent =
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun
+  AgentRun | UsageLog | LanguageModel | HttpClient.HttpClient
 > =>
   Layer.effect(
     ModelInvoker,
@@ -252,6 +252,14 @@ export const modelInvokerLayer = (): Layer.Layer<
       const run = yield* AgentRun;
       const { runId, session, logger } = run;
       const aggregateId = rowAggregate(runId);
+      const usageLog = yield* UsageLog;
+      type Binders = LanguageModel | HttpClient.HttpClient;
+      const binders = yield* Effect.context<Binders>();
+      const attribution = {
+        agentName: run.config.agent,
+        agentCategory: run.config.agentCategory,
+        runId,
+      };
 
       const logRetryLifecycle = (
         operationId: string,
@@ -536,6 +544,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         logRetryLifecycle(operationId, 'attempt_succeeded', bound, {
           attempt: invocation.attempt,
         });
+        yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
         return {
           kind: 'response',
           state: next,
@@ -841,32 +850,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         AttemptFailed | InvokeError,
         FileSystem.FileSystem
       > => {
-        const verdictFor = (error: Error) =>
+        const routes = routePolicies(bound, (error) =>
           error instanceof AttemptFailed
             ? error.failure.verdict
-            : classifyModelFailure(error).verdict;
-        const routes: [RoutePolicy, RoutePolicy] = [
-          {
-            key: bound.modelRetryRouteKey,
-            classifyFailure: (error: Error) => {
-              const verdict = verdictFor(error);
-              return verdict.rateLimitScope === 'model'
-                ? { retryAfterMs: verdict.retryAfterMs }
-                : undefined;
-            },
-          },
-          {
-            key: bound.wireRouteKey,
-            classifyFailure: (error: Error) => {
-              const verdict = verdictFor(error);
-              return verdict.wireRouteFailure
-                ? { retryAfterMs: verdict.retryAfterMs }
-                : undefined;
-            },
-            isReachableFailure: (error: Error) =>
-              verdictFor(error).rateLimitScope === 'model',
-          },
-        ];
+            : classifyModelFailure(error).verdict,
+        );
         return session.modelRetries.withRoutes(routes, {
           baseBackoffMs: RETRY_BACKOFF_MS,
           onWait: (delayMs) =>
@@ -874,36 +862,42 @@ export const modelInvokerLayer = (): Layer.Layer<
         })(attemptOnce(cell, invocation, request, bound, operationId));
       };
 
-      /** Rebuild the model binding a retry runs on. */
+      /** Rebind a retry, retiring the failed binding; a failure keeps it, loudly. */
       const rebind = (
         selection: RetryCredentials,
         failed: BoundModel,
         declinedRoutes: readonly DeclinableUsageRoute[],
       ) =>
-        SynchronizedRef.updateEffect(run.model, (current) =>
-          Effect.gen(function* () {
+        run
+          .swapModel((current) =>
             // A switch may have landed while the panel waited; never undo it.
-            if (current !== failed) return current;
-            // A personal-key retry leaves the failed route's overlay behind
-            // (subscription window, prices, PDF admission, a Kimi coding
-            // endpoint) and binds the catalog model.
-            const config =
-              selection === 'personal'
-                ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
-                : failed.config;
-            const next = yield* bindModel({
-              config,
-              stores: run.stores,
-              compatibilityKey: failed.compatibilityKey,
-              declinedRoutes,
-              agentCategory: run.config.agentCategory,
-              temperature: run.setting.temperature,
-            }).pipe(Scope.provide(run.scope));
-            yield* releaseBindingUploads(current.model, current.modelId);
-            logger.debug('Refreshed model binding before manual retry');
-            return next;
-          }),
-        );
+            current !== failed
+              ? Effect.succeed(current)
+              : bindModel({
+                  // A personal-key retry leaves the failed route's overlay
+                  // behind (subscription window, prices, PDF admission, a
+                  // Kimi coding endpoint) and binds the catalog model.
+                  config:
+                    selection === 'personal'
+                      ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
+                      : failed.config,
+                  stores: run.stores,
+                  compatibilityKey: failed.compatibilityKey,
+                  declinedRoutes,
+                  agentCategory: run.config.agentCategory,
+                  temperature: run.setting.temperature,
+                }),
+          )
+          .pipe(
+            Effect.provideContext(binders),
+            Effect.catch((error) =>
+              Effect.sync(() =>
+                logger.warn('Failed to refresh the model binding', {
+                  data: error,
+                }),
+              ),
+            ),
+          );
 
       type Decision = 'retry' | 'deny' | 'cancel';
 
@@ -1041,17 +1035,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               : declined;
           // Always rebuild the binding: a key or preference may have changed
           // while the panel waited, and a personal answer declines the offered
-          // route. A rebind that fails leaves the binding as it is, loudly.
-          yield* rebind(selection, failed, declinedRoutes).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                logger.warn(
-                  'Failed to refresh the model binding before retry',
-                  { data: error },
-                ),
-              ),
-            ),
-          );
+          // route.
+          yield* rebind(selection, failed, declinedRoutes);
           yield* cell.append((state) =>
             retryRows(runId, state, pendingRetry('authorized'), {
               lastError: info,
@@ -1233,7 +1218,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
               { data: failure.info.message },
             );
-            yield* Effect.sleep(RETRY_BACKOFF_MS);
+            const { declinedRoutes: declined } = yield* cell.current;
+            const bound = yield* SynchronizedRef.get(run.model);
+            yield* beforeNextAttempt(bound, (b) =>
+              rebind('configured', b, declined),
+            );
             continue;
           }
           if (
@@ -1257,6 +1246,23 @@ export const modelInvokerLayer = (): Layer.Layer<
         }
       });
 
-      return { invoke };
+      /** A compaction summary on the run's binding; its caller records it. */
+      const call = (
+        purpose: Exclude<CallPurpose, 'turn'>,
+        request: TurnRequest,
+        declinedRoutes: readonly DeclinableUsageRoute[],
+      ) =>
+        callModel({
+          purpose,
+          binding: SynchronizedRef.get(run.model),
+          reacquire: (failed) => rebind('configured', failed, declinedRoutes),
+          request,
+          gate: session.modelRetries,
+          settings: session.roots,
+          attribution,
+          logger,
+        }).pipe(Effect.provideService(UsageLog, usageLog));
+
+      return { invoke, call };
     }),
   );

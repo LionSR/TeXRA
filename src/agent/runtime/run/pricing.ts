@@ -116,7 +116,10 @@ const xaiTierGapWarned = new Set<string>();
  * A live xAI model whose window reaches the lowest documented threshold but
  * which has no row above would silently bill flat rates, so it warns once.
  */
-function warnOnMissingXaiTier(config: ModelConfig, logger: AgentTrace): void {
+function warnOnMissingXaiTier(
+  config: ModelConfig,
+  logger: Pick<AgentTrace, 'warn'>,
+): void {
   if (
     config.deprecated === true ||
     config.retired === true ||
@@ -154,7 +157,7 @@ function turnRates(
   bound: BoundModel,
   plan: boolean,
   promptTokens: number,
-  logger: AgentTrace,
+  logger: Pick<AgentTrace, 'warn'>,
 ): TurnRates {
   const { config } = bound;
   if (plan) return { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 };
@@ -268,7 +271,7 @@ export function priceTurnUsage(
   bound: BoundModel,
   usage: TurnResult['usage'],
   responseTimeMs: number,
-  logger: AgentTrace,
+  logger: Pick<AgentTrace, 'warn'>,
 ): NormalizedUsage | null {
   if (usage === null) return null;
   const provider = usage.providerUsage;
