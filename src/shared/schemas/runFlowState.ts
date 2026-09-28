@@ -9,11 +9,12 @@ import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
-import { SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
+import { ACTIVATED_SKILLS_MAX, SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
 import { FileLocationSchema } from './output';
+import { QualifiedSkillNameSchema } from './skillName';
 import {
   type RunUsageTotals,
   TokenCountSchema,
@@ -244,7 +245,10 @@ export const ToolUseSnapshotStateSchema = z.object({
   /** The names of the skills the run's user activated, recorded with the
    *  delivery that activated them: each step resolves them against its own
    *  catalog, and grants one while its plugin, if any, still contributes. */
-  activated: z.array(z.string().min(1)).optional(),
+  activated: z
+    .array(QualifiedSkillNameSchema)
+    .max(ACTIVATED_SKILLS_MAX)
+    .optional(),
   /** The attached memories the opening could not read. */
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */

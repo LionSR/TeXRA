@@ -36,7 +36,11 @@ import {
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
-import type { MediaAttachmentKind, RunId } from '@shared/schemas';
+import {
+  ACTIVATED_SKILLS_MAX,
+  type MediaAttachmentKind,
+  type RunId,
+} from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
 import type { RunLedger } from '@shared/session/runLedger';
@@ -56,6 +60,7 @@ import {
   type Message,
   type ToolUseFlowState,
 } from './loop/rows';
+import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -249,16 +254,25 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const instruction = userFollowUpInstruction(
       followUps.map((followUp) => followUp.content),
     );
-    // A skill the user activated joins the run's recorded activations by
-    // name; each step resolves it against its own catalog.
-    const found = activatedSkillNames(
-      followUps
-        .filter(({ content }) => isInstruction(content))
-        .map(({ content }) => content.text),
+    // A skill the user activated, and the run's current step resolves,
+    // joins the run's recorded activations by name, the latest
+    // `ACTIVATED_SKILLS_MAX` kept; each step resolves them again.
+    const found = yield* resolveActivations(
+      run,
+      activatedSkillNames(
+        followUps
+          .filter(({ content }) => isInstruction(content))
+          .map(({ content }) => content.text),
+      ),
     );
     const current = state.flow?.state.activated ?? [];
     const activated = found.some((name) => !current.includes(name))
-      ? [...new Set([...current, ...found])]
+      ? [
+          ...new Set([
+            ...current.filter((name) => !found.includes(name)),
+            ...found,
+          ]),
+        ].slice(-ACTIVATED_SKILLS_MAX)
       : undefined;
     return {
       turn,

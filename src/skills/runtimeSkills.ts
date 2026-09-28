@@ -6,6 +6,8 @@ import {
 } from '@common/plugins/pluginTrust';
 
 import {
+  ACTIVATED_SKILLS_MAX,
+  QualifiedSkillNameSchema,
   SKILL_CATALOG_MAX_SKILLS,
   type ActiveSkillSourceScope,
   type SkillCatalogEntry,
@@ -56,6 +58,7 @@ let installed: SkillContributionsInstall = {
 
 interface RuntimeSkillCatalogResult {
   catalog: SkillCatalogEntry[];
+  named: SkillCatalogEntry[];
   issues: SkillLoadIssue[];
 }
 
@@ -273,18 +276,22 @@ const catalogEntry = (
 /**
  * The names of the skills a user activated in `texts`: each
  * `<skill_activation>` block names its skill as
- * {@link formatRuntimeSkillActivation} writes it. The run records the names;
- * each step resolves them against its own catalog.
+ * {@link formatRuntimeSkillActivation} writes it. Only a well-formed skill
+ * name counts, and only the last `ACTIVATED_SKILLS_MAX`; what a run records
+ * of them is what a step's catalog resolves.
  */
-export const activatedSkillNames = (texts: readonly string[]): string[] => [
-  ...new Set(
-    texts.flatMap((text) =>
-      [
-        ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
-      ].map(([, name]) => name),
+export const activatedSkillNames = (texts: readonly string[]): string[] =>
+  [
+    ...new Set(
+      texts.flatMap((text) =>
+        [
+          ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
+        ].flatMap(([, name]) =>
+          QualifiedSkillNameSchema.safeParse(name).success ? [name] : [],
+        ),
+      ),
     ),
-  ),
-];
+  ].slice(-ACTIVATED_SKILLS_MAX);
 
 export function formatRuntimeSkillActivation({
   skill,
@@ -313,6 +320,10 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     readonly settings: SettingsStores;
     /** The installed plugins the step accepted. */
     readonly plugins: InstalledPluginLoad;
+    /** Skills to resolve by name from everything discovery enables, past
+     *  the listing's bound: the activated ones, or a resumed step's
+     *  recorded listing. */
+    readonly named?: readonly string[];
   }) {
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: the step lists those of the plugins it pinned.
@@ -334,9 +345,14 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
       kept.set(source.plugin, count + 1);
       return count < SKILL_CATALOG_MAX_SKILLS;
     });
+    const named = new Set(run.named);
     return {
       catalog: yield* Effect.forEach(catalog, (entry) =>
         catalogEntry(run.workspacePath, entry),
+      ),
+      named: yield* Effect.forEach(
+        result.skills.filter(({ skill }) => named.has(skill.name)),
+        (entry) => catalogEntry(run.workspacePath, entry),
       ),
       issues: result.errors,
     } satisfies RuntimeSkillCatalogResult;
