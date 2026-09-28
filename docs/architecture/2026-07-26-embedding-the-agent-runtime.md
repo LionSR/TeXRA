@@ -167,10 +167,10 @@ yields the detach disposer, so it is `yield*`ed. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
-(`src/agent/runtime/HostInteractions.ts:85-91`). An unanswered request stays
+(`src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
-presentation events, and says `approvalPromptsUnavailable: true` (§3), which
-keeps the approval-gated tools away from the model.
+presentation events, and sets `approvalPromptsUnavailable: true` on the
+object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
 
 ### Putting it together
 
@@ -440,7 +440,7 @@ this document.
 
 A run that needs a person commits a `request.opened` row carrying what a
 surface shows (a diff, a command, a question) and parks. The row is answered
-by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:407-421`).
+by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:381-396`).
 "Pending" is nothing but the fold: an opened request with no decision is
 listed in the session view's `requests`
 (`src/shared/session/sessionView.ts:256`;
@@ -467,7 +467,7 @@ run's `request.decided` row, and the run continues from it.
 `HostInteractions` is not part of this path. It is a presentation port —
 events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
 carry — and no method on it returns a decision
-(`src/agent/runtime/HostInteractions.ts:85-91`). Attaching a host with
+(`src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
 `session.interactions.use(...)` is how a host sees what a run does; it never
 unparks a run.
 
@@ -475,24 +475,29 @@ unparks a run.
 
 The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
 `proposal`, `planApproval`, `externalInquiry`, `userQuestion`
-(`src/shared/schemas/progressView/data.ts:133-156`). Every kind but
+(`src/shared/schemas/progressView/data.ts:106-128`). Every kind but
 `externalInquiry` parks the tool or turn that opened it
-(`requestParksItsCaller`, `:171-175`); an external inquiry is answered later
+(`requestParksItsCaller`, `:144-150`); an external inquiry is answered later
 and parks nothing.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
-A host attached with `approvalPromptsUnavailable: true`
-(`HostInteractions`, `src/agent/runtime/HostInteractions.ts:96`) withholds
-every `requiresApproval` tool from the model before the first turn, so a run
-cannot open the requests those tools would raise. It is a fact of the
-session, not a launch option: `executeAgent` reads the attached host's answer
-into the run context on a fresh launch and on a resume
-(`src/agent/runtime/executeAgent.ts:360`, `:521`), so a delegated child,
-which runs on its parent's session, and a run the session wakes on its own
-get the same answer. The run layer forwards it to tool resolution
-(`src/agent/runtime/run/AgentRun.ts:243`), and `resolveAgentTools` drops the
-gated tools (`src/agent/runtime/agentToolResolution.ts:245-249`). The tools that open
+The host says it by supplying `approvalPromptsUnavailable` on the object it
+passes to `session.interactions.use({...})`, as in the §1 example; it is a
+field of `HostInteractions` (`src/agent/runtime/HostInteractions.ts:96`), not
+an option of `runAgent`, and `RunAgentOptions` has no such property. The
+session's `interactions.approvalPromptsUnavailable` getter reads the attached
+host's answer live (`HostInteractions.ts:264-267`), and it is `false` while no
+host is attached. While it is `true`, every `requiresApproval` tool is
+withheld from the model before the first turn, so a run cannot open the
+requests those tools would raise. It is a fact of the session, not a launch
+option: `executeAgent` reads the getter into the run context on a fresh launch
+and on a resume (`src/agent/runtime/executeAgent.ts:356-357`, `:507-508`), so
+a delegated child, which runs on its parent's session, and a run the session
+wakes on its own get the same answer. The run layer forwards it to tool
+resolution (`src/agent/runtime/run/AgentRun.ts:238-239`), and
+`resolveAgentTools` drops the gated tools
+(`src/agent/runtime/agentToolResolution.ts:245-249`). The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
 `userQuestion` requests all declare `requiresApproval: true`. This is a loud,
 defined degradation — an agent that cannot ask is not given the tools that
@@ -501,7 +506,7 @@ ask — rather than a hang.
 The CLI's hosts answer it from the approval policy
 (`cliApprovalPromptsUnavailable`,
 `packages/cli/src/runtime/approval/settleApprovals.ts`), through the headless
-adapter's getter (`packages/cli/src/runtime/approvalAdapter.ts:320`) and the
+adapter's getter (`packages/cli/src/runtime/approvalAdapter.ts:320-322`) and the
 TUI's.
 
 ### Answering the rest: `retry`
@@ -511,7 +516,7 @@ user-retryable provider failure, so the flag cannot remove it, and a headless
 embedder must answer it. The `@texra-ai/agent` package's own sessions do
 exactly this: a listener over `viewChanges` denies each pending `retry`
 with the decide command above (`denyRetryRequests`,
-`packages/agent/src/effect/sessionPrograms.ts:91-146`). It keeps the set of
+`packages/agent/src/effect/sessionPrograms.ts:102-142`). It keeps the set of
 requests it has answered, prunes it as the fold drops them, and forgets a
 request whose decision was refused so a later level denies it again. The worked
 example in §1 inlines the same listener.
@@ -526,7 +531,7 @@ and from a terminal prompt otherwise
 Stopping the run (`session.runs.stop(runId)`, with the id
 `RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
 the run, and the fold drops a closed run's open requests with it
-(`src/shared/session/sessionFold.ts:1858-1860`). That is
+(`projectRequests`, `src/shared/session/sessionFold.ts:1138-1153`). That is
 the cancellation path, not a substitute for answering a run that should
 continue.
 
@@ -536,8 +541,8 @@ A request is a durable row, answerable by any surface that folds the session
 — the TUI, a reattached desktop window, a resumed process. A built-in
 decider could not tell a session nobody watches from one whose surface has
 not attached yet, and it would answer requests a person was meant to see.
-The caller knows which case it is in, and says so with a host attached with
-`approvalPromptsUnavailable` plus a decider for `retry`.
+The caller knows which case it is in, and says so by attaching a host that
+sets `approvalPromptsUnavailable` plus a decider for `retry`.
 
 ---
 
