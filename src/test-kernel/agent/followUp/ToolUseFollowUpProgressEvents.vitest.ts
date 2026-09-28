@@ -65,12 +65,10 @@ describe('tool-use follow-up progress events', () => {
   } = {}): void {
     const handle = testRunHandle({ runId, agent: 'search' });
     const owner = session ?? testDefaultSession();
-    handle.attachToolUseFlow({
-      ownerSession: owner,
+    handle.attachControls({
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
-      interrupt: () => {},
     });
     owner.runs.track(handle);
     trackedRuns.push({ session: owner, runId });

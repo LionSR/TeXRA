@@ -194,16 +194,7 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
 }
 
 function activeTarget(): ToolUseFollowUpTarget {
-  return {
-    kind: 'active',
-    context: {
-      ownerSession: {} as SessionHandle,
-      requestImmediateCompaction: () => {},
-      modelSwitchDisabledReason: () => Effect.succeed(undefined),
-      switchModel: () => Effect.void,
-      interrupt: () => {},
-    },
-  };
+  return { kind: 'active' };
 }
 
 describe('submitFollowUp', () => {

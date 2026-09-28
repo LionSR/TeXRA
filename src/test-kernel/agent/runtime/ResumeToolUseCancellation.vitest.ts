@@ -1,12 +1,11 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
   readRunRecords: vi.fn(),
-  invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUse: vi.fn(),
   agentRunLayer: vi.fn(),
@@ -101,18 +100,6 @@ import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
-/** The part of `ToolUseStart` this suite drives. */
-interface InterruptibleLoopStart {
-  attachment: {
-    attach: (flowContext: TestFlowContext) => void;
-    detach: (flowContext: TestFlowContext) => void;
-  };
-}
-
-interface TestFlowContext {
-  interrupt(): void;
-}
-
 /** Empty totals: this suite never bills a turn. */
 const NO_USAGE = {
   firstInputTokens: 0,
@@ -204,8 +191,8 @@ function completedTurn() {
 /** Handle stub for tests that only need the flow to run to completion. */
 function noopFlowHandle(): unknown {
   return {
-    attachToolUseFlow: vi.fn(),
-    detachToolUseFlow: vi.fn(),
+    attachControls: vi.fn(),
+    detachControls: vi.fn(),
   };
 }
 
@@ -290,75 +277,29 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   );
 
   it.effect(
-    'interrupts at flow attachment before substantive work starts',
+    'a stop asked before the resumed loop starts interrupts the run first',
     () =>
       Effect.gen(function* () {
         const runId = 'e80491' as RunId;
         const context = buildResumeContext(runId);
-        const order: string[] = [];
         const tools = [
           {
             definition: { name: 'run_scoped' },
             call: vi.fn(),
           },
         ] as unknown as readonly ITool[];
-        let attachedContext: TestFlowContext | undefined;
-        const handle = {
-          attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('attach');
-            attachedContext = flowContext;
-          }),
-          detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('detach');
-            if (attachedContext === flowContext) attachedContext = undefined;
-          }),
-        };
-
         mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-        mocks.runFlowWithLifecycle.mockImplementationOnce(
-          (
-            _context: unknown,
-            run: (liveHandle: typeof handle) => Effect.Effect<unknown, unknown>,
-          ) => run(handle),
-        );
-        mocks.runToolUse.mockImplementationOnce(
-          (start: InterruptibleLoopStart) =>
-            Effect.sync(() => {
-              let interrupted = false;
-              const flowContext: TestFlowContext = {
-                interrupt: () => {
-                  order.push('interrupt');
-                  interrupted = true;
-                },
-              };
-              start.attachment.attach(flowContext);
-              if (!interrupted) mocks.invokeModelOrTool();
-              start.attachment.detach(flowContext);
-              return {
-                outcome: interrupted
-                  ? RUN_OUTCOME.CANCELLED
-                  : RUN_OUTCOME.COMPLETED,
-                response: '',
-                files: [],
-                usage: NO_USAGE,
-                structured: undefined,
-              };
-            }),
+
+        const exit = yield* Effect.exit(
+          resumeToolUseFromResumeData(createToolUseResumeData({ runId }), {
+            tools,
+            isCancellationRequested: () => true,
+          }),
         );
 
-        const snapshot = createToolUseResumeData({ runId });
-
-        const result = yield* resumeToolUseFromResumeData(snapshot, {
-          tools,
-          isCancellationRequested: () => {
-            order.push('query');
-            expect(attachedContext).toBeDefined();
-            return true;
-          },
-          onCancellationAtFlowAttachment: () => order.push('cancel'),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        // The run's own fiber is interrupted: no loop, so nothing to attach.
+        expect(Exit.hasInterrupts(exit)).toBe(true);
+        expect(mocks.runToolUse).not.toHaveBeenCalled();
         // The run-scoped tools reach the loop through the run's own layer.
         expect(mocks.agentRunLayer).toHaveBeenCalledWith(
           context,
@@ -367,14 +308,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', runId),
         );
-        expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-        expect(order).toEqual([
-          'attach',
-          'query',
-          'cancel',
-          'interrupt',
-          'detach',
-        ]);
       }),
   );
 

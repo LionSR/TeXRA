@@ -72,9 +72,9 @@ type ToolUseLaunchVariant =
   | {
       readonly kind: 'resume';
       readonly onIdle?: () => void;
-      /** Queried once the resumed flow is attached and interruptible. */
+      /** Read on the run's own fiber before its loop starts: a stop asked
+       *  before the run was reachable is that fiber's interruption. */
       readonly isCancellationRequested?: () => boolean;
-      readonly onCancellationAtFlowAttachment?: () => void;
     };
 
 /**
@@ -153,28 +153,28 @@ function launchToolUseRun(
       ? { memoryMisses: ctx.attachedMemoryMisses }
       : {}),
   });
-  return runToolUse({
-    ...(shared.turns
-      ? {
-          turns: {
-            turnPermit: shared.turns.turnPermit,
-            onTurnBoundary: (result) =>
-              shared.turns!.onTurnBoundary(toResult(result)),
+  // A stop asked before the run was reachable is this fiber's interruption,
+  // taken before the loop does any work.
+  return Effect.suspend(() =>
+    variant.kind === 'resume' && variant.isCancellationRequested?.()
+      ? Effect.interrupt
+      : runToolUse({
+          ...(shared.turns
+            ? {
+                turns: {
+                  turnPermit: shared.turns.turnPermit,
+                  onTurnBoundary: (result) =>
+                    shared.turns!.onTurnBoundary(toResult(result)),
+                },
+              }
+            : {}),
+          resume: variant.kind === 'resume',
+          attachment: {
+            attach: (controls) => handle.attachControls(controls),
+            detach: (controls) => handle.detachControls(controls),
           },
-        }
-      : {}),
-    resume: variant.kind === 'resume',
-    attachment: {
-      attach: (flowContext) => {
-        handle.attachToolUseFlow(flowContext);
-        if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
-          variant.onCancellationAtFlowAttachment?.();
-          flowContext.interrupt();
-        }
-      },
-      detach: (flowContext) => handle.detachToolUseFlow(flowContext),
-    },
-  }).pipe(
+        }),
+  ).pipe(
     Effect.map(toResult),
     Effect.provide(
       runLayerFor(
@@ -469,10 +469,8 @@ export interface ResumeToolUseFromResumeDataOptions
     RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
-  /** Query caller-owned cancellation once the resumed flow is interruptible. */
+  /** Caller-owned cancellation, read on the run's fiber before its loop. */
   readonly isCancellationRequested?: () => boolean;
-  /** Observe cancellation accepted at the live-flow attachment boundary. */
-  readonly onCancellationAtFlowAttachment?: () => void;
 }
 
 /**
@@ -535,8 +533,6 @@ export function resumeToolUseFromResumeData(
                 kind: 'resume',
                 onIdle: options.onIdle,
                 isCancellationRequested: options.isCancellationRequested,
-                onCancellationAtFlowAttachment:
-                  options.onCancellationAtFlowAttachment,
               },
             ),
       // Resume reads the parent edge from the persisted `run.start`.

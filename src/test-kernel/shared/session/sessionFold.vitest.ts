@@ -1680,7 +1680,7 @@ describe('foldRunState', () => {
           }),
         );
         expect(state?.outcome).toBe('completed');
-        expect(state?.flow?.family).toBe('toolUse');
+        expect(state?.family).toBe('toolUse');
         expect(state?.snapshotCommit).toBe(10);
       },
     ],

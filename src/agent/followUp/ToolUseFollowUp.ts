@@ -238,8 +238,8 @@ function admitFollowUp(
           if (submission.kind === 'queued') return { status: 'queued' };
           // The queue is the only way in. A refusal here means another process
           // holds the run, or the session has no entry for it (terminalized by
-          // a run deletion, or terminally released) or is disposed: the flow
-          // context may still be attached during teardown, but the
+          // a run deletion, or terminally released) or is disposed: the run's
+          // controls may still be attached during teardown, but the
           // continuation boundary that owns it is gone.
           return {
             status: 'failed',
@@ -326,7 +326,7 @@ export function recordRunRefusal(
         .markUnreadable(runId, runHeldMessage(ownerPid(classification.owner)))
         .pipe(Effect.as('owned_elsewhere'));
     case 'owned_here':
-      // A claim this process holds for a run with no live flow context is
+      // A claim this process holds for a run with no running loop here is
       // a registry/claim disagreement, not a free run: it stays read-only
       // with a diagnostic naming that disagreement.
       return session

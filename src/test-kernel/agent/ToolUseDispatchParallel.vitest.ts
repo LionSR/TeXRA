@@ -810,7 +810,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = folded!.flow?.state.stateSlices;
+      const slices = folded!.flow?.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);
