@@ -1717,7 +1717,8 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             Effect.forkIn(processScope),
           );
           if (unopenedProjects.length > 0) {
-            // Detached: startup does not wait on the user dismissing it.
+            // Forked: startup does not wait on the user dismissing it; the
+            // process scope's close ends it with everything else.
             yield* Effect.tryPromise({
               try: () =>
                 showDesktopWarningDialog(
@@ -1730,11 +1731,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                   cause,
                 }),
             }).pipe(
-              // Its failure or a defect: detached, nothing else reports it.
+              // Its failure or a defect: forked, nothing else reports it.
               Effect.catchCause((cause) =>
                 Effect.sync(() => console.error(Cause.squash(cause))),
               ),
-              Effect.forkDetach,
+              Effect.forkIn(processScope),
             );
           }
         }),

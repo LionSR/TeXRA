@@ -787,6 +787,32 @@ hits in 5 files.
 - `ProcessLayer` as a whole waits until a PR shows it deletes more than it
   adds.
 
+### Re-check against main (2026-09-28)
+
+Most of the shrunk move had already landed or does not pay.
+
+- **Host identity is done.** It is `WorkspaceRoots.host` with an `sdk` member;
+  `SetupPlatform.host`, `installedHost` in production, `initProcessSettingHost`
+  and `processToolHost` no longer exist.
+- **The SDK already has the bound transport** (`modelBinding` hands every model
+  `longRunningModelFetch`) and runs the first-install seed itself. The rest of
+  `bootstrapHost` is a global dispatcher an embedder must not set, account
+  probes the SDK deliberately answers signed-out, and bundled skills it has no
+  resources for. Routing the SDK through it would add three switches to save
+  one call.
+- **Process fibers**: the reprobe and the app-signal listeners are already
+  `forkScoped`; the last two process-lifetime `forkDetach` calls (the
+  extension's welcome and the desktop's unopened-projects dialog) moved onto
+  the activation and process scopes. The watcher fibers are owned by their VS
+  Code disposables and stay.
+- **`AppSignals` finalizer: not done.** `emitAppSignal` is synchronous and is
+  called from secret stores and VS Code callbacks that hold no Effect context,
+  so a tag would sit beside the module reference, not replace it, and the
+  hub holds nothing once its subscribers are interrupted.
+- **Owner-id nonce: deferred.** The second-graph guard stays, so nothing
+  consumes the nonce yet. Adding it now would also strand a disposed graph's
+  leases as `alive` in a live process, where today the same id reclaims them.
+
 ### Current state
 
 Five composition roots install the process runtime (extension, desktop, CLI
