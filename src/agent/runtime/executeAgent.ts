@@ -502,7 +502,6 @@ export function resumeToolUseFromResumeData(
       definition,
       runId: resume.runId,
       resumed: true,
-      modelCompatibilityKey: resume.modelCompatibilityKey,
       session: runSession,
       toolPolicy: {
         approvalPromptsUnavailable:

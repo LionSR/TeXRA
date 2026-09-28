@@ -99,7 +99,6 @@ export function addTurnUsage(
       totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
     totalServerToolRequests:
       totals.totalServerToolRequests + (usage.serverToolRequests ?? 0),
-    totalResponseTimeMs: totals.totalResponseTimeMs + usage.responseTimeMs,
   };
 }
 

@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
+import { Effect, Exit, FileSystem, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -206,13 +206,13 @@ export function createWorkflowScriptStrategy(
       for (const entry of run.journal) {
         const parsed = RunEndSchema.safeParse(entry.result);
         if (!parsed.success) {
-          // Presentation tolerates what accounting does not: the cost path
-          // (`workflowJournalEntryCost`) throws on this same corruption because
-          // a mis-billed run is a correctness fault, while a delivery line that
-          // omits one entry's files is merely incomplete. Loud either way — a
-          // silently short file list is how corruption goes unreported.
+          // The summary is display: every attempt's spend is on its own run.
+          // A corrupt entry never fails a finished run; it is reported here,
+          // once per settle, and the cost line counts it as 0
+          // (`workflowJournalEntryCost`). Loud, since a silently short
+          // summary is how corruption goes unreported.
           yield* Effect.logWarning(
-            `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+            `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files and cost are omitted from the summary: ${toErrorMessage(parsed.error)}`,
           ).pipe(
             Effect.annotateLogs({ data: parsed.error }),
             withLogChannel(SUMMARY_CHANNEL),
@@ -340,21 +340,13 @@ export function createWorkflowScriptStrategy(
         // Settle only entries consumed by this invocation: the durable union may
         // hold superseded or malformed untouched recovery history, and baseline
         // history is irrelevant to this invocation's cost and delivered files.
-        const settleAttempt = Effect.try({
-          try: () => {
-            const journal = attemptJournal();
-            return {
-              journal,
-              board: projection.tally(),
-              costUsd: attemptCost.total(journal),
-            };
-          },
-          catch: ensureError,
-        }).pipe(
-          Effect.flatMap(({ journal, board, costUsd }) =>
-            settleSummary({ journal, board }, costUsd),
-          ),
-        );
+        const settleAttempt = Effect.suspend(() => {
+          const journal = attemptJournal();
+          return settleSummary(
+            { journal, board: projection.tally() },
+            attemptCost.total(journal),
+          );
+        });
         // The child-run loop cancels a turn through `signal` (it runs the
         // turn uninterruptibly); the engine cancels by interruption. This is
         // the one edge between them: the abort interrupts the run, which
@@ -386,14 +378,7 @@ export function createWorkflowScriptStrategy(
         );
         if (Exit.isFailure(result)) {
           // A failed run's delivery reports what it did too.
-          const settlement = yield* Effect.exit(settleAttempt);
-          if (Exit.isFailure(settlement)) {
-            const settlementError = Cause.squash(settlement.cause);
-            params.logger.warn(
-              `Workflow script '${params.name}' failed and its cost could not be settled from this attempt's journal: ${toErrorMessage(settlementError)}`,
-              { data: settlementError },
-            );
-          }
+          yield* settleAttempt;
           return yield* Effect.failCause(result.cause);
         }
         yield* settleAttempt;

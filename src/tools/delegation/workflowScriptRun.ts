@@ -51,16 +51,12 @@ type WorkflowScriptRunWithProgressOptions<R> = Omit<
   readonly onActivity?: (line: string) => void;
 };
 
+/** An entry's recorded spend, for the display-only summary: no usage is no
+ *  spend, and an entry that is not a run result counts 0 (the summary's
+ *  settle step warns about it, `workflowScriptStrategy.settleSummary`). */
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = RunEndSchema.safeParse(entry.result);
-  if (!result.success) {
-    throw new Error(
-      `Workflow journal entry ${entry.index} is not a run result.`,
-      { cause: result.error },
-    );
-  }
-  // No usage recorded is no spend.
-  return result.data.usage?.totalCost ?? 0;
+  return result.success ? (result.data.usage?.totalCost ?? 0) : 0;
 }
 
 /**

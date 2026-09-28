@@ -440,9 +440,8 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
       commit: 0,
-      snapshotCommit: null,
       lastSnapshot: null,
-      rowsBeforeSnapshot: 0,
+      ledgerRows: 0,
       family: 'toolUse',
       at: null,
       outcome: null,

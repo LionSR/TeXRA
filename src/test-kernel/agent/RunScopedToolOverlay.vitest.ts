@@ -1,8 +1,12 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { Effect, Layer, SynchronizedRef } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -56,11 +60,7 @@ function approvalGatedTool(name: string): ITool {
   return { ...tool(name), requiresApproval: true };
 }
 
-/**
- * A launch whose model binds without a credential: the run layer reads the
- * compatibility key off the launch context, and the validation key binds the
- * deterministic in-process model.
- */
+/** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
   config: AgentLaunchContext['config'],
@@ -72,7 +72,6 @@ function validationLaunch(
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
     modelConfig: buildTestModelConfig(),
-    modelCompatibilityKey: 'Validation',
   };
 }
 
@@ -112,6 +111,26 @@ function runLayer(
     Layer.provideMerge(nodeSpawnerLayer),
   );
 }
+
+// Every launch here binds the deterministic in-process model through the
+// real route: the guarded package-validation gate, opened as CI opens it.
+beforeAll(() => {
+  const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
+  writeFileSync(flag, 'overlay');
+  for (const [name, value] of Object.entries({
+    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_OVERLAY_VALIDATION',
+    TEXRA_OVERLAY_VALIDATION: '1',
+    CI: '1',
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV: 'TEXRA_OVERLAY_FLAG',
+    TEXRA_OVERLAY_FLAG: flag,
+    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'overlay',
+  }))
+    vi.stubEnv(name, value);
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('run-scoped tool resolution', () => {
   setupPlatform({ workspacePath: process.cwd() });

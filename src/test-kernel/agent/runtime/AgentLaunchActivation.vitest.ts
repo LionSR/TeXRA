@@ -79,7 +79,6 @@ function runOf(key: AggregateId): RunId {
 }
 
 const FRESH_RUN_ID = 'f1e501' as RunId;
-const MODEL_COMPATIBILITY_KEY = 'OpenAIResponse' as const;
 
 const config = AgentConfigSchema.parse({
   agent: 'chat',
@@ -275,7 +274,6 @@ describe('native agent launch activation', () => {
         const resume = createToolUseResumeData({
           runId,
           agentConfig: config,
-          modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
         });
         mocks.retrieveSessionResumeData.mockReturnValueOnce(
           Effect.succeed(resume),

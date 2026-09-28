@@ -313,7 +313,6 @@ describe('AgentLaunchContext', () => {
               runId: EXECUTION_ID,
               session,
               resumed: true,
-              modelCompatibilityKey: 'OpenAIResponse',
             }),
             {},
           ),
@@ -364,7 +363,6 @@ describe('AgentLaunchContext', () => {
           config,
           runId: EXECUTION_ID,
           session,
-          modelCompatibilityKey: 'OpenAIResponse',
         });
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
@@ -431,7 +429,6 @@ describe('AgentLaunchContext', () => {
           runId: EXECUTION_ID,
           session,
           resumed: true,
-          modelCompatibilityKey: 'OpenAIResponse',
         });
 
         const restored = { bash: false, toolEdit: true, superYolo: false };
@@ -504,7 +501,6 @@ describe('AgentLaunchContext', () => {
             session,
             resumed: true,
             suppressErrorNotification: true,
-            modelCompatibilityKey: 'OpenAIResponse',
           }),
           {},
         ),

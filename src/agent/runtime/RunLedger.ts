@@ -287,7 +287,7 @@ const loaded = (
     // null). Return that unopened state so the caller can seed pending
     // input; after a restart there is no in-memory copy of those rows.
     if (state === null) return null;
-    if (state.phase === null && state.rowsBeforeSnapshot === 0) return state;
+    if (state.phase === null && state.ledgerRows === 0) return state;
     if (state.phase === null) {
       return yield* inconsistent(
         run,

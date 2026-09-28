@@ -3,9 +3,9 @@ import type { ResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { RunId } from '@shared/schemas';
 
 /**
- * The identity a host resumes a tool-use run under: the config, the run id
- * and the conversation format its rows are in. The run's state is not part
- * of it — the loop folds that from the ledger.
+ * The identity a host resumes a tool-use run under: the config and the run
+ * id. The run's state and route are not part of it — the loop folds them
+ * from the ledger.
  */
 export function createToolUseResumeData(
   overrides: Partial<ResumeData> = {},
@@ -17,7 +17,6 @@ export function createToolUseResumeData(
       model: 'test-model',
       agentCategory: 'toolUse',
     }),
-    modelCompatibilityKey: null,
     ...overrides,
   };
 }

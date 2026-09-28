@@ -270,15 +270,11 @@ export const agentRunLayer = (
         );
       }
 
-      // The model of a resumed run is the one its latest snapshot names; a
-      // fresh run binds the launch model under the route the launch context
-      // resolved for it (including a persisted compatibility key).
+      // The model and route of a resumed run are the ones its latest snapshot
+      // names; a fresh run binds the launch model under today's default route.
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
-      const compatibilityKey =
-        persisted !== null
-          ? persisted.modelCompatibilityKey
-          : ctx.modelCompatibilityKey;
+      const compatibilityKey = persisted?.modelCompatibilityKey ?? null;
       const modelConfig =
         modelId === config.model ? ctx.modelConfig : MODEL_CONFIGS[modelId];
       if (!modelConfig) {

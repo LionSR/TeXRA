@@ -39,13 +39,16 @@ import { isObject } from '@utils/core';
 import {
   applyRunRow,
   byId,
+  copyById,
   freshRunPosition,
   isFollowUpRow,
   isSharedRunRow,
   phaseAfter,
   type RunLoopPhase,
+  type FoldPass,
   type RunPosition,
   type SharedRunRow,
+  writable,
 } from './runRows';
 import { mutate } from './stateOperation';
 import type { z } from 'zod';
@@ -151,13 +154,12 @@ export type RunState = RunPosition & {
   readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
-  readonly snapshotCommit: CommitOrdinal | null;
   /** The latest `run.snapshot` as written: the loop state beside it moves
    *  with each `tool.result` mutation, this does not. */
   readonly lastSnapshot: RunSnapshotPayload | null;
-  /** Ledger rows folded into this state: zero means nothing but queued
-   *  input has folded, which is what tells an unopened run from a broken one. */
-  readonly rowsBeforeSnapshot: number;
+  /** Ledger rows folded into this state, before and after any snapshot:
+   *  zero means only queued input has folded (an unopened, not broken, run). */
+  readonly ledgerRows: number;
   /** `null` until the opening `run.snapshot` (then `initial`, moved by
    *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
@@ -257,9 +259,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
   round: 0,
   commit,
-  snapshotCommit: null,
   lastSnapshot: null,
-  rowsBeforeSnapshot: 0,
+  ledgerRows: 0,
   phase: null,
   modelId: null,
   modelCompatibilityKey: null,
@@ -358,8 +359,19 @@ function applyMutations(
 const opened = (state: RunState | null): state is RunState =>
   state !== null && state.phase !== null;
 
-function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
+function foldRow(
+  current: RunState | null,
+  row: SessionEvent,
+  pass: FoldPass,
+): Fold | null {
   const commit = row.commit;
+  /** `messages` with `added` appended: the pass's own array, written once
+   *  copied, so a batch of rows appends without re-copying the history. */
+  const appended = (state: RunState, ...added: readonly Message[]) => {
+    const messages = writable(pass, state.messages, (m) => [...m]);
+    for (const message of added) messages.push(message);
+    return messages;
+  };
   if (current !== null && commit <= current.commit) {
     return refuse(
       'out-of-order',
@@ -374,7 +386,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
   const advance = (state: RunState): RunState => ({
     ...state,
     commit,
-    rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+    ledgerRows: state.ledgerRows + 1,
   });
   // Pending input is the publisher's: a queued row only opens an empty run.
   if (isFollowUpRow(row))
@@ -388,7 +400,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     if (row.type === 'output.produced' && !opened(current)) {
       return refuse('out-of-order', 'output before opening snapshot', commit);
     }
-    const verdict = applyRunRow(current, row);
+    const verdict = applyRunRow(current, row, pass);
     if (verdict.kind === 'unchanged') return null;
     if (verdict.kind === 'unresolved') {
       return refuse(
@@ -407,7 +419,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       commit,
       // Only the loop's own position is a ledger row; queued input, output
       // and the requests a session opens do not open a run.
-      rowsBeforeSnapshot: state.rowsBeforeSnapshot + (at === undefined ? 0 : 1),
+      ledgerRows: state.ledgerRows + (at === undefined ? 0 : 1),
       ...verdict.rows,
       phase: phaseAfter(state.phase, at),
     });
@@ -421,7 +433,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       const state = current ?? freshRunState(commit);
       return Result.succeed({
         ...advance(state),
-        snapshotCommit: commit,
         lastSnapshot: p,
         phase: state.phase ?? 'initial',
         family: p.family,
@@ -435,7 +446,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         const state = current ?? freshRunState(commit);
         return Result.succeed({
           ...advance(state),
-          messages: [...state.messages, ...p.messages],
+          messages: appended(state, ...p.messages),
         });
       }
       if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
@@ -521,10 +532,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           if (p.calls.length === 0) {
             return Result.succeed({
               ...settled,
-              messages: [
-                ...settled.messages,
-                assistantMessageFromResult(p.turn),
-              ],
+              messages: appended(settled, assistantMessageFromResult(p.turn)),
             });
           }
           return Result.succeed({
@@ -557,19 +565,21 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
               commit,
             );
           }
+          const pendingIntents = byId(
+            Object.entries(state.pendingIntents).filter(
+              ([, intent]) => intent.responseId !== pending.responseId,
+            ),
+          );
+          pass.add(pendingIntents);
           return Result.succeed({
             ...state,
-            messages: [
-              ...state.messages,
+            messages: appended(
+              state,
               assistantMessageFromResult(pending.turn),
               ...p.messages,
-            ],
-            pendingResponse: null,
-            pendingIntents: byId(
-              Object.entries(state.pendingIntents).filter(
-                ([, intent]) => intent.responseId !== pending.responseId,
-              ),
             ),
+            pendingResponse: null,
+            pendingIntents,
           });
         }
       }
@@ -580,9 +590,14 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     case 'model.compaction': {
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
+      const messages = [
+        ...current.messages.slice(0, p.keepPrefix),
+        ...p.messages,
+      ];
+      pass.add(messages);
       return Result.succeed({
         ...advance(current),
-        messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
+        messages,
         continuation: p.continuation,
         usage: addTurnUsage(current.usage, p.usage),
         ...(p.cause === 'context-window'
@@ -601,7 +616,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
-      const pendingIntents = byId(Object.entries(current.pendingIntents));
+      const pendingIntents = writable(pass, current.pendingIntents, copyById);
       for (const callId of p.callIds) {
         const call = pending.calls.find((fact) => fact.callId === callId);
         if (call === undefined || call.parallelSafe) {
@@ -647,13 +662,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
-      return Result.succeed({
-        ...advance(current),
-        pendingIntents: byId([
-          ...Object.entries(current.pendingIntents),
-          [p.callId, { ...intent, approvalRequestId: p.requestId }],
-        ]),
-      });
+      const pendingIntents = writable(pass, current.pendingIntents, copyById);
+      pendingIntents[p.callId] = { ...intent, approvalRequestId: p.requestId };
+      return Result.succeed({ ...advance(current), pendingIntents });
     }
     case 'tools.offered': // a fresh run's comes in its opening batch
       return Result.succeed({
@@ -666,10 +677,10 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     case 'context.blob': {
       const { digest, value } = row.payload;
       const state = advance(current ?? freshRunState(commit));
-      return Result.succeed({
-        ...state,
-        contents: { ...state.contents, [digest]: value },
-      });
+      // A digest is 64 hex characters, never `__proto__`: plain assignment.
+      const contents = writable(pass, state.contents, (c) => ({ ...c }));
+      contents[digest] = value;
+      return Result.succeed({ ...state, contents });
     }
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
@@ -727,33 +738,24 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           commit,
         );
       }
-      const pendingIntents =
-        intent === undefined
-          ? current.pendingIntents
-          : byId(
-              Object.entries(current.pendingIntents).filter(
-                ([callId]) => callId !== p.callId,
-              ),
-            );
+      let pendingIntents = current.pendingIntents;
+      if (intent !== undefined) {
+        const remaining = writable(pass, pendingIntents, copyById);
+        delete remaining[p.callId];
+        pendingIntents = remaining;
+      }
+      const settled = writable(pass, pending.settled, copyById);
+      settled[p.callId] = {
+        attempt: p.attempt,
+        disposition: p.disposition,
+        duplicateOf: p.duplicateOf,
+        result: p.result,
+        attachments: p.attachments,
+      };
       return applyMutations(
         {
           ...advance(current),
-          pendingResponse: {
-            ...pending,
-            settled: byId([
-              ...Object.entries(pending.settled),
-              [
-                p.callId,
-                {
-                  attempt: p.attempt,
-                  disposition: p.disposition,
-                  duplicateOf: p.duplicateOf,
-                  result: p.result,
-                  attachments: p.attachments,
-                },
-              ],
-            ]),
-          },
+          pendingResponse: { ...pending, settled },
           pendingIntents,
         },
         p.stateMutation,
@@ -781,8 +783,9 @@ export function foldRunState(
   rows: readonly SessionEvent[],
 ): Result.Result<RunState | null, RunLedgerInconsistent> {
   let current = state;
+  const pass: FoldPass = new WeakSet();
   for (const row of rows) {
-    const next = foldRow(current, row);
+    const next = foldRow(current, row, pass);
     if (next === null) continue;
     if (Result.isFailure(next)) return next;
     current = next.success;

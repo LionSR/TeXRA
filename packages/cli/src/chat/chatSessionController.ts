@@ -28,7 +28,7 @@ import {
   presentFollowUpResult,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { cliToolUseApprovalOptions } from '@cli/runtime/approval/settleApprovals';
+import { cliApprovalDenialHandler } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -444,10 +444,10 @@ export function createChatSessionController(
   const setupRunHost = (
     runId: RunId,
   ): {
-    readonly approval: ReturnType<typeof cliToolUseApprovalOptions>;
+    readonly onDenial: ReturnType<typeof cliApprovalDenialHandler>;
     readonly finalize: () => void;
   } => ({
-    approval: cliToolUseApprovalOptions(runtimeSession, sessionContext, runId),
+    onDenial: cliApprovalDenialHandler(runtimeSession, sessionContext, runId),
     finalize: (): void => session.markRunCompleted(),
   });
 
@@ -458,7 +458,7 @@ export function createChatSessionController(
   const startRootRun = (config: AgentConfigPayload): void => {
     session.interruptedRunId = undefined;
     const runId = generateRunId();
-    const { approval, finalize } = setupRunHost(runId);
+    const { onDenial, finalize } = setupRunHost(runId);
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds the `await` of a `Deferred` the run chain completes.
@@ -482,7 +482,7 @@ export function createChatSessionController(
             {
               session: runtimeSession,
               enforceCategory: true,
-              ...approval,
+              onApprovalPolicyDenial: onDenial,
               onRunResolved: (resolvedRunId) => {
                 // Each chat round mints a fresh root run id, so
                 // bash/tool-edit/super-YOLO bypass, which is
@@ -577,7 +577,7 @@ export function createChatSessionController(
           return;
         }
 
-        const { approval, finalize } = setupRunHost(id);
+        const { onDenial, finalize } = setupRunHost(id);
 
         // Adopting the resumed stream is the mutation a refusal must not cost:
         // `resumeRun` calls this only once the saved state loaded, so the
@@ -611,7 +611,7 @@ export function createChatSessionController(
           Effect.gen(function* () {
             const result = yield* agentRuns.resume(id, {
               session: runtimeSession,
-              ...approval,
+              onApprovalPolicyDenial: onDenial,
               onResumeResolved: adoptResumedRun,
               isCancellationRequested: () => session.stopRequested,
             });

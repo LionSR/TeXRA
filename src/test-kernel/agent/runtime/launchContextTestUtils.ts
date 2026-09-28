@@ -63,6 +63,5 @@ export function createTestLaunchContext({
     toolPolicy: {},
     attachedMemoryMisses: [],
     modelConfig: buildTestModelConfig(),
-    modelCompatibilityKey: null,
   };
 }

@@ -100,7 +100,6 @@ describe('retrieveSessionResumeData', () => {
         ).toMatchObject({
           runId,
           agentConfig: { model: 'gpt55' },
-          modelCompatibilityKey: COMPATIBILITY_KEY,
         });
       }),
   );
