@@ -106,16 +106,11 @@ type _PluginServicesAreNotProcessServices = AssertNever<
 
 /**
  * The services an agent catalog load reads: the global and filesystem views
- * the local agent directories are scanned through, the app state the
- * disabled-plugin switch is read from, and the HTTP client the remote catalog
- * is listed with.
+ * the local agent directories are scanned through, and the app state the
+ * disabled-plugin switch is read from.
  */
 export type AgentCatalogServices =
-  | GlobalStorageFs
-  | FileSystem.FileSystem
-  | AgentDirectories
-  | AppState
-  | HttpClient.HttpClient;
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,

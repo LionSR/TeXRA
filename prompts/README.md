@@ -5,8 +5,10 @@ by a specific package.
 
 ## Layout
 
-- `agents/remote/workflow/` contains canonical workflow agents that TeXRA Cloud
-  may deliver remotely for whole-document transformations.
+- `agents/remote/workflow/` contains the workflow agents TeXRA Cloud delivers
+  to released versions that still load hosted agents. It serves those versions
+  only: the build no longer reads it, and the agents the current app runs ship
+  bundled (as copies) in `packages/extension/resources/agents/`.
 - The tool-use agents and specialists (the orchestrator, `search`,
   `simplifier`, `presenter`, and `progressCheck`) ship bundled in
   `packages/extension/resources/tool_use_agents/`, which is their only

@@ -28,10 +28,10 @@ type SettingsAgentCatalogEntry = ReturnType<
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
   workflow: [
     {
-      source: 'remote',
+      source: 'plugin',
       name: 'writer',
       category: 'workflow',
-      description: 'Remote writer',
+      description: 'Plugin writer',
     },
     {
       source: 'builtInWorkflow',
@@ -154,7 +154,6 @@ describe('SettingsAgentCatalogController', () => {
             workflow: ['writer'],
             toolUse: ['review', 'missing'],
           },
-          texraHostedAgents: [],
         };
         const { controller, workspaceState } = createController({
           customPresets: [persistedPreset],
@@ -173,7 +172,7 @@ describe('SettingsAgentCatalogController', () => {
           toolUse: ['missing'],
         });
         assert.deepEqual(resolved.resolution.agentKeys.workflow, [
-          'remote:writer',
+          'plugin:writer',
         ]);
         assert.deepEqual(resolved.resolution.agentKeys.toolUse, [
           'builtInToolUse:review',
@@ -194,7 +193,17 @@ describe('SettingsAgentCatalogController', () => {
     'selects preset roots without matching arbitrary orchestrator substrings',
     () =>
       Effect.gen(function* () {
-        const { controller } = createController();
+        const delegating = (name: string): SettingsAgentCatalogEntry => ({
+          source: 'builtInToolUse',
+          name,
+          category: 'toolUse',
+          tools: ['delegate_agent'],
+        });
+        const { controller } = createController({
+          agents: {
+            toolUse: [delegating('engineer'), delegating('leanOrchestrator')],
+          },
+        });
 
         assert.equal(
           yield* controller.getPresetToolUseRoot([
@@ -219,13 +228,19 @@ describe('SettingsAgentCatalogController', () => {
     () =>
       Effect.gen(function* () {
         const delegatingLean: SettingsAgentCatalogEntry = {
-          source: 'remote',
+          source: 'plugin',
           name: 'lean',
           category: 'toolUse',
           tools: ['delegate_agent'],
         };
+        const orchestrator: SettingsAgentCatalogEntry = {
+          source: 'builtInToolUse',
+          name: 'orchestrator',
+          category: 'toolUse',
+          tools: ['delegate_agent'],
+        };
         const { controller } = createController({
-          agents: { toolUse: [delegatingLean] },
+          agents: { toolUse: [delegatingLean, orchestrator] },
         });
         const mathematician = findTeamPreset(teamPresets([]), 'mathematician');
         assert.ok(mathematician);
@@ -242,16 +257,9 @@ describe('SettingsAgentCatalogController', () => {
           preview,
           planTeamRun(mathematician, {
             resolveAgent: (_category, identifier) =>
-              [
-                delegatingLean,
-                // Stand-in for the controller's synthesized built-in root entry.
-                {
-                  source: 'builtInToolUse' as const,
-                  name: 'orchestrator',
-                  category: 'toolUse' as const,
-                  tools: ['delegate_agent'],
-                },
-              ].find((entry) => agentMatchesIdentifier(entry, identifier)),
+              [delegatingLean, orchestrator].find((entry) =>
+                agentMatchesIdentifier(entry, identifier),
+              ),
           }).rootAgent?.name,
         );
         // The same member list previewed ad-hoc keeps custom semantics and
@@ -276,7 +284,6 @@ describe('SettingsAgentCatalogController', () => {
             workflow: [],
             toolUse: ['teamLead', 'orchestrator'],
           },
-          texraHostedAgents: [],
         };
         const { controller } = createController({
           agents: {
@@ -293,7 +300,7 @@ describe('SettingsAgentCatalogController', () => {
         });
 
         // Preset order wins for custom teams, even over the built-in root the
-        // member list names (synthesized because the catalog lacks it).
+        // member list names.
         assert.equal(
           yield* controller.getPresetToolUseRoot(
             customPreset.agents.toolUse,
@@ -325,7 +332,6 @@ describe('SettingsAgentCatalogController', () => {
             workflow: ['correct'],
             toolUse: ['review'],
           },
-          texraHostedAgents: [],
         },
       );
       assert.equal((yield* state.customPresets).length, 1);
@@ -364,7 +370,6 @@ describe('SettingsAgentCatalogController', () => {
           workflow: [],
           toolUse: [],
         },
-        texraHostedAgents: [],
       };
       const state = createController({
         customPresets: [target, LEGACY_ICON_PRESET, MALFORMED_PRESET],

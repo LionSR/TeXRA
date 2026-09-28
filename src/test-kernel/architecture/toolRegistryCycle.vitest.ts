@@ -18,9 +18,8 @@ import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
  * `bash -> @agent/storage -> @agent/index/agentRegistry -> remoteAgentMeta ->
  * RemoteAgentLoader -> @tools/registry`, and it put an identical 630-file
  * closure on 19 of the 50 `defineTool()` modules. Splitting the remote-agent
- * client's listing half (`@agent/remote/remoteAgentList`, registry-free) from
- * its config-loading half (`RemoteAgentLoader`, which genuinely resolves tool
- * names) severed it.
+ * client (since deleted with hosted agents) into a registry-free listing half
+ * and a config-loading half severed it.
  *
  * Measurement matches the closure census in the issue: an esbuild bundle per
  * `defineTool()` module with dependencies external, counting non-`node_modules`

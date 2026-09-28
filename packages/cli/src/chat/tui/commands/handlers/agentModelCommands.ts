@@ -19,7 +19,6 @@ import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import {
   formatTeamLaunchBlockedMessage,
-  formatTeamUnavailableMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@common/teams/TeamPlan';
@@ -84,8 +83,7 @@ export function applyInitialCliAgentSelection(
  * `/agent` → a team: the same launch resolution the extension and desktop
  * launchers use, so a team started here pins the same root agent and
  * delegation scope as one started there. The picker row already names any
- * unavailable members, so choosing it means continuing without them; the TUI
- * offers no remote-catalog sign-in mid-pick (`/login` covers that).
+ * unavailable members, so choosing it means continuing without them.
  */
 export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
   function* (teamId: string, context: SlashCommandContext) {
@@ -100,24 +98,14 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       ...(yield* createTeamCatalogPorts(
         context.runtimeSession.roots.repoState,
       )),
-      providedChoice: 'continue',
-      choose: () => Effect.succeed('continue' as const),
-      signIn: () => Effect.succeed(false),
     });
     switch (resolution.status) {
-      case 'cancelled':
-        return;
       case 'unknown-team':
         setTransientNotice(formatUnknownTeamMessage(teamId));
         return;
       case 'blocked':
         setTransientNotice(
           formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        );
-        return;
-      case 'unavailable':
-        setTransientNotice(
-          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
         );
         return;
       case 'ready':

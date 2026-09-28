@@ -1,6 +1,6 @@
 /**
  * A JSON Schema's identity, apart from its wording: what a tool's identity
- * digest covers (`toolDigests` in `@tools/liveTools`), so a reworded
+ * digest covers (`toolDigests` in `@tools/catalogEntries`), so a reworded
  * description never invalidates a call the model already made.
  */
 import { isObject } from '@utils/core';

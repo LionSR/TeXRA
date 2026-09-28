@@ -1,7 +1,17 @@
-import type { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
+import { Data, type Effect } from 'effect';
 import type { TeamRunPlan } from '@common/teams/TeamPlan';
 import type { AgentModePreset } from '@shared/schemas';
-import type { Effect } from 'effect';
+
+/**
+ * The host would not persist a team roster: `commitPreset` reaches a host
+ * store, so each host raises this from its own boundary.
+ */
+export class TeamCatalogPortFailed extends Data.TaggedError(
+  'TeamCatalogPortFailed',
+)<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 /**
  * A team's members resolved against the catalog at resolve time, as
@@ -9,7 +19,7 @@ import type { Effect } from 'effect';
  * `missingAgents` the member names with no catalog entry. Nothing persists
  * the missing names: the roster stores the team reference and re-resolves
  * `preset.agents` on read, so a member activates the moment it appears in the
- * catalog (sign-in, install).
+ * catalog (a plugin install, a new custom agent).
  */
 export type TeamRosterResolution = Pick<
   TeamRunPlan,
@@ -31,9 +41,9 @@ export interface TeamRosterCatalog {
   ): Effect.Effect<TeamRosterPresetResolution, Error>;
   /**
    * Persist the symbolic preset. The resolution {@link resolvePreset} computed
-   * is preflight evidence only: the roster stores the team reference and
-   * re-resolves it against the catalog on read, so no committer freezes the
-   * per-agent-key snapshot.
+   * is evidence only: the roster stores the team reference and re-resolves it
+   * against the catalog on read, so no committer freezes the per-agent-key
+   * snapshot.
    */
   commitPreset(
     preset: AgentModePreset,

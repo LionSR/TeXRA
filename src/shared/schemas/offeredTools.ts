@@ -65,7 +65,10 @@ export const ContextBlobSchema = z.strictObject({
 
 /** Whether two offered tools are the same tool: a call made to one may run
  *  as the other. The shown digest is left out. */
-export const sameIdentity = (a: OfferedTool, b: OfferedTool): boolean =>
+export const sameIdentity = (
+  a: Omit<OfferedTool, 'shown'>,
+  b: Omit<OfferedTool, 'shown'>,
+): boolean =>
   a.name === b.name &&
   a.digest === b.digest &&
   a.plugin === b.plugin &&

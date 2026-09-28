@@ -1,5 +1,4 @@
 import { Array as Arr, Effect, Result } from 'effect';
-import type { SignInFailed } from '@common/errors/signInFailed';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -19,11 +18,6 @@ import {
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { capitalize } from '@utils/text/stringUtils';
 
-import {
-  preflightTeamAvailability,
-  type TeamAvailabilityChoice,
-  type TeamCatalogPortFailed,
-} from './TeamAvailabilityPreflight';
 import {
   findTeamPreset,
   launchableTeamPresets,
@@ -106,7 +100,7 @@ export function planTeamRuns<T extends TeamCatalogAgent>(
   return presets.map((preset) => planTeamRun(preset, options));
 }
 
-export function teamPlanHasGaps(plan: TeamRunPlan): boolean {
+function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   return (
     !plan.rootAgent ||
     plan.missingAgentOverride !== undefined ||
@@ -230,21 +224,13 @@ export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   resolveAgent: TeamAgentResolver<T>;
-  canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, Error, R>;
 }): Effect.Effect<TeamOptionData[], Error, R> {
   return Effect.gen(function* () {
     yield* ports.ensureCatalogLoaded();
     const presets = launchableTeamPresets(ports.customPresetsRaw);
-    const planCurrent = () =>
-      planTeamRuns(presets, { resolveAgent: ports.resolveAgent });
-    const result = yield* refreshRemoteCatalogForGaps(
-      planCurrent(),
-      (plans) => plans.some(teamPlanHasGaps),
-      planCurrent,
-      ports,
+    return buildTeamOptions(
+      planTeamRuns(presets, { resolveAgent: ports.resolveAgent }),
     );
-    return buildTeamOptions(result.value);
   });
 }
 
@@ -252,36 +238,16 @@ export type TeamLaunchResolution =
   | {
       readonly status: 'ready';
       readonly fields: ReturnType<typeof teamExecutionFields>;
-      /**
-       * Reflects ONLY TeXRA-hosted member gaps skipped after a preflight
-       * 'continue' choice. Non-hosted missing members populate
-       * `missingNames` but leave `partial: false` and never trigger the
-       * preflight dialog, because only hosted members can potentially be
-       * resolved via sign-in/refresh.
-       */
-      readonly partial: boolean;
       readonly missingNames: readonly string[];
     }
-  | { readonly status: 'cancelled' }
   | { readonly status: 'unknown-team' }
-  | { readonly status: 'blocked'; readonly reason: string }
-  | {
-      readonly status: 'unavailable';
-      readonly unavailableNames: readonly string[];
-    };
+  | { readonly status: 'blocked'; readonly reason: string };
 
 export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   teamId: string;
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   resolveAgent: TeamAgentResolver<T>;
-  canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, Error, R>;
-  choose: (
-    unavailableNames: readonly string[],
-  ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
-  signIn: () => Effect.Effect<boolean, SignInFailed>;
-  providedChoice?: TeamAvailabilityChoice;
 }): Effect.Effect<TeamLaunchResolution, Error, R> {
   return Effect.gen(function* () {
     const preset = findTeamPreset(
@@ -291,44 +257,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
     if (!preset) return { status: 'unknown-team' as const };
 
     yield* args.ensureCatalogLoaded();
-    const planCurrent = () =>
-      planTeamRun(preset, { resolveAgent: args.resolveAgent });
-    const refreshed = yield* refreshRemoteCatalogForGaps(
-      planCurrent(),
-      teamPlanHasGaps,
-      planCurrent,
-      args,
-    );
-    const preflight = yield* preflightTeamAvailability({
-      initial: refreshed.value,
-      // The preflight owns the hosted-member filter; hand it the raw gaps.
-      unresolvedNames: missingMemberNames,
-      texraHostedNames: new Set(preset.texraHostedAgents),
-      canAccessRemoteCatalog: args.canAccessRemoteCatalog,
-      providedChoice: args.providedChoice,
-      choose: args.choose,
-      signIn: args.signIn,
-      refreshRemote: args.refreshRemote,
-      replan: () => Effect.sync(planCurrent),
-      remoteCatalogRefreshAttempted: refreshed.remoteCatalogRefreshAttempted,
-    });
-
-    // 'choice-required' is reachable only when no provided choice exists and the
-    // interactive choice port returns no decision; hosts treat dismissal as cancel.
-    if (
-      preflight.status === 'cancelled' ||
-      preflight.status === 'choice-required'
-    ) {
-      return { status: 'cancelled' as const };
-    }
-    if (preflight.status === 'unavailable') {
-      return {
-        status: 'unavailable' as const,
-        unavailableNames: preflight.unavailableNames,
-      };
-    }
-
-    const plan = preflight.value;
+    const plan = planTeamRun(preset, { resolveAgent: args.resolveAgent });
     if (!canLaunchTeam(plan)) {
       return {
         status: 'blocked' as const,
@@ -338,70 +267,15 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
     return {
       status: 'ready' as const,
       fields: teamExecutionFields(plan),
-      partial: preflight.partial,
       missingNames: missingMemberNames(plan),
     };
   });
 }
 
-export function refreshRemoteCatalogForGaps<T, R = never>(
-  value: T,
-  hasGaps: (value: T) => boolean,
-  replan: () => T,
-  ports: {
-    canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-    refreshRemote: () => Effect.Effect<void, Error, R>;
-  },
-): Effect.Effect<
-  { value: T; remoteCatalogRefreshAttempted: boolean },
-  Error,
-  R
-> {
-  return Effect.gen(function* () {
-    // `hasGaps` first, as in the Promise original: a gapless plan must not
-    // even probe remote access.
-    if (hasGaps(value)) {
-      const canAccess = yield* ports.canAccessRemoteCatalog();
-      if (canAccess) {
-        yield* ports.refreshRemote();
-        return { value: replan(), remoteCatalogRefreshAttempted: true };
-      }
-    }
-    return { value, remoteCatalogRefreshAttempted: false };
-  });
-}
-
 // ---------------------------------------------------------------------------
-// Launch dialog copy. Hosts render these strings through their own dialogs
-// (VS Code vs Electron native); keeping the literals here stops them drifting.
+// Launch copy. Hosts render these strings through their own surfaces;
+// keeping the literals here stops them drifting.
 // ---------------------------------------------------------------------------
-
-/** Host-neutral unavailable-members prompt, including action order. */
-export interface TeamAvailabilityPrompt {
-  readonly severity: 'warning';
-  readonly message: string;
-  readonly actions: readonly [
-    { readonly choice: 'sign-in'; readonly label: string },
-    { readonly choice: 'continue'; readonly label: string },
-    { readonly choice: 'cancel'; readonly label: string },
-  ];
-}
-
-/** Build the unavailable-member prompt shared by launch and settings flows. */
-export function teamAvailabilityPrompt(
-  unavailableNames: readonly string[],
-  teamId?: string,
-): TeamAvailabilityPrompt {
-  return {
-    severity: 'warning',
-    message: formatUnavailableTeamMembersMessage(unavailableNames, teamId),
-    actions: [
-      { choice: 'sign-in', label: 'Sign In to TeXRA' },
-      { choice: 'continue', label: 'Continue with Available Members' },
-      { choice: 'cancel', label: 'Cancel' },
-    ],
-  };
-}
 
 export const TEAM_SELECTION_REQUIRED_MESSAGE = 'Team selection required.';
 
@@ -414,34 +288,6 @@ export function formatTeamLaunchBlockedMessage(
   reason: string,
 ): string {
   return `Team "${teamId}" cannot run: ${reason}.`;
-}
-
-export function formatTeamUnavailableMessage(
-  teamId: string,
-  unavailableNames: readonly string[],
-): string {
-  return `Team "${teamId}" is unavailable: ${unavailableNames.join(', ')}.`;
-}
-
-/**
- * Prompt shown before launching a team that has unavailable hosted members.
- *
- * `teamId` is optional because the two hosts reach this prompt with different
- * context: the main-view launch path already displays the team being launched,
- * while the settings path names it inline.
- */
-function formatUnavailableTeamMembersMessage(
-  unavailableNames: readonly string[],
-  teamId?: string,
-): string {
-  const subject = teamId === undefined ? 'This team' : `Team "${teamId}"`;
-  return `${subject} has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`;
-}
-
-export function formatPartialTeamLaunchMessage(
-  missingNames: readonly string[],
-): string {
-  return `This team will run with available members only. Unavailable members: ${missingNames.join(', ')}.`;
 }
 
 /** Missing workflow and tool-use member names, in preset-declaration order. */

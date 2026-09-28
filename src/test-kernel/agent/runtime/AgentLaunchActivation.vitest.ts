@@ -198,7 +198,6 @@ function expectStartedThenFailed(
   expect(start).toMatchObject({
     identity: { kind: 'agent', agent: 'chat' },
     category: AgentCategory.ToolUse,
-    isRemote: false,
     // The parent edge is the whole of "is a child": the birth fact carries
     // it, and nothing else spells it.
     parent:
@@ -218,7 +217,6 @@ function expectStartedThenFailed(
 function expectActivatedThenFailed(launch: StartedLaunch): void {
   expect(launch.activate).toMatchObject({
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   expect(launch.end).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,

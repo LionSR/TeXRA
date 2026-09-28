@@ -217,7 +217,6 @@ describe('CLI history status formatting', () => {
           identity: { kind: 'agent', agent: 'orchestrator' },
           category: AgentCategory.ToolUse,
           userFollowUpSupport: 'unsupported',
-          isRemote: false,
           parent: null,
         },
       ]);

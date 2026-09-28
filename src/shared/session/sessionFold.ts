@@ -348,7 +348,6 @@ function createRun(
   const common = {
     id,
     identity,
-    isRemote: event.isRemote,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
     label: runIdentityDisplayName(identity),
     description: null,

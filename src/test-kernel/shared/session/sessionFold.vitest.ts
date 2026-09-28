@@ -92,7 +92,6 @@ describe('sessionFold', () => {
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const stage = log.emit(CHILD, 1010, {
@@ -475,7 +474,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -483,7 +481,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
       userFollowUpSupport: 'unsupported',
     });
@@ -555,7 +552,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -614,7 +610,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -749,7 +744,6 @@ describe('sessionFold', () => {
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const rounds = [
@@ -809,7 +803,6 @@ describe('sessionFold', () => {
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const outputOf = (round: number): OutputFileInfo => ({
@@ -942,7 +935,6 @@ describe('sessionFold', () => {
       identity: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const row = early.emit(PROCESS, 5010, {
@@ -1144,7 +1136,6 @@ describe('sessionFold', () => {
         at: 3900,
         type: 'run.activate',
         category: AgentCategory.ToolUse,
-        isRemote: false,
       }),
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
@@ -1795,13 +1786,11 @@ describe('foldRunState', () => {
                 identity: { kind: 'agent', agent: 'chat' },
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
                 parent: null,
               }),
               ledgerRow(2, {
                 type: 'run.activate',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
               }),
             ]),
           ),

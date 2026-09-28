@@ -8,7 +8,7 @@ import {
   formatCliMultiAgentTeamLaunchBlockMessage,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
-import { planTeamRun, teamPlanHasGaps } from '@common/teams/TeamPlan';
+import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
   AgentCategory,
@@ -161,7 +161,6 @@ describe('CLI multi-agent presets', () => {
           workflow: ['polish'],
           toolUse: ['review'],
         },
-        texraHostedAgents: [],
       },
     ];
     const customPresets = (raw: unknown) =>
@@ -197,7 +196,6 @@ describe('CLI multi-agent presets', () => {
       members: ['review', 'engineer'],
       delegating: ['review', 'engineer'],
       rootAgent: 'review' as string | undefined,
-      hasGaps: false,
     },
     {
       name: 'does not infer a non-delegating root for custom presets',
@@ -205,7 +203,6 @@ describe('CLI multi-agent presets', () => {
       members: ['review'],
       delegating: [],
       rootAgent: undefined,
-      hasGaps: true,
     },
     {
       name: 'does not allow custom presets to default to their simplifier agent',
@@ -213,16 +210,14 @@ describe('CLI multi-agent presets', () => {
       members: ['simplifier'],
       delegating: ['simplifier'],
       rootAgent: undefined,
-      hasGaps: true,
     },
-  ])('$name', ({ id, members, delegating, rootAgent, hasGaps }) => {
+  ])('$name', ({ id, members, delegating, rootAgent }) => {
     const plan = planRun(
       {
         id,
         name: id,
         description: 'User-authored team.',
         icon: 'cube',
-        texraHostedAgents: [],
         source: 'custom',
         agents: {
           workflow: [],
@@ -245,6 +240,5 @@ describe('CLI multi-agent presets', () => {
     // the regression these rows exist to catch.
     if (rootAgent === undefined) expect(plan.rootAgent).toBeUndefined();
     else expect(plan.rootAgent?.name).toBe(rootAgent);
-    expect(teamPlanHasGaps(plan)).toBe(hasGaps);
   });
 });

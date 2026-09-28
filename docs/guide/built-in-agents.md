@@ -186,6 +186,27 @@ algorithm, key results, and future work. Use the metropolis theme and include Ti
 diagrams for the architecture.
 ```
 
+## Research writing agents
+
+These workflow agents drive the Physicist, Mathematician, and Computer
+Scientist teams. Three of them review a paper and leave inline comments; the
+others rewrite it, and `apply` works through the comments the reviewers left.
+
+| Agent       | What it does                                                                                                   |
+| :---------- | :------------------------------------------------------------------------------------------------------------- |
+| `generic`   | Edits the paper by your instruction, keeping academic and LaTeX conventions and the paper's own comment style. |
+| `devise`    | Rewrites in two phases: adds rigorous derivations, then revises to publication-ready style.                    |
+| `criticize` | Reviews the paper critically and inserts inline comments.                                                      |
+| `firstread` | Reads the paper top to bottom as a first-time reader and notes where it loses the thread.                      |
+| `logic`     | Improves the argument's structure and coherence.                                                               |
+| `notation`  | Makes symbol usage consistent across the document.                                                             |
+| `enhance`   | Looks for stronger results and more elegant proofs.                                                            |
+| `apply`     | Reads the inline comments the reviewers left and applies the fixes.                                            |
+
+A typical loop is `criticize` (or `firstread`, `logic`, `notation`), then
+`apply`. Each is a YAML file you can read and copy into a
+[custom agent](./custom-agents.md) to change.
+
 ## Correction & polishing agents
 
 ### `correct`
@@ -500,10 +521,6 @@ An end-of-session reviewer. It looks at what was just done and, when the session
 
 **Best for:** Auditing what a team run actually delivered versus the goal
 
-::: tip
-Additional remote workflow agents may be available depending on your access level. In the VS Code extension, the Agents tab of Settings (**TeXRA: Open Settings**) has the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
-:::
-
 ## Built-in teams
 
 Teams are predefined collections of agents for a discipline. Pick one from the
@@ -519,11 +536,10 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 | Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists                                   | `engineer`         |
 
 Every team except Software Engineer bundles the `progressCheck` audit helper
-and `latexFixer`. Every lead and tool-use specialist ships with TeXRA; the
-Physicist, Mathematician, and Computer Scientist teams also list the
-`generic`, `devise`, `apply`, and `criticize` workflow agents, which are
-[remote agents](./remote-agents.md) that sync after you sign in. Every lead
-can also run its specialists in parallel as a
+and `latexFixer`. Every member ships with TeXRA, including the `generic`,
+`devise`, `apply`, and `criticize` workflow agents the Physicist,
+Mathematician, and Computer Scientist teams list, so no team needs a sign-in.
+Every lead can also run its specialists in parallel as a
 [multi-agent workflow](./multi-agent-workflows.md).
 
 ## Next steps

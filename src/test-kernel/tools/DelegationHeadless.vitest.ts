@@ -545,7 +545,7 @@ describe('headless delegation', () => {
         const options = delegationOptions({
           configPayload: {
             agent: 'review',
-            agentSource: 'remote',
+            agentSource: 'plugin',
             agentCategory: AgentCategory.Workflow,
             model: 'deepseekT',
           },

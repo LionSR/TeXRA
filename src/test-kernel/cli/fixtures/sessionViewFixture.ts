@@ -61,7 +61,6 @@ export function makeRunView(over: RunViewOverrides): RunView {
   const common = {
     id,
     identity: { kind: 'agent' as const, agent: 'agent' },
-    isRemote: false,
     ownerId: null,
     ownedHere: false,
     label: over.id,

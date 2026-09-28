@@ -15,6 +15,18 @@ All notable changes to this project will be documented in this file.
   agent roster and teams) are now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **Every agent ships bundled; hosted agents are gone.** The Physicist,
+  Mathematician, and Computer Scientist teams now work fully offline with no
+  TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
+  agents are bundled, along with `enhance`, `firstread`, `logic`, and
+  `notation`. Each is a YAML file you can read and copy into a custom agent to
+  change. TeXRA no longer fetches agents from an account catalog, so signing in
+  adds no agents, the sign-in prompt for "unavailable TeXRA-hosted members" is
+  gone, and `texra agents`, the settings Agents page and the launcher no longer
+  show a "Remote" badge. The researcher-only hosted agents `elevate`,
+  `humanize`, and `verifyFix` are not bundled. Session history from earlier
+  builds is cleared the first time this build opens a workspace; settings are
+  kept.
 - **Agent prompt templates lose `{{ MODEL }}`, `{{ ROUNDS }}` and
   `{{ DEFAULT_BIB_PATH }}`.** None of TeXRA's agents used them; a custom
   agent that does now renders them empty. The default bibliography is named

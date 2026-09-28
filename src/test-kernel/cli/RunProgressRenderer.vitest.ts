@@ -306,7 +306,6 @@ function publishRun(
       identity: { kind: 'agent', agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: overrides.agentCategory ?? AgentCategory.Workflow,
-      isRemote: false,
       worktree: null,
       parent: null,
       approvalPolicy: null,
@@ -342,7 +341,6 @@ function publishRun(
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
       category: overrides.agentCategory ?? AgentCategory.Workflow,
-      isRemote: false,
     },
     // The first step of the loop: what clears the activation's starting
     // substate, so the live line reads the plain running phase. A workflow
@@ -1034,7 +1032,6 @@ describe('CLI run progress renderer', () => {
                 identity: { kind: 'agent', agent: 'review' },
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
                 parent: { id: parentRunId },
               },
             ]);

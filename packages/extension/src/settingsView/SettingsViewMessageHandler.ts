@@ -12,14 +12,11 @@ import { ModelError, completedTurn } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
-import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
-import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -27,10 +24,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { syncInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import {
-  chooseTeamAvailabilityViaDialog,
-  selectFolder,
-} from '@frontend/ui/dialogs';
+import { selectFolder } from '@frontend/ui/dialogs';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -187,12 +181,6 @@ export class SettingsViewMessageHandler {
             signInWithSubscription(session.roots, this.channel, providerId),
           ),
         customAgentDirChanged: agentDirectories.refreshAfterDirChange(),
-        remoteCatalog: {
-          canAccess: () => supabaseAuthenticated,
-          signIn: runSignInCommand,
-        },
-        chooseTeamAvailability: (prompt) =>
-          chooseTeamAvailabilityViaDialog(prompt, { modal: true }),
         revealRun: revealProgressRun,
         runLabel: getProgressRunLabel,
         // The status-bar tooltip paints the approval policy outside this
@@ -253,11 +241,6 @@ export class SettingsViewMessageHandler {
   ): SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs> {
     return {
       ...this.body.handlers,
-      // The team preflight's catalog fetch holds the auth listeners off.
-      applyAgentModePreset: (message) =>
-        withAgentCatalogAuthRefreshDeferred(
-          this.body.handlers.applyAgentModePreset(message),
-        ),
       signIn: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>

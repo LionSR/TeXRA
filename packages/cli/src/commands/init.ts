@@ -163,7 +163,7 @@ const runInit = Effect.fn('runInit')(function* (
     return CliExitCode.Usage;
   }
 
-  yield* loadAgents({ includeRemote: false });
+  yield* loadAgents();
   const agents = implicitDefaultToolUseAgents(
     yield* getVisibleAgents(services, AgentCategory.ToolUse),
   );

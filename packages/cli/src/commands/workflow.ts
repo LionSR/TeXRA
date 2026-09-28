@@ -160,8 +160,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         const runContext = buildHeadlessRunContext(context);
         // Only the input-derived names are knowable here: the agent's declared
         // defaults live in a definition the launch below loads, and loading it
-        // twice would pay a second remote fetch and could observe a different
-        // revision than the run executes. They are applied at finalization.
+        // twice could observe a different revision than the run executes. They are applied at finalization.
         const expectedOutputFiles = init.outputDir
           ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
           : undefined;
@@ -380,8 +379,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         Effect.gen(function* () {
           // Handed over by the launch (the only load of this run's definition):
           // the defaults this run actually executed, not a reread of a catalog
-          // entry a nested refresh may have swapped for a remote listing that
-          // carries none. The input-derived `cli.expectedOutputFiles` the
+          // entry a nested refresh may have swapped since. The input-derived `cli.expectedOutputFiles` the
           // launch computed stand in when the agent declares none.
           const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
           const expectedOutputFiles = declaredOutputFiles.length

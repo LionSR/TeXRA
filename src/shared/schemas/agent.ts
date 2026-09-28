@@ -42,7 +42,6 @@ export const AGENT_SOURCE = {
   CUSTOM: 'custom',
   BUILT_IN_WORKFLOW: 'builtInWorkflow',
   BUILT_IN_TOOL_USE: 'builtInToolUse',
-  REMOTE: 'remote',
   /** An installed Claude Code or Codex plugin's agent, named `<plugin>:<name>`. */
   PLUGIN: 'plugin',
 } as const;
@@ -91,7 +90,7 @@ const CatalogAgentNameSchema = z
 
 /**
  * Base schema for agent identity metadata shared across all agent representations.
- * View-specific schemas (RemoteAgentSchema, AgentSelectionItemSchema, etc.)
+ * View-specific schemas (AgentSelectionItemSchema, etc.)
  * should extend this via `.extend()` rather than redefining these fields.
  */
 export const AgentMetadataBaseSchema = z.object({

@@ -145,7 +145,7 @@ export const commandCatalog = [
   {
     id: 'texra.auth.signIn',
     extensionRegistry: true,
-    title: 'Sign In to TeXRA Account (Remote Agents)',
+    title: 'Sign In to TeXRA Account',
     category: 'TeXRA',
     icon: '$(sign-in)',
   },

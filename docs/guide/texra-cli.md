@@ -155,8 +155,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 ## Authentication
 
 Model calls run on your own provider API keys, or on a provider subscription
-you already pay for. Signing in to TeXRA is a separate, optional step that
-unlocks the hosted research-agent catalog.
+you already pay for. Signing in to TeXRA is a separate, optional step: every
+agent ships bundled, so no agent needs it.
 
 **Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -186,9 +186,9 @@ or out and sets which subscription serves each provider's models, and
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
-**Sign in to your TeXRA account** to use the hosted research-agent
-catalog. Remote agents then resolve by name like any local agent. Sign-in does
-not supply model access; runs still use the credentials above.
+**Sign in to your TeXRA account** if you use account features. Sign-in does
+not supply model access, and no agent needs it; runs use the credentials
+above.
 
 ```bash
 texra login                 # pick GitHub or Google, then sign in via browser

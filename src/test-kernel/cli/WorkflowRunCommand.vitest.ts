@@ -369,7 +369,6 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
         identity: { kind: 'agent', agent: 'polish' },
         category: AgentCategory.Workflow,
         userFollowUpSupport: 'unsupported',
-        isRemote: false,
         parent: null,
       },
     ]);
@@ -828,7 +827,6 @@ describe('CLI run command, workflow agents', () => {
             identity: { kind: 'agent', agent: 'polish' },
             category: AgentCategory.Workflow,
             userFollowUpSupport: 'unsupported',
-            isRemote: false,
             parent: null,
           },
         ]);

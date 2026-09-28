@@ -27,7 +27,6 @@ beforeEach(async () => {
         aggregateId: aggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
         userFollowUpSupport: 'unsupported',
-        isRemote: false,
         category: 'toolUse',
         parent: null,
       },

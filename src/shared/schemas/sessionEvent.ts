@@ -249,8 +249,8 @@ export type RunParent = z.infer<typeof RunParentSchema>;
  * exists, once per incarnation, seq 1 of its aggregate (decision 9); the
  * aggregate's logical id is the run id, so the row carries no second copy of
  * it. `worktree` is absent for a run that executes in the workspace itself
- * rather than in a dedicated worktree. `category`,
- * `isRemote`, and `userFollowUpSupport` are explicit on every run: the
+ * rather than in a dedicated worktree. `category`
+ * and `userFollowUpSupport` are explicit on every run: the
  * launcher knows them for an agent, a process, and a workflow script alike,
  * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
  * initial approval-policy snapshot rides here rather than as its own event
@@ -265,8 +265,6 @@ const RunStartEventSchema = durable('run.start', {
   /** The `RunView` discriminant: `toolUse` for an agent in tool-use mode
    *  and for a process run, `workflow` for a workflow agent or script. */
   category: AgentCategorySchema,
-  /** Agent-registry remoteness; false for a run with no registry entry. */
-  isRemote: z.boolean(),
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
   parent: RunParentSchema.nullable(),
@@ -303,13 +301,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * item 8); the CLI projection writes it verbatim as a `run.activate`
    * progress record. `run.start` is the creation fact and happens once.
    */
-  durable('run.activate', {
-    category: AgentCategorySchema,
-    /** Agent-registry remoteness, carried only by a run with a registry
-     *  entry: the frozen wire line omits it for a process, agent-CLI, or
-     *  workflow-script child (PRD 10.3), and a fold reads `run.start`. */
-    isRemote: z.boolean().nullish(),
-  }),
+  durable('run.activate', { category: AgentCategorySchema }),
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),

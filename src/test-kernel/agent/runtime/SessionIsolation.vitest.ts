@@ -205,7 +205,6 @@ describe('session isolation', () => {
               identity: { kind: 'agent', agent: 'chat' },
               userFollowUpSupport: 'unsupported',
               category: 'toolUse',
-              isRemote: false,
               parent: null,
             },
           ]);

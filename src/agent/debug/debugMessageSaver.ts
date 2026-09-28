@@ -15,8 +15,6 @@ interface DebugContext {
   logger: AgentTrace;
   modelName?: string;
   runId?: RunId;
-  /** Remote agents skip saving to avoid leaking prompts. */
-  isRemote?: boolean;
   /**
    * The run's session roots, passed as data. A save with a run id lands under
    * the storage root, a save without one under the workspace root, and the
@@ -43,8 +41,7 @@ interface SaveDebugParams {
 
 /**
  * Save debug objects (messages or responses) to a JSON file when
- * `texra.debug.saveModelIO` is enabled. Skips remote agents to avoid
- * leaking prompts.
+ * `texra.debug.saveModelIO` is enabled.
  *
  * Takes the process filesystem from context: the target is an absolute path
  * built from the run's own roots, and the write is a plain (non-atomic) one.
@@ -77,7 +74,6 @@ export function maybeSaveDebugObject({
 
   return Effect.gen(function* () {
     if (
-      context.isRemote ||
       !(yield* readSettingFrom<boolean>(
         context.roots,
         'texra.debug.saveModelIO',

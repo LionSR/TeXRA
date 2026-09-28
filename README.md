@@ -41,16 +41,17 @@ Set `<PROVIDER>_API_KEY` to use your own credentials, sign in with a
 ChatGPT or Grok subscription, or add the API key for a Kimi Code or
 GLM Coding Plan subscription.
 
-### Hosted agent catalog
+### Agents and teams
 
-Academic researchers can sign in with GitHub or Google for
-complimentary access to the hosted agent catalog — the Orchestrator
-and the full roster of hosted specialists. Sign in through the
-Profile view in VS Code, or `texra login` in the terminal. The agents
-are free; their model calls run on your configured model credential,
-the same as your built-in agents.
+Every agent ships bundled, including the workflow agents the
+Physicist, Mathematician and Computer Scientist teams use, so every
+team works offline with no sign-in. Each agent is a YAML file you can
+read, copy into a custom agent and change. Signing in to a TeXRA
+account (GitHub or Google, through the Profile view in VS Code or
+`texra login`) is optional and adds no agents; model calls run on
+your configured model credential.
 
-Access is sustained by the community. If TeXRA helps your
+TeXRA is sustained by the community. If TeXRA helps your
 research, consider supporting it via
 [GitHub Sponsors](https://github.com/sponsors/texra-ai) or
 [Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep it open

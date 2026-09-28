@@ -443,21 +443,13 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     postLatexStatus: toolsPage.postLatexStatus,
     reported,
     signInSubscription,
-    /** A TeXRA account change: the profile, the models it unlocks, and the
-     *  agent catalog, which the host may be holding for a team sign-in. */
-    refreshAfterAuthChange: (
-      options: { deferAgentCatalog?: boolean } = {},
-    ): HostEffect =>
-      Effect.andThen(
-        allSettledVoid<Error, ProcessServices>([
-          postProfile,
-          postModelSelection,
-          bindings.refreshCatalogs(),
-        ]),
-        options.deferAgentCatalog
-          ? Effect.void
-          : agents.refreshAfterAgentMutation(undefined, true),
-      ),
+    /** A TeXRA account change: the profile and the models it unlocks. */
+    refreshAfterAuthChange: (): HostEffect =>
+      allSettledVoid<Error, ProcessServices>([
+        postProfile,
+        postModelSelection,
+        bindings.refreshCatalogs(),
+      ]),
     /** Settle a repaint nobody awaits, reported as a message's would be. */
     settle,
     /** The Tools page following its workspace's availability results, for

@@ -64,7 +64,6 @@ async function setupApiKeyToolPlatform(
     {
       secrets,
       setup: {
-        signIn: () => Effect.succeed(false),
         commands: {
           invoke: () => Effect.void,
         },

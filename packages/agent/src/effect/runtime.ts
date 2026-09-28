@@ -20,7 +20,6 @@ import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';
 
 import { closeAllSessions, installedProcessRuntime } from '@agent/runtime';
 import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
-import { SignInFailed } from '@common/errors/signInFailed';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -79,7 +78,7 @@ export interface AgentPlatform {
  * `false` would report a sign-in that can never happen as one that merely
  * did not complete. Each member says so instead, the way the test kernel's
  * fake does — on read for the members a caller only ever calls, and as the
- * port's own typed failure for the sign-in and command surfaces.
+ * port's own typed failure for the command surface.
  * The same loud answer this package gave before it provided `SetupPlatform`
  * at all.
  */
@@ -87,7 +86,6 @@ const NO_SETUP_PLATFORM =
   'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
 
 const PACKAGE_SETUP: SetupPlatformShape = {
-  signIn: () => Effect.fail(new SignInFailed({ message: NO_SETUP_PLATFORM })),
   // The one member read before it is called: `unset_api_key` asks for the
   // command surface to refresh the host's status views after a credential
   // it already removed. A throwing getter would make that read a defect
