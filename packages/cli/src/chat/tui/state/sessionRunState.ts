@@ -154,13 +154,13 @@ export class TuiSession {
 
   /**
    * On exit, a tool-use session suspended at a wait (idle/WAITING) with an
-   * active tool-use run is left uninterrupted. Resumability survives either
-   * way: a run's rows and its latest `flow.snapshot` stay until the run is
-   * explicitly deleted, so even a CANCELLED run remains resumable. What this
-   * preserves is the run's persisted status and its side effects: an idle exit
-   * leaves the run WAITING instead of recording a CANCELLED the user never
-   * asked for, and does not clear approvals or sweep active children through
-   * `detachSubagentsOnStop`.
+   * active tool-use run is not stopped the way a Ctrl-C stops a turn: the
+   * user's stop policy (`detachSubagentsOnStop`) does not apply, and the exit
+   * needs no second Ctrl-C. The session's close still ends the generation,
+   * which records its terminal `run.end` as cancelled ("Stopped"): every
+   * activation ends with one, and a run left without it would read as
+   * interrupted by a crash. Resumability survives either way: a run's rows
+   * and its latest `flow.snapshot` stay until the run is explicitly deleted.
    */
   isResumableIdle(): boolean {
     return (

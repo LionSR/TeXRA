@@ -346,13 +346,11 @@ export class AgentRosterController<
     return serializeWorkspaceWrite(
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
-        for (const category of AGENT_CATEGORIES) {
-          yield* recordCustomChoices(
-            this.deps.repoState,
-            this.deps.getAgents(category),
-            agentKeys[category],
-          );
-        }
+        yield* recordCustomChoices(
+          this.deps.repoState,
+          this.deps.getAgents,
+          agentKeys,
+        );
         yield* this.writeSelection({
           kind: 'custom',
           agentKeys: byCategory((category) => {
@@ -376,11 +374,9 @@ export class AgentRosterController<
       // constructed back to back would otherwise both start from the same
       // pre-lane snapshot and one update would be lost.
       Effect.gen({ self: this }, function* () {
-        yield* recordCustomChoices(
-          this.deps.repoState,
-          this.deps.getAgents(category),
-          enabledKeys,
-        );
+        yield* recordCustomChoices(this.deps.repoState, this.deps.getAgents, {
+          [category]: enabledKeys,
+        });
         return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: yield* Effect.all(
@@ -437,11 +433,9 @@ export class AgentRosterController<
         } else {
           target.splice(index, 1);
         }
-        yield* recordCustomChoices(
-          this.deps.repoState,
-          this.deps.getAgents(input.category),
-          target,
-        );
+        yield* recordCustomChoices(this.deps.repoState, this.deps.getAgents, {
+          [input.category]: target,
+        });
         return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: byCategory((category) =>
