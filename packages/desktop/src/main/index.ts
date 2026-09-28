@@ -168,14 +168,37 @@ if (e2eUserDataPath) {
 /** Show a run of a project in the window; the window assigns it. */
 const revealProjectRun: { current?: (key: string, runId: RunId) => void } = {};
 
-function focusOrReopenMainWindow(): void {
+/** The closed window's scope while it is still closing. */
+let releasingWindow: Promise<void> | undefined;
+
+/**
+ * Open the window once the closed one has released everything it held (its
+ * protocol-router subscription among them), so two windows' resources never
+ * overlap; then run `then`. A reopen queued twice opens one window.
+ */
+function reopenAfterRelease(then?: () => void): void {
+  const open = () => {
+    if (!mainWindow) reopenMainWindow?.();
+    then?.();
+  };
+  if (!releasingWindow) {
+    open();
+    return;
+  }
+  void releasingWindow.then(open).catch((error: unknown) => {
+    console.error('The desktop window could not be reopened:', error);
+  });
+}
+
+function focusOrReopenMainWindow(then?: () => void): void {
   if (!mainWindow) {
-    reopenMainWindow?.();
+    reopenAfterRelease(then);
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  then?.();
 }
 
 const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
@@ -183,7 +206,7 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   argv: process.argv.slice(1),
   execPath: process.execPath,
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
-  focusMainWindow: focusOrReopenMainWindow,
+  focusMainWindow: () => focusOrReopenMainWindow(),
 });
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
@@ -1485,6 +1508,13 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
+    // Published before the close starts, so a reopen asked for meanwhile
+    // waits for it even when every finalizer runs synchronously.
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => {
+      released = resolve;
+    });
+    releasingWindow = release;
     runtime.runFork(
       Scope.close(windowScope, Exit.void).pipe(
         Effect.catchCause((cause) =>
@@ -1497,6 +1527,8 @@ function createWindow(options: {
         // `will-quit`, which on macOS leaves the process running.
         Effect.ensuring(
           Effect.sync(() => {
+            if (releasingWindow === release) releasingWindow = undefined;
+            released();
             if (continueQuit) setImmediate(continueQuit);
           }),
         ),
@@ -1659,7 +1691,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             reopenMainWindow();
             app.on('activate', () => {
               if (BrowserWindow.getAllWindows().length === 0)
-                reopenMainWindow?.();
+                reopenAfterRelease();
             });
           });
           // For the process lifetime: the fallback project's scope is the
@@ -1670,10 +1702,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               DesktopAttentionPort,
               electronAttentionPort({
                 window: () => mainWindow,
-                reveal: (key, runId) => {
-                  focusOrReopenMainWindow();
-                  revealProjectRun.current?.(key, runId);
-                },
+                reveal: (key, runId) =>
+                  focusOrReopenMainWindow(() =>
+                    revealProjectRun.current?.(key, runId),
+                  ),
               }),
             ),
             Effect.catchCause((cause) =>
