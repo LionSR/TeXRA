@@ -16,6 +16,7 @@ import type {
 } from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
+  AGENT_SOURCE,
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
@@ -138,7 +139,7 @@ export class AgentRosterController<
         category,
         yield* this.allPresets(),
       );
-      if (identifiers === undefined) return this.deps.getAgents(category);
+      if (identifiers === undefined) return yield* this.unhidden(category);
       const { entries } = this.resolveIdentifiers(category, identifiers);
       return [
         ...entries,
@@ -188,6 +189,20 @@ export class AgentRosterController<
     });
   }
 
+  /** Every agent of the category except the custom ones the user hid. */
+  private unhidden(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      const agents = this.deps.getAgents(category);
+      const shownCustom = new Set(
+        yield* unlistedCustomAgents(this.deps.repoState, agents, []),
+      );
+      return agents.filter(
+        (agent) =>
+          agent.source !== AGENT_SOURCE.CUSTOM || shownCustom.has(agent),
+      );
+    });
+  }
+
   private selectionKeys(
     selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
     category: AgentCategory,
@@ -198,7 +213,13 @@ export class AgentRosterController<
         category,
         yield* this.allPresets(),
       );
-      if (identifiers === undefined) return undefined;
+      if (identifiers === undefined) {
+        // `all` stays symbolic until a hidden custom agent needs a list.
+        const visible = yield* this.unhidden(category);
+        return visible.length === this.deps.getAgents(category).length
+          ? undefined
+          : visible.map(agentKeyOf);
+      }
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
       const keys =

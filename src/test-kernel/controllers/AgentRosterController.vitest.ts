@@ -111,6 +111,23 @@ describe('AgentRosterController', () => {
     }),
   );
 
+  it.effect('keeps a hidden custom agent hidden when the roster is all', () =>
+    Effect.gen(function* () {
+      const roster = controller(
+        new FakeStateStore({
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: ['custom:search'],
+        }),
+      );
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead']);
+      expect(yield* roster.getEnabledAgentKeys('toolUse')).toEqual([
+        'builtInToolUse:lead',
+      ]);
+      expect(yield* roster.getEnabledAgentKeys('workflow')).toBeUndefined();
+    }),
+  );
+
   it.effect('reads a bare name in a written list as choosing that agent', () =>
     Effect.gen(function* () {
       const roster = controller(new FakeStateStore());

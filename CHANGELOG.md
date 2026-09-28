@@ -284,6 +284,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A custom agent you turned off stays off under the default roster** —
+  it reappeared in the selector whenever the roster resolved to all agents,
+  which is the default for a new workspace. Choosing "All agents" still
+  shows it again.
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session
   on a run another TeXRA window held. Every surface now offers the same
