@@ -31,7 +31,7 @@ export function listAgents(
   // The platform init and the list read below are one program, run on the
   // process runtime the command entry installs.
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const result = yield* loadCliAgentList(services, options);
 
     if (!context.quietLogs) {
@@ -62,7 +62,7 @@ export function listAgents(
 
 export function showAgent(context: CliContext, name: string) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const entry = yield* resolveCliAgent(services, name);
     if (!entry) {
       writeTextStderr(missingAgentMessage(name));

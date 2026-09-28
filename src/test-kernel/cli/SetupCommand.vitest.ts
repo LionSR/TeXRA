@@ -85,7 +85,7 @@ describe('texra setup combined flow', () => {
     await setup(INTERACTIVE_CONTEXT);
 
     expect(mocks.initCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ ...INTERACTIVE_CONTEXT, quietLogs: true }),
+      expect.objectContaining(INTERACTIVE_CONTEXT),
     );
     expect(mocks.initCliPlatform.mock.calls[0]?.[0]).not.toHaveProperty(
       'installSignalHandlers',

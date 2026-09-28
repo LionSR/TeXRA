@@ -33,9 +33,7 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
     // it is folded here and handed to the builder as data — over the whole
     // cause, because a platform that dies on the way up is as much "no
     // platform" as one that fails.
-    const init = yield* Effect.exit(
-      initCliPlatform({ ...context, quietLogs: true }),
-    );
+    const init = yield* Effect.exit(initCliPlatform(context));
     if (Exit.isFailure(init)) {
       // A failed init disposed the runtime it installed (see
       // `initPlatform.ts`), so the degraded report — node, workspace,

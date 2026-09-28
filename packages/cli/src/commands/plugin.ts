@@ -61,7 +61,7 @@ function withPluginEnv<A, E>(
   ) => Effect.Effect<A, E, ChildProcessSpawner | FileSystem.FileSystem>,
 ) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     return yield* withProcessServices(
       services.runtime,
       operation(services.roots),

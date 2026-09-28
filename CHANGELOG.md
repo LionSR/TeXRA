@@ -284,6 +284,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Ctrl-C in `texra run` reports a failed shutdown step** — a step that
+  fails while the CLI shuts down after Ctrl-C is now printed on stderr for
+  every command. Before, commands that print their own output, `texra run`
+  among them, dropped it. `--quiet` still hides it.
+
 - **A re-trusted plugin's changed MCP server answers the next request** —
   after you edit an installed plugin's server code and trust it again, the
   chat's next request calls the new server, not the old one, even when its

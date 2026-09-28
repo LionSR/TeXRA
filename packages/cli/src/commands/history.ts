@@ -49,7 +49,7 @@ function runHistoryList(context: CliContext, options: { limit?: number }) {
   // The init and the history read it feeds are one program, run on the
   // process runtime the command entry installs.
   return Effect.gen(function* () {
-    const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+    const stores = yield* initCliPlatform(context);
     const entries = yield* listCliHistoryEntries(stores.session);
     const visibleEntries =
       options.limit !== undefined ? entries.slice(0, options.limit) : entries;
@@ -71,7 +71,7 @@ function runHistoryShow(
   options: { full?: boolean },
 ) {
   return Effect.gen(function* () {
-    const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+    const stores = yield* initCliPlatform(context);
     const details = yield* readCliHistoryDetails(stores.session, id, {
       includeFullConversation: options.full === true,
     });
@@ -108,7 +108,7 @@ export function runHistoryExport(
   format: 'html' | 'md',
 ) {
   return Effect.gen(function* () {
-    const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+    const stores = yield* initCliPlatform(context);
     if (format === 'md') {
       const exportResult = yield* readCliHistoryExportInput(stores.session, id);
       if (exportResult.status === 'not_found') {
@@ -166,7 +166,7 @@ function runHistoryDelete(
   options: { id?: RunId; all: boolean; yes: boolean },
 ) {
   return Effect.gen(function* () {
-    const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+    const stores = yield* initCliPlatform(context);
     // Both deletion paths read the same session: opened once here, in the
     // one program the run arm runs.
     const session = yield* stores.session;

@@ -21,7 +21,7 @@ function runMemoryList(context: CliContext) {
   // The init and the read it feeds are one program, run on the process
   // runtime the command entry installs.
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     // Pass the full list to `formatCliMemoryList`; it owns truncation (the
     // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
     // consumers should see every memory, not a capped slice.
@@ -38,7 +38,7 @@ function runMemoryList(context: CliContext) {
 
 function runMemoryShow(context: CliContext, inputPath: string) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const record = yield* runCliMemory(
       services.roots,
       loadCliMemoryDetail(inputPath),

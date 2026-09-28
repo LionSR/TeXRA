@@ -92,7 +92,7 @@ describe('CLI auth command', () => {
     expect(stdout.trim()).toBe('Not signed in.');
     expect(stderr).toBe('');
     expect(mocks.initCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ quietLogs: true }),
+      expect.objectContaining({ quietLogs: false }),
     );
   });
 

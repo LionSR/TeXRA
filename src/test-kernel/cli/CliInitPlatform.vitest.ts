@@ -56,7 +56,6 @@ function spyOnSignalRegistration(): {
 }
 
 const mocks = vi.hoisted(() => ({
-  consoleLogSink: { write: vi.fn() },
   signInCliSupabase: vi.fn(),
   authenticated: false,
   createNodeWorkspaceRoots: vi.fn(() => ({
@@ -96,9 +95,7 @@ vi.mock('@cli/runtime/supabaseAuth', async () => {
 vi.mock('@logger/logSink', () => ({
   LOG_CHANNEL: 'channel',
   LOG_DATA: 'data',
-  consoleLogSink: mocks.consoleLogSink,
-  // The sink a `--quiet` init picks instead; the double only has to be a
-  // distinct value, since `setLogSink` is a spy here.
+  // The double only has to be a value, since `setLogSink` is a spy here.
   silentLogSink: { write: () => undefined },
   setLogSink: vi.fn(),
   writeLogEntry: vi.fn(),

@@ -89,7 +89,7 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
  */
 export function runResumeCommand(context: CliContext, id: RunId) {
   return Effect.gen(function* () {
-    const stores = yield* initCliPlatform({ ...context, quietLogs: true });
+    const stores = yield* initCliPlatform(context);
     const session = yield* stores.session;
     const store = getRunRecords(session, id);
     const configResult = yield* Effect.result(store.readConfig());

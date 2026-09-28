@@ -228,10 +228,7 @@ const configAgentsCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
+      const services = yield* initCliPlatform(context);
       return yield* configureAgentRoster(context, services, {
         inherit: ctx.args.inherit === true,
         all: ctx.args.all === true,
@@ -251,10 +248,7 @@ const configShowCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   run: (context) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
+      const services = yield* initCliPlatform(context);
       return yield* showConfig(context, services);
     }),
 });
@@ -275,7 +269,7 @@ const configEditCommand = defineCliCommand({
       );
     }
     return Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform(context);
       // The config TUI's module is loaded lazily, so a headless `config show`
       // in the same process never pays for Ink. The TUI itself is part of
       // this program rather than a second run past a Promise edge: its Ink

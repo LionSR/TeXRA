@@ -57,7 +57,7 @@ function listTools(context: CliContext) {
   // runtime the command entry installs, so they hit the same state store
   // without a Promise between them.
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const items = yield* readCliToolStatuses(services.roots);
 
     emitCliResult(context, {
@@ -71,7 +71,7 @@ function listTools(context: CliContext) {
 
 function showTool(context: CliContext, id: string) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const item = yield* readCliToolStatus(services.roots, id);
     if (!item) {
       writeTextStderr(formatCliToolNotFoundMessage(id));
@@ -89,7 +89,7 @@ function showTool(context: CliContext, id: string) {
 
 function toggleTool(context: CliContext, id: string, enabled: boolean) {
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const ok = yield* setCliToolEnabled(services.globalState, id, enabled);
     if (!ok) {
       writeTextStderr(formatCliToolNotToggleableMessage(id));
@@ -186,7 +186,7 @@ function toolGuideResult(
 
 function installTool(context: CliContext, id: string, run: boolean) {
   return Effect.gen(function* () {
-    yield* initCliPlatform({ ...context, quietLogs: true });
+    yield* initCliPlatform(context);
     const guide = readCliToolGuide(id, 'install');
     if (!guide) {
       writeTextStderr(formatCliToolNotFoundMessage(id));
@@ -222,7 +222,7 @@ function installTool(context: CliContext, id: string, run: boolean) {
 
 function authTool(context: CliContext, id: string) {
   return Effect.gen(function* () {
-    yield* initCliPlatform({ ...context, quietLogs: true });
+    yield* initCliPlatform(context);
     const guide = readCliToolGuide(id, 'auth');
     if (!guide) {
       writeTextStderr(formatCliToolNotFoundMessage(id));

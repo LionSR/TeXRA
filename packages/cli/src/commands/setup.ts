@@ -49,7 +49,7 @@ export function runSetup(context: CliContext) {
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     if (
       !(yield* hasUsableSetupCredential(services, services.secrets).pipe(
         withLogChannel('Setup Credentials'),

@@ -15,7 +15,7 @@ import {
   openRepoStateStore,
 } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
+import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
@@ -281,11 +281,10 @@ export function initCliPlatform(
     Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
-    // The terminal is the operator's own, so entries reach it unredacted — the
-    // contract `logSinks.ts` documents for CLI output.
-    setLogSink(context.quietLogs ? silentLogSink : consoleLogSink, {
-      trusted: true,
-    });
+    // Every command renders its own output, so the platform's log lines go
+    // nowhere; `quietLogs` is only the user's `--quiet`, which the shutdown
+    // handler below reads.
+    setLogSink(silentLogSink);
 
     // The one Effect runtime of this process (PRD 7.7) comes first: the stores
     // below open as Effect programs, and the session graph and every
@@ -373,11 +372,7 @@ export function initCliPlatform(
               Effect.tap((session) =>
                 Effect.sync(() => {
                   const moved = session.storeMovedAside;
-                  if (
-                    moved &&
-                    context.quietLogs &&
-                    context.presentsStoreMovedAside !== true
-                  ) {
+                  if (moved && context.presentsStoreMovedAside !== true) {
                     writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
                 }),

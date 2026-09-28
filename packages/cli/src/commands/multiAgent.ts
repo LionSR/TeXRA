@@ -124,7 +124,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (init.inputFiles.length === 0 && !hasInstruction) {
     return yield* failUsage(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
-  const services = yield* initCliPlatform({ ...context, quietLogs: true });
+  const services = yield* initCliPlatform(context);
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
@@ -248,7 +248,7 @@ const multiAgentListCommand = defineCliCommand({
   },
   run: (context) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform(context);
       return yield* runMultiAgentList(context, services);
     }),
 });
@@ -268,7 +268,7 @@ const multiAgentShowCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform(context);
       return yield* runMultiAgentShow(context, ctx.args.preset, services);
     }),
 });

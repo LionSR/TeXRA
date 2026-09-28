@@ -173,7 +173,6 @@ export async function runChat(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({
         ...context,
-        quietLogs: true,
         presentsStoreMovedAside: true,
       });
       const runtimeSession = yield* services.session;
