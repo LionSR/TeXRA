@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { AppState } from '@platform/interfaces';
-import { getDisabledToolIds } from '@utils/config/constants';
+import { readDisabledTools } from '@tools/plugins';
 
 export const BUILTIN_WORKFLOW_AGENTS_DIR = 'agents' as const;
 export const BUILTIN_TOOL_USE_AGENTS_DIR = 'tool_use_agents' as const;
@@ -63,6 +63,6 @@ export function builtInToolUseRoots(
  */
 export const enabledToolUseRoots = (coreDirectory: string) =>
   AppState.pipe(
-    Effect.flatMap(getDisabledToolIds),
+    Effect.flatMap(readDisabledTools),
     Effect.map((disabled) => builtInToolUseRoots(coreDirectory, disabled)),
   );

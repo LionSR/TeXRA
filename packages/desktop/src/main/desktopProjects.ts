@@ -302,6 +302,7 @@ export function openDesktopProjectRegistry(
               { concurrency: 'unbounded' },
             );
             const roots = createNodeWorkspaceRoots({
+              host: 'desktop',
               workspacePath: root,
               storage,
               globalStorage: resolveGlobalStoragePath(options.dataRoot),

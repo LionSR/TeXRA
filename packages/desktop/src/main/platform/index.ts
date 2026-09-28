@@ -217,6 +217,7 @@ export const initializeElectronPlatform = Effect.fn(
     );
     repairLaunchPath();
     const processRoots = createNodeWorkspaceRoots({
+      host: 'desktop',
       workspacePath: undefined,
       storage,
       globalStorage,
@@ -225,7 +226,6 @@ export const initializeElectronPlatform = Effect.fn(
       globalState: globalStateStore,
     });
     yield* bootstrapHost({
-      host: 'desktop',
       roots: processRoots,
       skills: { resourcesPath },
     });

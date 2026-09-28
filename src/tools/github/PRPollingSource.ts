@@ -45,7 +45,7 @@ import {
   GitHubRateLimitError,
 } from './githubClient';
 import {
-  SharedAnnotationFetchBudget,
+  AnnotationFetchBudget,
   AnnotationFetchBudgetExhaustedError,
 } from './annotationFetchBudget';
 import {
@@ -200,7 +200,15 @@ export class PRPollingSource extends PollingSourceBase<
 > {
   private nextAnnotationDrainKey: string | undefined;
 
-  constructor(lifetime?: PollingLifetime) {
+  /**
+   * `annotationBudget` caps annotation-page requests across every PR this
+   * source polls; the process layer builds the source, so the budget is the
+   * process's.
+   */
+  constructor(
+    lifetime?: PollingLifetime,
+    private readonly annotationBudget = new AnnotationFetchBudget(),
+  ) {
     super(
       {
         name: 'PRPollingSource',
@@ -210,14 +218,6 @@ export class PRPollingSource extends PollingSourceBase<
       },
       lifetime,
     );
-  }
-
-  /** Reset the process-wide annotation budget between unit tests. */
-  static resetAnnotationFetchBudgetForTests(
-    remainingFetches?: number,
-    nowMs?: number,
-  ): Effect.Effect<void> {
-    return SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
   }
 
   subscribe(
@@ -806,7 +806,7 @@ export class PRPollingSource extends PollingSourceBase<
       pr.owner,
       pr.repo,
       run.id,
-      SharedAnnotationFetchBudget,
+      this.annotationBudget,
       now,
     ).pipe(
       this.inLogChannel,

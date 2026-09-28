@@ -87,7 +87,7 @@ Things the tree won't tell you:
   other only. The rest of `src/utils/` must not be assumed browser-safe.
   Side-specific helpers still belong in `frontend/` or `common/`.
 - **`src/eventBus/` is `AppSignals` only** — cross-cutting app-lifecycle signals
-  (auth, subscriptions, tool availability, workspace-file writes). It is _not_
+  (auth, subscriptions, credentials, workspace-file writes). It is _not_
   run or session progress; those live in `@agent/trace` and `SessionEvents`
   (`src/agent/runtime/`).
 - **`src/common/webview/` does not exist.** Webview base classes are in

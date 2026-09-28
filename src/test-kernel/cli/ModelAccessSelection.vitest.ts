@@ -47,7 +47,7 @@ class ObservedStateStore extends FakeStateStore {
 }
 
 const secrets = new FakeSecrets();
-const stores = makeFakeSettingsStores().stores;
+const stores = makeFakeSettingsStores('cli').stores;
 const appState = new ObservedStateStore();
 
 /**

@@ -22,7 +22,7 @@
  */
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -525,6 +525,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | ClaudeAgentSessions
   | AgentResume
   | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   const { roots } = toolCall;
   const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
@@ -590,7 +591,12 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
+  | Secrets
+  | ToolCall
+  | Runs
+  | AgentResume
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;
@@ -600,8 +606,7 @@ const launchClaudeAgentSession = Effect.fn(
   // `Options` names these `cwd` / `additionalDirectories`, unlike codex.
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, context.parentWorkingDirectory);
-  // The env block reads only the process environment and the `Secrets`
-  // service, neither of which is workspace-scoped.
+  // The env block reads the process environment and `Secrets`: no workspace.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
     Effect.orDie,

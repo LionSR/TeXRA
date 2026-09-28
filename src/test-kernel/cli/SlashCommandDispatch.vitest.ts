@@ -160,7 +160,7 @@ function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
  */
 const services = {
   secrets: new FakeSecrets(),
-  stores: makeFakeSettingsStores().stores,
+  stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
   runtimeSession: testDefaultSession(),
 };

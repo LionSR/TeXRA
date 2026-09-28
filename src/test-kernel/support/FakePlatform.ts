@@ -28,7 +28,10 @@ import {
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { getCoreSettingDefault } from '@shared/state/stateSettings';
+import {
+  getCoreSettingDefault,
+  type SettingHost,
+} from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 /**
@@ -398,6 +401,7 @@ export class FakeSecrets implements PlatformSecrets {
  */
 export function fakeStores(): ModelOptionStores {
   return {
+    host: 'vscode',
     secrets: new FakeSecrets(),
     config: new FakeConfigProvider(),
     workspaceState: new FakeStateStore(),
@@ -432,6 +436,8 @@ export interface FakePlatformOptions {
   storagePath?: string;
   /** The global-storage root, as a real path. Worker-shared by default. */
   globalStoragePath?: string;
+  /** The product host the roots name; the extension's by default. */
+  host?: SettingHost;
 }
 
 /** A fake host's shutdown scope and the port it serves as
@@ -471,6 +477,7 @@ export function createFakeWorkspaceRoots(
   > = {},
 ): WorkspaceRoots {
   return {
+    host: options.host ?? 'vscode',
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
       : fakePath('workspace'),

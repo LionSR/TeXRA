@@ -195,6 +195,7 @@ export function createDesktopSettingsIpc(
 
   const { repaintOn, settle } = body;
   const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
+    body.followToolAvailability,
     ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map((signal) =>
       onAppSignal(signal, (payload) => {
         const work = repaintOn[signal](payload as never);

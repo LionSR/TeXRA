@@ -8,8 +8,9 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import { LiveTools } from '@tools/liveTools';
-import { switchedOffPlugins } from '@tools/plugins';
-import { getDisabledToolIds } from '@utils/config/constants';
+import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
+
+import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 
 /**
  * Hold the loaded plugins the declarations name, apply the switches
@@ -31,10 +32,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   const live = yield* LiveTools;
   const held = yield* live.hold(declaredToolNames(input.tools));
   const pinned = yield* live.pinSwitched(
-    Effect.map(
-      getDisabledToolIds(input.stores.globalState),
-      switchedOffPlugins,
-    ),
+    Effect.map(readDisabledTools(input.stores.globalState), switchedOffPlugins),
   );
   const resolved = yield* resolveStepTools(pinned.generation, {
     runTools: [],
@@ -42,6 +40,9 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
     injectInstalled: false,
     ...input,
     held,
-  });
+  }).pipe(
+    // No probe has answered: the gate withholds nothing on its account.
+    Effect.provide(unprobedToolAvailability),
+  );
   return { ...resolved, held, generation: pinned.generation };
 });

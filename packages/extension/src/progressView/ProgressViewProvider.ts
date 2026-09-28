@@ -83,7 +83,6 @@ import type {
 } from '@shared/session/sessionFrames';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { createFlushableDebounce } from '@utils/core';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
@@ -172,7 +171,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           withLogChannel(CHANNEL),
         ),
       ),
-    DEBOUNCE_OPTIONS_MS,
+    // Dropdown options refresh.
+    300,
   );
   private readonly draftRequests = new HostDraftRequests();
 

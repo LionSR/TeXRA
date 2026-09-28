@@ -4,7 +4,7 @@
  * install commands. Installing a VS Code extension and writing VS Code's own
  * settings stay with the host that can.
  */
-import { Effect } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import {
   detectLatexSettingsStatus,
@@ -19,11 +19,8 @@ import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import {
-  getLastCheckResults,
-  refreshToolAvailability,
-  setToolEnabled,
-} from '@tools/toolAvailability';
+import { setToolEnabled } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -32,12 +29,16 @@ import {
 
 /** The Tools and LaTeX pages: their arms, repaints and opening data. */
 export function settingsToolCommands(ports: {
-  readonly host: 'vscode' | 'desktop';
-  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'config' | 'globalState'>;
+  readonly roots: Pick<
+    WorkspaceRoots,
+    'host' | 'workspace' | 'config' | 'globalState'
+  >;
   readonly bindings: SettingsHostBindings;
 }) {
   const { bindings, roots } = ports;
-  const probeInputs = { workspaceRoot: roots.workspace, config: roots.config };
+  const refresh = Effect.flatMap(ToolAvailability, (availability) =>
+    availability.refresh(roots),
+  );
 
   const postItems = <E, R>(items: Effect.Effect<ToolDashboardItem[], E, R>) =>
     bindings.post(
@@ -46,14 +47,12 @@ export function settingsToolCommands(ports: {
         items: built,
       })),
     );
-  // A cold probe cache stays `undefined` so the build runs the probes;
-  // coercing it to `[]` would render "zero external tools".
+  // Results no probe has produced yet stay `undefined` so the build runs the
+  // probes; coercing them to `[]` would render "zero external tools".
   const postToolDashboard = postItems(
-    Effect.suspend(() =>
-      buildToolDashboardItems(
-        ports.host,
-        probeInputs,
-        getLastCheckResults(roots.workspace) ?? undefined,
+    Effect.flatMap(ToolAvailability, (availability) =>
+      Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
+        buildToolDashboardItems(roots, held.get(roots.workspace)),
       ),
     ),
   );
@@ -70,11 +69,11 @@ export function settingsToolCommands(ports: {
   );
 
   /**
-   * The dashboard posts from the probe cache on a detached fiber, so a cold
-   * cache's network probes (Zotero and others) never hold the first render,
-   * then re-probes; the re-probe's `toolAvailabilityChanged` signal repaints
-   * it. The view shows a spinner until data arrives, so a failed build still
-   * posts an empty dashboard to end it.
+   * The dashboard posts from the last results on a detached fiber, so a first
+   * probe's network checks (Zotero and others) never hold the first render,
+   * then re-probes; `followToolAvailability` repaints it with what the
+   * re-probe finds. The view shows a spinner until data arrives, so a failed
+   * build still posts an empty dashboard to end it.
    */
   const postStartup = Effect.andThen(
     Effect.forkDetach(
@@ -92,12 +91,30 @@ export function settingsToolCommands(ports: {
           log: 'Warn',
           message: 'The empty tool dashboard could not be posted either.',
         }),
-        Effect.andThen(refreshToolAvailability(probeInputs)),
+        Effect.andThen(refresh),
       ),
       { startImmediately: true },
     ),
     postLatexStatus,
   );
+
+  /**
+   * Repaint the dashboard whenever this workspace's results change, whoever
+   * probed: a session opening, the Re-check button, a credential write, an
+   * editor extension installed. Runs until interrupted; the host holds it
+   * for the view's life and settles each repaint.
+   */
+  const followToolAvailability = <E, R>(
+    repaint: (post: typeof postToolDashboard) => Effect.Effect<void, E, R>,
+  ) =>
+    Effect.flatMap(ToolAvailability, (availability) =>
+      SubscriptionRef.changes(availability.results).pipe(
+        Stream.map((held) => held.get(roots.workspace)),
+        Stream.changes,
+        Stream.filter((results) => results !== undefined),
+        Stream.runForEach(() => repaint(postToolDashboard)),
+      ),
+    );
 
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
@@ -123,7 +140,15 @@ export function settingsToolCommands(ports: {
         : Effect.fail(
             new Error(`Rejected unknown install command: ${installCommand}`),
           ),
+    // The dashboard follows the results the re-probe publishes.
+    recheckToolStatus: () => refresh,
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
-  return { handlers, postStartup, postToolDashboard, postLatexStatus };
+  return {
+    handlers,
+    postStartup,
+    postToolDashboard,
+    postLatexStatus,
+    followToolAvailability,
+  };
 }

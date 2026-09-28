@@ -301,6 +301,7 @@ describe('CLI history runtime', () => {
     vi.mocked(initCliPlatform).mockReturnValue(
       Effect.succeed({
         ...host.platform,
+        host: host.roots.host,
         globalStorage: host.roots.globalStorage,
         config: host.roots.config,
         workspaceState: host.roots.workspaceState,

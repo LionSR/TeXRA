@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
-import { REFRESH_THRESHOLD_MS } from '@utils/config/constants';
+/** The shortest interval between two diff refreshes. */
+const REFRESH_THRESHOLD_MS = 200;
 
 interface DiffInfo {
   left: vscode.Uri;

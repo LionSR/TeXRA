@@ -58,7 +58,7 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { Cancelled } from '@shared/session/requestErrors';
-import { refreshToolAvailability } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DesktopProjectRecords,
@@ -900,10 +900,9 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: () =>
-        refreshToolAvailability({
-          workspaceRoot: project.roots.workspace,
-          config: project.roots.config,
-        }),
+        Effect.flatMap(ToolAvailability, (tools) =>
+          Effect.asVoid(tools.refresh(project.roots)),
+        ),
     });
     const port = runtime.runSync(
       bridge.attach({

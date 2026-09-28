@@ -61,7 +61,7 @@ const { loadCliDetailedAccountStatusLines, loadCliModelAccessOverview } =
   await import('@cli/runtime/apiStatus');
 
 const secrets = new FakeSecrets();
-const stores = makeFakeSettingsStores().stores;
+const stores = makeFakeSettingsStores('cli').stores;
 
 function lineFor(lines: readonly string[], route: string): string {
   const matches = lines.filter((line) => line.startsWith(`${route}:`));

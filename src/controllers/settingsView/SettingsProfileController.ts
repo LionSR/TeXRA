@@ -2,10 +2,7 @@ import { Effect } from 'effect';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  modelsTabSettings,
-  type SettingHost,
-} from '@shared/state/stateSettings';
+import { modelsTabSettings } from '@shared/state/stateSettings';
 import {
   type ProviderKeyStatus,
   type UpdateProfileMessage,
@@ -30,8 +27,6 @@ import {
  * its modules.
  */
 interface SettingsProfileControllerDeps {
-  /** The host reading the catalog, so `slots` resolves to its own entry. */
-  readonly host: SettingHost;
   /** The three setting slots a catalog row resolves against. */
   readonly stores: SettingsStores;
   /** The host's key-status read, as the program it already was. */
@@ -133,7 +128,7 @@ export class SettingsProfileController {
 
   private getProviderSettings(provider: string) {
     return Effect.forEach(modelsTabSettings(provider), ({ entry, surface }) =>
-      readSetting(entry, this.deps.stores, this.deps.host).pipe(
+      readSetting(entry, this.deps.stores).pipe(
         Effect.map((value) => {
           const { provider: _provider, ...display } = surface;
           return { ...display, key: entry.key, value: value === true };

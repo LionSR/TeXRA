@@ -50,13 +50,9 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
   ),
 );
 
-// The Tools and LaTeX pages read the probe cache and spawn the LaTeX probes;
-// an empty cache and a fixed status keep the suite off the machine's tools.
-vi.mock('@tools/toolAvailability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tools/toolAvailability')>()),
-  getLastCheckResults: () => [],
-  refreshToolAvailability: () => Effect.void,
-}));
+// The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
+// the machine's tools, as the harness's unprobed tool availability does for
+// the Tools page.
 vi.mock(
   '@controllers/settingsView/LatexToolingController',
   async (importOriginal) => ({

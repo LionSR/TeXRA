@@ -19,7 +19,6 @@
  *    reading of the call's effective permission mode.
  */
 
-import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
@@ -31,6 +30,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
+  binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
 } from './support/externalBinaryUtils';
@@ -93,22 +93,9 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 /** Native CLI binary filename for the current platform. */
 const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
 
-/**
- * The platform binary sits directly in the platform-package directory.
- *
- * The probe is a plain predicate on a path this module just built, over the
- * real filesystem the packaged binary lives on, like the sibling `which.sync`
- * probe. The static it replaces asked lstat, which counted a dangling symlink
- * as present where `existsSync`'s access probe does not — a link no
- * executable can be run through either way.
- */
-function claudeBinaryInPlatformPackage(
-  platformPkgDir: string,
-): Effect.Effect<string | undefined> {
-  return Effect.sync(() => {
-    const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-    return existsSync(binary) ? binary : undefined;
-  });
+/** The platform binary sits directly in the platform-package directory. */
+function claudeBinaryInPlatformPackage(platformPkgDir: string) {
+  return binaryIfPresent(path.join(platformPkgDir, CLAUDE_BINARY_NAME));
 }
 
 /**
@@ -143,10 +130,10 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
   };
 });
 
-/** Lazy accessor for claudeAgentConfig.ts exports (loaded once, cached). */
-let configModule: typeof import('./claudeAgentConfig.js') | null = null;
+/** Lazy accessor for claudeAgentConfig.ts exports: Node's module cache
+ *  answers every call after the first. */
 export const getClaudeAgentConfig = Effect.promise(
-  async () => (configModule ??= await import('./claudeAgentConfig.js')),
+  () => import('./claudeAgentConfig.js'),
 );
 
 /**

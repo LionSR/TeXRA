@@ -40,7 +40,7 @@ export const testRunTools = (
   toolInputs: {
     tools: [],
     approvalPromptsUnavailable: false,
-    host: undefined,
+    host: stores.host,
     runTools: Object.values(tools),
     injectTools: false,
     injectInstalled: false,

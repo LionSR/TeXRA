@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, type FileSystem } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -462,7 +462,12 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | CodexThreads | AgentResume | ChildProcessSpawner
+  | ToolCall
+  | Runs
+  | CodexThreads
+  | AgentResume
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   const toolCall = yield* ToolCall;
   const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
@@ -515,7 +520,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | AgentResume | ChildProcessSpawner
+  ToolCall | Runs | AgentResume | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = yield* ToolCall;
   const thread = yield* createCodexThread(

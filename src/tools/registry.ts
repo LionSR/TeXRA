@@ -16,6 +16,7 @@ import {
 import { LiveTools, toolTableLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import {
+  readDisabledTools,
   switchedOffPlugins,
   TOOL_PLUGINS,
   type PluginToolName,
@@ -41,7 +42,6 @@ import {
   type PromptSection,
   type SessionPluginLayer,
 } from '@tools/toolTable';
-import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -392,7 +392,7 @@ export const toolRegistryLayer = (
         Effect.gen(function* () {
           const live = yield* LiveTools;
           const off = Effect.map(
-            getDisabledToolIds(appState),
+            readDisabledTools(appState),
             switchedOffPlugins,
           );
           // Nothing stays pinned: a pin here only applies the switches and

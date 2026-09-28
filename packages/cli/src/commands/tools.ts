@@ -2,15 +2,11 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 import { parse as shellParse } from 'shell-quote';
 
-import type { ToolProbeInputs } from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { runForegroundCommand } from '../runtime/foregroundCommand';
-import {
-  initCliPlatform,
-  type CliPlatformServices,
-} from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliToolList,
@@ -56,25 +52,13 @@ interface CliToolGuideResult {
   readonly command?: string;
 }
 
-/**
- * The workspace this command's init opened, as the probes read it: the
- * configuration slot and its folder, which is undefined when the process
- * opened no workspace folder.
- */
-function toolProbeInputs(services: CliPlatformServices): ToolProbeInputs {
-  return {
-    workspaceRoot: services.roots.workspace,
-    config: services.config,
-  };
-}
-
 function listTools(context: CliContext) {
   // The init and the status read it feeds are one program, run on the process
   // runtime the command entry installs, so they hit the same state store
   // without a Promise between them.
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
-    const items = yield* readCliToolStatuses(toolProbeInputs(services));
+    const items = yield* readCliToolStatuses(services.roots);
 
     emitCliResult(context, {
       json: items,
@@ -88,7 +72,7 @@ function listTools(context: CliContext) {
 function showTool(context: CliContext, id: string) {
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
-    const item = yield* readCliToolStatus(toolProbeInputs(services), id);
+    const item = yield* readCliToolStatus(services.roots, id);
     if (!item) {
       writeTextStderr(formatCliToolNotFoundMessage(id));
       return CliExitCode.Usage;

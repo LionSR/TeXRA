@@ -303,7 +303,7 @@ function makeInit(
       throw new Error('slash commands are not exercised here');
     },
     secrets: new FakeSecrets(),
-    stores: makeFakeSettingsStores().stores,
+    stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     // The agent boundary, injected the way the init seam intends: the bag is
     // the suite's own, so assertions read the same `mocks` entries the old

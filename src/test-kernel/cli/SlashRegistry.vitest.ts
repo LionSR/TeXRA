@@ -76,7 +76,7 @@ function registerBuiltins(
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
-    stores: makeFakeSettingsStores().stores,
+    stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     ...options,

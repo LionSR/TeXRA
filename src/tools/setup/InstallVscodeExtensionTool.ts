@@ -83,7 +83,7 @@ const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
 export const InstallVscodeExtensionTool = defineTool({
   name: 'install_vscode_extension',
   // Requires VS Code extensions.
-  unavailableHosts: ['cli', 'desktop'],
+  unavailableHosts: ['cli', 'desktop', 'sdk'],
   requiresApproval: true,
   description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
   schema: InstallVscodeExtensionInputSchema,

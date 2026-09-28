@@ -7,9 +7,9 @@
  * PR subscriptions in the process to a token bucket that continuously
  * refills, independent of the poll interval.
  *
- * A single shared singleton (`SharedAnnotationFetchBudget`) is the authority; the
- * infrastructure `fetchAnnotations` claims against it and `PRPollingSource`
- * exposes a test-only reset that targets the same instance.
+ * The GitHub plugin's process layer (`gitHubSubscriptionsLayer`) builds the
+ * one budget of a process and hands it to the one PR polling source, whose
+ * `fetchAnnotations` claims against it; it lives and ends with that layer.
  *
  * Token state lives in a `Ref` and `tryClaim` reads its time from Effect's
  * `Clock` by default, rather than a bespoke injectable-clock parameter — the
@@ -21,8 +21,6 @@
  */
 
 import { Clock, Data, Effect, Ref } from 'effect';
-
-import { clamp } from '@utils/core';
 
 // Bound annotation endpoint traffic across all PR subscriptions in this
 // process. Pagination claims one unit per annotations page, so this budget
@@ -48,13 +46,12 @@ export class AnnotationFetchBudget {
   private readonly state: Ref.Ref<TokenBucketState>;
 
   constructor(
-    private readonly maxRequestsPerWindow: number,
-    private readonly windowMs: number,
+    private readonly maxRequestsPerWindow = MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW,
+    private readonly windowMs = ANNOTATION_FETCH_BUDGET_WINDOW_MS,
   ) {
-    // `SharedAnnotationFetchBudget` below is constructed eagerly at module
-    // load, before any Effect runtime exists to run a `Ref.make` program —
-    // `makeUnsafe` is `Ref`'s documented synchronous constructor for exactly
-    // that case, not an `Effect.run*` boundary call.
+    // A plain constructor, so the polling source holds one from its own
+    // construction: `makeUnsafe` is `Ref`'s documented synchronous
+    // constructor, not an `Effect.run*` boundary call.
     this.state = Ref.makeUnsafe<TokenBucketState>({
       tokens: maxRequestsPerWindow,
       lastRefillMs: Date.now(),
@@ -98,28 +95,4 @@ export class AnnotationFetchBudget {
       });
     });
   }
-
-  resetForTests(
-    remainingRequests?: number,
-    nowMs?: number,
-  ): Effect.Effect<void> {
-    const { state, maxRequestsPerWindow } = this;
-    return Effect.gen(function* () {
-      const now = nowMs ?? (yield* Clock.currentTimeMillis);
-      yield* Ref.set(state, {
-        tokens: clamp(
-          remainingRequests ?? maxRequestsPerWindow,
-          0,
-          maxRequestsPerWindow,
-        ),
-        lastRefillMs: now,
-      });
-    });
-  }
 }
-
-/** Process-wide singleton shared by every PR subscription. */
-export const SharedAnnotationFetchBudget = new AnnotationFetchBudget(
-  MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW,
-  ANNOTATION_FETCH_BUDGET_WINDOW_MS,
-);

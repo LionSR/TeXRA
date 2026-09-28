@@ -121,7 +121,7 @@ function tui(
       createTuiHostInteractions(presentationHost, cliContext, {
         session: testDefaultSession(),
         secrets,
-        settings: makeFakeSettingsStores().stores,
+        settings: makeFakeSettingsStores('cli').stores,
         runtime: testRuntime(),
       }),
     ),

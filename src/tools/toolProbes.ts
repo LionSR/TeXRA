@@ -7,7 +7,7 @@
  */
 
 // Third-party imports
-import { Data, Duration, Effect } from 'effect';
+import { Data, Duration, Effect, type FileSystem } from 'effect';
 import { HttpClient } from 'effect/unstable/http';
 
 // Local imports
@@ -15,8 +15,8 @@ import {
   causeChain,
   isModuleNotFoundError,
 } from '@common/errors/errorPredicates';
-import type { ConfigProvider } from '@platform/interfaces';
 import type { Secrets, SecretsFailed } from '@platform/secrets';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
@@ -70,12 +70,14 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
  * credentials, the host's setup capabilities for the one plugin whose
  * availability depends on the editor host (Lean 4's VS Code extension), that
  * host's Lean port, which owns the roster of running servers the same plugin
- * reports, the HTTP client the Zotero probes request through, and the spawner
- * every probe runs its child processes on. All five are `ProcessServices`
- * arms, so every caller of the availability surface already holds them.
+ * reports, the HTTP client the Zotero probes request through, the spawner
+ * every probe runs its child processes on, and the filesystem the CLI binary
+ * probes look in. All six are `ProcessServices` arms, so every caller of the
+ * availability surface already holds them.
  */
 export type ToolProbeServices =
   | Secrets
+  | FileSystem.FileSystem
   | SetupPlatform
   | LeanLanguageServices
   | HttpClient.HttpClient
@@ -84,13 +86,14 @@ export type ToolProbeServices =
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
  * from an ambient scope: the folder the GitHub plugin asks whether it is a git
- * repository, and the configuration the Zotero plugin reads its port from. Every
- * caller of the availability surface already holds both on the roots it opened.
+ * repository, the configuration the Zotero plugin reads its port from, and the
+ * host the Lean plugin asks whether it drives Lean through the editor: three
+ * fields of the roots every caller of the availability surface opened.
  */
-export interface ToolProbeInputs {
-  readonly workspaceRoot: string | undefined;
-  readonly config: ConfigProvider;
-}
+export type ToolProbeInputs = Pick<
+  WorkspaceRoots,
+  'workspace' | 'config' | 'host'
+>;
 
 /**
  * How a plugin with an external dependency answers "is it available": an
@@ -228,9 +231,13 @@ function findProbedBinary(
   findBinary: () => Effect.Effect<
     string | undefined,
     Error,
-    ChildProcessSpawner
+    ChildProcessSpawner | FileSystem.FileSystem
   >,
-): Effect.Effect<string | undefined, ToolProbeFailed, ChildProcessSpawner> {
+): Effect.Effect<
+  string | undefined,
+  ToolProbeFailed,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   return Effect.mapError(
     findBinary(),
     (cause) =>
@@ -262,13 +269,17 @@ export function probeSdkBinaryStatus(config: {
   findBinary: () => Effect.Effect<
     string | undefined,
     Error,
-    ChildProcessSpawner
+    ChildProcessSpawner | FileSystem.FileSystem
   >;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
-}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed, ChildProcessSpawner> {
+}): Effect.Effect<
+  SdkBinaryStatus,
+  ToolProbeFailed,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel.

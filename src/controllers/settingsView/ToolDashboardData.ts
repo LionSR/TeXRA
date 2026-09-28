@@ -19,16 +19,16 @@ import type {
 import {
   TOOL_PLUGINS,
   findToolPlugin,
+  readDisabledTools,
   type ToolPlugin,
   type ToolPluginSetup,
 } from '@tools/plugins';
 import { isToolUnavailableOnHost } from '@tools/registry';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
-  runExternalToolChecks,
+  ToolAvailability,
   type ExternalToolCheckResult,
-} from '@tools/toolAvailability';
-import { getDisabledToolIds } from '@utils/config/constants';
+} from '@tools/toolAvailabilityService';
 
 // ============================================================
 // Tool terminal actions
@@ -105,8 +105,8 @@ export function isToolPluginVisible(
  * Built-in plugins come first, in manifest order, then the probed plugins in
  * the order their results arrive.
  *
- * @param host - the product host asking; see {@link isToolPluginVisible}.
- * @param probeInputs - the asking host's workspace folder and configuration,
+ * @param probeInputs - the asking host (see {@link isToolPluginVisible}), its
+ *   workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
  *   whether the folder is a git repository, the Zotero group reads its port).
  *   Ignored when `cachedResults` skips the probes.
@@ -116,10 +116,10 @@ export function isToolPluginVisible(
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    host: SettingHost,
     probeInputs: ToolProbeInputs,
-    cachedResults?: ExternalToolCheckResult[],
+    cachedResults?: readonly ExternalToolCheckResult[],
   ) {
+    const { host } = probeInputs;
     const builtinItems: ToolDashboardItem[] = TOOL_PLUGINS.filter(
       (plugin) =>
         plugin.availability === undefined && isToolPluginVisible(plugin, host),
@@ -136,9 +136,9 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     }));
 
     const results =
-      cachedResults ?? (yield* runExternalToolChecks(probeInputs));
+      cachedResults ?? (yield* (yield* ToolAvailability).refresh(probeInputs));
 
-    const disabledIds = yield* getDisabledToolIds(yield* AppState);
+    const disabledIds = yield* readDisabledTools(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findToolPlugin(id);

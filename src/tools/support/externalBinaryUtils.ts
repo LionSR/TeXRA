@@ -22,7 +22,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import which from 'which';
 
 import { isModuleNotFoundError } from '@common/errors';
@@ -149,7 +149,7 @@ export interface ResolveBinaryConfig {
    */
   binaryInPlatformPackage(
     platformPkgDir: string,
-  ): Effect.Effect<string | undefined>;
+  ): Effect.Effect<string | undefined, never, FileSystem.FileSystem>;
   /**
    * Global npm-prefix package roots to resolve the platform package from,
    * given the detected `npm prefix -g`. Each root is passed to Node module
@@ -167,7 +167,11 @@ export interface ResolveBinaryConfig {
  */
 const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   config: ResolveBinaryConfig,
-): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
+): Effect.fn.Return<
+  string | undefined,
+  never,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   if (config.platformPackages.length === 0) return undefined;
 
   // Strategy 1: packaged Electron app.asar.unpacked resources
@@ -188,11 +192,13 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   }
 
   // Strategy 2: resolve from local project's node_modules
-  // Preferred in VS Code extension development — matches package.json.
-  const local = yield* resolveBinaryFromBase(
-    path.join(__dirname, '..'),
-    config,
-  );
+  // Preferred in VS Code extension development — matches package.json. The
+  // agent package is an ES-module bundle with no `__dirname`: it has no local
+  // tree of its own and goes on to the strategies below.
+  const local =
+    typeof __dirname === 'string'
+      ? yield* resolveBinaryFromBase(path.join(__dirname, '..'), config)
+      : undefined;
   if (local) return local;
 
   // Strategy 3: resolve from global npm prefix
@@ -244,7 +250,11 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
  */
 export function createCachedBinaryResolver(
   buildConfig: () => ResolveBinaryConfig | undefined,
-): () => Effect.Effect<string | undefined, Error, ChildProcessSpawner> {
+): () => Effect.Effect<
+  string | undefined,
+  Error,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   let cached: string | undefined;
   return () =>
     Effect.suspend(() => {
@@ -260,7 +270,7 @@ export function createCachedBinaryResolver(
       );
     }).pipe(
       // The probe steps are plain synchronous calls (Node module resolution,
-      // `existsSync`, the PATH extension, `which.sync`); one that throws is a
+      // the PATH extension, `which.sync`); one that throws is a
       // failed lookup the caller reports, not a crash of the calling fiber.
       Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
     );
@@ -309,7 +319,7 @@ const resolveBinaryFromBase = Effect.fn(
 )(function* (
   baseDir: string,
   config: ResolveBinaryConfig,
-): Effect.fn.Return<string | undefined> {
+): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
   for (const pkg of config.platformPackages) {
     const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
     if (platformPkgDir === undefined) continue;
@@ -318,3 +328,24 @@ const resolveBinaryFromBase = Effect.fn(
   }
   return undefined;
 });
+
+/**
+ * `binary` when a file is there, else `undefined`: how a platform package's
+ * binary is found. The check follows symlinks, so a dangling link counts as
+ * absent, as no executable can run through it; a check that cannot answer
+ * is logged and read as absent, like a package Node cannot resolve.
+ */
+export function binaryIfPresent(
+  binary: string,
+): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
+  return Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(binary)).pipe(
+    Effect.map((present) => (present ? binary : undefined)),
+    Effect.catch((error) =>
+      Effect.logWarning(`Could not check for ${binary}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.as(undefined),
+      ),
+    ),
+  );
+}

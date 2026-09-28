@@ -479,7 +479,7 @@ export const MANIFEST = [
       configNotes:
         'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
     }),
-    unavailableHosts: ['cli', 'desktop'],
+    unavailableHosts: ['cli', 'desktop', 'sdk'],
     toggleable: true,
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,

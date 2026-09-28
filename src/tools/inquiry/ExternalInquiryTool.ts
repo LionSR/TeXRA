@@ -399,7 +399,7 @@ function executeList(
 export const ExternalInquiryTool = defineTool({
   name: 'inquiry',
   // Requires the long-lived graphical inquiry panel.
-  unavailableHosts: ['cli'],
+  unavailableHosts: ['cli', 'sdk'],
   requiresApproval: 'inBody',
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,

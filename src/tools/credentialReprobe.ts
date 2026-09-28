@@ -15,7 +15,7 @@ import { listSessions } from '@agent/runtime/sessionGraph';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import { TOOL_PLUGINS } from '@tools/plugins';
-import { refreshToolAvailability } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -28,19 +28,14 @@ const REPROBE_SECRETS: ReadonlySet<string> = new Set(
 
 /**
  * The probe inputs of every session the process holds, one per workspace
- * root, because the availability cache is keyed by that root: the extension
+ * root, because the availability results are keyed by that root: the extension
  * and the CLI hold one session over their process roots, the desktop one per
  * open project plus the no-workspace one.
  */
 const openWorkspaceInputs = Effect.map(listSessions(), (sessions) => {
   const inputs = new Map<string | undefined, ToolProbeInputs>();
-  for (const { roots } of sessions) {
-    if (inputs.has(roots.workspace)) continue;
-    inputs.set(roots.workspace, {
-      workspaceRoot: roots.workspace,
-      config: roots.config,
-    });
-  }
+  for (const { roots } of sessions)
+    if (!inputs.has(roots.workspace)) inputs.set(roots.workspace, roots);
   return [...inputs.values()];
 });
 
@@ -48,11 +43,12 @@ const openWorkspaceInputs = Effect.map(listSessions(), (sessions) => {
  * Re-probe on every declared credential change until interrupted. The bus
  * delivers to a synchronous listener, so the listener only enqueues the
  * change and this fiber owns the refreshes; each refresh is forked so a slow
- * probe does not hold back the next change, which the availability cache
+ * probe does not hold back the next change, which the availability service
  * coalesces into a follow-up probe anyway.
  */
 export const reprobeOnCredentialChange = Effect.gen(function* () {
   if (REPROBE_SECRETS.size === 0) return;
+  const availability = yield* ToolAvailability;
   const changes = yield* Queue.unbounded<string>();
   yield* Effect.forkChild(
     onAppSignal('credentialChanged', ({ key }) => {
@@ -63,13 +59,15 @@ export const reprobeOnCredentialChange = Effect.gen(function* () {
     const key = yield* Queue.take(changes);
     for (const inputs of yield* openWorkspaceInputs) {
       yield* Effect.forkChild(
-        refreshToolAvailability(inputs).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logError(
-              `Tool availability refresh after a change to "${key}" failed: ${toErrorMessage(Cause.squash(cause))}`,
-            ).pipe(withLogChannel(CHANNEL)),
+        availability
+          .refresh(inputs)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logError(
+                `Tool availability refresh after a change to "${key}" failed: ${toErrorMessage(Cause.squash(cause))}`,
+              ).pipe(withLogChannel(CHANNEL)),
+            ),
           ),
-        ),
       );
     }
   }

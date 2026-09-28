@@ -42,6 +42,7 @@ import {
   SetupCommandFailed,
   type SetupPlatformShape,
 } from '@tools/setup/platform';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 import { PlatformConflict } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -74,8 +75,8 @@ export interface AgentPlatform {
 
 /**
  * What the package answers a setup tool with: nothing, loudly. It is
- * embedded in someone else's process, so it is none of the three product
- * hosts `SettingHost` names and it has no sign-in flow of its own to start.
+ * embedded in someone else's process, so it is the `sdk` host, none of the
+ * three product hosts, and it has no sign-in flow of its own to start.
  * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
  * tools branch on a surface that is not there, and answering `signIn` with
  * `false` would report a sign-in that can never happen as one that merely
@@ -176,6 +177,17 @@ export const acquireProcess = (
           thrown instanceof PlatformConflict
             ? Effect.fail(thrown)
             : Effect.die(thrown),
+        ),
+        // The first-install tool switches every host's bootstrap seeds, once
+        // the hold is taken: an acquisition refused as a conflict writes
+        // nothing to another embedder's store, and the opt-in plugins stay
+        // off until the embedder switches them on. A store that cannot be
+        // read or written is a platform defect; the hold it took is ended.
+        Effect.tap((hold) =>
+          seedDisabledToolDefaults(platform.roots.globalState).pipe(
+            Effect.orDie,
+            Effect.onError(() => hold.release),
+          ),
         ),
       ),
     ),

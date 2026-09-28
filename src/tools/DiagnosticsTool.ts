@@ -218,7 +218,7 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
 export const DiagnosticsTool = defineTool({
   name: 'diagnostics',
   // No diagnostics provider is installed on either host.
-  unavailableHosts: ['cli', 'desktop'],
+  unavailableHosts: ['cli', 'desktop', 'sdk'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,

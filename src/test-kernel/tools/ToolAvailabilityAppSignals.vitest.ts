@@ -1,6 +1,16 @@
 // Third-party imports
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { ConfigProvider } from '@platform/interfaces';
@@ -10,6 +20,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { createFakeSetupPlatform } from './setup/fixtures';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
@@ -25,12 +36,13 @@ const unreadConfig = (): never => {
 /** The workspace the probes are handed. No mocked def reads it, so its stores
  *  answer nothing. */
 const probeInputs: ToolProbeInputs = {
-  workspaceRoot: undefined,
+  workspace: undefined,
   config: {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
   } satisfies ConfigProvider,
+  host: 'cli',
 };
 
 const secretsLayer = Secrets.layer({
@@ -48,14 +60,25 @@ const probeServices = Layer.mergeAll(
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,
   nodeSpawnerLayer,
+  NodeFileSystem.layer,
 );
+
+/** The process's availability service over the (mocked) manifest this test
+ *  registered, as a composition root builds it. */
+const availabilityService = Effect.gen(function* () {
+  const { toolAvailabilityLayer } = yield* Effect.promise(
+    () => import('@tools/toolAvailability'),
+  );
+  const context = yield* Layer.build(toolAvailabilityLayer);
+  return Context.get(context, ToolAvailability);
+});
 
 afterEach(() => {
   vi.doUnmock('@tools/plugins');
   vi.resetModules();
 });
 
-describe('tool availability app signals', () => {
+describe('tool availability service', () => {
   it.effect(
     're-probes every open workspace when a key a plugin declares changes',
     () =>
@@ -70,8 +93,8 @@ describe('tool availability app signals', () => {
               category: 'ai-agents',
               availability: {
                 reprobeOnSecrets: ['token.key'],
-                probe: vi.fn(({ workspaceRoot }: ToolProbeInputs) =>
-                  Effect.sync(() => probedRoots.push(workspaceRoot)),
+                probe: vi.fn(({ workspace }: ToolProbeInputs) =>
+                  Effect.sync(() => probedRoots.push(workspace)),
                 ),
                 check: vi.fn(() => Effect.succeed(true)),
               },
@@ -81,17 +104,18 @@ describe('tool availability app signals', () => {
         const sessionGraph = yield* Effect.promise(
           () => import('@agent/runtime/sessionGraph'),
         );
-        const { emitAppSignal, onAppSignal } = yield* Effect.promise(
+        const { emitAppSignal } = yield* Effect.promise(
           () => import('@eventBus/AppSignals'),
         );
         const { reprobeOnCredentialChange } = yield* Effect.promise(
           () => import('@tools/credentialReprobe'),
         );
+        const availability = yield* availabilityService;
         const session = (workspace: string | undefined) => ({
-          roots: { workspace, config: probeInputs.config },
+          roots: { ...probeInputs, workspace },
         });
         // Two projects plus the no-workspace session; the second session on
-        // `/a` shares its availability cache, so it is probed once.
+        // `/a` shares its results, so it is probed once.
         const sessions = [
           session('/a'),
           session('/a'),
@@ -101,27 +125,30 @@ describe('tool availability app signals', () => {
         sessionGraph.initSessionOwner({
           list: () => Effect.succeed(sessions),
         } as never);
-        let refreshed = 0;
-        const allRefreshed = Deferred.makeUnsafe<void>();
-        const listener = yield* Effect.forkChild(
-          onAppSignal('toolAvailabilityChanged', () => {
-            if (++refreshed === 3)
-              Deferred.doneUnsafe(allRefreshed, Effect.void);
-          }),
+        // Each session holds its roots, which probes them once on open.
+        for (const { roots } of sessions) yield* availability.hold(roots);
+        const probedAll = SubscriptionRef.changes(availability.results).pipe(
+          Stream.filter(() => probedRoots.length === 3),
+          Stream.runHead,
         );
-        const reprobe = yield* Effect.forkChild(reprobeOnCredentialChange);
-        // Both subscribers register on their own fibers, the re-prober's one
-        // fork deeper, before the store announces anything.
+        yield* probedAll;
+        probedRoots.length = 0;
+        const reprobe = yield* Effect.forkChild(
+          reprobeOnCredentialChange.pipe(
+            Effect.provideService(ToolAvailability, availability),
+          ),
+        );
+        // The re-prober registers on its own fiber, one fork deeper, before
+        // the store announces anything.
         yield* Effect.repeat(Effect.yieldNow, { times: 3 });
 
         emitAppSignal('credentialChanged', { key: 'unrelated.key' });
         emitAppSignal('credentialChanged', { key: 'token.key' });
 
-        yield* Deferred.await(allRefreshed);
+        yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
         sessionGraph.initSessionOwner(undefined);
         yield* Fiber.interrupt(reprobe);
-        yield* Fiber.interrupt(listener);
       }).pipe(Effect.provide(probeServices)),
   );
 
@@ -141,17 +168,15 @@ describe('tool availability app signals', () => {
             },
           ],
         }));
-        const { runExternalToolChecks } = yield* Effect.promise(
-          () => import('@tools/toolAvailability'),
-        );
+        const availability = yield* availabilityService;
         // The first caller claims the slot and forks the probe; the second
         // joins before that fiber's first step and asks for a rerun.
         const first = yield* Effect.forkChild(
-          runExternalToolChecks(probeInputs),
+          availability.refresh(probeInputs),
           { startImmediately: true },
         );
         const second = yield* Effect.forkChild(
-          runExternalToolChecks(probeInputs),
+          availability.refresh(probeInputs),
           { startImmediately: true },
         );
         yield* Fiber.join(first);
@@ -161,7 +186,7 @@ describe('tool availability app signals', () => {
   );
 
   it.effect(
-    'derives unavailable tool names from the last probe results, with no cache to refresh',
+    'holds each workspace its own results, none before a probe answers',
     () =>
       Effect.gen(function* () {
         vi.doMock('@tools/plugins', () => ({
@@ -187,24 +212,31 @@ describe('tool availability app signals', () => {
             },
           ],
         }));
-        const { getUnavailableToolNamesCached, runExternalToolChecks } =
-          yield* Effect.promise(() => import('@tools/toolAvailability'));
+        const availability = yield* availabilityService;
+        const statuses = (root: string | undefined) =>
+          Effect.map(SubscriptionRef.get(availability.results), (held) =>
+            held.get(root)?.map(({ id, status }) => [id, status]),
+          );
 
-        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([]);
+        expect(yield* statuses(undefined)).toBeUndefined();
 
-        yield* runExternalToolChecks(probeInputs);
+        // A root no session holds is answered, not remembered.
+        yield* availability.refresh(probeInputs);
+        expect(yield* statuses(undefined)).toBeUndefined();
 
-        // Toggling a tool on or off never changes this set — it reports missing
-        // external dependencies only — so there is nothing to rebuild after a
-        // toggle, which is why the availability answer is derived on read.
-        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([
-          'missing',
+        const hold = yield* Scope.make();
+        yield* availability.hold(probeInputs).pipe(Scope.provide(hold));
+        yield* availability.refresh(probeInputs);
+        expect(yield* statuses(undefined)).toEqual([
+          ['present-tool', 'available'],
+          ['missing-tool', 'not-found'],
         ]);
         // The probes read the workspace, so one workspace's results never
         // answer for another's on a multi-project host.
-        expect([...getUnavailableToolNamesCached('/other/project')]).toEqual(
-          [],
-        );
+        expect(yield* statuses('/other/project')).toBeUndefined();
+        // The last holder leaving drops the root's results.
+        yield* Scope.close(hold, Exit.void);
+        expect(yield* statuses(undefined)).toBeUndefined();
       }).pipe(Effect.provide(probeServices)),
   );
 
@@ -241,11 +273,9 @@ describe('tool availability app signals', () => {
             },
           ],
         }));
-        const { runExternalToolChecks } = yield* Effect.promise(
-          () => import('@tools/toolAvailability'),
-        );
+        const availability = yield* availabilityService;
 
-        expect(yield* runExternalToolChecks(probeInputs)).toEqual([
+        expect(yield* availability.refresh(probeInputs)).toEqual([
           expect.objectContaining({
             id: 'broken-probe',
             status: 'unknown',

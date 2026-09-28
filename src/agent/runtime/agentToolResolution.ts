@@ -12,7 +12,7 @@
  *      come from the loaded plugin the declaration names; a server that is
  *      not configured or failed to start is reported. A tool whose plugin a
  *      dependency probe found missing, that the host cannot run (its
- *      `unavailableHosts`; every such tool when no host was named) or that
+ *      `unavailableHosts`) or that
  *      is approval-gated while approval prompts are unavailable is withheld;
  *      so is one whose plugin is off (not in the generation).
  *   2. The injected tools not already declared, under the same gates: the
@@ -30,12 +30,13 @@
  *      the offered tools only, so dispatch cannot run a tool the model was
  *      not offered.
  *
- * Routine filtering outcomes (switched off, dependency missing) are silent.
- * The other outcomes are returned as warnings, which the step reports when
+ * A switched-off plugin is withheld silently: the user chose it. The other
+ * outcomes, a declared tool whose dependency is missing included, are
+ * returned as warnings, which the step reports when
  * the offered set changes, not on every step.
  */
 
-import { Effect } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -62,7 +63,7 @@ import {
 } from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
-import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { isInstalledPluginId, ToolRegistry } from '@tools/toolTable';
 import {
   annotateDelegationAvailability,
@@ -79,11 +80,8 @@ export interface StepToolInputs {
   readonly tools: AgentToolUseSetting['tools'];
   /** When true, approval-gated tools are withheld. */
   readonly approvalPromptsUnavailable: boolean;
-  /**
-   * The product host this process is; tools excluded from it are dropped.
-   * `undefined` (no composition root named one) drops every host-bound tool.
-   */
-  readonly host: SettingHost | undefined;
+  /** The product host the run's roots name; tools excluded from it are dropped. */
+  readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 5). */
   readonly runTools: readonly ITool[];
   /** Whether the manifest's injected tools join (step 2). */
@@ -208,11 +206,16 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const refusal = childToolRefusal(input.parentOffered, input.tools);
     if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
   }
-  // A plugin whose dependency probe last reported missing is off.
-  const unavailable = getUnavailableToolNamesCached(input.workspaceRoot);
-  const probedOff = new Set(
-    [...table.plugins].flatMap(([id, tools]) =>
-      [...tools.keys()].some((name) => unavailable.has(name)) ? [id] : [],
+  // A plugin whose dependency the workspace's last probe found missing is
+  // off. Before any probe has answered for the workspace, nothing is
+  // withheld on its account.
+  const probed =
+    (yield* SubscriptionRef.get((yield* ToolAvailability).results)).get(
+      input.workspaceRoot,
+    ) ?? [];
+  const probedOff = new Map(
+    probed.flatMap((result) =>
+      result.status === 'not-found' ? [[result.id, result] as const] : [],
     ),
   );
   const enabled = new Map(
@@ -237,15 +240,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const passesRuntimeGates = (name: string): boolean => {
     const tool = enabled.get(name)?.tool ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
-    if (excluded.length > 0 && input.host === undefined) {
-      warnings.push(
-        `Tool "${name}" is not offered: it depends on the product host, and this run named none.`,
-      );
-      return false;
-    }
-    if (input.host !== undefined && excluded.includes(input.host)) return false;
+    if (excluded.includes(input.host)) return false;
     if (tool?.requiresApproval && input.approvalPromptsUnavailable) {
-      withheldForApproval.push(name);
+      // One whose plugin is off is withheld for that, silently.
+      if (enabled.has(name)) withheldForApproval.push(name);
       return false;
     }
     return true;
@@ -297,13 +295,24 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const resolvedNames = new Set<string>();
   const offer = (name: string, source: 'declared' | 'injected'): void => {
     if (resolvedNames.has(name) || !narrowed(name)) return;
+    // A missing dependency says so where the run declared the tool, before
+    // any other gate, so an approval-gated tool's reason is not lost to the
+    // approval notice.
+    const missing = probedOff.get(generation.entries.get(name)?.plugin ?? '');
+    if (missing !== undefined) {
+      if (source === 'declared')
+        warnings.push(
+          `Tool "${name}" is not offered: ${missing.name} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
+        );
+      return;
+    }
     if (!passesRuntimeGates(name)) return;
     const entry = enabled.get(name);
     if (!entry) {
       // A name with no registration is a configuration error (typo, or a
       // tool retired from the table): dropping it silently would strip the
-      // agent's capability with no trace. One whose plugin is off is
-      // withheld quietly; an MCP name was reported above.
+      // agent's capability with no trace. One whose plugin is switched off
+      // is withheld quietly; an MCP name was reported above.
       if (!table.get(name) && mcpServerOfToolName(name) === undefined)
         warnings.push(
           `${source === 'declared' ? 'Declared' : 'Injected'} tool not found in registry: ${name}`,

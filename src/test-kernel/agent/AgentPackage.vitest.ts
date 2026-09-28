@@ -180,6 +180,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
 
 // Local imports - package API under test
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
@@ -194,7 +195,7 @@ import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = {
   globalState: { get: () => undefined, update: async () => undefined },
-  roots: { storage: '/storage' },
+  roots: { storage: '/storage', globalState: new MemoryStateStore() },
   storage: { getGlobalStoragePath: () => '/global-storage' },
 } as unknown as AgentPlatform;
 /** The run's trace as `onRunResolved` hands it over: the event source. */

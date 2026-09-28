@@ -206,11 +206,7 @@ describe('catalog-derived settings snapshots', () => {
       for (const snapshot of Object.keys(
         derivedSnapshots,
       ) as DerivedSettingsSnapshot[]) {
-        const message = yield* buildSettingsSnapshotMessage(
-          snapshot,
-          stores,
-          'vscode',
-        );
+        const message = yield* buildSettingsSnapshotMessage(snapshot, stores);
         assert.ok(
           Object.keys(message.values).length > 0,
           `${snapshot} carries no rows`,
@@ -271,11 +267,10 @@ describe('catalog-derived settings snapshots', () => {
         );
 
         try {
-          const message = yield* buildSettingsSnapshotMessage(
-            'latex',
-            stores,
-            'desktop',
-          );
+          const message = yield* buildSettingsSnapshotMessage('latex', {
+            ...stores,
+            host: 'desktop',
+          });
 
           assert.equal(message.snapshot, 'latex');
           assert.equal(
@@ -349,12 +344,12 @@ describe('settingsAccess', () => {
     const fake = makeFakeSettingsStores();
     const entry = entryByKey(options.key);
     const store = fake[options.storeName];
-    yield* writeSetting(entry, false, fake.stores, options.host);
+    yield* writeSetting(entry, false, { ...fake.stores, host: options.host });
     assert.equal(yield* isStored(store, entry.key), true);
-    yield* resetSetting(entry, fake.stores, options.host);
+    yield* resetSetting(entry, { ...fake.stores, host: options.host });
     assert.equal(yield* isStored(store, entry.key), false);
     assert.equal(
-      yield* readSetting(entry, fake.stores, options.host),
+      yield* readSetting(entry, { ...fake.stores, host: options.host }),
       options.expectedDefault,
     );
   });
@@ -363,10 +358,10 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, config, workspaceState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      yield* writeSetting(entry, false, stores, 'vscode');
+      yield* writeSetting(entry, false, stores);
       assert.equal(yield* isStored(workspaceState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
-      assert.equal(yield* readSetting(entry, stores, 'vscode'), false);
+      assert.equal(yield* readSetting(entry, stores), false);
     }),
   );
 
@@ -374,7 +369,7 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, config, workspaceState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      yield* writeSetting(entry, false, stores, 'cli');
+      yield* writeSetting(entry, false, { ...stores, host: 'cli' });
       assert.equal(yield* isStored(config, entry.key), true);
       assert.equal(yield* isStored(workspaceState, entry.key), false);
       // The config write used the default 'workspace' target.
@@ -382,7 +377,10 @@ describe('settingsAccess', () => {
         globalValue: undefined,
         workspaceValue: false,
       });
-      assert.equal(yield* readSetting(entry, stores, 'cli'), false);
+      assert.equal(
+        yield* readSetting(entry, { ...stores, host: 'cli' }),
+        false,
+      );
     }),
   );
 
@@ -392,7 +390,7 @@ describe('settingsAccess', () => {
       const entry = settingsViewSettingByKey('texra.telemetry.enabled');
       assert.ok(entry);
 
-      yield* writeSetting(entry, false, stores, 'vscode');
+      yield* writeSetting(entry, false, stores);
 
       assert.deepEqual(config.inspect(entry.key), {
         globalValue: false,
@@ -405,11 +403,14 @@ describe('settingsAccess', () => {
     Effect.gen(function* () {
       const { stores, config, globalState } = makeFakeSettingsStores();
       const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
-      yield* writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
+      yield* writeSetting(entry, 'https://example.invalid/v1', {
+        ...stores,
+        host: 'cli',
+      });
       assert.equal(yield* isStored(globalState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
       assert.equal(
-        yield* readSetting(entry, stores, 'cli'),
+        yield* readSetting(entry, { ...stores, host: 'cli' }),
         'https://example.invalid/v1',
       );
     }),
@@ -481,7 +482,7 @@ describe('settingsAccess', () => {
               if (stored !== undefined) config.set(setting.configKey, stored);
               yield* Effect.promise(() => installPlatform({}, { config }));
               assert.equal(
-                yield* readSetting(entry, stores, 'vscode'),
+                yield* readSetting(entry, stores),
                 expected,
                 `${setting.configKey} stored=${String(stored)}`,
               );
@@ -518,11 +519,12 @@ describe('settingsAccess', () => {
           config.seedGlobal(key, true);
           config.seedWorkspace(key, false);
           const stores = {
+            host: 'vscode' as const,
             config,
             workspaceState: new FakeStateStore(),
             globalState: new FakeStateStore(),
           };
-          assert.equal(yield* readSetting(entry, stores, 'vscode'), true, key);
+          assert.equal(yield* readSetting(entry, stores), true, key);
           assert.equal(yield* readSettingFrom<boolean>(stores, key), true, key);
         }
       }),
@@ -538,7 +540,7 @@ describe('settingsAccess', () => {
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
         try {
           assert.equal(
-            yield* readSetting(entry, stores, 'vscode'),
+            yield* readSetting(entry, stores),
             LATEX_CONFIG_DEFAULTS.latexFormatter,
           );
           const warnings = logs.at('WARN', 'settingsAccess');

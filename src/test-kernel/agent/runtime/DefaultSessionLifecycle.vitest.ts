@@ -55,6 +55,7 @@ describe('default session lifecycle', () => {
           return testWorkspaceRoots();
         });
         const originalRoots = {
+          host: installedRoots.host,
           workspace: installedRoots.workspace,
           storage: installedRoots.storage,
           globalStorage: installedRoots.globalStorage,

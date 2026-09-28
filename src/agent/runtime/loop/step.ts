@@ -44,9 +44,8 @@ import {
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
-import { switchedOffPlugins } from '@tools/plugins';
+import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
-import { getDisabledToolIds } from '@utils/config/constants';
 
 import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
@@ -168,7 +167,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const pinned = yield* live
       .pinSwitched(
         Effect.map(
-          getDisabledToolIds(run.stores.globalState),
+          readDisabledTools(run.stores.globalState),
           switchedOffPlugins,
         ),
         { installed: true },

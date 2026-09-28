@@ -64,8 +64,8 @@ class StateSettingWriteFailed extends Data.TaggedError(
 export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
   readonly stores: SettingsStores;
   /**
-   * The calling host: it selects which rows are writable and resolves each
-   * row's slot for that host instead of assuming the extension's.
+   * The calling surface: it selects which rows are writable (each row's
+   * slot is the stores' own host's).
    */
   readonly host: H;
   /**
@@ -106,7 +106,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
     return Effect.succeed({ kind: 'rejected', entry, error: parsed.error });
   }
   if (
-    entry.slots[ports.host] === 'config' &&
+    entry.slots[ports.stores.host] === 'config' &&
     entry.configTarget !== 'global' &&
     ports.requiresOpenWorkspace?.()
   ) {
@@ -114,8 +114,8 @@ export function applyStateSettingUpdate<H extends SettingHost>(
   }
   const persist =
     parsed === null
-      ? resetSetting(entry, ports.stores, ports.host)
-      : writeSetting(entry, parsed.data, ports.stores, ports.host);
+      ? resetSetting(entry, ports.stores)
+      : writeSetting(entry, parsed.data, ports.stores);
   return persist.pipe(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
@@ -123,7 +123,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
         if (entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
         const policy = (
           parsed === null
-            ? yield* readSetting(entry, ports.stores, ports.host)
+            ? yield* readSetting(entry, ports.stores)
             : parsed.data
         ) as TexraApprovalPolicy;
         yield* Effect.try({

@@ -38,6 +38,7 @@ import type { GoalGrants } from '@tools/goal/goalAutoApproval';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
+import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -61,8 +62,9 @@ import type { Secrets } from './secrets';
  * which the records above and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
  * connection between application state and a session graph, `ToolRegistry`,
- * the plugin table every run's offered tools are rebuilt from, and
- * `LiveTools`, the live catalog each run's step pins a generation of.
+ * the plugin table every run's offered tools are rebuilt from,
+ * `LiveTools`, the live catalog each run's step pins a generation of, and
+ * `ToolAvailability`, each workspace's last dependency probe.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -86,7 +88,8 @@ export type ProcessServices =
   | UsageLog
   | SupabaseAuth
   | ToolRegistry
-  | LiveTools;
+  | LiveTools
+  | ToolAvailability;
 
 /**
  * The services plugin layers serve (`PLUGIN_PROCESS_LAYERS`,
