@@ -391,6 +391,7 @@ export async function runChat(
     runtimeSession,
     getSessionContext: currentSessionContext,
     disposables,
+    shutdownScope: services.shutdownScope,
     followUpQueue,
     initialAgent: agent,
     initialModel: model,
@@ -553,6 +554,7 @@ export async function runChat(
     flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: () => chatController.stop(),
+    quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's
   // handlers, not any earlier: everything above (the platform init,

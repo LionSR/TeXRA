@@ -294,6 +294,7 @@ function makeInit(
     runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
+    shutdownScope: scope,
     followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
@@ -752,8 +753,9 @@ describe('createChatSessionController', () => {
 
         const session = makeSession();
         const disposables = new DisposableStore();
+        const shutdownScope = Scope.makeUnsafe();
         const ctrl = createChatSessionController(
-          makeInit({ session, disposables }),
+          makeInit({ session, disposables, shutdownScope }),
         );
         ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
         const rootRun = session.runId;
@@ -821,6 +823,7 @@ describe('createChatSessionController', () => {
 
         disposables.dispose();
         expect(disposeAdapter).toHaveBeenCalledOnce();
+        yield* Scope.close(shutdownScope, Exit.void);
         expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
         runs.dispose();
       }),

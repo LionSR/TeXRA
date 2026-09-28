@@ -80,6 +80,8 @@ interface SessionExitControllerContext {
   readonly repaintAfterTerminalResume: () => void;
   /** Stop the active run (writes a `halted` `flow.step`). */
   readonly interruptActive: () => void;
+  /** The user's own `--quiet`: the TUI silences the log sink regardless. */
+  readonly quiet: boolean;
 }
 
 /** The exit-subsystem handles `runChat` wires into Ink props and its `finally`. */
@@ -146,7 +148,7 @@ export function createSessionExitController(
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence();
+    runCliPlatformShutdownSequence({ quiet: ctx.quiet });
   // Drain artifact writes and canonical event publication before shutdown.
   // Platform shutdown then settles executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves. Every

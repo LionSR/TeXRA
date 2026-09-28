@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
@@ -45,6 +45,7 @@ import {
   flushNdjsonStdout,
   flushTextStderr,
   writeTextStderr,
+  writeTextStderrAndWait,
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
@@ -151,20 +152,39 @@ export type CliPlatformServices = SettingsStores & {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
-export async function runCliPlatformShutdownSequence(): Promise<void> {
+export async function runCliPlatformShutdownSequence(options: {
+  /** The user's own `--quiet`, never a command's silenced log sink. */
+  readonly quiet: boolean;
+}): Promise<void> {
+  // Each step is best effort, so a failure never stops termination, but it
+  // is said, on stderr: the process runtime is gone by the flushes, and the
+  // log sink is silent under the chat TUI (which has unmounted by now), so
+  // only an explicit `--quiet` keeps it unsaid.
+  const bestEffort = (step: string, effect: Effect.Effect<void>) =>
+    effect.pipe(
+      Effect.catchCause((cause) =>
+        options.quiet
+          ? Effect.void
+          : Effect.promise(() =>
+              writeTextStderrAndWait(
+                `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
+              ),
+            ),
+      ),
+    );
   await Effect.runPromise(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
-      yield* Effect.ignoreCause(cliPlatformShutdown);
+      yield* bestEffort('closing the platform', cliPlatformShutdown);
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushTextStderr());
+      yield* bestEffort('flushing stderr', flushTextStderr());
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushNdjsonStdout());
+      yield* bestEffort('flushing stdout', flushNdjsonStdout());
     }),
   );
 }
 
-export function installCliShutdownSignalHandlers(): void {
+export function installCliShutdownSignalHandlers(quiet: boolean): void {
   if (shutdownHandlers) return;
   const handlers = new DisposableStore();
   shutdownHandlers = handlers;
@@ -179,7 +199,7 @@ export function installCliShutdownSignalHandlers(): void {
         process.once(signal, handler);
         return;
       }
-      await runCliPlatformShutdownSequence();
+      await runCliPlatformShutdownSequence({ quiet });
       process.exit(exitCode);
     };
     process.once(signal, handler);
@@ -395,7 +415,7 @@ export function initCliPlatform(
           installedRoots = roots;
           sessionOpen = openSession;
           if (context.installSignalHandlers !== false) {
-            installCliShutdownSignalHandlers();
+            installCliShutdownSignalHandlers(context.quietLogs);
           }
           return { globalState, roots };
         }).pipe(
