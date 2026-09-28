@@ -98,17 +98,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   options?: { approvalMeta?: ApprovalMeta },
 ) {
   const parentSession = parent.run.session;
-  // Capture the invocation hook explicitly: the child-run loop reports the
-  // child's cost at the child's own run end, which for an in-band one-shot
-  // delegation is before this tool call settles and rolls into the parent's
-  // usage totals. A detached child reports after settlement, and the
-  // dispatcher's latch keeps that spend on the child's own run instead.
-  // Subagent cost never drives the loop, only the totals.
-  const recordSubagentCost = parent.hooks?.recordSubagentCost;
-  const recordCost = (costUsd: number | undefined): void => {
-    recordSubagentCost?.(costUsd ?? 0);
-  };
-
   const delegationAgentScope = parent.run.delegationAgentScope ?? undefined;
   const childConfigPayload: AgentConfigPayload = {
     ...configPayload,
@@ -149,7 +138,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         parentOffered,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
-        onCost: recordCost,
         notify: notifyParentTrace,
       }),
     );
@@ -221,7 +209,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         runId,
         parentRunId,
         agentName,
-        recordCost,
         buildLaunch: () =>
           restore(Effect.void).pipe(
             Effect.andThen(

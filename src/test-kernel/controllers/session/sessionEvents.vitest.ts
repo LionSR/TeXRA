@@ -2528,11 +2528,7 @@ describe('RunLedger', () => {
       yield* run.acquire(RUN);
       let state = yield* openTurn(run);
       state = yield* run.appendBatch(RUN, state, [
-        settled('call-a', {
-          stateMutation: [
-            { op: 'add', path: ['usage', 'totalCost'], amount: 0.25 },
-          ],
-        }),
+        settled('call-a'),
         toolEnd('call-a'),
       ]);
       state = yield* run.appendBatch(RUN, state, [
@@ -2553,7 +2549,6 @@ describe('RunLedger', () => {
         'assistant',
         'tool',
       ]);
-      expect(state.usage.totalCost).toBe(0.25);
       expect(yield* run.load(RUN)).toEqual(state);
     }).pipe(Effect.provide(ledger())),
   );

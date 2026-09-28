@@ -284,6 +284,15 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A subagent's spend is counted once** — when an agent delegated to a
+  subagent and waited for it (as `texra run` does), or ran a workflow script,
+  the child's cost was added to the parent run and counted again on the
+  child's own run, so the session cost shown on exit was too high. Each run
+  now shows only its own model calls, and the session total is their sum. A
+  run's `usage` in `texra run --output-format json` no longer includes its
+  subagents' cost, matching its token counts. Session history from earlier
+  builds is cleared the first time this build opens a workspace.
+
 - **Ctrl-C in `texra run` reports a failed shutdown step** — a step that
   fails while the CLI shuts down after Ctrl-C is now printed on stderr for
   every command. Before, commands that print their own output, `texra run`

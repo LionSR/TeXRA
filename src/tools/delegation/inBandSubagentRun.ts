@@ -76,8 +76,6 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
   /** What the parent's step offered, which the child can only narrow. */
   readonly parentOffered: readonly OfferedTool[];
-  /** Synchronous by contract; forwarded as the loop's `recordCost`. */
-  readonly onCost?: (costUsd: number | undefined) => void;
   /**
    * Live progress sink for the in-band child. An in-band parent is mid-cycle,
    * so follow-up delivery cannot reach it; each caller degrades deliberately:
@@ -202,7 +200,6 @@ const executeInBand = Effect.fn('executeInBand')(
         runId,
         parentRunId: options.parentRunId,
         agentName: config.agent,
-        recordCost: options.onCost,
         // The parent is blocked awaiting this child, so it rides the parent's
         // budget slot (child-run budget design note).
         budgeted: false,

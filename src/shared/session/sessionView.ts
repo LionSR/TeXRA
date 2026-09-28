@@ -38,6 +38,8 @@ import {
   TaskGroupSchema,
   TodoItemSchema,
   TokenUsageStatsSchema,
+  sumUsageStats,
+  type TokenUsageStats,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
   type PermissionPayload,
@@ -448,6 +450,23 @@ export function emptySessionView(
 type RunTopology = {
   readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
 };
+
+/**
+ * The spend of a run tree: `rootRunId` and every run under it, finished or
+ * not. Each run's `usage` is its own priced model calls only, so this sum is
+ * the one reading of a session's (or a root run's) total every host shows.
+ */
+export function runTreeUsage(
+  view: Pick<SessionView, 'runs'>,
+  rootRunId: RunId | undefined,
+): TokenUsageStats {
+  return sumUsageStats(
+    descendantRuns(view, rootRunId, { includeRoot: true }).flatMap((id) => {
+      const run = view.runs.get(id);
+      return run ? [run.usage] : [];
+    }),
+  );
+}
 
 /**
  * Every run under `rootRunId`, parents first: the topology `childIds`

@@ -24,7 +24,6 @@ export interface ToolCallShape {
   readonly hooks?: {
     /** What the tool prints while it runs, for its card's transient output. */
     readonly onToolOutput?: (chunk: string) => void;
-    readonly recordSubagentCost?: (costUsd: number) => void;
   };
   /**
    * Absent for a standalone host invocation outside an agent run. What the run

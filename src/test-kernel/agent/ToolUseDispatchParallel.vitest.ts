@@ -62,7 +62,7 @@ import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { PluginServices } from '@platform/processRuntime';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
@@ -583,60 +583,6 @@ describe('tool-use dispatch', () => {
       expect(observedTrace).toBe(noopTrace);
       yield* closeSessionOf(kit.session);
     }),
-  );
-
-  it.live(
-    'bills a child cost reported before the call settled, not after',
-    () =>
-      Effect.gen(function* () {
-        let report: ((costUsd: number) => void) | undefined;
-        const delegate: ITool = {
-          definition: {
-            name: 'delegate',
-            description: 'delegate',
-            parameters: {},
-          },
-          call: Effect.fn(function* (): Effect.fn.Return<
-            ToolResult,
-            never,
-            ToolCall
-          > {
-            const context = yield* ToolCall;
-            report = context?.hooks?.recordSubagentCost;
-            // An in-band one-shot child reports while its call is still open.
-            report?.(2);
-            return { status: 'executed', output: 'ok' };
-          }),
-        } as ITool;
-        const events: AgentEvent[] = [];
-        const trace = new TraceEmitter((event) => events.push(event));
-        const kit = yield* openDispatch({
-          tools: { delegate },
-          calls: [makeCall('c1', 'delegate', {})],
-          logger: trace,
-        });
-
-        const { state } = yield* dispatch(kit);
-        // The latch must not close before the call returns: a one-shot
-        // delegation is not `slow`, so gating it on the streamed-output latch
-        // would drop every in-band cost.
-        expect(state.usage.totalCost).toBe(2);
-
-        // A detached child reports at its own run end, after the settlement
-        // read the total. The spend stays on the child's own run, and the
-        // report says so instead of incrementing a consumed local.
-        report?.(5);
-        expect(
-          events.filter(
-            (event) =>
-              event.type === 'log' &&
-              event.message.includes(
-                'reported its cost after the call settled',
-              ),
-          ),
-        ).toHaveLength(1);
-        yield* closeSessionOf(kit.session);
-      }),
   );
 
   it.live('runs contiguous parallel-safe calls concurrently, in order', () =>

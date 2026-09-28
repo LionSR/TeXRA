@@ -4,11 +4,14 @@ import type { CliOutputFormat } from '@shared/schemas';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
-  sumUsageStats,
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { descendantRuns, type SessionView } from '@shared/session/sessionView';
+import {
+  descendantRuns,
+  runTreeUsage,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 
 import { runViewOf } from './sessionView';
@@ -66,14 +69,7 @@ export function collectResumeUsage(
   view: SessionView,
   rootRunId: RunId | undefined,
 ): TokenUsageStats | undefined {
-  const usages: TokenUsageStats[] = [];
-  for (const runId of descendantRuns(view, rootRunId, {
-    includeRoot: true,
-  })) {
-    const run = runViewOf(view, runId);
-    if (run) usages.push(run.usage);
-  }
-  const total = sumUsageStats(usages);
+  const total = runTreeUsage(view, rootRunId);
   return isEmptyUsage(total) ? undefined : total;
 }
 

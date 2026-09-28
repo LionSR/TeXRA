@@ -61,8 +61,9 @@ export const TranscriptEventSchemas = {
   /**
    * One priced model turn of the row's run: never a running total, so a
    * run's usage is the sum of its rows. A run with a ledger stores none: the
-   * database projects one from each priced `model.message` response and from
-   * each child's cost a `tool.result` adds (`Database`'s display reads). An
+   * database projects one from each priced `model.message` response and
+   * `model.compaction` summary (`Database`'s display reads). A child's spend
+   * is on the child's own run, never on its parent's. An
    * agent-CLI child, which has no ledger, stores one per turn. `elapsedTime`
    * is the turn's response time in seconds; `percentageCached` is a
    * statistics row's, never a turn's.

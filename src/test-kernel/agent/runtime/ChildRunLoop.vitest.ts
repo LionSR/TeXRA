@@ -51,7 +51,6 @@ vi.mock(
 
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
-import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { finalizeRun: realFinalizeRun } = await vi.importActual<
   typeof import('@agent/storage/runLifecycle')
 >('@agent/storage/runLifecycle');
@@ -92,7 +91,6 @@ import {
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createChildRun } from '@tools/delegation/childRun';
-import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 import { generateRunId } from '@utils/core';
 
 let session: SessionHandle;
@@ -1274,7 +1272,7 @@ describe('childRunLoop E2E fixtures', () => {
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const { strategy, rejectTurn } = createFakeStrategy();
-        // Fires between the turn failure and the loop's finalize, which is the
+        // Fires once the failed turn settled, before the loop's finalize: the
         // window the stop latch has to win. Kill admission is synchronous, so
         // the stop latch is already set here and only the settlement is left
         // for the test to run once the loop is done.
@@ -1286,7 +1284,7 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy, {
           childRun,
           agentName: 'fake-cli',
-          recordCost: interruptAfterFailure,
+          onTurnSettled: interruptAfterFailure,
         });
 
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
@@ -1387,149 +1385,5 @@ describe('childRunLoop E2E fixtures', () => {
           );
         }
       }),
-  );
-
-  it.effect(
-    'recordCost commits exactly once with the greatest observed value',
-    () =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const firstTurn = yield* Deferred.make<FakeTurn>();
-        const nextTurn = yield* Deferred.make<FakeTurn>();
-        const recordCost = vi.fn();
-        const firstDelivered = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
-          Effect.as(Deferred.succeed(firstDelivered, undefined), {
-            status: 'sent',
-          }),
-        );
-
-        const strategy: ChildRunStrategy<FakeTurn> = {
-          stageLabel: 'Fake cost-tracking run',
-          launch: (ports: ChildRunPorts) =>
-            Effect.gen(function* () {
-              const turn = yield* Deferred.await(firstTurn);
-              ports.recordCost(0.2);
-              return turn;
-            }),
-          runTurn: (_items, ports: ChildRunPorts) =>
-            Effect.gen(function* () {
-              const turn = yield* Deferred.await(nextTurn);
-              ports.recordCost(undefined);
-              ports.recordCost(0.1);
-              return turn;
-            }),
-          isTerminal: (turn) => turn.kind === 'terminal',
-          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
-          formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
-        };
-
-        const loop = yield* startLoop(runId, strategy, { recordCost });
-
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-        yield* Deferred.succeed<FakeTurn, never>(firstTurn, {
-          kind: 'interim',
-          value: 'first',
-        });
-        yield* Deferred.await(firstDelivered);
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-
-        expect(
-          yield* session.followUps.submit(
-            runId,
-            { text: 'go on', from: { kind: 'user' as const } },
-            'live_owner',
-          ),
-        ).toEqual({ kind: 'queued' });
-        yield* Deferred.succeed<FakeTurn, never>(nextTurn, {
-          kind: 'terminal',
-          value: 'final',
-        });
-
-        yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-        expect(recordCost).toHaveBeenCalledTimes(1);
-        expect(recordCost).toHaveBeenCalledWith(0.2);
-      }),
-  );
-
-  it.effect('settles mixed workflow attempt spend to the parent once', () =>
-    Effect.gen(function* () {
-      const entry = (
-        index: number,
-        key: string,
-        cost: number,
-      ): WorkflowJournalEntry => ({
-        index,
-        key,
-        result: {
-          outcome: 'completed',
-          usage: { totalCost: cost },
-          output: {
-            category: 'workflow',
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
-          },
-        },
-      });
-      const historical = entry(0, 'historical', 0.8);
-      const completed = entry(1, 'completed', 0.5);
-      const recovered = entry(2, 'recovered', 0.5);
-      const tracker = createWorkflowAttemptCostTracker();
-      const recordCost = vi.fn();
-      const strategy = createTerminalStrategy(
-        'Workflow attempt cost',
-        (ports) =>
-          Effect.sync((): FakeTurn => {
-            ports.recordCost(tracker.record(completed, 0.1));
-            ports.recordCost(tracker.record(completed, 0));
-            ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
-            ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
-            ports.recordCost(tracker.total([historical, completed, recovered]));
-            return { kind: 'terminal', value: 'done' };
-          }),
-        () => Effect.succeed('delivered'),
-      );
-
-      const loop = yield* startLoop(loopRunId(), strategy, {
-        recordCost,
-      });
-
-      expect(yield* Fiber.join(loop)).toEqual({
-        kind: 'terminal',
-        value: 'done',
-      });
-      expect(recordCost).toHaveBeenCalledOnce();
-      expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
-    }),
-  );
-
-  it.effect('finalizes and wakes when the parent cost observer throws', () =>
-    Effect.gen(function* () {
-      const strategy = createTerminalStrategy(
-        'throwing cost observer',
-        (ports) =>
-          Effect.sync((): FakeTurn => {
-            ports.recordCost(0.4);
-            return { kind: 'terminal', value: 'done' };
-          }),
-        () => Effect.succeed('delivered'),
-      );
-      const recordCost = vi.fn(() => {
-        throw new Error('observer failed');
-      });
-
-      const loop = yield* startLoop(loopRunId(), strategy, { recordCost });
-
-      // The cost observer is forked with `startImmediately` inside the
-      // terminal block, so its thunk has already run when the loop exits.
-      expect(yield* Fiber.join(loop)).toEqual({
-        kind: 'terminal',
-        value: 'done',
-      });
-      expect(recordCost).toHaveBeenCalledOnce();
-      expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-    }),
   );
 });

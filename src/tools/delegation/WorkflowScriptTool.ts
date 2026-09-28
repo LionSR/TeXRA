@@ -335,14 +335,6 @@ function executeWorkflowScriptTool(
     // itself lives on the checkpoint aggregate, which outlives the run.
     const runId = deriveRunId({ checkpointId });
 
-    // Capture the invocation hook explicitly so the detached run can still
-    // roll its cost into the parent after this call returns. Undefined totals
-    // are skipped (a malformed-journal failure never records a spurious cost).
-    const recordSubagentCost = parent.hooks?.recordSubagentCost;
-    const recordCost = (totalCost: number | undefined): void => {
-      if (totalCost !== undefined) recordSubagentCost?.(totalCost);
-    };
-
     // The parent's model at the instant of dispatch. `run.model` is the
     // live cell a parent model switch sets, and a detached workflow
     // resolves its `agent()` calls on a forked fiber after this call has
@@ -490,7 +482,6 @@ function executeWorkflowScriptTool(
                 runId,
                 parentRunId,
                 agentName: meta.name,
-                recordCost,
                 createChildRun: () =>
                   Effect.gen(function* () {
                     yield* restore(Effect.void);

@@ -362,6 +362,10 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
   readonly key: string;
   /** Fires with the run id of the attempt about to run; recovery never fires. */
   readonly onLaunch: (runId: RunId) => void;
+  /** Fires once per launched attempt with the cost its own run's rows add up
+   *  to, as soon as the attempt returns and before any fence can refuse its
+   *  result; recovery never fires. */
+  readonly onSpent: (costUsd: number) => void;
 };
 
 /**
@@ -530,6 +534,11 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           parentRunId: call.parentRunId,
           prepare: call.prepare,
         });
+        // `RunEnd.usage` is the run ledger's folded totals, absent only for
+        // a run that never opened a ledger: absence is the recorded fact "no
+        // spend". Reported before the fence below, whose refusal would
+        // otherwise leave this attempt's spend off the invocation.
+        call.onSpent(result.usage?.totalCost ?? 0);
         // The child's loop released its claim and its run lane as it ended, so
         // from this return until the engine journals the call's value the id
         // it answered on is resumable: a host that takes it appends
@@ -751,10 +760,11 @@ export function createWorkflowScriptAgentRunner(
   checkpointId: string,
   run: WorkflowRunIdentity,
   hooks?: {
-    /** Fires per live child on success and failure with its total cost. */
+    /** Fires once per live child attempt, whatever its outcome, with the
+     *  cost its own run's rows add up to. */
     readonly onCost?: (
       invocation: WorkflowAgentInvocation,
-      costUsd: number | undefined,
+      costUsd: number,
     ) => void;
   },
 ): (
@@ -773,6 +783,12 @@ export function createWorkflowScriptAgentRunner(
         key: invocation.key,
         onLaunch: (childRunId) => {
           invocation.report({ childRunId });
+        },
+        // Every launched attempt charges its terminal cost once, whatever
+        // its outcome and whether a fence then refuses its result.
+        onSpent: (costUsd) => {
+          hooks?.onCost?.(invocation, costUsd);
+          invocation.report({ costUsd });
         },
         prepare: () =>
           Effect.gen(function* () {
@@ -807,15 +823,6 @@ export function createWorkflowScriptAgentRunner(
                   session,
                 );
               },
-              onCost: (costUsd) => {
-                hooks?.onCost?.(invocation, costUsd);
-                // Stamp progressive spend onto the live attempt so a
-                // failed/cancelled/retried attempt still shows what it consumed
-                // even when run never reaches the success path below.
-                if (costUsd !== undefined) {
-                  invocation.report({ costUsd });
-                }
-              },
             };
           }),
       });
@@ -827,17 +834,6 @@ export function createWorkflowScriptAgentRunner(
         // skip/retry map; a recovered result is authoritative and must stay
         // uncontrollable.
         invocation.report({ childRunId: child.runId, recovered: true });
-      }
-      // Live physical attempts always charge the terminal result cost (covers
-      // failed/cancelled outcomes and empty-output validation throws that
-      // never reach a success-only callback). Recovered durable results must
-      // not charge the synthetic resume attempt; the prior attempt's card
-      // already carried that cost.
-      if (!recovered) {
-        // `RunEnd.usage` is the run ledger's folded totals, absent only for
-        // a run that never opened a ledger, so absence is the recorded fact
-        // "no spend" rather than an unknown defaulted here.
-        invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
         return yield* new WorkflowSubagentUnsuccessful({

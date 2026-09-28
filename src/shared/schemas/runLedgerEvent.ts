@@ -364,35 +364,24 @@ const SettledToolResultSchema = z.discriminatedUnion('status', [
 ]);
 
 /**
- * Per-call state operations over the run's mutable slices, never a whole-state
- * copy that could overwrite a concurrent call. `add` is not optional
- * generality: `recordSubagentCost` adds raw USD into the run's usage totals
- * from inside a tool call, and an enumerated slice list cannot express it.
- * Folding a result applies its mutation exactly once.
- *
- * Under `usage`, `add` is the ONLY operation. The run's accounting is derived
- * from the priced usage of every response row plus additive tool costs (D12);
- * a `set` rewriting `totalCost` would make a resumed run's cost a number no
- * row accounts for, and `applyMutations` cannot tell the difference because
- * the rewritten totals still parse.
+ * Per-call state operations over the run's mutable `state` slice, never a
+ * whole-state copy that could overwrite a concurrent call. Folding a result
+ * applies its mutation exactly once. The run's `usage` is not a slice a call
+ * can touch: it is derived from the priced usage of the run's own response
+ * rows (D12) and nothing else, so a child's spend stays on the child's run and
+ * a parent's or session's total is the sum over the run tree.
  */
-const StateOperationSchema = z
-  .discriminatedUnion('op', [
-    z.strictObject({
-      op: z.literal('set'),
-      path: z.array(z.string().min(1)).min(1),
-      value: JsonValueSchema,
-    }),
-    z.strictObject({
-      op: z.literal('add'),
-      path: z.array(z.string().min(1)).min(1),
-      amount: z.number().finite(),
-    }),
-  ])
-  .refine(
-    (op) => op.op === 'add' || op.path[0] !== 'usage',
-    'The run usage totals are derived: a tool result only adds to them.',
-  );
+const StateOperationSchema = z.strictObject({
+  op: z.literal('set'),
+  path: z
+    .array(z.string().min(1))
+    .min(1)
+    .refine(
+      (path) => path[0] === 'state',
+      'A tool result sets only the run state slice; the usage totals are derived.',
+    ),
+  value: JsonValueSchema,
+});
 export type StateOperation = z.infer<typeof StateOperationSchema>;
 
 export const ToolResultPayloadSchema = z

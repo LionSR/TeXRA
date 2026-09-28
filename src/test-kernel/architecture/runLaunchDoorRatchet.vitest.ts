@@ -28,8 +28,6 @@ const LAUNCH_ROOTS = ['src/agent', 'src/tools', 'packages/agent/src'] as const;
 const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 
 const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
-  // The child's cost observer, detached from the loop's uninterruptible tail.
-  'src/agent/runtime/childRunLoop.ts': 1,
   // A host presentation notice, reported rather than awaited.
   'src/agent/runtime/HostInteractions.ts': 1,
   // The host's `onRun` observer, which may last as long as the run.

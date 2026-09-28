@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
-import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -150,7 +149,6 @@ function parentRunContext(
     session: SessionHandle;
     approvalPromptsUnavailable: boolean;
     userInstruction: string;
-    hooks: NonNullable<ToolCallShape['hooks']>;
   }> = {},
 ): Parameters<typeof nativeToolTestLayer>[0] {
   const session = overrides.session ?? testDefaultSession();
@@ -159,7 +157,6 @@ function parentRunContext(
     ...(overrides.userInstruction !== undefined && {
       userInstruction: overrides.userInstruction,
     }),
-    ...(overrides.hooks !== undefined && { hooks: overrides.hooks }),
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
       session,
@@ -739,9 +736,8 @@ describe('headless delegation', () => {
       }),
   );
 
-  it.effect('records a failed child cost once for durable in-band run', () =>
+  it.effect('persists a failed durable in-band child result', () =>
     Effect.gen(function* () {
-      const onCost = vi.fn();
       mockExecuteAgentErrorOnce(0.61, {
         runId: IN_BAND_RUN_ID,
         output: {
@@ -751,12 +747,8 @@ describe('headless delegation', () => {
         },
       });
 
-      const error = yield* Effect.flip(
-        runInBand(delegationOptions({ onCost })),
-      );
+      const error = yield* Effect.flip(runInBand(delegationOptions()));
       expect(error.message).toContain('review model failed');
-      expect(onCost).toHaveBeenCalledOnce();
-      expect(onCost).toHaveBeenCalledWith(0.61);
       expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -804,7 +796,6 @@ describe('headless delegation', () => {
     'interrupts the live child when the in-band caller is interrupted',
     () =>
       Effect.gen(function* () {
-        const onCost = vi.fn();
         const ready = yield* Deferred.make<void>();
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
@@ -822,9 +813,7 @@ describe('headless delegation', () => {
           },
         );
 
-        const running = yield* Effect.forkChild(
-          runInBand(delegationOptions({ onCost })),
-        );
+        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
         yield* Deferred.await(ready);
 
         // Interruption stops the child by run id and waits for it to settle
@@ -832,7 +821,6 @@ describe('headless delegation', () => {
         yield* Fiber.interrupt(running);
         const exit = yield* Fiber.await(running);
         expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(onCost).toHaveBeenCalledOnce();
         expect(inBandSession.runs.isLive(IN_BAND_RUN_ID)).toBe(false);
       }),
   );
@@ -953,14 +941,10 @@ describe('headless delegation', () => {
 
   it.effect('formats returned child error results as subagent errors', () =>
     Effect.gen(function* () {
-      const recordSubagentCost = vi.fn();
       mockExecuteAgentErrorOnce(0.42);
 
       const result = yield* callDelegateReview(
-        parentRunContext({
-          stopAfterCycle: true,
-          hooks: { recordSubagentCost },
-        }),
+        parentRunContext({ stopAfterCycle: true }),
       );
 
       expect(result.summary).toBe("Subagent 'review' failed");
@@ -972,33 +956,12 @@ describe('headless delegation', () => {
       expect(mocks.writeReport).toHaveBeenCalledWith(
         expect.stringContaining('review model failed'),
       );
-      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-      expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expect.objectContaining({
           producer: 'subagent',
           agentName: 'review',
         }),
       );
-    }),
-  );
-
-  it.effect('rolls up failed async subagent cost from the error callback', () =>
-    Effect.gen(function* () {
-      const costRecorded = Deferred.makeUnsafe<void>();
-      const recordSubagentCost = vi.fn(() => {
-        Deferred.doneUnsafe(costRecorded, Effect.void);
-      });
-      mockExecuteAgentErrorOnce(0.31);
-
-      const result = yield* callDelegateReview(
-        parentRunContext({ hooks: { recordSubagentCost } }),
-      );
-
-      expect(result.summary).toBe("Launched 'review' (async)");
-      yield* Deferred.await(costRecorded);
-      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-      expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
     }),
   );
 

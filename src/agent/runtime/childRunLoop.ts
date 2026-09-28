@@ -54,28 +54,12 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
  * run. `notify` is best-effort live progress (no persistence, no gating; one
  * delivery site per turn, so there is nothing to dedupe).
  *
- * ## Cost accounting contract (every child-run type keeps it)
- *
- * - **Observe.** A strategy reports spend only through `recordCost`, as a
- *   *cumulative total for the physical run so far*, never a delta. Native
- *   subagents pass each turn's run-cumulative `usage.totalCost`; the
- *   workflow-script strategy converts its per-grandchild deltas first
- *   (`createWorkflowAttemptCostTracker`). Replayed journal work observes
- *   zero, and `invocation.report({ costUsd })` is display, never accounting.
- * - **Retain.** The loop keeps `max(best defined observation)`: order-
- *   insensitive and monotone over cumulative totals.
- * - **Commit.** Exactly one commit per physical child run, at run end, into
- *   `params.recordCost`, which the parent *adds* into its totals: a second
- *   commit double-bills, a missed one under-bills.
- * - **Failure path (workflow).** A failed run settles from the checkpoint
- *   journal; spend a failed settlement leaves unbilled is warned about
- *   loudly, never masking the run error.
- * - **Agent-CLI children** wire no cost observer: their spend is the user's
- *   own subscription, not TeXRA-billed USD.
+ * A child reports no spend here: each of its priced model calls is one row
+ * on its own run, and a parent's or a session's total is the sum over the
+ * run tree (`RunView.usage` per run), never a figure a child hands up.
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
-  recordCost(totalCost: number | undefined): void;
 }
 
 /** A stopped child's pause: the notice its parent reads, and the id a
@@ -249,9 +233,6 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   readonly runId: RunId;
   readonly agentName: string;
   readonly strategy: ChildRunStrategy<TTurn, R>;
-  /** Roll this child's final cost into the parent's usage totals; omitted
-   *  by agent-CLI callers. Synchronous by contract (run inside `Effect.try`). */
-  readonly recordCost?: (totalCost: number | undefined) => void;
   /**
    * Gate every turn through the session's child-run budget semaphore
    * (`RunRegistry.childRunBudget`); agent-CLI children, external processes,
@@ -826,7 +807,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
     }
 
     const attemptId = randomUUID();
-    let bestCostUsd: number | undefined;
     // Progress reaches the parent as queued follow-ups. The port is
     // synchronous, so it admits each one where it is reported (the target and
     // the admission decided then) and one drainer the loop's body owns writes
@@ -865,11 +845,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
               ),
             ),
           );
-        }
-      },
-      recordCost: (totalCost) => {
-        if (totalCost !== undefined) {
-          bestCostUsd = Math.max(bestCostUsd ?? 0, totalCost);
         }
       },
     };
@@ -1190,23 +1165,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 });
                 if (queueLease)
                   runSession.followUps.release(queueLease, 'terminal');
-                yield* Effect.forkDetach(
-                  Effect.try({
-                    try: () => params.recordCost?.(bestCostUsd),
-                    catch: ensureError,
-                  }).pipe(
-                    Effect.catch((error) =>
-                      loopLog(
-                        trace,
-                        'warn',
-                        'Child cost observer failed',
-                        error,
-                      ),
-                    ),
-                  ),
-                  { startImmediately: true },
-                );
-
                 // Re-read: a stop landing after the body's exit is still the
                 // run's terminal verdict.
                 const stoppedAtExit = stopped || loop.isInterrupted();
