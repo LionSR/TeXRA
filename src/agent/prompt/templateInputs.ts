@@ -19,7 +19,10 @@ import {
   AgentCategory,
   AgentSkillsEnabledSchema,
 } from '@shared/schemas';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import {
+  activatedSkillEntries,
+  loadRuntimeSkillCatalog,
+} from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, unique } from '@utils/core';
@@ -136,31 +139,18 @@ type LoadedFileEntry = FileListEntry & {
   varName: string;
 };
 
+/**
+ * The roots of the session this run belongs to, held as data, so a run never
+ * reads whichever roots the calling fiber carries: the workspace that prompt
+ * file names, file reads and `CWD` resolve against (`undefined` with no
+ * folder open), the storage its attached memories live in, and the
+ * configuration and setting slots its skills switch and disabled-skill lists
+ * answer from.
+ */
 interface BuildTemplateInputsOptions {
-  /**
-   * Workspace root of the session this run belongs to, held as data: prompt
-   * file names, the readable-file reads and `CWD` all resolve against it, so
-   * a run never reads whichever roots the calling fiber happens to carry.
-   * `undefined` is a session with no folder open.
-   */
   workspacePath: string | undefined;
-  /**
-   * Storage root of the same session, held as data for the same reason: the
-   * attached memories are read from this project's storage, not from whichever
-   * roots the calling fiber carries.
-   */
   storageRoot: string;
-  /**
-   * Configuration of the same session, held as data for the same reason: the
-   * skills master switch answers for this project, not for whichever roots
-   * the calling fiber carries.
-   */
   config: ConfigProvider;
-  /**
-   * The three setting slots of the same session, held as data for the same
-   * reason: the run's disabled-skill lists answer for this project, not for
-   * whichever roots the calling fiber carries.
-   */
   settings: SettingsStores;
   installed: Effect.Effect<InstalledPluginLoad>;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
@@ -188,14 +178,15 @@ type AttachedMemoriesResult = {
 };
 
 /**
- * What a launch opens from: the template inputs its prompts render from,
- * with the agent's required-file pairs beside the fixed vocabulary; the
- * skill catalog a tool-use run records (empty for a workflow run, or with
- * skills switched off); and the attached memories that could not be read.
+ * What a launch opens from: the template inputs (the agent's required-file
+ * pairs beside the fixed vocabulary); a tool-use run's skill catalog (empty
+ * with skills off) and the skills its instruction activated; and the
+ * attached memories that could not be read.
  */
 export interface TemplateOpening {
   readonly inputs: TemplateVars;
   readonly catalog: readonly SkillCatalogEntry[];
+  readonly activated: readonly SkillCatalogEntry[];
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
 }
 
@@ -212,11 +203,13 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   logger: AgentTrace,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, Error, FileSystem.FileSystem> {
+  const toolUse = agentSetting.agentCategory === AgentCategory.ToolUse;
   // Parallelize independent I/O: required files, memories, and skills
   const [
     { vars: requiredVars, files: requiredFiles },
     attachedMemories,
     runtimeSkills,
+    activated,
   ] = yield* Effect.all(
     [
       getRequiredFileVars(agentSetting, agentPath),
@@ -225,12 +218,18 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
       // multi-source readdir + per-skill realpath/read/parse) is dead work
       // for workflow agents. The settings toggle gives users a hard off
       // switch that skips discovery and leaves the catalog empty.
-      agentSetting.agentCategory === AgentCategory.ToolUse &&
+      toolUse &&
       AgentSkillsEnabledSchema.parse(
         options.config.get(AGENT_SKILLS_CONFIG_KEY),
       )
         ? loadRuntimeSkillCatalog(options)
         : Effect.succeed({ catalog: [], issues: [] }),
+      // What the launch instruction activates (`/skills`), switch or not.
+      activatedSkillEntries(
+        toolUse ? [agentConfig.instruction] : [],
+        options.workspacePath,
+        options.settings,
+      ),
     ],
     { concurrency: 'unbounded' },
   );
@@ -268,6 +267,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   return {
     inputs,
     catalog: runtimeSkills.catalog,
+    activated,
     attachedMemoryMisses: attachedMemories.misses,
   };
 });

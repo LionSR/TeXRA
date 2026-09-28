@@ -177,7 +177,12 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     runId,
     session: LANE_SESSION,
     config: { agent: 'test-agent', model: 'test-model' },
-    opening: { inputs: {}, catalog: [], attachedMemoryMisses: [] },
+    opening: {
+      inputs: {},
+      catalog: [],
+      activated: [],
+      attachedMemoryMisses: [],
+    },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn() },
   } as unknown as AgentLaunchContext;

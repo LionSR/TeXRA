@@ -285,7 +285,12 @@ function agentRun(
     // The launch stores a real run carries; no fixture reads through them.
     stores: hostStores(),
     toolPolicy: {},
-    opening: { inputs: {}, catalog: [], attachedMemoryMisses: [] },
+    opening: {
+      inputs: {},
+      catalog: [],
+      activated: [],
+      attachedMemoryMisses: [],
+    },
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
     ...testRunTools(hostStores()),

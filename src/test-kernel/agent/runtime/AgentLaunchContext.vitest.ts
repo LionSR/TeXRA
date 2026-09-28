@@ -354,7 +354,12 @@ describe('AgentLaunchContext', () => {
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
         mocks.buildVars.mockReturnValueOnce(
-          Effect.succeed({ inputs: {}, catalog: [], attachedMemoryMisses: [] }),
+          Effect.succeed({
+            inputs: {},
+            catalog: [],
+            activated: [],
+            attachedMemoryMisses: [],
+          }),
         );
         const config = AgentConfigSchema.parse({
           agent: 'chat',

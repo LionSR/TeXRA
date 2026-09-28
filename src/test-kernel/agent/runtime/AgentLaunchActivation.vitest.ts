@@ -333,7 +333,12 @@ describe('native agent launch activation', () => {
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
         mocks.buildVars.mockReturnValueOnce(
-          Effect.succeed({ inputs: {}, catalog: [], attachedMemoryMisses: [] }),
+          Effect.succeed({
+            inputs: {},
+            catalog: [],
+            activated: [],
+            attachedMemoryMisses: [],
+          }),
         );
 
         const session = createTestSession();

@@ -268,6 +268,12 @@ All notable changes to this project will be documented in this file.
   into your custom agents folder, as it already could in VS Code. Before, its
   instructions named no folders and saving outside the project was refused.
 
+- **A skill you activate with `/skills` stays readable only while it is
+  allowed** — its files stay readable to the chat after a compaction and a
+  resume, stop being readable once its plugin is disabled or loses your
+  trust, and are readable only by the chat that activated or lists it, not
+  by another chat in the same folder.
+
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
   underlying cause, such as the history file being locked by another process.

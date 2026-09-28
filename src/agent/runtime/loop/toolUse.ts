@@ -151,15 +151,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  // The opening's catalog and memory misses, and the instruction the latest
-  // turn answers: a restore reads all three back.
+  // Recorded facts a restore reads back (catalog, misses, instruction, skills).
   let catalog = run.opening?.catalog ?? [];
   let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
   let instruction = run.config.instruction;
+  let activated = run.opening?.activated ?? [];
   let systemPrompt: string | undefined;
   let response = '';
-  // A `/compact` the host admitted: honoured at the next model boundary,
-  // regardless of the threshold.
+  // A `/compact` the host admitted: done at the next model boundary.
   let compactionRequested = false;
 
   /** The family state every snapshot of this run carries. */
@@ -174,6 +173,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ...(instruction !== run.config.instruction
       ? { instruction: sha256(instruction) }
       : {}),
+    ...(activated.length > 0 ? { activated: sha256(activated) } : {}),
     ...(memoryMisses.length > 0 ? { memoryMisses } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
@@ -190,15 +190,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ]);
   };
 
-  // A resumed root's first step that pins a continuation stands it down,
-  // before anything this activation decides can re-arm it.
+  // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
   // What a step's system text is built from; its skill grants end with us.
   const system: RunSystem = {
     base: () => systemPrompt,
     catalog: () => catalog,
+    activated: () => activated,
     isChild,
-    activated: new Map(),
   };
   yield* Effect.addFinalizer(() => Effect.sync(() => releaseSkillRoots(runId)));
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
@@ -306,7 +305,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
       // The catalog is stored once, before the snapshot that names it.
-      ...(catalog.length > 0 ? blobRows(runId, opening, [catalog]) : []),
+      ...blobRows(
+        runId,
+        opening,
+        [catalog, activated].filter((l) => l.length),
+      ),
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
@@ -325,13 +328,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (flow === undefined) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
-    if (flow.stateSlices) {
+    if (flow.stateSlices)
       workspace = AgentWorkspaceState.fromSnapshot(
         flow.stateSlices.workspaceSnapshot,
       );
-    }
     systemPrompt = flow.system && stored(state, flow.system, z.string());
     catalog = flow.skills ? stored(state, flow.skills, SkillCatalogSchema) : [];
+    activated = flow.activated
+      ? stored(state, flow.activated, SkillCatalogSchema)
+      : [];
     memoryMisses = flow.memoryMisses ?? [];
     if (flow.instruction)
       instruction = stored(state, flow.instruction, z.string());
@@ -351,8 +356,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     let state = yield* cell.current;
-    // A turn begins from a settled boundary; a resumed turn continues at
-    // whatever phase its rows left.
+    // A turn begins at a settled boundary; a resumed one where its rows left.
     const begins =
       advance ||
       state.phase === 'initial' ||
@@ -482,11 +486,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             cell,
             turnContext,
             (yield* openStep(state, 'dispatch')).tools,
-            joined?.rows,
+            joined,
           );
           state = dispatched.state;
-          // Its blob commits with the rows that consume the follow-ups.
-          instruction = joined?.delivered() ?? instruction;
+          const delivered = joined?.delivered();
+          instruction = delivered?.instruction ?? instruction;
+          activated = delivered?.activated ?? activated;
           if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
@@ -663,6 +668,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           state = yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;
           instruction = consumed.instruction ?? instruction;
+          activated = consumed.activated ?? activated;
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns

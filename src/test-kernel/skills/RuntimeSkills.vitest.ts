@@ -7,8 +7,7 @@ import { afterEach, describe, expect } from 'vitest';
 import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  activatedSkillDirectories,
-  activatedSkillNames,
+  activatedSkillEntries,
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
@@ -187,13 +186,12 @@ describe('runtime skills', () => {
     expect(catalogText(result.catalog)).not.toContain('skill-200');
   });
 
-  // Fails if a skill root granted for one project admits file access in
-  // another project's session, if scoping cuts off the granting project
-  // itself, or if a grant outlives the listing that made it. The skill sits
-  // outside both projects, so neither workspace contains it and only the
-  // external-root allowlist can admit it.
+  // Fails if a skill root one run granted admits file access to another run
+  // of the same project, if scoping cuts off the granting run itself, or if
+  // a grant outlives the listing or activation that made it. The skill sits
+  // outside the project, so only the external-root allowlist can admit it.
   it.effect(
-    "admits one project's listed skill directory to that project only",
+    "admits a run's listed or activated skill directory to that run only",
     () =>
       Effect.gen(function* () {
         const skillsRoot = yield* Effect.promise(createTempRoot);
@@ -207,46 +205,46 @@ describe('runtime skills', () => {
         );
         installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
         const projectA = path.resolve(path.sep, 'project-a');
-        const projectB = path.resolve(path.sep, 'project-b');
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
           runCatalog(projectA),
         ).pipe(Effect.provide(nodePlatformLayer));
         const grant = (listed: typeof catalog) =>
           grantSkillRoots(
-            'run',
-            projectA,
+            'run-a',
             listed.flatMap(({ name, directory }) =>
               directory === null ? [] : [{ name, directory }],
             ),
           );
         expect(grant(catalog)).toEqual([]);
-        const resolveFrom = (workspace: string) =>
+        const resolveFrom = (runId: string) =>
           resolveToolPath(
-            { roots: { ...testWorkspaceRoots(), workspace } },
+            {
+              roots: { ...testWorkspaceRoots(), workspace: projectA },
+              run: { runId },
+            },
             skillPath,
           );
 
-        expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
-        expect(yield* Effect.flip(resolveFrom(projectB))).toBeInstanceOf(
+        expect((yield* resolveFrom('run-a')).external?.writable).toBe(false);
+        expect(yield* Effect.flip(resolveFrom('run-b'))).toBeInstanceOf(
           ToolError,
         );
         // A step that no longer lists the skill withdraws the grant.
         grant([]);
-        expect(yield* Effect.flip(resolveFrom(projectA))).toBeInstanceOf(
+        expect(yield* Effect.flip(resolveFrom('run-a'))).toBeInstanceOf(
           ToolError,
         );
         // A skill the user activated by name is granted again, even unlisted.
-        const named = activatedSkillNames(
-          '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
-        );
-        expect(named).toEqual(['shared-notes']);
-        const activated = yield* activatedSkillDirectories(
-          new Set(named),
+        const activated = yield* activatedSkillEntries(
+          [
+            '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
+          ],
           projectA,
           testWorkspaceRoots(),
         ).pipe(Effect.provide(nodePlatformLayer));
-        expect(grantSkillRoots('run', projectA, activated)).toEqual([]);
-        expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
+        expect(activated.map(({ name }) => name)).toEqual(['shared-notes']);
+        expect(grant(activated)).toEqual([]);
+        expect((yield* resolveFrom('run-a')).external?.writable).toBe(false);
         grant([]);
       }),
   );

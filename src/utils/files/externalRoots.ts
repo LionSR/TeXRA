@@ -38,17 +38,17 @@ import { isPathWithin } from '@utils/core/pathCore';
  *   built-in agents dir).
  * - The registry keys on `ExternalRootKind`, not on the path — each kind
  *   gets exactly one slot, except `skill`, which holds one read-only slot per
- *   skill directory a holder (a run) grants. Two different kinds may canonicalise to the
+ *   skill directory a run grants. Two different kinds may canonicalise to the
  *   same path (legitimate when a user overlays a custom dir on a built-in
  *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
  *   read-only one win for permission purposes.
- * - A `skill` root belongs to the project of the run whose step listed it:
- *   a process hosting several projects (the desktop) admits it only for
- *   lookups made on behalf of that project, so one project's enabled skills
- *   never open a path to another project's session. A run's grants are
- *   exactly what its latest step lists (`grantSkillRoots`), so a skill whose
- *   plugin was disabled or lost its trust stops being readable at the next
- *   step, and they end with the run (`releaseSkillRoots`).
+ * - A `skill` root belongs to the run whose step granted it: it admits only
+ *   lookups made on behalf of that run, so no other run, in this project or
+ *   another, reads a skill it never listed or activated. A run's grants are
+ *   exactly what its latest step lists or its user activated
+ *   (`grantSkillRoots`), so a skill whose plugin was disabled or lost its
+ *   trust stops being readable at the next step, and they end with the run
+ *   (`releaseSkillRoots`).
  */
 
 /** Stable identifier for each registered root. Label strings are for display
@@ -65,9 +65,8 @@ export interface ExternalRoot {
   readonly writable: boolean;
   /** Human-readable label shown in workspace_info. */
   readonly label: string;
-  /** A `skill` root's project: the workspace root of the run that granted
-   *  it, `undefined` with no folder open. Other kinds serve every project. */
-  readonly project?: string;
+  /** A `skill` root's run, the only one it serves; other kinds serve all. */
+  readonly holder?: string;
 }
 
 /** Registration options of every kind but `skill`, which runs grant. */
@@ -184,17 +183,16 @@ export function registerExternalRoot(
 }
 
 /**
- * Make `skills` the read-only skill directories `holder` grants to its
- * project, replacing what it granted before; unchanged grants cost nothing.
+ * Make `skills` the read-only skill directories run `holder` may read,
+ * replacing what it granted before; unchanged grants cost nothing.
  * Fails closed: a directory that cannot be canonicalised is not granted, and
  * the names of those are returned for the caller to report.
  */
 export function grantSkillRoots(
   holder: string,
-  project: string | undefined,
   skills: readonly { readonly name: string; readonly directory: string }[],
 ): string[] {
-  const key = JSON.stringify([project, skills]);
+  const key = JSON.stringify(skills);
   if (grants.get(holder) === key) return [];
   releaseSkillRoots(holder);
   const refused: string[] = [];
@@ -213,7 +211,7 @@ export function grantSkillRoots(
         absolutePath,
         writable: false,
         label: `Skill ${name}`,
-        project,
+        holder,
       }),
     );
   }
@@ -231,8 +229,8 @@ export function releaseSkillRoots(holder: string): void {
 /**
  * Return the registered root that contains `absolutePath`, or null when no
  * registered root matches or the path cannot be canonicalised (fail closed).
- * `project` is the workspace root of the session asking: a `skill` root
- * registered for another project never matches.
+ * `holder` is the run asking: a `skill` root another run granted, or any
+ * one when no run asks, never matches.
  * Uses `path.relative` for containment so filesystem-root registrations
  * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
  * registered root when multiple would match. Ties on path length prefer
@@ -241,7 +239,7 @@ export function releaseSkillRoots(holder: string): void {
  */
 export function findExternalRoot(
   absolutePath: string,
-  project: string | undefined,
+  holder: string | undefined,
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
   // Nothing registered means nothing can match. Checked before
@@ -260,7 +258,11 @@ export function findExternalRoot(
 
   let best: MatchedExternalRoot | null = null;
   for (const root of roots.values()) {
-    if (root.kind === 'skill' && root.project !== project) continue;
+    if (
+      root.kind === 'skill' &&
+      (holder === undefined || root.holder !== holder)
+    )
+      continue;
     if (!isPathWithin(root.absolutePath, resolved)) continue;
 
     const candidate: MatchedExternalRoot = {

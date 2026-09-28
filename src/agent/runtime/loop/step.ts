@@ -46,10 +46,6 @@ import {
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import {
-  activatedSkillDirectories,
-  activatedSkillNames,
-} from '@skills/runtimeSkills';
 import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
@@ -73,41 +69,15 @@ export interface StepTools {
   readonly services: Context.Context<PluginServices>;
 }
 
-/** What a step's system text is built from that the run holds: its
- *  recorded base text and skill catalog, and whether it is a child; and the
- *  skills its user activated by name, which each step grants beside those
- *  it lists (null: not an enabled skill, nothing to grant). */
+/** What a step's system text and skill grants are built from that the run
+ *  holds, all recorded in its rows: its base text, its skill catalog, the
+ *  skills its user activated, and whether it is a child. */
 export interface RunSystem {
   readonly base: () => string | undefined;
   readonly catalog: () => readonly SkillCatalogEntry[];
+  readonly activated: () => readonly SkillCatalogEntry[];
   readonly isChild: () => boolean;
-  readonly activated: Map<string, SkillGrant | null>;
 }
-
-type SkillGrant = { readonly name: string; readonly directory: string };
-
-/** Resolve, once each, the skills the user activated in the rows. */
-const noteActivations = Effect.fn('Step.activations')(function* (
-  run: AgentRunShape,
-  state: RunState,
-  activated: RunSystem['activated'],
-) {
-  const named = new Set(
-    state.messages
-      .flatMap((m) => (m.role === 'user' ? m.content : []))
-      .flatMap((p) => (p.kind === 'text' ? activatedSkillNames(p.text) : []))
-      .filter((name) => !activated.has(name)),
-  );
-  if (named.size === 0) return;
-  for (const name of named) activated.set(name, null);
-  const { roots } = run.session;
-  for (const grant of yield* activatedSkillDirectories(
-    named,
-    roots.workspace,
-    roots,
-  ))
-    activated.set(grant.name, grant);
-});
 
 /** The run's current step, the scope that holds its pin, the tools it
  *  withheld for approval, its continuation, and its prompt contributions by
@@ -264,21 +234,23 @@ const openStep = Effect.fn('Step.open')(function* (
   // and skills, and the installed ones' skills. The skills it lists are the
   // ones the run grants tools to read.
   const sections = [...step.prompt.keys(), ...step.installed].toSorted();
-  const listed = listedSkills(
-    runSystem.catalog(),
-    new Set([
-      ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
-      ...step.installed,
-    ]),
-  );
+  const contributors = new Set([
+    ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
+    ...step.installed,
+  ]);
+  const listed = listedSkills(runSystem.catalog(), contributors);
+  // An activated skill is granted while the step would list it: its plugin,
+  // if any, still contributes, so one disabled or untrusted since loses it.
+  const activated = runSystem
+    .activated()
+    .filter(({ plugin }) => plugin === null || contributors.has(plugin));
   const { roots } = run.session;
-  yield* noteActivations(run, state, runSystem.activated);
-  for (const name of grantSkillRoots(run.runId, roots.workspace, [
-    ...listed.flatMap(({ name, directory }) =>
+  for (const name of grantSkillRoots(
+    run.runId,
+    [...listed, ...activated].flatMap(({ name, directory }) =>
       directory === null ? [] : [{ name, directory }],
     ),
-    ...[...runSystem.activated.values()].flatMap((grant) => grant ?? []),
-  ]))
+  ))
     run.logger.warn(
       `Skill ${name} is not readable by tools: its directory cannot be verified.`,
     );

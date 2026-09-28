@@ -204,7 +204,7 @@ describe('run-scoped tool resolution', () => {
               base: () => undefined,
               catalog: () => [],
               isChild: () => false,
-              activated: new Map(),
+              activated: () => [],
             },
           );
           return { state: state!, step };
