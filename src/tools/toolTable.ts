@@ -10,7 +10,6 @@ import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
@@ -116,13 +115,10 @@ export interface InstalledToolPlugin {
 }
 
 /**
- * The installed plugins that load now, and why each enabled one that does
- * not load is held back: from `read` when the step brings the read its
- * launch took (`AgentRunShape.installed`), else read now.
+ * The installed plugins that load now, read at each step, and why each
+ * enabled one that does not load is held back.
  */
-export type InstalledToolReader = (
-  read?: InstalledPluginLoad,
-) => Effect.Effect<{
+export type InstalledToolReader = Effect.Effect<{
   readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;

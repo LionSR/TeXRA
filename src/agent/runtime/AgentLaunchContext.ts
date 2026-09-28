@@ -71,7 +71,6 @@ type LaunchResolvedRunFacts = Pick<
   | 'userVarChannels'
   | 'initialUserMessageForTranscript'
   | 'usageMonitor'
-  | 'installed'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
@@ -500,7 +499,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       userVarChannels,
       attachedMemoryMisses,
       usageMonitor,
-      installed,
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,

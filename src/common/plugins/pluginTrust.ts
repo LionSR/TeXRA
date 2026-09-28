@@ -293,8 +293,10 @@ export function readInstalledPluginLoad(
 
 /**
  * {@link readInstalledPluginLoad}, run once on first use and then answered
- * from that read: what one launch's consumers share (a plugin agent's check,
- * the skill catalog, the run's first step). Nothing is read if none asks.
+ * from that read: what one launch's consumers share (a plugin agent's check
+ * and the skill catalog). Nothing is read if none asks. A run's steps never
+ * take it: each step reads the plugins again, as the trust and ordering
+ * authority for what the run loads.
  */
 export const readInstalledPluginLoadOnce = (
   stores: Pick<SettingsStores, 'globalState'>,

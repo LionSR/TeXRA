@@ -39,7 +39,6 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory } from '@shared/schemas';
 import {
@@ -68,11 +67,6 @@ import { buildPluginLayer } from '@tools/pluginLayers';
 /** The services a pin serves: its plugins' layers'. */
 type Services = Context.Context<PluginServices>;
 
-/** How a pin reads the installed plugins (`LiveTools.pinSwitched`). */
-type PinInstalled =
-  | { readonly installed: true; readonly read?: InstalledPluginLoad }
-  | { readonly installed: 'withdraw' };
-
 export class LiveTools extends Context.Service<
   LiveTools,
   {
@@ -88,12 +82,10 @@ export class LiveTools extends Context.Service<
       off: Effect.Effect<ReadonlySet<string>, E>,
       /**
        * Also read the installed plugins: `true` loads them as they stand (a
-       * run's step), from `read` when the step brings its launch's read,
-       * so one read serves each step; `'withdraw'` only withdraws those
-       * disabled, removed or changed since they loaded, starting nothing (a
-       * switch follower).
+       * run's step); `'withdraw'` only withdraws those disabled, removed or
+       * changed since they loaded, starting nothing (a switch follower).
        */
-      options?: PinInstalled,
+      options?: { readonly installed: true | 'withdraw' },
     ) => Effect.Effect<
       Pinned<string, ToolEntry, void> & {
         /** Pin the process services of the plugins the step uses, from the
@@ -260,7 +252,7 @@ const liveToolsLayer = (
         });
       const pinSwitched = <E>(
         off: Effect.Effect<ReadonlySet<string>, E>,
-        options?: PinInstalled,
+        options?: { readonly installed: true | 'withdraw' },
       ) =>
         Effect.gen(function* () {
           const loading = options?.installed === true;
@@ -274,9 +266,7 @@ const liveToolsLayer = (
           // the lock: a slow server does not hold up every run's step.
           const readId = reading ? ++reads : 0;
           const read = reading
-            ? yield* installedReader(
-                options?.installed === true ? options.read : undefined,
-              )
+            ? yield* installedReader
             : { plugins: [], warnings: [] };
           // Loads started here and not yet adopted by the catalog: an
           // interruption or failure before adoption drops them.
@@ -419,7 +409,7 @@ const liveToolsLayer = (
   );
 
 /** Loads no plugins, from configuration or installed. */
-const NONE = () => Effect.succeed({ plugins: [], warnings: [] });
+const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
 /**
  * `table` as the `ToolRegistry`, and the live catalog over it, the plugins
@@ -429,7 +419,7 @@ const NONE = () => Effect.succeed({ plugins: [], warnings: [] });
  */
 export const toolTableLayer = (
   table: ToolTable,
-  loader: PluginLoader = NONE,
+  loader: PluginLoader = () => NONE,
   closed: ReadonlySet<string> = new Set(),
   installed: InstalledToolReader = NONE,
 ): Layer.Layer<LiveTools | ToolRegistry, never, ChildProcessSpawner> =>
