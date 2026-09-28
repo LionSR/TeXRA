@@ -10,11 +10,10 @@
  *
  * Two owners of retry. Owner A is automatic and route-scoped: a bounded batch
  * of attempts under the session's `ModelRetryGate`, so sibling runs on one
- * credential share cooling. Owner B is a human and indefinite, and durable:
- * the prompt is admitted by a `request.opened` row whose `model.retry` permit
- * walks `waiting` -> `authorized` -> `started`. A decision survives a restart,
- * an unused permit survives one, and a consumed permit never buys a second
- * billed attempt implicitly.
+ * credential share cooling. Owner B is a human, indefinite and durable: a
+ * `request.opened` row whose `model.retry` permit walks `waiting` ->
+ * `authorized` -> `started`. A decision and an unused permit survive a
+ * restart; a consumed permit never buys a second billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -39,7 +38,6 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-  sameModelOrigin,
 } from '@texra-ai/llm/turn';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
@@ -98,6 +96,7 @@ import { priceTurnUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
   attemptRows,
+  chainedContinuation,
   checkRecordedRequest,
   recordedRequest,
 } from './run/requestContext';
@@ -333,11 +332,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
           : {}),
-        ...(request.fullTranscript !== true &&
-        state.continuation !== null &&
-        sameModelOrigin(state.continuation.origin, bound.origin)
-          ? { continuation: state.continuation }
-          : {}),
+        ...chainedContinuation(state, bound.origin, request.fullTranscript),
       });
 
       const failAttempt = (
@@ -1087,9 +1082,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           open !== null && open.accepted !== null && state.pendingRetry === null
             ? { invocation: open.invocation, accepted: open.accepted }
             : null;
-        // The manual gate as resumed. `waiting`: re-present the same request.
-        // `authorized`: one unused permit. `started`: spent by an attempt that
-        // never reported, so a new decision is required.
+        // The manual gate as resumed: `waiting` re-presents the request,
+        // `authorized` holds one unused permit, `started` needs a new decision.
         let admission: 'automatic' | 'authorized' | 'decision' | 'waiting' =
           'automatic';
         let outstanding: string | null = null;
@@ -1111,9 +1105,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           } else {
             admission = 'decision';
           }
-          // Every gate write commits `lastError` in the same batch, so a gate
-          // without its failure is a malformed aggregate: refuse loudly rather
-          // than re-present a fabricated one.
+          // Every gate write commits `lastError` with it, so a gate without
+          // one is malformed: refuse loudly rather than fabricate a failure.
           if (state.lastError === null) {
             return yield* Effect.die(
               new Error('A manual retry gate has no recorded failure.'),
@@ -1149,8 +1142,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               if (decision === 'cancel')
                 return { kind: 'cancelled', state: yield* cell.current };
             }
-            // Consume the permit: `started` commits with the attempt row, so
-            // a crash after this transaction cannot reuse the authorization.
+            // Consume the permit: `started` commits with the attempt row, so a
+            // crash cannot reuse the authorization.
             const gate = (yield* cell.current).pendingRetry;
             if (gate === null) {
               return yield* Effect.die(
@@ -1164,6 +1157,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           }
           // Read after the gate: a manual retry rebinds the model.
           const bound = yield* SynchronizedRef.get(run.model);
+          let carried = false;
           let invocation: InvocationRef;
           let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
           if (observing !== null) {
@@ -1182,6 +1176,13 @@ export const modelInvokerLayer = (): Layer.Layer<
           } else {
             invocation = { invocationId, attempt };
             attempt += 1;
+            carried =
+              'continuation' in
+              chainedContinuation(
+                yield* cell.current,
+                bound.origin,
+                sent.fullTranscript,
+              );
             exit = yield* Effect.exit(
               gatedAttempt(cell, invocation, sent, bound, operationId),
             );
@@ -1201,25 +1202,24 @@ export const modelInvokerLayer = (): Layer.Layer<
           lastFailure = error.failure.formatted;
           failedAttempt = invocation;
           const { failure } = error;
-          if (
-            failure.storedResponseGone &&
-            sent.fullTranscript !== true &&
-            (yield* cell.current).continuation !== null
-          ) {
+          const dropChain = carried && failure.storedResponseGone;
+          if (dropChain) {
             logger.warn(
               `Chained response gone (${failure.info.message}); retrying once with the full transcript.`,
             );
             sent = { ...request, fullTranscript: true };
-            continue;
-          }
-          automaticAttempts += 1;
+          } else automaticAttempts += 1;
           if (isUserAbort(failure.error))
             return { kind: 'cancelled', state: yield* cell.current };
-          if (failure.autoRetryable && automaticAttempts < limit) {
-            logger.debug(
-              `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
-              { data: failure.info.message },
-            );
+          if (
+            dropChain ||
+            (failure.autoRetryable && automaticAttempts < limit)
+          ) {
+            if (!dropChain)
+              logger.debug(
+                `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
+                { data: failure.info.message },
+              );
             const { declinedRoutes: declined } = yield* cell.current;
             yield* beforeNextAttempt(bound, (b) =>
               rebind('configured', b, declined),

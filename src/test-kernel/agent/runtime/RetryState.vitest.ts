@@ -45,7 +45,7 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
+import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
   modelInvokerLayer,
@@ -984,5 +984,89 @@ describe('ModelInvoker retry', () => {
       yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
     }),
+  );
+
+  it.effect(
+    'retries a chained request once without its continuation when the stored response is gone',
+    () =>
+      Effect.gen(function* () {
+        const session = sessionWithInteractions(undefined);
+        const pump = yield* pumpClock;
+        const chained: boolean[] = [];
+        const model: Model = {
+          prepareTurn: (request) =>
+            Effect.succeed(
+              request.continuation === undefined
+                ? PREPARED
+                : ResolvedTurnSchema.parse({
+                    ...PREPARED,
+                    continuation: request.continuation,
+                  }),
+            ),
+          streamTurn: (turn) =>
+            Stream.unwrap(
+              Effect.sync(() => {
+                chained.push('continuation' in turn);
+                return 'continuation' in turn
+                  ? Stream.fail(
+                      new ModelError({
+                        kind: 'provider-rejection',
+                        status: 404,
+                        message: 'Previous response with id resp-1 not found.',
+                      }),
+                    )
+                  : Stream.fromIterable<TurnEvent>([
+                      {
+                        kind: 'identified',
+                        providerResponseId: PROVIDER_RESPONSE_ID,
+                        requestedOrigin: ORIGIN,
+                        returnedModel: null,
+                      },
+                      { kind: 'completed', result: completedTurn('full') },
+                    ]);
+              }),
+            ),
+        };
+        const kit = yield* openRun(session, model);
+        const state = yield* session.ledger.appendBatch(kit.runId, kit.state, [
+          {
+            type: 'model.compaction',
+            aggregateId: rowAggregate(kit.runId),
+            payload: {
+              keepPrefix: 1,
+              messages: [],
+              cause: 'model-switch',
+              continuation: {
+                origin: { ...ORIGIN, protocol: 'openai-responses' },
+                coveredMessages: 1,
+                prefixFingerprint: 'a'.repeat(64),
+                anchor: {
+                  kind: 'stored',
+                  responseId: 'resp-0',
+                  coveredItems: 1,
+                },
+              },
+              continuationDropped: null,
+              usage: null,
+            },
+          },
+        ]);
+
+        const outcome = yield* invokeOn({ ...kit, state });
+
+        expect(outcome.kind).toBe('response');
+        expect(chained).toEqual([true, false]);
+        const rows = yield* session.ledger.load(kit.runId);
+        expect(
+          Object.values(rows?.contents ?? {}).filter(
+            (value) =>
+              typeof value === 'object' &&
+              value !== null &&
+              'fullTranscript' in value,
+          ),
+        ).toHaveLength(1);
+        yield* Fiber.interrupt(pump);
+        yield* closeSessionOf(session);
+      }),
   );
 });

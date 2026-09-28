@@ -107,7 +107,8 @@ export function classifyModelFailure(
     autoRetryable,
     storedResponseGone:
       withPackageFacts.statusCode === 404 ||
-      (withPackageFacts.statusCode === 400 &&
+      ((withPackageFacts.statusCode === 400 ||
+        withPackageFacts.statusCode === undefined) &&
         /previous[_ ]?(response|interaction)/i.test(withPackageFacts.message) &&
         /not found|expired|no longer|does not exist/i.test(
           withPackageFacts.message,
