@@ -602,7 +602,6 @@ export function createDesktopHostRequests(
         case 'launch': {
           const launch = yield* prepareSurfaceLaunch(
             request,
-            host,
             session.roots.repoState,
             session.roots.storage,
           );

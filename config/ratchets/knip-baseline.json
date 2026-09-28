@@ -434,12 +434,6 @@
       "name": "DesktopProtocolApp"
     },
     {
-      "file": "packages/extension/src/frontend/auth/agentCatalogRefreshScope.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetAgentCatalogAuthRefreshScopeForTests"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",

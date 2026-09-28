@@ -104,7 +104,7 @@ describe('CLI agent validation with a shadowed name', () => {
     await Effect.runPromise(
       Effect.provide(
         Effect.provideService(
-          refresh({ includeRemote: false }),
+          refresh(),
           GlobalStorageFs,
           {} as RootedFileSystem,
         ).pipe(

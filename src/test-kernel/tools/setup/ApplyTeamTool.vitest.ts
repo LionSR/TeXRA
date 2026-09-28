@@ -14,11 +14,9 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
   fakeHostAgentDirectories,
   hostStores,
-  installHostAuth,
   installPlatform,
 } from '@test/support/setupPlatform';
 import {
@@ -29,7 +27,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
-import type { SetupPlatformShape } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -49,21 +46,7 @@ const expectNoTeamState = Effect.gen(function* () {
   expect(yield* getDefaultTeamId(hostStores().globalState)).toBeUndefined();
 });
 
-/**
- * The installed fake host's setup sign-in: a suite-level double the host is
- * built with once, so a test steers sign-in without swapping hosts.
- */
-const signIn = vi.fn<SetupPlatformShape['signIn']>();
-
-function mockCatalogAccess(canAccessCatalog: boolean): void {
-  installHostAuth(
-    fakeSupabaseAuth({ authenticated: Effect.succeed(canAccessCatalog) }),
-  );
-}
-
 async function clearOnboardingState(): Promise<void> {
-  signIn.mockReset();
-  signIn.mockReturnValue(Effect.succeed(false));
   await Effect.runPromise(
     testWorkspaceRoots().repoState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
@@ -79,13 +62,12 @@ async function clearOnboardingState(): Promise<void> {
 }
 
 beforeAll(async () => {
-  // Real bundled agent YAMLs on disk and no remote agents (signed out), so
-  // the tests exercise the actual name → key resolution including the
-  // unresolved TeXRA-hosted workflow members of the Physicist team.
+  // Real bundled agent YAMLs on disk, so the tests exercise the actual
+  // name → key resolution.
   await installPlatform(
     {},
     {
-      setup: createFakeSetupPlatform({ signIn }),
+      setup: createFakeSetupPlatform(),
       agentDirectories: {
         custom: () => Effect.sync(() => ''),
         customConfigured: () => Effect.succeed(false),
@@ -102,7 +84,7 @@ beforeAll(async () => {
   );
   await Effect.runPromise(
     Effect.provide(
-      refresh({ includeRemote: false }),
+      refresh(),
       Layer.mergeAll(
         unusedGlobalStorageFs(),
         nodePlatformLayer,
@@ -127,7 +109,6 @@ describe('apply_team', () => {
       Effect.gen(function* () {
         const result = yield* applyTeam({
           teamId: 'starter',
-          unavailableAction: 'continue',
         });
 
         expect(result.status).toBe('executed');
@@ -147,89 +128,34 @@ describe('apply_team', () => {
     }),
   );
 
-  it.effect('performs no writes before an unresolved-team choice', () =>
+  it.effect('applies a preset of bundled members', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({
+        teamId: 'software-engineer',
+      });
+
+      expect(result.status).toBe('executed');
+      expect(yield* workspaceRoster()).toEqual({
+        kind: 'team',
+        teamId: 'software-engineer',
+      });
+    }),
+  );
+
+  it.effect('applies the physicist team with every member bundled', () =>
     Effect.gen(function* () {
       const result = yield* applyTeam({ teamId: 'physicist' });
 
       expect(result.status).toBe('executed');
-      expect(result.output).toMatch(/Sign in to TeXRA/);
-      yield* expectNoTeamState;
-    }),
-  );
-
-  it.effect(
-    'applies a preset declared local-only without prompting for sign-in',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* applyTeam({
-          teamId: 'software-engineer',
-        });
-
-        expect(result.status).toBe('executed');
-        expect(yield* workspaceRoster()).toEqual({
-          kind: 'team',
-          teamId: 'software-engineer',
-        });
-      }),
-  );
-
-  it.effect('cancels without writing roster or default-team state', () =>
-    Effect.gen(function* () {
-      const result = yield* applyTeam({
+      expect(result.output).not.toMatch(/Not installed yet/);
+      expect(result.summary).toMatch(/Applied the Physicist roster/);
+      expect(yield* workspaceRoster()).toEqual({
+        kind: 'team',
         teamId: 'physicist',
-        unavailableAction: 'cancel',
       });
-
-      expect(result.status).toBe('executed');
-      expect(result.output).toMatch(
-        /No roster or default-team state was written/,
+      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
+        'physicist',
       );
-      yield* expectNoTeamState;
     }),
-  );
-
-  it.effect(
-    'honors an explicit continuation when catalog access is available',
-    () =>
-      Effect.gen(function* () {
-        mockCatalogAccess(true);
-
-        const result = yield* applyTeam({
-          teamId: 'physicist',
-          unavailableAction: 'continue',
-        });
-
-        expect(result.status).toBe('executed');
-        expect(result.summary).toMatch(/Applied the Physicist roster/);
-        expect(yield* workspaceRoster()).toEqual({
-          kind: 'team',
-          teamId: 'physicist',
-        });
-        expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-          'physicist',
-        );
-      }),
-  );
-
-  it.effect(
-    'uses the host setup sign-in capability before its forced retry',
-    () =>
-      Effect.gen(function* () {
-        signIn.mockReturnValue(Effect.succeed(true));
-        mockCatalogAccess(false);
-
-        const result = yield* applyTeam({
-          teamId: 'physicist',
-          unavailableAction: 'sign-in',
-        });
-
-        expect(signIn).toHaveBeenCalledOnce();
-        expect(result.status).toBe('error');
-        expect(result).toHaveProperty(
-          'error',
-          expect.stringContaining('still unavailable after refreshing'),
-        );
-        expect(yield* workspaceRoster()).toBeUndefined();
-      }),
   );
 });

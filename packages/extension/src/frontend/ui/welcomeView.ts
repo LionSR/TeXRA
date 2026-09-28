@@ -135,9 +135,8 @@ function renderWelcomeHtml(): string {
     <a class="button secondary" href="${setApiKey}">Set API key &mdash; ${ONBOARDING_CHOICE_API_KEY.description}</a>
   </div>
   <p class="muted">
-    A ${RESEARCHER_ACCESS.label} is optional: signing in only adds the hosted
-    remote agents. The bundled agents, the orchestrator included, work
-    without one.
+    A ${RESEARCHER_ACCESS.label} is optional: every agent ships bundled, the
+    orchestrator included, and none needs one.
     <a href="${signInTexra}">Sign in to a ${RESEARCHER_ACCESS.label}</a>
   </p>
   <p class="section-label">Open your project</p>

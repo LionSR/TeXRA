@@ -108,13 +108,12 @@ export const commitResumedActivation = (
   session: SessionHandle,
   runId: RunId,
   category: AgentCategory,
-  isRemote: boolean,
 ) =>
   reactivatedApprovalPolicy(session, runId).pipe(
     Effect.flatMap((snapshot) => {
       const target = aggregateId('run', runId);
       return session.commit([
-        { type: 'run.activate', aggregateId: target, category, isRemote },
+        { type: 'run.activate', aggregateId: target, category },
         { type: 'approval.policy', aggregateId: target, snapshot },
       ]);
     }),
@@ -183,10 +182,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
     const category = isAgentRunRecord(pinned)
       ? pinned.agentCategory
       : (options.category ?? AgentCategory.ToolUse);
-    // The launch stamped the resolved source on the record; the registry is
-    // not consulted again.
-    const isRemote =
-      isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
     const events: SessionEventDraft[] = [];
     if (!prior) {
       // The worktree the fold spells is the run's working directory as a
@@ -200,7 +195,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
         userFollowUpSupport:
           options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         category,
-        isRemote,
         worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
         parent:
           options.parentRunId === undefined
@@ -211,15 +205,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
       });
     }
     events.push(config);
-    events.push({
-      type: 'run.activate',
-      aggregateId: target,
-      category,
-      ...(options.identity.kind === 'agent' &&
-      options.identity.tool === undefined
-        ? { isRemote }
-        : {}),
-    });
+    events.push({ type: 'run.activate', aggregateId: target, category });
     // Enforcement is the session's in-memory policy; the row is its
     // projection. A re-registration writes no `run.start`, so the
     // activation re-stamps the snapshot enforcement now holds, rebuilt from

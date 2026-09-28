@@ -98,11 +98,6 @@ export { getHelperModelName } from './helperModelName';
 // AgentFlowResult
 export type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
-// agentLoad: the definition a launch actually loads, for hosts that must read
-// a declared field (a remote agent's `defaultOutputFiles`) the catalog listing
-// does not carry.
-export { loadAgentSettingAndPrompts } from './agentLoad';
-
 // core/definition config contract used by host launch/resume seams.
 export {
   AgentConfigSchema,

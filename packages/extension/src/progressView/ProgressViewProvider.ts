@@ -48,10 +48,6 @@ import {
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import {
-  isAgentCatalogAuthRefreshDeferred,
-  runAfterAgentCatalogAuthRefresh,
-} from '@frontend/auth/agentCatalogRefreshScope';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
@@ -490,13 +486,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
     );
     onTexraAuthSessionsChanged(this.context, () => {
-      if (isAgentCatalogAuthRefreshDeferred()) {
-        runAfterAgentCatalogAuthRefresh(this.runtime, [
-          this.snapshot.refreshCatalogs,
-          this.refreshApiKeyStatus,
-        ]);
-        return;
-      }
       this.runtime.runFork(this.refreshAfterCredentialChange());
     });
   }
@@ -504,7 +493,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
-      yield* refresh({ includeRemote: true });
       // Let every surface finish repainting even when another one fails.
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,

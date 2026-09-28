@@ -316,9 +316,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     result: WorkflowFlowResult,
     /**
      * The `defaultOutputFiles` declared by the definition this run loaded —
-     * the only place a remote agent's are readable, and the run's own copy, so
-     * a host never re-reads a catalog entry that may have been refreshed since
-     * the launch.
+     * the run's own copy, so a host never re-reads a catalog entry that may
+     * have been refreshed since the launch.
      */
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<'published' | 'failed', Error>;

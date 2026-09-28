@@ -1,9 +1,7 @@
 /**
- * The load-time check on an agent's parsed `tools:`. Shared by the local
- * definition loader ({@link ./agentLoad}) and the remote one
- * (`@agent/remote/RemoteAgentLoader`); each reports the warning on its own
- * log channel. The `{ name }` shorthand itself is parsed by the settings
- * schema.
+ * The load-time check on an agent's parsed `tools:`, reported by the
+ * definition loader ({@link ./agentLoad}) on its own log channel. The
+ * `{ name }` shorthand itself is parsed by the settings schema.
  */
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { AgentCategory } from '@shared/schemas';

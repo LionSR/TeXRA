@@ -412,7 +412,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(loadAgents({ includeRemote: false }));
+await harnessRuntime.runPromise(loadAgents());
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -513,7 +513,6 @@ function seedRun(
     aggregateId: qualifyAggregateId('run', runId),
     identity,
     category: options.category ?? AgentCategory.ToolUse,
-    isRemote: false,
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
@@ -554,7 +553,6 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
       category,
-      isRemote: false,
     });
   }
   if (phase === RUN_PHASE.WAITING) {
@@ -1798,7 +1796,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   log.emit(PROCESS, 10_000_000, {
     type: 'run.activate',
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],
@@ -1812,7 +1809,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         type: 'run.start',
         identity: { kind: 'agent', agent },
         category: AgentCategory.ToolUse,
-        isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         // The creation commit the database stamps, not a guess: `Log.parent`
         // refuses a parent that never started.
@@ -1826,7 +1822,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       {
         type: 'run.activate',
         category: AgentCategory.ToolUse,
-        isRemote: false,
       },
       owner,
     );

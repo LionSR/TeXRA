@@ -156,8 +156,6 @@ state (`src/agent/index/agentRegistry.ts`); when it misses,
 `loadAgents` (`src/agent/index/agentRegistry.ts:113-128`) is what fills it.
 Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
 registry, so the caller must ensure that loading has happened before launch.
-Pass `{ includeRemote: false }` unless you want the Supabase remote-agent
-catalog.
 
 ### Per-session — attach host interactions when presentation is required
 
@@ -279,7 +277,7 @@ await runtime.runPromise(
         );
       }),
     );
-    yield* loadAgents({ includeRemote: false });
+    yield* loadAgents();
 
     const validated = validateRunRequest({
       config: {

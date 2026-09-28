@@ -32,10 +32,7 @@ vi.mock('@utils/system/binaryResolver', async (importOriginal) => ({
 }));
 
 /** A host with no extension surface; the spawner is mocked out above. */
-const layer = Layer.merge(
-  nodeSpawnerLayer,
-  SetupPlatform.layer({ signIn: () => Effect.succeed(false) }),
-);
+const layer = Layer.merge(nodeSpawnerLayer, SetupPlatform.layer({}));
 
 describe('LatexToolingController', () => {
   beforeEach(() => {

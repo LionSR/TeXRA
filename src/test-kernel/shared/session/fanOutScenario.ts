@@ -215,7 +215,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.start',
     identity: ROOT_IDENTITY,
     category: AgentCategory.Workflow,
-    isRemote: false,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     parent: null,
     userFollowUpSupport: 'unsupported',
@@ -225,7 +224,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.activate',
     category: AgentCategory.Workflow,
-    isRemote: false,
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
@@ -263,7 +261,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.start',
     identity: CHILD_IDENTITY,
     category: AgentCategory.ToolUse,
-    isRemote: false,
     parent: log.parent(ROOT),
     userFollowUpSupport: 'nativeInteractive',
   });
@@ -278,7 +275,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.activate',
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   log.emit(ROOT, T.child + 1, {
     type: 'workflow.call',
@@ -327,14 +323,12 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.start',
     identity: GRANDCHILD_IDENTITY,
     category: AgentCategory.ToolUse,
-    isRemote: false,
     userFollowUpSupport: 'unsupported',
     parent: log.parent(CHILD),
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'flow.step',
@@ -372,7 +366,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.start',
     identity: { kind: 'process', tool: 'bash' },
     category: AgentCategory.ToolUse,
-    isRemote: false,
     parent: null,
     userFollowUpSupport: 'unsupported',
   });
@@ -825,7 +818,6 @@ function boardView({
     type: 'run.start',
     identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
     category: AgentCategory.Workflow,
-    isRemote: false,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     parent: null,
     userFollowUpSupport: 'unsupported',
@@ -835,7 +827,6 @@ function boardView({
   log.emit(ROOT, startedAt, {
     type: 'run.activate',
     category: AgentCategory.Workflow,
-    isRemote: false,
   });
   log.emit(ROOT, startedAt, {
     type: 'run.config',
@@ -909,7 +900,6 @@ function boardView({
         type: 'run.start',
         identity: { kind: 'agent', agent: `custom:${entry.id}` },
         category: AgentCategory.ToolUse,
-        isRemote: false,
         parent: log.parent(ROOT),
         userFollowUpSupport: 'unsupported',
       });
@@ -924,7 +914,6 @@ function boardView({
       log.emit(kid.id, kid.startedAt, {
         type: 'run.activate',
         category: AgentCategory.ToolUse,
-        isRemote: false,
       });
       log.emit(kid.id, kid.startedAt, {
         type: 'flow.step',

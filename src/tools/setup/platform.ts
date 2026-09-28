@@ -14,7 +14,6 @@ import { Context, Data, Effect, Layer } from 'effect';
 // Local imports
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
-import type { SignInFailed } from '@common/errors/signInFailed';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,
@@ -82,15 +81,6 @@ interface SetupExtensionAdapter {
 
 /** Host-varying setup capabilities. */
 export interface SetupPlatformShape {
-  /**
-   * Start the host's existing TeXRA account sign-in flow. The member is an
-   * `Effect`: a host that cannot run the flow reaches the setup tool as
-   * `SignInFailed` rather than as `unknown`. The extension and desktop
-   * implementations answer `false` when the user cancels; the CLI loopback
-   * has no boolean cancel value and surfaces abandonment or timeout through
-   * `SignInFailed`.
-   */
-  signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** VS Code-only command invocation. */
   commands?: SetupCommandAdapter;
   /** VS Code extension inspection and installation. */

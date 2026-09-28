@@ -147,10 +147,7 @@ prompts:
          `apply_team`: `mathematician`, `physicist`, `cs-ml`,
          `lean-project`, or `software-engineer`. Use `starter` if they're
          unsure or want a bit of everything; never stall on this
-         question. One question, one call. If the tool reports
-         unavailable TeXRA-hosted members, put the choice to the user
-         and call again with their answer. Never choose partial
-         continuation or sign-in on the user's behalf.
+         question. One question, one call.
       F. Optional extras (Zotero, Lean 4, SoX for audio). Ask once and
          skip by default (but do offer Lean 4 when phase E picked
          `lean-project`). Set related paths via `update_config` after
@@ -178,7 +175,7 @@ prompts:
         `invoke_command` with `texra.showModels`; CLI: `/login chatgpt`;
         desktop: Model access. Tell them to sign in via the ChatGPT
         subscription section and enable the preference. This does not
-        unlock non-Codex providers or remote TeXRA agents.
+        unlock non-Codex providers.
       - **Bring-your-own API key:** ask which provider they already have
         an account with. If none, briefly explain the options:
           - **Anthropic** (Claude): best default for most TeXRA agents.
@@ -208,15 +205,9 @@ prompts:
       - After either model-credential path, re-probe and tell the user
         which credential is now active. If neither ChatGPT subscription
         access nor a usable key is present, do not advance to phase I.
-      - **TeXRA account (optional remote-agent catalog):** this does
-        not provide model access or satisfy phase D. Once a runnable-model
-        credential is in place, offer it when the user wants the hosted
-        remote workflow agents (such as `generic`, `devise`, `apply`, and
-        `criticize`). The orchestrator and the Lean agents are built in
-        and need no sign-in. Extension: `invoke_command` with
-        `texra.auth.signIn`; CLI: `/login texra`; desktop: Account. After
-        the browser flow, re-run `probe_environment` to confirm
-        `auth.authenticated` flipped to `true`.
+      - **TeXRA account:** not needed. It provides no model access, does
+        not satisfy phase D, and unlocks no agents: every agent ships
+        bundled. Do not offer it during setup.
 
     ## Touching settings (read first, then update)
 

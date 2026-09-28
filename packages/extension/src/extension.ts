@@ -388,8 +388,8 @@ function registerSupabaseAuth(
             callPort(async () => {
               const action = await vscode.window.showWarningMessage(
                 reason === 'expired'
-                  ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-                  : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
+                  ? 'Your TeXRA session has expired. Please sign in again.'
+                  : 'Your TeXRA session is no longer valid. Please sign in again.',
                 'Sign In',
               );
               if (action !== 'Sign In') return;
@@ -564,11 +564,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   roots: WorkspaceRoots,
 ) {
   const { globalState } = roots;
-  // The account provider the platform registered precedes the
-  // fire-and-forget remote agent refresh below,
-  // which reads the account plane's access token: with the provider in place
-  // the refresh fetches the real catalog instead of short-circuiting on a null
-  // token, so activation now performs that one background fetch.
   context.subscriptions.push(
     languageModel.onDidChange(() =>
       emitAppSignal('languageModelsChanged', undefined),
@@ -601,26 +596,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   FileLister.initialize(context, runtimeSession);
 
-  const agentIndexLoaded = yield* loadAgents({ includeRemote: false }).pipe(
-    Effect.as(true),
+  yield* loadAgents().pipe(
     Effect.catchCause((cause) =>
       Effect.logError(
         `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
+      ).pipe(withLogChannel(EXTENSION_CHANNEL)),
     ),
   );
-  if (agentIndexLoaded) {
-    // Process-lifetime: activation does not wait on the remote catalog.
-    yield* Effect.forkDetach(
-      loadAgents().pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
-            `Remote agent refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-        ),
-      ),
-    );
-  }
 
   // The setup pill: shown only while the host snapshot's API-key banner is,
   // the one credential answer the welcome card also reads (a ChatGPT

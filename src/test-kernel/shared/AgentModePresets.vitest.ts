@@ -1,25 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AGENT_MODE_PRESETS,
-  parseAgentModePresets,
-  STARTER_AGENT_MODE_PRESET,
-} from '@shared/schemas';
-
-describe('agent preset hosted-definition metadata', () => {
-  it('keeps every hosted name inside its owning preset roster', () => {
-    for (const preset of [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS]) {
-      const roster = new Set([
-        ...preset.agents.workflow,
-        ...preset.agents.toolUse,
-      ]);
-      expect(
-        preset.texraHostedAgents.filter((name) => !roster.has(name)),
-        `${preset.id} has hosted metadata outside its roster`,
-      ).toEqual([]);
-    }
-  });
-});
+import { parseAgentModePresets } from '@shared/schemas';
 
 describe('parseAgentModePresets', () => {
   afterEach(() => {
@@ -40,7 +21,6 @@ describe('parseAgentModePresets', () => {
         workflow: ['polish'],
         toolUse: ['assistant'],
       },
-      texraHostedAgents: [],
     };
   }
 

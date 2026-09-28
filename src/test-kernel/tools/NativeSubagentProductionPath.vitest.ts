@@ -594,7 +594,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   beforeEach(async () => {
     await Effect.runPromise(
       Effect.provide(
-        refresh({ includeRemote: false }),
+        refresh(),
         Layer.mergeAll(
           unusedGlobalStorageFs(),
           nodePlatformLayer,

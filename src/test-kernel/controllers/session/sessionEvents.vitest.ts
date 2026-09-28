@@ -163,7 +163,6 @@ const runStart: SessionEventDraft = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
-  isRemote: false,
   parent: null,
 };
 
@@ -1634,7 +1633,6 @@ describe('the C1 event table and the C6 publisher', () => {
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
-              isRemote: false,
               parent: null,
             }),
           },
@@ -1649,7 +1647,6 @@ describe('the C1 event table and the C6 publisher', () => {
               identity: runStart.identity,
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
-              isRemote: false,
               parent: null,
             }),
           },

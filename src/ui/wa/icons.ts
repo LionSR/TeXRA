@@ -75,11 +75,6 @@ export function getModelProviderDecorator(provider: string): ProviderDecorator {
 
 export const AGENT_DECORATORS = {
   properties: {
-    remote: {
-      icon: 'cloud',
-      label: 'Remote',
-      hint: 'Remote agent: Prompts loaded from cloud',
-    },
     // `star`, not a person glyph: `circle-user` is already the Account glyph
     // inside the same settings window, and this row is rendered as the
     // custom-agent badge in Settings -> Agents.

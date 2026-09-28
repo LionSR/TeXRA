@@ -190,24 +190,21 @@ describe('agent registry load state', () => {
     );
   });
 
-  it.effect('runs a single scan for loads that start together', () =>
+  it.effect('answers loads from the published catalog without a rescan', () =>
     Effect.gen(function* () {
       const counter = { scans: 0 };
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* onGlobalStorage(refresh({ includeRemote: false }));
+      yield* onGlobalStorage(refresh());
       counter.scans = 0;
 
       yield* Effect.all(
-        [
-          onGlobalStorage(loadAgents({ includeRemote: true })),
-          onGlobalStorage(loadAgents({ includeRemote: true })),
-        ],
+        [onGlobalStorage(loadAgents()), onGlobalStorage(loadAgents())],
         { concurrency: 'unbounded' },
       );
 
-      assert.strictEqual(counter.scans, 1);
+      assert.strictEqual(counter.scans, 0);
       assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
     }),
   );
@@ -218,7 +215,7 @@ describe('agent registry load state', () => {
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* onGlobalStorage(refresh({ includeRemote: false }));
+      yield* onGlobalStorage(refresh());
       assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
       const scanFailure = new Error('agent directory unavailable');
@@ -238,9 +235,7 @@ describe('agent registry load state', () => {
         }),
       );
 
-      const error = yield* Effect.flip(
-        onGlobalStorage(refresh({ includeRemote: false })),
-      );
+      const error = yield* Effect.flip(onGlobalStorage(refresh()));
       assert.ok(error instanceof Error);
       assert.strictEqual(error.message, scanFailure.message);
 

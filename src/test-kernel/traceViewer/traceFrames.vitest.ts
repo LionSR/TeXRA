@@ -72,7 +72,6 @@ function runStart(
     identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     category,
-    isRemote: false,
     worktree: null,
     parent: null,
   };

@@ -198,7 +198,6 @@ function installedSetup(): SetupPlatformShape {
  * swaps setup platforms with them.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
-  signIn: () => installedSetup().signIn(),
   get commands() {
     return installedSetup().commands;
   },

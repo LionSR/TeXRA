@@ -1,5 +1,5 @@
 /**
- * Supabase configuration for TeXRA authentication and remote agents.
+ * Supabase configuration for TeXRA authentication.
  *
  * These credentials are for TeXRA's official Supabase backend.
  * Users authenticate to TeXRA's service, not their own Supabase instance.
@@ -19,8 +19,6 @@ export interface SupabaseConfig {
    * - Anon key (legacy): JWT starting with `eyJ...`
    */
   publicKey: string;
-  /** Edge function URL for fetching remote agent configurations. */
-  edgeFunctionUrl: string;
 }
 
 /** Custom domain for Supabase-backed remote services. */
@@ -32,9 +30,6 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 
   // Production public key - safe to include in client code
   publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
-
-  // Edge function URL via custom domain
-  edgeFunctionUrl: `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/get-agent-config`,
 };
 
 /**

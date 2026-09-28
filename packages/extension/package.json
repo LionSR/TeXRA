@@ -267,7 +267,7 @@
       },
       {
         "command": "texra.auth.signIn",
-        "title": "Sign In to TeXRA Account (Remote Agents)",
+        "title": "Sign In to TeXRA Account",
         "category": "TeXRA",
         "icon": "$(sign-in)"
       },
@@ -378,7 +378,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Connect a model",
-            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run Codex models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nA TeXRA account is optional: it only adds the hosted remote agents. The bundled agents, the orchestrator included, work without one.",
+            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run Codex models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEvery agent ships bundled, the orchestrator included; none needs a TeXRA account.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the provider API key settings"

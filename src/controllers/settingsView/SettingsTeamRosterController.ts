@@ -1,17 +1,10 @@
 import { Data, Effect } from 'effect';
-import type {
-  TeamAvailabilityChoice,
-  TeamCatalogPortFailed,
-} from '@common/teams/TeamAvailabilityPreflight';
 import {
-  formatTeamUnavailableMessage,
   formatUnknownTeamMessage,
   missingMemberNames,
-  teamAvailabilityPrompt,
-  type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import {
-  applyTeamRosterWithPreflight,
+  applyTeamRoster,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
 import type { MessageHost } from '@hosts/uiHosts';
@@ -27,18 +20,14 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   ): Effect.Effect<string | undefined, StateReadFailed>;
 };
 
-interface SettingsTeamRosterPresentation extends Pick<
+type SettingsTeamRosterPresentation = Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
-> {
-  chooseTeamAvailability(
-    prompt: TeamAvailabilityPrompt,
-  ): Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
-}
+>;
 
 interface SettingsTeamRosterOptions<R> extends Omit<
   TeamRosterApplicationDeps<R>,
-  'catalog' | 'choose'
+  'catalog'
 > {
   readonly catalog: SettingsTeamRosterCatalog;
   readonly presentation: SettingsTeamRosterPresentation;
@@ -65,29 +54,12 @@ export function applySettingsTeamRoster<R = never>(
   options: SettingsTeamRosterOptions<R>,
 ): Effect.Effect<void, Error, R> {
   return Effect.gen(function* () {
-    const result = yield* applyTeamRosterWithPreflight<R>(presetId, {
-      ...options,
-      choose: (preset, unavailableNames) =>
-        options.presentation.chooseTeamAvailability(
-          teamAvailabilityPrompt(unavailableNames, preset.name),
-        ),
-    });
+    const result = yield* applyTeamRoster<R>(presetId, options);
 
     switch (result.status) {
       case 'unknown':
         yield* options.presentation.showErrorMessage(
           formatUnknownTeamMessage(presetId),
-        );
-        return;
-      case 'choice-required':
-      case 'cancelled':
-        return;
-      case 'unavailable':
-        yield* options.presentation.showErrorMessage(
-          formatTeamUnavailableMessage(
-            result.preset.name,
-            result.unavailableNames,
-          ),
         );
         return;
       case 'applied': {

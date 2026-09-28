@@ -31,11 +31,6 @@ export function createStubSettingsBindings(
     refreshCatalogs: noOpEffect,
     refreshCredentialStatus: Effect.void,
     customAgentDirChanged: Effect.void,
-    remoteCatalog: {
-      canAccess: () => Effect.succeed(false),
-      signIn: () => Effect.succeed(false),
-    },
-    chooseTeamAvailability: () => Effect.succeed(undefined),
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     stateSettingApplied: noOpEffect,

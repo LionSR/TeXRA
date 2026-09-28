@@ -108,7 +108,7 @@ export class AccountTab extends LitElement {
         })}
       `;
     } else {
-      description = 'Sign in to use the hosted research-agent catalog.';
+      description = 'Optional: no agent needs a TeXRA account.';
       actions = renderLabeledActionButton({
         icon: 'right-to-bracket',
         text: 'Sign in',

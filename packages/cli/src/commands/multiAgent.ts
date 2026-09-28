@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
-import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
+import { canLaunchTeam } from '@common/teams/TeamPlan';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 
@@ -85,17 +85,14 @@ const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const { plans, remoteCatalogRefreshAttempted } =
-    yield* loadCliMultiAgentPresetPlanSet(
-      yield* readCliMultiAgentPresets(services.repoState),
-    );
+  const plans = yield* loadCliMultiAgentPresetPlanSet(
+    yield* readCliMultiAgentPresets(services.repoState),
+  );
 
   emitCliResult(context, {
     json: plans.map(cliMultiAgentPresetListRecord),
     ndjson: cliMultiAgentPresetNdjsonRecords(plans),
-    text: formatCliMultiAgentPresetList(plans, {
-      includeLoginHint: !remoteCatalogRefreshAttempted,
-    }),
+    text: formatCliMultiAgentPresetList(plans),
   });
   return CliExitCode.Success;
 });
@@ -105,18 +102,15 @@ const runMultiAgentShow = Effect.fn('runMultiAgentShow')(function* (
   presetIdOrName: string,
   services: CliPlatformServices,
 ) {
-  const { plan, remoteCatalogRefreshAttempted } =
-    yield* loadCliMultiAgentRunPlan(
-      { preset: presetIdOrName },
-      services.repoState,
-    );
+  const plan = yield* loadCliMultiAgentRunPlan(
+    { preset: presetIdOrName },
+    services.repoState,
+  );
 
   emitCliResult(context, {
     json: plan,
     ndjson: { kind: 'multi-agent-preset-inspection', plan },
-    text: formatCliMultiAgentPresetInspection(plan, {
-      includeLoginHint: !remoteCatalogRefreshAttempted,
-    }),
+    text: formatCliMultiAgentPresetInspection(plan),
   });
   return CliExitCode.Success;
 });
@@ -134,25 +128,12 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const { plan, remoteCatalogRefreshAttempted } =
-    yield* loadCliMultiAgentRunPlan(init, services.repoState, {
-      reloadRemoteAgents: !rejectsHeadlessAsk,
-    });
+  const plan = yield* loadCliMultiAgentRunPlan(init, services.repoState);
   if (rejectsHeadlessAsk) {
     writeTextStderr(
       `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
     );
     return CliExitCode.Usage;
-  }
-  if (remoteCatalogRefreshAttempted) {
-    const inspectAdvice = `Run \`texra multi-agent show ${plan.preset.id}\` to view the resolved team.`;
-    // Otherwise the silent second load makes runs behave differently from a
-    // signed-out shell with no visible reason.
-    writeTextStderr(
-      teamPlanHasGaps(plan)
-        ? `Preset ${plan.preset.id} attempted to load remote agents before launch, but some team members are still unavailable. ${inspectAdvice}`
-        : `Preset ${plan.preset.id} loaded remote agents before launch. ${inspectAdvice}`,
-    );
   }
   if (plan.missingAgentOverride) {
     return yield* failUsage(
@@ -162,7 +143,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (!canLaunchTeam(plan)) {
     const singleAgentAdvice = plan.rootAgent
       ? `Start a single-agent chat with \`texra chat --agent ${plan.rootAgent.name}\` if that is what you want.`
-      : 'Install or sign in for a runnable team root before launching this preset.';
+      : 'Install or create a runnable team root before launching this preset.';
     writeTextStderr(
       formatCliMultiAgentTeamLaunchBlockMessage(plan, {
         requestedPreset: init.preset,

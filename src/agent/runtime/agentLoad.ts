@@ -14,7 +14,6 @@ import {
   type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
-import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
@@ -23,7 +22,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 import { inertToolsWarning } from './agentSettingTools';
-import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
 
@@ -58,19 +56,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   /** The installed plugins that load, as the launch reads them. */
   installed: Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem>,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<
-  [AgentSetting, AgentPrompt],
-  Error,
-  FileSystem.FileSystem | HttpClient.HttpClient
-> {
-  // Handle remote agents
-  if (entry.source === 'remote') {
-    const remoteConfig = yield* loadRemoteAgent(entry.name);
-
-    // Remote agents are already fully processed (tools resolved, validated)
-    return [remoteConfig.settings, remoteConfig.prompts];
-  }
-
+): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
   // A plugin agent is its subagent file, read again: it inherits nothing.
   // The catalog that listed it may predate a change another host made, so
   // its plugin must load now (enabled, and trusted as it is) or it does not

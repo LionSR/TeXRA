@@ -175,7 +175,7 @@ function admitInput(
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    yield* loadAgents({ includeRemote: false }).pipe(
+    yield* loadAgents().pipe(
       Effect.mapError((cause) => {
         // The agent scan reads the configured directories through the
         // platform, so it can fail on the environment. That is a failure of

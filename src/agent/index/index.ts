@@ -31,7 +31,6 @@ export {
   getAgentsByCategory,
   getCustomAgentScanIssues,
   refresh,
-  invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
   // Visible agents (for dropdowns and tools)

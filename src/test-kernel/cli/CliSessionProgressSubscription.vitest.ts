@@ -55,14 +55,12 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
         type: 'run.activate',
         aggregateId: runAggregate,
         category: AgentCategory.Workflow,
-        isRemote: false,
       },
     },
     event: 'run.activate',
     payload: {
       aggregateId: runAggregate,
       category: AgentCategory.Workflow,
-      isRemote: false,
     },
   },
   {
@@ -230,7 +228,6 @@ describe('attachCliSessionProgressProjection', () => {
               aggregateId: childAggregate,
               identity: { kind: 'process', tool: 'bash' },
               category: AgentCategory.ToolUse,
-              isRemote: false,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId },
             },
@@ -279,7 +276,6 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: runAggregate,
             identity: { kind: 'agent', agent: 'polish' },
             category: AgentCategory.ToolUse,
-            isRemote: false,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             parent: null,
           },
@@ -287,7 +283,6 @@ describe('attachCliSessionProgressProjection', () => {
             type: 'run.activate',
             aggregateId: runAggregate,
             category: AgentCategory.ToolUse,
-            isRemote: false,
           },
           {
             type: 'run.description',
@@ -301,7 +296,6 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: childAggregate,
             identity: { kind: 'agent', agent: 'review' },
             category: AgentCategory.ToolUse,
-            isRemote: false,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             parent: { id: runId },
           },
@@ -323,7 +317,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.activate',
               aggregateId: runAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           }),
         );
@@ -335,7 +328,6 @@ describe('attachCliSessionProgressProjection', () => {
             fields: {
               aggregateId: runAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           },
         ]);
@@ -359,7 +351,6 @@ describe('attachCliSessionProgressProjection', () => {
               aggregateId: childAggregate,
               identity: { kind: 'agent', agent: 'review' },
               category: AgentCategory.ToolUse,
-              isRemote: false,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId },
             },
@@ -393,7 +384,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.activate',
               aggregateId: childAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           }),
         );

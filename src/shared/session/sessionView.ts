@@ -90,8 +90,6 @@ const RunViewCommonSchema = z.object({
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
-  // Launch facts from the `run.start` payload, never derived (5.2).
-  isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
   /** The current claim belongs to this process, independently of parentage. */

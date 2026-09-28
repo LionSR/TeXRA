@@ -82,7 +82,6 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         aggregateId: aggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
         category: 'workflow',
-        isRemote: false,
         userFollowUpSupport: 'unsupported',
         parent: { id: parentId },
       },

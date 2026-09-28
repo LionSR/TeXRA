@@ -10,10 +10,6 @@ import {
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import {
-  isAgentCatalogAuthRefreshDeferred,
-  runAfterAgentCatalogAuthRefresh,
-} from '@frontend/auth/agentCatalogRefreshScope';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -77,20 +73,6 @@ export class SettingsViewProvider {
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {
       if (this._view) {
-        if (isAgentCatalogAuthRefreshDeferred()) {
-          // The panel this repaint belongs to is whichever one is open when
-          // the preflight releases it, not the one open when auth changed: a
-          // dispose and reopen inside that window must not repaint the dead
-          // webview and leave the live one stale.
-          runAfterAgentCatalogAuthRefresh(this.runtime, [
-            Effect.suspend(() =>
-              this._view
-                ? this.messageHandler.refreshAfterAuthChange()
-                : Effect.void,
-            ),
-          ]);
-          return;
-        }
         this.runtime.runFork(this.messageHandler.refreshAfterAuthChange());
       }
     });

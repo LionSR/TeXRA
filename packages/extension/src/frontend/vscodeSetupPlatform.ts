@@ -3,10 +3,9 @@
  * service by `initVscodePlatform`.
  *
  * Every member is a closure over VS Code's own APIs, so the value exists
- * before any activation state does. The sign-in, command, and extension
- * members are `Effect`s: a sign-in VS Code cannot run reaches the setup tool
- * as `SignInFailed`, a command it refuses as `SetupCommandFailed`, and a
- * refused install as `SetupExtensionInstallFailed`, instead of as `unknown`
+ * before any activation state does. The command and extension members are
+ * `Effect`s: a command VS Code refuses reaches the setup tool as
+ * `SetupCommandFailed`, and a refused install as `SetupExtensionInstallFailed`, instead of as `unknown`
  * behind an identity catch. They live here rather than in `extension.ts` for
  * the same reason `runTerminalCommand` does: the host implementation of a
  * port belongs beside the other host implementations, and the composition
@@ -18,7 +17,6 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { runSignInCommand } from '@frontend/auth/signInCommand';
 import {
   SetupCommandFailed,
   SetupExtensionInstallFailed,
@@ -33,7 +31,6 @@ import { runTerminalCommand } from './setupTerminalRunner';
 const INSTALL_EXTENSION_COMMAND = 'workbench.extensions.installExtension';
 
 export const vscodeSetupPlatform: SetupPlatformShape = {
-  signIn: runSignInCommand,
   commands: {
     invoke: (commandId, ...args) =>
       Effect.tryPromise({

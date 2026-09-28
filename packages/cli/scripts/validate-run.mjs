@@ -1086,8 +1086,7 @@ prompts:
 
 function validateMultiAgentRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
-  // This preset has a local built-in delegating root; remote-catalog teams such as
-  // mathematician are unavailable in signed-out validation environments.
+  // A preset whose members are all tool-use agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
     const inputPath = path.join(cwd, 'math-problem.md');

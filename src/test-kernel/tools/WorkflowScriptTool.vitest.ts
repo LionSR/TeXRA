@@ -917,7 +917,6 @@ describe('WorkflowScriptTool', () => {
             },
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             category: AgentCategory.Workflow,
-            isRemote: false,
             parent: { id: parentRunId },
             checkpointId: checkpointIdFor('tool-test'),
           },

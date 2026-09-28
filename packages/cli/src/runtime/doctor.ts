@@ -244,7 +244,7 @@ function checkAuth(
         'auth',
         RESEARCHER_ACCESS.label,
         'Not signed in.',
-        'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
+        'Optional: no agent needs it. Add a provider API key with `texra setup` to run models.',
       );
     }),
     Effect.catch((error) =>

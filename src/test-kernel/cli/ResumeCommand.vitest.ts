@@ -138,7 +138,6 @@ async function seedRunRecord(seed: {
         identity: { kind: 'agent', agent: seed.config?.agent ?? 'planner' },
         category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
         userFollowUpSupport: 'unsupported',
-        isRemote: false,
         parent: null,
       },
     ]),

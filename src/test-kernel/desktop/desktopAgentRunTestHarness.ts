@@ -12,8 +12,6 @@ export function createStubDesktopAgentRunHost(
     openBuildDisplay: () => Effect.void,
     openDiff: () => Effect.void,
     confirmAcceptFile: () => Effect.succeed(true),
-    chooseTeamAvailability: () => Effect.succeed('cancel' as const),
-    signInForRemoteAgentCatalog: () => Effect.succeed(false),
     showErrorMessage: () => Effect.void,
     showWarningMessage: () => Effect.void,
     showInfoMessage: () => Effect.void,
