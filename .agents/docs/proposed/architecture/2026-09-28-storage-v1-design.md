@@ -152,6 +152,34 @@ Both changes narrow the ratchets; neither widens one.
   subqueries. `start_commit` (the commit of seq 1) replaces the correlated
   subquery in `READ_STATE`. The transaction that writes those rows sets
   both.
+- **Large strings live outside the row, compressed, once per store.** The
+  codec replaces every payload string of 4096 characters or more, at any
+  depth, with `{"$b": "<sha256 of the string>"}` and stores the string
+  once in `blob` as zstd level 3 (Node's built-in `zlib.zstdCompressSync`),
+  keyed by the sha256 of its uncompressed text. A payload's own key of the
+  form `$b`, `$$b`, … gains one `$` when stored and loses it when read, so
+  a stored `$b` is always a reference and round-trips are exact.
+  - Every event read selects a row's blobs with it, a correlated
+    `group_concat` over `event_blob` (digest and `hex(value)`), so decoding
+    stays one synchronous call per row. The codec decompresses each
+    reference and checks it hashes to its digest; one missing or failing
+    the check makes the row `Corrupt`. Folds, request rebuild and
+    `StoredTurn` see full strings.
+  - This covers what makes a store large without code for any kind: tool
+    output (in `tool.result` and again in the conversation append), media
+    (attachments are inline base64 in `model.message` and `tool.result`),
+    long prompts, and `context.blob` values, whose canonical JSON text is
+    the string the rule applies to. Duplicates cost one blob.
+  - `event_blob (commit, digest)` records each row's references; it is the
+    reachability collection reads (§7), and it cascades from `event`.
+  - Measured on a generated 1,000-run store (175k rows): 1,038 MB before,
+    324 MB after. Three images and a PDF read with a tool store at 1.00× their
+    raw bytes, once, where the rows held 3.5× before.
+  - zstd is in Node from 22.15 and in Electron's Node 24; the codec throws
+    at load on a runtime without it.
+  - Alternatives: compressing the whole `data` column (no dedup, and every
+    small row pays a frame); a media-specific attachment table (a second
+    mechanism for what the string rule already covers). Rejected.
 
 ### DDL
 
@@ -175,8 +203,8 @@ CREATE TABLE event_sequence (
 ) STRICT;
 
 CREATE TABLE blob (
-  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the canonical JSON
-  value  TEXT NOT NULL
+  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the uncompressed string
+  value  BLOB NOT NULL                                  -- zstd level 3 of the string
 ) STRICT;
 
 CREATE TABLE event (
@@ -187,10 +215,16 @@ CREATE TABLE event (
   version   INTEGER NOT NULL CHECK (version >= 1),
   origin    TEXT NOT NULL,
   at        INTEGER NOT NULL,
-  data      TEXT NOT NULL,
-  blob      TEXT REFERENCES blob(digest),               -- set only on context.blob rows
+  data      TEXT NOT NULL,                              -- large strings as {"$b": digest}
   UNIQUE (aggregate, seq)
 ) STRICT;
+
+-- Each row's blob references: what keeps a blob reachable.
+CREATE TABLE event_blob (
+  "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
+  digest   TEXT NOT NULL REFERENCES blob(digest),
+  PRIMARY KEY ("commit", digest)
+) STRICT, WITHOUT ROWID;
 
 -- The highest version of each row kind ever written here (§3, blocking).
 CREATE TABLE stored_kind (
@@ -252,23 +286,23 @@ CREATE TABLE input_history (
 CREATE INDEX event_sequence_parent ON event_sequence(parent_id) WHERE parent_id IS NOT NULL;
 CREATE INDEX event_aggregate_type  ON event(aggregate, type, seq);
 CREATE INDEX event_type_commit     ON event(type, "commit");
-CREATE INDEX event_blob            ON event(blob) WHERE blob IS NOT NULL;
+CREATE INDEX event_blob_digest     ON event_blob(digest);
 CREATE INDEX current_value_at      ON current_value(family, at);
 ```
 
 ### Indexes, each justified by a named query
 
-| Index                                                                      | Query it serves                                                                                                                                       |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `event` PK (`commit`)                                                      | `readAll` and every tail read by commit range; joins from `listing_entry`, `projected_row` and `run_usage`                                            |
-| `UNIQUE (aggregate, seq)`                                                  | `readAggregate(id, fromSeq)`, `readDisplayAggregate`, `readInputBatch`'s per-id arm; seq density; the FK child index for `event.aggregate`            |
-| `event_aggregate_type`                                                     | `readAggregate` with types (`typedRows`), `readRunSnapshot` (latest snapshot), the latest inquiry row inside the inquiry transition                   |
-| `event_type_commit`                                                        | `readDisplay` and `readInputBatch` tails (`type IN … AND commit range`), `readPendingDeletions` (`type = 'run.removed'`), projection catch-up by kind |
-| `event_blob` (partial)                                                     | blob reachability after a collection; the FK check when a blob is deleted                                                                             |
-| `event_sequence_parent` (partial)                                          | the recursive `dependents` CTE (deletion, closure); the FK child index for `parent_id`                                                                |
-| `UNIQUE (kind, logical_id)`                                                | every lookup of an `AggregateId`                                                                                                                      |
-| `current_value_at`                                                         | `values.list(family)`, ordered by `at DESC`                                                                                                           |
-| primary keys of `listing_entry`, `projected_row`, `run_usage`, `run_model` | the listing read, display reads, and the projector's read-modify-write; each is also the table's FK child index                                       |
+| Index                                                                                    | Query it serves                                                                                                                                       |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `event` PK (`commit`)                                                                    | `readAll` and every tail read by commit range; joins from `listing_entry`, `projected_row` and `run_usage`                                            |
+| `UNIQUE (aggregate, seq)`                                                                | `readAggregate(id, fromSeq)`, `readDisplayAggregate`, `readInputBatch`'s per-id arm; seq density; the FK child index for `event.aggregate`            |
+| `event_aggregate_type`                                                                   | `readAggregate` with types (`typedRows`), `readRunSnapshot` (latest snapshot), the latest inquiry row inside the inquiry transition                   |
+| `event_type_commit`                                                                      | `readDisplay` and `readInputBatch` tails (`type IN … AND commit range`), `readPendingDeletions` (`type = 'run.removed'`), projection catch-up by kind |
+| `event_blob_digest`                                                                      | blob reachability after a collection; the FK check when a blob is deleted                                                                             |
+| `event_sequence_parent` (partial)                                                        | the recursive `dependents` CTE (deletion, closure); the FK child index for `parent_id`                                                                |
+| `UNIQUE (kind, logical_id)`                                                              | every lookup of an `AggregateId`                                                                                                                      |
+| `current_value_at`                                                                       | `values.list(family)`, ordered by `at DESC`                                                                                                           |
+| primary keys of `listing_entry`, `projected_row`, `run_usage`, `run_model`, `event_blob` | the listing read, display reads, the projector's read-modify-write, and a collection's references; each is also the table's FK child index            |
 
 Dropped: `event_agg_commit`, which no query in this design needs, and
 `event_snapshot_model`, whose job `run_model` now does.
@@ -636,11 +670,13 @@ interface PluginArm {
   - Today the coauthor store is 95% free pages.
 - **Blob collection.** Collection is by reachability, not refcount; a
   counter would be a second truth that drifts on partial paths.
-  - `collectDeletion`'s final transaction reads the digests referenced by
-    the aggregates it collects (`event_blob`).
-  - After the cascade, it deletes those digests that no remaining `event`
-    row references.
-  - The `event.blob` foreign key makes deleting a reachable blob impossible.
+  - `collectDeletion`'s final transaction reads the digests the collected
+    aggregates' rows reference (`event_blob`).
+  - The cascade from `event` removes those references. It then deletes
+    the digests no remaining `event_blob` row names: a blob another run
+    shares survives.
+  - The `event_blob.digest` foreign key makes deleting a reachable blob
+    impossible.
 - **WAL.** `journal_size_limit` is 1 MiB. On scope close, the connection
   runs `PRAGMA wal_checkpoint(TRUNCATE)`. A failure there is logged at
   warn.

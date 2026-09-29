@@ -62,7 +62,7 @@ const TABLES = [
   ) STRICT`,
   `CREATE TABLE IF NOT EXISTS blob (
     digest TEXT PRIMARY KEY CHECK (length(digest) = 64),
-    value  TEXT NOT NULL
+    value  BLOB NOT NULL
   ) STRICT`,
   `CREATE TABLE IF NOT EXISTS event (
     "commit"  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,9 +73,13 @@ const TABLES = [
     origin    TEXT NOT NULL,
     at        INTEGER NOT NULL,
     data      TEXT NOT NULL,
-    blob      TEXT REFERENCES blob(digest),
     UNIQUE (aggregate, seq)
   ) STRICT`,
+  `CREATE TABLE IF NOT EXISTS event_blob (
+    "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
+    digest   TEXT NOT NULL REFERENCES blob(digest),
+    PRIMARY KEY ("commit", digest)
+  ) STRICT, WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS stored_kind (
     type    TEXT PRIMARY KEY,
     version INTEGER NOT NULL
@@ -133,7 +137,7 @@ const ADDITIVE = [
     ON event_sequence(parent_id) WHERE parent_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS event_aggregate_type ON event(aggregate, type, seq)`,
   `CREATE INDEX IF NOT EXISTS event_type_commit ON event(type, "commit")`,
-  `CREATE INDEX IF NOT EXISTS event_blob ON event(blob) WHERE blob IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS event_blob_digest ON event_blob(digest)`,
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
 ];
 
