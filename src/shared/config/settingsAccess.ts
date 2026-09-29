@@ -14,7 +14,6 @@ import type {
 } from '@platform/interfaces';
 import type {
   SettingHost,
-  SettingStore,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -26,37 +25,16 @@ const CHANNEL = 'settingsAccess';
  * Host-aware read/write for {@link StateSettingEntry} rows.
  *
  * Catalog reads compose application-state Effects and synchronous config
- * reads through the one host-aware slot selection.
- *
- * The slot is whatever the row's `slots` map declares for the calling host —
- * there is no fallback chain, so a host that does not store a setting cannot
- * silently read someone else's slot.
+ * reads through the row's one declared `slot`.
  */
 
 export interface SettingsStores {
-  /** The host whose slot layout these stores follow (`WorkspaceRoots.host`). */
+  /** The host these stores belong to (`WorkspaceRoots.host`). */
   readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;
   readonly globalState: StateStore;
-}
-
-/**
- * The storage slot a setting resolves to for a host. Single source of the
- * resolution rule — display labels and read/write all go through it. Throws
- * when the row declares no slot for the host: a silent fallback would write
- * the value where that host will never read it back.
- */
-export function settingSlot(
-  entry: StateSettingEntry,
-  host: SettingHost,
-): SettingStore {
-  const slot = entry.slots[host];
-  if (slot === undefined) {
-    throw new Error(`Setting "${entry.key}" has no ${host} storage slot`);
-  }
-  return slot;
 }
 
 /** The default-when-absent value for an entry, from its `.prefault()`. */
@@ -143,7 +121,7 @@ export function inspectSetting(
   stores: SettingsStores,
 ): Effect.Effect<StoredSetting, StateReadFailed> {
   return Effect.suspend(() => {
-    const slot = settingSlot(entry, stores.host);
+    const slot = entry.slot;
     return slot === 'config'
       ? Effect.sync(() =>
           classifyStored(entry.schema, rawConfigValue(entry, stores.config)),
@@ -226,7 +204,7 @@ function writeSlot(
   stores: SettingsStores,
   target: ConfigTarget | undefined,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  const slot = settingSlot(entry, stores.host);
+  const slot = entry.slot;
   if (slot === 'config') {
     return stores.config.update(
       entry.key,

@@ -46,7 +46,7 @@ describe('applyStateSettingUpdate', () => {
           kind: 'applied',
           entry: {
             key: BASH_APPROVAL_CONFIG_KEY,
-            slots: { vscode: 'config', cli: 'config', desktop: 'config' },
+            slot: 'config',
             surfaces: { settingsView: 'approval' },
           },
         });

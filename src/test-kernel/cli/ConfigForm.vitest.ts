@@ -113,8 +113,7 @@ const RECORD_ENTRY: SurfacedSettingEntry = {
   schema: z.record(z.string(), z.string()).prefault({}),
   description: 'A record setting with no inline editor.',
   category: 'example',
-  slots: { cli: 'workspaceState' },
-  honoredBy: { cli: { reader: 'src/tools/toolAvailability.ts' } },
+  slot: 'workspaceState',
   surfaces: { cliConfig: true },
 };
 

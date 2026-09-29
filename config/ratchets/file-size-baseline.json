@@ -73,7 +73,7 @@
     "src/shared/session/sessionFold.ts": 1478,
     "src/shared/session/surface.ts": 511,
     "src/shared/settingsView/settingsViewMessages.ts": 876,
-    "src/shared/state/stateSettings.ts": 1525,
+    "src/shared/state/stateSettings.ts": 1344,
     "src/telemetry/UsageLogService.ts": 571,
     "src/tools/agentCliShared.ts": 575,
     "src/tools/bash.ts": 567,

@@ -79,20 +79,12 @@ const DEFAULT_GIT_WORKTREE_SUPPORT = false;
 const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
 /**
- * Host-neutral catalog for every TeXRA setting a host can store, honor, or render.
+ * Host-neutral catalog for every TeXRA setting a host can store or render.
  *
- * One row carries the catalog facts that used to be answered in six places:
+ * One row carries the catalog facts:
  *
- * - **`slots`** — where each host stores the value (`config` /
- *   `workspaceState` / `repoState` / `globalState`). Replaces the old `store` + `cliStore`
- *   pair and the caller-chosen slot the git identity reader once took.
- * - **`honoredBy`** — whose *runtime* actually reads the key, with the reading
- *   file as evidence. Replaces `CLI_CORE_SETTING_PATHS`,
- *   `EXTENSION_ONLY_CORE_SETTING_PATHS`, and the reader-file registry that
- *   used to live in the guardrail suite as a third copy of the same knowledge.
- * - **`writtenBy`** — exceptional host write evidence when a host must recognize
- *   a config key that its runtime does not honor. This is not an exhaustive
- *   writer catalog.
+ * - **`slot`** — where the value is stored (`config` / `workspaceState` /
+ *   `repoState` / `globalState`); the same on every host.
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
  *   CLI `/config`, the Models tab's per-provider controls). Replaces the
  *   display half of the old `hosts` field, `settingsViewSnapshot`, and the
@@ -103,7 +95,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  *
  * Everything downstream is a filter over these rows: the CLI unknown-key set,
  * the `/config` panel, the settings-view write gate, the Models tab rows, and
- * `settingSlot(entry, host)`.
+ * `entry.slot`.
  */
 
 /**
@@ -122,9 +114,6 @@ export type SettingHost = (typeof SETTING_HOSTS)[number];
 export type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
 
-/** Storage slot per host. Absent means the host does not store the key. */
-type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
-
 export type SettingsViewSnapshot =
   | 'approval'
   | 'git-author'
@@ -135,30 +124,6 @@ export type SettingsViewSnapshot =
   | 'profile'
   | 'skills'
   | 'telemetry';
-
-/** Evidence that one host's runtime honors a setting. */
-interface SettingHonor {
-  /**
-   * Repo-relative source file that reads the setting in this host's runtime.
-   * Checked for existence by the guardrail suite, so a row can never claim a
-   * host honors a key by naming a file that does not exist.
-   */
-  readonly reader: string;
-}
-
-/** Which hosts' runtimes honor the setting, and how that is known. */
-type SettingHonoredBy = {
-  readonly [H in SettingHost]?: SettingHonor;
-};
-
-/** Evidence for an exceptional host write to a setting it does not honor. */
-interface SettingWriter {
-  readonly writer: string;
-}
-
-type SettingWrittenBy = {
-  readonly [H in SettingHost]?: SettingWriter;
-};
 
 /** One provider's control group in the Models tab. */
 interface ModelsTabSurface {
@@ -216,17 +181,10 @@ export interface StateSettingEntry {
   readonly description?: string;
   /** Grouping label for settings UIs. Required once a UI renders the row. */
   readonly category?: string;
-  /** Where each host stores the value. */
-  readonly slots: SettingSlots;
+  /** Where the value is stored, the same on every host. */
+  readonly slot: SettingStore;
   /** Persistence target for config-backed settings; workspace when omitted. */
   readonly configTarget?: 'global' | 'workspace';
-  /** Which hosts' runtimes read the value, with the reading file as evidence. */
-  readonly honoredBy: SettingHonoredBy;
-  /**
-   * Exceptional host writes that require config-key recognition even though
-   * that host's runtime does not honor the value. Not an exhaustive writer list.
-   */
-  readonly writtenBy?: SettingWrittenBy;
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -264,19 +222,6 @@ export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
 // Row builders
 // ============================================================================
 
-/** Every host stores the setting in the same slot. */
-function sameSlot(store: SettingStore): SettingSlots {
-  return { vscode: store, cli: store, desktop: store, sdk: store };
-}
-
-/**
- * Every host's runtime reads the setting through one host-neutral module in
- * `src/`, so all three honor it.
- */
-function everyHost(reader: string): SettingHonoredBy {
-  return { vscode: { reader }, desktop: { reader }, cli: { reader } };
-}
-
 type SurfacedSettingInput = Omit<
   StateSettingEntry,
   'surfaces' | 'description' | 'category'
@@ -297,7 +242,7 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
 /**
  * A Models-tab provider toggle: a globally-scoped boolean that renders both as
  * a profile row and as one per-provider control on the Models tab. These rows
- * differ only in their default, copy, honoring reader, and Models-tab control,
+ * differ only in their default, copy, and Models-tab control,
  * so the uniform framing is written once here: the `category: 'model'` /
  * `settingsView: 'profile'` / Models-tab surface `globalProviderToggle` gives
  * the GlobalState toggles, plus the `configTarget: 'global'` these config-tree
@@ -309,16 +254,14 @@ function modelProviderToggle(opts: {
   readonly default: boolean;
   readonly title: string;
   readonly description: string;
-  readonly honoredBy: SettingHonoredBy;
   readonly model: ModelsTabSurface;
-}): Omit<StateSettingEntry, 'key' | 'slots'> {
+}): Omit<StateSettingEntry, 'key' | 'slot'> {
   return {
     schema: z.boolean().prefault(opts.default),
     configTarget: 'global',
     title: opts.title,
     description: opts.description,
     category: 'model',
-    honoredBy: opts.honoredBy,
     surfaces: { settingsView: 'profile', models: [opts.model] },
   };
 }
@@ -332,7 +275,6 @@ function modelProviderToggle(opts: {
 function globalProviderToggle(opts: {
   readonly key: string;
   readonly default: boolean;
-  readonly honoredBy: SettingHonoredBy;
   readonly onWrite?: SettingWriteEffects;
   readonly model: ModelsTabSurface;
 }): SurfacedSettingEntry {
@@ -342,8 +284,7 @@ function globalProviderToggle(opts: {
     title: opts.model.label,
     description: opts.model.description,
     category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: opts.honoredBy,
+    slot: 'globalState',
     ...(opts.onWrite && { onWrite: opts.onWrite }),
     surfaces: {
       settingsView: 'profile',
@@ -356,8 +297,6 @@ function globalProviderToggle(opts: {
 // ============================================================================
 // Core (config-tree) rows
 // ============================================================================
-
-const REPLACEMENT_ENGINE_READER = 'src/replacement/engine.ts';
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
@@ -372,14 +311,10 @@ const DEFAULT_TIKZ_TEMPLATE =
   '{{ tikzpicture }}\n' +
   '\\end{document}';
 
-/**
- * The terminal client's own `.texra/config.json` rows: which agent and model a
- * command starts with, and how it prints. Every host stores them in the same
- * config tree, but only the CLI runtime reads them, so only `honoredBy.cli` is
- * declared — the extension and desktop resolve an agent and a model from their
- * own surfaces.
- */
-const CLI_CONFIG_READER = 'packages/cli/src/runtime/cliConfig.ts';
+// The terminal client's own `.texra/config.json` rows (`agent`, `model`,
+// `chat`, `run`, `outputFormat`): which agent and model a command starts with,
+// and how it prints. Only the CLI runtime reads them; the extension and desktop
+// resolve an agent and a model from their own surfaces.
 
 /** An agent key or name, as typed into `.texra/config.json`. */
 const CliAgentSchema = z.string().trim().min(1).optional();
@@ -393,11 +328,19 @@ const CliCommandDefaultsSchema = z
   .optional();
 
 /**
+ * The ChatGPT and Grok subscription routes apply only with OpenRouter off, so
+ * preferring one clears the OpenRouter switch on every write path.
+ */
+const SUBSCRIPTION_PREFERENCE_WRITE: SettingWriteEffects = {
+  disablesWhenEnabled: [GlobalStateKey.USE_OPENROUTER],
+};
+
+/**
  * Every config-file-backed setting, keyed by its dotted path under `texra.`.
  *
  * All three hosts read `.texra/config.json` and that storage is flat, so the
  * key and the slot are derived rather than restated; a row carries the schema
- * (with its `.prefault()` default), the copy, who honors it, and which UI
+ * (with its `.prefault()` default), the copy, and which UI
  * renders it — exactly the shape every state-backed row below already uses.
  *
  * The record's own declaration order is the catalog order, including the
@@ -405,55 +348,48 @@ const CliCommandDefaultsSchema = z
  */
 const CORE_SETTING_ROWS: Record<
   string,
-  Omit<StateSettingEntry, 'key' | 'slots'>
+  Omit<StateSettingEntry, 'key' | 'slot'>
 > = {
   agent: {
     schema: CliAgentSchema,
     title: 'Default agent',
     description:
       'Agent `texra chat` and `texra run` start with when neither `--agent` nor a per-command default names one.',
-    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
   },
   model: {
     schema: CliModelSchema,
     title: 'Default model',
     description:
       'Model every `texra` command starts with when neither `--model`, `TEXRA_MODEL`, nor a per-command default names one. A model this machine cannot run falls back to an available one with a notice.',
-    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
   },
   chat: {
     schema: CliCommandDefaultsSchema,
     title: 'Chat defaults',
     description:
       'Agent and model `texra chat` starts with, overriding the top-level defaults.',
-    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
   },
   run: {
     schema: CliCommandDefaultsSchema,
     title: 'Run defaults',
     description:
       'Agent and model `texra run` starts with, overriding the top-level defaults.',
-    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
   },
   outputFormat: {
     schema: CliOutputFormatSchema,
     title: 'Output format',
     description:
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
-    honoredBy: { cli: { reader: CLI_CONFIG_READER } },
   },
   'agentOutputs.autoOpenFinal': {
     schema: z.boolean().prefault(true),
     description:
       "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
-    honoredBy: everyHost('src/agent/runtime/selectAutoOpenFinalOutput.ts'),
   },
   childRunConcurrencyBudget: {
     schema: ChildRunConcurrencyBudgetSchema,
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'multi-agent',
-    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   // The provider toggles below are `configTarget: 'global'`:
@@ -474,14 +410,12 @@ const CORE_SETTING_ROWS: Record<
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
   },
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     model: {
       provider: 'google',
       label: 'Server-side conversation state',
@@ -496,7 +430,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Google background responses',
     description:
       'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
   },
   'model.useBackgroundResponses': {
     schema: z.boolean().prefault(true),
@@ -505,7 +438,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
   },
   'model.openaiParallelToolCalls': {
     schema: z.boolean().prefault(true),
@@ -514,7 +446,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
   },
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `readSettingFrom`, so the row must not narrow itself to the
@@ -525,7 +456,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/runtime/run/compaction.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'model.retry.maxAttempts': {
@@ -533,21 +463,19 @@ const CORE_SETTING_ROWS: Record<
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
-    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
+    onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
     title: 'Subscription input token budget (K tokens)',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
     category: 'model',
-    honoredBy: everyHost('src/model/providerCapabilities.ts'),
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
@@ -557,53 +485,45 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
+    onWrite: SUBSCRIPTION_PREFERENCE_WRITE,
   },
   maxImageDimension: {
     schema: z.int().min(100).max(10000).prefault(2000),
     description:
       'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
-    honoredBy: everyHost('src/utils/media/img.ts'),
   },
   'bib.defaultPath': {
     schema: z.string().prefault(''),
     description:
       'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
-    honoredBy: everyHost('src/tools/latex/ExtractBibliographyTool.ts'),
   },
   'bib.zoteroPort': {
     schema: z.int().min(1).max(65535).prefault(23119),
     description:
       'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
-    honoredBy: everyHost('src/tools/zotero/bbtClient.ts'),
   },
   'latex.latexindentConfig': {
     schema: z.string().prefault(''),
     description: 'Path to latexindent configuration file',
-    honoredBy: everyHost('src/latex/formatter/latexindentpt.ts'),
   },
   'latex.texfmtConfig': {
     schema: z.string().prefault(''),
     description: 'Path to tex-fmt configuration file',
-    honoredBy: everyHost('src/latex/formatter/texfmt.ts'),
   },
   'latex.tikzInputDirectory': {
     schema: z.string().prefault(''),
     description:
       'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
-    honoredBy: everyHost('src/latex/texTools.ts'),
   },
   'latex.includeWorkspaceInTexinputs': {
     schema: z.boolean().prefault(true),
     description:
       'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
-    honoredBy: everyHost('src/latex/texTools.ts'),
   },
   'latex.tikzTemplate': {
     schema: z.string().prefault(DEFAULT_TIKZ_TEMPLATE),
     description:
       'Template used for generating standalone documents when extracting and compiling TikZ figures',
-    honoredBy: everyHost('src/latex/TikzPictureManager.ts'),
   },
   'latex.wrapCritiqueInAlign': {
     schema: z.boolean().prefault(true),
@@ -611,7 +531,6 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Wrap bare criticism and comment commands inside align environments with intertext.',
     category: 'latex',
-    honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
   },
   'latex.enabledReplacements': {
     schema: z
@@ -620,7 +539,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Literal replacement groups',
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
     category: 'latex',
-    honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
   },
   'latex.enabledReplacementsRegex': {
     schema: z
@@ -629,21 +547,18 @@ const CORE_SETTING_ROWS: Record<
     title: 'Pattern replacement groups',
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
     category: 'latex',
-    honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
   },
   'latex.customReplacementsRegex': {
     schema: z.record(z.string(), z.string()).prefault({}),
     title: 'Custom pattern replacements',
     description: 'Custom regular-expression replacements.',
     category: 'latex',
-    honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
   },
   'latex.customReplacements': {
     schema: z.record(z.string(), z.string()).prefault({}),
     title: 'Custom literal replacements',
     description: 'Custom direct text replacements.',
     category: 'latex',
-    honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
   },
   'latexdiff.tempFileLocation': {
     schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
@@ -653,38 +568,23 @@ const CORE_SETTING_ROWS: Record<
       'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
       'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
     ],
-    honoredBy: everyHost('src/tools/approval/latexPreview.ts'),
   },
   // The launcher's commit picker reads the count through the host snapshot on
-  // both GUI hosts. The setup assistant's host-neutral `update_config` writer
-  // is recorded separately so a CLI-written value is recognized without
-  // mislabeling the writer as a reader.
+  // both GUI hosts; the CLI only writes it, through the setup assistant's
+  // `update_config`.
   'git.numberOfCommitsToShow': {
     schema: z.int().min(1).max(1000).prefault(20),
     description:
       'Number of recent commits to show in the commit selection dropdown',
-    honoredBy: {
-      vscode: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
-      desktop: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
-    },
-    writtenBy: {
-      cli: { writer: 'src/tools/setup/ConfigTools.ts' },
-    },
   },
   'audio.soxPath': {
     schema: z.string().prefault(''),
     description: 'Path to the SoX executable. Overrides automatic detection.',
-    honoredBy: everyHost('src/tools/media/audio.ts'),
   },
   'logger.debugMode': {
     schema: z.boolean().prefault(false),
     description:
       "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
-    honoredBy: {
-      vscode: { reader: 'src/controllers/session/sessionInputs.ts' },
-      desktop: { reader: 'src/controllers/session/sessionInputs.ts' },
-      cli: { reader: 'src/controllers/session/sessionInputs.ts' },
-    },
   },
   'telemetry.enabled': {
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
@@ -693,14 +593,12 @@ const CORE_SETTING_ROWS: Record<
       'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
     category: 'account',
     configTarget: 'global',
-    honoredBy: everyHost('src/telemetry/UsageLogService.ts'),
     surfaces: { settingsView: 'telemetry' },
   },
   'debug.saveModelIO': {
     schema: z.boolean().prefault(false),
     description:
       'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
-    honoredBy: everyHost('src/agent/debug/debugMessageSaver.ts'),
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
@@ -708,7 +606,6 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
-    honoredBy: everyHost('src/agent/prompt/templateInputs.ts'),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
@@ -717,7 +614,6 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
-    honoredBy: everyHost('src/tools/approval/toolEditApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
@@ -725,7 +621,6 @@ const CORE_SETTING_ROWS: Record<
     title: 'Require approval for shell commands',
     description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
-    honoredBy: everyHost('src/tools/approval/bashApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
 };
@@ -736,7 +631,7 @@ const CORE_TREE_SETTINGS: readonly StateSettingEntry[] = Object.entries(
 ).map(([path, row]) => ({
   ...row,
   key: `texra.${path}`,
-  slots: sameSlot('config'),
+  slot: 'config',
 }));
 
 const CORE_TREE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> =
@@ -786,12 +681,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
-    slots: sameSlot('config'),
-    honoredBy: {
-      vscode: { reader: 'src/utils/config/platformSettings.ts' },
-      desktop: { reader: 'src/utils/config/platformSettings.ts' },
-      cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
-    },
+    slot: 'config',
     enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -800,28 +690,6 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
 // ============================================================================
 // State-backed rows
 // ============================================================================
-
-const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
-const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
-const CODEX_TOOL_READER = 'src/tools/codex.ts';
-const CLAUDE_AGENT_TOOL_READER = 'src/tools/claudeAgent.ts';
-const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
-const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
-const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
-
-/**
- * Repository-level settings (git identity, worktrees, coding-agent controls,
- * roster): one value per repository on every host and in every worktree.
- */
-const REPO_STATE_SLOTS = sameSlot('repoState');
-
-const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
-
-const CODEX_AGENT_HONORED_BY = everyHost(CODEX_TOOL_READER);
-
-const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_TOOL_READER);
-
-const WORKFLOW_COMPILE_HONORED_BY = everyHost(WORKFLOW_COMPILE_READER);
 
 // Written by the extension/desktop Models tab and the CLI's `/config` panel
 // through the same catalog write path.
@@ -833,8 +701,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
       title: `${displayName} endpoint`,
       description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
       category: 'model',
-      slots: sameSlot('globalState'),
-      honoredBy: everyHost(ROUTE_ENDPOINT_READER),
+      slot: 'globalState',
       surfaces: { settingsView: 'profile', cliConfig: true },
     }),
 );
@@ -851,7 +718,6 @@ const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
           globalProviderToggle({
             key: region.key,
             default: region.default,
-            honoredBy: everyHost(ROUTE_ENDPOINT_READER),
             model: { provider, ...region.control },
           }),
         ],
@@ -866,8 +732,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
     category: 'git',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: GIT_AUTHOR_HONORED_BY,
+    slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
   surfacedSetting({
@@ -879,8 +744,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: GIT_AUTHOR_HONORED_BY,
+    slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
   surfacedSetting({
@@ -890,8 +754,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: GIT_AUTHOR_HONORED_BY,
+    slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
   surfacedSetting({
@@ -901,8 +764,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: everyHost(GIT_WORKTREE_READER),
+    slot: 'repoState',
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 
@@ -912,20 +774,17 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
-    slots: REPO_STATE_SLOTS,
-    honoredBy: everyHost('src/agent/roster/AgentRosterController.ts'),
+    slot: 'repoState',
   },
   {
     key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     schema: z.array(AgentModePresetSchema).prefault([]),
-    slots: REPO_STATE_SLOTS,
-    honoredBy: everyHost('src/agent/index/agentRegistry.ts'),
+    slot: 'repoState',
   },
   {
     key: WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
     schema: HiddenCustomAgentKeysSchema.prefault([]),
-    slots: REPO_STATE_SLOTS,
-    honoredBy: everyHost('src/agent/roster/rosterWorkspaceState.ts'),
+    slot: 'repoState',
   },
 
   // --- Multi-agent coordination --------------------------------------------
@@ -943,8 +802,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/executions/killPolicy.ts'),
+    slot: 'globalState',
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({
@@ -954,8 +812,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Let active subagents continue when the orchestrator is stopped.',
     category: 'multi-agent',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/detachSubagentsOnStop.ts'),
+    slot: 'globalState',
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
 
@@ -969,8 +826,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Enable memory for chat agents',
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/agentToolResolution.ts'),
+    slot: 'globalState',
     surfaces: { settingsView: 'memory' },
   }),
 
@@ -981,8 +837,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex sandbox mode',
     description: 'Filesystem access mode used when TeXRA launches Codex.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CODEX_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -992,8 +847,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex reasoning effort',
     description: 'Reasoning effort hint passed to Codex runs.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CODEX_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1003,8 +857,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex approval policy',
     description: 'When Codex should ask for approval before risky actions.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CODEX_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: [
       'Auto approve',
       'Ask when requested',
@@ -1019,8 +872,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CLAUDE_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1032,8 +884,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code permission mode',
     description: 'Permission policy used by Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CLAUDE_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: [
       'Prompt for risky actions',
       'Auto-accept edits',
@@ -1048,8 +899,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code reasoning effort',
     description: 'Reasoning effort hint passed to Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: REPO_STATE_SLOTS,
-    honoredBy: CLAUDE_AGENT_HONORED_BY,
+    slot: 'repoState',
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1062,8 +912,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
-    slots: sameSlot('workspaceState'),
-    honoredBy: WORKFLOW_COMPILE_HONORED_BY,
+    slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
   surfacedSetting({
@@ -1076,8 +925,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
-    slots: sameSlot('workspaceState'),
-    honoredBy: WORKFLOW_COMPILE_HONORED_BY,
+    slot: 'workspaceState',
     surfaces: { cliConfig: true },
   }),
   surfacedSetting({
@@ -1087,13 +935,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
-    slots: sameSlot('workspaceState'),
+    slot: 'workspaceState',
     // Read by the documents plugin, but the emitted `requestOpenFile` has no
-    // CLI handler (headless), so the CLI does not honor it.
-    honoredBy: {
-      vscode: { reader: 'src/agent/output/documentRounds.ts' },
-      desktop: { reader: 'src/agent/output/documentRounds.ts' },
-    },
+    // CLI handler (headless), so the CLI ignores it.
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({
@@ -1105,8 +949,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/output/documentRounds.ts'),
+    slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
@@ -1121,8 +964,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Also diff each agent round against the previous one, not only against your original input.',
     category: 'latexdiff',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/output/LatexDiffManager.ts'),
+    slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({
@@ -1136,8 +978,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
     category: 'latexdiff',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/latex/latexdiff.ts'),
+    slot: 'workspaceState',
     surfaces: { cliConfig: true },
   }),
   surfacedSetting({
@@ -1148,8 +989,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Math markup in diffs',
     description: 'How latexdiff marks up changes inside math environments.',
     category: 'latexdiff',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/latex/latexdiff/diffCommandExecutor.ts'),
+    slot: 'workspaceState',
     enumDescriptions: [
       'suppress markup',
       'equation-level',
@@ -1165,8 +1005,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
     category: 'latexdiff',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/latex/latexdiff/diffCommandExecutor.ts'),
+    slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
   }),
 
@@ -1179,8 +1018,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'LaTeX formatter',
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/latex/formatter/texFormatter.ts'),
+    slot: 'workspaceState',
     enumLabels: ['latexindent', 'tex-fmt', 'None'],
     enumDescriptions: [
       'needs Perl',
@@ -1191,9 +1029,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- Inline criticism -------------------------------------------------------
-  // Editor squiggles and Problems-panel entries exist only in VS Code. Every
-  // host carries the slot so the shared LaTeX snapshot reads on each of them;
-  // the desktop LaTeX page hides the row.
+  // Editor squiggles and Problems-panel entries exist only in VS Code. The
+  // shared LaTeX snapshot reads the row on every host; the desktop LaTeX page
+  // hides it.
   surfacedSetting({
     key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
     schema: z.boolean().prefault(false),
@@ -1201,12 +1039,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
     category: 'latex',
-    slots: sameSlot('globalState'),
-    honoredBy: {
-      vscode: {
-        reader: 'packages/extension/src/frontend/latex/inlineCriticism.ts',
-      },
-    },
+    slot: 'globalState',
     surfaces: { settingsView: 'latex' },
   }),
 
@@ -1218,8 +1051,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
     category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
+    slot: 'globalState',
     surfaces: {
       settingsView: 'profile',
       cliConfig: true,
@@ -1245,8 +1077,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Model used for auxiliary tasks: instruction polishing, merges, and session descriptions.',
     category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/helperModelName.ts'),
+    slot: 'globalState',
     surfaces: { settingsView: 'models' },
   }),
   surfacedSetting({
@@ -1255,8 +1086,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Prefer short model names',
     description: 'Show compact model names in pickers.',
     category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/modelRoutes.ts'),
+    slot: 'globalState',
     surfaces: { settingsView: 'models' },
   }),
 
@@ -1264,7 +1094,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   globalProviderToggle({
     key: GlobalStateKey.USE_OPENROUTER,
     default: false,
-    honoredBy: everyHost(PROVIDER_CONFIG_READER),
     onWrite: { invalidatesModelOptions: true },
     model: {
       provider: 'openRouter',
@@ -1278,7 +1107,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   globalProviderToggle({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     default: false,
-    honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
     // models, so enabling one clears the other on every write path.
     onWrite: {
@@ -1296,7 +1124,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   globalProviderToggle({
     key: GlobalStateKey.GLM_CODING_PLAN,
     default: false,
-    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
     onWrite: { invalidatesModelOptions: true },
     model: {
       provider: 'glm',
@@ -1319,8 +1146,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/plugins.ts'),
+    slot: 'globalState',
     openForm: 'tools',
     surfaces: { cliConfig: true },
   }),
@@ -1330,8 +1156,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skills',
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
-    slots: sameSlot('config'),
-    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
+    slot: 'config',
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
@@ -1341,8 +1166,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skill sources',
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
-    slots: sameSlot('config'),
-    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
+    slot: 'config',
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
@@ -1353,8 +1177,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
     category: 'tools',
-    slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/tools/pathResolution.ts'),
+    slot: 'workspaceState',
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];
@@ -1425,8 +1248,7 @@ export function settingsViewSnapshotEntries(
 
 /**
  * The `/config` roster: every row the CLI panel renders, across both catalog
- * tiers. `surfaces.cliConfig` is the single predicate, so a row can be honored
- * by the CLI runtime without being editable there.
+ * tiers. `surfaces.cliConfig` is the single predicate.
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
@@ -1442,14 +1264,11 @@ export function cliConfigSettingByKey(
 }
 
 /**
- * Canonical `texra.*` keys the CLI reads or writes in `.texra/config.json` —
- * the unknown-key whitelist's catalog half. A config-backed row belongs when
- * the CLI runtime honors it or the catalog records an exceptional CLI writer.
+ * Canonical `texra.*` keys of the config-backed rows — the CLI's unknown-key
+ * whitelist's catalog half.
  */
 export const CLI_CONFIG_SLOT_KEYS: readonly string[] = ALL_SETTINGS.filter(
-  (entry) =>
-    entry.slots.cli === 'config' &&
-    (entry.honoredBy.cli !== undefined || entry.writtenBy?.cli !== undefined),
+  (entry) => entry.slot === 'config',
 ).map((entry) => entry.key);
 
 /** Models tab controls for one provider, in catalog order. */
