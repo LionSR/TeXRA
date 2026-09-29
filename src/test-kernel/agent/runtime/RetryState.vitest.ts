@@ -339,6 +339,8 @@ const freshState = (): RunState => ({
   offeredSkills: [],
   offeredSystem: null,
   contents: {},
+  hookOutcomes: {},
+  offeredHooks: [],
 });
 
 interface InvokerKit {
