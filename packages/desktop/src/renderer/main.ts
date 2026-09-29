@@ -50,14 +50,12 @@ import {
 } from '../shared/desktopCommandSurface';
 import { DESKTOP_ONBOARDING_COMMANDS } from '../shared/desktopOnboardingMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
-import { createDesktopShortcutBootstrap } from './desktopShortcutBootstrap';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
   DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
-import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import './desktopShell.css';
 import {
   shellSidebarTemplate,
@@ -80,7 +78,6 @@ import {
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { resolveSessionWire } from '../shared/hostBridgeChannels';
-import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createDesktopSettingsDialog } from './settingsDialog';
@@ -646,7 +643,7 @@ function shellTemplate(): TemplateResult {
           },
           {
             onNewTask: returnToLauncher,
-            onOpenCommands: openCommandPalette,
+            onOpenCommands: () => palette.open(),
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onSelectProject: selectProject,
@@ -687,7 +684,7 @@ function observeSurfaceResizes(): void {
 }
 
 function rerenderShell(): void {
-  if (bootstrapFailed || applyingProjectList) return;
+  if (applyingProjectList) return;
   projectRail.revealSidebarForOffScreenRequest();
   const active = activeRailProject(railProjects());
   const session = active ? projectSessions.get(active.display.key) : undefined;
@@ -707,39 +704,6 @@ function rerenderShell(): void {
   if (projectWorkbenches.has(shell.active)) observeSurfaceResizes();
 }
 
-function renderBootstrapFallback(error: unknown): void {
-  const message =
-    extractErrorMessage(error) ?? 'TeXRA could not finish starting up.';
-  const reload = () => window.location.reload();
-  render(
-    html`
-      <section class="desktop-bootstrap-fallback" role="alert">
-        <div class="desktop-bootstrap-fallback-panel">
-          <h1>TeXRA could not start</h1>
-          <p>${message}</p>
-          <p>
-            If you just denied a keychain prompt, your saved API keys and
-            sign-in session are unavailable. You can continue without them, or
-            reload after granting access.
-          </p>
-          <div class="desktop-bootstrap-fallback-actions">
-            <wa-button appearance="filled" variant="brand" @click=${reload}>
-              Reload
-            </wa-button>
-            <wa-button
-              appearance="outlined"
-              @click=${recoverFromBootstrapFallback}
-            >
-              Continue without saved secrets
-            </wa-button>
-          </div>
-        </div>
-      </section>
-    `,
-    appRoot,
-  );
-}
-
 function reportRuntimeFailure(error: unknown): void {
   const shouldReload = window.confirm(
     `TeXRA encountered an unexpected error.\n\n${extractErrorMessage(error) ?? 'TeXRA could not finish starting up.'}\n\nReload TeXRA now?`,
@@ -747,47 +711,24 @@ function reportRuntimeFailure(error: unknown): void {
   if (shouldReload) window.location.reload();
 }
 
-function recoverFromBootstrapFallback(): void {
-  try {
-    bootstrapFailed = false;
-    bootstrapComplete = false;
-    logsController.rerenderViewer();
-    rerenderShell();
-    // Recovery redoes the whole normal bootstrap tail; without it the
-    // recovered shell renders but stays inert (rail clicks ignored).
-    completeBootstrap();
-  } catch (recoveryError) {
-    console.error('TeXRA desktop renderer recovery failed', recoveryError);
-    bootstrapFailed = true;
-    renderBootstrapFallback(recoveryError);
-  }
-}
-
 // =============================================================================
 // Bootstrap
 // =============================================================================
 
-let bootstrapFailed = false;
-let bootstrapComplete = false;
+// A module-load throw or a rejected promise is reported once, loudly, with the
+// choice to reload; nothing renders a second copy of the shell.
 window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
   console.error('TeXRA desktop renderer unhandled rejection', event.reason);
-  if (bootstrapComplete) {
-    reportRuntimeFailure(event.reason);
-    return;
-  }
-  bootstrapFailed = true;
-  renderBootstrapFallback(event.reason);
+  reportRuntimeFailure(event.reason);
+});
+window.addEventListener('error', (event) => {
+  // A ResizeObserver loop notice is an ErrorEvent with no error behind it.
+  if (event.error) reportRuntimeFailure(event.error);
 });
 
-try {
-  logsController.rerenderViewer();
-  rerenderShell();
-} catch (error) {
-  bootstrapFailed = true;
-  console.error('TeXRA desktop renderer bootstrap failed', error);
-  renderBootstrapFallback(error);
-}
+logsController.rerenderViewer();
+rerenderShell();
 
 // =============================================================================
 // Onboarding + command palette
@@ -815,32 +756,24 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
 };
-const shortcutBootstrap = createDesktopShortcutBootstrap({
-  createRegistry: (openCommands) =>
-    createDesktopShortcutRegistry({
-      document,
-      actions: desktopRendererCommandActions,
-      openCommands,
-    }),
-  createPalette: (registry) =>
-    createDesktopCommandPalette({
-      document,
-      actions: desktopRendererCommandActions,
-      getShortcuts: () => registry.entries(),
-    }),
-  appendPalette: (element) => document.body.append(element),
-  onShortcutsChanged: (entries) => {
-    shortcutAcceleratorsById.clear();
-    for (const entry of entries) {
-      shortcutAcceleratorsById.set(entry.id, entry.accelerator);
-    }
-    rerenderShell();
-  },
+const shortcuts = createDesktopShortcutRegistry({
+  document,
+  actions: desktopRendererCommandActions,
+  openCommands: () => palette.open(),
 });
-
-function openCommandPalette(): void {
-  shortcutBootstrap.open();
-}
+const palette = createDesktopCommandPalette({
+  document,
+  actions: desktopRendererCommandActions,
+  getShortcuts: () => shortcuts.entries(),
+});
+document.body.append(palette.element);
+shortcuts.subscribe((entries) => {
+  shortcutAcceleratorsById.clear();
+  for (const entry of entries) {
+    shortcutAcceleratorsById.set(entry.id, entry.accelerator);
+  }
+  rerenderShell();
+});
 
 // Clear the active run so the conversation shell shows its empty state.
 function returnToLauncher(): void {
@@ -853,82 +786,82 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
 };
 
 const routeMessage = createMessageRoutes({
-  saveAllFiles: () => {
+  'desktop:saveFile': () => {
     void projectWorkbenches.get(shell.active)?.editorPane.save();
   },
   // `refresh()` re-lists from the root and drops the expansion state, which is
   // the same reset the Files rail already performs each time it is opened —
   // so this stays consistent with how the pane behaves everywhere else rather
   // than introducing a second, subtler kind of refresh.
-  reloadWorkspaceFiles: (session) => {
-    void projectWorkbenches.get(session)?.editorPane.refresh();
+  'desktop:workspace:filesChanged': (message) => {
+    void projectWorkbenches.get(message.session)?.editorPane.refresh();
   },
-  isBootstrapFailed: () => bootstrapFailed,
-  openKind: (kind) =>
-    projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
-  openSettings: () => settingsDialog.open(),
-  toggleLayoutPanel: (panel) => {
-    if (projectWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
+  'desktop:openWorkbench': (message) =>
+    projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
+  'desktop:openSettings': () => settingsDialog.open(),
+  'desktop:toggleLayout': (message) => {
+    if (projectWorkbenches.has(shell.active)) {
+      LAYOUT_PANEL_TOGGLES[message.panel]();
+    }
   },
-  onboarding: {
-    show: () => startupTeamPanel.show(),
-    hide: () => startupTeamPanel.hide(),
+  'desktop:setOnboarding': (message) => {
+    if (message.shouldShow) startupTeamPanel.show();
+    else startupTeamPanel.hide();
   },
-  logs: { applySnapshot: (message) => logsController.applySnapshot(message) },
-  review: {
-    open: (message) => {
-      const project = projectWorkbenches.get(message.session);
-      project?.reviewPane.open(message);
-      project?.workbench.openKind('review');
-    },
-    close: (session, previewId) =>
-      projectWorkbenches.get(session)?.reviewPane.close(previewId) ?? false,
+  'desktop:setLog': (message) => logsController.applySnapshot(message),
+  'desktop:showDiff': (message) => {
+    const project = projectWorkbenches.get(message.session);
+    project?.reviewPane.open(message);
+    project?.workbench.openKind('review');
   },
-  disposeReviewTab: (session) =>
+  'desktop:closeDiff': (message) => {
+    // A close takes its own diff off the pane and nothing else; the Review
+    // tab goes only once that leaves the pane empty, so a request settling
+    // never dismisses another request's preview or an unrelated review.
+    const project = projectWorkbenches.get(message.session);
+    if (project?.reviewPane.close(message.previewId)) {
+      project.workbench.disposeWorkbenchTab('workbench:review');
+    }
+  },
+  'desktop:showPdf': (message) => {
+    const project = projectWorkbenches.get(message.session);
+    if (!project) return;
+    project.updateState(
+      openWorkbenchTab(project.getState(), {
+        kind: 'pdf',
+        target: message.pdfUrl,
+        title: message.title,
+      }),
+    );
+  },
+  'desktop:showPrompt': (message) => promptOverlay.open(message),
+  'desktop:terminal:data': (message) =>
     projectWorkbenches
-      .get(session)
-      ?.workbench.disposeWorkbenchTab('workbench:review'),
-  pdf: {
-    open: (message) => {
-      // The schema parsed the shape; the path is still checked once here,
-      // before it becomes an iframe `src`, so a main-process post cannot
-      // turn the tab into a generic browsing surface.
-      if (!isSafeAbsolutePdfPath(message.pdfPath)) {
-        console.error('[desktop] rejected unsafe PDF path', message.pdfPath);
-        return;
-      }
-      const project = projectWorkbenches.get(message.session);
-      if (!project) return;
+      .get(message.session)
+      ?.terminalPane.write(message.sessionId, message.data),
+  'desktop:terminal:exit': (message) =>
+    projectWorkbenches
+      .get(message.session)
+      ?.terminalPane.reportExit(message.sessionId, message.exitCode),
+  'desktop:terminal:error': (message) =>
+    projectWorkbenches
+      .get(message.session)
+      ?.terminalPane.reportError(message.sessionId, message.message),
+  'desktop:terminal:openCommand': (message) =>
+    projectWorkbenches
+      .get(message.session)
+      ?.workbench.openTerminalCommand(message.initialCommand),
+  // Renames the document so a browser tab reads as its page rather than a
+  // generic "Browser".
+  'desktop:browser:state': (message) => {
+    const project = projectWorkbenches.get(message.session);
+    if (project) {
       project.updateState(
-        openWorkbenchTab(project.getState(), {
-          kind: 'pdf',
-          target: message.pdfPath,
-          title: message.title,
-        }),
+        renameWorkbenchTab(project.getState(), message.tabId, message.title),
       );
-    },
+    }
   },
-  prompt: { open: (message) => promptOverlay.open(message) },
-  terminal: {
-    write: (session, sessionId, data) =>
-      projectWorkbenches.get(session)?.terminalPane.write(sessionId, data),
-    reportExit: (session, sessionId, exitCode) =>
-      projectWorkbenches
-        .get(session)
-        ?.terminalPane.reportExit(sessionId, exitCode),
-    reportError: (session, sessionId, message) =>
-      projectWorkbenches
-        .get(session)
-        ?.terminalPane.reportError(sessionId, message),
-  },
-  openTerminalCommand: (session, command) =>
-    projectWorkbenches.get(session)?.workbench.openTerminalCommand(command),
-  renameBrowserTab: (session, tabId, title) => {
-    const project = projectWorkbenches.get(session);
-    if (project)
-      project.updateState(renameWorkbenchTab(project.getState(), tabId, title));
-  },
-  projects: (message) => {
+  'desktop:projects': (message) => {
     const previousKey = shell.active;
     // The list changes resource ownership and selection together. Keep signal
     // notifications from painting an intermediate owner during this adoption.
@@ -1011,13 +944,6 @@ window.addEventListener('resize', () => {
 // (the shell and its dock) carries the shown project's key, and each project's
 // workbench and rail tree its own.
 
-// The guard below protects the wiring against double-registration: a
-// bootstrap recovery attempt that itself fails re-renders the same fallback
-// UI, whose button re-invokes recoverFromBootstrapFallback() against this
-// same module-level document, which is never torn down for the life of the
-// renderer.
-let shellEventsWired = false;
-
 function sessionOf(event: Event): string | undefined {
   for (const node of event.composedPath()) {
     if (node instanceof HTMLElement && node.dataset.session) {
@@ -1027,71 +953,52 @@ function sessionOf(event: Event): string | undefined {
   return undefined;
 }
 
-function wireShellEvents(): void {
-  if (shellEventsWired) return;
-  shellEventsWired = true;
-  appRoot.addEventListener('runtime-request', (event) => {
-    const key = sessionOf(event);
-    if (key) projectSessions.runtimeRequest(key, event.detail);
-  });
-  appRoot.addEventListener('host-request', (event) => {
-    const key = sessionOf(event);
-    if (key) projectSessions.hostRequest(key, event.detail);
-  });
-  appRoot.addEventListener('surface-action', (event) => {
-    const key = sessionOf(event);
-    if (!key) return;
-    projectSessions.act(key, event.detail);
-    // The rail is bound to one active run across every section: picking
-    // a run in another project's tree picks that project too (PRD 12.2).
-    if (event.detail.kind === 'select' && key !== shell.active) {
-      selectProject(key);
-    }
-  });
-  appRoot.addEventListener('composer-submit', (event) => {
-    const key = sessionOf(event);
-    if (key) projectSessions.submit(key);
-  });
-}
+appRoot.addEventListener('runtime-request', (event) => {
+  const key = sessionOf(event);
+  if (key) projectSessions.runtimeRequest(key, event.detail);
+});
+appRoot.addEventListener('host-request', (event) => {
+  const key = sessionOf(event);
+  if (key) projectSessions.hostRequest(key, event.detail);
+});
+appRoot.addEventListener('surface-action', (event) => {
+  const key = sessionOf(event);
+  if (!key) return;
+  projectSessions.act(key, event.detail);
+  // The rail is bound to one active run across every section: picking
+  // a run in another project's tree picks that project too (PRD 12.2).
+  if (event.detail.kind === 'select' && key !== shell.active) {
+    selectProject(key);
+  }
+});
+appRoot.addEventListener('composer-submit', (event) => {
+  const key = sessionOf(event);
+  if (key) projectSessions.submit(key);
+});
 
-/**
- * Everything "finish starting up" means, in one place: the module-scope path
- * below and `recoverFromBootstrapFallback` both run it, so the two can no
- * longer drift (recovery used to skip the workspace file refresh and never
- * installed shortcuts at all). Every step is idempotent.
- */
-function completeBootstrap(): void {
-  wireShellEvents();
-  // Runs here rather than at module scope so a shell recovering from a
-  // bootstrap failure re-installs shortcuts too; every step is idempotent.
-  shortcutBootstrap.ensure();
-  postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
-  // The projects list arrives in reply; each project's session subscribes as it
-  // opens, and the file tree refreshes when the list names the project this
-  // window shows.
-  postMessage(DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS);
-  document.body.dataset.desktopReady = 'true';
-  bootstrapComplete = true;
-}
-
-if (!bootstrapFailed) {
-  completeBootstrap();
-}
+postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+// The projects list arrives in reply; each project's session subscribes as it
+// opens, and the file tree refreshes when the list names the project this
+// window shows.
+postMessage(DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS);
+document.body.dataset.desktopReady = 'true';
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
 // keeps no copy and learns of it only when this veto raises will-prevent-unload.
-installDesktopUnsavedCloseWiring(window, {
-  hasUnsavedChanges: () =>
-    [...projectWorkbenches.values()].some((project) =>
-      project.editorPane.hasUnsavedChanges(),
-    ),
+window.addEventListener('beforeunload', (event) => {
+  const dirty = [...projectWorkbenches.values()].some((project) =>
+    project.editorPane.hasUnsavedChanges(),
+  );
+  if (!dirty) return;
+  event.preventDefault();
+  event.returnValue = '';
 });
 
 window.addEventListener(
   'unload',
   () => {
     surfaceResizeObserver?.disconnect();
-    shortcutBootstrap.dispose();
+    shortcuts.dispose();
     for (const project of projectWorkbenches.values()) project.dispose();
     projectWorkbenches.clear();
     projectSessions.dispose();

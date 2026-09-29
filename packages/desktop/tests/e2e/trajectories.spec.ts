@@ -295,7 +295,7 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
 /** The host opens compiled PDFs in the originating paper's workbench. */
 test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
-  const pdfPath = '/tmp/texra-trajectory/output.pdf';
+  const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
   const session = await page
     .locator('.shell-launcher-surface')
     .getAttribute('data-session');
@@ -303,29 +303,29 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
 
   await page.evaluate(
-    ({ session, pdfPath }) => {
+    ({ session, pdfUrl }) => {
       window.postMessage(
         {
           command: 'desktop:showPdf',
           session,
           title: 'output.pdf',
-          pdfPath,
+          pdfUrl,
         },
         '*',
       );
     },
-    { session, pdfPath },
+    { session, pdfUrl },
   );
   await expect(pdfTab).toBeVisible();
   await expect(pdfTab).toHaveAttribute('data-active', 'true');
   await expect(pdfTab).toContainText('output.pdf');
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
+  await expect(frame).toHaveAttribute('src', pdfUrl);
   await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
   await expect(frame).toHaveAttribute('title', 'output.pdf');
 
-  const rejectedPath = page.waitForEvent('console', (message) =>
-    message.text().includes('[desktop] rejected unsafe PDF path'),
+  const rejectedUrl = page.waitForEvent('console', (message) =>
+    message.text().includes('Dropped a malformed desktop:showPdf push'),
   );
   await page.evaluate((session) => {
     window.postMessage(
@@ -333,14 +333,14 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
         command: 'desktop:showPdf',
         session,
         title: 'malicious',
-        pdfPath: 'http://evil.com/x.pdf',
+        pdfUrl: 'http://evil.com/x.pdf',
       },
       '*',
     );
   }, session);
-  await rejectedPath;
+  await rejectedUrl;
   await expect(pdfTab).toHaveCount(1);
-  await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
+  await expect(frame).toHaveAttribute('src', pdfUrl);
 
   // A PDF is a workbench tab, closed from its own tab like any other.
   await pdfTab.locator('.shell-workbench-tab-close').click();

@@ -21,7 +21,7 @@
     "packages/desktop/src/main/desktopHostRequests.ts": 620,
     "packages/desktop/src/renderer/desktopShell.ts": 553,
     "packages/desktop/src/renderer/editorPane.ts": 627,
-    "packages/desktop/src/renderer/main.ts": 1100,
+    "packages/desktop/src/renderer/main.ts": 1007,
     "packages/extension/src/extension.ts": 818,
     "packages/extension/src/frontend/auth/SupabaseAuthProvider.ts": 529,
     "packages/extension/src/frontend/lean/VscodeIntegration.ts": 550,

@@ -4,32 +4,6 @@
 
 import type { WorkbenchTab } from '../shared/desktopShellState';
 
-/**
- * Convert an absolute filesystem path (already shape-validated by
- * `isSafeAbsolutePdfPath` at the message boundary) into a `file:` URL safe
- * for an iframe `src`.
- *
- * - posix `/abs/path.pdf` becomes `file:///abs/path.pdf`
- * - Windows drive `C:\path\file.pdf` becomes `file:///C:/path/file.pdf`
- * - Windows UNC `\\server\share\file.pdf` becomes `file://server/share/file.pdf`
- */
-function pdfPathToFileUrl(absolutePath: string): string {
-  const normalised = absolutePath.replaceAll('\\', '/');
-  const encodePath = (path: string): string =>
-    path.split('/').map(encodeURIComponent).join('/');
-  if (normalised.startsWith('//')) {
-    return `file://${encodePath(normalised.slice(2))}`;
-  }
-  if (normalised.startsWith('/')) {
-    return `file:///${encodePath(normalised.slice(1))}`;
-  }
-  const driveMatch = normalised.match(/^([A-Za-z]):\/(.*)$/);
-  if (driveMatch) {
-    return `file:///${driveMatch[1]}:/${encodePath(driveMatch[2])}`;
-  }
-  return `file:///${encodeURIComponent(normalised)}`;
-}
-
 export function createPdfPane() {
   const frames = new Map<string, HTMLIFrameElement>();
 
@@ -47,7 +21,7 @@ export function createPdfPane() {
     // Same-origin so the viewer's controls work; no scripts, so a malformed
     // PDF cannot run JS into the renderer.
     frame.setAttribute('sandbox', 'allow-same-origin');
-    frame.src = pdfPathToFileUrl(tab.target ?? '');
+    frame.src = tab.target ?? '';
     frames.set(tab.id, frame);
     return frame;
   }
