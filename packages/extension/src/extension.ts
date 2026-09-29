@@ -802,8 +802,12 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         vscode.commands.executeCommand('texra.showMainView'),
       ).pipe(
         Effect.andThen(globalState.update(welcomeKey, true)),
+        // The activation scope's close interrupts this fiber; that is not a
+        // failed welcome.
         Effect.catchCause((cause) =>
-          Effect.logWarning('Welcome failed', cause),
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning('Welcome failed', cause),
         ),
         withLogChannel(EXTENSION_CHANNEL),
       ),

@@ -825,7 +825,7 @@ Most of the shrunk move had already landed or does not pay.
   consumes the nonce yet. Adding it now would also strand a disposed graph's
   leases as `alive` in a live process, where today the same id reclaims them.
 
-### Current state
+### State at plan time (superseded where the re-check above says so)
 
 Five composition roots install the process runtime (extension, desktop, CLI
 `cliProcessRuntime.ts`, the SDK, and the test harness that 79 suites import).

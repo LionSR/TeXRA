@@ -1732,8 +1732,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 }),
             }).pipe(
               // Its failure or a defect: forked, nothing else reports it.
+              // The scope's close interrupts it; that is not a failure.
               Effect.catchCause((cause) =>
-                Effect.sync(() => console.error(Cause.squash(cause))),
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Effect.sync(() => console.error(Cause.squash(cause))),
               ),
               Effect.forkIn(processScope),
             );
