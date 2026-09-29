@@ -557,8 +557,8 @@ following classification makes that distinction.
 - **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
   runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
   builds the agent-directories port
-  (`:218-229`). Its `lean: directLeanLanguageServices()` (`:298`) is
-  shipped-feature parity, not a raw-loop requirement; an embedder may pass
+  (`:218-229`). The direct Lean language-server layer
+  (`src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
   another layer. The `memory` and `plan` injections are manifest data
   (`src/tools/plugins.ts`).
 - **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace

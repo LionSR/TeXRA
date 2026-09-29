@@ -248,10 +248,10 @@ Workflow scripts and documents:
 
 Agent definitions and accounts:
 
-- **The CLI ignores the custom agents directory** _(confirmed)_: it passes
-  `customDirectoryStore: { get: () => Effect.succeed(undefined) }`
-  (`cliProcessRuntime.ts:224`) while the extension stores the setting in the
-  shared global state.
+- **The CLI ignored the custom agents directory** _(fixed by move 12)_: it
+  passed a `customDirectoryStore` that always answered `undefined` while the
+  extension stored the setting in the shared global state. `AgentDirectoryService`
+  now takes the state store and every host reads it through `readCustomAgentDir`.
 - **The built-in `creator` agent is broken off VS Code**: only the extension
   registers the agent and doc directories as external roots, so on desktop, the
   CLI and the SDK its path variables render as `''` (`frontend/setup.ts:33-90`,
