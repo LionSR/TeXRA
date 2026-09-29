@@ -443,6 +443,9 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     { role: 'assistant', origin, content: result.content },
   ];
   const coveredSteps = yield* lowerMessages(prefix, origin);
+  // A turn that left no step of its own covers nothing past the input:
+  // the next user input would lower into the covered user_input step.
+  if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
   return {
     origin,
     coveredMessages: prefix.length,

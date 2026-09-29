@@ -734,6 +734,36 @@ describe('canonical Google Interactions protocol', () => {
       }),
   );
 
+  it.effect('leaves no anchor for a stored turn that produced no step', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementation(async () =>
+        response([
+          {
+            event_type: 'interaction.created',
+            interaction: { id: 'int_1', status: 'in_progress' },
+          },
+          {
+            event_type: 'interaction.completed',
+            interaction: {
+              id: 'int_1',
+              status: 'completed',
+              usage: { total_input_tokens: 3 },
+            },
+          },
+        ]),
+      );
+      const configured = model();
+      const turn = yield* configured.prepareTurn(request());
+      assert(turn.mode === 'foreground');
+      const result = yield* completedTurn(configured.streamTurn(turn));
+      // Its anchor would cover the input, and the next user input would
+      // join the covered user_input step instead of following it.
+      assert(result.kind === 'http');
+      expect(result.providerResponseId).toBe('int_1');
+      expect(result.continuation).toBeUndefined();
+    }),
+  );
+
   it.effect(
     'joins a context update to the user turn beside it in one user_input step',
     () =>

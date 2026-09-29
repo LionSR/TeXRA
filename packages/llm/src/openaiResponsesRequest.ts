@@ -79,7 +79,7 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
         toolChoice: author.toolChoice ?? 'auto',
         reasoning: config.defaults.reasoning,
         serviceTier: config.defaults.serviceTier,
-        ...(config.supportsPromptCacheKey && author.cacheKey !== undefined
+        ...(config.openaiEndpoint && author.cacheKey !== undefined
           ? { promptCacheKey: author.cacheKey }
           : {}),
       },

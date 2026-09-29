@@ -336,7 +336,7 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
-    supportsPromptCacheKey: false,
+    openaiEndpoint: false,
     requestDialect: 'compatible',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
@@ -511,7 +511,7 @@ const PROTOCOL_DESCRIPTORS: {
           },
           continuationInheritsInstructions: false,
           supportsForcedToolChoice: true,
-          supportsPromptCacheKey: true,
+          openaiEndpoint: true,
           requestDialect: 'openai',
           defaults: {
             maxOutputTokens: null,
@@ -554,7 +554,7 @@ const PROTOCOL_DESCRIPTORS: {
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: xai,
         supportsForcedToolChoice: true,
-        supportsPromptCacheKey: config.provider === ModelProvider.OPENAI,
+        openaiEndpoint: config.provider === ModelProvider.OPENAI,
         requestDialect: 'openai',
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,

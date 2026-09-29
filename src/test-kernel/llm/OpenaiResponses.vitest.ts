@@ -55,7 +55,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   instructions: { kind: 'optional' },
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
-  supportsPromptCacheKey: true,
+  openaiEndpoint: true,
   requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',
@@ -1233,6 +1233,40 @@ describe('native OpenAI Responses protocol', () => {
         });
         expect(fetch).toHaveBeenCalledTimes(1);
         for (const log of logs) expect(log).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    "sends a context update as a developer message on OpenAI's endpoint, as user text elsewhere",
+    () =>
+      Effect.gen(function* () {
+        const sent = (openaiEndpoint: boolean) =>
+          Effect.gen(function* () {
+            const fetch = vi
+              .fn<typeof globalThis.fetch>()
+              .mockImplementation(async () => response(events([MESSAGE])));
+            const model = modelWith(fetch, { ...CONFIG, openaiEndpoint });
+            const turn = yield* model.prepareTurn({
+              ...REQUEST,
+              messages: [
+                ...REQUEST.messages,
+                { role: 'system', text: 'Skills changed.' },
+              ],
+            });
+            assert(turn.mode === 'foreground');
+            yield* completedTurn(model.streamTurn(turn));
+            return JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).input.at(
+              -1,
+            );
+          });
+        expect(yield* sent(true)).toEqual({
+          role: 'developer',
+          content: 'Skills changed.',
+        });
+        expect(yield* sent(false)).toEqual({
+          role: 'user',
+          content: '<system-update>\nSkills changed.\n</system-update>',
+        });
       }),
   );
 

@@ -264,14 +264,15 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   );
   const activity = startCompactionActivity(logger);
   // The summary is a model call like any other: the invoker gates, prices
-  // and reports it, and its usage rides the row below.
+  // and reports it, and its usage rides the row below. It leaves out the
+  // context updates: the next step renders them into the system text anew.
   const summarized = yield* Effect.exit(
     input.invoker.call(
       {
         mode: 'foreground',
         system: COMPACTION_SYSTEM_PROMPT,
         messages: [
-          ...conversation,
+          ...conversation.filter(({ role }) => role !== 'system'),
           {
             role: 'user',
             content: [{ kind: 'text', text: COMPACTION_USER_PROMPT }],

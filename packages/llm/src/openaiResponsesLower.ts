@@ -83,6 +83,7 @@ const replayCallIds = (
 const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   messages: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+  config: OpenAIResponsesConfiguration,
   documents: DocumentAccess,
   callIds: string[],
 ) {
@@ -116,7 +117,12 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
     }
     callIds.length = 0;
     if (message.role === 'system') {
-      input.push({ role: 'user', content: systemUpdateText(message.text) });
+      // A developer message outranks user text; elsewhere it is user text.
+      input.push(
+        config.openaiEndpoint
+          ? { role: 'developer', content: message.text }
+          : { role: 'user', content: systemUpdateText(message.text) },
+      );
       continue;
     }
     if (message.role === 'user') {
@@ -259,7 +265,13 @@ const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   uploads: UploadCache | null,
 ) {
   const documents = yield* documentAccess(config, uploads);
-  const input = yield* lowerMessages(turn, turn.messages, documents, []);
+  const input = yield* lowerMessages(
+    turn,
+    turn.messages,
+    config,
+    documents,
+    [],
+  );
   yield* checkToolChoice(turn);
   return input;
 });
@@ -367,6 +379,7 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   const input = yield* lowerMessages(
     turn,
     turn.messages.slice(continuation.coveredMessages),
+    config,
     documents,
     callIds,
   );
