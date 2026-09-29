@@ -2,7 +2,7 @@
 // title, padded body slot, key handling, and KeyHints footer.
 
 import { createContext, useState } from 'react';
-import { Box, Text, useInput, useWindowSize, type BoxProps } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
@@ -38,7 +38,6 @@ const CONFIRM_CARD_FEEDBACK_PLACEHOLDER = 'Feedback to send with rejection';
 export const ConfirmCardFeedback = createContext({ mode: false, rows: 0 });
 
 interface ConfirmCardProps extends ConfirmCardHintOptions<ConfirmCardKeyRow> {
-  readonly borderStyle: BoxProps['borderStyle'];
   readonly color: string;
   readonly title: string;
   readonly rejectionMode: ConfirmCardRejectionMode;
@@ -49,7 +48,6 @@ interface ConfirmCardProps extends ConfirmCardHintOptions<ConfirmCardKeyRow> {
 }
 
 export function ConfirmCard({
-  borderStyle,
   color,
   title,
   feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
@@ -149,7 +147,7 @@ export function ConfirmCard({
         </Box>
       ) : (
         <BorderedPanel
-          borderStyle={borderStyle}
+          borderStyle="double"
           color={color}
           title={pulsedTitle}
           footer={<KeyHints hints={hints} confirmCancel={false} />}

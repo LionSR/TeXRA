@@ -116,7 +116,6 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
 
   return (
     <ConfirmCard
-      borderStyle="double"
       color={COLOR_INFO}
       compact={compact}
       title={PLAN_APPROVAL_TITLE}

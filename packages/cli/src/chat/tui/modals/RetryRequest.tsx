@@ -57,7 +57,6 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
 
   return (
     <ConfirmCard
-      borderStyle="single"
       color={COLOR_WARNING}
       title={RETRY_REQUEST_TITLE}
       approveLabel="retry"

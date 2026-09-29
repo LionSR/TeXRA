@@ -284,7 +284,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   );
   return (
     <BorderedPanel
-      borderStyle="single"
+      borderStyle="double"
       color={COLOR_SUCCESS}
       width={columns}
       // The question's own chip, as the other hosts show it: an agent's

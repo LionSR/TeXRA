@@ -49,7 +49,6 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
 
   return (
     <ConfirmCard
-      borderStyle="double"
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
