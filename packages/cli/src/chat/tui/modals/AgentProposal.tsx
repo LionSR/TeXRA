@@ -225,7 +225,6 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
 
   return (
     <ConfirmCard
-      borderStyle="double"
       color={COLOR_ACCENT}
       title={title}
       rejectionMode="feedback"

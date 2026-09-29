@@ -485,7 +485,7 @@ const SCENARIOS = [
       '/clear',
       'Start a fresh chat session',
       'Keyboard',
-      '`Esc` closes panels and returns to the parent session',
+      '`Esc` closes panels, returns to the parent session, and rejects an open approval',
       'Typing while a response is running queues your message as a follow-up.',
     ],
   },

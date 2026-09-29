@@ -63,7 +63,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` closes panels and returns to the parent session · `Ctrl-C` stops the active response, or exits when idle',
+    '- `Esc` closes panels, returns to the parent session, and rejects an open approval · `Ctrl-C` stops the active response, or exits when idle',
     "- `Ctrl-T` opens the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
     `- \`Tab\` ${SESSION_LIST.openHelp}`,
     `- \`${focusChord}\` focuses a run in the visible session-list order`,

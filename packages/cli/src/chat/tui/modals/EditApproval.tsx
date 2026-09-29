@@ -63,7 +63,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const title = `Apply edit to ${props.payload.data.relativePath}?`;
   return (
     <ConfirmCard
-      borderStyle="double"
       color={COLOR_HINT}
       title={title}
       rejectionMode="feedback"
