@@ -43,6 +43,7 @@ import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
 import { cliRunStanding } from './toolUseResumeData';
 import {
+  blockedHistoryEntry,
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from './historyLabels';
@@ -155,23 +156,21 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 
 /**
  * The history readers take the process session as the open that yields it
- * (`CliPlatformServices.session`): a listing is the first thing `history`
- * asks of the session, so the open runs inside the reader's own program, which
- * the calling surface runs once on the runtime it holds
- * (`CliPlatformServices.runtime`).
+ * (`CliPlatformServices.session`), so the open runs inside the reader's own
+ * program, on the runtime the calling surface holds.
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
-    // A row's resumability comes from the snapshot probe the listing already
-    // did; only a failed workflow row still reads its persisted state. That
-    // read is bounded here so a history full of failed workflow runs cannot
-    // fold every run's ledger at once. `Effect.forEach` preserves input
-    // order.
+    // Resumability comes from the listing's snapshot probe; only a failed
+    // workflow row reads its state, bounded so a history of them does not
+    // fold every ledger at once. `Effect.forEach` keeps input order.
     const opened = yield* session;
-    const entries = yield* listRuns(opened);
     return yield* Effect.forEach(
-      entries.filter(isUserVisibleRun),
-      (entry) => toCliHistoryEntry(entry, opened),
+      (yield* listRuns(opened)).filter(isUserVisibleRun),
+      (entry) =>
+        entry.kind === 'blocked'
+          ? Effect.succeed(blockedHistoryEntry(entry))
+          : toCliHistoryEntry(entry, opened),
       { concurrency: HISTORY_ENTRY_CONCURRENCY },
     );
   },
@@ -219,6 +218,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         agentCategory: config === null ? null : config.agentCategory,
         phase: run?.status,
         paused: run?.substate === RUN_SUBSTATE.PAUSED,
+        blocked: (run?.blocked ?? null) !== null,
       },
       session,
     );
@@ -287,13 +287,12 @@ type CliHistoryExportInputResult =
   | { readonly status: 'incomplete' };
 
 /**
- * Load a stored run's config + conversation as the format-agnostic
- * {@link ChatExportInput} the markdown export formatter consumes (the HTML
- * export path uses `assembleTrace` instead — see `commands/history.ts`).
- * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
- * loader, which also backs the progress-view
- * `ChatExportController.buildExportInput` — so the CLI and GUI render
- * the same conversation identically.
+ * Load a stored run's config + conversation as the format-agnostic {@link
+ * ChatExportInput} the markdown export formatter consumes (the HTML export path
+ * uses `assembleTrace` instead — see `commands/history.ts`). Thin CLI-specific
+ * wrapper around the shared {@link loadChatExportInput} loader, which also
+ * backs the progress-view `ChatExportController.buildExportInput` — so the CLI
+ * and GUI render the same conversation identically.
  *
  * Distinguishes "this run id has no stored data at all" (`not_found`
  * — the same case `history show` reports as not found) from "this run
@@ -468,6 +467,7 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
     status === HISTORY_RUN_STATUS.PAUSED ||
+    status === HISTORY_RUN_STATUS.BLOCKED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -560,6 +560,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
       agentCategory: config.agentCategory,
       phase: entry.status,
       paused: entry.paused,
+      blocked: entry.blocked !== undefined,
     },
     session,
   );

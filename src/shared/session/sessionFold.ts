@@ -5,14 +5,13 @@
  * Every process that shows a session runs it; the transport carries its
  * input, never its output.
  *
- * Pure in the sense that matters: no IO, no clock, no platform, no store
- * reads, and the same input sequence yields the same view. Incremental in
- * the sense the PRD requires: an event recomputes the arm for its run,
- * walks `parentId` to the root refreshing each ancestor's `childIds`,
- * `rollup`, `approval`, `group`, and `forceExpanded`, then touches `order`
- * only when a top-level run appeared, moved, or left. O(depth) per
- * event, never a whole-view pass. A text chunk costs the chunk, never the
- * row's text.
+ * Pure in the sense that matters: no IO, no clock, no platform, no store reads,
+ * and the same input sequence yields the same view. Incremental in the sense
+ * the PRD requires: an event recomputes the arm for its run, walks `parentId`
+ * to the root refreshing each ancestor's `childIds`, `rollup`, `approval`,
+ * `group`, and `forceExpanded`, then touches `order` only when a top-level run
+ * appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
+ * chunk costs the chunk, never the row's text.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
@@ -81,6 +80,7 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
 import {
+  runBlockedMessage,
   runHeldMessage,
   runInterruptedMessage,
   runStatusCopy,
@@ -182,12 +182,19 @@ function foldWith(
       reconcileExistence(next, input.existence, deferred);
       next.cursor = input.cursor;
       return next;
+    case 'blocked': {
+      const runId = runIdOf(input.aggregateId);
+      const run = runId === null ? undefined : next.runs.get(runId);
+      if (run === undefined || run.blocked !== null) return view;
+      setRun(next, { ...run, blocked: input.reason });
+      walkUp(next, run.id, run.id, deferred);
+      return next;
+    }
     case 'replay.complete': {
-      // The input reader releases the completed replay as one batch (7.2).
-      // Its marker closes the listing ahead of it: a run no listing row
-      // of this sequence named is gone,
-      // tombstone and all, because retention pruned it while this surface
-      // was away and no later read can deliver the deletion.
+      // The input reader releases the completed replay as one batch (7.2). Its
+      // marker closes the listing ahead of it: a run no listing row of this
+      // sequence named is gone, tombstone and all, because retention pruned it
+      // while this surface was away and no later read can deliver the deletion.
       const { listed } = sessionIndexesOf(next);
       for (const id of [...next.runs.keys()]) {
         if (!listed.has(qualifyAggregateId('run', id)))
@@ -381,6 +388,7 @@ function createRun(
     approval: 'none' as const,
     ownedHere: false,
     readOnly: false,
+    blocked: null,
     actions: [],
     forceExpanded: false,
     group: 'recent' as const,
@@ -587,7 +595,9 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     (!own || sessionIndexesOf(view).ended.has(run.id))
       ? run.status
       : null;
-  const unreadable = local.unreadable.find((u) => u.runId === run.id);
+  const unreadable = run.blocked
+    ? runBlockedMessage(run.blocked)
+    : local.unreadable.find((u) => u.runId === run.id)?.detail;
   const rollup = { total: 0, running: 0, finished: 0 };
   let descendantWaiting = false;
   let descendantNeedsUser = false;
@@ -622,7 +632,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const readOnly = heldElsewhere || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
-  let statusDetail: string | null = unreadable?.detail ?? null;
+  let statusDetail: string | null = unreadable ?? null;
   if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
@@ -1351,11 +1361,10 @@ function foldTraceEvent(
 }
 
 /**
- * The tombstone (5.2, "Existence" and "Durable text wins"): final, clears
- * every session-level entry keyed by the run, re-roots its children, and
- * ends its transcript tier. The run's `latest` entries stay: the
- * lifecycle one is what outranks a replayed `run.start` beneath the
- * tombstone.
+ * The tombstone (5.2, "Existence" and "Durable text wins"): final, clears every
+ * session-level entry keyed by the run, re-roots its children, and ends its
+ * transcript tier. The run's `latest` entries stay: the lifecycle one is what
+ * outranks a replayed `run.start` beneath the tombstone.
  */
 function foldRunRemoved(
   view: SessionView,
@@ -1415,41 +1424,26 @@ function foldLocal(
   const indexes = sessionIndexesOf(view);
   const previous = indexes.local;
   indexes.local = local;
-  const heldBefore = new Set([...previous.self, ...previous.dead]);
-  const heldAfter = new Set([...local.self, ...local.dead]);
-  const changedOwners = new Set<string>();
-  for (const owner of heldBefore) {
-    if (!heldAfter.has(owner)) changedOwners.add(owner);
-  }
-  for (const owner of heldAfter) {
-    if (!heldBefore.has(owner)) changedOwners.add(owner);
-  }
-  // Changes between self and a proved-dead verdict also change ownership:
-  // an owner moving between them, in either direction, changes that answer
-  // while staying held.
-  for (const owner of heldAfter) {
-    if (previous.self.includes(owner) !== local.self.includes(owner)) {
-      changedOwners.add(owner);
-    }
-  }
+  // An owner entering or leaving the held set, or moving between self and a
+  // proved-dead verdict, changes the answer for every run it holds.
+  const standing = (state: LocalRuntimeState, owner: string) =>
+    state.self.includes(owner) ? 'self' : state.dead.includes(owner);
+  const changedOwners = new Set(
+    [...previous.self, ...previous.dead, ...local.self, ...local.dead].filter(
+      (owner) => standing(previous, owner) !== standing(local, owner),
+    ),
+  );
   const touched = new Set<RunId>();
   for (const owner of changedOwners) {
     for (const runId of indexes.byOwner.get(owner) ?? []) {
       touched.add(runId);
     }
   }
-  const unreadableBefore = new Map(
-    previous.unreadable.map((u) => [u.runId, u.detail]),
-  );
-  const unreadableAfter = new Map(
-    local.unreadable.map((u) => [u.runId, u.detail]),
-  );
-  for (const [runId, detail] of unreadableBefore) {
-    if (unreadableAfter.get(runId) !== detail) touched.add(runId);
-  }
-  for (const [runId, detail] of unreadableAfter) {
-    if (unreadableBefore.get(runId) !== detail) touched.add(runId);
-  }
+  const details = (state: LocalRuntimeState) =>
+    new Map(state.unreadable.map((u) => [u.runId, u.detail]));
+  const [before, after] = [details(previous), details(local)];
+  for (const runId of new Set([...before.keys(), ...after.keys()]))
+    if (before.get(runId) !== after.get(runId)) touched.add(runId);
   for (const runId of touched) walkUp(view, runId, runId, deferred);
 }
 

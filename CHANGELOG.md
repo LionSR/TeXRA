@@ -6,13 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Settings reset once with this build, and later updates keep them.**
-  TeXRA's saved settings, remembered desktop projects, open inquiry threads
-  and update-check record start fresh the first time this build runs;
-  session history starts over too. From now on, a TeXRA update that clears
-  session history leaves settings alone. Repository settings (the git commit
-  identity, subagent worktrees, the Codex and Claude Code controls, and the
-  agent roster and teams) are now shared by every worktree of a repository
+- **History and settings reset once with this update, and later updates
+  keep them.** The first time this build runs, session history, saved
+  settings, remembered desktop projects, open inquiry threads, the
+  update-check record and CLI input history start fresh, and TeXRA says so;
+  the old data is kept in a backup beside it and never read again. After
+  this, an update keeps your history: a run a newer TeXRA wrote is listed as
+  blocked ("update TeXRA to open it") instead of being hidden or cleared.
+  Context shared by several runs is stored once per workspace, and another
+  TeXRA process holding the history no longer freezes the window while it
+  waits. Repository settings (the git commit identity, subagent worktrees,
+  the Codex and Claude Code controls, and the agent roster and teams) are
+  now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,

@@ -1,4 +1,23 @@
+import type { BlockedRunListingEntry } from '@agent/storage';
+import { HISTORY_RUN_STATUS, runIdentityName } from '@shared/schemas';
 import type { CliHistoryEntry } from './history';
+
+/** The row of a run whose record a newer TeXRA wrote: listed, never
+ *  resumed here, with what the listing still knows of it. */
+export function blockedHistoryEntry(
+  entry: BlockedRunListingEntry,
+): CliHistoryEntry {
+  return {
+    id: entry.id,
+    timestamp: entry.timestamp,
+    description: entry.description,
+    agent: runIdentityName(entry.identity),
+    model: entry.model ?? '-',
+    status: HISTORY_RUN_STATUS.BLOCKED,
+    resumable: false,
+    inputBasename: '-',
+  };
+}
 
 /**
  * What a history entry is about: its first input file, or, for runs started

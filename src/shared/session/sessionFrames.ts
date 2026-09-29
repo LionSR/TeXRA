@@ -27,6 +27,7 @@ import {
 import { z } from 'zod';
 
 import {
+  BlockedAggregateSchema,
   CommitOrdinalSchema,
   ExistenceReconciliationSchema,
   FoldEventSchema,
@@ -79,6 +80,8 @@ const EventsFrameSchema = z.object({
   replayComplete: z.boolean(),
   /** Only the final frame of a finite read carries its checked claims and removals. */
   existence: ExistenceReconciliationSchema.nullable(),
+  /** Aggregates this frame's reads found this build cannot read whole. */
+  blocked: z.array(BlockedAggregateSchema),
 });
 export type EventsFrame = z.infer<typeof EventsFrameSchema>;
 
@@ -226,7 +229,12 @@ export class SessionFrames extends Context.Service<
                 (state, frame) => {
                   if (!state.complete && frame.debug !== null)
                     state.debug = frame.debug;
-                  state.pending.push(...frame.events, ...frame.chunks);
+                  // A blocked verdict marks a run its events create.
+                  state.pending.push(
+                    ...frame.events,
+                    ...frame.blocked,
+                    ...frame.chunks,
+                  );
                   if (frame.local)
                     state.pending.push({ _tag: 'local', local: frame.local });
                   if (frame.existence !== null) {

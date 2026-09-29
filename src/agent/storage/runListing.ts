@@ -19,6 +19,7 @@ import {
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
+  type BlockedAggregate,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -41,6 +42,8 @@ interface RunListingBase {
   status: RunLifecycleStatus;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
+  /** Why this build cannot read the run whole (`RunView.blocked`). */
+  blocked?: BlockedAggregate['reason'];
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /** The model the run is on, as the view folds it: its latest snapshot's
@@ -75,7 +78,15 @@ export type RunListingEntry =
   | (RunListingBase & {
       /** Row without a readable identity or record — un-healed or corrupt. */
       kind: 'incomplete';
-    });
+    })
+  | BlockedRunListingEntry;
+
+/** A run whose record a newer TeXRA wrote (or is corrupt): listed with its
+ *  status `blocked`, never opened. */
+export type BlockedRunListingEntry = RunListingBase & {
+  kind: 'blocked';
+  identity: RunIdentity;
+};
 
 /** Narrow to the agent arm; nested `identity.kind` cannot discriminate the
  *  entry union for TypeScript, so this is the one spelled-out guard. */
@@ -88,8 +99,8 @@ function isAgentRunEntry(
 /**
  * True for runs a user should see in a history list, meaning the runs a
  * user started themselves. Excludes non-agent runs (background processes,
- * workflow-script containers — `identity.kind` decides), incomplete rows,
- * and runs an agent spawned (delegated subagents, workflow-script children,
+ * workflow-script containers — `identity.kind` decides), incomplete rows
+ * (a blocked one is kept, as `blocked`), and runs an agent spawned (delegated subagents, workflow-script children,
  * team members), which belong to their parent's transcript rather than to
  * the history list.
  *
@@ -100,8 +111,11 @@ function isAgentRunEntry(
  */
 export function isUserVisibleRun(
   entry: RunListingEntry,
-): entry is AgentRunListingEntry {
-  return isAgentRunEntry(entry) && entry.parentRunId === undefined;
+): entry is AgentRunListingEntry | BlockedRunListingEntry {
+  return (
+    (isAgentRunEntry(entry) || entry.kind === 'blocked') &&
+    entry.parentRunId === undefined
+  );
 }
 
 /** The latest `run.config` row of each run in one committed listing. */
@@ -153,12 +167,16 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
+          ...(run.blocked === null ? {} : { blocked: run.blocked }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           checkpointPresent,
         };
         const identity = run.identity;
-        if (!record) return { ...base, kind: 'incomplete' };
+        if (!record)
+          return run.blocked === null
+            ? { ...base, kind: 'incomplete' }
+            : { ...base, kind: 'blocked', identity };
         if (identity.kind === 'agent') {
           // An agent row's record is always an AgentConfig; anything else is
           // corrupt and lists as incomplete rather than lying about shape.

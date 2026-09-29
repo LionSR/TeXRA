@@ -92,6 +92,8 @@ export * from './offeredTools';
 export * from './hookOutcome';
 export * from './followUp';
 export * from './sessionEvent';
+export * from './foldInput';
+export * from './rowVersions';
 export * from './traceEvent';
 
 export * from './updateCheck';

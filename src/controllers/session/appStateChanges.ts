@@ -13,12 +13,11 @@ const READ_RETRY = Schedule.exponential('250 millis').pipe(
   ),
 );
 
-/** The keys' rows as one text, in key order: equal exactly when no value
+/** The keys' rows in key order: their text is equal exactly when no value
  *  changed. */
-const SNAPSHOT = `SELECT json_group_array(json_array(key, value)) AS snapshot
-  FROM (SELECT key, value FROM current_value
-        WHERE family = ? AND key IN (SELECT value FROM json_each(?))
-        ORDER BY key)`;
+const SNAPSHOT = `SELECT key, value FROM current_value
+  WHERE family = ? AND key IN (SELECT value FROM json_each(?))
+  ORDER BY key`;
 
 /**
  * A root database's `values.changes`, over its wake level and its
@@ -29,17 +28,24 @@ const SNAPSHOT = `SELECT json_group_array(json_array(key, value)) AS snapshot
 export const currentValueChangeFeed =
   (
     level: SubscriptionRef.SubscriptionRef<number>,
-    execOne: (
+    exec: (
       statement: string,
       params: readonly unknown[],
-    ) => Effect.Effect<Readonly<Record<string, unknown>> | undefined, SqlError>,
+    ) => Effect.Effect<readonly Readonly<Record<string, unknown>>[], SqlError>,
   ) =>
   (
     family: CurrentValueFamily,
     keys: readonly string[],
   ): Stream.Stream<void> => {
-    const snapshot = execOne(SNAPSHOT, [family, JSON.stringify(keys)]).pipe(
-      Effect.map((row) => z.string().parse(row?.snapshot)),
+    const snapshot = exec(SNAPSHOT, [family, JSON.stringify(keys)]).pipe(
+      Effect.map((rows) =>
+        JSON.stringify(
+          rows.map((row) => [
+            z.string().parse(row.key),
+            z.string().parse(row.value),
+          ]),
+        ),
+      ),
       Effect.tapError((error) =>
         Effect.logWarning(
           `Could not read whether ${keys.join(', ')} changed; retrying.`,

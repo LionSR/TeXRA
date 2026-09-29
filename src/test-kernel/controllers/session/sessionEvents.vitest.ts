@@ -16,6 +16,8 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -42,6 +44,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { TestClock } from 'effect/testing';
+import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
@@ -70,6 +73,7 @@ import {
 } from '@controllers/session/Database';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
+import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
@@ -82,6 +86,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -90,7 +95,6 @@ import {
   LocalRuntimeStateSchema,
   RUN_PHASE,
   RunIdSchema,
-  SESSION_EVENT_FORMAT,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -194,7 +198,14 @@ const requested: SessionEventDraft = {
  *  bits: the log seeded with `history` before the plane reads its anchor
  *  (the pre-cutover importer's position), the plane, the fold, and the
  *  three local sources. */
-const graph = (history: readonly SessionEventDraft[]) => {
+const graph = (
+  history: readonly SessionEventDraft[],
+  store: Layer.Layer<
+    Database,
+    never,
+    ProcessIdentity | WorkspaceRoots | ProcessProbe
+  > = databaseLayer('ephemeral').pipe(Layer.orDie),
+) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -206,11 +217,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
-        Layer.provideMerge(
-          seeded.pipe(
-            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
-          ),
-        ),
+        Layer.provideMerge(seeded.pipe(Layer.provideMerge(store))),
       ),
     ),
     Layer.provideMerge(
@@ -651,6 +658,7 @@ describe('session events and view', () => {
         host: null,
         debug: false,
         replayComplete: true,
+        blocked: [],
         existence: {
           checkedAggregateIds: rows.map(({ aggregateId }) => aggregateId),
           removedAggregateIds: [],
@@ -902,8 +910,9 @@ describe('Sessions owner', () => {
             expect(
               opened.mock.calls.filter(
                 ([options]) =>
+                  options.readonly !== true &&
                   options.filename ===
-                  join(realpathSync.native(storage), 'texra.db'),
+                    join(realpathSync.native(storage), 'texra.db'),
               ),
             ).toHaveLength(1);
             yield* closeSessionOf(session);
@@ -1297,11 +1306,31 @@ describe('the C1 event table and the C6 publisher', () => {
       ),
     );
 
-  it.effect('moves a store of an older event format aside at open', () => {
+  /** A store as a pre-1.0 build left it: its `event` and `event_sequence`
+   *  keyed by `aggregate_id`, one event and one setting, stamped `format`. */
+  const legacyStore = (storage: string, format: number) =>
+    Effect.sync(() => {
+      const connection = reader(storage);
+      try {
+        connection.exec(`
+          CREATE TABLE event_sequence (aggregate_id TEXT PRIMARY KEY, seq INTEGER);
+          CREATE TABLE event ("commit" INTEGER PRIMARY KEY, aggregate_id TEXT, data TEXT);
+          CREATE TABLE current_value (family TEXT, key TEXT, value TEXT);
+          INSERT INTO event_sequence VALUES ('["run","ab12cd"]', 1);
+          INSERT INTO event VALUES (1, '["run","ab12cd"]', '{}');
+          INSERT INTO current_value VALUES ('setting', 'k', '1');
+          PRAGMA user_version = ${format};
+        `);
+      } finally {
+        connection.close();
+      }
+    });
+
+  it.effect('retires a store written before 1.0 whole and starts clean', () => {
     const storage = workspace();
-    const format = SESSION_EVENT_FORMAT - 1;
+    const format = 44;
     return Effect.gen(function* () {
-      yield* storeOfFormat(storage, format);
+      yield* legacyStore(storage, format);
       const reopenedStore = yield* Database.pipe(
         Effect.flatMap((database) =>
           Effect.map(database.readListing(), (listing) => ({
@@ -1311,17 +1340,13 @@ describe('the C1 event table and the C6 publisher', () => {
         ),
         Effect.provide(substrate(storage)),
       );
-      const asidePath = join(
-        realpathSync.native(storage),
-        `texra.db.format${format}`,
-      );
+      const asidePath = join(realpathSync.native(storage), 'texra.db.pre1');
       expect(reopenedStore).toEqual({
         listing: [],
         movedAside: {
           path: join(storage, 'texra.db'),
           aside: asidePath,
-          rows: 1,
-          storedFormat: format,
+          reason: 'pre-1.0',
         },
       });
       const aside = new DatabaseSync(asidePath);
@@ -1335,43 +1360,292 @@ describe('the C1 event table and the C6 publisher', () => {
       } finally {
         aside.close();
       }
+      // Nothing is kept, current values included, and the file carries
+      // the 1.0 header.
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: SESSION_EVENT_FORMAT,
+          user_version: 100,
         });
+        expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
+          auto_vacuum: 2,
+        });
+        expect(
+          reopened.prepare('SELECT count(*) AS rows FROM current_value').get(),
+        ).toEqual({ rows: 0 });
       } finally {
         reopened.close();
       }
     });
   });
 
-  it.effect(
-    'refuses a store of a newer event format and changes nothing',
-    () => {
-      const storage = workspace();
-      const format = SESSION_EVENT_FORMAT + 1;
-      return Effect.gen(function* () {
-        yield* storeOfFormat(storage, format);
-        const failure = yield* Effect.flip(
-          Database.pipe(Effect.provide(substrate(storage))),
-        );
-        expect(failure._tag).toBe('DatabaseOpenFailed');
-        expect(failure.message).toContain('Update TeXRA');
-        const stored = reader(storage);
+  it.effect('never replaces an earlier backup when it retires a store', () => {
+    // A user restored another pre-1.0 store beside an earlier retirement's
+    // copy: a rename onto `.pre1` would delete that copy on most platforms.
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const earlier = join(storage, 'texra.db.pre1');
+      writeFileSync(earlier, 'the earlier backup');
+      yield* legacyStore(storage, 44);
+      const moved = yield* Database.pipe(
+        Effect.map((database) => database.movedAside),
+        Effect.provide(substrate(storage)),
+      );
+      expect(moved?.aside).toBe(
+        join(realpathSync.native(storage), 'texra.db.pre1.2'),
+      );
+      expect(readFileSync(earlier, 'utf8')).toBe('the earlier backup');
+    });
+  });
+
+  it.effect('refuses a foreign SQLite file and leaves it untouched', () => {
+    // Another tool's database at the store's path: no TeXRA stamp, no
+    // TeXRA tables. It is not a pre-1.0 store, so nothing retires it.
+    const storage = workspace();
+    return Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        const connection = reader(storage);
         try {
-          expect(stored.prepare('PRAGMA user_version').get()).toEqual({
-            user_version: format,
-          });
-          expect(
-            stored.prepare('SELECT count(*) AS rows FROM event').get(),
-          ).toEqual({ rows: 1 });
+          connection.exec(
+            "CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');",
+          );
         } finally {
-          stored.close();
+          connection.close();
         }
+      });
+      const before = readFileSync(join(storage, 'texra.db'));
+      const failure = yield* Effect.flip(
+        Database.pipe(Effect.provide(substrate(storage))),
+      );
+      expect(failure._tag).toBe('DatabaseOpenFailed');
+      expect(failure.message).toContain('not a TeXRA session store');
+      expect(readFileSync(join(storage, 'texra.db'))).toEqual(before);
+      expect(existsSync(join(storage, 'texra.db.pre1'))).toBe(false);
+      const stored = reader(storage);
+      try {
+        expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
+          { body: 'mine' },
+        ]);
+      } finally {
+        stored.close();
+      }
+    });
+  });
+
+  it.effect(
+    'marks a projection that skipped a newer row, so a build that reads it rebuilds',
+    () => {
+      // A newer build's run.config lands where this build catches the
+      // listing up: it cannot read the row, so the projection it builds
+      // lacks it. Checkpointed past it unmarked, a build that reads the row
+      // would trust that checkpoint and never list it.
+      const storage = workspace();
+      const bump = (version: number) =>
+        Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = ${version} WHERE type = 'run.config';
+              UPDATE stored_kind SET version = ${version} WHERE type = 'run.config';
+              DROP TABLE projection_state;`);
+          } finally {
+            raw.close();
+          }
+        });
+      const listing = Database.pipe(
+        Effect.flatMap((database) => database.readListing()),
+        Effect.map((rows) => rows.map((row) => row.type)),
+        Effect.provide(substrate(storage)),
+      );
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) =>
+            database.appendAll([
+              runStart,
+              {
+                type: 'run.config',
+                aggregateId: runStart.aggregateId,
+                config: AgentConfigFieldsSchema.parse({
+                  agentCategory: AgentCategory.ToolUse,
+                  model: 'test-model',
+                }),
+              },
+            ]),
+          ),
+          Effect.provide(substrate(storage)),
+        );
+        yield* bump(2);
+        expect(yield* listing).toEqual(['run.start']);
+        const marked = reader(storage);
+        try {
+          expect(
+            marked
+              .prepare(
+                "SELECT version FROM projection_state WHERE name = 'listing'",
+              )
+              .get(),
+          ).toEqual({ version: -1 });
+          // The row becomes one this build reads: as a newer build sees it.
+          marked.exec(`UPDATE event SET version = 1 WHERE type = 'run.config';
+            UPDATE stored_kind SET version = 1 WHERE type = 'run.config';`);
+        } finally {
+          marked.close();
+        }
+        expect(yield* listing).toEqual(['run.start', 'run.config']);
       });
     },
   );
+
+  it.effect(
+    'refuses a claim of a run a newer build wrote to since this connection last looked',
+    () => {
+      // A newer build commits a row this build cannot read and releases the
+      // run before this connection's poll has seen it: its verdict cache is
+      // stale, so only the claim's own transaction can refuse.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.appendAll([runStart, waiting]);
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.position';
+              UPDATE stored_kind SET version = 2 WHERE type = 'run.position';
+              UPDATE event_sequence SET owner_id = NULL;`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(yield* db.readBlocked()).toEqual([]);
+        const refused = yield* Effect.flip(
+          db.acquireClaims([runStart.aggregateId]),
+        );
+        expect(refused).toMatchObject({
+          _tag: 'DatabaseWriteFailed',
+          cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.position' },
+        });
+        const stored = reader(storage);
+        try {
+          expect(
+            stored
+              .prepare('SELECT owner_id AS owner FROM event_sequence')
+              .get(),
+          ).toEqual({ owner: null });
+        } finally {
+          stored.close();
+        }
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.effect(
+    'leaves a store another process already recovered from damage in place',
+    () => {
+      // Two processes saw the same damaged file. The first moved it aside
+      // and created a fresh store; the second, recovering after it, must not
+      // move that fresh store aside as if it were the damaged one.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) => database.appendAll([runStart])),
+          Effect.provide(substrate(storage)),
+        );
+        const filename = join(realpathSync.native(storage), 'texra.db');
+        let attempts = 0;
+        const connect = Effect.suspend(() =>
+          (attempts += 1) === 1
+            ? Effect.die(
+                Object.assign(new Error('file is not a database'), {
+                  errcode: 26,
+                }),
+              )
+            : SqlDriver.make({ filename }),
+        );
+        const opened = yield* openStore(
+          connect,
+          SqlDriver.make({ filename, readonly: true, disableWAL: true }),
+          'persistent',
+          filename,
+          filename,
+        );
+        expect(opened.movedAside).toBeNull();
+        expect(
+          readdirSync(storage).filter((name) => name.includes('.corrupt-')),
+        ).toEqual([]);
+        const rows = yield* opened.sql.unsafe<{ n: number }>(
+          'SELECT count(*) AS n FROM event',
+          [],
+        );
+        expect(rows[0]?.n).toBe(1);
+      }).pipe(
+        Effect.provide(Layer.merge(nodePlatformLayer, Reactivity.layer)),
+        Effect.scoped,
+      );
+    },
+  );
+
+  it.effect(
+    'lists a run whose own run.start a newer build wrote as blocked',
+    () => {
+      // The unreadable row is the one that creates the run: without it the
+      // run would vanish from every listing instead of reading as blocked.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) => database.appendAll([runStart, waiting])),
+          Effect.provide(substrate(storage)),
+        );
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
+            UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
+          } finally {
+            raw.close();
+          }
+        });
+        yield* Effect.gen(function* () {
+          const view = yield* SessionViewService;
+          yield* settle(view.ref, (v) => v.runs.has(RUN));
+          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
+          expect(run).toMatchObject({ blocked: 'newer', readOnly: true });
+          const refused = yield* Effect.flip(
+            (yield* Database).acquireClaims([runStart.aggregateId]),
+          );
+          expect(refused).toMatchObject({
+            _tag: 'DatabaseWriteFailed',
+            cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.start' },
+          });
+        }).pipe(
+          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
+          Effect.scoped,
+        );
+      });
+    },
+  );
+
+  it.effect('refuses a store of a newer schema and changes nothing', () => {
+    const storage = workspace();
+    const format = 101;
+    return Effect.gen(function* () {
+      yield* storeOfFormat(storage, format);
+      const failure = yield* Effect.flip(
+        Database.pipe(Effect.provide(substrate(storage))),
+      );
+      expect(failure._tag).toBe('DatabaseOpenFailed');
+      expect(failure.message).toContain('Update TeXRA');
+      const stored = reader(storage);
+      try {
+        expect(stored.prepare('PRAGMA user_version').get()).toEqual({
+          user_version: format,
+        });
+        expect(
+          stored.prepare('SELECT count(*) AS rows FROM event').get(),
+        ).toEqual({ rows: 1 });
+      } finally {
+        stored.close();
+      }
+    });
+  });
 
   it.effect('rolls back a failed commit before reusing the connection', () => {
     const storage = workspace();
@@ -1389,8 +1663,8 @@ describe('the C1 event table and the C6 publisher', () => {
         );
         CREATE TRIGGER validate_run AFTER INSERT ON event
         BEGIN
-          INSERT INTO committed_run
-            VALUES (json_extract(NEW.aggregate_id, '$[1]'));
+          INSERT INTO committed_run VALUES (
+            (SELECT logical_id FROM event_sequence WHERE id = NEW.aggregate));
         END;
       `);
 
@@ -1678,16 +1952,17 @@ describe('the C1 event table and the C6 publisher', () => {
                 ?.foreign_keys,
               events: raw
                 .prepare(
-                  `SELECT "commit" AS "commit", aggregate_id AS aggregateId,
-                          seq, type, origin, at, data
+                  `SELECT "commit" AS "commit", aggregate, seq, type, version,
+                          origin, at, data
                    FROM event ORDER BY "commit"`,
                 )
                 .all(),
               sequences: raw
                 .prepare(
-                  `SELECT aggregate_id AS aggregateId, seq,
-                          owner_id AS ownerId, parent_id AS parentId, closed
-                   FROM event_sequence ORDER BY aggregate_id`,
+                  `SELECT id, kind, logical_id AS logicalId, seq,
+                          owner_id AS ownerId, parent_id AS parentId,
+                          start_commit AS startCommit, closed_by AS closedBy
+                   FROM event_sequence ORDER BY id`,
                 )
                 .all(),
               integrity: raw.prepare('PRAGMA integrity_check').get()
@@ -1706,9 +1981,10 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(observed.events).toEqual([
           {
             commit: 1,
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregate: 1,
             seq: 1,
-            type: 'run.start.1',
+            type: 'run.start',
+            version: 1,
             origin: SELF,
             at: now,
             data: JSON.stringify({
@@ -1720,9 +1996,10 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           {
             commit: 2,
-            aggregateId: qualifyAggregateId('run', OLDER),
+            aggregate: 2,
             seq: 1,
-            type: 'run.start.1',
+            type: 'run.start',
+            version: 1,
             origin: SELF,
             at: now,
             data: JSON.stringify({
@@ -1737,18 +2014,24 @@ describe('the C1 event table and the C6 publisher', () => {
         // parent link for a root.
         expect(observed.sequences).toEqual([
           {
-            aggregateId: qualifyAggregateId('run', RUN),
+            id: 1,
+            kind: 'run',
+            logicalId: RUN,
             seq: 1,
             ownerId: SELF,
             parentId: null,
-            closed: 0,
+            startCommit: 1,
+            closedBy: null,
           },
           {
-            aggregateId: qualifyAggregateId('run', OLDER),
+            id: 2,
+            kind: 'run',
+            logicalId: OLDER,
             seq: 1,
             ownerId: SELF,
             parentId: null,
-            closed: 0,
+            startCommit: 2,
+            closedBy: null,
           },
         ]);
       }).pipe(Effect.provide(substrate(storage)));
@@ -1797,12 +2080,16 @@ describe('the C1 event table and the C6 publisher', () => {
         const raw = reader(storage);
         try {
           raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
-            WHEN NEW.type = 'run.position.1'
+            WHEN NEW.type = 'run.position'
             BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
         } finally {
           raw.close();
         }
       });
+      // The trigger is another connection's commit: let the poll take its
+      // wake first, so the level below counts this process's batches.
+      yield* TestClock.adjust('300 millis');
+      const level = yield* SubscriptionRef.get(db.level);
       const failure = yield* Effect.flip(db.appendAll([olderStart, waiting]));
 
       expect(failure._tag).toBe('DatabaseWriteFailed');
@@ -1815,7 +2102,7 @@ describe('the C1 event table and the C6 publisher', () => {
         }
       });
       expect(rows).toEqual([{ seq: 1 }]);
-      expect(yield* SubscriptionRef.get(db.level)).toBe(1);
+      expect(yield* SubscriptionRef.get(db.level)).toBe(level);
     }).pipe(Effect.provide(substrate(storage)));
   });
 
@@ -1860,8 +2147,10 @@ describe('the C1 event table and the C6 publisher', () => {
         try {
           raw.exec('PRAGMA foreign_keys = ON');
           raw
-            .prepare('DELETE FROM event_sequence WHERE aggregate_id = ?')
-            .run(qualifyAggregateId('run', RUN));
+            .prepare(
+              "DELETE FROM event_sequence WHERE kind = 'run' AND logical_id = ?",
+            )
+            .run(RUN);
           expect(raw.prepare('SELECT COUNT(*) AS n FROM event').get()?.n).toBe(
             0,
           );
@@ -1915,8 +2204,10 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           { type: 'run.removed', aggregateId: other },
         ]);
+        // Keyed by `listingKeyOf`: the tombstone replaces its run's
+        // `run.start` under the one lifecycle key the fold keeps.
         expect((yield* db.readListing()).map((row) => row.commit)).toEqual([
-          1, 2, 4, 7, 9,
+          1, 4, 7, 9,
         ]);
         const withoutTranscript = yield* db.readInputBatch([], 0);
         expect(withoutTranscript.cursor).toBe(9);

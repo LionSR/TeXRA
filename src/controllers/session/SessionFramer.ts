@@ -26,6 +26,7 @@ import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
+  type BlockedAggregate,
   listingTypeOf,
   type CommitOrdinal,
   type ExistenceReconciliation,
@@ -77,6 +78,7 @@ function cutFrame(
   items: readonly FrameItem[],
 ): EventsFrame {
   const events: FoldEvent[] = [];
+  const blocked: BlockedAggregate[] = [];
   const chunks = new Map<string, TextChunk>();
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
@@ -117,6 +119,9 @@ function cutFrame(
       case 'debug':
         debug = item.enabled;
         break;
+      case 'blocked':
+        blocked.push(item);
+        break;
       case 'replay.complete':
         replayComplete = true;
         existence = item.existence;
@@ -138,6 +143,7 @@ function cutFrame(
     host,
     debug,
     replayComplete,
+    blocked,
     existence,
   };
 }
