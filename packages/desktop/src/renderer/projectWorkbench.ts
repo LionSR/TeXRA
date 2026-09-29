@@ -23,6 +23,8 @@ import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
 import { createWorkbenchController } from './workbenchController';
 
+const FILE_REQUEST_TIMEOUT_MS = 60_000;
+
 export function createProjectWorkbench(options: {
   session: string;
   surfaces: SessionSurfaces;
@@ -79,15 +81,21 @@ export function createProjectWorkbench(options: {
   // session's close fails whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
     new Error(`The host answered a file request with ${outcome.kind}.`);
+  // A read or a list on a hung mount would otherwise leave the pane's refresh
+  // pending until the project closes. A write is never abandoned: the host
+  // cannot cancel it, and a retry must not race a write still in flight.
   const workspaceFile = (
     action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
   ) =>
-    surfaces.answer({
-      kind: 'host.request',
-      session,
-      requestId: crypto.randomUUID(),
-      request: { kind: 'workspaceFile', action },
-    });
+    surfaces.answer(
+      {
+        kind: 'host.request',
+        session,
+        requestId: crypto.randomUUID(),
+        request: { kind: 'workspaceFile', action },
+      },
+      action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
+    );
   const editorPane = createEditorPane({
     listFiles: async (directory) => {
       const outcome = await workspaceFile({ kind: 'list', directory });

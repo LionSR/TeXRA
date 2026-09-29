@@ -9,8 +9,8 @@
  * A host spreads the body's `handlers` into its
  * `SettingsViewInboundHandlerRegistry`, keeps its own entries for the
  * commands only it answers (its account sign-in, the Copilot routes, and
- * installing a VS Code extension or writing VS Code's settings), and routes every inbound message through the
- * body's `handleMessage`, the one parse and report boundary. The binding
+ * installing a VS Code extension or writing VS Code's settings), and runs every message it has parsed at its own edge
+ * through the body's `handleMessage`. The binding
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
@@ -65,9 +65,9 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
-  SettingsViewInboundMessageSchema,
   SUBSCRIPTION_AUTH_PROVIDERS,
   type DerivedSettingsSnapshot,
+  type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
@@ -422,19 +422,12 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   return {
     handlers,
-    /**
-     * Parse one inbound message and settle its program; `undefined` when the
-     * message is not a settings command.
-     */
+    /** Settle the program one message the host already parsed selects. */
     handleMessage(
-      message: unknown,
+      message: SettingsViewInboundMessage,
       registry: SettingsArms,
-    ): Effect.Effect<void, never, ProcessServices> | undefined {
-      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return undefined;
-      return settle(
-        settingsViewProgram(parsed.data, registry).pipe(Effect.asVoid),
-      );
+    ): Effect.Effect<void, never, ProcessServices> {
+      return settle(settingsViewProgram(message, registry).pipe(Effect.asVoid));
     },
     /** Every page's opening data. */
     postAll: withSessionFs(roots, postAll),

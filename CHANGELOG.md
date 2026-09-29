@@ -302,6 +302,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Desktop: a hung file list no longer freezes the editor tree.** Listing or
+  reading a file on a stalled network or cloud mount now fails after 60
+  seconds, so Refresh works again instead of waiting until the project
+  closes.
 - **A tool call cut off by a crash no longer runs twice unasked.** Resuming
   a run after the process died mid-call used to re-run any call that could
   run in parallel, even one with side effects. Now only read-only tools

@@ -67,14 +67,19 @@ export interface WebviewTransport {
   /** A new generation over the named transcript aggregates. */
   subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
   /** Answered on the matching `response` message of its session; answered
-   *  `Cancelled` when that session closes first or is not open. */
+   *  `Cancelled` when that session closes first or is not open, and
+   *  `Rejected` when `timeoutMs` passes with no response (the host's late
+   *  answer is then dropped). */
   request(
     message: Extract<UpMessage, { requestId: string }>,
+    timeoutMs?: number,
   ): Promise<Response['result']>;
   /** A `host.request` settled with the host's outcome, or failed with its
-   *  refusal (a session that closes first is a refusal too). */
+   *  refusal (a session that closes first, or `timeoutMs` passing, is a
+   *  refusal too). */
   answer(
     message: Extract<UpMessage, { kind: 'host.request' }>,
+    timeoutMs?: number,
   ): Promise<HostOutcome>;
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
@@ -169,6 +174,7 @@ export function installWebviewTransport(
 
   const request = (
     message: Extract<UpMessage, { requestId: string }>,
+    timeoutMs?: number,
   ): Promise<Response['result']> => {
     const session = sessions.get(message.session);
     if (!session) {
@@ -180,8 +186,27 @@ export function installWebviewTransport(
     const settled = Deferred.makeUnsafe<Response['result']>();
     session.pending.set(message.requestId, settled);
     post(message);
+    const response =
+      timeoutMs === undefined
+        ? Deferred.await(settled)
+        : Deferred.await(settled).pipe(
+            Effect.timeoutOrElse({
+              duration: timeoutMs,
+              orElse: () =>
+                Effect.sync((): Response['result'] => {
+                  session.pending.delete(message.requestId);
+                  return {
+                    ok: false,
+                    error: {
+                      _tag: 'Rejected',
+                      reason: 'The host did not answer in time.',
+                    },
+                  };
+                }),
+            }),
+          );
     return runtime.runPromise(
-      Deferred.await(settled).pipe(
+      response.pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.succeed(CANCELLED)
@@ -271,8 +296,8 @@ export function installWebviewTransport(
       post(message);
     },
     request,
-    async answer(message) {
-      const result = await request(message);
+    async answer(message, timeoutMs) {
+      const result = await request(message, timeoutMs);
       if (result.ok) return result.outcome as HostOutcome;
       throw new Error(
         'reason' in result.error

@@ -172,6 +172,7 @@ describe('desktop preview host', () => {
             onError: () => {},
           }),
           draftRequests,
+          workspaceFile: () => Effect.succeed({ kind: 'done' }),
           workspacePath: undefined,
           resourcesPath: '/resources',
           postToRenderer: () => {},

@@ -188,7 +188,13 @@ export function createMessageRoutes(
   return (data) => {
     if (typeof data !== 'object' || data === null) return;
     if ('command' in data && typeof data.command === 'string') {
-      table.get(data.command)?.(data);
+      const route = table.get(data.command);
+      if (route) route(data);
+      // The settings view's camelCase pushes share this window; a `desktop:`
+      // push is the main process's, and one with no route is a command added
+      // to the outbound schema without its renderer end.
+      else if (data.command.startsWith('desktop:'))
+        console.warn(`No renderer route for ${data.command}`);
     }
   };
 }

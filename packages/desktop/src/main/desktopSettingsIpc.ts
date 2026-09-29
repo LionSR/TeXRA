@@ -25,7 +25,7 @@ import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { DesktopCommandRoute } from './desktopIpcTypes.js';
+import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -236,13 +236,9 @@ export function createDesktopSettingsIpc(
   const settingsIpc: DesktopSettingsIpc = {
     refreshAfterAuthChange: body.refreshAfterAuthChange,
     signInSubscription: body.signInSubscription,
-    route: (message) =>
-      body.handleMessage(message, registry) ??
-      Effect.sync(() =>
-        console.warn(
-          `Dropped a malformed settings message: ${message.command}`,
-        ),
-      ),
+    route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
+      body.handleMessage(message, registry),
+    ),
   };
   return Effect.as(
     Effect.forEach(
