@@ -12,13 +12,16 @@
  *   with the current arm; a higher one, or a kind this build lacks, is
  *   `Blocked`; a known version that fails its schema is `Corrupt`. A
  *   plugin value carries its arm's version and is upcast through the arm.
- * - **Blobs.** A `context.blob` row's value is stored once per store, in the
- *   `blob` table under the sha256 of its canonical JSON; the row keeps the
- *   digest and the read joins the value back.
+ * - **Blobs.** A payload string of 4096+ characters is stored once per store,
+ *   zstd of its JSON encoding (lone surrogates survive) under that text's
+ *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
+ *   stored `$$b`), and the read inflates it, digest verified. A
+ *   `context.blob` row's value is stored as its canonical JSON text.
  * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
  *   `logical_id`, and composed back from them here.
  */
 import { createHash } from 'node:crypto';
+import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect } from 'effect';
 import { z } from 'zod';
@@ -42,22 +45,43 @@ import type { SqlError } from 'effect/unstable/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
 
+// zstd: Node 22.15+ (the CLI needs 22.19; Electron and VS Code ship 24).
+if (typeof zstdCompressSync !== 'function')
+  throw new Error('The session store needs zstd: Node 22.19 or later.');
+
+/** A payload key shaped `$b`, `$$b`, …: stored with one more `$`. */
+const REF_SHAPED = /^\$+b$/;
+const ZSTD_LEVEL_3 = { params: { [constants.ZSTD_c_compressionLevel]: 3 } };
+const sha256 = (text: string) =>
+  createHash('sha256').update(text).digest('hex');
+/** An object with its keys of the reference's shape renamed, or itself. */
+const renameRefShaped = (value: object, rename: (key: string) => string) =>
+  Object.keys(value).some((key) => REF_SHAPED.test(key))
+    ? Object.fromEntries(
+        Object.entries(value).map(([key, field]) => [
+          REF_SHAPED.test(key) ? rename(key) : key,
+          field,
+        ]),
+      )
+    : value;
+
 /** The column tuple every event read selects over {@link EVENT_FROM}. */
 export const EVENT_COLUMNS = `e."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, e.type AS type,
   e.version AS version, e.origin AS origin, e.at AS at, e.data AS data,
-  b.value AS blobValue`;
-/** An event `e`'s aggregate key and blob value, joined on. */
-export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate
-  LEFT JOIN blob b ON b.digest = e.blob`;
-/** An event with its aggregate's key and its blob's value. */
+  (SELECT group_concat(r.digest || hex(b.value)) FROM event_blob r
+    JOIN blob b ON b.digest = r.digest WHERE r."commit" = e."commit") AS blobs`;
+/** An event `e`'s aggregate key, joined on. */
+export const EVENT_JOINS = `JOIN event_sequence s ON s.id = e.aggregate`;
+/** An event with its aggregate's key and its blobs, each its digest then
+ *  its value in hex. */
 export const EVENT_FROM = `event e ${EVENT_JOINS}`;
 /** The same tuple for a projected row, on its source row's envelope: this
  *  build's projector wrote it, so it is at the current version. */
 export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
   s.logical_id AS logicalId, s.uid AS uid, e.seq AS seq, p.type AS type,
   NULL AS version, e.origin AS origin, e.at AS at, p.data AS data,
-  NULL AS blobValue`;
+  NULL AS blobs`;
 export const PROJECTED_FROM = `projected_row p
   JOIN event e ON e."commit" = p."commit"
   JOIN event_sequence s ON s.id = e.aggregate`;
@@ -82,12 +106,12 @@ const AGGREGATES_ABOVE = `SELECT s.kind AS kind,
   WHERE e.type = ? AND e.version > ?
   GROUP BY e.aggregate`;
 
-/** A draft as `Database` inserts it. */
+/** A draft as `Database` inserts it, with the blobs it references. */
 export interface EncodedRow {
   readonly type: string;
   readonly version: number;
   readonly data: string;
-  readonly blob: { readonly digest: string; readonly value: string } | null;
+  readonly blobs: readonly { digest: string; value: Uint8Array }[];
 }
 
 /** An aggregate as its two columns. */
@@ -134,27 +158,35 @@ export function prepareEventDraft(input: SessionEventDraft): {
 export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   const { type, aggregateId: _key, ...payload } = draft;
   const { version } = ROW_KINDS[type];
-  if (draft.type !== 'context.blob') {
-    return {
-      type,
-      version,
-      data: JSON.stringify(payload),
-      blob: null,
-    };
+  let stored: object = payload;
+  if (draft.type === 'context.blob') {
+    const { digest, value } = draft.payload;
+    const canonical = stableStringify(value);
+    if (canonical === undefined || sha256(canonical) !== digest)
+      throw new Error(`The context blob ${digest} does not hash to its digest`);
+    stored = { ...payload, payload: { digest, value: canonical } };
   }
-  const { digest, value } = draft.payload;
-  const canonical = stableStringify(value);
-  if (
-    canonical === undefined ||
-    createHash('sha256').update(canonical).digest('hex') !== digest
-  ) {
-    throw new Error(`The context blob ${digest} does not hash to its digest`);
-  }
+  const blobs = new Map<string, string>();
+  // The replacer sees each value (after `toJSON`) before its children.
+  const data = JSON.stringify(stored, (_key, value: unknown) => {
+    if (typeof value === 'string' && value.length >= 4096) {
+      const json = JSON.stringify(value);
+      const digest = sha256(json);
+      blobs.set(digest, json);
+      return { $b: digest };
+    }
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? renameRefShaped(value, (key) => `$${key}`)
+      : value;
+  });
   return {
     type,
     version,
-    data: JSON.stringify({ ...payload, payload: { digest } }),
-    blob: { digest, value: canonical },
+    data,
+    blobs: Array.from(blobs, ([digest, text]) => ({
+      digest,
+      value: zstdCompressSync(text, ZSTD_LEVEL_3),
+    })),
   };
 }
 
@@ -185,10 +217,29 @@ const RowSchema = z.object({
   origin: z.string(),
   at: z.int(),
   data: z.string(),
-  blobValue: z.string().nullable(),
+  blobs: z.string().nullable(),
 });
 
 const JsonObjectSchema = z.record(z.string(), z.json());
+
+/** `data`, its references inflated from `blobs` (one missing or not hashing
+ *  to its digest throws) and its escaped keys restored. */
+function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
+  if (!/"\$+b":/.test(data)) return JSON.parse(data);
+  const hex = new Map(
+    blobs?.split(',').map((b) => [b.slice(0, 64), b.slice(64)]),
+  );
+  return JSON.parse(data, (_key, value: unknown) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+      return value;
+    if (!('$b' in value)) return renameRefShaped(value, (key) => key.slice(1));
+    const digest = String(value.$b);
+    const zst = Buffer.from(hex.get(digest) ?? '', 'hex');
+    const text = zstdDecompressSync(zst).toString('utf8');
+    if (sha256(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
+    return z.string().parse(JSON.parse(text));
+  });
+}
 
 export function decodeRow(
   input: Readonly<Record<string, unknown>>,
@@ -214,21 +265,14 @@ export function decodeRow(
   if (stored > kind.version) return blocked('newer');
   let data: Record<string, JsonValue>;
   try {
-    data = JsonObjectSchema.parse(JSON.parse(row.data));
+    data = JsonObjectSchema.parse(parseData(row));
     for (const step of kind.upcast.slice(stored - 1)) data = { ...step(data) };
     if (row.type === 'context.blob') {
       const field = JsonObjectSchema.parse(data.payload);
       // The value is stored canonical, so its text hashes to its address.
-      if (
-        row.blobValue === null ||
-        createHash('sha256').update(row.blobValue).digest('hex') !==
-          field.digest
-      )
-        return blocked('corrupt');
-      data = {
-        ...data,
-        payload: { ...field, value: JSON.parse(row.blobValue) },
-      };
+      const text = z.string().parse(field.value);
+      if (sha256(text) !== field.digest) return blocked('corrupt');
+      data = { ...data, payload: { ...field, value: JSON.parse(text) } };
     }
   } catch {
     return blocked('corrupt');

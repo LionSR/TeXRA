@@ -177,6 +177,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Session history takes several times less disk** — long tool output,
+  attached images and PDFs, and long prompts are stored compressed and
+  only once per workspace: the same image attached in two runs, or a file's
+  text in both a tool's result and the conversation, is kept once, and an
+  attachment takes about its own size on disk instead of several times it.
+  Deleting a run frees what only it used.
 - **Enabling a skill or plugin mid-run no longer re-reads the whole
   conversation at full price** — the agent is told what changed, and the
   earlier conversation stays cached. Adding or removing a tool still costs

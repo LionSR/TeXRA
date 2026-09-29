@@ -323,7 +323,7 @@ export const READ_LISTING = `SELECT * FROM (
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
     s.uid AS uid,
     e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
-    e.at AS at, u.usage AS data, NULL AS blobValue
+    e.at AS at, u.usage AS data, NULL AS blobs
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
