@@ -5,10 +5,9 @@ import { Cause, Effect, Fiber } from 'effect';
 
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { formProgress, setTransientNotice } from '../state/cliState';
-import { appendLocalAssistantTranscript } from '../state/transcript';
+import { appendLocalNotice } from '../state/transcript';
 import {
   type SlashCommandEffect,
   type SlashCommandOutput,
@@ -74,7 +73,7 @@ export function formSelectionHandler<T>({
           return;
         }
         if (echoOnPersist) onPersist?.();
-        appendLocalAssistantTranscript(current.copyableMessage);
+        appendLocalNotice(current.copyableMessage);
         formProgress.set({
           ...current,
           message: 'Authentication instructions were written to scrollback.',
@@ -94,7 +93,7 @@ export function formSelectionHandler<T>({
         appendOutcome: (message) => {
           if (!currentProgress()) return;
           if (echoOnPersist) onPersist?.();
-          appendLocalAssistantTranscript(message);
+          appendLocalNotice(message);
           const current = currentProgress();
           if (current) formProgress.set({ ...current, message });
         },
@@ -137,11 +136,7 @@ export function formSelectionHandler<T>({
                 const copyableMessage = current.copyableMessage;
                 yield* reportError(
                   copyableMessage
-                    ? new Error(
-                        `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
-                          copyableMessage,
-                        )}`,
-                      )
+                    ? new Error(`${errorMessage}\n${copyableMessage}`)
                     : error,
                 );
                 current = currentProgress();

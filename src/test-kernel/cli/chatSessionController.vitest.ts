@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => ({
   detachHostInteractions: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  appendLocalAssistantTranscript: vi.fn(),
+  appendLocalNotice: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
   appendLocalUserTranscript: vi.fn(),
   clearLocalTranscript: vi.fn(),
@@ -64,7 +64,7 @@ vi.mock('@cli/chat/tui/state/subscribeApprovals', () => ({
 vi.mock('@cli/chat/tui/state/transcript', () => ({
   describeRequestError: (error: { reason?: string; _tag: string }) =>
     error.reason ?? error._tag,
-  appendLocalAssistantTranscript: mocks.appendLocalAssistantTranscript,
+  appendLocalNotice: mocks.appendLocalNotice,
   appendLocalErrorTranscript: mocks.appendLocalErrorTranscript,
   appendLocalUserTranscript: mocks.appendLocalUserTranscript,
   clearLocalTranscript: mocks.clearLocalTranscript,

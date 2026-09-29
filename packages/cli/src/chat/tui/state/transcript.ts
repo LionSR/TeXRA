@@ -55,15 +55,14 @@ export const notices = signal<readonly LocalNotice[]>([]);
 
 let localEntrySeq = 0;
 
-export function appendLocalAssistantTranscript(
-  text: string,
-  runId?: RunId,
-): void {
-  appendLocalTranscriptEntry('assistant', text, runId);
+/** A result the TUI itself reports (a slash command, a model fallback): a
+ *  dim, marked row, so it never reads as the model speaking. */
+export function appendLocalNotice(text: string, runId?: RunId): void {
+  appendLocalTranscriptEntry('notice', text, runId);
 }
 
-export function appendLocalErrorTranscript(text: string): void {
-  appendLocalTranscriptEntry('error', text);
+export function appendLocalErrorTranscript(text: string, runId?: RunId): void {
+  appendLocalTranscriptEntry('error', text, runId);
 }
 
 export function appendLocalUserTranscript(text: string): void {
@@ -72,7 +71,7 @@ export function appendLocalUserTranscript(text: string): void {
 
 /** The one non-event row producer. */
 function localTranscriptRow(
-  kind: 'assistant' | 'error' | 'user',
+  kind: 'notice' | 'error' | 'user',
   id: string,
   text: string,
 ): TranscriptRow {
@@ -91,17 +90,11 @@ function localTranscriptRow(
   if (kind === 'user') {
     return { ...base, level: 'info', kind: 'user', text: body, summary: body };
   }
-  return {
-    ...base,
-    level: 'info',
-    kind: 'assistant',
-    text: body,
-    streaming: false,
-  };
+  return { ...base, level: 'info', kind: 'log', text: body };
 }
 
 function appendLocalTranscriptEntry(
-  kind: 'assistant' | 'error' | 'user',
+  kind: 'notice' | 'error' | 'user',
   text: string,
   explicitRunId?: RunId,
 ): void {
@@ -246,7 +239,7 @@ export function appendLocalRequestRefusal(
   error: RequestError,
   runId: RunId,
 ): void {
-  appendLocalAssistantTranscript(describeRequestError(error), runId);
+  appendLocalErrorTranscript(describeRequestError(error), runId);
 }
 
 const CHANNEL = 'cli.transcript';

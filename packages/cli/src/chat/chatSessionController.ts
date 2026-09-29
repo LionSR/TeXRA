@@ -90,7 +90,7 @@ import {
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
   appendLocalErrorTranscript,
-  appendLocalAssistantTranscript,
+  appendLocalNotice,
   appendLocalUserTranscript,
   clearLocalTranscript,
   describeRequestError,
@@ -320,7 +320,7 @@ export function createChatSessionController(
   // Said in the transcript the controller writes to, not on stderr before
   // Ink mounts, where it would be left above the header.
   if (runtimeSession.storeMovedAside) {
-    appendLocalAssistantTranscript(
+    appendLocalNotice(
       sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
     );
   }
@@ -532,7 +532,7 @@ export function createChatSessionController(
       if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
-        appendLocalAssistantTranscript(
+        appendLocalNotice(
           'Finish the active chat before resuming a previous session.',
         );
         return Effect.void;
@@ -854,7 +854,7 @@ export function createChatSessionController(
   ) {
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
-      appendLocalAssistantTranscript(
+      appendLocalNotice(
         FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focusedChild.runId,
       );
@@ -1001,10 +1001,7 @@ export function createChatSessionController(
                 : { status: 'queued', wake: outcome.value.wake ?? undefined },
             );
             if (presentation.severity !== 'none') {
-              appendLocalAssistantTranscript(
-                presentation.message,
-                followUpTarget,
-              );
+              appendLocalNotice(presentation.message, followUpTarget);
             }
             return;
           }
@@ -1018,7 +1015,7 @@ export function createChatSessionController(
           if (followUpTarget === session.runId) {
             session.stopRequested = true;
           } else {
-            appendLocalAssistantTranscript(
+            appendLocalNotice(
               FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
               followUpTarget,
             );
@@ -1060,7 +1057,7 @@ export function createChatSessionController(
   const activateSkill = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
-    appendLocalAssistantTranscript(
+    appendLocalNotice(
       [
         `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
         'It will be applied to your next message.',

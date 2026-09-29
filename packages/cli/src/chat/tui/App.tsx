@@ -75,7 +75,8 @@ import {
   sessionListRunIds,
 } from './state/cliState';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
+  appendLocalNotice,
   describeRequestError,
 } from './state/transcript';
 import {
@@ -296,7 +297,7 @@ export function App(props: AppProps): React.JSX.Element {
     props.runtime.runFork(
       Effect.catch(props.session.requests.request(req), (error) =>
         Effect.sync(() =>
-          appendLocalAssistantTranscript(describeRequestError(error)),
+          appendLocalErrorTranscript(describeRequestError(error)),
         ),
       ),
     );
@@ -312,7 +313,7 @@ export function App(props: AppProps): React.JSX.Element {
   const archiveInfoPane = useCallback((lines: readonly string[]) => {
     if (infoPaneSignal.get()?.lines !== lines) return;
     closeInfoPane();
-    appendLocalAssistantTranscript(lines.join('\n'));
+    appendLocalNotice(lines.join('\n'));
   }, []);
   function renderReader(
     reader: NonNullable<typeof foregroundReader>,

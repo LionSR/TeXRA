@@ -42,7 +42,7 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // The root-agent selection writes a local notice, whose sink reads the bound
 // session view. Nothing here renders a TUI, so the sink stands in for it.
 vi.mock('@cli/chat/tui/state/transcript', () => ({
-  appendLocalAssistantTranscript: vi.fn(),
+  appendLocalNotice: vi.fn(),
 }));
 
 /**

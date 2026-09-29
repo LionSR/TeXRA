@@ -39,7 +39,6 @@ import {
   RESEARCHER_ACCESS_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -227,5 +226,5 @@ export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
   const lines = yield* logoutLines(target, stores, secrets);
-  output.appendOutcome(collapseWhitespace(lines.join(' · ')));
+  output.appendOutcome(lines.join('\n'));
 });
