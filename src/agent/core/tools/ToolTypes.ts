@@ -68,6 +68,16 @@ export interface ITool<E = Error, R = never> {
    */
   readonly parallelSafe?: boolean;
   /**
+   * Whether a call recorded as started, with no result, may run again on
+   * resume without asking: `'safe'` only for a read-only or idempotent tool,
+   * whose second run changes nothing the first did not. Omitted is
+   * `'unsafe'`. Independent of `parallelSafe`, which is about concurrency.
+   * The response row saves the declaration with each call, and a resume
+   * re-runs a call only when that saved word and the current one both say
+   * `'safe'` (`toolUseDispatch.ts`).
+   */
+  readonly replay?: 'safe' | 'unsafe';
+  /**
    * Whether a call needs a person's approval, and who asks for it. `true`:
    * the run loop asks before the body runs, spelling the call as `guard.bash`
    * does when the guard names one and as the tool's name and arguments

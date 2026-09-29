@@ -163,6 +163,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
 
 export const ArxivSearchTool = defineTool({
   name: 'arxiv_search',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Search arXiv for papers and return basic metadata for each hit. Use field="author" for author name searches.',

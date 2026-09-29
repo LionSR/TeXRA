@@ -269,6 +269,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
  */
 export const LeanLoogleTool = defineTool({
   name: 'lean_loogle',
+  replay: 'safe',
   parallelSafe: true,
   description: `Search for Lean 4 / Mathlib theorems and definitions by type signature or name.
 

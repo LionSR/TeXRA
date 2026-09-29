@@ -296,6 +296,8 @@ interface DispatchKit {
   readonly session: SessionHandle;
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
+  /** The state before the response: the one a live dispatch's cell opened on. */
+  readonly opened: RunState;
   readonly workspace: AgentWorkspaceState;
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
@@ -395,6 +397,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     runId,
     session,
     state,
+    opened,
     workspace: AgentWorkspaceState.create(),
     tools,
     layer,
@@ -403,7 +406,8 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit) =>
-  makeRunCell(kit.runId, kit.state).pipe(
+  makeRunCell(kit.runId, kit.opened).pipe(
+    Effect.tap((cell) => cell.adopt(kit.state)),
     Effect.flatMap((cell) =>
       dispatchPendingResponse(cell, kit.workspace, {
         definitions: [],

@@ -217,6 +217,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
 
 export const LeanDiagnosticsTool = defineTool({
   name: 'lean_diagnostics',
+  replay: 'safe',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
 
 Commands:
@@ -408,6 +409,7 @@ function executeLeanInspectTool(
 
 export const LeanInspectTool = defineTool({
   name: 'lean_inspect',
+  replay: 'safe',
   description: `Inspect proof state or type information at a position in a Lean 4 file.
 
 Types:

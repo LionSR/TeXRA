@@ -139,6 +139,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
 
 export const VerifySetupTool = defineTool({
   name: 'verify_setup',
+  replay: 'safe',
   description: `Verify installation status. With no input, runs a full check of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm or magick, texcount, latexdiff) and the LaTeX Workshop extension, returning a short plain-text report. With {"tool": "<name>"}, checks only that tool (falls back to a PATH search for names that don't have a known --version command). Use after running an install command to confirm it worked, or as the final step of a setup session.`,
   schema: VerifySetupInputSchema,
   execute: verify,

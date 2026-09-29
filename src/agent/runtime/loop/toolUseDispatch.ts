@@ -10,15 +10,15 @@
  * ordinary tool failures become model-visible results. Durable write failures
  * halt dispatch so an unsettled call is never recorded as successful.
  *
- * Write points: `tool.intent` before every barrier call; `tool.result` plus
+ * Write points: `tool.intent` before every call runs; `tool.result` plus
  * its `tool.end` card per settled call, in one batch, with attachment bytes
  * captured before the batch commits; the delivering `append` with the
  * complete tool group once, when every call of the response has settled.
  *
  * Resume reads only row data: a settled call stays settled; a duplicate
  * derives its primary; a call an earlier `endTurn` skipped keeps its saved
- * skip; a barrier with an intent and no result is outcome-unknown and asks;
- * a parallel-safe call without a result re-runs.
+ * skip; an unfinished call re-runs when `replayable` says so, else asks; a
+ * recovered call with no intent never started. The model decides on retries.
  */
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 import { z } from 'zod';
@@ -57,11 +57,19 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
-import { localCallsOf, parseCallArguments, type LocalCall } from '../run/tools';
+import {
+  localCallsOf,
+  parseCallArguments,
+  replayable,
+  SKIPPED_NOT_STARTED,
+  SKIPPED_OUTCOME_UNKNOWN,
+  type LocalCall,
+} from '../run/tools';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
+import { policyDecidedRows } from '../requestPolicy';
 import { guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import {
@@ -89,8 +97,6 @@ const STREAMED_OUTPUT_MAX = 50_000;
 
 const SKIPPED_AFTER_END_TURN =
   'Tool call skipped: an earlier tool call ended the turn.';
-const SKIPPED_OUTCOME_UNKNOWN =
-  'Tool call skipped: the run was interrupted after this call may have started, and its result was not recorded.';
 
 type Settlement = Pick<
   ToolResultPayload,
@@ -263,6 +269,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
+  // Folded from stored rows, not received here: a call with no intent never ran.
+  const recovered = cell.opened.pendingResponse?.responseId === responseId;
   const calls = localCallsOf(pending.turn);
   // The calls answer the instruction the committed state records.
   const at = initial.loop?.instruction;
@@ -571,7 +579,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   });
 
-  /** Ask whether an outcome-unknown barrier re-runs or is skipped (A3). */
+  /** Ask whether an outcome-unknown call re-runs or is skipped (A3). */
   const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
     fact: DispatchFacts,
     call: LocalCall,
@@ -630,7 +638,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             { label: rerunOption, description: 'Execute the call once more.' },
             {
               label: 'Skip',
-              description: 'Report it to the model as skipped.',
+              description: 'Tell the model its outcome is unknown.',
             },
           ],
         },
@@ -642,6 +650,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // and this opens its replacement, bound to the same call by the
     // `tool.binding` committed with it.
     if (standing === null) {
+      const payload = { kind: 'userQuestion' as const, data: request };
       yield* append([
         {
           type: 'request.opened',
@@ -649,7 +658,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           requestId,
           // The one door every durable request payload passes, whether the
           // session opens the request or the loop commits it.
-          payload: redactedForFact({ kind: 'userQuestion', data: request }),
+          payload: redactedForFact(payload),
           thread: null,
         },
         bindingRow(runId, {
@@ -657,8 +666,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           attempt: intent.attempt,
           requestId,
         }),
+        // `yolo` or a host that cannot present answers in the same batch.
+        ...policyDecidedRows(run.session, runId, payload),
       ]);
       current = yield* cell.current;
+      const policy = current.requests[requestId]?.decision;
+      const answer = policy == null ? null : decided(policy);
+      if (answer)
+        return yield* recordOutcomeDecision(fact, call, intent, answer);
     }
     // The decision is the `request.decided` row the decide command lands on
     // the tail. A plane that closes first, and a cleanup's `cancel`, leave
@@ -730,16 +745,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* settle(fact, 1, syntheticSettlement(SKIPPED_AFTER_END_TURN), []);
       return;
     }
-    if (fact.parallelSafe) {
-      const cards = admittedCards(fact, call);
-      if (cards.length > 0) yield* append(cards);
-      yield* execute(fact, call, 1);
-      return;
-    }
     const intent = current.pendingIntents[fact.callId];
     if (intent !== undefined) {
       const input = parseCallArguments(call, logger);
-      const decision = yield* decideOutcomeUnknown(fact, call, input, intent);
+      const decision = (yield* replayable(fact, step.registry, input, logger))
+        ? yield* recordOutcomeDecision(fact, call, intent, 'rerun')
+        : yield* decideOutcomeUnknown(fact, call, input, intent);
       if (decision === 'skip') {
         // The skip closes the card the interrupted attempt opened.
         yield* settle(
@@ -757,7 +768,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* execute(fact, call, intent.attempt + 1);
       return;
     }
-    // The intent precedes every barrier call, unconditionally, and a slow
+    if (recovered) {
+      yield* settle(fact, 1, syntheticSettlement(SKIPPED_NOT_STARTED), []);
+      return;
+    }
+    // The intent precedes every call, parallel-safe or not, and a slow
     // tool's card opens in the same batch.
     yield* append([
       {

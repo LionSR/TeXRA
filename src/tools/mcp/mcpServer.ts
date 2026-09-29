@@ -78,6 +78,13 @@ const ListToolsResultSchema = z.looseObject({
       name: z.string().min(1),
       description: z.string().nullish(),
       inputSchema: z.record(z.string(), z.unknown()),
+      /** MCP `ToolAnnotations`: hints only, each `false` when absent. */
+      annotations: z
+        .looseObject({
+          readOnlyHint: z.boolean().nullish(),
+          idempotentHint: z.boolean().nullish(),
+        })
+        .nullish(),
     }),
   ),
   nextCursor: z.string().nullish(),
@@ -195,6 +202,13 @@ function mcpTool(
     },
     requiresApproval: true,
     slow: true,
+    // A server tool re-runs after an interruption only when its server calls
+    // it read-only or idempotent: a repeat changes nothing either way.
+    replay:
+      listed.annotations?.readOnlyHint === true ||
+      listed.annotations?.idempotentHint === true
+        ? 'safe'
+        : 'unsafe',
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
     guard: {

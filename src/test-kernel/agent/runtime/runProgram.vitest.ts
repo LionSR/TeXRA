@@ -35,6 +35,7 @@ describe('settleRun', () => {
           const cell = {
             runId,
             current: Effect.succeed(state),
+            opened: state,
             append,
             adopt: (next: RunState) => Effect.succeed(next),
             fold: () => Effect.succeed(state),

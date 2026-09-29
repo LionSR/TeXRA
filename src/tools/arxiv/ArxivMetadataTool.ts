@@ -83,6 +83,7 @@ const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
 
 export const ArxivMetadataTool = defineTool({
   name: 'arxiv_metadata',
+  replay: 'safe',
   parallelSafe: true,
   description: 'Fetch bibliographic metadata for an arXiv paper.',
   schema: ArxivMetadataInputSchema,

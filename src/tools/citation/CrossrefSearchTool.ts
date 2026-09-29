@@ -175,6 +175,7 @@ const searchWorks = Effect.fn('CrossrefSearchTool.searchWorks')(function* (
 
 export const CrossrefSearchTool = defineTool({
   name: 'crossref_search',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Search Crossref works or look up detailed metadata for a DOI. Use command="search" with query, or command="doi" with doi.',

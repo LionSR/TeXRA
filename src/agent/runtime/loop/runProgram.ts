@@ -42,6 +42,8 @@ export interface RunCell {
   readonly runId: RunId;
   /** The state the loop continues from. Nothing mirrors it. */
   readonly current: Effect.Effect<RunState>;
+  /** The state the cell opened on: what a resume folded from stored rows. */
+  readonly opened: RunState;
   /**
    * Commit one batch against the current state and adopt what the ledger
    * folds back. Rows that read the state (a snapshot, a step, a settlement
@@ -87,6 +89,7 @@ export const makeRunCell = (
     return {
       runId,
       current: SynchronizedRef.get(ref),
+      opened,
       append: (rows) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
           ledger.appendBatch(

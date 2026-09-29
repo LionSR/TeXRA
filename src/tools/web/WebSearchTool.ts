@@ -181,6 +181,7 @@ const searchWeb = Effect.fn('WebSearchTool.execute')(function* ({
 
 export const WebSearchTool = defineTool({
   name: 'web_search',
+  replay: 'safe',
   slow: true,
   parallelSafe: true,
   description:

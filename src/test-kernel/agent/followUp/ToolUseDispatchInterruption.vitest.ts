@@ -410,8 +410,9 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(asked.questions).toHaveLength(1);
         expect(asked.questions[0].questions[0].question).toContain('toolB');
         expect(toolB.call).toHaveBeenCalledTimes(1);
-        // The call that never started runs normally on resume.
-        expect(toolC.call).toHaveBeenCalledTimes(1);
+        // The call that never started is not run blind: the model is told
+        // so and decides whether to retry it.
+        expect(toolC.call).not.toHaveBeenCalled();
 
         const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
         const group = delivered?.messages.find(
@@ -480,6 +481,58 @@ describe('tool dispatch interrupted mid-turn', () => {
         'error',
       );
     }),
+  );
+
+  /**
+   * Parallel-safe is about concurrency, not about running twice: an
+   * interrupted parallel-safe call whose tool is not replay-safe is asked
+   * about like a barrier, never re-run blind.
+   */
+  it.effect(
+    'asks before re-running a parallel-safe call that is not replay-safe',
+    () =>
+      Effect.gen(function* () {
+        const session = sessionWithInteractions({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const asked = askedQuestions(session, (question) => ({
+          action: 'submit',
+          answers: { [question.questions[0].question]: 'Skip' },
+        }));
+        const toolB = blockingTool('toolB');
+        const tools = { toolB: { ...toolB.tool, parallelSafe: true } };
+        const calls = [{ id: 'call-b', name: 'toolB' }];
+        const fiber = yield* Effect.forkDetach(
+          runToolUse({ resume: false }).pipe(
+            Effect.provide(
+              loopLayer({
+                runId,
+                session,
+                tools,
+                turns: [toolCallTurn(calls)],
+                stopAfterCycle: true,
+              }),
+            ),
+          ),
+        );
+        yield* toolB.started;
+        yield* Fiber.interrupt(fiber);
+
+        const resumed = yield* runToolUse({ resume: true }).pipe(
+          Effect.provide(
+            loopLayer({
+              runId,
+              session,
+              tools,
+              turns: [textTurn('The call was skipped.')],
+              stopAfterCycle: true,
+            }),
+          ),
+        );
+        expect(resumed.outcome).toBe('completed');
+        expect(asked.questions).toHaveLength(1);
+        expect(toolB.call).toHaveBeenCalledTimes(1);
+      }),
   );
 
   /**
