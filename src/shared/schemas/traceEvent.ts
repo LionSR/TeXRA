@@ -81,10 +81,9 @@ export const TranscriptEventSchemas = {
     finalText: z.string().optional(),
   }),
   /** Authoritative final assistant text for the round that just ended the
-   *  turn, decided once at the flow boundary that sets
-   *  `assembly.lastResponse` (after replacement-rule cleanup) and carried as
-   *  data from there. Fires at every mid-run turn boundary, not only the
-   *  terminal round (#7086). The round's MODEL_RESPONSE stream carries raw
+   *  turn, decided once at the flow boundary (after replacement-rule
+   *  cleanup) and carried as data from there. Fires at every mid-run turn
+   *  boundary, not only the terminal round (#7086). The round's MODEL_RESPONSE stream carries raw
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
   response: trace('response.finalized', { text: z.string() }),

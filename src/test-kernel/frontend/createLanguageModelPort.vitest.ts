@@ -482,7 +482,7 @@ describe('native editor model', () => {
   );
 
   it.effect.each([
-    { ...nativeRequest, temperature: 0.2 },
+    { ...nativeRequest, maxOutputTokens: 256 },
     {
       messages: [
         {

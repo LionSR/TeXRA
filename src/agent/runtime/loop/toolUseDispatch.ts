@@ -300,7 +300,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       {
         op: 'set',
         path: ['state', 'stateSlices', 'workspaceSnapshot'],
-        value: workspace.toSnapshot({ excludeAssemblyStrings: true }),
+        value: workspace.toSnapshot(),
       },
     ];
   };
@@ -956,9 +956,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       ? null
       : {
           ...saved.stateSlices,
-          workspaceSnapshot: workspace.toSnapshot({
-            excludeAssemblyStrings: true,
-          }),
+          workspaceSnapshot: workspace.toSnapshot(),
         };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),

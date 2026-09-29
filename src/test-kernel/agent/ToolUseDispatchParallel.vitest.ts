@@ -322,9 +322,7 @@ interface HarnessOptions {
 
 /** The slices of a run that has yet to touch a file. */
 const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
-  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
-    excludeAssemblyStrings: true,
-  }),
+  workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
 });
 
 /**

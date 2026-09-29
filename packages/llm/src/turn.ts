@@ -99,33 +99,24 @@ const ResponsesReasoningSchema = z
   .readonly()
   .nullable();
 const DisabledThinkingSchema = z.strictObject({ mode: z.literal('disabled') });
-const ThinkingDisplaySchema = z.enum(['summarized', 'omitted']);
 const AdaptiveThinkingSchema = z.strictObject({
   mode: z.literal('adaptive'),
-  display: ThinkingDisplaySchema,
+  display: z.literal('summarized'),
 });
 const BudgetedThinkingSchema = z.strictObject({
   mode: z.literal('enabled'),
   budgetTokens: z.int().min(1024),
-  display: ThinkingDisplaySchema,
+  display: z.literal('summarized'),
 });
 const AnthropicThinkingSchema = z.discriminatedUnion('mode', [
   DisabledThinkingSchema.readonly(),
   AdaptiveThinkingSchema.readonly(),
   BudgetedThinkingSchema.readonly(),
 ]);
-const AuthoredThinkingSchema = z.discriminatedUnion('mode', [
-  DisabledThinkingSchema.readonly(),
-  AdaptiveThinkingSchema.readonly(),
-  BudgetedThinkingSchema.partial({
-    budgetTokens: true,
-    display: true,
-  }).readonly(),
-]);
 const EffortSchema = ReasoningEffortSchema.unwrap()
   .exclude(['none', 'minimal'])
   .nullable();
-const CacheSchema = z.enum(['disabled', '5m', '1h']);
+const CacheSchema = z.enum(['disabled', '5m']);
 const ThinkingLevelSchema = z.enum(['low', 'medium', 'high']);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
@@ -135,18 +126,9 @@ export const TurnRequestSchema = z
     system: z.string().optional(),
     messages: PreparedHistorySchema,
     tools: ToolDefinitionsSchema.optional(),
-    parallelToolCalls: z.boolean().optional(),
     toolChoice: ToolChoiceSchema.optional(),
-    temperature: z.number().min(0).max(2).optional(),
     maxOutputTokens: z.int().positive().optional(),
     store: z.boolean().optional(),
-    thinkingLevel: ThinkingLevelSchema.optional(),
-    reasoning: ResponsesReasoningSchema.optional(),
-    serviceTier: z.literal('fast').nullable().optional(),
-    thinking: AuthoredThinkingSchema.optional(),
-    effort: ReasoningEffortSchema.optional(),
-    cache: CacheSchema.optional(),
-    stopSequences: z.array(z.string()).readonly().optional(),
     continuation: ContinuationSchema.optional(),
   })
   .readonly();

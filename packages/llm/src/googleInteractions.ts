@@ -601,27 +601,9 @@ export function googleInteractionsModel(
         request,
         'The canonical Google input is invalid.',
       );
-      if (authored.temperature !== undefined) {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'Google Interactions does not support temperature.',
-        });
-      }
-      if (authored.parallelToolCalls !== undefined) {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'Google parallel-call control is not implemented.',
-        });
-      }
       if (
-        authored.reasoning !== undefined ||
-        authored.serviceTier !== undefined ||
-        authored.thinking !== undefined ||
-        authored.effort !== undefined ||
-        authored.cache !== undefined ||
-        authored.stopSequences !== undefined ||
-        (authored.continuation !== undefined &&
-          authored.continuation.origin.protocol !== 'google-interactions')
+        authored.continuation !== undefined &&
+        authored.continuation.origin.protocol !== 'google-interactions'
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -652,8 +634,7 @@ export function googleInteractionsModel(
           maxOutputTokens:
             authored.maxOutputTokens ?? config.defaults.maxOutputTokens,
           store: authored.store ?? config.defaults.store,
-          thinkingLevel:
-            authored.thinkingLevel ?? config.defaults.thinkingLevel,
+          thinkingLevel: config.defaults.thinkingLevel,
         },
       });
       yield* invocationInput(turn, origin);
