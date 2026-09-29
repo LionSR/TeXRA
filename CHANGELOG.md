@@ -311,7 +311,9 @@ All notable changes to this project will be documented in this file.
   restart. The agent list and the launch now read one validated definition, so
   an agent with a missing parent, an inheritance loop or a bad value is
   reported as a problem with its file instead of being listed and then failing
-  when you run it.
+  when you run it. A saved edit is loaded within a third of a second, and a run
+  launched inside that window loads it first. A run that names an agent the
+  catalog could not load says so, rather than that the agent does not exist.
 
 - **Desktop model requests no longer fail with "Connection error".** The
   desktop app's bundled runtime rejected the proxy-aware connection model calls

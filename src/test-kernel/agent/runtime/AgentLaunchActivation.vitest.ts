@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   resolveAgentForLaunch: mocks.resolve,
+  settledCatalog: Effect.void,
 }));
 vi.mock('@agent/prompt/templateInputs', () => ({
   buildTemplateInputs: mocks.buildVars,

@@ -25,6 +25,7 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
@@ -59,6 +60,12 @@ const cache = new Map<string, AgentEntry>();
 /** Custom-directory YAML the last published load could not turn into an agent. */
 let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
 
+/** Why the last load failed; absent once one publishes. */
+let loadFailure: string | undefined;
+
+/** A source changed and its reload has not begun; cleared as a scan starts. */
+let changePending = false;
+
 /**
  * Loads are serialized on one per-key lane: every load enters it, so the
  * registry has one serialization point instead of a promise plus a queue.
@@ -82,6 +89,7 @@ const scanCatalog: Effect.Effect<
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > = Effect.gen(function* () {
+  changePending = false;
   const startTime = yield* Clock.currentTimeMillis;
 
   const dirs = yield* AgentDirectories;
@@ -174,8 +182,42 @@ export function refresh(): Effect.Effect<
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > {
-  return onCatalogLoadLane(scanCatalog);
+  return onCatalogLoadLane(
+    scanCatalog.pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          loadFailure = undefined;
+        }),
+      ),
+      Effect.tapError((error) =>
+        Effect.sync(() => {
+          loadFailure = toErrorMessage(error);
+        }),
+      ),
+    ),
+  );
 }
+
+/** Why the last load failed, so a launch that misses can say the catalog is
+ *  not loaded rather than that the agent does not exist. */
+export function getCatalogLoadFailure(): string | undefined {
+  return loadFailure;
+}
+
+/** A watched source changed: the reload is debounced, so the next
+ *  {@link settledCatalog} runs it now. */
+export function markCatalogStale(): void {
+  changePending = true;
+}
+
+/**
+ * The catalog a launch resolves against: any load already running has landed,
+ * and a change still waiting out its debounce is loaded now, so an agent
+ * edited a moment ago launches as saved.
+ */
+export const settledCatalog = Effect.suspend(() =>
+  changePending ? refresh() : onCatalogLoadLane(Effect.void),
+);
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)

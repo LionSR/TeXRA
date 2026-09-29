@@ -158,6 +158,12 @@ describe('agent YAML scanner', () => {
           '  agentCategory: workflow',
           '  documentTag: documents',
         ],
+        // A custom agent names its category: none is defaulted, it is reported.
+        'uncategorized.yaml': [
+          'name: uncategorized',
+          'prompts:',
+          '  systemPrompt: hi',
+        ],
         'valid.yaml': toolUseAgent('valid', 'hi'),
       });
 
@@ -172,6 +178,10 @@ describe('agent YAML scanner', () => {
         expect.objectContaining({
           path: 'retired.yaml',
           message: expect.stringContaining('documentTag'),
+        }),
+        expect.objectContaining({
+          path: 'uncategorized.yaml',
+          message: expect.stringContaining('agentCategory'),
         }),
       ]);
     }),

@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index', () => ({
+  getCatalogLoadFailure: () => undefined,
   getCustomAgentScanIssues: () => [],
   refresh: () => Effect.void,
+  settledCatalog: Effect.void,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/prompt/templateInputs', () => ({

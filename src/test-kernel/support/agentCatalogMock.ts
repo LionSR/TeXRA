@@ -26,6 +26,7 @@ const agentCatalogMock = vi.hoisted(() => ({
   getAgentsByCategory: vi.fn(),
   getCategoryAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
+  getCatalogLoadFailure: vi.fn(() => undefined),
   getCustomAgentScanIssues: vi.fn(() => []),
   // The registry's refresh is an Effect program; the callers under test run
   // it, so the fake must return an Effect, not a promise.
@@ -33,6 +34,10 @@ const agentCatalogMock = vi.hoisted(() => ({
   resolveAgentForLaunch: vi.fn(),
 }));
 
-vi.mock('@agent/index', () => ({ ...agentCatalogMock }));
+// `settledCatalog` is a value, not a call, so it cannot sit in the hoisted bag.
+vi.mock('@agent/index', () => ({
+  ...agentCatalogMock,
+  settledCatalog: Effect.void,
+}));
 
 export { agentCatalogMock };

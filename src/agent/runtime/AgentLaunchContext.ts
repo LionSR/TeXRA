@@ -5,9 +5,11 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
+  getCatalogLoadFailure,
   getCustomAgentScanIssues,
   refresh,
   resolveAgentForLaunch,
+  settledCatalog,
 } from '@agent/index';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
@@ -195,15 +197,21 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
-/** A custom agent the scan rejects is unlisted; a launch that misses names
- *  the files the scan skipped and why. */
-const scanIssuesNote = () => {
+/** A launch that misses names why: the catalog did not load, or the files the
+ *  scan skipped (a custom agent it rejects is unlisted) and their reasons. */
+const missNote = () => {
+  const failure = getCatalogLoadFailure();
   const issues = getCustomAgentScanIssues();
-  return issues.length === 0
-    ? ''
-    : `. Custom agent files that failed to load:${issues
-        .map((issue) => `\n  ${issue.path}: ${issue.message}`)
-        .join('')}`;
+  return (
+    (failure === undefined
+      ? ''
+      : `. The agent catalog did not load: ${failure}`) +
+    (issues.length === 0
+      ? ''
+      : `. Custom agent files that failed to load:${issues
+          .map((issue) => `\n  ${issue.path}: ${issue.message}`)
+          .join('')}`)
+  );
 };
 
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
@@ -217,21 +225,23 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
     // (source, name), else the visible set validation used, else the full
-    // category; never blind source-priority on a bare name. A miss rescans the
-    // local directories once, so a YAML written since the catalog loaded runs.
+    // category; never blind source-priority on a bare name. The catalog is settled
+    // first (a saved edit inside the watcher's debounce is loaded now), and a
+    // miss rescans once more.
     const resolve = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,
       fullConfig.agent,
       fullConfig.agentSource,
     );
+    yield* settledCatalog;
     const agentEntry =
       (yield* resolve) ??
       (yield* Effect.andThen(refresh(), resolve)) ??
       (yield* presentLaunchError(
         interactions,
         new AgentError(
-          `Could not find agent: ${fullConfig.agent}${scanIssuesNote()}`,
+          `Could not find agent: ${fullConfig.agent}${missNote()}`,
         ),
         'showAgentConfigBanner',
         {

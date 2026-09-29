@@ -7,12 +7,13 @@
  * sharing the global state (`AppState.changes`) or made in the custom
  * directory (`FileSystem.watch`, on every host), the catalog reloads and
  * every roster view repaints (`agentRosterChanged`). No plugin writer
- * refreshes it itself. The one other reload is a file tool's approved write
- * into the custom agents directory (`applyApprovedFileEdit` in
- * `@tools/fileEditFlow`): the `creator` agent tests the agent it just wrote
- * in its next call, so that reload is part of the write rather than a
- * watcher's later event. A launch that misses an agent reloads once
- * (`prepareAgentDefinition`).
+ * refreshes it itself. A saved edit loads after a 300 ms debounce, and a
+ * launch inside that window loads it first (`settledCatalog`). The one other
+ * reload is a file tool's approved write into the custom agents directory
+ * (`applyApprovedFileEdit` in `@tools/fileEditFlow`): the `creator` agent
+ * tests the agent it just wrote in its next call, so that reload is part of
+ * the write rather than a watcher's later event. A launch that misses an
+ * agent reloads once (`prepareAgentDefinition`).
  *
  * A host that packages a catalog (its agent directories name a resources
  * root) or names a custom directory of its own (an embedder's) gets the
@@ -44,7 +45,10 @@ import {
 } from 'effect';
 
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
-import { refresh as refreshAgentCatalog } from '@agent/index/agentRegistry';
+import {
+  markCatalogStale,
+  refresh as refreshAgentCatalog,
+} from '@agent/index/agentRegistry';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -100,9 +104,11 @@ export const reloadAgentCatalog = Effect.suspend(() =>
  * Only a `.yaml` update counts; a create or remove always does (a deleted
  * folder reports only itself). A watcher that fails mid-life (Node's JS
  * recursive watcher on Linux can, reported as `Unknown`) is retried on a
- * bounded backoff; a missing or unreadable directory fails fast. Either way
- * the end is logged, and edits then apply when the directory setting changes
- * or the process restarts.
+ * bounded backoff; a missing or unreadable directory fails fast. A watch that
+ * ends cleanly (the directory was deleted or replaced) counts as a change and
+ * is restarted, up to five times. Whatever ends the watching is logged, and
+ * edits then apply when the directory setting changes or the process
+ * restarts.
  */
 const watchCustomDirectory = Stream.unwrap(
   Effect.gen(function* () {
@@ -110,6 +116,12 @@ const watchCustomDirectory = Stream.unwrap(
       directories.custom(),
     );
     const fs = yield* FileSystem.FileSystem;
+    const stopped = (reason: string) =>
+      Stream.fromEffect(
+        Effect.logWarning(
+          `Stopped watching the custom agents directory ${directory}; edits there apply after the directory setting changes or the process restarts: ${reason}`,
+        ),
+      ).pipe(Stream.drain);
     return fs.watch(directory, { recursive: true }).pipe(
       Stream.filter(
         (event) => event._tag !== 'Update' || event.path.endsWith('.yaml'),
@@ -123,14 +135,16 @@ const watchCustomDirectory = Stream.unwrap(
           ),
         ),
       ),
+      Stream.map(() => undefined),
+      Stream.concat(Stream.make(undefined)),
+      Stream.repeat(
+        Schedule.spaced('1 second').pipe(Schedule.upTo({ times: 5 })),
+      ),
+      Stream.concat(stopped('the watch ended')),
       // fs.watch can also throw synchronously (ENOENT after a race, EMFILE,
       // ENOSPC), which surfaces as a defect.
       Stream.catchCause((cause) =>
-        Stream.fromEffect(
-          Effect.logWarning(
-            `Stopped watching the custom agents directory ${directory}; edits there apply after the directory setting changes or the process restarts: ${toErrorMessage(Cause.squash(cause))}`,
-          ),
-        ).pipe(Stream.drain),
+        stopped(toErrorMessage(Cause.squash(cause))),
       ),
     );
   }).pipe(
@@ -201,9 +215,12 @@ export const agentCatalogFollower = Layer.effectDiscard(
         times: 6,
         while: (error) => error._tag !== 'AgentCatalogLoadError',
       }),
+      // Loud, not fatal: a build that fails here would leave no host to fix
+      // the setting from. The registry keeps the reason, and a launch that
+      // misses says the catalog did not load.
       Effect.catchCause((cause) =>
         Effect.logError(
-          `The agent catalog was not reloaded, after seven tries; it lists the agents it had until the next change: ${toErrorMessage(Cause.squash(cause))}`,
+          `The agent catalog was not loaded, after its tries; it lists the agents it had until the next successful load: ${toErrorMessage(Cause.squash(cause))}`,
         ),
       ),
     );
@@ -216,6 +233,8 @@ export const agentCatalogFollower = Layer.effectDiscard(
           Effect.as(
             packaged ? registerCustomAgentRoot : Effect.void,
             watchCustomDirectory.pipe(
+              // A launch inside the debounce loads the change itself.
+              Stream.tap(() => Effect.sync(markCatalogStale)),
               Stream.debounce('300 millis'),
               Stream.mapEffect(() => reload),
             ),
@@ -227,13 +246,15 @@ export const agentCatalogFollower = Layer.effectDiscard(
     );
     // The first element is the catalog's load, and the build waits for it,
     // so nothing runs against a catalog that is not there. Later elements
-    // are a plugin's switch or install record written anywhere.
+    // are a plugin's switch, an install record or the custom directory
+    // setting, written anywhere.
     const loaded = yield* Deferred.make<void>();
     const landed = Deferred.succeed(loaded, undefined);
     yield* appState
       .changes([
         GlobalStateKey.DISABLED_TOOLS,
         GlobalStateKey.INSTALLED_PLUGINS,
+        GlobalStateKey.CUSTOM_AGENT_DIR,
       ])
       .pipe(
         Stream.runForEach(() => Effect.ensuring(reload, landed)),
