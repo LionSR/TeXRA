@@ -483,7 +483,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** The agent, team, and model catalogs (`texra.refreshAllOptions`). */
+  /** The agent, team, and model catalogs. */
   public refreshCatalogs(
     options: {
       agentCatalogAlreadyFresh?: boolean;

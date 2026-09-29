@@ -152,9 +152,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { instruction, activated } = state.loop ?? {};
     return {
       stateSlices: {
-        workspaceSnapshot: workspace.toSnapshot({
-          excludeAssemblyStrings: true,
-        }),
+        workspaceSnapshot: workspace.toSnapshot(),
       },
       ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
       ...(instruction !== undefined ? { instruction } : {}),
@@ -352,8 +350,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const body = Effect.gen(function* () {
       if (begins) {
         response = '';
-        workspace.assembly.lastResponse = '';
-        workspace.assembly.accumulatedOutput = '';
         const content = rounds ? yield* rounds.open(index) : null;
         state = yield* cell.append([
           ...(advance ? [positionRow(runId, state, 'turn.end')] : []),
@@ -406,14 +402,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 },
               ]),
             ]);
-            workspace.resetReasoning();
             return { state: next, done: false };
           }
-          if (text) {
-            workspace.assembly.lastResponse = text;
-            if (live) logger.emit({ type: 'response.finalized', text });
-          }
-          workspace.resetReasoning();
+          if (text && live) logger.emit({ type: 'response.finalized', text });
           if (
             run.finalToolName !== null &&
             !finalToolAttempted &&

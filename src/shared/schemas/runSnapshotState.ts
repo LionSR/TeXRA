@@ -104,20 +104,6 @@ export function addTurnUsage(
 
 // ------------------------------------------------------------ workspace
 
-/** Schema for thinking blocks (carried in persisted messages). */
-const ThinkingBlockSchema = z.object({
-  type: z.string(),
-  thinking: z.string().optional(),
-  signature: z.string().optional(),
-  data: z.string().optional(),
-});
-
-/** Response assembly state. */
-const ResponseAssemblyStateSchema = z.object({
-  lastResponse: z.string().prefault(''),
-  accumulatedOutput: z.string().prefault(''),
-});
-
 /** Flattened file-edit records. */
 const FileEditSnapshotSchema = z.object({
   path: z.string(),
@@ -137,20 +123,13 @@ const MediaAttachmentStateSnapshotSchema = z.object({
   files: z.array(FileLocationSchema).prefault([]),
 });
 
-/** Reasoning cache state. */
-const ReasoningCacheStateSchema = z.object({
-  thinkingBlocks: z.array(ThinkingBlockSchema).prefault([]),
-});
-
 /**
  * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
  * state has one supported format; an older record (one written before
  * `workPlan` entered the shape) fails its resume parse here.
  */
 export const AgentWorkspaceStateSnapshotSchema = z.object({
-  assembly: ResponseAssemblyStateSchema.prefault({}),
   media: MediaAttachmentStateSnapshotSchema.prefault({}),
-  reasoning: ReasoningCacheStateSchema.prefault({}),
   interactions: FileInteractionStateSnapshotSchema.prefault({}),
   workPlan: WorkPlanSnapshotSchema,
 });

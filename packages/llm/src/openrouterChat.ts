@@ -436,13 +436,7 @@ export function openrouterChatModel(
       if (
         authored.mode === 'background' ||
         authored.store !== undefined ||
-        authored.thinkingLevel !== undefined ||
-        authored.continuation !== undefined ||
-        authored.reasoning !== undefined ||
-        authored.serviceTier !== undefined ||
-        authored.cache !== undefined ||
-        authored.parallelToolCalls !== undefined ||
-        authored.thinking !== undefined
+        authored.continuation !== undefined
       )
         return yield* new ModelError({
           kind: 'unsupported',
@@ -458,16 +452,9 @@ export function openrouterChatModel(
         controls: {
           maxOutputTokens:
             authored.maxOutputTokens ?? config.defaults.maxOutputTokens,
-          temperature:
-            authored.temperature === undefined
-              ? config.defaults.temperature
-              : authored.temperature,
-          effort:
-            authored.effort === undefined
-              ? config.defaults.effort
-              : authored.effort,
-          stopSequences:
-            authored.stopSequences ?? config.defaults.stopSequences,
+          temperature: config.defaults.temperature,
+          effort: config.defaults.effort,
+          stopSequences: config.defaults.stopSequences,
           toolChoice: authored.toolChoice ?? 'auto',
         },
       });

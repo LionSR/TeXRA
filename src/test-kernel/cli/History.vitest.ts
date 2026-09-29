@@ -80,7 +80,7 @@ vi.mock('@transcript', async () => {
                 typeof actual.readCompletedRunConversation
               >),
             )
-          : { conversation, source: 'streamLog' };
+          : { conversation };
       }),
     ),
   };
@@ -377,7 +377,7 @@ describe('CLI history runtime', () => {
     });
   });
 
-  it('hides internal process-bookkeeping and configless entries from the history list', async () => {
+  it('hides internal process-bookkeeping entries from the history list', async () => {
     const processConfig = toolUseAgentConfig({ agent: 'bash' });
     mocks.listRuns.mockReturnValue(
       Effect.succeed([
@@ -388,12 +388,6 @@ describe('CLI history runtime', () => {
           id: 'bash-process' as RunId,
           timestamp: '2026-05-18T08:01:00.000Z',
           record: processConfig,
-          status: 'completed',
-        },
-        {
-          kind: 'incomplete',
-          id: 'configless' as RunId,
-          timestamp: '2026-05-18T08:02:00.000Z',
           status: 'completed',
         },
       ]),

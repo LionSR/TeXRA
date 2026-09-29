@@ -402,12 +402,11 @@ describe('native OpenAI Responses protocol', () => {
                 yield* Effect.flip(model.estimateInputTokens(rejected)),
               ).toMatchObject({ kind: 'unsupported' });
             expect(fetch).toHaveBeenCalledTimes(1);
-            const omitted = yield* model.prepareTurn({
-              messages: turn.messages,
-              reasoning: null,
+            yield* model.estimateInputTokens({
+              ...turn,
+              system: undefined,
+              controls: { ...turn.controls, reasoning: null },
             });
-            assert(omitted.mode === 'foreground');
-            yield* model.estimateInputTokens(omitted);
             const secondBody = JSON.parse(
               String(fetch.mock.calls[1]?.[1]?.body),
             );
@@ -2561,22 +2560,25 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
-    'freezes selected controls and distinguishes absent controls, explicit null and numeric zero',
+    'sends configured controls, distinguishing explicit null from numeric zero',
     () =>
       Effect.gen(function* () {
         const fetch = vi
           .fn<typeof globalThis.fetch>()
           .mockImplementation(async () => response(events([MESSAGE])));
-        const config = { ...CONFIG, defaults: { ...CONFIG.defaults } };
+        const config = {
+          ...CONFIG,
+          defaults: {
+            ...CONFIG.defaults,
+            temperature: 0,
+            parallelToolCalls: false,
+          },
+        };
         const model = modelWith(fetch, config);
         const turn = yield* model.prepareTurn({
           ...REQUEST,
-          temperature: 0,
-          parallelToolCalls: false,
           toolChoice: { name: 'read_file' },
         });
-        config.defaults.reasoning = null;
-        config.defaults.serviceTier = null;
         assert(turn.mode === 'foreground');
         yield* completedTurn(model.streamTurn(turn));
         expect(
@@ -2590,14 +2592,16 @@ describe('native OpenAI Responses protocol', () => {
           store: false,
           include: ['reasoning.encrypted_content'],
         });
-        yield* model
-          .prepareTurn({ ...REQUEST, reasoning: null, serviceTier: null })
-          .pipe(
-            Effect.flatMap((turn) => {
-              assert(turn.mode === 'foreground');
-              return completedTurn(model.streamTurn(turn));
-            }),
-          );
+        const withoutReasoning = modelWith(fetch, {
+          ...config,
+          defaults: { ...config.defaults, reasoning: null, serviceTier: null },
+        });
+        yield* withoutReasoning.prepareTurn(REQUEST).pipe(
+          Effect.flatMap((turn) => {
+            assert(turn.mode === 'foreground');
+            return completedTurn(withoutReasoning.streamTurn(turn));
+          }),
+        );
         const omitted = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
         expect(omitted.reasoning).toBeUndefined();
         expect(omitted.service_tier).toBeUndefined();
@@ -2606,11 +2610,6 @@ describe('native OpenAI Responses protocol', () => {
           supportsTemperature: false,
           defaults: { ...CONFIG.defaults, temperature: null },
         });
-        expect(
-          (yield* Effect.flip(
-            withoutTemperature.prepareTurn({ ...REQUEST, temperature: 0 }),
-          )).kind,
-        ).toBe('unsupported');
         yield* withoutTemperature.prepareTurn(REQUEST).pipe(
           Effect.flatMap((turn) => {
             assert(turn.mode === 'foreground');
@@ -2715,8 +2714,6 @@ describe('native OpenAI Responses protocol', () => {
         for (const control of [
           { maxOutputTokens: 100 },
           { store: true },
-          { temperature: 0 },
-          { reasoning: { effort: 'high', mode: null, summary: null } },
         ] satisfies readonly Partial<TurnRequest>[])
           expect(
             yield* Effect.flip(model.prepareTurn({ ...REQUEST, ...control })),

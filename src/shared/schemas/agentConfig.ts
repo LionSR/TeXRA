@@ -39,8 +39,8 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
    * Resolved source of `agent`. A boundary that validated the agent pins it;
    * launch (`prepareAgentDefinition`) stamps the entry it resolved, so every
    * run record carries it. Launch, resume, rerun and the remote checks read
-   * this instead of re-resolving the ambiguous bare name. Absent only on
-   * records written before launches stamped it; those resolve by name.
+   * this instead of re-resolving the ambiguous bare name. Absent only on a
+   * payload not yet launched, which launch resolves by name.
    */
   agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),

@@ -250,6 +250,12 @@ node, a cursor, a services bag, or a second writer of the ledger.
 
 ## Design guardrails
 
+- **Modern, scalable, not over-engineered (owner rule).** Use what SQLite
+  and Effect already provide instead of a hand-written version of it.
+  Choose shapes that keep working as data grows: content addressing, a
+  version per record kind, projections rebuilt from history, one owner per
+  fact. Then write the fewest lines that do the job, and build nothing for
+  a problem we don't have: no speculative layers, knobs or frameworks.
 - **Abstraction discipline.** Collapse pass-through layers — nodes create and
   run flows directly in `exec()`; a wrapper that only creates state, runs a
   flow, and interprets results gets inlined; deleted wrappers leave no

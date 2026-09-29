@@ -237,19 +237,9 @@ describe('desktop settings IPC', () => {
     });
 
     expect(posted).toEqual([]);
-    // Claimed either way — the settings surface owns the command — but only
-    // its own view's readiness posts anything.
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'main',
-      }),
-    ).toBe(true);
-    expect(posted).toEqual([]);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'settings',
       }),
     ).toBe(true);
     await flushAsyncWork();
@@ -276,7 +266,6 @@ describe('desktop settings IPC', () => {
 
     settings.handleMessage({
       command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'settings',
     });
     await flushAsyncWork();
     expect(usagePosts()).toEqual([]);
@@ -575,7 +564,6 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'settings',
       }),
     ).toBe(true);
     await flushAsyncWork();

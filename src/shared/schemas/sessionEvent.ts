@@ -37,7 +37,7 @@ import {
 import { RunIdSchema, type RunId } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
-import { InquiryThreadUpdatedEventSchema } from './inquiry';
+import { InquiryThreadSummarySchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
 import { PersistedJsonValueSchema, RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
@@ -349,11 +349,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     value: JsonValueSchema,
   }),
   /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
-  durable(
-    'inquiryThreadUpdated',
-    InquiryThreadUpdatedEventSchema.shape,
-    'inquiry',
-  ),
+  durable('inquiryThreadUpdated', InquiryThreadSummarySchema.shape, 'inquiry'),
   /**
    * Input a run has not taken yet (one run model, section 3.7): the whole
    * follow-up, so a resume seeds the run's queue from its rows and a crash

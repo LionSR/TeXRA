@@ -271,21 +271,13 @@ export const ModelMessagePayloadSchema = z
  * the conversation again. Whether the result is preparable is the ledger's
  * check (D11), at write and cold load: a payload cannot see its prefix.
  */
-export const ModelCompactionPayloadSchema = z
-  .strictObject({
-    keepPrefix: z.int().nonnegative(),
-    messages: z.array(MessageSchema).readonly(),
-    cause: z.enum(['context-limit', 'context-window', 'model-switch']),
-    continuation: ContinuationSchema.nullable(),
-    continuationDropped: z
-      .enum(['history-replaced', 'protocol-has-no-continuation'])
-      .nullable(),
-    usage: NormalizedUsageSchema.nullable(),
-  })
-  .refine(
-    (p) => p.continuation === null || p.continuationDropped === null,
-    'A replaced continuation is not also a dropped one.',
-  );
+export const ModelCompactionPayloadSchema = z.strictObject({
+  keepPrefix: z.int().nonnegative(),
+  messages: z.array(MessageSchema).readonly(),
+  cause: z.enum(['context-limit', 'context-window', 'model-switch']),
+  continuation: ContinuationSchema.nullable(),
+  usage: NormalizedUsageSchema.nullable(),
+});
 
 /* ------------------------------------------------------------ tool.intent */
 

@@ -74,7 +74,6 @@ export interface LogOptions {
    * may use it to pick a render style; agent-general consumers can ignore.
    */
   readonly messageType?: string;
-  readonly verbose?: boolean;
   /**
    * Stage to attach this entry to, for callers that captured a group id
    * earlier. Without one the entry belongs to no stage.

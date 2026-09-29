@@ -227,7 +227,6 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                         messages: scripted.compactTo,
                         cause: 'context-limit' as const,
                         continuation: null,
-                        continuationDropped: null,
                         usage: null,
                       },
                     },

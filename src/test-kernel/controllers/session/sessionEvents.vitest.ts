@@ -2119,7 +2119,6 @@ describe('the C1 event table and the C6 publisher', () => {
               aggregateId: runStart.aggregateId,
               level: 'info',
               message: 'non-json',
-              messageType: 'internal',
               data: 1n,
             },
           ]),

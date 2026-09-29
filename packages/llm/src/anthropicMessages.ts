@@ -513,35 +513,13 @@ export function anthropicMessagesModel(
     if (
       input.mode === 'background' ||
       input.continuation !== undefined ||
-      input.store !== undefined ||
-      input.reasoning !== undefined ||
-      input.effort === 'none' ||
-      input.effort === 'minimal' ||
-      input.thinkingLevel !== undefined ||
-      input.serviceTier !== undefined ||
-      (!config.supportsTemperature && input.temperature !== undefined)
+      input.store !== undefined
     )
       return yield* new ModelError({
         kind: 'unsupported',
         message:
           'The selected Anthropic model does not support these authored controls.',
       });
-    let thinking = input.thinking ?? config.defaults.thinking;
-    if (thinking.mode === 'enabled') {
-      thinking = {
-        mode: 'enabled',
-        budgetTokens:
-          thinking.budgetTokens ??
-          (config.defaults.thinking.mode === 'enabled'
-            ? config.defaults.thinking.budgetTokens
-            : undefined),
-        display:
-          thinking.display ??
-          (config.defaults.thinking.mode !== 'disabled'
-            ? config.defaults.thinking.display
-            : 'summarized'),
-      };
-    }
     const prepared = ResolvedTurnSchema.safeParse({
       ...origin,
       mode: 'foreground',
@@ -551,15 +529,13 @@ export function anthropicMessagesModel(
       controls: {
         maxOutputTokens:
           input.maxOutputTokens ?? config.defaults.maxOutputTokens,
-        temperature: input.temperature ?? config.defaults.temperature,
-        parallelToolCalls:
-          input.parallelToolCalls ?? config.defaults.parallelToolCalls,
+        temperature: config.defaults.temperature,
+        parallelToolCalls: config.defaults.parallelToolCalls,
         toolChoice: input.toolChoice ?? 'auto',
-        thinking,
-        effort:
-          input.effort === undefined ? config.defaults.effort : input.effort,
-        cache: input.cache ?? config.defaults.cache,
-        stopSequences: input.stopSequences ?? config.defaults.stopSequences,
+        thinking: config.defaults.thinking,
+        effort: config.defaults.effort,
+        cache: config.defaults.cache,
+        stopSequences: config.defaults.stopSequences,
       },
     });
     if (!prepared.success)

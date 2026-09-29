@@ -93,16 +93,15 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
 async function writeRun(
   id: RunId,
   timestamp: string,
-  agentConfig?: AgentConfig,
+  agentConfig: AgentConfig,
   parentRunId?: RunId,
 ): Promise<void> {
   await writeMetadata(id, {
     timestamp,
     parentRunId,
-    identity: { kind: 'agent', agent: agentConfig?.agent ?? 'assistant' },
+    identity: { kind: 'agent', agent: agentConfig.agent },
   });
-  if (agentConfig)
-    await Effect.runPromise(seedRunRecord(session, id, agentConfig));
+  await Effect.runPromise(seedRunRecord(session, id, agentConfig));
 }
 
 describe('run listing normalization', () => {
@@ -225,11 +224,10 @@ describe('run listing normalization', () => {
       }),
   );
 
-  it.effect('classifies process and incomplete storage rows explicitly', () =>
+  it.effect('classifies process storage rows explicitly', () =>
     Effect.gen(function* () {
       const processId = 'bbb222' as RunId;
       const customBashAgentId = 'ccc333' as RunId;
-      const incompleteId = 'ddd444' as RunId;
       const processStore = getRunRecords(session, processId);
       yield* Effect.promise(() =>
         writeMetadata(processId, {
@@ -241,17 +239,10 @@ describe('run listing normalization', () => {
       yield* Effect.promise(() =>
         writeRun(customBashAgentId, '2026-07-15T08:00:00.000Z', config('bash')),
       );
-      yield* Effect.promise(() =>
-        writeRun(incompleteId, '2026-07-15T07:00:00.000Z'),
-      );
 
       const entries = yield* listRuns(session);
 
-      expect(entries.map(({ kind }) => kind)).toEqual([
-        'run',
-        'run',
-        'incomplete',
-      ]);
+      expect(entries.map(({ kind }) => kind)).toEqual(['run', 'run']);
       expect(entries[0]).toMatchObject({
         kind: 'run',
         identity: { kind: 'process', tool: 'assistant' },
@@ -261,13 +252,6 @@ describe('run listing normalization', () => {
         kind: 'run',
         identity: { kind: 'agent', agent: 'bash' },
         record: { agent: 'bash' },
-      });
-      expect(entries[2]).toEqual({
-        kind: 'incomplete',
-        id: incompleteId,
-        timestamp: '2026-07-15T07:00:00.000Z',
-        status: 'ready',
-        checkpointPresent: false,
       });
       expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);
     }),

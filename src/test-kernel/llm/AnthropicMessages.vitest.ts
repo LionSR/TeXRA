@@ -29,7 +29,7 @@ const CONFIG: AnthropicMessagesConfiguration = {
     parallelToolCalls: false,
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
-    cache: '1h',
+    cache: '5m',
     stopSequences: [],
   },
 };
@@ -426,9 +426,8 @@ describe('canonical Anthropic Messages protocol', () => {
   );
 
   it.effect.each([
-    [undefined, '1h'],
-    ['', '1h'],
-    [' Exact system\n', '1h'],
+    [undefined, '5m'],
+    ['', '5m'],
     [' Exact system\n', '5m'],
     [' Exact system\n', 'disabled'],
   ] as const)(
@@ -446,8 +445,9 @@ describe('canonical Anthropic Messages protocol', () => {
             thinking: {
               mode: 'enabled',
               budgetTokens: 2048,
-              display: 'omitted',
+              display: 'summarized',
             },
+            cache,
           },
         });
         expect(
@@ -457,7 +457,6 @@ describe('canonical Anthropic Messages protocol', () => {
         assert(configured.estimateInputTokens);
         const turn = yield* configured.prepareTurn({
           ...(system === undefined ? {} : { system }),
-          cache,
           messages: [
             {
               role: 'user',
@@ -510,7 +509,7 @@ describe('canonical Anthropic Messages protocol', () => {
           thinking: {
             type: 'enabled',
             budget_tokens: 2048,
-            display: 'omitted',
+            display: 'summarized',
           },
           output_config: { effort: 'high' },
           ...(cache === 'disabled'
@@ -554,7 +553,7 @@ describe('canonical Anthropic Messages protocol', () => {
               thinking: {
                 mode: 'enabled',
                 budgetTokens: 10000,
-                display: 'omitted',
+                display: 'summarized',
               },
             },
           };
@@ -838,14 +837,14 @@ describe('canonical Anthropic Messages protocol', () => {
             {
               type: 'text',
               text: REQUEST.system,
-              cache_control: { type: 'ephemeral', ttl: '1h' },
+              cache_control: { type: 'ephemeral', ttl: '5m' },
             },
           ],
           stream: true,
           temperature: 1,
           thinking: { type: 'adaptive', display: 'summarized' },
           output_config: { effort: 'high' },
-          cache_control: { type: 'ephemeral', ttl: '1h' },
+          cache_control: { type: 'ephemeral', ttl: '5m' },
           tool_choice: {
             type: 'tool',
             name: 'search',
@@ -876,7 +875,6 @@ describe('canonical Anthropic Messages protocol', () => {
           JSON.parse(
             JSON.stringify({
               ...REQUEST,
-              effort: null,
               messages: [
                 ...REQUEST.messages,
                 {
@@ -920,7 +918,6 @@ describe('canonical Anthropic Messages protocol', () => {
         const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
         expect(sent.system).toEqual(first.system);
         expect(sent.cache_control).toEqual(first.cache_control);
-        expect(sent).not.toHaveProperty('output_config');
         for (const body of [first, sent]) {
           expect(body).not.toHaveProperty('inference_geo');
           expect(body).not.toHaveProperty('service_tier');
@@ -1067,22 +1064,9 @@ describe('canonical Anthropic Messages protocol', () => {
   );
 
   it.effect.each([
-    { temperature: 0.5 },
-    {
-      thinking: { mode: 'enabled', budgetTokens: 8192, display: 'summarized' },
-    },
-    { thinking: { mode: 'enabled' } },
-    {
-      thinking: { mode: 'enabled', budgetTokens: 1024, display: 'summarized' },
-      toolChoice: { name: 'search' },
-    },
     { toolChoice: { name: 'absent' } },
-    { serviceTier: null },
-    { serviceTier: 'fast' },
     { mode: 'background' },
     { store: true },
-    { effort: 'none' },
-    { effort: 'minimal' },
     {
       messages: [
         {
