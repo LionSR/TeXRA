@@ -376,8 +376,7 @@ export function executeCliRequest(
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;
-          // The run's ending committed just above, so the checkpoint alone
-          // decides whether the recovery notice is usable.
+          // The run's end committed above: the checkpoint alone decides the notice.
           if (onFinalized !== undefined) {
             const advertise = yield* advertisesInterruptedRun(
               runId,
