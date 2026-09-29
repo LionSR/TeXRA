@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -401,7 +402,7 @@ describe('desktop preview host', () => {
           expect.objectContaining({
             command: 'desktop:showPdf',
             title: 'paper.pdf',
-            pdfPath,
+            pdfUrl: pathToFileURL(pdfPath).href,
           }),
         );
         expect(shell.openPath).not.toHaveBeenCalled();
