@@ -1,6 +1,6 @@
 import { invalidateStaticTranscriptForRepaint } from '../state/staticTranscriptRepaint';
 
-export interface TuiRepaintOptions {
+interface TuiRepaintOptions {
   readonly clearScrollback?: boolean;
   readonly preserveStatic?: boolean;
 }

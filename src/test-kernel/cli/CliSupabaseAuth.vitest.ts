@@ -101,7 +101,6 @@ vi.mock('@auth/SupabaseAuth', async (importActual) => {
 });
 
 vi.mock('@auth/SupabaseSession', () => ({
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS: 60_000,
   toStorableSupabaseSession: mocks.toStorableSupabaseSession,
 }));
 

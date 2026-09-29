@@ -554,7 +554,7 @@ const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
 
 let usageColorOverride: boolean | undefined;
 
-export function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
+function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
   for (let index = 0; index < rawArgs.length;) {
     const arg = rawArgs[index];
     if (arg === undefined || arg === '--') return false;

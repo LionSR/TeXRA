@@ -247,12 +247,6 @@ function runCliUpdate(
 /** Once-per-process latch for {@link notifyCliUpdate}. */
 let updateNotifyStarted = false;
 
-/** Clear the once-per-process {@link notifyCliUpdate} latch. Tests only:
- *  a process never re-runs the check. */
-export function resetCliUpdateNotifyLatchForTests(): void {
-  updateNotifyStarted = false;
-}
-
 /**
  * Once per process: check the package source for a newer release (at most
  * once per day, throttled through a stamp persisted in global state) and, in

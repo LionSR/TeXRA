@@ -14,7 +14,6 @@ import {
   buildDoctorReport,
   doctorExitCode,
   doctorNdjsonRecords,
-  formatDoctorText,
   type DoctorReport,
   writeDoctorReport,
 } from '@cli/runtime/doctor';
@@ -264,7 +263,7 @@ describe('CLI doctor', () => {
 
   it('redacts email-like values outside the auth account message', () => {
     const report: DoctorReport = {
-      ok: false,
+      ok: true,
       checks: [
         {
           id: 'auth',
@@ -282,7 +281,7 @@ describe('CLI doctor', () => {
       ],
     };
 
-    const text = formatDoctorText(report);
+    const text = captureDoctorStdout(context, report);
     const records = doctorNdjsonRecords(report, NDJSON_TS);
 
     expect(text).toContain('Signed in as user@example.edu.');

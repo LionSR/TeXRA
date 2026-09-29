@@ -1,10 +1,7 @@
 // Local imports - tools
 import { createBasePollState } from '@tools/github/PollingSourceBase';
 import { DedupedResource, MAX_SEEN_IDS } from '@tools/github/pollingDedup';
-import type {
-  PRCurrentShaState,
-  PRSubscriptionState,
-} from '@tools/github/PRPollingSource';
+import type { PRSubscriptionState } from '@tools/github/PRPollingSource';
 import type {
   GhIssueComment,
   GhReview,
@@ -17,6 +14,8 @@ import type {
  * state, so building it through the production types is what makes a new
  * state field a compile error here instead of a silently-stale test double.
  */
+
+type PRCurrentShaState = NonNullable<PRSubscriptionState['currentShaState']>;
 
 export function createPRCurrentShaState(
   sha: string,

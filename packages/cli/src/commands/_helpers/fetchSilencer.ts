@@ -3,7 +3,7 @@ import isNetworkError from 'is-network-error';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export function isCliFetchStackLog(args: readonly unknown[]): boolean {
+function isCliFetchStackLog(args: readonly unknown[]): boolean {
   const [first] = args;
   if (!(first instanceof Error)) return false;
   const cause = first.cause;

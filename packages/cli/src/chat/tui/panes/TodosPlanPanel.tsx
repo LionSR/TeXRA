@@ -47,7 +47,7 @@ function TodoRow({ todo }: { readonly todo: TodoItem }): React.JSX.Element {
   );
 }
 
-export type CompactTodosPlanRow =
+type CompactTodosPlanRow =
   | { kind: 'todo'; sourceIndex: number; todo: TodoItem }
   | { kind: 'completedSummary'; sourceIndex: number; count: number }
   | { kind: 'planSummary'; sourceIndex: number; summary: string };
@@ -74,7 +74,7 @@ function compactRowPriority(row: CompactTodosPlanRow): number {
   }
 }
 
-export function compactTodosPlanRows({
+function compactTodosPlanRows({
   maxRows,
   plan,
   todos,

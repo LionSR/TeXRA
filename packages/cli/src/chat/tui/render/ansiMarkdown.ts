@@ -529,8 +529,3 @@ export function renderAnsiMarkdown(
   const processor = processorFor(options.width, options.colorEnabled);
   return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();
 }
-
-/** Test seam: drop the cached processors so tests can re-init cleanly. */
-export function _resetAnsiMarkdownForTests(): void {
-  processorCache.clear();
-}

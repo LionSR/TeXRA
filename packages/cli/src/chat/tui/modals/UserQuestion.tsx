@@ -158,7 +158,7 @@ function userQuestionPromptRowsBudget({
   return Math.max(0, availableRows - chromeRows - controlRows);
 }
 
-export function userQuestionFreeTextSuggestionLine({
+function userQuestionFreeTextSuggestionLine({
   option,
   optionIndex,
   overflowText,
@@ -180,7 +180,7 @@ export function userQuestionFreeTextSuggestionLine({
   return clipToWidth(`${prefix}${suffix}`, width);
 }
 
-export function boundedUserQuestionPromptLines({
+function boundedUserQuestionPromptLines({
   context,
   maxDisplayLines,
   question,

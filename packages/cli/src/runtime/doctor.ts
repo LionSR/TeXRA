@@ -522,7 +522,7 @@ export function doctorExitCode(report: DoctorReport): number {
   return report.ok ? CliExitCode.Success : CliExitCode.ModelOrNetworkError;
 }
 
-export function formatDoctorText(
+function formatDoctorText(
   report: DoctorReport,
   style: CliStyle = createCliStyle(false),
 ): string {

@@ -184,7 +184,7 @@ function lastDisplayRowIsFull(
 /** Rows the input will occupy at `width`, using the same soft-break algorithm
  *  as {@link textInputDisplayWindow}. When the last row is exactly full, the
  *  end-of-value caret wraps to its own row. */
-export function textInputDisplayRowCount(value: string, width: number): number {
+function textInputDisplayRowCount(value: string, width: number): number {
   const columns = Math.max(1, width);
   const rows = textInputDisplayRows(value, columns);
   return rows.length + (lastDisplayRowIsFull(value, rows, columns) ? 1 : 0);
