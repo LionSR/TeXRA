@@ -4,7 +4,11 @@ import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { refresh, resolveAgentForLaunch } from '@agent/index';
+import {
+  getCustomAgentScanIssues,
+  refresh,
+  resolveAgentForLaunch,
+} from '@agent/index';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
   logUserMessage,
@@ -191,6 +195,17 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
+/** A custom agent the scan rejects is unlisted; a launch that misses names
+ *  the files the scan skipped and why. */
+const scanIssuesNote = () => {
+  const issues = getCustomAgentScanIssues();
+  return issues.length === 0
+    ? ''
+    : `. Custom agent files that failed to load:${issues
+        .map((issue) => `\n  ${issue.path}: ${issue.message}`)
+        .join('')}`;
+};
+
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
@@ -215,7 +230,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       (yield* Effect.andThen(refresh(), resolve)) ??
       (yield* presentLaunchError(
         interactions,
-        new AgentError(`Could not find agent: ${fullConfig.agent}`),
+        new AgentError(
+          `Could not find agent: ${fullConfig.agent}${scanIssuesNote()}`,
+        ),
         'showAgentConfigBanner',
         {
           agentName: fullConfig.agent,

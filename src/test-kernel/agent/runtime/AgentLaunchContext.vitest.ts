@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index', () => ({
+  getCustomAgentScanIssues: () => [],
   refresh: () => Effect.void,
   resolveAgentForLaunch: mocks.resolve,
 }));

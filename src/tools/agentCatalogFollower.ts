@@ -194,7 +194,13 @@ export const agentCatalogFollower = Layer.effectDiscard(
     }
     const reload = reloadAgentCatalog.pipe(
       // A transient read failure is tried again: 200 ms doubling, six times.
-      Effect.retry({ schedule: Schedule.exponential('200 millis'), times: 6 }),
+      // A directory that cannot be resolved will not resolve on a retry, and
+      // the first load holds the runtime build.
+      Effect.retry({
+        schedule: Schedule.exponential('200 millis'),
+        times: 6,
+        while: (error) => error._tag !== 'AgentCatalogLoadError',
+      }),
       Effect.catchCause((cause) =>
         Effect.logError(
           `The agent catalog was not reloaded, after seven tries; it lists the agents it had until the next change: ${toErrorMessage(Cause.squash(cause))}`,
