@@ -26,6 +26,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AggregateIdSchema,
   aggregateTarget,
+  DISPLAY_EVENT_TYPES,
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
@@ -60,6 +61,13 @@ export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
 export const PROJECTED_FROM = `projected_row p
   JOIN event e ON e."commit" = p."commit"
   JOIN event_sequence s ON s.id = e.aggregate`;
+
+/** The kinds a display read selects: the display rows, and the settlements
+ *  their tool cards' output is projected from ({@link settleCards}). */
+export const DISPLAY_READ_TYPES = JSON.stringify([
+  ...DISPLAY_EVENT_TYPES,
+  'tool.result',
+]);
 
 /** Every kind this store holds, at the highest version it was written at. */
 export const STORED_KINDS = 'SELECT type, version FROM stored_kind';
@@ -256,6 +264,46 @@ export function decodeRow(
     _tag: 'event',
     event: { ...event, version: arm.version, value },
   };
+}
+
+/**
+ * The read-time projection of a tool card's output (§10): on a run with a
+ * ledger a `tool.end` stores no `result`, and its output is the `tool.result`
+ * committed in the same batch, the row just before it on its aggregate (bar
+ * the card's own `tool.start`). The card keeps its `files`; the transcript
+ * fold keeps the name and input its `tool.start` opened the card with.
+ */
+export function settleCards(
+  events: readonly SessionEvent[],
+): readonly SessionEvent[] {
+  const settled = new Map<
+    AggregateId,
+    SessionEvent & { type: 'tool.result' }
+  >();
+  return events.map((event) => {
+    if (event.type === 'tool.result') settled.set(event.aggregateId, event);
+    else if (event.type !== 'tool.start') {
+      const settlement = settled.get(event.aggregateId);
+      settled.delete(event.aggregateId);
+      if (event.type === 'tool.end' && event.result === undefined && settlement)
+        return { ...event, result: cardResult(settlement, event.files) };
+    }
+    return event;
+  });
+}
+
+function cardResult(
+  { payload }: SessionEvent & { type: 'tool.result' },
+  files: Extract<SessionEvent, { type: 'tool.end' }>['files'],
+): JsonValue {
+  const { status: _status, ...rest } = payload.result;
+  const output = { ...rest, ...(files?.length ? { editedFiles: files } : {}) };
+  return JSON.parse(
+    JSON.stringify({
+      ...(Object.keys(output).length > 0 ? { output } : {}),
+      ...(files?.length ? { files } : {}),
+    }),
+  );
 }
 
 /** The stored kinds whose rows this build cannot read: an unknown type (all

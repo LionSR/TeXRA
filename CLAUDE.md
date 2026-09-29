@@ -183,11 +183,13 @@ scope.
 **One publisher, loop-owned cards.** Every write to a session's event table
 is a job on the `SessionEvents` inbox (`publish`, `exclusive`, `detach`,
 `settle`); commit order is enqueue order, and nothing appends around it. A
-tool call's card belongs to the run loop: a slow tool's `tool.start` commits
-with the row that admits the attempt, a fast tool's opens and closes in its
-settlement batch, and what a tool prints while it runs is transient text on
-the card id (`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add
-a tool-side start card, a durable progress row, or a second append path.
+tool call's card belongs to the run loop. A slow tool's `tool.start` commits
+with the row that admits the attempt; a fast tool's card opens and closes in
+its settlement batch. On a run with a ledger, the card stores no output: its
+output is projected at read time from the `tool.result` it commits with.
+What a tool prints while it runs is transient text on the card id
+(`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add a tool-side
+start card, a durable progress row, or a second append path.
 
 ## Schemas (Zod v4)
 

@@ -47,6 +47,8 @@ import {
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
+  toJsonValue,
+  type JsonValue,
   type LogLevel,
   type MessageType,
   type NormalizedToolUse,
@@ -614,7 +616,7 @@ interface HarnessLogRow {
   readonly timestamp: number;
   readonly messageType: MessageType;
   readonly text?: string;
-  readonly data?: unknown;
+  readonly data?: JsonValue;
   readonly groupId?: string;
 }
 
@@ -696,13 +698,13 @@ function harnessToolEntry(
     level: LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType: MESSAGE_TYPES.TOOL_USE,
-    data: {
+    data: toJsonValue({
       toolName: toolUse.toolName,
       input: toolUse.input,
       output: toolUse.outputText,
       summary: toolUse.headerSummary,
       status: toolUse.status,
-    },
+    }),
   };
 }
 

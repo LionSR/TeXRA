@@ -39,7 +39,6 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
-  DISPLAY_EVENT_TYPES,
   edgesOf,
   isDisplaySessionEvent,
   validateInquiryTransition,
@@ -88,6 +87,7 @@ import {
   type ProjectionOp,
 } from './projections';
 import {
+  DISPLAY_READ_TYPES,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
@@ -98,6 +98,7 @@ import {
   decodeRow,
   encodeDraft,
   prepareEventDraft,
+  settleCards,
   unreadableKinds,
   verdictBook,
   type EncodedRow,
@@ -234,7 +235,7 @@ export const databaseLayer = (
       const decodedRows = (statement: string, params: readonly unknown[]) =>
         exec(statement, params).pipe(
           Effect.flatMap(verdicts.decodeAll),
-          Effect.map(({ events }) => events),
+          Effect.map(({ events }) => settleCards(events)),
         );
       const refuseBlocked = verdicts.refuse;
       const currentCommit = exec(highWater, []).pipe(
@@ -279,9 +280,7 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      const displayTypes = JSON.stringify(DISPLAY_EVENT_TYPES);
-      // `readAll` narrowed by type, off `event_type_commit`, plus the
-      // projected rows. The range binds once, on the outer select.
+      // `readAll` narrowed by type, plus projected rows; the range binds once.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -937,7 +936,7 @@ export const databaseLayer = (
           projected(
             Effect.gen(function* () {
               const rows = yield* decodedRows(display, [
-                displayTypes,
+                DISPLAY_READ_TYPES,
                 fromCommit,
                 yield* currentCommit,
               ]);
@@ -981,7 +980,7 @@ export const databaseLayer = (
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
-              displayTypes,
+              DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
             ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),

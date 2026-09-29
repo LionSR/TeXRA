@@ -46,7 +46,7 @@ export type SharedRunRow = Extract<
 >;
 
 /** Whether `applyRunRow` owns this row: the one test both folds branch on. */
-export const isSharedRunRow = <E extends SessionEvent>(
+export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
   row: E,
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
@@ -253,7 +253,9 @@ type FollowUpRow = Extract<
   { type: (typeof FOLLOW_UP_TYPES)[number] }
 >;
 
-export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
+export const isFollowUpRow = <E extends Pick<SessionEvent, 'type'>>(
+  row: E,
+): row is Extract<E, FollowUpRow> =>
   row.type === 'followup.queued' || row.type === 'followup.consumed';
 
 /**

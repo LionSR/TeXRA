@@ -9,11 +9,12 @@ import { describe, expect, it } from 'vitest';
 import { Result } from 'effect';
 
 import { ModelOriginSchema } from '@texra-ai/llm/turn';
+import { ledgerRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   emptyRunEndOutput,
-  isDisplaySessionEvent,
+  DISPLAY_EVENT_TYPES,
   listingTypeOf,
   MESSAGE_TYPES,
   isTranscriptEvent,
@@ -25,11 +26,15 @@ import {
   type DisplaySessionEvent,
   type FoldInput,
   type OutputFileInfo,
-  type SessionEvent,
   type RunId,
 } from '@shared/schemas';
 
-import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
+import type { RunLedgerRow } from '@shared/session/ledgerTurns';
+import {
+  foldRunState,
+  unboundRequests,
+  type RunLedgerDraft,
+} from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import {
   emptySessionView,
@@ -1360,19 +1365,25 @@ const TOOL_GROUP = {
   ],
 };
 
-/** One committed row, parsed at the production boundary. */
+/** One committed row, stored and read back through the production boundary. */
 const ledgerRow = (
   commit: number,
   draft: Record<string, unknown>,
-): SessionEvent =>
-  SessionEventSchema.parse({
-    aggregateId: LEDGER_AGGREGATE,
-    ...draft,
-    seq: commit,
-    commit,
-    origin: null,
-    at: 0,
-  });
+): RunLedgerRow =>
+  Result.getOrThrow(
+    ledgerRows([
+      SessionEventSchema.parse({
+        ...storedDraft({
+          aggregateId: LEDGER_AGGREGATE,
+          ...draft,
+        } as unknown as RunLedgerDraft),
+        seq: commit,
+        commit,
+        origin: null,
+        at: 0,
+      }),
+    ]),
+  )[0]!;
 
 /** The same boundary, asked whether it accepts the draft at all. */
 const rowAccepted = (draft: Record<string, unknown>): boolean =>
@@ -1386,7 +1397,7 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
   }).success;
 
 /** The whole life of one tool-use turn, commit by commit. */
-const TURN_ROWS: readonly SessionEvent[] = [
+const TURN_ROWS: readonly RunLedgerRow[] = [
   message({
     kind: 'append',
     messages: [USER('list the files')],
@@ -1857,7 +1868,9 @@ describe('foldRunState', () => {
     // would paint every parked run as ready (ruling A9-5).
     expect(listingTypeOf({ type: 'run.position' })).toBe('run.position');
     for (const row of TURN_ROWS) {
-      expect(isDisplaySessionEvent(row)).toBe(row.type === 'run.position');
+      expect(DISPLAY_EVENT_TYPES.includes(row.type)).toBe(
+        row.type === 'run.position',
+      );
     }
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.

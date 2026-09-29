@@ -9,16 +9,11 @@
  */
 import { Effect, Layer, Result } from 'effect';
 
-import {
-  PreparedHistorySchema,
-  type MessageSchema,
-  type ModelOrigin,
-} from '@texra-ai/llm/turn';
+import { PreparedHistorySchema, type ModelOrigin } from '@texra-ai/llm/turn';
 import {
   aggregateId as qualifyAggregateId,
   type RunId,
   type SessionEvent,
-  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   Database,
@@ -34,8 +29,9 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
+import type { HistoryMessage, RunLedgerRow } from '@shared/session/ledgerTurns';
 import { SessionEvents } from '@shared/session/sessionEvents';
-import type { z } from 'zod';
+import { ledgerRows, storedDraft } from './storedTurn';
 
 /**
  * Rows that may follow a `run.snapshot` in its batch: none moves what it
@@ -224,7 +220,7 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
 const candidates = (
   state: RunState | null,
   rows: readonly RunLedgerDraft[],
-): readonly SessionEvent[] =>
+): readonly RunLedgerRow[] =>
   rows.map((row, index) => ({
     ...row,
     seq: index + 1,
@@ -242,7 +238,7 @@ const candidates = (
  */
 const unprepared = (
   runId: RunId,
-  history: readonly z.output<typeof MessageSchema>[],
+  history: readonly HistoryMessage[],
   from = 0,
 ): RunLedgerRefused | null => {
   let start = Math.max(0, from - 1);
@@ -273,6 +269,10 @@ const inconsistent = (runId: RunId, cause: RunLedgerInconsistent) =>
     detail: cause.detail,
     cause,
   });
+
+/** Committed rows folded onto `state`, their turns read back first. */
+const foldStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
+  Result.flatMap(ledgerRows(rows), (live) => foldRunState(state, live));
 
 /** `load`'s answer for a run's folded rows, which `acquire` shares. */
 const loaded = (
@@ -352,11 +352,11 @@ export const runLedgerLayer: Layer.Layer<
       // as cancelled, so the surfaces still offering them settle instead of
       // outliving the process that asked. Rows that do not fold are `load`'s
       // refusal, answered here from the same read.
-      const rows = yield* log.readAggregate(aggregate, 1);
+      const stored = yield* log.readAggregate(aggregate, 1);
       // The same read seeds the publisher's pending follow-ups: what an
       // earlier owner left queued is delivered by this one.
-      yield* events.hydrateFollowUps(aggregate, taken.length > 0, rows);
-      const folded = foldRunState(null, rows);
+      yield* events.hydrateFollowUps(aggregate, taken.length > 0, stored);
+      const folded = foldStored(null, stored);
       if (Result.isFailure(folded) || folded.success === null)
         return yield* loaded(run, folded);
       const unbound = unboundRequests(folded.success);
@@ -385,7 +385,7 @@ export const runLedgerLayer: Layer.Layer<
           ),
         );
       // The cancellations fold onto the same read: the run is read once.
-      return yield* loaded(run, foldRunState(folded.success, cancelled));
+      return yield* loaded(run, foldStored(folded.success, cancelled));
     });
 
     const latestSnapshot = Effect.fn('RunLedger.latestSnapshot')(function* (
@@ -396,7 +396,7 @@ export const runLedgerLayer: Layer.Layer<
 
     const load = Effect.fn('RunLedger.load')(function* (run: RunId) {
       const rows = yield* log.readAggregate(qualifyAggregateId('run', run), 1);
-      return yield* loaded(run, foldRunState(null, rows));
+      return yield* loaded(run, foldStored(null, rows));
     });
 
     const appendBatch = Effect.fn('RunLedger.appendBatch')(function* (
@@ -459,11 +459,10 @@ export const runLedgerLayer: Layer.Layer<
         const refusal = unprepared(run, candidate.success.messages, kept);
         if (refusal !== null) return yield* refusal;
       }
-      const drafts: readonly SessionEventDraft[] = rows;
       // A target this process no longer holds open is the ledger's
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
-      const committed = yield* events.publish(drafts).pipe(
+      const committed = yield* events.publish(rows.map(storedDraft)).pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
             new RunLedgerRefused({
@@ -480,7 +479,7 @@ export const runLedgerLayer: Layer.Layer<
       // here is a defect in this module, not an outcome a caller can act on —
       // and by now the rows are durable, which is what the fold above exists
       // to prevent.
-      const folded = foldRunState(state, committed);
+      const folded = foldStored(state, committed);
       if (Result.isFailure(folded) || folded.success === null) {
         return yield* Effect.die(
           new Error(

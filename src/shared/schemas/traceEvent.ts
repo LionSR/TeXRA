@@ -3,7 +3,8 @@
 import { z } from 'zod';
 
 import { ContextStateDataSchema } from './contextManagement';
-import { LogLevelSchema } from './log';
+import { JsonValueSchema } from './jsonValue';
+import { FileListEntrySchema, LogLevelSchema } from './log';
 import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
@@ -26,7 +27,7 @@ export const TranscriptEventSchemas = {
   log: trace('log', {
     level: LogLevelSchema,
     message: z.string(),
-    data: z.unknown().optional(),
+    data: JsonValueSchema.optional(),
     messageType: z.string().optional(),
   }),
   stageStart: trace('stage.start', {
@@ -41,12 +42,19 @@ export const TranscriptEventSchemas = {
   toolStart: trace('tool.start', {
     logId: z.string(),
     toolName: z.string(),
-    input: z.unknown(),
+    input: JsonValueSchema,
   }),
+  /**
+   * On a run with a ledger the card stores no output: `result` is projected
+   * at read time from the `tool.result` it commits with and its `tool.start`
+   * input (`rowCodec.ts`), and `files` names what the call edited. A run
+   * without a ledger (an agent-CLI child) stores `result` here.
+   */
   toolEnd: trace('tool.end', {
     logId: z.string(),
     status: ToolCallStatusSchema,
-    result: z.unknown().optional(),
+    result: JsonValueSchema.optional(),
+    files: z.array(FileListEntrySchema).optional(),
   }),
   workflowPlan: trace('workflow.plan', {
     attemptId: z.string(),
@@ -88,7 +96,7 @@ export const TranscriptEventSchemas = {
   response: trace('response.finalized', { text: z.string() }),
   domain: trace('domain', {
     key: z.string(),
-    data: z.unknown().optional(),
+    data: JsonValueSchema.optional(),
     text: z.string().optional(),
   }),
 };

@@ -33,6 +33,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   type DispatchFacts,
+  type FileListEntry,
   type FileLocation,
   type RequestDecision,
   type StateOperation,
@@ -41,7 +42,7 @@ import {
   type ToolResult,
   type ToolResultPayload,
 } from '@shared/schemas';
-import { JsonValueSchema } from '@shared/schemas';
+import { JsonValueSchema, toJsonValue } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runLedger';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
@@ -345,16 +346,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       type: 'tool.start',
       logId: fact.logId,
       toolName: fact.toolName,
-      input,
+      input: toJsonValue(input),
       ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
     });
   /** The card rows a settlement commits: a slow tool's card is open already
-   *  and only closes, a fast tool's opens and closes in the same batch. */
+   *  and only closes, a fast tool's opens and closes in the same batch. The
+   *  card stores no output: a read projects it from the `tool.result` the
+   *  batch commits (`rowCodec.ts`). */
   const settledCards = (
     fact: DispatchFacts,
     input: unknown,
     status: ToolCallStatus,
-    result: unknown,
+    files: readonly FileListEntry[] = [],
   ): RunLedgerDraft[] => [
     ...(step.registry.get(fact.toolName)?.slow === true
       ? []
@@ -363,7 +366,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       type: 'tool.end',
       logId: fact.logId,
       status,
-      result,
+      ...(files.length > 0 ? { files: [...files] } : {}),
       ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
     }),
   ];
@@ -540,17 +543,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       extracted.attachments,
       run.session.roots.workspace,
     );
-    const { status: _status, ...logOutputBase } = extracted.sanitizedResult;
-    const logOutput = {
-      ...logOutputBase,
-      ...(editedFiles.length ? { editedFiles } : {}),
-    };
-    const toolUseLog = {
-      toolName: fact.toolName,
-      input: parsedInput,
-      ...(Object.keys(logOutput).length > 0 ? { output: logOutput } : {}),
-      ...(editedFiles.length > 0 ? { files: editedFiles } : {}),
-    };
     const status: ToolCallStatus =
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
     // The whole card commits with the settlement: a slow tool's card is
@@ -558,7 +550,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // in this same batch under the id its dispatch facts carry. Publishing a
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
-    const cards = settledCards(fact, parsedInput, status, toolUseLog);
+    const cards = settledCards(fact, parsedInput, status, editedFiles);
     // An executed call's PostToolUse rows commit with its settlement.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     yield* settle(
@@ -757,11 +749,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           fact,
           intent.attempt,
           syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-          settledCards(fact, input, 'failed', {
-            toolName: fact.toolName,
-            input,
-            output: { error: SKIPPED_OUTCOME_UNKNOWN },
-          }),
+          settledCards(fact, input, 'failed'),
         );
         return;
       }

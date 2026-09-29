@@ -22,6 +22,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import {
   CURRENT_VALUE_SCHEMAS,
+  CURRENT_VALUE_VERSION as VALUE_VERSION,
   type CurrentValue,
   type CurrentValueFamily,
 } from '@shared/schemas';
@@ -37,9 +38,6 @@ import {
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 
 type Rows = readonly Readonly<Record<string, unknown>>[];
-
-/** The version every family writes and reads, until one gains an upcaster. */
-const VALUE_VERSION = 1;
 
 /** Replace one current value in place. */
 const UPSERT_VALUE = `

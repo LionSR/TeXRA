@@ -17,15 +17,6 @@
  */
 import { z } from 'zod';
 
-import {
-  CancellationEvidenceSchema,
-  ContinuationSchema,
-  MessageSchema,
-  ModelOriginSchema,
-  RemoteOperationSchema,
-  TurnResultSchema,
-} from '@texra-ai/llm/turn';
-
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './offeredTools';
@@ -35,6 +26,13 @@ import {
   NormalizedUsageSchema,
   ToolUseSnapshotStateSchema,
 } from './runSnapshotState';
+import {
+  ProviderEvidenceSchema,
+  StoredMessageSchema,
+  StoredOperationSchema,
+  StoredOriginSchema,
+  StoredTurnSchema,
+} from './storedTurn';
 import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 import { DeclinableUsageRouteSchema } from './usage';
 
@@ -134,7 +132,7 @@ export const ModelMessagePayloadSchema = z
       kind: z.literal('attempt'),
       invocation: InvocationRefSchema,
       request: Sha256Schema,
-      origin: ModelOriginSchema,
+      origin: StoredOriginSchema,
       delivery: z.enum(['stream', 'blocking', 'background']),
     }),
     /** Provider identity observed before completion. */
@@ -153,7 +151,7 @@ export const ModelMessagePayloadSchema = z
     z.strictObject({
       kind: z.literal('accepted'),
       invocation: InvocationRefSchema,
-      operation: RemoteOperationSchema,
+      operation: StoredOperationSchema,
       deadlineAtMs: z.int().positive(),
     }),
     /**
@@ -165,19 +163,20 @@ export const ModelMessagePayloadSchema = z
     z.strictObject({
       kind: z.literal('cancelled'),
       invocation: InvocationRefSchema,
-      evidence: CancellationEvidenceSchema,
+      evidence: ProviderEvidenceSchema,
     }),
     /**
      * A completed provider turn, committed once and reused after restart.
-     * `turn` is `TurnResultSchema` verbatim: ordered content with its exact
-     * signatures and encrypted reasoning, the complete call list, finish
-     * reason and native finish evidence, observed usage, continuation.
+     * `turn` is the storage-owned `StoredTurn`: ordered content, the
+     * complete call list, finish reason and observed token counts, with its
+     * signatures, encrypted reasoning, native evidence and continuation kept
+     * as opaque provider evidence.
      */
     z.strictObject({
       kind: z.literal('response'),
       responseId: ResponseIdSchema,
       invocation: InvocationRefSchema,
-      turn: TurnResultSchema,
+      turn: StoredTurnSchema,
       calls: z.array(DispatchFactsSchema).readonly(),
       /**
        * The run's priced usage for this turn, stamped by the writer at append
@@ -203,7 +202,7 @@ export const ModelMessagePayloadSchema = z
      */
     z.strictObject({
       kind: z.literal('append'),
-      messages: z.array(MessageSchema).min(1).readonly(),
+      messages: z.array(StoredMessageSchema).min(1).readonly(),
       sourceResponse: ResponseIdSchema.nullable(),
     }),
   ])
@@ -281,9 +280,9 @@ export const ModelMessagePayloadSchema = z
  */
 export const ModelCompactionPayloadSchema = z.strictObject({
   keepPrefix: z.int().nonnegative(),
-  messages: z.array(MessageSchema).readonly(),
+  messages: z.array(StoredMessageSchema).readonly(),
   cause: z.enum(['context-limit', 'context-window', 'model-switch']),
-  continuation: ContinuationSchema.nullable(),
+  continuation: ProviderEvidenceSchema.nullable(),
   usage: NormalizedUsageSchema.nullable(),
 });
 

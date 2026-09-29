@@ -27,6 +27,7 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
+import { ledgerRows } from '../storedTurn';
 import { Runs } from '../runRegistry';
 import { haltedPositionRow } from './rows';
 import type { FollowUps } from '../FollowUps';
@@ -101,7 +102,9 @@ export const makeRunCell = (
       adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
       fold: (row, what) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) => {
-          const folded = foldRunState(state, [row]);
+          const folded = Result.flatMap(ledgerRows([row]), (rows) =>
+            foldRunState(state, rows),
+          );
           return Result.isFailure(folded) || folded.success === null
             ? Effect.die(
                 new Error(
