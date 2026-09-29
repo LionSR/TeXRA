@@ -119,7 +119,7 @@ export const makeRunCell = (
 
 /** Why a run the ledger holds no rows for cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
+  'This run stopped before it recorded any state to resume from. Start a new run instead.';
 
 export type RunEntry =
   /** No opening row yet: the aggregate holds at most queued follow-ups. */

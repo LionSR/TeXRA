@@ -71,13 +71,7 @@ export type RunListingEntry =
   | (RunListingBase & {
       kind: 'run';
       identity: Exclude<RunIdentity, { kind: 'agent' }>;
-      /** Honest non-agent record — or a pre-consolidation fabricated
-       *  AgentConfig, whose extra fields stay identity-suppressed. */
       record: RunRecord;
-    })
-  | (RunListingBase & {
-      /** Row without a readable identity or record — un-healed or corrupt. */
-      kind: 'incomplete';
     })
   | BlockedRunListingEntry;
 
@@ -99,10 +93,10 @@ function isAgentRunEntry(
 /**
  * True for runs a user should see in a history list, meaning the runs a
  * user started themselves. Excludes non-agent runs (background processes,
- * workflow-script containers — `identity.kind` decides), incomplete rows
- * (a blocked one is kept, as `blocked`), and runs an agent spawned (delegated subagents, workflow-script children,
- * team members), which belong to their parent's transcript rather than to
- * the history list.
+ * workflow-script containers — `identity.kind` decides) and runs an agent
+ * spawned (delegated subagents, workflow-script children, team members),
+ * which belong to their parent's transcript rather than to the history list.
+ * A blocked run is kept, as `blocked`.
  *
  * Every host's history listing must apply this filter. Lookups by explicit id
  * (`texra history show <id>`, export, resume) must not: naming a child run is
@@ -173,14 +167,19 @@ export const listRuns = Effect.fn('listRuns')(function* (
           checkpointPresent,
         };
         const identity = run.identity;
-        if (!record)
-          return run.blocked === null
-            ? { ...base, kind: 'incomplete' }
-            : { ...base, kind: 'blocked', identity };
+        // Registration commits `run.config` in the `run.start` batch, so a
+        // readable run without one, or an agent run without an AgentConfig,
+        // is corrupt: skipped loudly below.
+        if (!record) {
+          if (run.blocked !== null)
+            return { ...base, kind: 'blocked', identity };
+          return yield* Effect.fail(new Error('no run.config row'));
+        }
         if (identity.kind === 'agent') {
-          // An agent row's record is always an AgentConfig; anything else is
-          // corrupt and lists as incomplete rather than lying about shape.
-          if (!isAgentRunRecord(record)) return { ...base, kind: 'incomplete' };
+          if (!isAgentRunRecord(record))
+            return yield* Effect.fail(
+              new Error('agent run without an AgentConfig'),
+            );
           return { ...base, kind: 'run', identity, record };
         }
         return { ...base, kind: 'run', identity, record };
