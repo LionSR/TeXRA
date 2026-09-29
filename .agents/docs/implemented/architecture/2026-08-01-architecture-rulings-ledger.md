@@ -892,7 +892,7 @@ what does the embedding package owe a plugin it does not compose?
   stays agent-runtime code.
 - **The embedding package composes no setup platform.** Setup capabilities
   belong to a host with an editor: `installProcessRuntime` defaults `setup` to
-  `{}`, which is what the CLI and desktop pass, and the three setup tools
+  `{}`, which is what the CLI and desktop previously passed explicitly, and the three setup tools
   that need a host command, extension or terminal already fail naming its
   absence (all three are unavailable on `sdk`). The package's own refusing
   `SetupPlatform` and the `command-unavailable` failure reason existed for a
