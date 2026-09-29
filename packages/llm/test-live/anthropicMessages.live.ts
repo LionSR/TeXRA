@@ -18,6 +18,7 @@ liveProtocol({
         supportsInputTokenEstimation: true,
         supportsTemperature: true,
         supportsForcedToolChoice: true,
+        supportsSystemMessages: false,
         defaults: {
           maxOutputTokens: 2048,
           temperature: 0,

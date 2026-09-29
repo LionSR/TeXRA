@@ -16,11 +16,13 @@
  * step has pinned its own, so the calls a response makes run against the
  * tools its request offered, and a generation no step holds drains.
  *
- * The step renders the system text its requests send (`RenderSystem`).
- * When the offered set, the continuation, the prompt contributors or that
- * text differ from what the run last recorded, the step returns a
- * `tools.offered` row, preceded by the `context.blob` rows of the content it
- * names that the run has not stored yet, which the loop appends before the
+ * The step renders the run's context: the sections its system text adds,
+ * frozen at the first step and after a compaction, a later change appended
+ * to the history as a system message. When the offered set, the
+ * continuation, the hooks or that context differ from what the run last
+ * recorded, the step returns a `tools.offered` row, preceded by the
+ * `context.blob` rows of the content it names that the run has not stored
+ * yet and followed by that message, which the loop appends before the
  * request (or the park's decision) through the run's one ledger writer. A
  * resumed run's first step is held to what it recorded: it offers the recorded tools that are still in
  * the catalog as the same tool (the digest of its name and input schema, and
@@ -58,9 +60,9 @@ import type { StepRoot } from '@utils/files/externalRoots';
 
 import { resolveStepTools } from '../agentToolResolution';
 import { withholdsApprovalTools } from '../requestPolicy';
-import { blobRows } from '../run/requestContext';
+import { blobRows, contextAt } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
-import { rowAggregate } from './rows';
+import { appendRow, rowAggregate } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
@@ -332,16 +334,14 @@ const openStep = Effect.fn('Step.open')(function* (
   if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
-  const base = runSystem.base();
-  const added = stepInstructions(step.prompt, listed, {
+  const context = stepInstructions(step.prompt, listed, {
     offered: step.tools.definitions.map(({ name }) => name),
     isChild: runSystem.isChild(),
     isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
     bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
   });
-  const system =
-    base === undefined || added === '' ? base : `${base}\n${added}`;
-  const address = system === undefined ? null : sha256(system);
+  const base = runSystem.base();
+  const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const skills = listed.map(({ name }) => name);
   const skillsChanged = skills.join('\0') !== state.offeredSkills.join('\0');
@@ -349,7 +349,7 @@ const openStep = Effect.fn('Step.open')(function* (
     toolsChanged ||
     skillsChanged ||
     state.offeredContinuation !== continuation ||
-    state.offeredSystem !== address ||
+    state.offeredContext !== sha256(context) ||
     step.hooks.join('\0') !== state.offeredHooks.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
@@ -386,6 +386,7 @@ const openStep = Effect.fn('Step.open')(function* (
           ...blobRows(run.runId, state, [
             ...(base === undefined ? [] : [base]),
             ...(system === undefined ? [] : [system]),
+            context,
             ...toolDefinitionsFor(step.tools.definitions),
           ]),
           {
@@ -395,10 +396,14 @@ const openStep = Effect.fn('Step.open')(function* (
               tools: step.tools.offered,
               continuation,
               skills,
-              system: address,
+              system: system === undefined ? null : sha256(system),
+              context: sha256(context),
               hooks: step.hooks,
             },
           } satisfies RunLedgerDraft,
+          ...(update === ''
+            ? []
+            : [appendRow(run.runId, [{ role: 'system', text: update }])]),
         ]
       : [],
   };

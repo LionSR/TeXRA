@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect, Layer, SynchronizedRef } from 'effect';
-import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
@@ -242,8 +242,24 @@ describe('run-scoped tool resolution', () => {
         expect(offered).toEqual(['memory', 'plan', 'kept']);
         expect(resumed.step.tools.registry.has('gone')).toBe(false);
         expect(resumed.step.tools.registry.has('added')).toBe(false);
-        // The narrower set is recorded before the resumed request.
-        expect(resumed.step.rows).toHaveLength(1);
+        // The narrower set is recorded before the resumed request, and the
+        // model is told, after the history its cached prefix holds.
+        expect(resumed.step.rows.map(({ type }) => type)).toEqual([
+          'context.blob',
+          'tools.offered',
+          'model.message',
+        ]);
+        const told = resumed.step.rows.at(-1);
+        assert(told?.type === 'model.message');
+        expect(told.payload).toMatchObject({
+          kind: 'append',
+          messages: [
+            {
+              role: 'system',
+              text: 'These tools are no longer available; do not call them: gone.',
+            },
+          ],
+        });
         expect(warn).toHaveBeenCalledWith(
           'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
         );

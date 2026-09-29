@@ -469,9 +469,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         const bound = yield* SynchronizedRef.get(run.model);
         // The step this request opens, its offered set recorded when changed.
-        const step = yield* openStep(state, 'request');
+        let step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
-        const tools = toolDefinitionsFor(step.tools.definitions);
+        let tools = toolDefinitionsFor(step.tools.definitions);
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
@@ -493,6 +493,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 force,
               }),
             );
+          // A compaction replaced the history, the context updates in it
+          // too: a new step renders the system text anew, each one in it.
+          if (state.offeredContext === null) {
+            step = yield* openStep(state, 'request');
+            state = yield* cell.append(step.rows);
+            tools = toolDefinitionsFor(step.tools.definitions);
+          }
           const admitted = snapshot(state, {});
           if (admitted.length > 0) state = yield* cell.append(admitted);
         }

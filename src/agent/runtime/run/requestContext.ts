@@ -27,9 +27,12 @@ import {
   type TurnRequest,
 } from '@texra-ai/llm/turn';
 
+import { contextUpdate } from '@agent/prompt/PromptBuilder';
 import {
   JsonValueSchema,
+  RunContextSchema,
   Sha256Schema,
+  type RunContext,
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
@@ -82,6 +85,7 @@ const RestatedControlsSchema = z.looseObject({
     z.strictObject({ name: z.string().min(1) }),
   ]),
   maxOutputTokens: z.int().positive().nullish(),
+  promptCacheKey: z.string().min(1).nullish(),
 });
 
 const DeclarationSchema = z.strictObject({
@@ -161,6 +165,35 @@ export function attemptRows(
   ];
 }
 
+/**
+ * The run's context at a step that renders `context` over the `base` text:
+ * the system text its requests send, frozen by the run's first step and the
+ * first after a compaction so the cached prefix (tools, system, history)
+ * holds, and the system message that tells the model what changed since
+ * ('' for nothing).
+ */
+export function contextAt(
+  state: RunState,
+  base: string | undefined,
+  context: RunContext,
+): { readonly system: string | undefined; readonly update: string } {
+  if (state.offeredContext === null)
+    return {
+      system: base && [base, ...Object.values(context.sections)].join('\n'),
+      update: '',
+    };
+  return {
+    system:
+      state.offeredSystem === null
+        ? undefined
+        : stored(state, state.offeredSystem, z.string()),
+    update: contextUpdate(
+      stored(state, state.offeredContext, RunContextSchema),
+      context,
+    ),
+  };
+}
+
 /** A stored value, such as the base system text or the skill catalog a
  *  snapshot names. */
 export const stored = <T>(
@@ -214,12 +247,13 @@ function recordedTurn(state: RunState) {
  */
 export function recordedRequest(state: RunState): TurnRequest {
   const { controls, ...content } = recordedTurn(state).turn;
-  const { toolChoice, maxOutputTokens } =
+  const { toolChoice, maxOutputTokens, promptCacheKey } =
     RestatedControlsSchema.parse(controls);
   return {
     ...content,
     toolChoice,
     ...(maxOutputTokens == null ? {} : { maxOutputTokens }),
+    ...(promptCacheKey == null ? {} : { cacheKey: promptCacheKey }),
   };
 }
 

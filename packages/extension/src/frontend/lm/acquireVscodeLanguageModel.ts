@@ -9,6 +9,7 @@ import {
   TurnRequestSchema,
   TurnResultSchema,
   sameModelOrigin,
+  systemUpdateText,
   type Model,
   type ModelOrigin,
   type ResolvedTurn,
@@ -64,7 +65,11 @@ function lowerMessages(
     }
     const messages: vscode.LanguageModelChatMessage[] = [];
     for (const [index, message] of turn.messages.entries()) {
-      if (message.role === 'assistant') {
+      if (message.role === 'system') {
+        messages.push(
+          vscode.LanguageModelChatMessage.User(systemUpdateText(message.text)),
+        );
+      } else if (message.role === 'assistant') {
         const content: Array<
           vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart
         > = [];

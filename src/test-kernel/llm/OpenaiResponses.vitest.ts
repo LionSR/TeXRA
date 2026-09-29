@@ -55,6 +55,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   instructions: { kind: 'optional' },
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
+  supportsPromptCacheKey: true,
   requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',

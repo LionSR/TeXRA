@@ -24,7 +24,7 @@ import {
   type TurnResult,
 } from './turn.js';
 import { decodeTurnRequest, initialTextInput } from './turnInput.js';
-import { replayableHistory } from './message.js';
+import { replayableHistory, systemUpdateText } from './message.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
@@ -303,8 +303,23 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const messages: MessageParam[] = [];
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
-  for (const message of replayableHistory(turn.messages, origin)) {
-    if (message.role === 'user') {
+  const history = replayableHistory(turn.messages, origin);
+  for (const [index, message] of history.entries()) {
+    if (message.role === 'system') {
+      // Native where the model takes it and the API admits it: after a user
+      // turn, and last or before an assistant turn.
+      const next = history[index + 1];
+      messages.push(
+        config.supportsSystemMessages &&
+          messages.at(-1)?.role === 'user' &&
+          (next === undefined || next.role === 'assistant')
+          ? { role: 'system', content: message.text }
+          : {
+              role: 'user',
+              content: [{ type: 'text', text: systemUpdateText(message.text) }],
+            },
+      );
+    } else if (message.role === 'user') {
       messages.push({
         role: 'user',
         content: yield* Effect.forEach(message.content, lowerPart),

@@ -177,6 +177,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Enabling a skill or plugin mid-run no longer re-reads the whole
+  conversation at full price** — the agent is told what changed, and the
+  earlier conversation stays cached. Adding or removing a tool still costs
+  one full re-read. OpenAI models also reuse their cache more often across
+  a run.
 - **`texra doctor --prune-storage` clears history left by deleted
   projects** — it lists each workspace's stored history whose project
   folder no longer exists (or, for history no current build has opened,

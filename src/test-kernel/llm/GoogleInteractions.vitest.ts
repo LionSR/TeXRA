@@ -734,6 +734,39 @@ describe('canonical Google Interactions protocol', () => {
       }),
   );
 
+  it.effect(
+    'joins a context update to the user turn beside it in one user_input step',
+    () =>
+      Effect.gen(function* () {
+        const configured = model(false);
+        const turn = yield* configured.prepareTurn({
+          messages: [
+            { role: 'user', content: [{ kind: 'text', text: 'a' }] },
+            { role: 'system', text: 'Skills changed.' },
+            { role: 'user', content: [{ kind: 'text', text: 'b' }] },
+          ],
+        });
+        assert(turn.mode === 'foreground');
+        yield* completedTurn(configured.streamTurn(turn));
+        const body = yield* Effect.promise(() =>
+          (fetchModel.mock.calls[0][0] as Request).json(),
+        );
+        expect(body.input).toEqual([
+          {
+            type: 'user_input',
+            content: [
+              { type: 'text', text: 'a' },
+              {
+                type: 'text',
+                text: '<system-update>\nSkills changed.\n</system-update>',
+              },
+              { type: 'text', text: 'b' },
+            ],
+          },
+        ]);
+      }),
+  );
+
   it.effect.each([undefined, '', ' Exact system\n'])(
     'counts exact cold converted content with system %j without generating',
     (system) =>

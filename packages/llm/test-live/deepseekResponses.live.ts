@@ -28,6 +28,7 @@ liveProtocol({
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: false,
         supportsForcedToolChoice: true,
+        supportsPromptCacheKey: false,
         requestDialect: 'compatible',
         defaults: {
           temperature: 0,

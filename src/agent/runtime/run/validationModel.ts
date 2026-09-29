@@ -264,6 +264,9 @@ export function validationModel(config: ModelConfig): {
         toolChoice: request.toolChoice ?? 'auto',
         reasoning: null,
         serviceTier: null,
+        ...(request.cacheKey === undefined
+          ? {}
+          : { promptCacheKey: request.cacheKey }),
       },
     });
   // The scenario switches are read per turn, so a validation run can flip

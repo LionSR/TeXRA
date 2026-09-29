@@ -56,6 +56,7 @@ export {
   ContinuationSchema,
   MessageSchema,
   PreparedHistorySchema,
+  systemUpdateText,
 } from './message.js';
 export type { Continuation } from './message.js';
 export { ModelError, RemoteOperationSchema } from './errors.js';
@@ -130,6 +131,9 @@ export const TurnRequestSchema = z
     maxOutputTokens: z.int().positive().optional(),
     store: z.boolean().optional(),
     continuation: ContinuationSchema.optional(),
+    /** Groups the requests that share a prefix (a run's), for a provider
+     *  that routes its prompt cache by key. */
+    cacheKey: z.string().min(1).optional(),
   })
   .readonly();
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
@@ -148,6 +152,7 @@ const ResponsesControlsSchema = z.strictObject({
   toolChoice: ToolChoiceSchema,
   reasoning: ResponsesReasoningSchema,
   serviceTier: z.literal('fast').nullable(),
+  promptCacheKey: z.string().min(1).optional(),
 });
 const AnthropicControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
@@ -273,13 +278,18 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     continuationInheritsInstructions: z.boolean(),
     /** The route takes `tool_choice` naming one function, not only `auto`. */
     supportsForcedToolChoice: z.boolean(),
+    /** The route routes its prompt cache by `prompt_cache_key` (OpenAI's). */
+    supportsPromptCacheKey: z.boolean(),
     /**
      * `openai` sends OpenAI's full request surface; `compatible` omits what
      * the vendor Responses endpoints do not take: the encrypted-reasoning
      * `include`, `strict` on tools, and a `store` that is only the default.
      */
     requestDialect: z.enum(['openai', 'compatible']),
-    defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
+    defaults: ResponsesControlsSchema.omit({
+      toolChoice: true,
+      promptCacheKey: true,
+    }).readonly(),
   })
     .superRefine((configuration, ctx) => {
       if (
@@ -330,6 +340,8 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsForcedToolChoice: z.boolean(),
+    /** The model takes mid-conversation `role: "system"` messages. */
+    supportsSystemMessages: z.boolean(),
     defaults: AnthropicControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {

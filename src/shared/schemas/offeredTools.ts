@@ -44,14 +44,27 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
   continuation: z.string().min(1).nullable(),
   /** The names of the skills the step lists, in listing order. */
   skills: z.array(z.string().min(1)).readonly(),
-  /** The address of the system text the step's requests send, the run's
-   *  base text with every section rendered: a section reworded by an update
-   *  is a new offered set. Null when the run sends none. */
+  /** The address of the system text the run's requests send: its base text
+   *  with every section as the step that opened the run's context rendered
+   *  them, frozen until a compaction opens it again. Null when it sends
+   *  none. */
   system: Sha256Schema.nullable(),
+  /** The address of the context the model has been told, its sections by
+   *  name and its tools' names (`RunContextSchema`): what a later step
+   *  appends to the history as a system message is the change from it. */
+  context: Sha256Schema,
   /** The installed plugins' hooks the step pinned, each as
    *  `<plugin>@<trust digest>#<hook>`: a resumed call runs these or none. */
   hooks: z.array(z.string().min(1)).readonly(),
 });
+
+/** The context a run's model has been told, as a `tools.offered` row names
+ *  it. */
+export const RunContextSchema = z.strictObject({
+  sections: z.record(z.string(), z.string()),
+  tools: z.array(z.string()),
+});
+export type RunContext = z.infer<typeof RunContextSchema>;
 
 /**
  * One piece of model-facing content: a tool declaration, a system text, a

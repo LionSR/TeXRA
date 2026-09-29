@@ -180,7 +180,11 @@ export type RunState = RunPosition & {
   readonly offeredContinuation: string | null;
   /** The names of the skills it listed. */
   readonly offeredSkills: readonly string[];
-  readonly offeredSystem: string | null; // its system text's address
+  /** The address of the system text the run's context froze. */
+  readonly offeredSystem: string | null;
+  /** The address of the context its model has been told; `null` before the
+   *  first step and after a compaction, which each open it anew. */
+  readonly offeredContext: string | null;
   readonly offeredHooks: readonly string[]; // the hooks it pinned
   /** The run's `context.blob` rows: model-facing content by address. */
   readonly contents: Readonly<Record<string, JsonValue>>;
@@ -270,6 +274,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   offeredContinuation: null,
   offeredSkills: [],
   offeredSystem: null,
+  offeredContext: null,
   offeredHooks: [],
   contents: {},
   hookOutcomes: {},
@@ -562,6 +567,9 @@ function foldRow(
         ...advance(current),
         messages,
         continuation: p.continuation,
+        // The next step renders the system text anew, every change in it.
+        offeredSystem: null,
+        offeredContext: null,
         usage: addTurnUsage(current.usage, p.usage),
         ...(p.cause === 'context-window'
           ? { overflowRecoveredAtTurn: current.turn }
@@ -628,6 +636,7 @@ function foldRow(
         offeredContinuation: row.payload.continuation,
         offeredSkills: row.payload.skills,
         offeredSystem: row.payload.system,
+        offeredContext: row.payload.context,
         offeredHooks: row.payload.hooks,
       });
     case 'context.blob': {
