@@ -301,6 +301,9 @@ All notable changes to this project will be documented in this file.
   desktop app's bundled runtime rejected the proxy-aware connection model calls
   use, so every request to a model failed with an undici dispatcher error.
 
+- **GPT-6 models stay on your ChatGPT subscription when the OpenRouter
+  toggle is on** — they have no OpenRouter route, so they fell through to the
+  OpenAI API key (and failed without one).
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session
   on a run another TeXRA window held. Every surface now offers the same
