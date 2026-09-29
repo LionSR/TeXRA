@@ -112,14 +112,14 @@ inside `resourcesPath`, and the files are read where they are.
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => Effect.succeed(undefined) },
+  state: { get: () => Effect.succeed(undefined) },
 });
 // Served as `AgentDirectories` by the Step 1 install:
 // installProcessRuntime({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
 ```
 
-`customDirectoryStore.get()` yields the user-configured custom agent
-directory, or `undefined` for none. The three methods return Effects, not Promises
+`state.get()` reads the stored setting that names the user-configured
+custom agent directory; `undefined` means none. The three methods return Effects, not Promises
 (`src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
@@ -200,7 +200,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => Effect.succeed(undefined) },
+  state: { get: () => Effect.succeed(undefined) },
 });
 const runtime = installProcessRuntime({
   processStart: nodeProcesses.selfIdentity(),
@@ -361,8 +361,8 @@ one agent, an embedder cannot either.
   can skip the packaged resources tree entirely and point `custom()` at your
   own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
-  `new AgentDirectoryService({ channel: 'cli', customDirectoryStore: … })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:244-248`,
+  `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:218-229`,
   `src/agent/index/AgentDirectoryService.ts`). An embedder is free to
   supply a three-line literal instead:
 
@@ -555,9 +555,9 @@ following classification makes that distinction.
 ### Runtime bootstrap and shipped-feature parity
 
 - **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:251`), which also
+  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
   builds the agent-directories port
-  (`:246-250`). Its `lean: directLeanLanguageServices()` (`:298`) is
+  (`:218-229`). Its `lean: directLeanLanguageServices()` (`:298`) is
   shipped-feature parity, not a raw-loop requirement; an embedder may pass
   another layer. The `memory` and `plan` injections are manifest data
   (`src/tools/plugins.ts`).

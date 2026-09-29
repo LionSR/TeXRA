@@ -26,7 +26,7 @@ export function reasoningEffortOverrides(state: StateStore) {
     const stored = yield* readState(
       state,
       GlobalStateKey.REASONING_LEVELS,
-      z.record(z.string(), z.string()).prefault({}),
+      z.record(z.string(), z.unknown()).prefault({}),
     );
     const overrides: Record<string, ReasoningEffort> = {};
     for (const [model, value] of Object.entries(stored)) {
@@ -39,7 +39,7 @@ export function reasoningEffortOverrides(state: StateStore) {
       // the model falls back to its catalog default; say so rather than
       // dropping the entry silently.
       yield* Effect.logWarning(
-        `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
+        `Stored reasoning level ${JSON.stringify(value)} for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
         parsed.error,
       );
     }
