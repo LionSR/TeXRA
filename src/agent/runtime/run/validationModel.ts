@@ -24,12 +24,13 @@ import * as path from 'node:path';
 
 import { Effect, Stream } from 'effect';
 import { envVar } from '@utils/system/envFlags';
-import type {
-  Model,
-  ModelOrigin,
-  ResolvedTurn,
-  TurnEvent,
-  TurnResult,
+import {
+  originOf,
+  type Model,
+  type ModelOrigin,
+  type ResolvedTurn,
+  type TurnEvent,
+  type TurnResult,
 } from '@texra-ai/llm/turn';
 import type { ModelConfig } from 'llm-zoo';
 
@@ -146,15 +147,14 @@ export function validationModel(config: ModelConfig): {
   readonly model: Model;
   readonly origin: ModelOrigin;
 } {
-  const origin = {
+  const origin = originOf({
     protocol: 'openai-responses',
-    codecVersion: 1,
     requestedModel: config.fullName,
     deployment: {
       endpoint: VALIDATION_ENDPOINT,
       credentialScope: 'validation',
     },
-  } as const satisfies ModelOrigin;
+  });
   let responses = 0;
   const complete = (
     turn: ResolvedTurn,
