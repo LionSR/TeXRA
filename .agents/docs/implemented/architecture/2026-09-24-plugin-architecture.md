@@ -139,7 +139,7 @@ dashboard card for servers.
 ## Other contribution lists
 
 The same rule (static data, stable id, installed once, no runtime register or
-unregister, no plugin state, no event channel) now covers:
+unregister) now covers:
 
 - **Model providers** (#13094). `MODEL_PROVIDER_PLUGINS` in
   `src/shared/constants/modelProviderPlugins.ts` merges seven per-provider
@@ -167,14 +167,29 @@ unregister, no plugin state, no event channel) now covers:
 
 - **Continuation at idle.** `ToolPlugin.continuation: true` declares that a
   plugin decides what a parked tool-use run does next; `PLUGIN_CONTINUATIONS`
-  in `src/agent/runtime/loop/continuationPolicy.ts` holds its policy, and a
-  `satisfies` check keeps the table and the manifest flags in step. The run
-  resolves its policy once, from its pinned composition's plugins, so a
-  switched-off plugin and a child's narrowing apply to it as they do to
-  tools; with none on, the run parks. The `goal` plugin (the `plan` tool) is
-  the one contributor, and its switch replaced the `texra.goal.enabled`
-  setting. The loop still owns the queue, the child check and
-  `stopAfterCycle`; the policy only answers "another turn, or park?".
+  in `src/tools/registry.ts` holds its policy, and a `satisfies` check keeps
+  the table and the manifest flags in step. A step pins the continuation of
+  the plugins it found switched on (#13387), so a switched-off plugin applies
+  at the next step; with none on, the run parks. The `goal` plugin (the `plan`
+  tool) is the one contributor. The loop still owns the queue, the child
+  check and `stopAfterCycle`; the policy only answers "another turn, or
+  park?".
+- **Prompt sections** (amended 2026-09-28, ledger "Plugins own typed tables at
+  their seams"). `ToolPlugin.promptSection: true` lets a plugin add one
+  `(ctx) => string` section to a request's system text, from
+  `PLUGIN_PROMPT_SECTIONS`, consulted only for plugins the step pinned.
+  `memory-workflow` is the one contributor.
+- **Process and session layers.** `processLayer: true` (one entry in
+  `PLUGIN_PROCESS_LAYERS`, GitHub subscriptions and their delivery drain),
+  `sessionLayer: true` (`PLUGIN_SESSION_LAYERS`, the Codex and Claude session
+  registries, one per open session) and `hostLayer: true` (the VS Code
+  host's Copilot tools) declare the plugin's resources. Each is up while the
+  plugin is switched on or a step pins it.
+- **Event arms.** `rows: true` declares row kinds of its own: an arm in
+  `PLUGIN_EVENT_ARMS` (`src/tools/pluginArms.ts`), written as a `plugin.fact`
+  through the one publisher (goal state is the one contributor). The store
+  checks each row against its arm and keeps a row whose arm this build lacks
+  unread.
 
 ## What is deliberately core
 
@@ -187,17 +202,20 @@ decision:
   format and a second loader for the same thing. A plugin's bundled agents
   (above) add directories to the existing `builtInToolUse` source, not a
   source or a kind.
-- **Prompt sections.** `src/agent/prompt/PromptBuilder.ts` owns the system
-  prompt, which is recorded on the snapshot next to `offeredTools`. Plugin
-  prompt fragments would make the recorded prompt depend on inputs the
-  composition does not capture.
+- **The rest of the system prompt.** `src/agent/prompt/PromptBuilder.ts` owns
+  it, and a plugin's section (above) is consulted only for the plugins the
+  step pinned, so what a request sends follows the offered set the step
+  records.
 - **The run loop.** `src/agent/runtime/loop/toolUse.ts` is the only run
   program (workflow agents run it in round mode since the one-run-program
-  series). v1 plugins have no hooks and no task kinds, so a
-  plugin cannot add a step, a node or a wait.
+  series). v1 plugins have no task kinds, so a plugin cannot add a step, a
+  node or a wait; its one loop input is the continuation table.
 - **The ledger.** `appendBatch` on the run ledger
-  (`src/shared/session/runLedger.ts`) is the one writer. Plugins own no durable state and no
-  event channel; the offered-tool record goes through the existing snapshot.
+  (`src/shared/session/runLedger.ts`) is the one writer of run rows, and the
+  session's one publisher (`SessionEvents`) the one writer of every other
+  row. A plugin owns no second channel: its own rows are typed `plugin.fact`
+  arms in the one closed schema (amended 2026-09-28), and the offered-tool
+  record is the `tools.offered` row.
 - **Approval authority.** One approval queue and policy, pinned by
   `src/test-kernel/architecture/approvalPolicyAuthorityRatchet.vitest.ts`.
   Plugin tools, MCP included, request approval through it rather than
@@ -217,9 +235,9 @@ Adopted from pi Pico5:
 - resume offers what was recorded and is still available, loudly naming what
   is gone (adapted in #13088 to a model-visible error result).
 
-TeXRA's own ruling, not taken from Pico5: no hooks, task kinds,
-plugin-owned state or event channels in v1. Pico5 has all three (task kinds,
-hooks per kind, and Documents). The continuation policy and the documents
+TeXRA's own ruling, not taken from Pico5: no hooks or task kinds in v1, and
+plugin state only as typed arms of the one event schema. Pico5 has task kinds,
+hooks per kind, and Documents. The continuation policy and the documents
 plugin's after-turn handler are single-contributor hooks in Pico's terms.
 
 Adopted from deepseek-harness: presets reduced to data (the `Composition`

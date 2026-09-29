@@ -363,8 +363,10 @@ pipeline behind a boundary.
   loop already dispatches tools, but whether a documents agent should get
   tools is a product call for later.
 - Top-level script launch (`texra run x.mjs`). It is a separate design.
-- Manifest plugins contributing either seam. Both seams stay agent-runtime
-  code until the owner rules on plugin hooks.
+- Manifest plugins contributing the after-turn output seam. The continuation
+  seam has since moved to `PLUGIN_CONTINUATIONS` (`src/tools/registry.ts`,
+  #13387), with goal mode its one contributor; the output seam stays
+  agent-runtime code until the owner rules on plugin hooks.
 
 ## Evidence
 

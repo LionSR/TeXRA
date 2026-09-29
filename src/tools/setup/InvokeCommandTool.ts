@@ -76,9 +76,7 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
       Effect.catchTag('SetupCommandFailed', (failure) =>
         Effect.fail(
           new ToolError(
-            failure.reason === 'command-unavailable'
-              ? `This host cannot invoke VS Code commands: ${failure.message}`
-              : `VS Code command "${commandId}" failed: ${failure.message}`,
+            `VS Code command "${commandId}" failed: ${failure.message}`,
           ),
         ),
       ),

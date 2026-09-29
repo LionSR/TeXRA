@@ -38,7 +38,6 @@ export const vscodeSetupPlatform: SetupPlatformShape = {
           Promise.resolve(vscode.commands.executeCommand(commandId, ...args)),
         catch: (cause) =>
           new SetupCommandFailed({
-            reason: 'command-failed',
             message: `VS Code could not run "${commandId}": ${toErrorMessage(cause)}`,
             commandId,
             cause,

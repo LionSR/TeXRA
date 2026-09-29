@@ -404,6 +404,22 @@ the unchecked lists grow; it is not scheduled.
 
 ## Move 2: plugins are typed Layers at the existing lifetimes
 
+**Status (re-checked 2026-09-28 against `4b521aa462`).** Mostly landed; the
+text below is the plan as reviewed. On `main`: `PLUGIN_PROCESS_LAYERS`
+(GitHub only, its drain a step of the shutdown protocol), `PLUGIN_SESSION_LAYERS`
+(Codex and Claude registries; the WeakMaps are gone), `PLUGIN_PROMPT_SECTIONS`
+(`memory-workflow`), `PLUGIN_CONTINUATIONS`, and `PLUGIN_EVENT_ARMS` as typed
+`plugin.fact` arms (goal), with `GitHubSubscriptions`, `CodexThreads` and
+`ClaudeAgentSessions` out of `ProcessServices` (`PluginServices`); the goal
+grant is core approval state (#13420). `PACKAGE_SETUP` is deleted with this
+note: `setup` defaults to `{}` and the package composes none. The plugin-note,
+one-run-program and ledger amendments are recorded in the ledger entry
+"Plugins own typed tables at their seams". Not moved, with the reasons in that
+entry: `run.fact` todos and plan (core loop state, not one plugin's), inquiry
+and workflow-checkpoint rows (core aggregate kinds), the `documents` fold slice
+(PR 5's `RunView` half). Deferred: the SDK's plugin set
+(`TexraProcessOptions.plugins`) waits on move 4, and PR 7 needs owner decisions.
+
 ### Current state
 
 `PLUGIN_LAYERS` is empty by design and `PluginLayer` is `Layer<never>`
