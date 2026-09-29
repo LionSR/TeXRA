@@ -219,6 +219,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         agentCategory: config === null ? null : config.agentCategory,
         phase: run?.status,
         paused: run?.substate === RUN_SUBSTATE.PAUSED,
+        blocked: (run?.blocked ?? null) !== null,
       },
       session,
     );
@@ -287,13 +288,12 @@ type CliHistoryExportInputResult =
   | { readonly status: 'incomplete' };
 
 /**
- * Load a stored run's config + conversation as the format-agnostic
- * {@link ChatExportInput} the markdown export formatter consumes (the HTML
- * export path uses `assembleTrace` instead — see `commands/history.ts`).
- * Thin CLI-specific wrapper around the shared {@link loadChatExportInput}
- * loader, which also backs the progress-view
- * `ChatExportController.buildExportInput` — so the CLI and GUI render
- * the same conversation identically.
+ * Load a stored run's config + conversation as the format-agnostic {@link
+ * ChatExportInput} the markdown export formatter consumes (the HTML export path
+ * uses `assembleTrace` instead — see `commands/history.ts`). Thin CLI-specific
+ * wrapper around the shared {@link loadChatExportInput} loader, which also
+ * backs the progress-view `ChatExportController.buildExportInput` — so the CLI
+ * and GUI render the same conversation identically.
  *
  * Distinguishes "this run id has no stored data at all" (`not_found`
  * — the same case `history show` reports as not found) from "this run
@@ -468,6 +468,7 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
     status === HISTORY_RUN_STATUS.PAUSED ||
+    status === HISTORY_RUN_STATUS.BLOCKED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -560,6 +561,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
       agentCategory: config.agentCategory,
       phase: entry.status,
       paused: entry.paused,
+      blocked: entry.blocked !== undefined,
     },
     session,
   );

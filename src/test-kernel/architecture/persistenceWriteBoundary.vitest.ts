@@ -48,15 +48,28 @@ const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/childSource.ts';
 const SQLITE_IMPORT =
   /\b(?:from|import|require)\s*\(?\s*['"](?:(?:node:)?sqlite|@effect\/sql-sqlite-node(?:\/[^'"]*)?)['"]/;
 
-/** A statement naming either C1 table that could change its rows: the plain
+/** A statement naming a table that could change its rows: the plain
  *  `INSERT INTO`, every `INSERT OR <conflict>` and `REPLACE INTO` upsert form
  *  (the allowlisted module's own sequence assignment is an upsert, so that is
  *  the likeliest shape of a second writer), `UPDATE`, `DELETE FROM`, and
  *  `DROP TABLE`. A schema qualifier (`main.event`) is part of the name.
  *  Written to survive the line breaks a formatted SQL template literal
  *  introduces. */
-const EVENT_TABLE_WRITE =
-  /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
+const tableWrite = (tables: string) =>
+  new RegExp(
+    `\\b(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE|DELETE\\s+FROM|DROP\\s+TABLE(?:\\s+IF\\s+EXISTS)?)\\s+(?:"?\\w+"?\\s*\\.\\s*)?"?(?:${tables})"?\\b`,
+    'i',
+  );
+/** The ledger's tables: `event` and `event_sequence`, the store-wide `blob`
+ *  table, the `stored_kind` and `projection_state` bookkeeping, and the four
+ *  projection tables. `Database.ts` is their one writer. */
+const EVENT_TABLE_WRITE = tableWrite(
+  'event|event_sequence|blob|stored_kind|projection_state|projected_row|listing_entry|run_usage|run_model',
+);
+/** A root's current values and input history, written by `currentValues.ts`
+ *  alone. */
+const CURRENT_TABLE_WRITE = tableWrite('current_value|input_history');
+const CURRENT_VALUES_MODULE = 'src/controllers/session/currentValues.ts';
 
 /** The session publisher: per (process, root), every durable append is a
  *  job on its one inbox, so commit order is enqueue order (core concepts,
@@ -139,7 +152,10 @@ describe('persistence write boundary', () => {
   });
 
   it('writes the C1 tables in the Database layer and nowhere else', () => {
-    const found = offenders(EVENT_TABLE_WRITE, [DATABASE_MODULE]);
+    const found = [
+      ...offenders(EVENT_TABLE_WRITE, [DATABASE_MODULE]),
+      ...offenders(CURRENT_TABLE_WRITE, [CURRENT_VALUES_MODULE]),
+    ];
 
     expect(
       found,
@@ -198,6 +214,13 @@ describe('persistence write boundary', () => {
     // file that no longer writes anything.
     expect(SQLITE_IMPORT.test(source)).toBe(true);
     expect(EVENT_TABLE_WRITE.test(source)).toBe(true);
+    expect(
+      CURRENT_TABLE_WRITE.test(
+        stripComments(
+          readFileSync(resolve(REPO_ROOT, CURRENT_VALUES_MODULE), 'utf8'),
+        ),
+      ),
+    ).toBe(true);
     expect(
       SQLITE_IMPORT.test(
         stripComments(

@@ -19,6 +19,7 @@ import {
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
+  type BlockedAggregate,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -41,6 +42,8 @@ interface RunListingBase {
   status: RunLifecycleStatus;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
+  /** Why this build cannot read the run whole (`RunView.blocked`). */
+  blocked?: BlockedAggregate['reason'];
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /** The model the run is on, as the view folds it: its latest snapshot's
@@ -153,6 +156,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
+          ...(run.blocked === null ? {} : { blocked: run.blocked }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           checkpointPresent,

@@ -541,12 +541,13 @@ still supports; normalize those once at their boundary, and reject any other
 unsupported state with a clear error. `trace.json` is **not** such an exception:
 the owner ruled that 1.0's exports start fresh, so a document from an older
 build fails loudly at the parse boundary (#12359). The session database is
-the same stance made mechanical: `SESSION_EVENT_FORMAT`
-(`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
-moves a store of an older version aside at open (`texra.db.format<N>`, never
-read again) and refuses to open one of a newer version, and
-`sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
-cannot land without bumping the version.
+the same stance made mechanical: `storeSchema.ts`
+(`src/controllers/session/`) stamps every `texra.db` with its schema version
+and moves a store written before 1.0 aside whole at open (`texra.db.pre1`,
+never read again, settings included) and refuses one of a newer schema. Row
+kinds carry their own versions (`src/shared/schemas/rowVersions.ts`), read by
+the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
+kind is unreleased and changes with no upcaster and no bump.
 
 ### ES2023+ Patterns
 

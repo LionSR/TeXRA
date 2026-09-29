@@ -9,14 +9,19 @@
  */
 
 import { GOAL_STATE_ARM } from '@shared/plugins/goal';
+import type { JsonValue } from '@shared/schemas';
 import type { ToolPluginEntry } from '@tools/plugins';
 import type { z } from 'zod';
 
-/** One row kind of one plugin, and the schema of its value. */
+/** One row kind of one plugin: the version it writes, the schema of that
+ *  version's value, and the adjacent upcasters (`upcasters[i]` maps version
+ *  `i + 1` to `i + 2`) the row codec reads an older value through. */
 interface PluginArm {
   readonly plugin: string;
   readonly kind: string;
+  readonly version: number;
   readonly schema: z.ZodType;
+  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
 }
 
 const PLUGIN_EVENT_ARMS = {

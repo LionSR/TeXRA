@@ -1,9 +1,8 @@
 /**
- * The fold's input vocabulary (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
- * sections 5.2 and 6): the durable session events every process folds into
- * `SessionView`, plus the transient arms (live text chunks, the local runtime
- * snapshot, the transcript subscription set, the replay marker) that never
- * carry a seq.
+ * The fold's durable input vocabulary (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
+ * sections 5.2 and 6): the session events every process folds into
+ * `SessionView`. The transient arms that never carry a seq are
+ * `foldInput.ts`.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
  * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
@@ -305,7 +304,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),
-  durable('run.model', { model: z.string().min(1) }), // projected (`MODEL_ROWS`), never stored
+  durable('run.model', { model: z.string().min(1) }), // projected (`projections.ts`), never stored
   /**
    * The parent edge severed: a child promoted to the top level by a stop
    * that detaches its children. The only fact after `run.start` that moves
@@ -344,6 +343,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('plugin.fact', {
     plugin: z.string().min(1),
     kind: z.string().min(1),
+    /** The arm's version `value` was written at: a plugin evolves its
+     *  kinds without a core row version. */
+    version: z.int().positive(),
     value: JsonValueSchema,
   }),
   /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
@@ -535,16 +537,6 @@ export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
     .map((schema) => schema.extend(envelope)),
 ]);
 export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
-/**
- * The version of the stored vocabulary: the shape of every row a session
- * database holds. TeXRA keeps no compatibility with earlier persisted data
- * (AGENTS.md "Compatibility and format retirement"), so `Database` clears a
- * store stamped with any other version at open and stamps this one. Bump it
- * with any change to the stored shape of `SessionEventSchema` (pinned by
- * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
- */
-export const SESSION_EVENT_FORMAT = 45;
-
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
@@ -575,6 +567,56 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
     ids.push(aggregateId('run', event.parentRunId));
   }
   return ids;
+}
+
+/**
+ * The aggregate-graph edges one draft declares, applied by the store in the
+ * transaction that appends it: the parent a `run.start` stamps, the
+ * aggregate a row hangs its target under (a workflow checkpoint under the
+ * run that invoked it; an inquiry thread under its asking run, or none),
+ * the claim an inquiry update borrows for that transaction alone, and the
+ * closure a tombstone makes. {@link referencedAggregates} reads the same
+ * edges off committed rows.
+ */
+export interface AggregateEdges {
+  readonly parent: AggregateId | null;
+  /** Absent: the target keeps its parent. */
+  readonly reparent?: AggregateId | null;
+  readonly borrowsClaim: boolean;
+  readonly closes: boolean;
+}
+
+export function edgesOf(draft: SessionEventDraft): AggregateEdges {
+  switch (draft.type) {
+    case 'run.start':
+      return {
+        parent:
+          draft.parent === null ? null : aggregateId('run', draft.parent.id),
+        borrowsClaim: false,
+        closes: false,
+      };
+    case 'workflow.script':
+      return {
+        parent: null,
+        reparent: aggregateId('run', draft.parentRunId),
+        borrowsClaim: false,
+        closes: false,
+      };
+    case 'inquiryThreadUpdated':
+      return {
+        parent: null,
+        reparent:
+          draft.parentRunId === null
+            ? null
+            : aggregateId('run', draft.parentRunId),
+        borrowsClaim: true,
+        closes: false,
+      };
+    case 'run.removed':
+      return { parent: null, borrowsClaim: false, closes: true };
+    default:
+      return { parent: null, borrowsClaim: false, closes: false };
+  }
 }
 
 /**
@@ -661,96 +703,26 @@ export function listingKeyOf(event: SessionEvent): string | null {
 }
 
 /**
- * The read that delivered a durable row (PRD 7.1): the cold listing, one
- * aggregate's history, or the tail. Only a tail row advances `cursor`.
+ * The open sets the listing keeps beside its latest rows: an open request
+ * and a queued follow-up are keys of their own, closed by their pair. The
+ * fold and the listing projection both key them here.
  */
-export const FoldEventSchema = z.object({
-  _tag: z.literal('event'),
-  read: z.enum(['listing', 'aggregate', 'all']),
-  event: DisplaySessionEventSchema,
-});
-
-/**
- * A live text delta for one row, carrying its own offsets into the row's
- * in-flight text (PRD 5.2, "Live text"): the transient analogue of `seq`.
- * The fold ignores a chunk whose `to` is not past the text it holds,
- * otherwise truncates at `from` and appends, so a redelivery in any order is
- * a no-op, a `from: 0` chunk replaces the row, and two adjacent chunks merge
- * into one exactly. Never durable, never a seq.
- */
-export const TextChunkSchema = z.object({
-  _tag: z.literal('chunk'),
-  runId: RunIdSchema,
-  rowId: z.string(),
-  from: z.int().nonnegative(),
-  to: z.int().positive(),
-  text: z.string(),
-});
-export type TextChunk = z.infer<typeof TextChunkSchema>;
-
-/**
- * Process-local liveness evidence: self, explicitly proved-dead owners, and
- * unreadable runs. A current claimant absent from these verdicts is
- * unprovable and remains held until a probe establishes otherwise.
- */
-export const LocalRuntimeStateSchema = z.object({
-  self: z.array(OwnerIdSchema),
-  dead: z.array(OwnerIdSchema),
-  unreadable: z.array(z.object({ runId: RunIdSchema, detail: z.string() })),
-});
-export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
-
-/**
- * The aggregates whose transcript tier the view holds, each with the seq
- * its history is read from (PRD 5.2, "Residency"). Every value of the set
- * is a fold input: an aggregate entering it gets its `folded` entry, one
- * leaving it loses its transcript tier.
- */
-export const TranscriptSubscriptionSchema = z.object({
-  id: AggregateIdSchema,
-  fromSeq: z.int().nonnegative(),
-});
-export type TranscriptSubscription = z.infer<
-  typeof TranscriptSubscriptionSchema
->;
-
-/** Current ownership and removals for exactly the scope checked by a finite read. */
-export const ExistenceReconciliationSchema = z.object({
-  checkedAggregateIds: z.array(AggregateIdSchema),
-  removedAggregateIds: z.array(AggregateIdSchema),
-  claims: z.array(
-    z.object({
-      aggregateId: AggregateIdSchema,
-      ownerId: OwnerIdSchema.nullable(),
-    }),
-  ),
-});
-export type ExistenceReconciliation = z.infer<
-  typeof ExistenceReconciliationSchema
->;
-
-const FoldInputSchema = z.discriminatedUnion('_tag', [
-  FoldEventSchema,
-  TextChunkSchema,
-  z.object({ _tag: z.literal('debug'), enabled: z.boolean() }),
-  z.object({ _tag: z.literal('local'), local: LocalRuntimeStateSchema }),
-  z.object({
-    _tag: z.literal('subscriptions'),
-    set: z.array(TranscriptSubscriptionSchema),
-  }),
-  /** Cold reads have completed; apply current claims without adopting a later cursor. */
-  z.object({
-    _tag: z.literal('replay.complete'),
-    existence: ExistenceReconciliationSchema,
-  }),
-  /** A finite tail read has completed, including rows no longer materialized. */
-  z.object({
-    _tag: z.literal('drained'),
-    cursor: CommitOrdinalSchema,
-    existence: ExistenceReconciliationSchema,
-  }),
-]);
-export type FoldInput = z.infer<typeof FoldInputSchema>;
+export function pendingKeyOf(
+  event: SessionEvent,
+): { readonly open: string } | { readonly close: string } | null {
+  switch (event.type) {
+    case 'request.opened':
+      return { open: `request/${event.requestId}` };
+    case 'request.decided':
+      return { close: `request/${event.requestId}` };
+    case 'followup.queued':
+      return { open: `followup/${event.followUpId}` };
+    case 'followup.consumed':
+      return { close: `followup/${event.followUpId}` };
+    default:
+      return null;
+  }
+}
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.options.map(

@@ -112,6 +112,16 @@ export function runInterruptedMessage(): string {
   return 'The process running this run stopped before it finished. Resume it to continue.';
 }
 
+/** Banner copy for a run whose rows this build cannot read whole: a later
+ *  build wrote one, or one is corrupt. It is shown, never opened. */
+export function runBlockedMessage(
+  reason: 'newer' | 'unknown' | 'corrupt',
+): string {
+  return reason === 'corrupt'
+    ? 'A stored row of this run is corrupt, so it cannot be opened or resumed.'
+    : 'This run was written by a newer TeXRA; update TeXRA to open it.';
+}
+
 /** Banner and tooltip copy for a run another TeXRA process holds, named by
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {

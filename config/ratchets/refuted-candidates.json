@@ -15,7 +15,7 @@
         {
           "file": "src/platform/defaults/jsonConfigProvider.ts",
           "symbol": "JsonConfigProvider",
-          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; constructor({ workspace, global }: JsonConfigProviderOptions) {\u2026} get<T>(key: string, defaultValue?: T): T {\u2026} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {\u2026} inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {\u2026} }"
+          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; constructor({ workspace, global }: JsonConfigProviderOptions) {…} get<T>(key: string, defaultValue?: T): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> | undefined {…} }"
         }
       ]
     },
@@ -107,19 +107,6 @@
           "file": "packages/cli/src/runtime/logSinks.ts",
           "symbol": "writeRawAndWait",
           "signature": "function writeRawAndWait(key: StreamKey, text: string): Promise<void> {…}"
-        }
-      ]
-    },
-    {
-      "id": "RT-corrupt-record-tag",
-      "candidate": "A corrupt-record tag on run-record reads",
-      "why": "decodeEvent already folds a Zod fault into DatabaseReadFailed, so there is no second condition to name. A per-row tag, if ever wanted, belongs in decodeEvent and changes every read of the store.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "src/controllers/session/Database.ts",
-          "symbol": "decodeEvent",
-          "signature": "function decodeEvent(row: Record<string, unknown>): SessionEvent {…}"
         }
       ]
     },

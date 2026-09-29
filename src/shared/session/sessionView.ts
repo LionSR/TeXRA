@@ -18,6 +18,7 @@ import {
   AgentCategory,
   AggregateIdSchema,
   ApprovalPolicySnapshotSchema,
+  BlockedAggregateSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
@@ -100,12 +101,11 @@ const LoopCoordinateSchema = z.strictObject({
 export type LoopCoordinate = z.infer<typeof LoopCoordinateSchema>;
 
 /**
- * The coordinate a run counts its position in: the one rule, applied by the
- * fold, that every surface reads through `RunView.position`. The loop
- * advances `turn`, one-based (the loop commits `state.turn + 1` from a zero
- * start, and the child loop counts its first turn as 1). A workflow agent
- * counts rounds: each round is one turn, so its zero-based round index is
- * the turn less one, and a run that has not opened its first turn has none.
+ * The coordinate a run counts its position in, the one rule every surface
+ * reads through `RunView.position`. `turn` is one-based (the loop commits
+ * `state.turn + 1`; the child loop counts its first turn as 1). A workflow
+ * agent counts rounds, one per turn: its round index is the turn less one,
+ * and a run that has not opened its first turn has none.
  */
 export function loopCoordinate(
   turn: number,
@@ -201,8 +201,10 @@ const RunViewCommonSchema = z.object({
     finished: z.int().nonnegative(),
   }),
   approval: z.enum(['none', 'own', 'descendant']),
-  /** This process cannot act on it: another live owner, or unreadable (5.2). */
+  /** This process cannot act on it: another live owner, unreadable (5.2), or
+   *  `blocked`, a row this build cannot read (a newer TeXRA's, or corrupt). */
   readOnly: z.boolean(),
+  blocked: BlockedAggregateSchema.shape.reason.nullable(),
   /** What a host may offer on the run now (`runActions`). */
   actions: z.array(RunActionSchema).readonly(),
   /** This run or a descendant needs the user; outranks the surface's
@@ -270,13 +272,11 @@ export interface FollowUpHost {
 }
 
 /**
- * Whether a run takes a follow-up at all, the one rule every host reads: what
- * decides the composer is shown for it, and therefore what a host action
- * aimed at it may assume. A run that declares no follow-up support, a
+ * Whether a run takes a follow-up at all, the one rule every host reads (it
+ * decides whether the composer shows). A run with no follow-up support, a
  * terminal-backed run on a host that cannot drive one, and a run this process
- * may not act on take none; otherwise a run still going or waiting takes one,
- * as does a conversation that has not started (`ready` with nothing written
- * yet).
+ * may not act on take none; a run still going or waiting takes one, as does a
+ * conversation not yet started (`ready`, nothing written).
  */
 export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;

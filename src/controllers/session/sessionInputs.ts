@@ -85,6 +85,8 @@ export const sessionInputsLayer = Layer.effect(
             const listing = (yield* foldRead(log.readListing())).filter(
               isDisplaySessionEvent,
             );
+            // After the listing: a row it found unreadable is among them.
+            const blocked = yield* foldRead(log.readBlocked());
             let checked = new Set<AggregateId>(
               effectiveAggregates.map(({ id }) => id),
             );
@@ -100,6 +102,7 @@ export const sessionInputsLayer = Layer.effect(
                 read: 'listing' as const,
                 event,
               })),
+              ...blocked,
             ];
             replay.push({
               _tag: 'subscriptions',
@@ -158,6 +161,9 @@ export const sessionInputsLayer = Layer.effect(
                   // The first drain must publish the anchor: replay.complete
                   // reconciles existence but does not advance the view cursor.
                   existence: undefined as ExistenceReconciliation | undefined,
+                  blocked: new Set(
+                    blocked.map(({ aggregateId }) => aggregateId),
+                  ),
                 }),
                 (previous) =>
                   Effect.gen(function* () {
@@ -180,7 +186,9 @@ export const sessionInputsLayer = Layer.effect(
                     checked = new Set(
                       existence.claims.map(({ aggregateId }) => aggregateId),
                     );
-                    const inputs: FoldInput[] = [];
+                    const inputs: FoldInput[] = read.blocked.filter(
+                      ({ aggregateId }) => !previous.blocked.has(aggregateId),
+                    );
                     for (const [key, value] of nextText) {
                       const held = previous.text.get(key);
                       if (value === held) continue;
@@ -229,7 +237,15 @@ export const sessionInputsLayer = Layer.effect(
                       ...inputs,
                     ];
                     return [
-                      { cursor, text: nextText, local: snapshot, existence },
+                      {
+                        cursor,
+                        text: nextText,
+                        local: snapshot,
+                        existence,
+                        blocked: new Set(
+                          read.blocked.map(({ aggregateId }) => aggregateId),
+                        ),
+                      },
                       batch.length === 0 ? [] : [batch],
                     ] as const;
                   }),

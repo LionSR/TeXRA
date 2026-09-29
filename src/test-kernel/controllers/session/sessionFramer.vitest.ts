@@ -522,6 +522,7 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
+          blocked: [],
           existence: null,
         });
         const ticker = yield* Effect.forkScoped(ticking);
@@ -626,6 +627,7 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
+          blocked: [],
           existence: null,
         };
         yield* frames.feed({
@@ -686,6 +688,7 @@ describe('session framer', () => {
           host: null,
           debug: null,
           replayComplete: false,
+          blocked: [],
           existence: null,
         });
         yield* TestClock.adjust('16 millis');

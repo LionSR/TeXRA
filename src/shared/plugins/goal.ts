@@ -46,7 +46,9 @@ export type Goal = z.infer<typeof GoalSchema>;
 export const GOAL_STATE_ARM = {
   plugin: 'goal',
   kind: 'state',
+  version: 1,
   schema: GoalStateSchema,
+  upcasters: [],
 } as const;
 
 /** The row that makes `state` the run's goal, for the one publisher. */
@@ -59,6 +61,7 @@ export function goalStateRow(
     aggregateId: aggregateId('run', runId),
     plugin: GOAL_STATE_ARM.plugin,
     kind: GOAL_STATE_ARM.kind,
+    version: GOAL_STATE_ARM.version,
     value: GoalStateSchema.parse(state),
   };
 }
