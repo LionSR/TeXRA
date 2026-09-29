@@ -1,6 +1,14 @@
 # Agent SDK readiness re-verify: the 2026-09-26 pass
 
-Status: proposed
+Status: superseded — the 2026-09-29 pass carries the current map
+Archived: 2026-09-29
+
+> Superseded by
+> [`../../proposed/architecture/2026-09-29-agent-sdk-readiness-reverify.md`](../../proposed/architecture/2026-09-29-agent-sdk-readiness-reverify.md),
+> which re-verifies at `b26a925` (29 human-owned commits past this note's
+> `491490e` anchor touch the audited areas) and confirms the standing verdict
+> and all three open items hold, with the Tier-1 manifest still un-re-enumerated.
+> Kept as history; not authority for current behaviour.
 
 Origin: the recurring scheduled "review and refactor for Agent SDK readiness"
 charter — identify the agent core, model handler, logger and surface areas;
