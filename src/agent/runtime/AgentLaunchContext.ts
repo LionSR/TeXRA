@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { refresh, resolveAgentForLaunch } from '@agent/index';
+import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
   logUserMessage,
   TraceEmitter,
@@ -14,11 +15,10 @@ import {
 } from '@agent/trace';
 import { commitResumedActivation } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { AgentError } from '@common/errors';
-import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
@@ -222,11 +222,12 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           category: fullConfig.agentCategory,
         },
       ));
-    const installed = yield* readInstalledPluginLoadOnce(input.session.roots);
-    const [setting, prompt] = yield* loadAgentSettingAndPrompts(
-      agentEntry,
-      installed,
-    );
+    if (agentEntry.source === 'plugin')
+      yield* requirePluginAgentLoads(
+        agentEntry,
+        yield* readInstalledPluginLoad(input.session.roots),
+      );
+    const { setting, prompt } = agentEntry;
 
     // Block category mismatch. Resolution is already category-scoped; this
     // catches what the registry's pre-merge category can't see: an agent that
@@ -270,7 +271,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         ? explicit
         : (setting.defaultOutputFiles ?? []).filter(Boolean),
     };
-    return { config, setting, prompt, agentEntry, modelConfig, installed };
+    return { config, setting, prompt, agentEntry, modelConfig };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -315,7 +316,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     Error,
     Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, setting, prompt, agentEntry, modelConfig, installed } =
+    const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolCall.workingDirectory`

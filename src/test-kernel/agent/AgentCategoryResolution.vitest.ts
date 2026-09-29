@@ -9,6 +9,10 @@ import { afterAll, beforeAll, describe, expect } from 'vitest';
 
 // Local imports
 import {
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
+import {
   findAgentByIdentifier,
   getCategoryAgent,
   getVisibleAgent,
@@ -239,7 +243,16 @@ describe('cross-category agent resolution', () => {
 
 describe('findAgentByIdentifier (shared identity rule)', () => {
   function entry(name: string, source: AgentEntry['source']): AgentEntry {
-    return { name, source, path: '', category: AgentCategory.ToolUse };
+    return {
+      name,
+      source,
+      path: '',
+      category: AgentCategory.ToolUse,
+      setting: AgentSettingSchema.parse({
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      prompt: AgentPromptSchema.parse({}),
+    };
   }
   const entries = [
     entry('review', 'builtInToolUse'),

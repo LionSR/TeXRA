@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
   helperCall: vi.fn(),
-  load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
   runWithLifecycle: vi.fn(),
@@ -13,9 +12,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   resolveAgentForLaunch: mocks.resolve,
-}));
-vi.mock('@agent/runtime/agentLoad', () => ({
-  loadAgentSettingAndPrompts: mocks.load,
 }));
 vi.mock('@agent/prompt/templateInputs', () => ({
   buildTemplateInputs: mocks.buildVars,
@@ -128,10 +124,11 @@ const captureStartedLaunch = Effect.fn(function* (
         const recordedSession = recordSessionEvents(session);
 
         mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          Effect.succeed({
+            path: '/agents/chat.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
+          }),
         );
         mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
 
@@ -317,10 +314,11 @@ describe('native agent launch activation', () => {
           ),
         );
         mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          Effect.succeed({
+            path: '/agents/chat.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
+          }),
         );
         mocks.buildVars.mockReturnValueOnce(
           Effect.succeed({
