@@ -15,6 +15,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+import { isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
 import { createFakeHost, type FakeHost } from './setupPlatform';
@@ -102,15 +103,9 @@ export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   const sessionRoots = new Set(
     (await Effect.runPromise(listSessions()))
       .filter((session) =>
-        uniqueDirs.some((directory) => {
-          const relative = path.relative(directory, session.roots.storage);
-          return (
-            relative === '' ||
-            (relative !== '..' &&
-              !relative.startsWith(`..${path.sep}`) &&
-              !path.isAbsolute(relative))
-          );
-        }),
+        uniqueDirs.some((directory) =>
+          isPathWithin(directory, session.roots.storage),
+        ),
       )
       .map((session) => session.roots.storage),
   );

@@ -32,7 +32,7 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-import { hasExtension } from '@utils/core/pathCore';
+import { escapesRoot, hasExtension } from '@utils/core/pathCore';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
@@ -339,8 +339,8 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
                 : path.relative(storageRoot, canonicalPath);
             const storagePath =
               relative !== undefined &&
-              !path.isAbsolute(relative) &&
-              relative.split(path.sep)[0] !== '..'
+              !escapesRoot(relative) &&
+              !path.isAbsolute(relative)
                 ? path.join(storage, relative)
                 : undefined;
             if (

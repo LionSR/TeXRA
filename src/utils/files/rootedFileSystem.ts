@@ -22,6 +22,7 @@ import { Effect, FileSystem, Path, PlatformError, Stream } from 'effect';
 import { Glob, type GlobOptions } from 'glob';
 
 // Local imports
+import { isPathWithin } from '@utils/core/pathCore';
 import { readDirectoryTyped, writeFileAtomic } from './fsDurability';
 
 const MODULE = 'RootedFileSystem';
@@ -85,12 +86,7 @@ function resolverFor(root: string | undefined, path: Path.Path) {
         );
       }
       const resolved = path.resolve(root, target);
-      const relative = path.relative(root, resolved);
-      const escapes =
-        path.isAbsolute(relative) ||
-        relative === '..' ||
-        relative.startsWith(`..${path.sep}`);
-      return escapes
+      return !isPathWithin(root, resolved)
         ? Effect.fail(
             PlatformError.badArgument({
               module: MODULE,

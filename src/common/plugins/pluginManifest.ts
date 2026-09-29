@@ -18,6 +18,7 @@ import { SkillNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
+import { isPathWithin } from '@utils/core/pathCore';
 
 // Local imports - this module's neighbours
 import {
@@ -100,12 +101,6 @@ export const UNLOADED_COMPONENT_LABELS = [
   ...IGNORED_COMPONENTS,
 ].map((component) => component.label);
 
-/** Whether `relative` (from `path.relative`) climbs out of its base. */
-export const escapes = (relative: string) =>
-  relative === '..' ||
-  relative.startsWith(`..${path.sep}`) ||
-  path.isAbsolute(relative);
-
 /** A filesystem failure, as a plugin error the user reads. */
 export const ioError = (error: PlatformError.PlatformError) =>
   new PluginError({ message: error.message });
@@ -151,8 +146,7 @@ export function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
 export function containedPath(root: string, declared: string) {
   return Effect.gen(function* () {
     const resolved = path.resolve(root, declared);
-    const relative = path.relative(root, resolved);
-    if (path.isAbsolute(declared) || escapes(relative)) {
+    if (path.isAbsolute(declared) || !isPathWithin(root, resolved)) {
       return yield* failPlugin(
         `Plugin path "${declared}" points outside the plugin directory ${root}.`,
       );
@@ -163,7 +157,7 @@ export function containedPath(root: string, declared: string) {
       fs.realPath(root),
       fs.realPath(resolved),
     ]).pipe(Effect.mapError(ioError));
-    if (escapes(path.relative(realRoot, realResolved))) {
+    if (!isPathWithin(realRoot, realResolved)) {
       return yield* failPlugin(
         `Plugin path "${declared}" resolves through a symlink to ${realResolved}, outside the plugin directory ${root}.`,
       );
