@@ -575,7 +575,7 @@ function childListBindingsText(
     ? keyHintText({ key: 'x', action: 'kill' })
     : undefined;
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
-  const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
+  const inputBinding = keyHintText({ key: 'Tab/Esc', action: 'input' });
   const escBinding = keyHintText({ key: 'Esc', action: 'input' });
   return firstFittingCandidate({
     candidates: [
@@ -584,18 +584,18 @@ function childListBindingsText(
         enterBinding,
         expandBinding,
         killBinding,
-        tabBinding,
-        escBinding,
+        inputBinding,
         ctrlCBinding,
       ]),
       selectionKillable &&
         statusBarBindingRow([
           selectBinding,
           killBinding,
-          tabBinding,
-          escBinding,
+          inputBinding,
           ctrlCBinding,
         ]),
+      statusBarBindingRow([enterBinding, inputBinding, ctrlCBinding]),
+      // The narrow row keeps the way back to input; Esc alone still fits.
       statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
       ctrlCBinding,
     ],

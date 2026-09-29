@@ -44,7 +44,6 @@ import {
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
 import { resumeClaimedRun } from '@agent/runtime/resumeRun';
-import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
@@ -1019,16 +1018,10 @@ interface ProcessRuntimeOptions {
    * The host's editor language-model bridge, served as `LanguageModel`. Every
    * host has a value for it: the VS Code extension's bridge to the editor's
    * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where
-   * discovery discovers nothing.
+   * discovery discovers nothing and binding an editor model fails.
    */
   readonly languageModel: LanguageModelPort;
   readonly setup: SetupPlatformShape;
-  /**
-   * The editor's language models, for the one host that has an editor: the
-   * run layer binds `vscode-lm` models through it. Absent on a host without
-   * one, where binding such a model fails with that fact.
-   */
-  readonly editorModel?: EditorModel['Service'];
   /**
    * The host's inline-comment provider, for the one host with a Comments UI.
    * Absent elsewhere, where the tool is off the roster and a call that
@@ -1098,7 +1091,6 @@ export function installProcessRuntime({
   agentDirectories,
   toolMissingReporter,
   setup,
-  editorModel,
   inlineComments,
   toolAvailability = toolAvailabilityLayer,
   lean = directLeanLanguageServices(),
@@ -1133,9 +1125,6 @@ export function installProcessRuntime({
       resumeToolUseFromResumeData,
       resumeClaimedRun,
     }),
-    editorModel === undefined
-      ? Layer.empty
-      : Layer.succeed(EditorModel)(editorModel),
     inlineComments === undefined
       ? Layer.empty
       : Layer.succeed(InlineComments)(inlineComments),

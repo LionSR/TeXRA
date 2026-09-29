@@ -28,7 +28,6 @@ export interface RunAgentOptions
     Pick<
       ExecuteAgentOptions,
       | 'stopAfterCycle'
-      | 'onApprovalPolicyDenial'
       | 'tools'
       | 'ownApiKeyFallback'
       | 'onRun'

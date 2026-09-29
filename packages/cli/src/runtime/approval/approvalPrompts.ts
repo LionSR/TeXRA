@@ -2,10 +2,7 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type {
-  ApprovalPolicyDenial,
-  TexraRetryApprovalDecision,
-} from '@shared/approvalPolicy';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -39,19 +36,6 @@ function onCliPromptLane(context: CliContext) {
   return withPerKeyLane(cliPromptLanes, context);
 }
 
-/** What the policy closed, as the operator warning names it. */
-type CliApprovalDenial =
-  /** A command, edit or proposal denied, or approval-gated tools withheld
-   *  from the model when the run started. */
-  | ApprovalPolicyDenial
-  /** The human retry permit after a model error. */
-  | {
-      readonly kind: 'retry';
-      readonly deny: Exclude<TexraRetryApprovalDecision, 'present'>['deny'];
-    }
-  /** A question the model asked the user. */
-  | { readonly kind: 'humanInput' };
-
 /** Why no prompt could answer, from the live policy and this run's mode. */
 function promptUnavailableReason(
   policy: SessionHandle['approvalPolicy'],
@@ -65,7 +49,7 @@ function promptUnavailableReason(
 }
 
 function retryDenialReason(
-  deny: Extract<CliApprovalDenial, { kind: 'retry' }>['deny'],
+  deny: Extract<ApprovalPolicyDenial, { kind: 'retry' }>['deny'],
   reason: string,
 ): string {
   switch (deny) {
@@ -80,7 +64,7 @@ function retryDenialReason(
 }
 
 function approvalDenialMessage(
-  denial: CliApprovalDenial,
+  denial: ApprovalPolicyDenial,
   policy: SessionHandle['approvalPolicy'],
   context: CliContext,
 ): string {
@@ -92,6 +76,8 @@ function approvalDenialMessage(
   switch (denial.kind) {
     case 'executable':
       return `Command or edit denied: ${reason}. ${allow} it.`;
+    case 'plan':
+      return `Plan denied: ${reason}. ${allow} it.`;
     case 'proposal':
       return `Delegation denied: ${reason}. ${allow} it.`;
     case 'withheldTools':
@@ -112,17 +98,27 @@ function approvalDenialMessage(
  * denial as tool feedback and routes around it, so this is diagnostics only —
  * a denied gate never changes the process exit code.
  *
- * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
- * frozen CliContext.approvalPolicy can be stale — the warning names the live
- * policy read off the threaded `session`. Operator-facing warnings go
+ * TUI `/approval` updates SessionHandle only, so the frozen
+ * CliContext.approvalPolicy can be stale — the warning names the live policy
+ * read off the threaded `session`. Operator-facing warnings go
  * to stderr (not the diagnostic log).
  */
 export function warnApprovalDenied(
   session: SessionHandle,
   context: CliContext,
-  denial: CliApprovalDenial,
+  denial: ApprovalPolicyDenial,
   runId?: RunId | '',
 ): void {
+  // A yolo policy's own answer to a question or a retry is no news: the TUI
+  // shows the failed run itself, and only a headless run would end silently.
+  if (denial.kind === 'humanInput' && denial.deny === 'yolo-no-human') return;
+  if (
+    denial.kind === 'retry' &&
+    denial.deny === 'yolo-retry' &&
+    context.mode !== 'headless'
+  ) {
+    return;
+  }
   let warned = warnedApprovalRuns.get(context);
   if (!warned) warnedApprovalRuns.set(context, (warned = new Set()));
   // Withheld tools key by their names too: a delegated child reports through

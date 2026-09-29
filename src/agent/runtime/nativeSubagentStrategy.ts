@@ -22,7 +22,6 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -48,7 +47,6 @@ export interface ChildRunLaunchOptions {
    * resumed child is held to its own record.
    */
   readonly parentOffered?: readonly OfferedTool[];
-  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }
@@ -162,7 +160,6 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             parentOffered: params.parentOffered,
-            onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             onRunResolved: params.onRunResolved,
             onProgress: (update) => ports.notify(update),
             turns: {

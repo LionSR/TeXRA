@@ -93,7 +93,6 @@ function runLayerFor(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         tools: shared.tools,
-        onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
           onProgress: (update) => {
             // A UI-only signal, suppressed in the transcript fold: the session
@@ -279,8 +278,6 @@ interface SubagentRunOptions {
    * record instead.
    */
   parentOffered?: readonly OfferedTool[];
-  /** Record that this run met an approval-policy denial (see `AgentRun`). */
-  onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
   /** Session owning this run's coordination state. */
   readonly session: SessionHandle;
   /** Fires once with the run's id right after its handle is tracked. */

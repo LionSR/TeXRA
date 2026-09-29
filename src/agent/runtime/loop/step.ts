@@ -57,6 +57,7 @@ import type { PromptContribution } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 import { resolveStepTools } from '../agentToolResolution';
+import { withholdsApprovalTools } from '../requestPolicy';
 import { blobRows } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { rowAggregate } from './rows';
@@ -205,7 +206,12 @@ const openStep = Effect.fn('Step.open')(function* (
         { installed: true },
       )
       .pipe(Scope.provide(scope));
-    const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
+    // Read live: a policy change or a host attached mid-run reaches the next
+    // step's offer.
+    const resolved = yield* resolveStepTools(pinned.generation, {
+      ...run.toolInputs,
+      approvalPromptsUnavailable: withholdsApprovalTools(run.session),
+    });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     const tools = held?.tools ?? resolved;
     const continuation =
@@ -364,10 +370,10 @@ const openStep = Effect.fn('Step.open')(function* (
     run.logger.warn(message);
   }
   if (withheldChanged)
-    run.onApprovalPolicyDenial?.({
-      kind: 'withheldTools',
-      tools: step.withheld,
-    });
+    run.session.interactions.approvalDenied(
+      { kind: 'withheldTools', tools: step.withheld },
+      run.runId,
+    );
   return {
     tools,
     continuation: step.continuation?.continuation ?? null,

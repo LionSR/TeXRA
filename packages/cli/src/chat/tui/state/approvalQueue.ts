@@ -478,41 +478,6 @@ function approveQueuedDelegatedWorkForRun(
 }
 
 /**
- * Decide one pending request by id, for a surface answer that is not the
- * modal's: the CLI policy's own answer for the kinds it settles without a
- * person, and the retry a stored credential lets this host take. A request
- * the fold no longer lists cannot be answered, and saying so is the point —
- * a decision dropped in silence reads as a run waiting on nobody.
- */
-export function decidePendingRequest(
-  session: SessionHandle,
-  runtime: ProcessRuntime,
-  requestId: string,
-  decision: SurfaceDecision,
-  onRefused?: () => void,
-): void {
-  const request = attentionRequests
-    .get()
-    .find((pending) => pending.requestId === requestId);
-  if (!request) {
-    runtime.runFork(
-      Effect.logWarning(
-        `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
-      ).pipe(withLogChannel('cli.tui')),
-    );
-    return;
-  }
-  decideRequest(
-    session,
-    runtime,
-    request,
-    request.payload,
-    decision,
-    onRefused,
-  );
-}
-
-/**
  * Land one durable decision a host capability took itself — the retry a
  * stored credential let this host switch onto the user's own key. The
  * `request.decide` alone, with no arm decomposition: the decomposition is

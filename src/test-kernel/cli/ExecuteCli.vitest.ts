@@ -7,10 +7,10 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
+import { withholdsApprovalTools } from '@agent/runtime/requestPolicy';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
@@ -325,17 +325,15 @@ async function stubExecuteCliDeps(): Promise<void> {
     mocks.detachWorkflowPlainOutput,
   );
   // The host answers the session's approval question the way the headless
-  // adapter does: from the session's policy and this context.
+  // adapter does: whether this context can answer a prompt.
   mocks.createHeadlessCliHostInteractions.mockImplementation(
-    (session: SessionHandle, _runtime: unknown, context: CliContext) => ({
+    (_session: SessionHandle, _runtime: unknown, context: CliContext) => ({
       emit: mocks.emit,
       pending: vi.fn(() => []),
       resolve: vi.fn(() => false),
       cancel: vi.fn(),
       dispose: mocks.disposeHostInteractions,
-      get approvalPromptsUnavailable() {
-        return cliApprovalPromptsUnavailable(session, context);
-      },
+      approvalPromptsUnavailable: context.mode !== 'interactive',
     }),
   );
   mocks.createCliRuntimeHost.mockReturnValue({
@@ -442,13 +440,13 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  /** What the session's attached host answered while the run launched: the
-   *  one fact a launch reads to withhold approval-gated tools. */
+  /** Whether the session withheld approval-gated tools while the run
+   *  launched: its policy applied to what the attached host can answer. */
   const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
     let seen: boolean | undefined;
     mocks.runAgent.mockImplementationOnce(
       async (_request, options: { session: SessionHandle }) => {
-        seen = options.session.interactions.approvalPromptsUnavailable;
+        seen = withholdsApprovalTools(options.session);
         return COMPLETED_RUN;
       },
     );

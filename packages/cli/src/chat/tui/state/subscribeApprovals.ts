@@ -3,12 +3,12 @@
 // A run asks a person with `request.opened`; the fold lists it in
 // `view.requests` until a `request.decided` answers it, and the modal reads
 // that list (`approvalQueue.ts`). This module owns only what a request needs
-// before it can be shown or answered on this host: the CLI policy's own
-// answer for the kinds it settles with nobody to ask, and the decision it
-// lands for the `useOwnApiKey` capability. Whether a retry offers a move onto
-// the user's own key, and whether that move was taken without asking, is the
-// run's decision carried on the request; the key entry behind the capability
-// is `ProgressApiKeyRetryController`'s, shared with the extension and desktop.
+// before it can be shown or answered on this host: the retry card it stages
+// and the decision it lands for the `useOwnApiKey` capability. Whether a retry
+// offers a move onto the user's own key, and whether that move was taken
+// without asking, is the run's decision carried on the request; the key entry
+// behind the capability is `ProgressApiKeyRetryController`'s, shared with the
+// extension and desktop.
 //
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
@@ -16,12 +16,7 @@
 import { Effect } from 'effect';
 
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
-import {
-  cliApprovalPromptsUnavailable,
-  settleExecutable,
-  settleHumanInputDenial,
-  settleRetry,
-} from '@cli/runtime/approval/settleApprovals';
+import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -44,7 +39,6 @@ import { notify } from '../notifications/terminalNotifier';
 import {
   attentionRequests,
   currentApproval,
-  decidePendingRequest,
   dropPresentation,
   forgetSettledRequests,
   landRequestDecision,
@@ -54,16 +48,16 @@ import {
 } from './approvalQueue';
 
 /**
- * What this host holds for its lifetime: the session its policy settlements
- * read and its decisions land on, the secret store and settings slots a
- * retry's credential switch goes through, and the runtime its decisions are
- * issued on. All four come from the chat session's caller, which holds them
- * already.
+ * What this host holds for its lifetime: the session its denial notices read
+ * the policy from and its decisions land on, the secret store and settings
+ * slots a retry's credential switch goes through, and the runtime its
+ * decisions are issued on. All four come from the chat session's caller,
+ * which holds them already.
  */
 interface TuiApprovalStores {
   /** The chat's session: `/approval` writes land here between turns, so a
-   *  settlement reads the live policy from it rather than the launch-time
-   *  CliContext value. */
+   *  denial notice names the live policy read from it rather than the
+   *  launch-time CliContext value. */
   readonly session: SessionHandle;
   readonly secrets: PlatformSecrets;
   /** The settings slots a key prompt reads a provider's display name and key
@@ -75,10 +69,7 @@ interface TuiApprovalStores {
   readonly runtime: ProcessRuntime;
 }
 
-/**
- * Create the TUI's presentation host, and answer for its lifetime the
- * pending requests this host settles without the modal.
- */
+/** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
   host: CliRuntimeHost,
   context: CliContext,
@@ -235,11 +226,9 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * What this host does with each newly listed request: the policy's own
-   * decision for a gated plan or delegation, the denial a run with no human
-   * input available gets for a question, and a retry's card. Bash and
-   * tool-edit policy is decided at the tool boundary before their request
-   * opens, so those always wait for the modal.
+   * What this host does with each newly listed request: a retry's card is
+   * staged for the modal. The session decided everything its policy settles
+   * before the request was listed, so what is listed waits for a person.
    */
   const answerPendingRequests = (): void => {
     const pending = attentionRequests.get();
@@ -251,65 +240,9 @@ export function createTuiHostInteractions(
     pruneToLive(live, acted, switched);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
-      const payload = request.payload;
-      switch (payload.kind) {
-        case 'bash':
-        case 'toolEdit':
-          continue;
-        case 'planApproval':
-        case 'proposal': {
-          const settled = settleExecutable(
-            stores.session,
-            context,
-            request.runId,
-          );
-          if (settled) {
-            acted.add(request.requestId);
-            decidePendingRequest(
-              stores.session,
-              stores.runtime,
-              request.requestId,
-              settled,
-              actAgainOnRefusal(request.requestId),
-            );
-          }
-          continue;
-        }
-        case 'userQuestion': {
-          const denial = settleHumanInputDenial(
-            stores.session,
-            context,
-            request.runId,
-          );
-          if (denial) {
-            acted.add(request.requestId);
-            decidePendingRequest(
-              stores.session,
-              stores.runtime,
-              request.requestId,
-              { action: 'deny', reason: denial.reason },
-              actAgainOnRefusal(request.requestId),
-            );
-          }
-          continue;
-        }
-        case 'retry': {
-          acted.add(request.requestId);
-          const settled = settleRetry(stores.session, payload.data, context);
-          if (settled) {
-            decidePendingRequest(
-              stores.session,
-              stores.runtime,
-              request.requestId,
-              settled,
-              actAgainOnRefusal(request.requestId),
-            );
-            continue;
-          }
-          stagePresentation({ kind: 'retry', data: payload.data });
-          continue;
-        }
-      }
+      if (request.payload.kind !== 'retry') continue;
+      acted.add(request.requestId);
+      stagePresentation({ kind: 'retry', data: request.payload.data });
     }
   };
 
@@ -321,11 +254,8 @@ export function createTuiHostInteractions(
   const releaseCapability = useHostCapability(performHostCapability);
 
   return {
-    // What the session withholds on every run it launches or resumes, read
-    // live: `/approval` changes the policy mid-session.
-    get approvalPromptsUnavailable() {
-      return cliApprovalPromptsUnavailable(stores.session, context);
-    },
+    approvalDenied: (denial, runId) =>
+      warnApprovalDenied(stores.session, context, denial, runId),
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.
     emit: (event, payload) => {

@@ -136,7 +136,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         parentRunId,
         session: parentSession,
         parentOffered,
-        onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         notify: notifyParentTrace,
       }),
@@ -199,7 +198,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         startedAt,
         workingDirectory,
         parentOffered,
-        onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,
       };
