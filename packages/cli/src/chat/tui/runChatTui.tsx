@@ -336,7 +336,7 @@ export async function runChat(
     changes: runtimeSession.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
-        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit.`,
+        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
       );
       session.runExitCode = CliExitCode.AgentError;
     },
