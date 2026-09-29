@@ -7,10 +7,7 @@ import {
   DesktopSettlePromptMessageSchema,
   type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 interface DesktopPromptInput {
   title: string;
@@ -24,14 +21,21 @@ interface DesktopPromptRenderer {
 
 type PromptResolver = (value: string | undefined) => void;
 
-interface DesktopPromptIpc extends DesktopMessageHandler {
-  request(input: DesktopPromptInput): Effect.Effect<string | undefined>;
-  dispose(): void;
-}
-
 /** Owns correlated desktop prompt requests and their exact settlement. */
-export class DesktopPromptController implements DesktopPromptIpc {
+export class DesktopPromptController {
   private readonly pending = new Map<string, PromptResolver>();
+
+  /** A settlement for no pending request (a duplicate, or one whose asker
+   *  was interrupted) settles nothing. */
+  readonly routes: DesktopCommandRoutes = {
+    [DESKTOP_PROMPT_COMMANDS.SETTLE]: parsedRoute(
+      DesktopSettlePromptMessageSchema,
+      ({ requestId, value }) =>
+        Effect.sync(() => {
+          this.settle(requestId, value ?? undefined);
+        }),
+    ),
+  };
 
   constructor(private readonly renderer: DesktopPromptRenderer) {}
 
@@ -56,17 +60,6 @@ export class DesktopPromptController implements DesktopPromptIpc {
       return Effect.sync(() => {
         this.pending.delete(requestId);
       });
-    });
-  }
-
-  handleMessage(message: DesktopCommandMessage) {
-    const parsed = DesktopSettlePromptMessageSchema.safeParse(message);
-    const { requestId, value } = parsed.success ? parsed.data : {};
-    // A settlement for no pending request (a duplicate, or one whose asker
-    // was interrupted) is not this controller's to run.
-    if (requestId == null || !this.pending.has(requestId)) return undefined;
-    return Effect.sync(() => {
-      this.settle(requestId, value ?? undefined);
     });
   }
 

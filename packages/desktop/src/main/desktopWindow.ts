@@ -14,11 +14,8 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  desktopInboundRoute,
-  type DesktopInboundRoute,
-} from '../shared/desktopCommandSurface.js';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
+import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
@@ -30,7 +27,8 @@ import {
 } from './desktopBrowserWindow.js';
 import {
   isDesktopCommandMessage,
-  type DesktopMessageHandler,
+  type DesktopCommandRoute,
+  type DesktopCommandRoutes,
 } from './desktopIpcTypes.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
 import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
@@ -46,6 +44,7 @@ import {
   type ProjectSurface,
 } from './desktopProjectSurface.js';
 import { DesktopPromptController } from './desktopPromptController.js';
+import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import {
   createDesktopShellActions,
   createDesktopShellIpc,
@@ -284,22 +283,32 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     clearContinueQuitAfterWindowClose: hooks.cancelPendingQuit,
   });
 
-  // One handler per inbound command namespace: the message's `command` names
-  // its route (`desktopInboundRoute`), so a message is parsed by the one
-  // surface that owns it instead of being offered to every handler in turn.
-  const desktopRoutes: Record<DesktopInboundRoute, DesktopMessageHandler> = {
-    prompt: promptController,
-    settings: {
-      handleMessage: (message) => surface.settings()?.handleMessage(message),
-    },
-    onboarding,
-    projects: createDesktopProjectsIpc({
+  // One route per inbound command, each owned by one surface: the message's
+  // `command` names the program that runs it.
+  const claim = (
+    commands: readonly string[],
+    route: DesktopCommandRoute,
+  ): DesktopCommandRoutes =>
+    Object.fromEntries(commands.map((command) => [command, route]));
+  const commandRoutes = new Map<string, DesktopCommandRoute>();
+  for (const routes of [
+    promptController.routes,
+    onboarding.routes,
+    claim(SETTINGS_VIEW_INBOUND_COMMANDS, (message) => {
+      const settings = surface.settings();
+      return settings
+        ? settings.route(message)
+        : Effect.sync(() =>
+            console.warn(`Dropped ${message.command}: no project shows settings`),
+          );
+    }),
+    claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, bindings.workspaceRoute),
+    createDesktopProjectsIpc({
       postProjects,
       selectProject: navigation.select,
       closeProject: navigation.close,
     }),
-    workspace: { handleMessage: bindings.workspaceRoute },
-    logs: createDesktopLogIpc(
+    createDesktopLogIpc(
       { postToRenderer: host.post },
       {
         readLog: () =>
@@ -309,8 +318,15 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
           dialog.showSaveDialog(window, dialogOptions),
       },
     ),
-    shell: createDesktopShellIpc(shellActions),
-  };
+    createDesktopShellIpc(shellActions),
+  ]) {
+    for (const [command, route] of Object.entries(routes)) {
+      if (commandRoutes.has(command)) {
+        throw new Error(`Two desktop surfaces route ${command}`);
+      }
+      commandRoutes.set(command, route);
+    }
+  }
   const hostBridge = yield* Effect.acquireRelease(
     Effect.sync(() =>
       installDesktopHostBridge(window, {
@@ -319,13 +335,15 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             console.warn('Dropped a renderer command with no command name');
             return;
           }
-          const route = desktopInboundRoute(message.command);
-          // A command no surface owns is renderer drift.
-          const program = route && desktopRoutes[route].handleMessage(message);
-          // The one run site for every namespace's program, and its one
+          const route = commandRoutes.get(message.command);
+          if (!route) {
+            console.warn(`Dropped ${message.command}: no surface routes it`);
+            return;
+          }
+          // The one run site for every command's program, and its one
           // report: a failure or defect reaches the window's async-error
           // reporter.
-          if (program) spawn(host.reported(program));
+          spawn(host.reported(route(message)));
         },
         // A session message names its project: that project's port answers
         // it.

@@ -25,6 +25,7 @@ import {
 import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
+  SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -146,10 +147,11 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       // Runs an owned command's program the way the window's router does.
       Effect.map((ipc) => ({
         ...ipc,
-        handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
-          const program = ipc.handleMessage(message);
-          if (program) testRuntime().runFork(program);
-          return program !== undefined;
+        // Whether the shared inbound schema takes the message; a message it
+        // rejects runs a warning and nothing else.
+        handleMessage(message: Parameters<typeof ipc.route>[0]) {
+          testRuntime().runFork(ipc.route(message));
+          return SettingsViewInboundMessageSchema.safeParse(message).success;
         },
       })),
       Scope.provide(scope),

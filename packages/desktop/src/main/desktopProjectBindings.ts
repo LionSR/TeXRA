@@ -42,10 +42,7 @@ import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner } from './desktopWindows.js';
-import type {
-  DesktopMessageHandler,
-  DesktopCommandMessage,
-} from './desktopIpcTypes.js';
+import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -82,7 +79,7 @@ export interface ProjectBindings {
   readonly releaseAll: Effect.Effect<void>;
   /** Answer a project's workspace message (files, terminals, browser views).
    *  A closed project's request is dropped, not routed to a stranger. */
-  readonly workspaceRoute: DesktopMessageHandler['handleMessage'];
+  readonly workspaceRoute: DesktopCommandRoute;
 }
 
 export interface ProjectBindingsOptions {
@@ -344,26 +341,27 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         }
       }),
       releaseAll,
-      workspaceRoute: (message: DesktopCommandMessage) => {
-        const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-        if (!parsed.success) return undefined;
-        const binding = bindings.get(parsed.data.session);
-        if (!binding) {
-          return Effect.sync(() =>
-            console.warn(
-              `Dropped a workspace request for closed project ${parsed.data.session}`,
-            ),
-          );
-        }
-        // Hidden projects retain their resources, but cannot cover the visible
-        // project with a late browser-bounds notification.
-        if (
-          parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
-          binding.project !== projects.active()
-        )
-          return Effect.void;
-        return binding.workspace.handleMessage(message);
-      },
+      workspaceRoute: parsedRoute(
+        DesktopWorkspaceInboundMessageSchema,
+        (message) => {
+          const binding = bindings.get(message.session);
+          if (!binding) {
+            return Effect.sync(() =>
+              console.warn(
+                `Dropped a workspace request for closed project ${message.session}`,
+              ),
+            );
+          }
+          // Hidden projects retain their resources, but cannot cover the
+          // visible project with a late browser-bounds notification.
+          if (
+            message.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
+            binding.project !== projects.active()
+          )
+            return Effect.void;
+          return binding.workspace.handle(message);
+        },
+      ),
     };
   },
 );

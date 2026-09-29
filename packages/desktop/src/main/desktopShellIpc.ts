@@ -21,8 +21,7 @@ import {
 } from '../shared/desktopCommandSurface.js';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
+  DesktopCommandRoutes,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
@@ -190,18 +189,16 @@ export function createDesktopShellActions(
  */
 export function createDesktopShellIpc(
   actions: DesktopShellActions,
-): DesktopMessageHandler {
-  return {
-    handleMessage(message: DesktopCommandMessage) {
-      const id = DESKTOP_SHELL_IPC_COMMANDS.find(
-        (candidate) => candidate === message.command,
-      );
-      if (id == null) return undefined;
-      // Every registry handler runs its action synchronously; an action that
-      // forks host work reports its own failure.
-      return Effect.sync(() => {
-        void dispatchDesktopCommand(id, actions);
-      });
-    },
-  };
+): DesktopCommandRoutes {
+  // Every registry handler runs its action synchronously; an action that
+  // forks host work reports its own failure.
+  return Object.fromEntries(
+    DESKTOP_SHELL_IPC_COMMANDS.map((id) => [
+      id,
+      () =>
+        Effect.sync(() => {
+          void dispatchDesktopCommand(id, actions);
+        }),
+    ]),
+  );
 }

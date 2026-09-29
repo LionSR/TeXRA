@@ -23,6 +23,7 @@ import {
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
+import type { ProcessServices } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -36,14 +37,10 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
-  DesktopWorkspaceInboundMessageSchema,
   type DesktopBrowserBounds,
+  type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 
@@ -67,7 +64,12 @@ interface DesktopWorkspaceIpcOptions {
   getWorkspacePath(): string | undefined;
 }
 
-interface DesktopWorkspaceIpc extends DesktopMessageHandler {
+interface DesktopWorkspaceIpc {
+  /** The program one parsed renderer request runs. */
+  handle(
+    message: DesktopWorkspaceInboundMessage,
+  ): Effect.Effect<void, Error, ProcessServices>;
+
   /**
    * Releases resources owned by the current renderer document.
    *
@@ -470,11 +472,7 @@ export function createDesktopWorkspaceIpc(
 
     followFilesWritten,
 
-    handleMessage(message: DesktopCommandMessage) {
-      const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return undefined;
-      const data = parsed.data;
-
+    handle(data) {
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
           return listFiles(data.requestId, data.directory);

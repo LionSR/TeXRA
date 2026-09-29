@@ -236,6 +236,16 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
   ],
 );
 
+export type DesktopWorkspaceInboundMessage = z.infer<
+  typeof DesktopWorkspaceInboundMessageSchema
+>;
+
+/** The commands the main process routes to a project's workspace. */
+export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
+  DesktopWorkspaceInboundMessageSchema.options.flatMap((option) => [
+    ...option.shape.command.values,
+  ]);
+
 type WorkspaceOutbound =
   | z.infer<typeof DesktopFilesListedMessageSchema>
   | z.infer<typeof DesktopFilesListErrorMessageSchema>

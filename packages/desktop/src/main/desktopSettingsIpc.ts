@@ -19,12 +19,13 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 import { unsupported } from '@shared/utils/dispatcher';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { DesktopMessageHandler } from './desktopIpcTypes.js';
+import type { DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -69,10 +70,17 @@ export interface DesktopSettingsIpcOptions {
 
 type SettingsViewBody = ReturnType<typeof createSettingsViewBody>;
 
+/** The commands the settings view posts to its host. */
+export const SETTINGS_VIEW_INBOUND_COMMANDS =
+  SettingsViewInboundMessageSchema.options.flatMap((option) => [
+    ...option.shape.command.values,
+  ]);
+
 export interface DesktopSettingsIpc
-  extends
-    DesktopMessageHandler,
-    Pick<SettingsViewBody, 'refreshAfterAuthChange' | 'signInSubscription'> {}
+  extends Pick<SettingsViewBody, 'refreshAfterAuthChange' | 'signInSubscription'> {
+  /** The one route every inbound settings command runs. */
+  readonly route: DesktopCommandRoute;
+}
 
 /**
  * The settings surface of one project, with its app-signal subscriptions
@@ -226,7 +234,11 @@ export function createDesktopSettingsIpc(
   const settingsIpc: DesktopSettingsIpc = {
     refreshAfterAuthChange: body.refreshAfterAuthChange,
     signInSubscription: body.signInSubscription,
-    handleMessage: (message) => body.handleMessage(message, registry),
+    route: (message) =>
+      body.handleMessage(message, registry) ??
+      Effect.sync(() =>
+        console.warn(`Dropped a malformed settings message: ${message.command}`),
+      ),
   };
   return Effect.as(
     Effect.forEach(

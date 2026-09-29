@@ -3,11 +3,24 @@ import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
+import { withProcessServices } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
+
 type DesktopPromptControllerModule =
   typeof import('@desktop/main/desktopPromptController');
 type DesktopPromptController = InstanceType<
   DesktopPromptControllerModule['DesktopPromptController']
 >;
+
+/** The renderer's settlement of a prompt, run the way the window's router does. */
+function settlement(
+  controller: DesktopPromptController,
+  message: { command: string; requestId: string; value: string | null },
+) {
+  const route = controller.routes['desktop:settlePrompt'];
+  if (!route) throw new Error('the prompt controller routes no settlement');
+  return withProcessServices(testRuntime(), route(message));
+}
 
 async function createPromptController(
   postToRenderer: (message: unknown) => boolean,
@@ -44,13 +57,11 @@ describe('DesktopPromptController', () => {
         prompt: 'Enter API key',
         password: true,
       });
-      const settle = controller.handleMessage({
+      yield* settlement(controller, {
         command: 'desktop:settlePrompt',
-        requestId: request.requestId,
+        requestId: String(request.requestId),
         value: 'secret',
       });
-      expect(settle).toBeDefined();
-      if (settle) yield* settle;
       expect(yield* Fiber.join(fiber)).toBe('secret');
     }),
   );
@@ -78,10 +89,9 @@ describe('DesktopPromptController', () => {
         requestId,
         value: null,
       };
-      const settle = controller.handleMessage(cancellation);
-      expect(settle).toBeDefined();
-      if (settle) yield* settle;
-      expect(controller.handleMessage(cancellation)).toBeUndefined();
+      yield* settlement(controller, cancellation);
+      // A duplicate settles nothing.
+      yield* settlement(controller, cancellation);
       // The asking fiber resumes on the Effect scheduler, not on a microtask.
       yield* Effect.promise(
         () => new Promise((resolve) => setTimeout(resolve, 0)),
@@ -137,13 +147,12 @@ describe('DesktopPromptController', () => {
       );
       yield* Fiber.interrupt(fiber);
 
-      expect(
-        controller.handleMessage({
-          command: 'desktop:settlePrompt',
-          requestId,
-          value: 'late',
-        }),
-      ).toBeUndefined();
+      // A late answer to an abandoned prompt settles nothing.
+      yield* settlement(controller, {
+        command: 'desktop:settlePrompt',
+        requestId,
+        value: 'late',
+      });
     }),
   );
 });

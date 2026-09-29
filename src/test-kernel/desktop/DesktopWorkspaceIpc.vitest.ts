@@ -12,7 +12,10 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { DESKTOP_WORKSPACE_COMMANDS } from '@desktop/shared/desktopWorkspaceMessages';
+import {
+  DESKTOP_WORKSPACE_COMMANDS,
+  DesktopWorkspaceInboundMessageSchema,
+} from '@desktop/shared/desktopWorkspaceMessages';
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
@@ -77,11 +80,14 @@ function createIpc(
     ...ipc,
     // Runs the answered program the way the window's router does: forked,
     // with its failure handed to the async-error reporter.
-    handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
-      const program = ipc.handleMessage({ ...message, session: workspacePath });
-      if (!program) return false;
+    handleMessage(message: { command: string } & Record<string, unknown>) {
+      const parsed = DesktopWorkspaceInboundMessageSchema.safeParse({
+        ...message,
+        session: workspacePath,
+      });
+      if (!parsed.success) return false;
       runtime.runFork(
-        program.pipe(
+        ipc.handle(parsed.data).pipe(
           Effect.catch((error) => Effect.sync(() => onAsyncError(error))),
         ),
       );
