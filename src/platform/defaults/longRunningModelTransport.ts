@@ -12,7 +12,11 @@
  * globally ({@link installProcessHttpDispatcher}) so the rest of its HTTP
  * traffic follows the same proxy policy.
  */
-import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
+import {
+  EnvHttpProxyAgent,
+  fetch as undiciFetch,
+  setGlobalDispatcher,
+} from 'undici';
 
 /** A streamed reasoning turn may sit silent this long between chunks. */
 const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -33,14 +37,20 @@ function modelDispatcher(): EnvHttpProxyAgent {
   return dispatcher;
 }
 
-/** The fetch every model factory is constructed with. */
+/**
+ * The fetch every model factory is constructed with. It is undici's own
+ * `fetch`, not the global one: the global is the runtime's bundled undici
+ * (Electron 44 ships 7.x), which rejects a dispatcher built by this
+ * package's undici ("invalid onRequestStart method").
+ */
 export const longRunningModelFetch: typeof fetch = (input, init) =>
-  fetch(input, {
-    ...init,
-    // Node's fetch is undici's and honors a per-request dispatcher; the DOM
-    // `RequestInit` type does not name the field.
-    dispatcher: modelDispatcher(),
-  } as RequestInit);
+  undiciFetch(
+    input as Parameters<typeof undiciFetch>[0],
+    {
+      ...init,
+      dispatcher: modelDispatcher(),
+    } as Parameters<typeof undiciFetch>[1],
+  ) as unknown as Promise<Response>;
 
 /** A host root's process-wide HTTP dispatcher: the same agent, globally. */
 export function installProcessHttpDispatcher(): void {

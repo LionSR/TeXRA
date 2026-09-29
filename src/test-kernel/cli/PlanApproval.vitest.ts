@@ -24,7 +24,6 @@ async function renderPlanApproval(availableRows: number): Promise<string> {
         requestId: 'plan-1',
         runId: 'run-1' as RunId,
         plan: { objective: 'Verify the derivation.' },
-        goalEnabled: true,
       },
     }),
     60,
@@ -60,7 +59,6 @@ describe('CLI plan approval layout', () => {
       expect(
         isPlanApprovalGoalActionVisible({
           compact: true,
-          goalEnabled: true,
           visibleBodyRows,
         }),
       ).toBe(expected);

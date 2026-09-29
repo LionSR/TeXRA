@@ -137,7 +137,7 @@ export class SkillsTab extends LitElement {
       });
     let state = `Skills ${plugin.skillCount}, commands ${plugin.commandCount}, agents ${plugin.agentCount}, MCP servers ${plugin.mcpServers.length}.`;
     if (plugin.code.length > 0)
-      state = `Runs code (${plugin.code.join(', ')}); code plugins are not supported yet.`;
+      state = `Ships ${plugin.code.join(', ')}, which TeXRA does not run yet.`;
     else if (plugin.enabled && !plugin.trusted)
       state =
         'Changed since you trusted it: it loads nothing until you review it.';
