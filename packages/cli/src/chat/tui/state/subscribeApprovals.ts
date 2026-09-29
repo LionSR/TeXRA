@@ -43,9 +43,11 @@ import {
   forgetSettledRequests,
   landRequestDecision,
   pruneToLive,
+  reopenRequest,
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
+import { appendLocalAssistantTranscript } from './transcript';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
@@ -146,10 +148,9 @@ export function createTuiHostInteractions(
   /**
    * A retry on the user's own key: the shared controller checks the store
    * for the key the run's offer names, asks for one when there is none, and
-   * lands the retry through `triggerRetry`. What stays here is the
-   * answer a switch that did not happen still owes the run: the request is
-   * durable and nobody else re-asks it, so it leaves as a denial worded for
-   * this surface rather than as a card the user can no longer see.
+   * lands the retry through `triggerRetry`. A switch that did not happen
+   * leaves the retry pending, as on every other host: the card comes back
+   * with the reason worded into the conversation, and the user picks again.
    */
   const useOwnApiKey = (requestId: string): void => {
     const permission = pendingRetry(requestId);
@@ -169,6 +170,7 @@ export function createTuiHostInteractions(
           `Retry ${requestId} offers no move onto a provider key: no credential switch was made.`,
         ).pipe(withLogChannel('cli.tui')),
       );
+      reopenRequest(requestId);
       return;
     }
     const provider = offer.provider;
@@ -199,14 +201,8 @@ export function createTuiHostInteractions(
         yield* Effect.logWarning(
           `The retry could not switch to your own API key: ${reason}`,
         ).pipe(withLogChannel('cli.tui'));
-        landRequestDecision(
-          stores.session,
-          stores.runtime,
-          permission.runId,
-          requestId,
-          { action: 'deny', reason },
-          actAgainOnRefusal(requestId),
-        );
+        appendLocalAssistantTranscript(reason, permission.runId);
+        reopenRequest(requestId);
       }),
     );
   };

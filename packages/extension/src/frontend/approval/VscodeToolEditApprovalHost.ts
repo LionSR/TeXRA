@@ -44,8 +44,6 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 
   constructor(
     private readonly storageDirectory: string,
-    /** The window's `request.decide`: where a staged request's decision goes. */
-    readonly decide: ToolEditApprovalHost['decide'],
     private readonly runtime: ProcessRuntime,
     private readonly session: SessionHandle,
   ) {}

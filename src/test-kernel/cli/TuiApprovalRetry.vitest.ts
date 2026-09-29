@@ -8,6 +8,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   hasUsableApiKey: vi.fn(),
+  /** The key prompt: the user closes it without entering a key. */
+  promptForCliProviderApiKey: vi.fn(() => Effect.void),
   preferSubscription: true,
   notify: vi.fn(),
   setCliSubscriptionPreference: vi.fn(),
@@ -28,6 +30,13 @@ vi.mock('@model/subscriptionAccess', async (importActual) => {
         : actual.isPreferSubscription(...args),
   };
 });
+
+vi.mock('@cli/chat/tui/hosts/cliProviderKeys', async (importActual) => ({
+  ...(await importActual<
+    typeof import('@cli/chat/tui/hosts/cliProviderKeys')
+  >()),
+  promptForCliProviderApiKey: mocks.promptForCliProviderApiKey,
+}));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
@@ -582,6 +591,31 @@ describe('TUI request decisions', () => {
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);
+        yield* Fiber.interrupt(pending);
+      }),
+  );
+
+  it.effect(
+    'leaves a retry pending, with its card back, when no own key was entered',
+    () =>
+      Effect.gen(function* () {
+        tui();
+        const permission = chatGptSubscriptionRetry('no-key');
+        const pending = yield* Effect.forkChild(openRetry(permission));
+        yield* waitForApproval('retry', { requestId: permission.requestId });
+
+        decideRetry(PERSONAL_KEY_RETRY);
+
+        // No key was entered: the request is neither denied nor decided, as
+        // on the extension and the desktop, and the user chooses again.
+        yield* waitForApproval('retry', { requestId: permission.requestId });
+        yield* testDefaultSession().settlePublications();
+        expect(
+          SubscriptionRef.getUnsafe(testDefaultSession().view).requests.some(
+            (request) => request.requestId === permission.requestId,
+          ),
+        ).toBe(true);
+        expect(pending.pollUnsafe()).toBeUndefined();
         yield* Fiber.interrupt(pending);
       }),
   );

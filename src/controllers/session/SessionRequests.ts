@@ -63,6 +63,8 @@ import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { approvePendingUnderBypass } from './pendingUnderBypass';
+
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
 /** The log's reads, and removal through the session's publisher. */
@@ -100,6 +102,10 @@ export function sessionRequests(
   ) {
     yield* requireRunAction(session, req);
     const admitted = yield* admit(log, local, req);
+    // This process holds the run's claim: a parked request has a fiber here.
+    const heldHere =
+      admitted.ownerId !== null &&
+      SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
     return yield* handle(
       session,
       approvals,
@@ -107,7 +113,7 @@ export function sessionRequests(
       req,
       log,
       admitted,
-      local,
+      heldHere,
     ).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
       Effect.provideService(Runs, session.runs),
@@ -244,15 +250,12 @@ function decide(
   decisionLanes: Map<string, PerKeyLane>,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   admitted: AggregateState,
-  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+  heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   // A run whose owner is gone (proved dead, or a claim already released)
   // takes no append until this process holds its claim: the decision
   // acquires it with the fencing resume uses and gives it back, so a later
   // resume can still take the run.
-  const heldHere =
-    admitted.ownerId !== null &&
-    SubscriptionRef.getUnsafe(local).self.includes(admitted.ownerId);
   const answer = Effect.gen(function* () {
     const pending = SubscriptionRef.getUnsafe(session.view).requests.find(
       (request) =>
@@ -383,7 +386,7 @@ function handle(
   req: RuntimeRequest,
   log: SessionRequestLog,
   admitted: AggregateState,
-  local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
+  heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs> {
   switch (req.kind) {
     case 'run.stop':
@@ -461,9 +464,9 @@ function handle(
         ),
       );
     case 'request.decide':
-      return decide(session, decisionLanes, req, admitted, local);
+      return decide(session, decisionLanes, req, admitted, heldHere);
     case 'policy.set':
-      return Effect.sync(() => {
+      return Effect.gen(function* () {
         const { change } = req;
         switch (change.bypass) {
           case 'bash':
@@ -475,6 +478,10 @@ function handle(
           case 'superYolo':
             approvals.setDelegatedWorkBypasses(change.runId, change.enabled);
             break;
+        }
+        // A run held elsewhere has no fiber here to act on a decision.
+        if (change.enabled && heldHere) {
+          yield* approvePendingUnderBypass(session, change);
         }
         return done;
       });

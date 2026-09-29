@@ -24,10 +24,7 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import {
-  ToolEditApprovalController,
-  type ToolEditApprovalHost,
-} from '@controllers/approval/ToolEditApprovalController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import {
@@ -285,21 +282,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // (`request.opened` folds into the view) and this host's decision goes
     // back as that request's `request.decide`; the staged preview is
     // discarded when `request.decided` folds, whichever way it went.
-    const decideRequest: ToolEditApprovalHost['decide'] = (
-      runId,
-      requestId,
-      decision,
-    ) =>
-      session.requests
-        .request({ kind: 'request.decide', runId, requestId, decision })
-        .pipe(Effect.asVoid);
     this.toolEditApprovals = new ToolEditApprovalController({
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
-        decideRequest,
         this.runtime,
         session,
       ),
+      session,
     });
     const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({

@@ -144,12 +144,9 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
           ...options.toolEditPreview,
           showErrorMessage: host.showErrorMessage,
         },
-        decide: (runId, requestId, decision) =>
-          session.requests
-            .request({ kind: 'request.decide', runId, requestId, decision })
-            .pipe(Effect.asVoid),
         spawn,
       }),
+      session,
     });
     // Dispose joins any tool-edit LaTeX build still displaying, which has no
     // cancellation signal, so the window's release must not wait on it: it

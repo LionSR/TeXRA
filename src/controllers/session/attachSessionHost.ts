@@ -25,7 +25,10 @@ type PreviewServices = Effect.Services<
 export const attachSessionHost = Effect.fn('session.attachHost')(function* (
   session: SessionHandle,
   controller: ToolEditApprovalController,
-  extras: Omit<HostInteractions, 'presentToolEdit' | 'releaseToolEdit'> & {
+  extras: Omit<
+    HostInteractions,
+    'presentToolEdit' | 'releaseToolEdit' | 'approveToolEdit'
+  > & {
     readonly onEvent?: (event: SessionEvent) => Effect.Effect<void>;
   },
 ): Effect.fn.Return<void, never, Scope.Scope | PreviewServices> {
@@ -84,6 +87,9 @@ export const attachSessionHost = Effect.fn('session.attachHost')(function* (
       // not carry this window's services: they are the ones captured here.
       releaseToolEdit: (requestId) =>
         Effect.provideContext(controller.release(requestId), services),
+      // An approve-all reaches the edits a user made in a staged diff view.
+      approveToolEdit: (requestId) =>
+        Effect.provideContext(controller.approveStaged(requestId), services),
     }),
     (detach) => Effect.sync(detach),
   );

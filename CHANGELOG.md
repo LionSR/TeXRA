@@ -337,6 +337,15 @@ All notable changes to this project will be documented in this file.
   Headless `--output-format ndjson` progress no longer carries the
   undisplayed `internal` log lines or `modelRetryLifecycle` domain events,
   and `inquiryThreadUpdated` no longer carries `resumeOutcome`.
+- **Approve-all and "use my own key" behave the same on every host.**
+  Turning on "approve all" for a run (the switches in the run header, or
+  "approve all edits" on a prompt) now also approves the requests of that
+  kind already waiting, in the extension and desktop as it did in the
+  terminal; an edit you made in a waiting request's diff view is kept. A retry on your own API key with no key entered stays pending in
+  the terminal, as it does in the extension and desktop, instead of being
+  denied: the card comes back with the reason and you choose again. The
+  desktop now tells you when a file drop skipped items, as the extension
+  does.
 - **Desktop: a hung file list no longer freezes the editor tree.** Listing or
   reading a file on a stalled network or cloud mount now fails after 60
   seconds, so Refresh works again instead of waiting until the project

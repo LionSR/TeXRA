@@ -145,18 +145,13 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   /** A tool-edit prompt's verbs over the preview the host staged: the
    *  approval applies the proposed file as the user left it, so the host
-   *  settles it; the others open editors and leave the approval pending. */
+   *  reads the edit back and sends the `request.decide` itself; the others
+   *  open editors and leave the approval pending. A reject reads nothing off
+   *  the preview, so it is a plain `request.decide` on every host. */
   z.object({
     kind: z.literal('toolEdit'),
     requestId: z.string().min(1),
-    action: z.enum([
-      'approve',
-      'reject',
-      'openDiff',
-      'previewProposed',
-      'showLatexdiff',
-    ]),
-    feedback: z.string().nullish(),
+    action: z.enum(['approve', 'openDiff', 'previewProposed', 'showLatexdiff']),
   }),
   /** An output file's verbs on a workflow run's file list. */
   z.object({

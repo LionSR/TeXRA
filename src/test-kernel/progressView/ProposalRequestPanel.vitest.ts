@@ -83,6 +83,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         runId: 'run-a',
         bypass: 'superYolo',
         enabled: true,
+        exceptRequestId: 'proposal-1',
       },
     };
     // Approve-all carries the (unselected) overrides beside the bypass; the

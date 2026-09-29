@@ -22,8 +22,6 @@ import type {
   RunId,
 } from '@shared/schemas';
 import {
-  APPROVE_ALL_DELEGATED_WORK_ACTION,
-  APPROVE_SESSION_ACTION,
   approvalDecisionArms,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
@@ -352,6 +350,14 @@ export function dropPresentation(requestId: string): Effect.Effect<void> {
   });
 }
 
+/** Put a request the user answered on this surface back in front of them:
+ *  the answer did not land, and the request is still pending. */
+export function reopenRequest(requestId: string): void {
+  const next = new Set(decided.get());
+  next.delete(requestId);
+  decided.set(next);
+}
+
 /**
  * Issue the runtime requests one decision names, in order; a refusal reads
  * in the conversation and puts `requestId` back on this surface, since the
@@ -369,9 +375,7 @@ function issue(
   ...requests: RuntimeRequest[]
 ): void {
   const reopen = (): void => {
-    const next = new Set(decided.get());
-    next.delete(requestId);
-    decided.set(next);
+    reopenRequest(requestId);
     onRefused?.();
   };
   void runtime.runPromise(
@@ -442,38 +446,6 @@ function decideRequest(
           `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
         ).pipe(withLogChannel('cli.tui')),
       );
-  }
-  // Both approve-all actions on a proposal turn the run's delegated-work
-  // bypass on, so the work already queued behind it follows.
-  if (
-    payload.kind === 'proposal' &&
-    (decision.action === APPROVE_ALL_DELEGATED_WORK_ACTION ||
-      decision.action === APPROVE_SESSION_ACTION)
-  ) {
-    approveQueuedDelegatedWorkForRun(session, runtime, runId);
-  }
-}
-
-/** Approve every delegated request pending on `runId` once its bypass is
- *  on: the decisions the user's super-YOLO choice implied. */
-function approveQueuedDelegatedWorkForRun(
-  session: SessionHandle,
-  runtime: ProcessRuntime,
-  runId: RunId,
-): void {
-  const done = decided.get();
-  for (const request of attentionRequests.get()) {
-    if (request.runId !== runId || done.has(request.requestId)) continue;
-    if (
-      request.kind !== 'proposal' &&
-      request.kind !== 'toolEdit' &&
-      request.kind !== 'bash'
-    ) {
-      continue;
-    }
-    decideRequest(session, runtime, request, request.payload, {
-      action: 'approve',
-    });
   }
 }
 

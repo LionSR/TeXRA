@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
@@ -102,12 +103,8 @@ vi.mock('vscode', () => {
 type DecideSpy = ReturnType<typeof createDecideSpy>;
 
 function createDecideSpy() {
-  return vi.fn(
-    (
-      _runId: RunId,
-      _requestId: string,
-      _decision: RequestDecision,
-    ): Effect.Effect<void> => Effect.void,
+  return vi.fn((_request: RuntimeRequest): Effect.Effect<Outcome> =>
+    Effect.succeed({ kind: 'done' }),
   );
 }
 
@@ -145,12 +142,12 @@ function createApprovalHarness(): ApprovalHarness {
   const controller = new ToolEditApprovalController({
     host: new VscodeToolEditApprovalHost(
       storageRoot,
-      decide,
       testRuntime(),
       // The session only backs `openBuildDisplay`, which this suite never
       // invokes; no shared fake exists that builds without a platform host.
       { roots: {} } as unknown as SessionHandle,
     ),
+    session: { requests: { request: decide } },
   });
   const harness = { controller, decide };
   harnesses.push(harness);
@@ -251,9 +248,11 @@ describe('VS Code tool edit approval', () => {
     await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
 
     await vi.waitFor(() =>
-      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
-        action: 'approve',
-        content: 'beta after retry\n',
+      expect(decide).toHaveBeenCalledWith({
+        kind: 'request.decide',
+        runId: 'run-approval',
+        requestId,
+        decision: { action: 'approve', content: 'beta after retry\n' },
       }),
     );
     expect(getText).toHaveBeenCalledOnce();
@@ -276,11 +275,13 @@ describe('VS Code tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
 
-    await onRuntime(controller.handleAction({ requestId, action: 'reject' }));
+    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
     await vi.waitFor(() =>
-      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
-        action: 'reject',
-        feedback: null,
+      expect(decide).toHaveBeenCalledWith({
+        kind: 'request.decide',
+        runId: 'run-approval',
+        requestId,
+        decision: { action: 'approve', content: 'new\n' },
       }),
     );
   });

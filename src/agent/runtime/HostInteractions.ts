@@ -135,6 +135,15 @@ export interface HostInteractions {
    * stages nothing and undoes nothing on its own.
    */
   releaseToolEdit?(requestId: string): Effect.Effect<void>;
+  /**
+   * Approve a request {@link presentToolEdit} staged the way its surface's
+   * Approve does: the decision carries the content the user edited in the
+   * host's view. `false` when nothing is staged for `requestId`, which the
+   * caller then approves from the payload. `true` means the host took the
+   * decision, including a failed read of the edit, which it reports and
+   * leaves the request pending for.
+   */
+  approveToolEdit?(requestId: string): Effect.Effect<boolean>;
   dispose?(): void;
 }
 
@@ -316,6 +325,14 @@ export class SessionHostInteractions implements HostInteractions {
       active.interactions.presentToolEdit(request);
       return Effect.succeed(active.interactions.releaseToolEdit?.(requestId));
     });
+  }
+
+  /** Approve a staged tool edit with the content its host view holds. */
+  approveToolEdit(requestId: string): Effect.Effect<boolean> {
+    return (
+      this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
+      Effect.succeed(false)
+    );
   }
 
   /**

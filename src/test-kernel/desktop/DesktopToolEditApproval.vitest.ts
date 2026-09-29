@@ -114,11 +114,6 @@ function createApprovalFixture(
         closeDiff: () => Effect.void,
         ...options.ui,
       },
-      // The desktop surface's decision: the session's one `request.decide`.
-      decide: (runId, requestId, decision) =>
-        session.requests
-          .request({ kind: 'request.decide', runId, requestId, decision })
-          .pipe(Effect.asVoid),
     });
     // The previews the host actually staged. `stagePreview` hands back a
     // program now, not a promise, so the spy's recorded results are
@@ -135,6 +130,7 @@ function createApprovalFixture(
       );
     const controller = new modules.controllerModule.ToolEditApprovalController({
       host,
+      session,
     });
     yield* Effect.addFinalizer(() =>
       Effect.promise(() => testRuntime().runPromise(controller.dispose())),
@@ -236,7 +232,7 @@ describe('desktop tool edit approval', () => {
     () =>
       Effect.gen(function* () {
         const opened: string[] = [];
-        const { requestApproval, controller, waitForPreviews } =
+        const { requestApproval, controller, session, waitForPreviews } =
           yield* createApprovalFixture({
             ui: createStubDesktopAgentRunHost({
               openPath: (filePath) =>
@@ -271,13 +267,12 @@ describe('desktop tool edit approval', () => {
           true,
         );
 
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'reject',
-            feedback: 'not yet',
-          }),
-        );
+        yield* session.requests.request({
+          kind: 'request.decide',
+          runId: 'a20000' as RunId,
+          requestId: request.requestId,
+          decision: { action: 'reject', feedback: 'not yet' },
+        });
         expect(yield* Fiber.join(result)).toMatchObject({
           action: 'reject',
           feedback: 'not yet',
@@ -306,7 +301,7 @@ describe('desktop tool edit approval', () => {
         const closeDiff = vi.fn(
           (_previewId: string): Effect.Effect<void> => Effect.void,
         );
-        const { requestApproval, controller, waitForPreviews } =
+        const { requestApproval, controller, session, waitForPreviews } =
           yield* createApprovalFixture({
             ui: {
               ...createStubDesktopAgentRunHost({ openPath }),
@@ -352,12 +347,12 @@ describe('desktop tool edit approval', () => {
           yield* Effect.tryPromise(() => pathExists(proposed.filePath)),
         ).toBe(true);
 
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'reject',
-          }),
-        );
+        yield* session.requests.request({
+          kind: 'request.decide',
+          runId: 'a30000' as RunId,
+          requestId: request.requestId,
+          decision: { action: 'reject' },
+        });
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
 
         // The decision releases the preview: the view the diff opened in is
@@ -506,7 +501,7 @@ describe('desktop tool edit approval', () => {
         });
 
         const openBuildDisplay = vi.fn(() => Effect.void);
-        const { requestApproval, controller, waitForPreviews } =
+        const { requestApproval, controller, session, waitForPreviews } =
           yield* createApprovalFixture({
             ui: createStubDesktopAgentRunHost({ openBuildDisplay }),
           });
@@ -550,12 +545,12 @@ describe('desktop tool edit approval', () => {
         );
         expect(result.pollUnsafe()).toBeUndefined();
 
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'reject',
-          }),
-        );
+        yield* session.requests.request({
+          kind: 'request.decide',
+          runId: 'a60000' as RunId,
+          requestId: request.requestId,
+          decision: { action: 'reject' },
+        });
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
       }),
   );
@@ -572,7 +567,7 @@ describe('desktop tool edit approval', () => {
           options?: { preserveFocus?: boolean };
         }> = [];
         const messages: string[] = [];
-        const { requestApproval, controller, waitForPreviews } =
+        const { requestApproval, controller, session, waitForPreviews } =
           yield* createApprovalFixture({
             workspacePath: workspaceRoot,
             ui: createStubDesktopAgentRunHost({
@@ -626,12 +621,12 @@ describe('desktop tool edit approval', () => {
 
         // The request's own decision releases the preview and everything the
         // LaTeX inspection staged beside it.
-        yield* onRuntime(
-          controller.handleAction({
-            requestId: request.requestId,
-            action: 'reject',
-          }),
-        );
+        yield* session.requests.request({
+          kind: 'request.decide',
+          runId: 'a70000' as RunId,
+          requestId: request.requestId,
+          decision: { action: 'reject' },
+        });
         expect(yield* Fiber.join(result)).toMatchObject({ action: 'reject' });
         yield* Effect.tryPromise(() =>
           vi.waitFor(async () => {
