@@ -67,12 +67,10 @@ const FileOpResultSchema = z.discriminatedUnion('status', [
 export type FileOpResult = z.infer<typeof FileOpResultSchema>;
 
 /**
- * Merges the runDir and workspace legs of an runId-driven pack/clean
- * operation. Surfaces an error from either leg — a failed runDir
- * removal/snapshot must not be masked by a successful workspace sweep/pack —
- * and otherwise prefers the workspace result, falling back to the runDir
- * result only when the workspace leg found nothing (legacy runs whose
- * outputs still sit beside the source rather than inside the runDir).
+ * Merges the runDir and workspace legs of a run's pack. Surfaces an error
+ * from either leg — a failed runDir snapshot must not be masked by a
+ * successful workspace pack — and otherwise prefers the workspace result,
+ * falling back to the runDir result when the workspace leg found nothing.
  */
 export function mergeRunDirAndWorkspaceResult(
   runDirResult: FileOpResult,

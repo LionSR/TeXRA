@@ -49,7 +49,6 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
  */
 const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
   latexdiff: MESSAGE_TYPES.LATEXDIFF,
-  scratchpad: MESSAGE_TYPES.SCRATCHPAD,
   missingOutputs: MESSAGE_TYPES.MISSING_OUTPUTS,
   webSearch: MESSAGE_TYPES.WEB_SEARCH,
   contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
