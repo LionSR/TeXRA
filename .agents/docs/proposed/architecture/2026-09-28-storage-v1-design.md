@@ -2,7 +2,8 @@
 
 Date: 2026-09-28
 
-Status: proposed. It decides; the owner rules on the five questions in §13.
+Status: proposed. It decides; the owner ruled on every open question on
+2026-09-28 (§13), and the sections below carry those rulings.
 
 Audit baseline: `origin/main` `f8bc3d8ec8`. The evidence comes from two audits
 of 2026-09-28: history across upgrades, at `fddcc097a8`, and SQL layer
@@ -45,7 +46,7 @@ One physical bump, to `SCHEMA_VERSION` 100, carries all of it.
 | per-run `context.blob` copies: 50–65% of blob bytes are duplicates, and blobs are 73–79% of the data                                                                  | `requestContext.ts:93-110`                                            | the store-wide `blob` table, collected by reachability                         |
 | throw-on-bad-row, where one row fails the whole listing                                                                                                               | `Database.ts:126-156`                                                 | a `Blocked` or `Corrupt` verdict per aggregate                                 |
 | `packages/llm`'s authority over the stored `model.message` shape                                                                                                      | `runLedgerEvent.ts:20-26,168`                                         | a storage-owned `StoredTurn` (§4)                                              |
-| the second copy of every tool output (`tool.end.result` beside `tool.result`)                                                                                         | `toolUseDispatch.ts:344-358`                                          | a card hydrated at read time (§10, owner decision)                             |
+| the second copy of every tool output (`tool.end.result` beside `tool.result`)                                                                                         | `toolUseDispatch.ts:344-358`                                          | the card's output projected at read time (§10)                                 |
 | `appStateChanges.ts` as a separate file                                                                                                                               | 61 lines                                                              | merged into its owner, `currentValues.ts`                                      |
 | aside copies that are never deleted; 95% free pages; 4 MB WAL files that stay                                                                                         | the store directory                                                   | §7                                                                             |
 
@@ -280,7 +281,7 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 | `journal_mode`       | `WAL` (persistent), `MEMORY` (ephemeral) | unchanged                                                                                                                                                                                                                        |
 | `synchronous`        | `NORMAL`                                 | WAL-safe. The spike measured `FULL` at 1.4–1.8× the cost, and `kill -9` lost nothing.                                                                                                                                            |
 | `foreign_keys`       | `ON`                                     | the cascades are the collection mechanism                                                                                                                                                                                        |
-| `auto_vacuum`        | `INCREMENTAL`                            | set at creation; a pre-1.0 file gets one `VACUUM` at retirement (§3)                                                                                                                                                             |
+| `auto_vacuum`        | `INCREMENTAL`                            | set at creation; a retired pre-1.0 file gets one `VACUUM` when empty (§3)                                                                                                                                                        |
 | `journal_size_limit` | 1048576                                  | truncates the WAL to 1 MiB after a checkpoint reset (today it stays at about 4 MB)                                                                                                                                               |
 | `application_id`     | `0x54655852` (`TeXR`)                    | distinguishes a TeXRA store from a foreign SQLite file before anything is touched                                                                                                                                                |
 | `user_version`       | `SCHEMA_VERSION`                         | §3                                                                                                                                                                                                                               |
@@ -316,18 +317,22 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 4. Read `user_version` (`v`).
    - `v > SCHEMA_VERSION`: refuse, with nothing touched (`DatabaseOpenFailed`,
      reason `newer`).
-   - `v` from 1 to 99 (pre-1.0): retire it with `retireStore`'s existing
-     pattern.
+   - `v` from 1 to 99 (pre-1.0): start fully clean (owner ruling Q3). Nothing
+     in the store is kept, `current_value` and `input_history` included.
+     Retire it with `retireStore`'s existing pattern:
      - `VACUUM INTO` a staged copy.
      - `BEGIN IMMEDIATE`, then re-read `user_version` and `data_version`
        under the lock. If either moved, discard the copy and start over.
      - Rename the copy to `texra.db.pre1`.
-     - Drop `event` and `event_sequence`.
-     - `ALTER TABLE current_value ADD COLUMN version INTEGER NOT NULL DEFAULT 1`,
-       so remembered projects and app state survive.
-     - Apply the 1.0 DDL, stamp 100, `COMMIT`.
-     - Then run `PRAGMA auto_vacuum = INCREMENTAL; VACUUM` once, outside the
-       transaction.
+     - Drop every table, set `user_version = 0`, `COMMIT`.
+     - Run `PRAGMA auto_vacuum = INCREMENTAL; VACUUM` once, outside the
+       transaction. The file is empty now, so this is cheap, and it gives
+       the file the 1.0 header.
+     - Continue as a new store (the next case).
+
+     No pre-1.0 table is altered or read, so this path needs no knowledge of
+     any earlier format.
+
    - `v = 0` with no tables: create the store.
      - `auto_vacuum` first.
      - Then `BEGIN IMMEDIATE`, re-read `user_version`, and, if it is still
@@ -461,10 +466,26 @@ older than the new floor. Minor releases never rewrite rows.
 the chain. A newer value fails that one read with a typed error; it is not
 defaulted.
 
-**Policy change.** After 1.0 ships, released row versions are read forever
-through their upcasters, up to the next major compaction. That is the one
-sanctioned compatibility reader. Lane 1 rewrites the "Compatibility and
-format retirement" paragraph of AGENTS.md to say so (question Q2).
+**Policy change (owner ruling Q2).** From the 1.0 release on, released row
+versions are read forever through their upcasters, up to the next major
+compaction. The upcasters run in the codec and nowhere else; that is the
+one sanctioned compatibility reader. Before the release, AGENTS.md's "no
+compatibility readers" rule stands unchanged: every kind is unreleased, no
+upcaster exists, and a pre-1.0 store is moved aside whole.
+
+Lane 4, which ships with the freeze, changes the session-database sentences
+of AGENTS.md "Compatibility and format retirement" to this wording:
+
+> The session database is the one store read across releases. Each row
+> kind carries a version (`src/shared/schemas/rowVersions.ts`). A released
+> version is read forever through adjacent upcasters that run in the row
+> codec (`rowCodec.ts`) and nowhere else, until a major-version compaction
+> rewrites the rows and retires the old upcasters. An unreleased version
+> has no upcaster and may change freely until the next release freezes it
+> (`config/storage/frozen/`). A row newer than the build blocks its run and
+> is never rewritten. A store from before 1.0 is moved aside whole
+> (`texra.db.pre1`) and never read. No other persisted format gets a
+> compatibility reader.
 
 ## 4. Decoupling `model.message` from `packages/llm`
 
@@ -639,8 +660,9 @@ interface PluginArm {
   - `texra doctor --prune-storage` deletes those stores after listing them.
     A store with no record (pre-1.0) is pruned when its mtime is over 90
     days.
-  - There is no automatic deletion of whole stores: an unmounted drive
-    looks exactly like a deleted root.
+  - Decided (Q4): whole orphaned stores are removed only by this explicit
+    command, never automatically. An unmounted drive looks exactly like a
+    deleted root.
   - The `mkdtemp` stores are a test-harness leak, fixed at the source:
     every E2E and test harness passes a temporary TeXRA data root.
 - **Corrupt or NOTADB.** At open, the file is moved aside (§3, step 2) and
@@ -711,9 +733,10 @@ interface PluginArm {
     aggregation) into primary-key joins.
   - The worker is **format-neutral**: the `Database` service interface is
     already the RPC seam, so taking it later rewrites no storage.
-  - Lane 3 takes the off-host note's Stage 0 reading once, on the 1.0
-    store. The worker (Stage 2) is taken after 1.0 only if a stall over its
-    100 ms budget remains.
+  - **Decided (Q5): the worker is deferred past 1.0.** Lane 1 takes the
+    off-host note's Stage 0 event-loop reading once, on the 1.0 store, with
+    the busy retry in place. The worker (Stage 2) is taken after 1.0 only if
+    that reading shows a stall over the 100 ms budget.
 
 ## 9. Module split for `Database.ts`
 
@@ -751,7 +774,10 @@ The following stay where they are or move to an existing owner:
 No module exists only to be called once. The file-size baseline shrinks for
 `Database.ts` and gains no new entry.
 
-## 10. Tool output stored twice: owner decision
+## 10. Tool output stored once
+
+Decided (owner ruling Q1): tool output is stored once. The `tool.end` card
+is filled from its `tool.result` at read time.
 
 A settled tool call writes two rows today:
 
@@ -761,7 +787,8 @@ A settled tool call writes two rows today:
 
 The input is a third copy; it is also on `tool.start`.
 
-**Recommendation: the card is hydrated from its settlement at read time.**
+**The design: the card's output is projected from its settlement at read
+time.**
 
 - On a run with a ledger, `tool.end` keeps `{logId, status, files}` and
   drops `result`.
@@ -776,14 +803,26 @@ The input is a third copy; it is also on `tool.start`.
 - Runs without a ledger (agent-CLI children, `toolUseHelpers.ts:53`) keep
   writing `result` on the card.
 
-This keeps the loop-owned-card rule. The card still commits in the
-settlement batch, and nothing is appended around the publisher. What
-changes is that the card's content now depends on a ledger row, which is
-why this is the owner's call (Q1).
+The card is still loop-owned:
 
-Alternative: keep both copies and cap `tool.end` at a display preview. It
-is simpler, but full output then lives only in a row renderers may not
-read.
+- the run loop writes it, and it commits in the settlement batch;
+- there is still no tool-side card and no second append path;
+- the only change is that its output is projected from the `tool.result`
+  it settles with, not stored a second time.
+
+Lane 2 changes the tool-call sentence of CLAUDE.md "One publisher,
+loop-owned cards" to:
+
+> A tool call's card belongs to the run loop. A slow tool's `tool.start`
+> commits with the row that admits the attempt; a fast tool's card opens
+> and closes in its settlement batch. On a run with a ledger, the card
+> stores no output: its output is projected at read time from the
+> `tool.result` it commits with. What a tool prints while it runs is
+> transient text on the card id (`hooks.onToolOutput` → `stream.chunk`),
+> never a row.
+
+Rejected: keeping both copies and capping `tool.end` at a display preview.
+Full output would then live only in a row renderers may not read.
 
 ## 11. Testing
 
@@ -824,7 +863,8 @@ internals.
   - a newer `SCHEMA_VERSION` is refused untouched;
   - a foreign `application_id` is refused;
   - a truncated file (NOTADB) is moved aside and a fresh store opened;
-  - a format-44 store is retired to `.pre1`, with `current_value` kept.
+  - a format-44 store is retired whole to `.pre1`, and the store that opens
+    is empty, with no `current_value` or `input_history` row carried over.
 - **Two-OS-process test.** A child Node process appends to the same file
   while the parent appends and reads. It asserts:
   - dense seqs and no lost appends;
@@ -839,18 +879,18 @@ There are four lanes, and exactly one physical bump: Lane 1, to
 `SCHEMA_VERSION` 100. Everything after Lane 1 changes only unreleased row
 versions (§3, the release watermark).
 
-| Lane                          | Order                    | Depends on | Effort    | In the 1.0 reader?                                                  |
-| ----------------------------- | ------------------------ | ---------- | --------- | ------------------------------------------------------------------- |
-| 1. The 1.0 store              | first                    | none       | 8–10 days | **yes, all of it**                                                  |
-| 2. Stored contracts           | second (parallel with 3) | 1          | 4–5 days  | **yes**: `StoredTurn`, and the tool-card shape if ruled             |
-| 3. Hygiene and host threading | second (parallel with 2) | 1          | 4–5 days  | no stored-format content; may slip past 1.0 except corrupt recovery |
-| 4. Freeze and prove           | last, the release gate   | 1, 2, 3    | 3–4 days  | **yes**: the frozen schemas and watermark                           |
+| Lane                | Order                    | Depends on | Effort    | In the 1.0 reader?                                                  |
+| ------------------- | ------------------------ | ---------- | --------- | ------------------------------------------------------------------- |
+| 1. The 1.0 store    | first                    | none       | 9–11 days | **yes, all of it**                                                  |
+| 2. Stored contracts | second (parallel with 3) | 1          | 4–5 days  | **yes**: `StoredTurn`, and the output-free tool card                |
+| 3. Hygiene          | second (parallel with 2) | 1          | 3–4 days  | no stored-format content; may slip past 1.0 except corrupt recovery |
+| 4. Freeze and prove | last, the release gate   | 1, 2, 3    | 3–4 days  | **yes**: the frozen schemas and watermark                           |
 
 **Lane 1: The 1.0 store.** One PR, and the only format bump.
 
 - `storeSchema.ts`: the full §2 DDL (including the projection, blob and
   bookkeeping tables), the PRAGMAs, the §3 open sequence and runner,
-  pre-1.0 retirement that keeps `current_value`, and corrupt move-aside.
+  fully clean pre-1.0 retirement, and corrupt move-aside.
 - `rowCodec.ts` and `rowVersions.ts`, with every kind at version 1;
   `Blocked`/`Corrupt` verdicts through reads, the fold input, the listing,
   and acquire refusal; plugin arm versions.
@@ -860,12 +900,17 @@ versions (§3, the release watermark).
 - Deletion of `SESSION_EVENT_FORMAT`, the 30 literals, and the 24 + 3 JSON
   reads.
 - The `storedShapeBoundary` ratchet, and the write-ratchet extension.
-- The AGENTS.md compatibility paragraph.
+- The 25 ms busy slice plus Effect retry, and a monotonic `observedCommit`,
+  so the reading below measures the store 1.0 ships.
+- The off-host note's Stage 0 event-loop reading, taken once on the 1.0
+  store. It decides whether the post-1.0 worker is taken (§8, Q5).
 
 E2E evidence:
 
 - a CLI run (`glm53flash`) on a copy of a real format-44 store, showing
-  the `.pre1` copy, kept app state, and `.schema` output in the PR;
+  the `.pre1` copy, an empty fresh store, and `.schema` output in the PR;
+- two `texra` processes on one project with a held write lock, and the
+  event-loop delay reading;
 - a run killed with `kill -9` and resumed;
 - `texra history --json` listing identical before and after a forced
   projection rebuild (drop `projection_state`, reopen);
@@ -879,7 +924,9 @@ E2E evidence:
 - `StoredTurn` and `StoredMessage`, with `toStoredTurn`/`fromStoredTurn`
   at `RunLedger`.
 - `JsonValueSchema` for the four `z.unknown()` fields.
-- The §10 card hydration, if ruled.
+- Tool output stored once (§10): the output-free `tool.end` on ledger runs,
+  and the read-time projection of its output from `tool.result`.
+- The CLAUDE.md "One publisher, loop-owned cards" wording change (§10).
 - The per-kind fingerprint test, `npm run storage:freeze`, and the
   `releasing` skill step.
 
@@ -894,22 +941,18 @@ E2E evidence:
   (`texra history <id> --format md` diff);
 - store size per run before and after.
 
-**Lane 3: Hygiene and host threading.**
+**Lane 3: Hygiene.**
 
-- The 25 ms slice plus Effect retry; monotonic `observedCommit`; typed
-  failure reasons; defects kept as defects.
+- Typed failure reasons; defects kept as defects.
 - `incremental_vacuum` after collection; WAL truncation at close; aside
   collection.
 - `workspace-store` records, the `texra doctor` report and
   `--prune-storage`.
 - The storage-key realpath rule; temporary data roots in every harness.
 - `currentValues.ts`, and the inquiry-transition move.
-- The Stage 0 event-loop reading.
 
 E2E evidence:
 
-- two `texra` processes on one project with a held write lock, and the
-  event-loop delay reading;
 - `page_count` and `freelist_count` before and after deleting runs,
   showing the file shrink;
 - `texra doctor --prune-storage` dry-run output on a developer data root.
@@ -920,21 +963,20 @@ E2E evidence:
   refusal corpus and two-process test.
 - Run `storage:freeze` at the 1.0 tag, so the frozen schemas and
   `RELEASED_ROW_VERSIONS` become the floor every later build reads.
+- The AGENTS.md "Compatibility and format retirement" wording change (§3,
+  Q2). It lands with the freeze, because only then do released rows exist.
 
 E2E evidence: the golden store itself, and the suite green on all three
 CI OSes.
 
-## 13. Open questions for the owner
+## 13. Decisions (2026-09-28)
 
-- **Q1.** Tool output once (§10): hydrate the card from its `tool.result`
-  at read time, or keep both copies?
-- **Q2.** From 1.0 on, released rows are read forever through adjacent
-  upcasters until a major compaction. This replaces AGENTS.md's "no
-  compatibility readers" for the session store only. Confirm.
-- **Q3.** At the 1.0 bump, a pre-1.0 store keeps `current_value` (app state,
-  remembered projects, inquiries) and moves its event history to `.pre1`,
-  which is deleted after 30 days. Keep, or start the store fully clean?
-- **Q4.** Whole orphaned stores are deleted only by an explicit
-  `texra doctor --prune-storage`, never automatically. Is that acceptable?
-- **Q5.** The database worker is deferred past 1.0, gated on the Stage 0
-  reading, because it is format-neutral. Confirm.
+Every question this note raised is decided. None remain open.
+
+| #   | Question                               | Decision                                                                                                                                             | Where                    |
+| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Q1  | Tool output stored twice               | Store it once. The `tool.end` card is filled from its `tool.result` at read time. The card stays loop-owned; only its output is projected.           | §10; Lane 2              |
+| Q2  | Compatibility after 1.0                | From the 1.0 release on, released rows are read forever through upcasters, in the codec only. Before 1.0 the "no compatibility readers" rule stands. | §3; AGENTS.md in Lane 4  |
+| Q3  | What a pre-1.0 store keeps at the bump | Nothing. The whole store, `current_value` included, moves aside to `.pre1`, and the store starts fully clean.                                        | §3 open sequence; Lane 1 |
+| Q4  | Removing orphaned stores               | Only by an explicit `texra doctor --prune-storage`, never automatically.                                                                             | §7; Lane 3               |
+| Q5  | Moving SQLite to a worker thread       | Deferred past 1.0 (the coordinator's call). It is taken only if Lane 1's event-loop reading shows a stall over the 100 ms budget.                    | §8; Lane 1               |
