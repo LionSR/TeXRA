@@ -168,7 +168,6 @@ export const initializeElectronPlatform = Effect.fn(
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer,
-    setup: {},
     // Desktop model traffic goes to the same Supabase usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
     // The runtime's disposal drains the queue, so a queue shorter than one

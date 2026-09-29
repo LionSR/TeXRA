@@ -249,7 +249,6 @@ export function installCliProcessRuntime(
       // the same port.
       languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
       agentDirectories: agentDirectoriesLayer,
-      setup: {},
       // CLI model traffic goes to the same Supabase usage log the extension
       // writes to, tagged with editorType 'cli' and the CLI version. The
       // runtime's disposal drains the queue, and that disposal is the last

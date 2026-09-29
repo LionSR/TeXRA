@@ -815,6 +815,12 @@ second guard around `invalidateRemoteAgentsAfterSignOut` at a call site.
 
 ## A run pins one composition from a process `Compositions` `LayerMap`; plugins may own layers (ruled 2026-09-23)
 
+**Superseded 2026-09-27 by #13364.** `Compositions`, the `Composition` value and
+the run-lifetime pin are deleted: a step pins a generation of the live
+catalog, and a plugin's layer is one refcounted `RcMap` entry shared by the
+generations that hold it. "Plugins may own layers" stands, and the entry
+below it ("Plugins own typed tables at their seams") records where they live.
+
 **Question.** The plugin architecture (the owner decision of 2026-09-23 in the
 `defineTool` amendment above) makes a run's toolset a composition value
 (`src/tools/composition.ts`). How long does a composition live, who holds
@@ -853,3 +859,64 @@ at all, so the pool cannot live inside the entries it gates.
 standing in for the holders' count, `Layer.fresh` on a plugin layer, a
 plugin layer constructed per composition (its identity is what makes it
 shared), and a child re-resolving its parent's plugin set.
+
+---
+
+## Plugins own typed tables at their seams; the SDK's setup platform is core's empty one (ruled 2026-09-28)
+
+**Question.** The plugin note (`2026-09-24-plugin-architecture.md`) ruled
+that "plugins own no durable state and no event channel" and that "prompt
+sections are core", and `2026-09-24-one-run-program.md` kept the continuation
+seam agent-runtime code. The tree no longer matches either. Which stands, and
+what does the embedding package owe a plugin it does not compose?
+
+**Ruling.** Amend all three, and keep everything else in those notes.
+
+- **Static in-tree plugins own typed contributions, one fixed table per
+  seam, keyed by plugin id and checked with `satisfies` against the manifest
+  flag that declares it.** The tables are `PLUGIN_TOOLS`,
+  `PLUGIN_CONTINUATIONS`, `PLUGIN_PROMPT_SECTIONS`, `PLUGIN_PROCESS_LAYERS`
+  and `PLUGIN_SESSION_LAYERS` in `src/tools/registry.ts`, and
+  `PLUGIN_EVENT_ARMS` in `src/tools/pluginArms.ts`. The manifest imports no
+  tool implementation, and there is no plugin object.
+- **Plugin state is a typed arm of the one closed event schema**, written as
+  a `plugin.fact` through the one publisher (`SessionEvents`). "No event
+  channel" stays true: a plugin has no channel of its own, and the union is
+  closed and composition-independent, so a row decodes and folds whether or
+  not its plugin is on. A build that lacks an arm keeps its row unread.
+- **A plugin in the pinned composition may contribute one prompt section**,
+  `(ctx) => string`, consulted only for plugins the step pinned
+  (`memory-workflow` today). Plugins do not read each other's sections.
+- **The continuation seam is a plugin table.** `PLUGIN_CONTINUATIONS` holds
+  goal mode's policy, pinned by the step (#13387). The after-turn output seam
+  stays agent-runtime code.
+- **The embedding package composes no setup platform.** Setup capabilities
+  belong to a host with an editor: `installProcessRuntime` defaults `setup` to
+  `{}`, which is what the CLI and desktop previously passed explicitly, and the three setup tools
+  that need a host command, extension or terminal already fail naming its
+  absence (all three are unavailable on `sdk`). The package's own refusing
+  `SetupPlatform` and the `command-unavailable` failure reason existed for a
+  call no tool can reach; both are deleted.
+
+**Evidence.** #13364 (tables on the Registry, `Compositions` deleted),
+#13387 (`PLUGIN_CONTINUATIONS`), #13420 (goal grant in core approval state,
+`GoalGrants` deleted), and the `plugin.fact` arm, `PLUGIN_PROCESS_LAYERS`
+(GitHub subscriptions, drained by the shutdown protocol) and
+`PLUGIN_SESSION_LAYERS` (Codex and Claude registries) already on `main`.
+`InvokeCommandTool`, `InstallVscodeExtensionTool` and `SendToTerminalTool`
+each read the absent member and return a `ToolError`, so nothing read
+`PACKAGE_SETUP`'s throwing `terminal` getter.
+
+**What this forbids.** A plugin object with optional slots; a driver table
+(none, decided 2026-09-27); a plugin-composed event union (rows must decode
+with the plugin off); a second write path for plugin rows; a host-specific
+refusing `SetupPlatform` in the embedding package.
+
+**Not moved, and why.** `run.fact` todos and plan stay core rows: the
+work-plan is core loop state (`WorkPlanState`, rehydrated from the run
+snapshot and announced by the loop's own update callbacks), `run.fact` is its
+display mirror, and the Codex adapter writes it too, so it has no single
+plugin owner. Inquiry and workflow-checkpoint rows are aggregate kinds the core
+`SessionRequests` and resume paths read, and `InquiryRecords` stays core. The
+SDK's plugin set (`TexraProcessOptions.plugins`) lands with the process layer
+graph (move 4).
