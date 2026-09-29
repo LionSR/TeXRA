@@ -894,7 +894,7 @@ describe('Sessions owner', () => {
             yield* Effect.addFinalizer(() =>
               Scope.close(projectScope, Exit.void),
             );
-            const state = yield* openProjectStateStore(storage).pipe(
+            const state = yield* openProjectStateStore(storage, undefined).pipe(
               Scope.provide(projectScope),
             );
             yield* state.update('shared', 'before session');
@@ -923,7 +923,7 @@ describe('Sessions owner', () => {
             expect((yield* Effect.flip(state.get('shared')))._tag).toBe(
               'StateReadFailed',
             );
-            const reopened = yield* openProjectStateStore(storage);
+            const reopened = yield* openProjectStateStore(storage, undefined);
             expect(yield* reopened.get('shared')).toBe('after session');
           }),
         ),

@@ -297,7 +297,9 @@ export function openDesktopProjectRegistry(
             const [workspaceState, repoState, workspaceConfig] =
               yield* Effect.all(
                 [
-                  openProjectStateStore(storage),
+                  openProjectStateStore(storage, root).pipe(
+                    Effect.provideService(GlobalDatabase, globalDatabase),
+                  ),
                   openRepoStateStore(root, storage).pipe(
                     Effect.provideService(GlobalDatabase, globalDatabase),
                   ),

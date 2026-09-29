@@ -79,6 +79,12 @@ function run(command, args, options = {}) {
     if (!options.validationFlagPath) {
       throw new Error('validationModel requires validationFlagPath');
     }
+    // Its TeXRA data goes to a temporary home beside its flag file, never
+    // the developer's ~/.texra, where each run left a store behind.
+    if (options.env?.HOME === undefined) {
+      const home = path.join(path.dirname(options.validationFlagPath), 'home');
+      Object.assign(env, isolatedCliHomeEnv(home));
+    }
     Object.assign(env, validationModelProviderEnv);
     env[validationEnv] = '1';
     env[validationFlagEnv] = options.validationFlagPath;

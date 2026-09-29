@@ -19,6 +19,7 @@ import {
   freeName,
   isDamaged,
   pragmaValue,
+  removeOldAsides,
   run,
   underCopy,
   type Sql,
@@ -344,6 +345,18 @@ const prepareStore = Effect.fnUntraced(function* (
 });
 
 /**
+ * Give the pages a collection freed back to the filesystem (the design's
+ * §7). `incremental_vacuum` frees one page per step, and the driver steps a
+ * statement once, so it runs once per free page.
+ */
+export const reclaimFreePages = Effect.fnUntraced(function* (sql: Sql) {
+  const free = Number(yield* pragmaValue(sql, 'freelist_count'));
+  yield* Effect.replicateEffect(run(sql, 'PRAGMA incremental_vacuum'), free, {
+    discard: true,
+  });
+});
+
+/**
  * Open the store at `filename` through `connect` and prepare it. A file
  * SQLite reports damaged or not a database (`SQLITE_CORRUPT`,
  * `SQLITE_NOTADB`) at open is closed, moved aside with its WAL and
@@ -360,6 +373,16 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  // An aside copy over 30 days old goes at open (the design's §7).
+  if (mode === 'persistent')
+    yield* removeOldAsides(filename).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Could not remove old copies of ${path}.`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
   // A file the probe cannot open (none yet) is the store's open to create.
   if (mode === 'persistent')
     yield* Effect.scoped(

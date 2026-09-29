@@ -255,9 +255,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     runtime,
     Effect.gen(function* () {
       const globalState = yield* AppState;
-      const projectState = yield* openProjectStateStore(storage).pipe(
-        Scope.provide(projectScope),
-      );
+      const projectState = yield* openProjectStateStore(
+        storage,
+        workspaceRoot,
+      ).pipe(Scope.provide(projectScope));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(

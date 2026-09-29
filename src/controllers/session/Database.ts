@@ -22,7 +22,6 @@ import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 import {
-  Cause,
   Clock,
   Duration,
   Scope,
@@ -103,7 +102,7 @@ import {
   verdictBook,
   type EncodedRow,
 } from './rowCodec';
-import { assertStoreFormat, openStore } from './storeSchema';
+import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -325,10 +324,9 @@ export const databaseLayer = (
       ))?.data_version;
       // A failed read (a busy wait past the timeout, an I/O error) is logged
       // and the poll backs off, doubling from 250 ms to at most 30 s over a
-      // streak of failures and resetting on the first healthy tick, so a
-      // blip neither ends change notification nor slows it afterwards. The
-      // version is checkpointed only once the commit behind it is read, so a
-      // tick that fails between the two reads retries both.
+      // streak of failures and resetting on the first healthy tick, so a blip
+      // neither ends change notification nor slows it afterwards. The version
+      // is checkpointed only once the commit behind it is read.
       let failures = 0;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
@@ -898,9 +896,8 @@ export const databaseLayer = (
             );
           }
           if (edges.closes) {
-            // C5/C9: admission must hold every open dependent claim.
-            // This check shares the write transaction with the tombstone
-            // and recursive closure, so no claimant can change between them.
+            // C5/C9: admission must hold every open dependent claim, in the
+            // tombstone's transaction, so no claimant can change between.
             const unowned = yield* execOne(unownedDependent, [
               ...columns,
               identity.ownerId,
@@ -1217,6 +1214,7 @@ export const databaseLayer = (
                       }
                       if (digests.length > 0)
                         yield* exec(collectBlobs, [JSON.stringify(digests)]);
+                      yield* reclaimFreePages(sql);
                     }),
                   );
                   yield* query(verdicts.retain);
@@ -1264,6 +1262,24 @@ export const databaseLayer = (
     }),
   ).pipe(Layer.provide(Reactivity.layer));
 
+/** Whether another process has the store at `filename` open: SQLite's
+ *  exclusive lock, which every open connection (and so every claim) refuses. */
+export const storeOpenElsewhere = (filename: string) =>
+  Effect.scoped(
+    Effect.flatMap(
+      SqliteClient.make({ filename, disableWAL: true, busyTimeout: 0 }),
+      (sql) =>
+        Effect.andThen(
+          sql.unsafe('PRAGMA locking_mode = EXCLUSIVE'),
+          sql.unsafe('BEGIN EXCLUSIVE'),
+        ),
+    ),
+  ).pipe(
+    Effect.as(false),
+    Effect.catchIf(isBusy, () => Effect.succeed(true)),
+    Effect.provide(Reactivity.layer),
+  );
+
 /**
  * The process's handle on the global storage root: one connection, schema and
  * `data_version` poll for every application record of that root, built with
@@ -1286,26 +1302,10 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Preserve interruption and each SQL/validation failure at the database boundary. */
+/** Interruption stays; a failure or a driver defect becomes `failed`'s. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
-    operation.pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.fromReasons(
-            cause.reasons.map((reason) =>
-              reason._tag === 'Interrupt'
-                ? reason
-                : Cause.makeFailReason(
-                    failed(
-                      reason._tag === 'Fail' ? reason.error : reason.defect,
-                    ),
-                  ),
-            ),
-          ),
-        ),
-      ),
-    );
+    operation.pipe(Effect.catchDefect(Effect.fail), Effect.mapError(failed));
 }
