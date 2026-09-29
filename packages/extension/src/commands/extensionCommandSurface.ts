@@ -36,6 +36,7 @@ import {
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
@@ -43,13 +44,14 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+
+const externalOpener = new VscodeExternalOpener();
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -85,13 +87,7 @@ export function createExtensionCommandActions(
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     openDoc: (page) =>
       page
-        ? Effect.tryPromise({
-            try: () =>
-              vscode.env.openExternal(
-                vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
-              ),
-            catch: ensureError,
-          }).pipe(Effect.asVoid)
+        ? externalOpener.openExternal(`https://texra.ai/guide/${page}.html`)
         : Effect.void,
     indentCurrentTeX: () => latexIndentCurrentTeX(session),
     fixCompilation: () => latexFixCompilation(session),

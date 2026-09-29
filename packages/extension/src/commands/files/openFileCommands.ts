@@ -22,22 +22,45 @@ function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   editor.selection = new vscode.Selection(pos, pos);
 }
 
-async function openFile(
-  session: SessionHandle,
-  file: string,
-  line?: number,
-): Promise<void> {
+/**
+ * Open `uri` in the preview editor and put the cursor where `at` says. The one
+ * lift of the three editor calls, for a line request and a label match alike.
+ */
+function openInEditor(
+  uri: vscode.Uri,
+  at: (doc: vscode.TextDocument) => vscode.Position,
+) {
+  return Effect.tryPromise({
+    try: async () => {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: true,
+      });
+      revealPosition(editor, at(doc));
+    },
+    catch: ensureError,
+  });
+}
+
+function openFile(session: SessionHandle, file: string, line?: number) {
   const uri = vscode.Uri.file(
     workspaceAbsolutePath(session.roots.workspace, file),
   );
-
-  if (line !== undefined && line > 0) {
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, { preview: true });
-    revealPosition(editor, new vscode.Position(line - 1, 0));
-  } else {
-    await vscode.commands.executeCommand('vscode.open', uri);
-  }
+  const opened =
+    line !== undefined && line > 0
+      ? openInEditor(uri, () => new vscode.Position(line - 1, 0))
+      : Effect.tryPromise({
+          try: () => vscode.commands.executeCommand('vscode.open', uri),
+          catch: ensureError,
+        });
+  return opened.pipe(
+    Effect.tapError((error) =>
+      Effect.logError(`Could not open ${file}: ${error.message}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
+    ),
+    Effect.asVoid,
+  );
 }
 
 /**
@@ -73,18 +96,10 @@ function openLabel(session: SessionHandle, label: string) {
           ),
         ),
       (file, index) =>
-        Effect.tryPromise({
-          try: async () => {
-            const doc = await vscode.workspace.openTextDocument(
-              workspaceAbsolutePath(roots.workspace, file),
-            );
-            const editor = await vscode.window.showTextDocument(doc, {
-              preview: true,
-            });
-            revealPosition(editor, doc.positionAt(index));
-          },
-          catch: ensureError,
-        }),
+        openInEditor(
+          vscode.Uri.file(workspaceAbsolutePath(roots.workspace, file)),
+          (doc) => doc.positionAt(index),
+        ),
     );
   });
 }
@@ -97,7 +112,8 @@ export function registerOpenFileCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.openFile',
-      handler: (file: string, line?: number) => openFile(session, file, line),
+      handler: (file: string, line?: number) =>
+        runtime.runPromise(openFile(session, file, line)),
     },
     {
       id: 'texra.openLabel',

@@ -10,7 +10,6 @@ import {
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import { withLogChannel } from '@logger/effectLog';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -164,13 +163,7 @@ export class SettingsViewProvider {
           const pending = this.pendingTab;
           this.pendingTab = undefined;
           if (pending) yield* this.postTab(panel.webview, pending);
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logError('Settings view message failed', cause).pipe(
-              withLogChannel('SettingsViewProvider'),
-            ),
-          ),
-        ),
+        }),
       );
     });
   }

@@ -33,7 +33,7 @@ import type { SubscriptionOAuthCoordinator } from '../oauth/SubscriptionOAuthCoo
 export interface XaiDeviceLoginOptions {
   coordinator: SubscriptionOAuthCoordinator<XaiSession>;
   /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
+  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
 }
 
 /**
@@ -51,7 +51,7 @@ export const loginWithDeviceCode = Effect.fn(
     1000,
   );
 
-  options.onPrompt({
+  yield* options.onPrompt({
     userCode: device.user_code,
     verificationUrl: device.verification_uri,
     verificationUrlComplete: device.verification_uri_complete ?? undefined,

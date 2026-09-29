@@ -80,13 +80,14 @@ export const signInCliSubscription = Effect.fn(
       userCode,
       verificationUrl,
       verificationUrlComplete,
-    }) => {
-      const openUrl = verificationUrlComplete ?? verificationUrl;
-      options.writeProgress(
-        `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
-        { copyable: true },
-      );
-    },
+    }) =>
+      Effect.sync(() => {
+        const openUrl = verificationUrlComplete ?? verificationUrl;
+        options.writeProgress(
+          `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
+          { copyable: true },
+        );
+      }),
     presentSignInUrl: (url) =>
       presentCliSignInUrl({
         writeProgress: options.writeProgress,

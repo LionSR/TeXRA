@@ -59,9 +59,9 @@ describe('Codex device login', () => {
         const fetchMock = deviceEndpointsFetch({}, () => inFlight.promise);
         const coordinator = coordinatorStub();
         const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() => {
-          Deferred.doneUnsafe(shown, Effect.void);
-        });
+        const onPrompt = vi.fn(() =>
+          Effect.asVoid(Deferred.succeed(shown, undefined)),
+        );
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
@@ -108,9 +108,9 @@ describe('Codex device login', () => {
           return Effect.promise(() => store.promise) as never;
         });
         const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() => {
-          Deferred.doneUnsafe(shown, Effect.void);
-        });
+        const onPrompt = vi.fn(() =>
+          Effect.asVoid(Deferred.succeed(shown, undefined)),
+        );
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({ coordinator, onPrompt }).pipe(
             Effect.provide(FetchHttpClient.layer),
@@ -151,9 +151,9 @@ describe('Codex device login', () => {
           return jsonResponse({ error: 'authorization_pending' }, 403);
         });
         const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() => {
-          Deferred.doneUnsafe(shown, Effect.void);
-        });
+        const onPrompt = vi.fn(() =>
+          Effect.asVoid(Deferred.succeed(shown, undefined)),
+        );
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({
             coordinator: coordinatorStub(),

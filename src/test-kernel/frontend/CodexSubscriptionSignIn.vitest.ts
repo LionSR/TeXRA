@@ -133,7 +133,9 @@ describe('signInWithSubscription (ChatGPT)', () => {
 
   it('opens the default browser when the user chooses it', async () => {
     mocks.openExternal.mockResolvedValue(true);
-    mocks.showInformationMessage.mockResolvedValue('Open in Default Browser');
+    mocks.showInformationMessage.mockResolvedValue({
+      title: 'Open in Default Browser',
+    });
     mockPreferenceEnabled();
     mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 
@@ -141,16 +143,18 @@ describe('signInWithSubscription (ChatGPT)', () => {
 
     expect(mocks.showInformationMessage).toHaveBeenCalledWith(
       expect.stringContaining('different browser'),
-      { modal: true },
-      'Open in Default Browser',
-      'Copy Sign-in Link',
+      { detail: undefined, modal: true },
+      { title: 'Open in Default Browser' },
+      { title: 'Copy Sign-in Link' },
     );
     expect(mocks.openExternal).toHaveBeenCalledTimes(1);
     expect(mocks.writeText).not.toHaveBeenCalled();
   });
 
   it('copies the sign-in link instead of opening the browser when chosen', async () => {
-    mocks.showInformationMessage.mockResolvedValue('Copy Sign-in Link');
+    mocks.showInformationMessage.mockResolvedValue({
+      title: 'Copy Sign-in Link',
+    });
     mockPreferenceEnabled();
     mocks.loginWithLoopback.mockImplementation(loginByOpeningBrowser);
 

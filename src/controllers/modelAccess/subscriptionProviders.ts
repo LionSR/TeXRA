@@ -61,11 +61,11 @@ export type SubscriptionProviderId =
  */
 export interface SubscriptionSignInPresenter {
   /**
-   * Show the one-time code and where to enter it. Called once, before the
-   * poll loop starts; hosts that present asynchronously own their own error
-   * reporting because the flow does not wait for the prompt.
+   * Show the one-time code and where to enter it. Runs once, on a child fiber
+   * beside the poll loop: the flow does not wait for it and interrupts it when
+   * the sign-in ends. A host reports its own failure, so the channel is empty.
    */
-  presentDeviceCode(prompt: SubscriptionDeviceCodePrompt): void;
+  presentDeviceCode(prompt: SubscriptionDeviceCodePrompt): Effect.Effect<void>;
   /**
    * Show (and normally open) the loopback consent URL. The program runs to
    * completion before the callback wait begins, so a host may block on a
@@ -157,7 +157,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   ) => Effect.Effect<SubscriptionSessionStatus>;
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
+    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
   }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
@@ -192,7 +192,13 @@ function defineSubscriptionProvider<
   ) =>
     loginWithDeviceCode({
       coordinator,
-      onPrompt: (prompt) => options.present.presentDeviceCode(prompt),
+      // The prompt is shown beside the poll, not before it: the poll waits on
+      // the user, who may be reading (or dismissing) exactly this prompt. A
+      // child fiber, so cancelling the sign-in closes it with the flow.
+      onPrompt: (prompt) =>
+        Effect.asVoid(
+          Effect.forkChild(options.present.presentDeviceCode(prompt)),
+        ),
     });
 
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
