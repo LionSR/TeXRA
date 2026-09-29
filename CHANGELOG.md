@@ -297,6 +297,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Resuming after a vendor deleted its stored response no longer fails.**
+  When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
+  Google) is refused because the vendor no longer holds it, TeXRA logs a
+  warning and retries once with the full transcript.
 - **Desktop model requests no longer fail with "Connection error".** The
   desktop app's bundled runtime rejected the proxy-aware connection model calls
   use, so every request to a model failed with an undici dispatcher error.
