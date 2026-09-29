@@ -41,7 +41,6 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.PROGRESS_STATUS]: z.unknown().optional(),
   [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
   [MESSAGE_TYPES.ERROR]: ErrorLogDataSchema.optional(),
-  [MESSAGE_TYPES.INTERNAL]: z.unknown().optional(),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
   [MESSAGE_TYPES.WORKFLOW_TASK]: WorkflowCallProgressSchema,
   [MESSAGE_TYPES.DEFAULT]: z.unknown().optional(),

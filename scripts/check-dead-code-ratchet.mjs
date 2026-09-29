@@ -159,9 +159,10 @@ function main() {
     return kept;
   };
   const normalFindings = withoutDynamicConsumers(extractFindings(runKnip()));
-  const productionFindings = withoutDynamicConsumers(
-    extractFindings(runKnip({ production: true })),
-  );
+  // The loader suppression covers the normal run only: a suite is not a
+  // production consumer, so an export only a suite loads stays
+  // production-dead.
+  const productionFindings = extractFindings(runKnip({ production: true }));
   const strayArtifacts = findStrayBuildArtifacts([
     ...normalFindings,
     ...productionFindings,

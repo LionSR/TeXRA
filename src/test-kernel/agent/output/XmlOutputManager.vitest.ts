@@ -1580,7 +1580,6 @@ Appendix.
         expect(outputs).toEqual([]);
         expect(logger.debug).toHaveBeenCalledWith(
           expect.stringContaining('Dropped unclosed LaTeX fence'),
-          expect.anything(),
         );
       }).pipe(Effect.provide(nodePlatformLayer)),
   );

@@ -19,13 +19,10 @@ import { readRunTranscript } from './runTranscript';
 // Conversation
 // ============================================================================
 
-type CompletedRunConversationSource = 'streamLog' | 'none';
-
 export interface CompletedRunConversationReadResult {
   /** Typed conversation nodes, or `null` when the transcript holds no
    *  conversation data. */
   readonly conversation: ExportNode[] | null;
-  readonly source: CompletedRunConversationSource;
 }
 
 /** Whether completed-run storage proves a conversation or transcript association exists. */
@@ -138,7 +135,5 @@ export const readCompletedRunConversation = Effect.fn(
   const conversation = (yield* readRunTranscript(session, runId)).rows.flatMap(
     conversationNodesForRow,
   );
-  return conversation.length > 0
-    ? { conversation, source: 'streamLog' }
-    : { conversation: null, source: 'none' };
+  return { conversation: conversation.length > 0 ? conversation : null };
 });

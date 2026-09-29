@@ -44,8 +44,7 @@ import { deliveredOutput, type RunResult } from './resultMeta';
  * Turn attribution for a child run's single latest-value report/result
  * slots: the turn currently running (or interrupted mid-flight before its
  * delivery ran) versus the latest turn whose delivery ran. Both null on a
- * run that never had turns (a run recorded before the run ledger, or one
- * whose loop never accepted a turn). Its keys are the shared
+ * run whose loop never accepted a turn. Its keys are the shared
  * {@link AttemptKey}: `key` is the child-run attempt that accepted the turn,
  * `index` the turn's position in that attempt.
  */

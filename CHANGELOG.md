@@ -302,6 +302,14 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Output failures that were hidden now show as warnings in the run.** A
+  failed latexdiff, a workspace dependency latexdiff could not copy, a run
+  workspace that could not be prepared, an output file that could not be
+  processed, and a workflow agent's declared tools not being offered were
+  recorded but never displayed; each is now a warning in the transcript.
+  Headless `--output-format ndjson` progress no longer carries the
+  undisplayed `internal` log lines or `modelRetryLifecycle` domain events,
+  and `inquiryThreadUpdated` no longer carries `resumeOutcome`.
 - **Approve-all and "use my own key" behave the same on every host.**
   Turning on "approve all" for a run (the switches in the run header, or
   "approve all edits" on a prompt) now also approves the requests of that

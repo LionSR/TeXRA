@@ -353,11 +353,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   ]);
 
   const handlers = {
-    // Other views share the command and want none of this.
-    webviewReady: (message) =>
-      message.view == null || message.view === 'settings'
-        ? postAll
-        : Effect.void,
+    webviewReady: () => postAll,
     ...agents.handlers,
     setProviderKey: (message) =>
       keyAction(profileKeys.setProviderKey(message.provider)),

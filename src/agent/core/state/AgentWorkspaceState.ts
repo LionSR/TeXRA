@@ -197,9 +197,7 @@ export class WorkPlanState {
 
 export class AgentWorkspaceState {
   private constructor(
-    public readonly assembly: AgentWorkspaceSnapshot['assembly'],
     public readonly media: MediaAttachmentState,
-    public readonly reasoning: AgentWorkspaceSnapshot['reasoning'],
     public readonly interactions: FileInteractionState,
     public readonly workPlan: WorkPlanState,
   ) {}
@@ -229,34 +227,17 @@ export class AgentWorkspaceState {
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
     return new AgentWorkspaceState(
-      parsed.assembly,
       new MediaAttachmentState(parsed.media),
-      parsed.reasoning,
       new FileInteractionState(parsed.interactions),
       new WorkPlanState(parsed.workPlan),
     );
   }
 
-  toSnapshot(options?: {
-    excludeAssemblyStrings?: boolean;
-  }): AgentWorkspaceSnapshot {
-    const exclude = options?.excludeAssemblyStrings ?? false;
+  toSnapshot(): AgentWorkspaceSnapshot {
     return {
-      assembly: {
-        lastResponse: exclude ? '' : this.assembly.lastResponse,
-        accumulatedOutput: exclude ? '' : this.assembly.accumulatedOutput,
-      },
       media: this.media.toSnapshot(),
-      reasoning: {
-        ...this.reasoning,
-        thinkingBlocks: [...this.reasoning.thinkingBlocks],
-      },
       interactions: this.interactions.toSnapshot(),
       workPlan: this.workPlan.toSnapshot(),
     };
-  }
-
-  resetReasoning(): void {
-    this.reasoning.thinkingBlocks = [];
   }
 }

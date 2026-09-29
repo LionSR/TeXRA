@@ -134,7 +134,7 @@ interface BindModelInput {
   /** Declined routes persist on this run's ledger, not in user preferences. */
   readonly declinedRoutes?: readonly DeclinableUsageRoute[];
   readonly agentCategory: AgentCategory;
-  /** The route default's temperature; the request may override per turn. */
+  /** The route default's temperature. */
   readonly temperature: number;
 }
 

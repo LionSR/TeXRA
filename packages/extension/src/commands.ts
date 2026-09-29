@@ -10,7 +10,6 @@ import {
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
-import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 
 // Local imports - components
@@ -40,7 +39,6 @@ export function registerCommands(
     progressViewProvider,
   );
   registerOpenFileCommands(context, runtime, session);
-  registerMainViewCommands(context, progressViewProvider, runtime);
 
   // The shared registry owns every command whose handler map lives in
   // `extensionCommandSurface.ts`, dispatched the same way as the desktop

@@ -15,7 +15,7 @@
  * `ResultEvent` below is that row named by its run.
  *
  * Host-specific events that don't belong in the core union (TeXRA's
- * file-list payloads, latexdiff, scratchpad, etc.) use the `domain`
+ * file-list payloads, latexdiff, missing outputs, etc.) use the `domain`
  * escape hatch with a host-chosen `key`.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';

@@ -7,7 +7,6 @@
 
 import { Effect, FileSystem } from 'effect';
 
-import { debugInternal } from '@agent/trace';
 import { workflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import type { FileLocation } from '@shared/schemas';
 
@@ -64,7 +63,7 @@ export const checkExpectedOutputs = Effect.fn('documents.checkExpectedOutputs')(
         );
       }
     } else {
-      debugInternal(deps.logger, `No expected outputs for round ${currRound}`);
+      deps.logger.debug(`No expected outputs for round ${currRound}`);
     }
 
     // Clear an earlier missing report if this round is reprocessed and all
