@@ -20,7 +20,6 @@ import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
 import {
   Clock,
   Duration,
@@ -29,7 +28,7 @@ import {
   Exit,
   FileSystem,
   Layer,
-  Schedule,
+  Option,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -79,9 +78,13 @@ import {
   projectionStates as parseProjectionStates,
   isCurrent,
   PROJECTORS,
+  AGGREGATE_LIST,
   READ_LISTING,
   READ_RUN_RECORDS,
+  READ_STATE,
   displayUnion,
+  DISPLAY_PAGE_END,
+  DISPLAY_PAGE_ROWS,
   priorOf,
   type ProjectionName,
   type ProjectionOp,
@@ -103,27 +106,16 @@ import {
   verdictBook,
   type EncodedRow,
 } from './rowCodec';
-import { isDamaged } from './storeAside';
+import { isBusy, isDamaged, retryBusy } from './storeAside';
 import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`). */
-const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) k
-  JOIN json_each(?) l ON l.key = k.key
-  JOIN event_sequence s ON s.kind = k.value AND s.logical_id = l.value`;
 /** One aggregate's surrogate, from its two columns. */
 const AGGREGATE =
   '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
-const READ_STATE = `
-SELECT s.kind, s.logical_id AS logicalId, s.uid, s.owner_id AS ownerId,
-  s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
-  p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
-WHERE s.id IN (${AGGREGATE_LIST})
-`;
 /** First append claims the aggregate and mints its uid; later need the claim. */
 const NEXT_SEQ = `
 INSERT INTO event_sequence (kind, logical_id, uid, seq, owner_id)
@@ -146,21 +138,6 @@ const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
-/** A busy transaction's retry: from 5 ms, doubling and jittered, each sleep
- *  at most 250 ms, for at most 5 s. The fiber yields between attempts, so
- *  a lock another process holds never freezes the host thread. */
-const BUSY_RETRY = Schedule.exponential('5 millis').pipe(
-  Schedule.jittered,
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, Duration.millis(250))),
-  ),
-  Schedule.upTo({ duration: '5 seconds' }),
-);
-/** `SQLITE_BUSY` or `SQLITE_LOCKED`: another connection holds the lock. */
-const isBusy = (error: unknown): boolean =>
-  isSqlError(error) && error.reason._tag === 'LockTimeoutError';
-const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 export const databaseLayer = (
   mode: 'persistent' | 'ephemeral',
 ): Layer.Layer<
@@ -930,17 +907,40 @@ export const databaseLayer = (
               ]);
             }),
           ),
-        readDisplay: (fromCommit) =>
-          projected(
-            Effect.gen(function* () {
-              const rows = yield* decodedRows(display, [
-                DISPLAY_READ_TYPES,
-                fromCommit,
-                yield* currentCommit,
-              ]);
-              return rows.filter(isDisplaySessionEvent);
-            }),
-          ),
+        readDisplay: (fromCommit) => {
+          // Pages are separate snapshots: a tombstone seen stays in view.
+          const tombstones = new Map<number, SessionEvent>();
+          return Stream.paginate(fromCommit, (from) =>
+            projected(
+              Effect.gen(function* () {
+                const top = yield* currentCommit;
+                const end = yield* top - from > DISPLAY_PAGE_ROWS
+                  ? execOne(DISPLAY_PAGE_END, [from])
+                  : Effect.undefined;
+                const through = Math.min(top, Number(end?.through ?? top));
+                const rows = yield* decodedRows(display, [
+                  DISPLAY_READ_TYPES,
+                  from,
+                  through,
+                ]);
+                if (through < top)
+                  for (const row of yield* decodedRows(pendingDeletions, []))
+                    tombstones.set(row.commit, row);
+                const read = new Set(rows.map((row) => row.commit));
+                const kept = [...tombstones.values()].filter(
+                  ({ commit }) =>
+                    commit > from && commit <= through && !read.has(commit),
+                );
+                return [
+                  [...rows, ...kept]
+                    .sort((x, y) => x.commit - y.commit)
+                    .filter(isDisplaySessionEvent),
+                  through < top ? Option.some(through) : Option.none(),
+                ] as const;
+              }),
+            ),
+          );
+        },
         readListing: () => projected(decodedRows(READ_LISTING, [])),
         readBlocked: () => Effect.sync(() => [...verdicts.blocked.values()]),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
@@ -1207,9 +1207,9 @@ export const databaseLayer = (
                       }
                       if (digests.length > 0)
                         yield* exec(collectBlobs, [JSON.stringify(digests)]);
-                      yield* reclaimFreePages(sql);
                     }),
                   );
+                  yield* reclaimFreePages(sql, path);
                   yield* query(verdicts.retain);
                 }),
               (_, exit) =>
