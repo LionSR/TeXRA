@@ -2116,7 +2116,7 @@ const SCENARIOS = [
       // Right-aligned metadata column: generated tokens for a child with usage.
       '↓40k',
       '3 agents',
-      'Tab input',
+      'Tab/Esc input',
     ],
     unexpect: ['Option-p tasks', 'Option-s subagents'],
   },
@@ -2136,7 +2136,7 @@ const SCENARIOS = [
       'leanSolver Idle',
       'reviewer Error',
       '3 agents',
-      'Tab input',
+      'Tab/Esc input',
     ],
     unexpect: ['reviewer Running'],
   },
@@ -2253,7 +2253,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, ESC, '\t'],
-    expect: ['● strategy Running', 'Tab input', 'Esc input'],
+    expect: ['● strategy Running', 'Tab/Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2425,7 +2425,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'x'],
-    expect: ['● strategy Stopped', 'Enter focus', 'Tab input', 'Esc input'],
+    expect: ['● strategy Stopped', 'Enter focus', 'Tab/Esc input'],
     unexpect: ['v full output', 'k kill'],
   },
   {

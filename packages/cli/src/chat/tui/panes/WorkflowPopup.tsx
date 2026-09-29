@@ -277,7 +277,7 @@ export function WorkflowPopup({
         ]
       : []),
     ...(selectedRunId !== undefined ? [{ key: 'x', action: 'kill' }] : []),
-    { key: 'Ctrl-T', action: 'log' },
+    { key: 'Ctrl-T', action: 'transcript' },
     { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
   ];
   const filterShown = view.filterEditing || view.filter.length > 0;
