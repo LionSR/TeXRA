@@ -52,6 +52,32 @@ export const pullStream = <
   );
 
 /**
+ * A stream over a foreign SDK's async iterator, which the scope closes: the
+ * request aborts first, since a queued `return` cannot release a pending SDK
+ * read until then. A rejected `return` is a defect, raised through
+ * `cleanupFailure`.
+ */
+export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
+  source: AsyncIterable<unknown> & { readonly controller: AbortController },
+  onError: (cause: unknown) => E,
+  cleanupFailure: (cause: unknown) => unknown = (cause) => cause,
+) {
+  const iterator = yield* Effect.acquireRelease(
+    Effect.sync(() => source[Symbol.asyncIterator]()),
+    (iterator) => {
+      source.controller.abort();
+      return iterator.return
+        ? Effect.tryPromise({
+            try: () => iterator.return!(),
+            catch: cleanupFailure,
+          }).pipe(Effect.orDie)
+        : Effect.void;
+    },
+  );
+  return pullStream(() => iterator.next(), onError);
+});
+
+/**
  * Parses a persisted local-call's argument text back into the JSON object a
  * provider request carries. This process authored the history, so a
  * malformed payload is our bug, not the model's: every protocol reports it
@@ -91,11 +117,9 @@ export const parseInboundToolArguments = (
   });
 
 /**
- * A tool-result row translated to its Chat wire shape: OpenAI Chat and
- * OpenRouter build this identically (materialize the text parts, an error
- * status prefixes them), and diverge only in how the surrounding message is
- * typed. `callIds` is the calling assistant turn's provider call ids, in
- * `callOrdinal` order.
+ * A tool-result row translated to OpenRouter's Chat wire shape: the text
+ * parts materialized, an error status prefixing them. `callIds` is the
+ * calling assistant turn's provider call ids, in `callOrdinal` order.
  */
 export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
   function* (
@@ -130,6 +154,34 @@ export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
 );
 
 /**
+ * Waits out `pending` at scope close. A rejection is dropped only when it
+ * repeats the cause the primary failure in `exit` already carries, or when
+ * `isExpected` recognizes it; anything else is an independent defect, raised
+ * through `cleanupFailure`.
+ */
+export const rejoin = (
+  pending: PromiseLike<unknown>,
+  exit: Exit.Exit<unknown, unknown>,
+  isExpected: (cause: unknown) => boolean,
+  cleanupFailure: (cause: unknown) => unknown = (cause) => cause,
+): Effect.Effect<void> =>
+  Effect.tryPromise({ try: () => pending, catch: (cause) => cause }).pipe(
+    Effect.catch((cause) =>
+      isExpected(cause) ||
+      (Exit.isFailure(exit) &&
+        exit.cause.reasons.some(
+          (reason) =>
+            Cause.isFailReason(reason) &&
+            reason.error instanceof ModelError &&
+            reason.error.cause === cause,
+        ))
+        ? Effect.void
+        : Effect.die(cleanupFailure(cause)),
+    ),
+    Effect.asVoid,
+  );
+
+/**
  * The request signal for a streamed body, with the body reader cancelled at
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
@@ -145,24 +197,11 @@ export const readerAbortSignal = (
     yield* Effect.addFinalizer((exit) => {
       const body = reader();
       if (body === undefined) return Effect.void;
-      return Effect.tryPromise({
-        try: () => body.cancel(),
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.catch((cause) =>
-          (signal.aborted && cause === signal.reason) ||
-          (Exit.isFailure(exit) &&
-            exit.cause.reasons.some(
-              (reason) =>
-                Cause.isFailReason(reason) &&
-                reason.error instanceof ModelError &&
-                reason.error.cause === cause,
-            ))
-            ? Effect.void
-            : Effect.die(cause),
-        ),
-        Effect.ensuring(Effect.sync(() => body.releaseLock())),
-      );
+      return rejoin(
+        body.cancel(),
+        exit,
+        (cause) => signal.aborted && cause === signal.reason,
+      ).pipe(Effect.ensuring(Effect.sync(() => body.releaseLock())));
     });
     const signal = yield* Effect.abortSignal;
     return signal;
@@ -218,24 +257,11 @@ export function ownedAbortSafeRequest<A>(
       Effect.onExit((exit) => {
         if (started === undefined) return Effect.void;
         const { signal, pending } = started;
-        return Effect.tryPromise({
-          try: () => pending,
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.catch((cause) => {
-            const repeated =
-              Exit.isFailure(exit) &&
-              exit.cause.reasons.some(
-                (reason) =>
-                  Cause.isFailReason(reason) &&
-                  reason.error instanceof ModelError &&
-                  reason.error.cause === cause,
-              );
-            return repeated || isAbortMatch(cause, signal, exit)
-              ? Effect.void
-              : Effect.die(cleanupFailure(cause));
-          }),
-          Effect.asVoid,
+        return rejoin(
+          pending,
+          exit,
+          (cause) => isAbortMatch(cause, signal, exit),
+          cleanupFailure,
         );
       }),
     );

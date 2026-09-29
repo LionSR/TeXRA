@@ -58,6 +58,22 @@ export const ModelOriginSchema = z.discriminatedUnion('protocol', [
 ]);
 export type ModelOrigin = z.infer<typeof ModelOriginSchema>;
 
+/** The origin a wire model stamps on its turns: the one place `codecVersion` is written. */
+export const originOf = <P extends z.infer<typeof OriginSchema>['protocol']>(
+  config: Pick<
+    z.infer<typeof OriginSchema>,
+    'requestedModel' | 'deployment'
+  > & {
+    readonly protocol: P;
+  },
+) =>
+  Object.freeze({
+    protocol: config.protocol,
+    requestedModel: config.requestedModel,
+    deployment: config.deployment,
+    codecVersion: 1 as const,
+  });
+
 /** Compares the complete non-secret binding, not runtime lineage. */
 export function sameModelOrigin(
   left: ModelOrigin,
