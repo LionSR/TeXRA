@@ -230,14 +230,12 @@ export const databaseLayer = (
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
       const verdicts = verdictBook(path, exec);
-      const { blocked } = verdicts;
       /** The rows a read statement returns, decoded (`verdictBook`). */
       const decodedRows = (statement: string, params: readonly unknown[]) =>
         exec(statement, params).pipe(
           Effect.flatMap(verdicts.decodeAll),
           Effect.map(({ events }) => settleCards(events)),
         );
-      const refuseBlocked = verdicts.refuse;
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
       );
@@ -628,11 +626,10 @@ export const databaseLayer = (
             }),
           ),
         );
-      /** Before a read, a projection another build versioned is emptied and
-       *  rebuilt, and one behind the high-water commit catches up, 1,000
-       *  rows per transaction. */
-      const ensureProjections = Effect.gen(function* () {
-        if (yield* query(projectionsCurrent)) return;
+      /** A projection another build versioned is emptied and rebuilt, and
+       *  one behind the high-water commit catches up, 1,000 rows per
+       *  transaction. */
+      const catchUpProjections = Effect.gen(function* () {
         let done = false;
         while (!done) {
           done = yield* transaction(
@@ -687,11 +684,11 @@ export const databaseLayer = (
       });
       /** A read of the projections, in one read transaction with the check
        *  that they are current: another build's rebuild between the two
-       *  would otherwise hand it a half-built projection. */
+       *  would otherwise hand it a half-built projection. One that is not
+       *  current catches up and the read runs again. */
       const projected = <A, E>(read: Effect.Effect<A, E>) =>
         Effect.gen(function* () {
           for (;;) {
-            yield* ensureProjections;
             const result = yield* transaction(
               'read',
               Effect.gen(function* () {
@@ -701,6 +698,7 @@ export const databaseLayer = (
               readFailed,
             );
             if (result !== null) return result.value;
+            yield* catchUpProjections;
           }
         });
       const appendRows = (
@@ -944,17 +942,17 @@ export const databaseLayer = (
             }),
           ),
         readListing: () => projected(decodedRows(READ_LISTING, [])),
-        readBlocked: () => Effect.sync(() => [...blocked.values()]),
+        readBlocked: () => Effect.sync(() => [...verdicts.blocked.values()]),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
           projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
         readRunSnapshot: (id) =>
           Effect.gen(function* () {
-            yield* refuseBlocked(id, readFailed);
+            yield* verdicts.refuse(id, readFailed);
             const [event] = yield* query(
               decodedRows(runSnapshot, aggregateColumns(id)),
             );
-            yield* refuseBlocked(id, readFailed);
+            yield* verdicts.refuse(id, readFailed);
             if (event === undefined) return null;
             if (event.type !== 'run.snapshot')
               return yield* invariant('Invalid run snapshot row');
@@ -963,7 +961,7 @@ export const databaseLayer = (
         ...currentValues({ exec, execOne, transact, query, level }),
         readAggregate: (id, fromSeq, types) =>
           Effect.gen(function* () {
-            yield* refuseBlocked(id, readFailed);
+            yield* verdicts.refuse(id, readFailed);
             const events = yield* query(
               types === undefined
                 ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq])
@@ -974,7 +972,7 @@ export const databaseLayer = (
                   ]),
             );
             // A row this read found unreadable blocks the whole aggregate.
-            yield* refuseBlocked(id, readFailed);
+            yield* verdicts.refuse(id, readFailed);
             return events;
           }),
         readDisplayAggregate: (id, fromSeq) =>
@@ -1022,14 +1020,14 @@ export const databaseLayer = (
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
-                blocked: [...blocked.values()],
+                blocked: [...verdicts.blocked.values()],
               };
             }),
           ),
         acquireClaims: (ids) =>
           Effect.gen(function* () {
             if (ids.length === 0) return [];
-            for (const id of ids) yield* refuseBlocked(id, writeFailed);
+            for (const id of ids) yield* verdicts.refuse(id, writeFailed);
             const observed = yield* query(readState(ids));
             if (
               observed.length !== new Set(ids).size ||

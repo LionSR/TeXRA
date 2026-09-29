@@ -7,13 +7,11 @@
 import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
-import { AgentCategory } from './agent';
 import {
   AggregateIdSchema,
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
   OwnerIdSchema,
-  type DisplaySessionEvent,
 } from './sessionEvent';
 
 /**
@@ -106,25 +104,6 @@ export const BlockedAggregateSchema = z.object({
   at: z.int(),
 });
 export type BlockedAggregate = z.infer<typeof BlockedAggregateSchema>;
-
-/** The `run.start` a blocked run whose own start row is unreadable stands
- *  on: its envelope, and no identity but its id. */
-export function blockedRunStart(
-  input: BlockedAggregate,
-): Extract<DisplaySessionEvent, { type: 'run.start' }> {
-  return {
-    type: 'run.start',
-    aggregateId: input.aggregateId,
-    seq: 1,
-    commit: input.commit,
-    origin: null,
-    at: input.at,
-    identity: { kind: 'agent', agent: 'unknown' },
-    userFollowUpSupport: 'unsupported',
-    category: AgentCategory.ToolUse,
-    parent: null,
-  };
-}
 
 const FoldInputSchema = z.discriminatedUnion('_tag', [
   BlockedAggregateSchema,

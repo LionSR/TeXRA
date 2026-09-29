@@ -28,8 +28,6 @@ interface RowKind {
   }) => {
     readonly [field: string]: JsonValue;
   })[];
-  /** The payload field whose `{ digest, value }` lives in the `blob` table. */
-  readonly blob?: 'payload';
 }
 
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
@@ -85,7 +83,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'model.retry': V1,
   'run.snapshot': V1,
   'tools.offered': V1,
-  'context.blob': { ...V1, blob: 'payload' },
+  'context.blob': V1,
   'hook.outcome': V1,
   'child.turn': V1,
   'workflow.script': V1,
