@@ -22,7 +22,6 @@ import {
 } from 'effect';
 import { z } from 'zod';
 import { closeAllSessions, presentRunFailure } from '@agent/runtime';
-import { loadAgents } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
 import {
@@ -1075,7 +1074,6 @@ function createWindow(options: {
           onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
         ),
       ),
-      customAgentDirChanged: Effect.void,
       // Selection is the surface's: a settings jump asks the shown project's
       // surface to select the run, and reports a run the view no longer holds
       // as missing.
@@ -1239,10 +1237,6 @@ function createWindow(options: {
                 ),
               );
             }
-            // Idempotent: joins the in-flight/initialized registry so a kickoff
-            // racing the startup `loadAgents()` cannot hit "Could not find agent:
-            // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-            yield* loadAgents();
             yield* binding.run.runValidated(request);
           }).pipe(
             Effect.provideContext(context),

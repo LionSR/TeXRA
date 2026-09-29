@@ -50,7 +50,6 @@ const mocks = vi.hoisted(() => ({
    *  on: what says whether the package must compose the process. */
   installRuntime: vi.fn(),
   ownerRuntime: undefined as ProcessRuntime | undefined,
-  loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
   interruptRun: vi.fn(),
   /** Every session the owner built for the package, with what it was
@@ -78,7 +77,6 @@ vi.mock('@utils/core', async (importActual) => ({
 }));
 
 vi.mock('@agent/index', () => ({
-  loadAgents: mocks.loadAgents,
   getAgent: () => ({
     category: mocks.agentCategory,
     source: 'custom',
@@ -281,7 +279,6 @@ describe('agent package sessions', () => {
       }),
     );
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
-    mocks.loadAgents.mockReturnValue(Effect.void);
     mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RunAgentOptions) => driveRun(options),

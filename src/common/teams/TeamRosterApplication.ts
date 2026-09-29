@@ -13,18 +13,12 @@ type TeamRosterApplicationResult =
       readonly resolution: TeamRosterResolution;
     };
 
-export interface TeamRosterApplicationDeps<R = never> {
-  readonly catalog: TeamRosterCatalog;
-  readonly loadCatalog: () => Effect.Effect<void, Error, R>;
-}
-
 /** Host sequence for resolving and committing one team roster. */
-export function applyTeamRoster<R = never>(
+export function applyTeamRoster(
   presetId: string,
-  deps: TeamRosterApplicationDeps<R>,
-): Effect.Effect<TeamRosterApplicationResult, Error, R> {
+  deps: { readonly catalog: TeamRosterCatalog },
+): Effect.Effect<TeamRosterApplicationResult, Error> {
   return Effect.gen(function* () {
-    yield* deps.loadCatalog();
     const resolved = yield* deps.catalog.resolvePreset(presetId);
     if (!resolved.ok) return { status: 'unknown' as const };
     yield* deps.catalog.commitPreset(resolved.preset);

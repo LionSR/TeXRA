@@ -93,7 +93,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       setTransientNotice(fixedTeamNotice);
       return;
     }
-    const resolution = yield* resolveTeamLaunch({
+    const resolution = resolveTeamLaunch({
       teamId,
       ...(yield* createTeamCatalogPorts(
         context.runtimeSession.roots.repoState,

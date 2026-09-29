@@ -22,7 +22,7 @@ const unresolved = {
 };
 
 describe('team roster application', () => {
-  it.effect('loads the catalog, then commits the preset once', () =>
+  it.effect('commits the resolved preset once', () =>
     Effect.gen(function* () {
       const calls: string[] = [];
       const commitPreset = vi.fn(() =>
@@ -37,10 +37,6 @@ describe('team roster application', () => {
             Effect.succeed({ ok: true, preset, resolution: unresolved }),
           commitPreset,
         },
-        loadCatalog: () =>
-          Effect.sync(() => {
-            calls.push('load');
-          }),
       });
 
       expect(result).toEqual({
@@ -48,7 +44,7 @@ describe('team roster application', () => {
         preset,
         resolution: unresolved,
       });
-      expect(calls).toEqual(['load', 'commit']);
+      expect(calls).toEqual(['commit']);
       expect(commitPreset).toHaveBeenCalledWith(preset);
     }),
   );

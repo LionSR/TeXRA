@@ -94,10 +94,9 @@ const bundledAgentDirectories = () => ({
 
 beforeAll(async () => {
   customAgentsDir = await makeTempDir('texra-init-agents-', tempDirs);
-  // Preload the catalog cache (module-level) so the command's own
-  // `loadAgents()` is a silent cache hit: the one
-  // real scan logs an info line that the output-shape tests would otherwise
-  // read as stderr noise.
+  // Load the catalog (module-level) up front, as the process runtime does at
+  // build: the one real scan logs an info line that the output-shape tests
+  // would otherwise read as stderr noise.
   const { refresh } = await import('@agent/index/agentRegistry');
   const { AgentDirectories } = await import('@platform/interfaces');
   await testRuntime().runPromise(

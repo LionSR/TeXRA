@@ -204,7 +204,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         const { toolUse, workflow } = yield* computeAgentOptionsData(
           props.stores,
         );
-        const teams = yield* loadTeamOptions(
+        const teams = loadTeamOptions(
           yield* createTeamCatalogPorts(props.stores.repoState),
         );
         return { toolUse, workflow, teams };

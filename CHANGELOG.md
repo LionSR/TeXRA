@@ -305,6 +305,14 @@ All notable changes to this project will be documented in this file.
   When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
   Google) is refused because the vendor no longer holds it, TeXRA logs a
   warning and retries once with the full transcript.
+- **An agent you edit is picked up on every host, and one that is listed can
+  launch.** The terminal app and the desktop app now watch your custom agents
+  directory as VS Code does, so a saved edit shows in the next run without a
+  restart. The agent list and the launch now read one validated definition, so
+  an agent with a missing parent, an inheritance loop or a bad value is
+  reported as a problem with its file instead of being listed and then failing
+  when you run it.
+
 - **Desktop model requests no longer fail with "Connection error".** The
   desktop app's bundled runtime rejected the proxy-aware connection model calls
   use, so every request to a model failed with an undici dispatcher error.

@@ -42,7 +42,7 @@ import {
   type HostSnapshotSource,
 } from '@controllers/session/hostSnapshotSource';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
@@ -158,7 +158,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly debouncedRefreshCatalogs = createFlushableDebounce(
     () =>
       this.runtime.runFork(
-        this.refreshCatalogs().pipe(
+        this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
           Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
           withLogChannel(CHANNEL),
         ),
@@ -466,7 +466,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     fileWatcher.onDidDelete(refreshFiles);
     this.disposables.push(
       fileWatcher,
-      agentDirectories.watchAgentDirectories(this.runtime, () =>
+      // The catalog reloads itself on every change to its sources
+      // (`agentCatalogFollower`); this launcher repaints what it lists.
+      subscribeAppSignal(this.runtime, 'agentRosterChanged', () =>
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );

@@ -5,7 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { afterAll, beforeAll, describe } from 'vitest';
 
-import { getAgent, loadAgents, refresh } from '@agent/index';
+import { getAgent, refresh } from '@agent/index';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -91,25 +91,6 @@ describe('agent registry load state', () => {
       ].join('\n'),
     );
   });
-
-  it.effect('answers loads from the published catalog without a rescan', () =>
-    Effect.gen(function* () {
-      const counter = { scans: 0 };
-      yield* Effect.promise(() =>
-        installDirectories(countingDirectories(counter)),
-      );
-      yield* onGlobalStorage(refresh());
-      counter.scans = 0;
-
-      yield* Effect.all(
-        [onGlobalStorage(loadAgents()), onGlobalStorage(loadAgents())],
-        { concurrency: 'unbounded' },
-      );
-
-      assert.strictEqual(counter.scans, 0);
-      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
-    }),
-  );
 
   it.effect('keeps serving the published catalog when a refresh fails', () =>
     Effect.gen(function* () {

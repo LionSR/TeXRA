@@ -27,7 +27,6 @@ import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
-import { untilFollowerLoaded } from './catalogReadiness';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { scanPluginAgents } from './pluginAgents';
 import type { AgentEntry } from './agentEntry';
@@ -57,21 +56,14 @@ const LOOKUP_PRIORITY: AgentSource[] = [
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
 
-/**
- * Whether a load has published a catalog. Only a load that completes sets
- * it, so a failed load leaves the previous catalog serving.
- */
-let published = false;
-
 /** Custom-directory YAML the last published load could not turn into an agent. */
 let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
 
 /**
  * Loads are serialized on one per-key lane: every load enters it, so the
  * registry has one serialization point instead of a promise plus a queue.
- * A fiber that arrives while a load runs waits for it, then re-checks what
- * that load published — nothing on the load path may take the lane from
- * inside a load of its own.
+ * A fiber that arrives while a load runs waits for it — nothing on the load
+ * path may take the lane from inside a load of its own.
  */
 const catalogLoadLanes = new Map<string, PerKeyLane>();
 const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
@@ -79,25 +71,6 @@ const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
 // =============================================================================
 // CORE API
 // =============================================================================
-
-/**
- * Load all agents into cache, unless a load already published them. Where a
- * catalog follower runs, its first reload is the initial load and this waits
- * for it. Concurrent calls join the in-flight load through the lane and
- * re-check what it published, so only one scan runs.
- */
-export function loadAgents(): Effect.Effect<
-  void,
-  AgentCatalogLoadError | StateReadFailed,
-  AgentCatalogServices
-> {
-  return Effect.andThen(
-    untilFollowerLoaded,
-    onCatalogLoadLane(
-      Effect.suspend(() => (published ? Effect.void : scanCatalog)),
-    ),
-  );
-}
 
 /**
  * Scan every agent source and publish the result. The caller holds the lane,
@@ -149,7 +122,6 @@ const scanCatalog: Effect.Effect<
   ]) {
     cache.set(agentKeyOf(entry), entry);
   }
-  published = true;
 
   yield* Effect.logInfo(
     `Loaded ${cache.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
@@ -190,9 +162,12 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
 }
 
 /**
- * Rescan after every older load has settled. The cache keeps serving the
- * catalog it already published until the new one lands, including when the
- * rescan fails.
+ * The one loader: rescan every source, after every older load has settled,
+ * and publish the catalog rebuilt from empty. The process's catalog layer
+ * (`agentCatalogFollower`) calls it when the runtime is built and on every
+ * change; nothing else needs the catalog loaded first. The cache keeps
+ * serving the catalog it already published until the new one lands,
+ * including when the rescan fails.
  */
 export function refresh(): Effect.Effect<
   void,
@@ -420,19 +395,11 @@ function sortAgentEntries(
   });
 }
 
-/**
- * Compute typed agent options data for Lit-native rendering.
- * Ensures cache is loaded first.
- */
+/** Compute typed agent options data for Lit-native rendering. */
 export function computeAgentOptionsData(
   stores: AgentRosterStores,
-): Effect.Effect<
-  AgentOptionsDataPayload,
-  AgentCatalogLoadError | StateReadFailed,
-  AgentCatalogServices
-> {
+): Effect.Effect<AgentOptionsDataPayload, StateReadFailed> {
   return Effect.gen(function* () {
-    yield* loadAgents();
     return {
       workflow: entriesToOptionData(
         sortAgentEntries(yield* getVisibleAgents(stores, 'workflow'), [

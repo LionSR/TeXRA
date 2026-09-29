@@ -242,7 +242,6 @@ function captureNextRenderOnSubmit(options?: { recordRender?: boolean }): {
 async function stubAgentRegistry(): Promise<() => void> {
   const agents = await import('@agent/index');
   const spies = [
-    vi.spyOn(agents, 'loadAgents').mockReturnValue(Effect.void),
     vi.spyOn(agents, 'getVisibleAgents').mockReturnValue(Effect.succeed([])),
   ];
   return () => {

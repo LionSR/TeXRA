@@ -30,7 +30,6 @@ export function createStubSettingsBindings(
     pickFolder: () => Effect.succeed(undefined),
     refreshCatalogs: noOpEffect,
     refreshCredentialStatus: Effect.void,
-    customAgentDirChanged: Effect.void,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     stateSettingApplied: noOpEffect,

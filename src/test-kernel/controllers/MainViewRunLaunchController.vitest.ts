@@ -139,20 +139,18 @@ describe('main-view run launch controller', () => {
 
   it.effect('builds the resolved team fields over the renderer agent', () =>
     Effect.gen(function* () {
-      mocks.resolveTeamLaunch.mockReturnValue(
-        Effect.succeed({
-          status: 'ready',
-          fields: {
-            agent: 'builtInToolUse:lead',
-            delegationAgentScope: {
-              workflow: ['builtInWorkflow:writer'],
-              toolUse: ['builtInToolUse:lead'],
-            },
-            cli: { multiAgentPresetId: 'custom-team' },
+      mocks.resolveTeamLaunch.mockReturnValue({
+        status: 'ready',
+        fields: {
+          agent: 'builtInToolUse:lead',
+          delegationAgentScope: {
+            workflow: ['builtInWorkflow:writer'],
+            toolUse: ['builtInToolUse:lead'],
           },
-          missingNames: ['writer'],
-        }),
-      );
+          cli: { multiAgentPresetId: 'custom-team' },
+        },
+        missingNames: ['writer'],
+      });
 
       // The renderer's selected agent is ignored in favour of the team plan.
       const { config } = yield* onGlobalStorage(

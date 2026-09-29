@@ -4,7 +4,6 @@ import {
   getAgent,
   getAgentsByCategory,
   getVisibleAgents,
-  loadAgents,
   resolveAgentForLaunch,
   type AgentEntry,
   type AgentRosterStores,
@@ -127,26 +126,11 @@ export function checkCliAgentLaunch(
  * A launch category resolves through the launch resolver, so validation lands
  * on the exact entry the launch will load; without one this is a display
  * lookup and stays category-blind.
- *
- * The catalog loads are Effect programs and so is this lookup: the entry
- * point that owns the process runtime settles it, and every caller already
- * inside a program composes it.
  */
 export function resolveCliAgent(
   stores: AgentRosterStores,
-  name: string,
-  lookupCategory?: AgentCategory,
-) {
-  return Effect.gen(function* () {
-    yield* loadAgents();
-    return yield* lookupCliAgent(stores, name, lookupCategory);
-  });
-}
-
-function lookupCliAgent(
-  stores: AgentRosterStores,
   identifier: string,
-  category: AgentCategory | undefined,
+  category?: AgentCategory,
 ) {
   return category
     ? resolveAgentForLaunch(stores, category, identifier)
@@ -172,7 +156,6 @@ export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
       name,
       AgentCategory.Workflow,
     );
-    // The pass above already loaded the catalog this lookup reads.
     const toolUse = yield* resolveAgentForLaunch(
       stores,
       AgentCategory.ToolUse,
@@ -227,8 +210,6 @@ export function loadCliAgentList(
 ) {
   const includeHidden = options.includeHidden === true;
   return Effect.gen(function* () {
-    yield* loadAgents();
-
     const agents = yield* collectCliAgents(
       stores,
       includeHidden ? 'all' : 'visible',

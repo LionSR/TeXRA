@@ -20,7 +20,7 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
-import { loadAgents } from '@agent/index';
+import { refresh } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
@@ -411,7 +411,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(loadAgents());
+await harnessRuntime.runPromise(refresh());
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact

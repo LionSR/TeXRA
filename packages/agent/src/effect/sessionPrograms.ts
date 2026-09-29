@@ -30,7 +30,7 @@ import {
 // curated `@agent/runtime` barrel rather than by module path, so this
 // package stops pinning the runtime's internal file layout. These never
 // reach the emitted declarations, so they carry no provider-type leak risk.
-import { getAgent, loadAgents } from '@agent/index';
+import { getAgent } from '@agent/index';
 import {
   closeSession as closeOwnedSession,
   listSessions as listOwnedSessions,
@@ -47,10 +47,7 @@ import type { RunEndResult } from '@agent/runtime/RunEndResult';
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
 import { withLogChannel } from '@logger/effectLog';
-import type {
-  AgentCatalogServices,
-  ProcessServices,
-} from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -169,21 +166,11 @@ function admitInput(
   input: StartInput,
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
-  LaunchError | RunFailure,
-  AgentCatalogServices
+  LaunchError | RunFailure
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    yield* loadAgents().pipe(
-      Effect.mapError((cause) => {
-        // The agent scan reads the configured directories through the
-        // platform, so it can fail on the environment. That is a failure of
-        // `start`, in the vocabulary the surface already names, not a defect
-        // an embedder's `catchTag` never sees.
-        return new RunFailure({ cause, message: toErrorMessage(cause) });
-      }),
-    );
     const resolved = getAgent(input.agent);
     if (!resolved) {
       return yield* new AgentNotFound({
@@ -232,10 +219,7 @@ function start(
   input: StartInput,
 ): Effect.Effect<Run, LaunchError | RunFailure> {
   return Effect.gen(function* () {
-    // Over the composition root's own services: the agent scan reads the
-    // configured directories through the process's global storage view, which
-    // this layer carries.
-    const config = yield* admitInput(input).pipe(Effect.provide(services));
+    const config = yield* admitInput(input);
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();

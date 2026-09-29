@@ -16,7 +16,6 @@ import type { SubscriptionProviderId } from '@controllers/modelAccess/subscripti
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -180,7 +179,6 @@ export class SettingsViewMessageHandler {
           Effect.asVoid(
             signInWithSubscription(session.roots, this.channel, providerId),
           ),
-        customAgentDirChanged: agentDirectories.refreshAfterDirChange(),
         revealRun: revealProgressRun,
         runLabel: getProgressRunLabel,
         // The status-bar tooltip paints the approval policy outside this

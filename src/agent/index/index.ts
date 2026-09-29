@@ -14,17 +14,13 @@ export {
   agentSourceDirectory,
 } from './AgentDirectoryService';
 
-export {
-  BUNDLED_AGENT_DIRECTORY_NAMES,
-  builtInToolUseRoots,
-} from './BundledAgentDirectories';
+export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 export { InvalidAgentTeamError } from '../roster/AgentRosterController';
 
 export type { AgentEntry } from './agentEntry';
 
 export {
-  loadAgents,
   getAgent,
   getCategoryAgent,
   resolveAgentForLaunch,
