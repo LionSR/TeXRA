@@ -227,6 +227,8 @@ function messageText(message: Message): string {
           result.content.map((part) => (part.kind === 'text' ? part.text : '')),
         )
         .join('');
+    case 'system':
+      return message.text;
   }
 }
 

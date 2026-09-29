@@ -230,6 +230,7 @@ const freshState = (): RunState => ({
   offeredContinuation: null,
   offeredSkills: [],
   offeredSystem: null,
+  offeredContext: null,
   contents: {},
   hookOutcomes: {},
   offeredHooks: [],

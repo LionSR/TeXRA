@@ -23,6 +23,7 @@ const CONFIG: AnthropicMessagesConfiguration = {
   supportsTemperature: true,
   supportsForcedToolChoice: true,
   supportsInputTokenEstimation: true,
+  supportsSystemMessages: false,
   defaults: {
     maxOutputTokens: 8192,
     temperature: 1,
@@ -422,6 +423,47 @@ describe('canonical Anthropic Messages protocol', () => {
             ],
           },
         ]);
+      }),
+  );
+
+  it.effect(
+    'sends a context update natively only where the model and the API admit one',
+    () =>
+      Effect.gen(function* () {
+        const user = (text: string) => ({
+          role: 'user' as const,
+          content: [{ kind: 'text' as const, text }],
+        });
+        const update = { role: 'system' as const, text: 'Skills changed.' };
+        const sent = (native: boolean, messages: TurnRequest['messages']) =>
+          Effect.gen(function* () {
+            const bound = model({ ...CONFIG, supportsSystemMessages: native });
+            const turn = yield* bound.prepareTurn({ messages });
+            assert(turn.mode === 'foreground');
+            yield* completedTurn(bound.streamTurn(turn));
+            return JSON.parse(
+              fetchModel.mock.calls.at(-1)![1]!.body as string,
+            ).messages.slice(1);
+          });
+        const fallback = {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: '<system-update>\nSkills changed.\n</system-update>',
+            },
+          ],
+        };
+        // Last, after a user turn: the model's own system message.
+        expect(yield* sent(true, [user('a'), update])).toEqual([
+          { role: 'system', content: 'Skills changed.' },
+        ]);
+        // Before a user turn, or on a model without it: user text.
+        expect(yield* sent(true, [user('a'), update, user('b')])).toEqual([
+          fallback,
+          { role: 'user', content: [{ type: 'text', text: 'b' }] },
+        ]);
+        expect(yield* sent(false, [user('a'), update])).toEqual([fallback]);
       }),
   );
 

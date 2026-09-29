@@ -336,6 +336,7 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
+    supportsPromptCacheKey: false,
     requestDialect: 'compatible',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
@@ -451,6 +452,7 @@ const PROTOCOL_DESCRIPTORS: {
       supportsInputTokenEstimation: capabilities.supportsTokenCounting,
       supportsTemperature,
       supportsForcedToolChoice: true,
+      supportsSystemMessages: capabilities.supportsIntermDevMsgs,
       defaults: {
         ...controls,
         parallelToolCalls: true,
@@ -479,10 +481,8 @@ const PROTOCOL_DESCRIPTORS: {
         supportedEfforts,
         gpt5ReasoningSummary,
       } = facts;
-      // GPT-5 asks for a reasoning summary only when the user turned the
-      // toggle on; every other reasoning-capable Responses model keeps
-      // asking, as the retired Responses handler did. `null` omits the
-      // field from the request.
+      // GPT-5 asks for a reasoning summary only when the user turned it on;
+      // every other reasoning Responses model asks. `null` omits the field.
       const isGpt5 =
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
@@ -511,6 +511,7 @@ const PROTOCOL_DESCRIPTORS: {
           },
           continuationInheritsInstructions: false,
           supportsForcedToolChoice: true,
+          supportsPromptCacheKey: true,
           requestDialect: 'openai',
           defaults: {
             maxOutputTokens: null,
@@ -530,9 +531,8 @@ const PROTOCOL_DESCRIPTORS: {
           },
         };
       }
-      // xAI stores and chains responses too, but has no background mode,
-      // `max` effort or summary control, and a chained request reuses the
-      // stored instructions.
+      // xAI stores and chains too, but has no background mode, `max` effort
+      // or summary control; a chained request reuses the stored instructions.
       const xai = config.provider === ModelProvider.XAI;
       const routeEffort = xai && effort === ReasoningEffort.MAX ? null : effort;
       return {
@@ -554,13 +554,13 @@ const PROTOCOL_DESCRIPTORS: {
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: xai,
         supportsForcedToolChoice: true,
+        supportsPromptCacheKey: config.provider === ModelProvider.OPENAI,
         requestDialect: 'openai',
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,
           temperature: controls.temperature,
-          // The route stores responses server-side, which is what
-          // `previous_response_id` chaining and background submission both
-          // read; the Codex arm above is the stateless one.
+          // Stored server-side, which `previous_response_id` chaining and
+          // background submission read; the Codex arm above is stateless.
           store: true,
           parallelToolCalls: controls.parallelToolCalls,
           reasoning: capabilities.supportsReasoning

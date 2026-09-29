@@ -24,6 +24,7 @@ import {
   type TurnResult,
 } from './turn.js';
 import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { systemUpdateText } from './message.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -197,7 +198,12 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
   for (const message of messages) {
-    if (message.role === 'user') {
+    if (message.role === 'system') {
+      steps.push({
+        type: 'user_input',
+        content: [{ type: 'text', text: systemUpdateText(message.text) }],
+      });
+    } else if (message.role === 'user') {
       steps.push({
         type: 'user_input',
         content: yield* Effect.forEach(message.content, lowerInputPart),

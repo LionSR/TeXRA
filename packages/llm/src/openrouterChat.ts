@@ -24,7 +24,7 @@ import {
   type TurnResult,
 } from './turn.js';
 import { decodeTurnRequest } from './turnInput.js';
-import { replayableHistory } from './message.js';
+import { replayableHistory, systemUpdateText } from './message.js';
 import { sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -217,6 +217,10 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       continue;
     }
     calls = [];
+    if (message.role === 'system') {
+      messages.push({ role: 'user', content: systemUpdateText(message.text) });
+      continue;
+    }
     if (message.role === 'user') {
       const content: ChatContentItems[] = [];
       for (const part of message.content) {

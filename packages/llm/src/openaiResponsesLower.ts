@@ -13,6 +13,7 @@ import {
 import {
   ContinuationSchema,
   replayableHistory,
+  systemUpdateText,
   type Continuation,
 } from './message.js';
 import { sameModelOrigin } from './protocol.js';
@@ -50,7 +51,7 @@ const loweredItemCount = (
   >['messages'][number],
 ): number => {
   if (message.role === 'tool') return message.results.length;
-  return message.role === 'user' ? 1 : message.content.length;
+  return message.role === 'assistant' ? message.content.length : 1;
 };
 
 /**
@@ -114,6 +115,10 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
       continue;
     }
     callIds.length = 0;
+    if (message.role === 'system') {
+      input.push({ role: 'user', content: systemUpdateText(message.text) });
+      continue;
+    }
     if (message.role === 'user') {
       input.push({
         role: 'user',

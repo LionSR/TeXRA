@@ -296,7 +296,17 @@ export const MessageSchema = z.discriminatedUnion('role', [
         .readonly(),
     })
     .readonly(),
+  /** An instruction the run's context adds mid-conversation, after the
+   *  system text its requests freeze: sent as the protocol's own system
+   *  message where the binding takes one, otherwise as `systemUpdateText`. */
+  z
+    .strictObject({ role: z.literal('system'), text: z.string().min(1) })
+    .readonly(),
 ]);
+
+/** A mid-conversation system message as the user text any protocol takes. */
+export const systemUpdateText = (text: string): string =>
+  `<system-update>\n${text}\n</system-update>`;
 
 // A completed assistant can precede settlement; only the next request requires it.
 export const PreparedHistorySchema = z

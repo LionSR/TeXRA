@@ -278,12 +278,10 @@ export const modelInvokerLayer = (): Layer.Layer<
           session.roots,
         );
 
-      /**
-       * The semantic request an attempt admits: the folded history, the
-       * caller's system, tools and stop sequences, and the last response's
-       * continuation while the binding matches its whole origin. A resume
-       * rebuilds it from the same inputs, so no row copies the history.
-       */
+      /** The semantic request an attempt admits: the folded history, the
+       *  caller's system and tools, the run as its cache key, and the last
+       *  response's continuation while the binding matches its whole origin.
+       *  A resume rebuilds it from the same inputs; no row copies history. */
       const turnRequestFor = (
         state: RunState,
         request: InvokeRequest,
@@ -298,6 +296,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           ? { toolChoice: request.toolChoice }
           : {}),
         ...chainedContinuation(state, bound.origin, request.fullTranscript),
+        cacheKey: run.runId,
       });
 
       const failAttempt = (

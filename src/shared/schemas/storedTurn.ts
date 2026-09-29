@@ -169,6 +169,8 @@ export const StoredMessageSchema = z.discriminatedUnion('role', [
       .min(1)
       .readonly(),
   }),
+  /** A context update the run appended mid-conversation. */
+  z.strictObject({ role: z.literal('system'), text: z.string().min(1) }),
 ]);
 
 /** Accepted remote work: its identity, and the cursor the adapter observes

@@ -468,6 +468,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       offeredContinuation: null,
       offeredSkills: [],
       offeredSystem: null,
+      offeredContext: null,
       contents: {},
       hookOutcomes: {},
       offeredHooks: [],

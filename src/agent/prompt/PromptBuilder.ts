@@ -6,7 +6,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SkillCatalogEntry } from '@shared/schemas';
+import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
 import type { PromptContribution, PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
@@ -49,32 +49,67 @@ Do not call tools that are not provided or any multi_tool_use variants.
 Call tools sequentially and wait for the output before calling another.`;
 
 /**
- * The system text a step adds after the run's recorded prompt: the tool-call
- * mechanics of the step's model and the configured bibliography, the skills
- * the step lists, then each pinned plugin's section, in plugin id order. It
- * is built from the step (its model, settings, offered tools and pinned
- * contributors) and the skill catalog it discovers, so a model switch or a
- * setting change reaches the next request, and a resume rebuilds it.
+ * The context a step renders: the tools it offers and the sections it adds
+ * after the run's recorded prompt, by name, in order: the tool-call mechanics of the step's model and the configured
+ * bibliography, the skills the step lists, then each pinned plugin's
+ * section, in plugin id order. They are built from the step (its model,
+ * settings, offered tools and pinned contributors) and the skill catalog it
+ * discovers, so a model switch or a setting change reaches the next request,
+ * and a resume rebuilds them.
  */
 export function stepInstructions(
   prompt: ReadonlyMap<string, PromptContribution>,
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
-): string {
-  return [
-    ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
+): RunContext {
+  const sections = Object.fromEntries([
+    [
+      'tool-call',
+      ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
+    ],
     ...(ctx.bibPath
       ? [
-          `The default bibliography file is ${ctx.bibPath}. You can grep or read this file to search for citations and references.`,
+          [
+            'bibliography',
+            `The default bibliography file is ${ctx.bibPath}. You can grep or read this file to search for citations and references.`,
+          ],
         ]
       : []),
     ...(skills.length > 0
       ? [
-          `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
+          [
+            'skills',
+            `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
+          ],
         ]
       : []),
-    ...[...prompt.values()].flatMap(({ section }) => section?.(ctx) || []),
-  ].join('\n');
+    ...[...prompt].flatMap(([id, { section }]) => {
+      const text = section?.(ctx);
+      return text ? [[`${id} plugin`, text]] : [];
+    }),
+  ]);
+  return { sections, tools: [...ctx.offered] };
+}
+
+/** What changed from the context the model was told to `now`, as the text
+ *  of the system message that tells it: each section added or reworded,
+ *  each one withdrawn, and the tools that came and went. '' for none. */
+export function contextUpdate(told: RunContext, now: RunContext): string {
+  const lines = Object.entries(now.sections).flatMap(([name, text]) =>
+    told.sections[name] === text ? [] : [text],
+  );
+  for (const name of Object.keys(told.sections))
+    if (!Object.hasOwn(now.sections, name))
+      lines.push(`The earlier ${name} instructions no longer apply.`);
+  const added = now.tools.filter((name) => !told.tools.includes(name));
+  const removed = told.tools.filter((name) => !now.tools.includes(name));
+  if (added.length > 0)
+    lines.push(`These tools are now available: ${added.join(', ')}.`);
+  if (removed.length > 0)
+    lines.push(
+      `These tools are no longer available; do not call them: ${removed.join(', ')}.`,
+    );
+  return lines.join('\n');
 }
 
 /**

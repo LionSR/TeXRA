@@ -121,6 +121,10 @@ function logCompactionEvent({
 function historyText(messages: readonly Message[]): string {
   const pieces: string[] = [];
   for (const message of messages) {
+    if (message.role === 'system') {
+      pieces.push(message.text);
+      continue;
+    }
     if (message.role === 'tool') {
       for (const result of message.results) {
         for (const part of result.content) {

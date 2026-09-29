@@ -79,6 +79,9 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
         toolChoice: author.toolChoice ?? 'auto',
         reasoning: config.defaults.reasoning,
         serviceTier: config.defaults.serviceTier,
+        ...(config.supportsPromptCacheKey && author.cacheKey !== undefined
+          ? { promptCacheKey: author.cacheKey }
+          : {}),
       },
     });
     if (turn.protocol !== 'openai-responses')
@@ -169,6 +172,9 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.controls.serviceTier !== null
         ? { service_tier: turn.controls.serviceTier }
+        : {}),
+      ...(turn.controls.promptCacheKey !== undefined
+        ? { prompt_cache_key: turn.controls.promptCacheKey }
         : {}),
       ...(reasoning !== null
         ? {
