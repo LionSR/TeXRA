@@ -88,7 +88,6 @@ import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createDesktopSettingsDialog } from './settingsDialog';
 import { createLogsPane } from './logsPane';
-import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
 import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
@@ -200,10 +199,11 @@ function setShell(next: Shell): void {
 // One fold, one surface, and one host snapshot per open project, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
-const sessionWire = (
-  globalThis as { [SESSION_WIRE_API_KEY]?: SessionWireApi }
-)[SESSION_WIRE_API_KEY];
-if (!sessionWire) throw new Error('The desktop session channel is unavailable.');
+const sessionWire = (globalThis as { [SESSION_WIRE_API_KEY]?: SessionWireApi })[
+  SESSION_WIRE_API_KEY
+];
+if (!sessionWire)
+  throw new Error('The desktop session channel is unavailable.');
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
   post: sessionWire.post,
@@ -997,8 +997,10 @@ const MESSAGE_ROUTES = createMessageRoutes({
 // pushes reach `<settings-app>` through its own listener and match no route
 // here.
 window.addEventListener('message', (event) => {
-  for (const route of MESSAGE_ROUTES) {
-    if (route(event.data)) return;
+  const { data } = event;
+  if (typeof data !== 'object' || data === null) return;
+  if ('command' in data && typeof data.command === 'string') {
+    MESSAGE_ROUTES.get(data.command)?.(data);
   }
 });
 
@@ -1103,7 +1105,6 @@ window.addEventListener(
   () => {
     surfaceResizeObserver?.disconnect();
     shortcutBootstrap.dispose();
-    disposePendingFileRequests();
     for (const project of projectWorkbenches.values()) project.dispose();
     projectWorkbenches.clear();
     projectSessions.dispose();

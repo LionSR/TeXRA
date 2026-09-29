@@ -1,5 +1,5 @@
-// Main → renderer pushes for the desktop-only surfaces: editor file I/O,
-// terminal runs, browser state, the diff/pdf/prompt overlays, shell
+// Main → renderer pushes for the desktop-only surfaces: the editor tree's
+// change notice, terminal runs, browser state, the diff/pdf/prompt overlays, shell
 // navigation, logs, and onboarding.
 //
 // This union adds no new wire shape — it composes the per-surface schemas so
@@ -33,11 +33,6 @@ import {
 } from './desktopShellMessages.js';
 import {
   DesktopBrowserStateMessageSchema,
-  DesktopFileErrorMessageSchema,
-  DesktopFileReadMessageSchema,
-  DesktopFilesListErrorMessageSchema,
-  DesktopFilesListedMessageSchema,
-  DesktopFileWrittenMessageSchema,
   DesktopTerminalDataMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
@@ -46,12 +41,7 @@ import {
 } from './desktopWorkspaceMessages.js';
 
 export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
-  // Editor file I/O
-  DesktopFilesListedMessageSchema,
-  DesktopFilesListErrorMessageSchema,
-  DesktopFileReadMessageSchema,
-  DesktopFileWrittenMessageSchema,
-  DesktopFileErrorMessageSchema,
+  // Editor tree
   DesktopWorkspaceFilesChangedMessageSchema,
   // Terminal
   DesktopTerminalDataMessageSchema,

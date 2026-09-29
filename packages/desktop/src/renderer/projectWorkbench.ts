@@ -5,6 +5,7 @@ import { nothing, type TemplateResult } from 'lit';
 
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { Theme } from '@shared/schemas';
+import type { HostOutcome } from '@shared/session/sessionFrames';
 import { postMessage } from '@shared/hostBridge';
 
 import {
@@ -16,12 +17,6 @@ import {
 } from '../shared/desktopShellState';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { createEditorPane } from './editorPane';
-import {
-  disposePendingFileRequests,
-  requestFileRead,
-  requestFileWrite,
-  requestFiles,
-} from './fileRequests';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
@@ -79,10 +74,30 @@ export function createProjectWorkbench(options: {
   }
   const send = (command: string, payload?: Record<string, unknown>) =>
     postMessage(command, { ...payload, session });
+  // The editor's file I/O is a host request answered to the pane; the
+  // session's close fails whatever is still pending.
+  const unexpected = (outcome: HostOutcome) =>
+    new Error(`The host answered a file request with ${outcome.kind}.`);
   const editorPane = createEditorPane({
-    listFiles: (directory) => requestFiles(session, directory),
-    readFile: (path) => requestFileRead(session, path),
-    writeFile: (path, contents) => requestFileWrite(session, path, contents),
+    listFiles: async (directory) => {
+      const outcome = await surfaces.workspaceFile(session, {
+        kind: 'list',
+        directory,
+      });
+      if (outcome.kind !== 'entries') throw unexpected(outcome);
+      return outcome.entries;
+    },
+    readFile: async (path) => {
+      const outcome = await surfaces.workspaceFile(session, {
+        kind: 'read',
+        path,
+      });
+      if (outcome.kind !== 'contents') throw unexpected(outcome);
+      return outcome.contents;
+    },
+    writeFile: async (path, contents) => {
+      await surfaces.workspaceFile(session, { kind: 'write', path, contents });
+    },
     onRequestOpen: (path) =>
       updateState(
         openWorkbenchTab(getState(), { kind: 'editor', target: path }),
@@ -150,7 +165,6 @@ export function createProjectWorkbench(options: {
     dispose() {
       disposed = true;
       editorPane.dispose();
-      disposePendingFileRequests(session);
       terminalPane.disposeAll();
       for (const tab of getState().workbenchTabs) {
         if (tab.kind === 'pdf') pdfPane.dispose(tab.id);

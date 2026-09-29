@@ -24,6 +24,9 @@ import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
 import type { ProcessServices } from '@platform/processRuntime';
+import type { HostRequest } from '@shared/session/hostRequest';
+import { Rejected } from '@shared/session/requestErrors';
+import type { HostOutcome } from '@shared/session/sessionFrames';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -65,6 +68,11 @@ interface DesktopWorkspaceIpcOptions {
 }
 
 interface DesktopWorkspaceIpc {
+  /** The editor pane's file I/O: one `host.request` program per action. */
+  file(
+    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
+  ): Effect.Effect<HostOutcome, Rejected, ProcessServices>;
+
   /** The program one parsed renderer request runs. */
   handle(
     message: DesktopWorkspaceInboundMessage,
@@ -284,33 +292,10 @@ export function createDesktopWorkspaceIpc(
     );
   }
 
-  function reportFileFailure(
-    requestId: string,
-    path: string,
-  ): (
-    error: WorkspaceFileFailure,
-  ) => Effect.Effect<never, WorkspaceFileFailure> {
-    return (error) =>
-      reportRequestFailure(error, {
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
-        requestId,
-        path,
-        message: toErrorMessage(error),
-      });
-  }
-
   const listDirectory = Effect.fn('desktopWorkspaceIpc.listDirectory')(
-    function* (requestId: string, directory: string) {
+    function* (directory: string) {
       const root = options.getWorkspacePath();
-      if (!root) {
-        renderer.postToRenderer({
-          command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
-          requestId,
-          directory,
-          files: [],
-        });
-        return;
-      }
+      if (!root) return [];
 
       // The project tree is a code editor, not the agent input picker. Reuse
       // the shared ignore policy, but do not inherit
@@ -338,7 +323,7 @@ export function createDesktopWorkspaceIpc(
       // rather than failing the tree: readdir already named every entry, so
       // one unreadable row must not cost the directory.
       const entries = yield* readDirectoryTypedTolerant(absoluteDirectory);
-      const files = entries
+      return entries
         .toSorted(([left], [right]) =>
           left.localeCompare(right, undefined, {
             numeric: true,
@@ -359,38 +344,18 @@ export function createDesktopWorkspaceIpc(
             ? [{ path, isDirectory: false }]
             : [];
         });
-      renderer.postToRenderer({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
-        requestId,
-        directory,
-        files,
-      });
     },
   );
 
-  function listFiles(requestId: string, directory: string) {
-    const normalizedDirectory = normalizeFilePath(directory)
-      .replace(/^\.\//, '')
-      .replace(/\/$/, '');
-    return listDirectory(requestId, normalizedDirectory).pipe(
-      // A listing fails two ways and both are answered the same way: a path
-      // refused past the workspace boundary, and a directory the process
-      // filesystem could not read. The handler names that pair instead of
-      // inferring it, so a third tag added to the listing's channel fails to
-      // compile here rather than being reported as a listing error.
-      Effect.catch((error: WorkspaceFileFailure) =>
-        reportRequestFailure(error, {
-          command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
-          requestId,
-          directory: normalizedDirectory,
-          message: toErrorMessage(error),
-        }),
-      ),
+  const listFiles = (directory: string) =>
+    listDirectory(
+      normalizeFilePath(directory).replace(/^\.\//, '').replace(/\/$/, ''),
+    ).pipe(
+      Effect.map((entries): HostOutcome => ({ kind: 'entries', entries })),
     );
-  }
 
-  function readFile(requestId: string, path: string) {
-    return Effect.gen(function* () {
+  const readFile = (path: string) =>
+    Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* resolveWorkspacePath(
         options.getWorkspacePath(),
@@ -403,30 +368,26 @@ export function createDesktopWorkspaceIpc(
       const contents = normalizeLineEndings(
         Buffer.from(yield* fs.readFile(absolutePath)).toString('utf8'),
       );
-      renderer.postToRenderer({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-        requestId,
-        path,
-        contents,
-      });
-    }).pipe(Effect.catch(reportFileFailure(requestId, path)));
-  }
+      return { kind: 'contents', contents } satisfies HostOutcome;
+    });
 
-  function writeFile(requestId: string, path: string, contents: string) {
-    return Effect.gen(function* () {
+  const writeFile = (path: string, contents: string) =>
+    Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* resolveWorkspaceWritePath(
         options.getWorkspacePath(),
         path,
       );
       yield* fs.writeFileString(absolutePath, contents);
-      renderer.postToRenderer({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
-        requestId,
-        path,
-      });
-    }).pipe(Effect.catch(reportFileFailure(requestId, path)));
-  }
+      return { kind: 'done' } satisfies HostOutcome;
+    });
+
+  /** A refused file request is the request's answer: the editor pane shows
+   *  it. */
+  const refuse = Effect.mapError(
+    (error: WorkspaceFileFailure) =>
+      new Rejected({ reason: toErrorMessage(error) }),
+  );
 
   function startTerminal(
     sessionId: string,
@@ -472,15 +433,19 @@ export function createDesktopWorkspaceIpc(
 
     followFilesWritten,
 
+    file(action) {
+      switch (action.kind) {
+        case 'list':
+          return refuse(listFiles(action.directory));
+        case 'read':
+          return refuse(readFile(action.path));
+        case 'write':
+          return refuse(writeFile(action.path, action.contents));
+      }
+    },
+
     handle(data) {
       switch (data.command) {
-        case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          return listFiles(data.requestId, data.directory);
-        case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
-          return readFile(data.requestId, data.path);
-        case DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE:
-          return writeFile(data.requestId, data.path, data.contents);
-
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:
           return startTerminal(
             data.sessionId,

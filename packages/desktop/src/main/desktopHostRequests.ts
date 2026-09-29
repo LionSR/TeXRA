@@ -129,7 +129,7 @@ interface DesktopHostRequestsOptions {
 
 export interface DesktopHostRequests {
   handleHostRequest(
-    request: HostRequest,
+    request: Exclude<HostRequest, { kind: 'workspaceFile' }>,
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
@@ -560,7 +560,7 @@ export function createDesktopHostRequests(
    * (a lifted capability may still run its own program behind its face).
    */
   function dispatch(
-    request: HostRequest,
+    request: Exclude<HostRequest, { kind: 'workspaceFile' }>,
     port: string,
   ): Effect.Effect<
     HostOutcome,
@@ -623,7 +623,7 @@ export function createDesktopHostRequests(
    * already been presented by the launch itself.
    */
   function handleHostRequest(
-    request: HostRequest,
+    request: Exclude<HostRequest, { kind: 'workspaceFile' }>,
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the

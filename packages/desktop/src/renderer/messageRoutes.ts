@@ -36,20 +36,14 @@ import {
 } from '../shared/desktopPromptMessages';
 import {
   DesktopBrowserStateMessageSchema,
-  DesktopFileErrorMessageSchema,
-  DesktopFileReadMessageSchema,
-  DesktopFilesListErrorMessageSchema,
-  DesktopFilesListedMessageSchema,
-  DesktopFileWrittenMessageSchema,
   DesktopTerminalDataMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
   DesktopWorkspaceFilesChangedMessageSchema,
 } from '../shared/desktopWorkspaceMessages';
-import { takePendingFileRequest } from './fileRequests';
 import type { WorkbenchKind } from '../shared/desktopShellState';
-import type { ZodType } from 'zod';
+import type { z, ZodType } from 'zod';
 
 /** Callbacks and live state reads the routes need from the renderer. */
 interface DesktopMessageRouteHandlers {
@@ -89,27 +83,34 @@ interface DesktopMessageRouteHandlers {
   projects(message: DesktopProjectsMessage): void;
 }
 
-function messageRoute<T>(
-  schema: ZodType<T>,
-  handle: (message: T) => void,
-): (data: unknown) => boolean {
-  return (data) => {
-    const parsed = schema.safeParse(data);
-    if (!parsed.success) return false;
-    handle(parsed.data);
-    return true;
-  };
+type MessageRoute = readonly [string, (data: unknown) => void];
+
+/** The route of the command `schema` names. A claimed command that fails its
+ *  schema is the host's defect: warned, and nothing runs. */
+function messageRoute<
+  S extends ZodType & { shape: { command: z.ZodLiteral<string> } },
+>(schema: S, handle: (message: z.output<S>) => void): MessageRoute {
+  const [command] = [...schema.shape.command.values];
+  return [
+    command,
+    (data) => {
+      const parsed = schema.safeParse(data);
+      if (parsed.success) handle(parsed.data);
+      else console.warn(`Dropped a malformed ${command} push`, parsed.error);
+    },
+  ];
 }
 
 /**
- * Every inbound window message the shell claims, in match order: the first
- * route whose schema parses handles it. Shell routes come first, then the
- * main-process replies for the editor, terminal, and browser panes.
+ * Every inbound window message the shell claims, by command: the shell's own
+ * commands, then the main-process pushes for the terminal and browser panes.
+ * A command with no entry is not the shell's (the settings view's pushes
+ * share the window).
  */
 export function createMessageRoutes(
   handlers: DesktopMessageRouteHandlers,
-): ReadonlyArray<(data: unknown) => boolean> {
-  return [
+): ReadonlyMap<string, (data: unknown) => void> {
+  const routes: MessageRoute[] = [
     messageRoute(DesktopSaveFileMessageSchema, () => {
       handlers.saveAllFiles();
     }),
@@ -149,47 +150,8 @@ export function createMessageRoutes(
     messageRoute(DesktopShowPromptMessageSchema, (message) =>
       handlers.prompt.open(message),
     ),
-    messageRoute(DesktopFilesListedMessageSchema, (message) => {
-      const pending = takePendingFileRequest(
-        message.session,
-        message.requestId,
-      );
-      if (pending?.kind === 'list') pending.resolve(message.files);
-    }),
-    messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
-      const pending = takePendingFileRequest(
-        message.session,
-        message.requestId,
-      );
-      if (pending?.kind === 'list') pending.reject(new Error(message.message));
-    }),
-    messageRoute(DesktopFileReadMessageSchema, (message) => {
-      const pending = takePendingFileRequest(
-        message.session,
-        message.requestId,
-      );
-      if (pending?.kind === 'read') pending.resolve(message.contents);
-    }),
-    messageRoute(DesktopFileWrittenMessageSchema, (message) => {
-      const pending = takePendingFileRequest(
-        message.session,
-        message.requestId,
-      );
-      if (pending?.kind === 'write') pending.resolve();
-    }),
     messageRoute(DesktopWorkspaceFilesChangedMessageSchema, (message) => {
       handlers.reloadWorkspaceFiles(message.session);
-    }),
-    messageRoute(DesktopFileErrorMessageSchema, (message) => {
-      // One request, one rejection: the requestId names the single pending read
-      // or write, so there is no read/write queue pair to sweep.
-      const pending = takePendingFileRequest(
-        message.session,
-        message.requestId,
-      );
-      if (pending?.kind === 'read' || pending?.kind === 'write') {
-        pending.reject(new Error(message.message));
-      }
     }),
     messageRoute(DesktopTerminalDataMessageSchema, (message) =>
       handlers.terminal.write(message.session, message.sessionId, message.data),
@@ -220,4 +182,8 @@ export function createMessageRoutes(
       handlers.projects(message),
     ),
   ];
+  const table = new Map(routes);
+  if (table.size !== routes.length)
+    throw new Error('Two pushes share a command');
+  return table;
 }

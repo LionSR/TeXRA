@@ -198,7 +198,9 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const bridge = yield* SessionBridge.make({
         session: project.session,
         handleHostRequest: (request, portId) =>
-          hostRequests.handleHostRequest(request, portId),
+          request.kind === 'workspaceFile'
+            ? workspace.file(request.action)
+            : hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
       }).pipe(Scope.provide(bridgeScope));
       yield* Effect.forkScoped(workspace.followFilesWritten, {

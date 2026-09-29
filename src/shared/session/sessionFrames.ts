@@ -109,12 +109,18 @@ export type RequestErrorWire = z.infer<typeof RequestErrorWireSchema>;
 
 /** What the host answers a `host.request` with (PRD 8.3): the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
- *  stored image its file name; everything else is done. */
+ *  stored image its file name, the editor's file I/O a listing or a file's
+ *  contents; everything else is done. */
 const HostOutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
   z.object({ kind: z.literal('files'), paths: z.array(z.string()) }),
   z.object({ kind: z.literal('text'), text: z.string() }),
   z.object({ kind: z.literal('savedImage'), fileName: z.string() }),
+  z.object({
+    kind: z.literal('entries'),
+    entries: z.array(z.object({ path: z.string(), isDirectory: z.boolean() })),
+  }),
+  z.object({ kind: z.literal('contents'), contents: z.string() }),
 ]);
 export type HostOutcome = z.infer<typeof HostOutcomeSchema>;
 
