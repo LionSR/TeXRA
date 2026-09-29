@@ -60,6 +60,7 @@ import {
   type Message,
   type ToolUseLoopState,
 } from './loop/rows';
+import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -254,6 +255,27 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const instruction = userFollowUpInstruction(
       followUps.map((followUp) => followUp.content),
     );
+    // What the user typed runs the step's UserPromptSubmit hooks, recorded
+    // with the message their context joins.
+    const typed = followUps.filter(
+      ({ content }) => content.from.kind === 'user',
+    );
+    const hooked =
+      typed.length === 0
+        ? { rows: [], parts: [] }
+        : yield* promptHooks(
+            run,
+            state,
+            typed[0].followUpId,
+            typed.map(({ content }) => content.text).join('\n\n'),
+          );
+    const message: Message =
+      built.message.role === 'user'
+        ? {
+            ...built.message,
+            content: [...built.message.content, ...hooked.parts],
+          }
+        : built.message;
     // A skill the user activated, and the run's current step resolves,
     // joins the run's recorded activations by name, the latest
     // `ACTIVATED_SKILLS_MAX` kept; each step resolves them again.
@@ -298,7 +320,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           aggregateId: rowAggregate(runId),
           followUpId: followUp.followUpId,
         })),
-        ...(turn ? [appendRow(runId, [built.message])] : []),
+        ...hooked.rows,
+        ...(turn ? [appendRow(runId, [message])] : []),
       ],
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => logFollowUps(followUps, built.kinds),

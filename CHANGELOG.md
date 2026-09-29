@@ -172,6 +172,19 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
+  that ships hooks now works in TeXRA. Its hooks can add notes to what you
+  ask, block a tool call they object to (the agent is told why), and add
+  notes to a tool's result. They cannot approve anything on your behalf:
+  your approval setting still decides. Enabling such a plugin shows each
+  hook and the scripts it runs; anything whose script TeXRA cannot pin down
+  is shown as its exact command, and changing a hook or its scripts asks
+  you to trust the plugin again. Hooks never see your API keys, and one
+  that hangs is stopped. Enabling or disabling a plugin reaches open
+  conversations at their next step. `texra plugin show <name>` lists a
+  plugin's hooks and the ones TeXRA does not run. Plugins with language
+  servers still cannot be enabled. Session history from earlier builds is
+  cleared the first time this build opens a workspace.
 - **Tool changes reach open conversations** — switching Memory or a Tools
   plugin on or off (in the settings, or with `texra tools enable|disable`
   from another shell) now takes effect at the conversation's next step
@@ -284,6 +297,9 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **GPT-6 models stay on your ChatGPT subscription when the OpenRouter
+  toggle is on** — they have no OpenRouter route, so they fell through to the
+  OpenAI API key (and failed without one).
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session
   on a run another TeXRA window held. Every surface now offers the same

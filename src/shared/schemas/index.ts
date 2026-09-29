@@ -89,6 +89,7 @@ export * from './runSnapshotState';
 export * from './rowValues';
 export * from './runLedgerEvent';
 export * from './offeredTools';
+export * from './hookOutcome';
 export * from './followUp';
 export * from './sessionEvent';
 export * from './traceEvent';
