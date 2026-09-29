@@ -301,6 +301,10 @@ All notable changes to this project will be documented in this file.
   it reappeared in the selector whenever the roster resolved to all agents,
   which is the default for a new workspace. Choosing "All agents" still
   shows it again.
+- **Desktop model requests no longer fail with "Connection error".** The
+  desktop app's bundled runtime rejected the proxy-aware connection model calls
+  use, so every request to a model failed with an undici dispatcher error.
+
 - **GPT-6 models stay on your ChatGPT subscription when the OpenRouter
   toggle is on** — they have no OpenRouter route, so they fell through to the
   OpenAI API key (and failed without one).

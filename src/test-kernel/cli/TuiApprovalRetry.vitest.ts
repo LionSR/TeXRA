@@ -540,7 +540,6 @@ describe('TUI request decisions', () => {
           data: {
             requestId: 'plan-excluded',
             runId,
-            goalEnabled: false,
             plan: { objective: 'Keep the approval categories distinct.' },
           },
         }),
