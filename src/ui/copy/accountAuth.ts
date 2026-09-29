@@ -17,7 +17,7 @@ import { RESEARCHER_ACCESS } from './onboarding';
 
 /** Shared device-code option description for any account picker. */
 export const DEVICE_CODE_DESCRIPTION =
-  'Sign in from SSH or another browser' as const;
+  'One-time code; works over SSH or in any browser' as const;
 
 /** ChatGPT subscription account — Codex models via Plus/Pro/Team. */
 export const CHATGPT_AUTH = {
@@ -27,7 +27,7 @@ export const CHATGPT_AUTH = {
   signInDescription: 'Use a ChatGPT subscription',
   signOutLabel: 'Sign out of ChatGPT',
   preferLabel: 'Prefer ChatGPT subscription',
-  deviceCodeLabel: 'ChatGPT device code',
+  deviceCodeLabel: 'Sign in to ChatGPT with a code',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
@@ -43,7 +43,7 @@ export const GROK_AUTH = {
   signInDescription: 'Use a Grok / SuperGrok subscription',
   signOutLabel: 'Sign out of Grok',
   preferLabel: 'Prefer Grok subscription',
-  deviceCodeLabel: 'Grok device code',
+  deviceCodeLabel: 'Sign in to Grok with a code',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',
@@ -92,7 +92,7 @@ export const RESEARCHER_ACCESS_AUTH = {
   deviceSignInExample: `sign in to your ${RESEARCHER_ACCESS.label} over SSH`,
   credentialsOnlyExample: `sign in to your ${RESEARCHER_ACCESS.label} (credentials only)`,
   loginDescription: `Sign in to your ${RESEARCHER_ACCESS.label}`,
-  deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
+  deviceCodeLabel: `Sign in to ${RESEARCHER_ACCESS.label} with a code`,
   signOutDescription: `Sign out of your ${RESEARCHER_ACCESS.label}`,
   statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,
   statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
