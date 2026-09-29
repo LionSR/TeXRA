@@ -1237,10 +1237,6 @@ describe('canonical Google Interactions protocol', () => {
     'tool-audio',
     'tool-video',
     'tool-document',
-    'parallel-control',
-    'reasoning-control',
-    'service-tier-control',
-    'anthropic-controls',
     'background-mode',
   ] as const)('rejects unsupported %s before provider I/O', (unsupported) =>
     Effect.gen(function* () {
@@ -1250,26 +1246,7 @@ describe('canonical Google Interactions protocol', () => {
       const result = yield* completedTurn(configured.streamTurn(prepared));
       const next = JSON.parse(JSON.stringify(exchange(result)));
       let expectedMessage = 'Google tool results';
-      if (unsupported === 'parallel-control') {
-        next.parallelToolCalls = false;
-        expectedMessage = 'Google parallel-call control';
-      } else if (
-        unsupported === 'reasoning-control' ||
-        unsupported === 'service-tier-control'
-      ) {
-        next[
-          unsupported === 'reasoning-control' ? 'reasoning' : 'serviceTier'
-        ] = null;
-        expectedMessage = 'Google does not support';
-      } else if (unsupported === 'anthropic-controls') {
-        Object.assign(next, {
-          thinking: { mode: 'disabled' },
-          effort: null,
-          cache: 'disabled',
-          stopSequences: [],
-        });
-        expectedMessage = 'Google does not support';
-      } else if (unsupported === 'background-mode') {
+      if (unsupported === 'background-mode') {
         next.mode = 'background';
         expectedMessage = 'Google background execution';
       } else if (unsupported === 'raw-audio') {

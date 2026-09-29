@@ -257,10 +257,10 @@ export function validationModel(config: ModelConfig): {
       tools: request.tools ?? [],
       transport: { kind: 'http' },
       controls: {
-        temperature: request.temperature ?? 0,
+        temperature: 0,
         maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
         store: false,
-        parallelToolCalls: request.parallelToolCalls ?? true,
+        parallelToolCalls: true,
         toolChoice: request.toolChoice ?? 'auto',
         reasoning: null,
         serviceTier: null,

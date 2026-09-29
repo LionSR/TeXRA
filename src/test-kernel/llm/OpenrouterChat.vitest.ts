@@ -210,16 +210,21 @@ describe('native OpenRouter Chat', () => {
             ),
           );
         });
-        const model = openrouterChatModel(CONFIG, {
-          apiKey: 'selected-key',
-          fetch,
-        });
+        const model = openrouterChatModel(
+          {
+            ...CONFIG,
+            defaults: {
+              ...CONFIG.defaults,
+              effort: 'minimal',
+              stopSequences: ['END'],
+            },
+          },
+          { apiKey: 'selected-key', fetch },
+        );
         const request: TurnRequest = {
           system: '',
           tools: TOOLS,
           toolChoice: { name: 'search' },
-          effort: 'minimal',
-          stopSequences: ['END'],
           messages: [
             {
               role: 'user',
@@ -519,10 +524,7 @@ describe('native OpenRouter Chat', () => {
   );
 
   it.effect.each([
-    ['unsupported effort', { effort: 'medium' }],
-    ['parallel', { parallelToolCalls: false }],
     ['background', { mode: 'background' }],
-    ['foreign thinking', { thinking: { mode: 'disabled' } }],
     ['unknown named tool', { toolChoice: { name: 'missing' } }],
   ] as const)(
     'rejects %s and does not issue an automatic request',

@@ -96,7 +96,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     output.append('Done ✓');
     output.finalize();
     // ...then the flow boundary emits the authoritative, replacement-clean
-    // text once `assembly.lastResponse` is set.
+    // text once the response is final.
     const completedText = 'Done \\checkmark\n'.repeat(4000);
     trace.emit({ type: 'response.finalized', text: completedText });
 
