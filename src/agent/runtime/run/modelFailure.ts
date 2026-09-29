@@ -79,18 +79,32 @@ function isPackageContextOverflow(error: ModelError): boolean {
   );
 }
 
+const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
 /**
  * The package labels every non-HTTP, non-parse failure `transport`, including
  * local ones (a stale persistent socket, a bug in stream handling). Only a
- * failure whose cause chain shows the network itself (an errno or undici code,
- * an SDK connection or timeout class, a bare `fetch failed`) is evidence about
- * the shared route; the rest is the caller's own to retry.
+ * failure whose cause chain shows the network itself (a code in
+ * `NETWORK_ERROR_CODES`, an SDK connection or timeout class, a bare `fetch
+ * failed`) is evidence about the shared route; the rest is the caller's own
+ * to retry.
  */
 function hasNetworkEvidence(error: ModelError): boolean {
   return causeChain(error.cause).some((link) => {
     const { code, message } = link as { code?: unknown; message?: unknown };
     return (
-      (typeof code === 'string' && /^(?:E[A-Z]+|UND_ERR_\w+)$/.test(code)) ||
+      (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) ||
       (typeof message === 'string' &&
         /^(?:fetch failed|failed to fetch)$/i.test(message.trim())) ||
       getErrorClassNames(link).some((name) =>
