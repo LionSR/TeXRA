@@ -337,9 +337,10 @@ export function initCliPlatform(
           // owned by the project scope; AppState (global) is the runtime's.
           const { storageRoot } = context;
           const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-          const workspaceState = yield* openProjectStateStore(storage).pipe(
-            Scope.provide(projectScope),
-          );
+          const workspaceState = yield* openProjectStateStore(
+            storage,
+            context.cwd,
+          ).pipe(Scope.provide(projectScope));
           const repoState = yield* openRepoStateStore(context.cwd, storage);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project

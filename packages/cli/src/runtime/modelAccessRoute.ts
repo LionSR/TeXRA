@@ -126,7 +126,7 @@ export function formatCliSubscriptionPreference(
   if (status.signedIn) return `Off · ${account}`;
   return status.preferSubscription
     ? 'On · sign in required'
-    : 'Off · sign in required to enable';
+    : 'Off · select to sign in and turn on';
 }
 
 function formatCliKeyedSubscriptionPreference(
@@ -136,7 +136,7 @@ function formatCliKeyedSubscriptionPreference(
   if (preferenceOn && keySet !== true) return 'On · key required';
   if (preferenceOn) return 'On · key configured';
   return keySet === true
-    ? 'Off · key configured'
+    ? 'Off · select to turn on'
     : 'Off · key required to enable';
 }
 

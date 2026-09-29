@@ -66,7 +66,7 @@ type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
  * webview validates, not `unknown`, so a builder's Effect passed without
  * `yield*` is a compile error rather than a serialized Effect it drops.
  */
-function postToWebview(
+export function postToWebview(
   webview: vscode.Webview,
   message: SettingsViewOutboundMessage,
 ): Effect.Effect<void, Error> {
@@ -269,21 +269,24 @@ export class SettingsViewMessageHandler {
     });
   }
 
-  /** Validate at the webview edge and run the selected program once. */
+  /**
+   * Validate at the webview edge and settle the selected program; the host's
+   * event listener is the one boundary that runs it.
+   */
   public handleMessage(
     message: unknown,
     webviewView: SettingsWebview,
-  ): Promise<void> {
-    this.activeView = webviewView;
-    const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-    return this.runtime.runPromise(
-      parsed.success
+  ): Effect.Effect<void, never, ProcessServices> {
+    return Effect.suspend(() => {
+      this.activeView = webviewView;
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      return parsed.success
         ? this.body.handleMessage(parsed.data, this.handlerRegistry)
         : Effect.logDebug('Message validation failed').pipe(
             Effect.annotateLogs({ data: message, error: parsed.error.message }),
             withLogChannel(this.channel),
-          ),
-    );
+          );
+    });
   }
 
   private handleRequestModelAccess(

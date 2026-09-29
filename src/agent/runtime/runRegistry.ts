@@ -39,9 +39,11 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
+import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { RunView } from '@shared/session/sessionView';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { RunHandle, RunParent } from './RunHandle';
+import type { RunStop, RunStopOptions } from './runStop';
 
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -58,30 +60,6 @@ export class RunLive extends Data.TaggedError('RunLive')<{
 class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
   readonly message: string;
 }> {}
-
-/**
- * One stop. A cascading stop reaches its targets when it is issued; a
- * detaching one only after {@link settlement} has committed the detach batch
- * and severed the children locally, so {@link accepted} answers `false` until
- * that has run. A caller that must decide synchronously is therefore a caller
- * that cascades (headless shutdown, session close).
- */
-export interface RunStop {
-  /** Whether a live interrupt target took the stop. */
-  readonly accepted: () => boolean;
-  /** Fails when a durable fact the stop owed storage was refused: a detach
-   *  batch, or the terminal row of a stop that reached no live target. */
-  readonly settlement: Effect.Effect<void, Error>;
-}
-
-/** Child policy of a stop. An explicit value wins: the CLI's bare-Escape stop
- *  always detaches and shutdown always cascades. A `run.stop` request that
- *  leaves it unset is resolved by the session request handler through
- *  `detachSubagentsOnStop()`; a missing option here reads as cascade, since a
- *  child left running has no owner. */
-export interface RunStopOptions {
-  readonly detachActiveChildren?: boolean;
-}
 
 /**
  * A child loop's stop target and lineage for the loop's whole life: from the
@@ -179,6 +157,10 @@ interface RunEntry {
   /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRegistry.isLive}). */
   launches: number;
+  /** The reason of the stop that interrupted this run here, recorded before
+   *  the interrupt so the run's own cleanup reads it. A `user` reason is
+   *  never overwritten by a later `shutdown`. */
+  stopReason?: RunStopReason;
 }
 
 /** Session-owned registry of runs: one per session, built by the session
@@ -517,6 +499,7 @@ export class RunRegistry {
         // was marked for belongs to the generation it ended.
         this.stopping.delete(runId);
         counted = this.entryFor(runId);
+        counted.stopReason = undefined;
         counted.launches += 1;
         return undefined;
       };
@@ -706,7 +689,7 @@ export class RunRegistry {
    * its claim fences the whole gesture, descendant sweep included, and the
    * stop writes the terminal row itself; a refused row fails the settlement.
    */
-  stop(runId: RunId, options: RunStopOptions = {}): RunStop {
+  stop(runId: RunId, options: RunStopOptions): RunStop {
     const token = Symbol('run-stop');
     const tokens = this.stopping.get(runId) ?? new Set<symbol>();
     tokens.add(token);
@@ -727,10 +710,12 @@ export class RunRegistry {
       // Shared across the child sweep and the root cascade so each run in
       // the chain is interrupted exactly once.
       const visited = new Set<string>();
-      if (!detach) this.interruptActiveChildren(runId, visited);
+      const { reason } = options;
+      if (!detach) this.interruptActiveChildren(runId, visited, reason);
+      this.markStopped(runId, reason);
       const root = this.getHandle(runId);
       reached = root
-        ? this.terminate(root, visited, !detach)
+        ? this.terminate(root, visited, !detach, reason)
         : this.interruptActive(runId);
       return reached;
     };
@@ -771,12 +756,16 @@ export class RunRegistry {
    *  since nothing here drives them, and those whose stop failed to record
    *  what it owed storage (logged here). */
   stopAll(): Effect.Effect<readonly RunId[]> {
+    const shutdown = {
+      detachActiveChildren: false,
+      reason: 'shutdown',
+    } as const;
     const active = new Set(this.heldIds());
     const stops = [...active].flatMap((runId) => {
       const parent = this.getHandle(runId)?.parent ?? null;
       return parent !== null && active.has(parent)
         ? []
-        : [{ runId, stop: this.stop(runId, { detachActiveChildren: false }) }];
+        : [{ runId, stop: this.stop(runId, shutdown) }];
     });
     return Effect.forEach(
       stops,
@@ -812,13 +801,29 @@ export class RunRegistry {
    */
   sweepChildrenOfFoldedStop(runId: RunId): void {
     if (this.disposed || !this.stopFolded(runId)) return;
-    this.interruptActiveChildren(runId, new Set());
+    // The folded stop's reason is not known here: its children are
+    // interrupted without one, so none cancels remote work.
+    this.interruptActiveChildren(runId, new Set(), undefined);
+  }
+
+  /** Record why `runId` stops, before it is interrupted (see
+   *  {@link RunEntry.stopReason}); only a run this process holds has one. */
+  private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
+    const entry = this.entries.get(runId);
+    if (entry === undefined || reason === undefined) return;
+    if (entry.stopReason !== 'user') entry.stopReason = reason;
+  }
+
+  /** Why the run was stopped here, while it unwinds from that stop. */
+  stopReason(runId: RunId): RunStopReason | undefined {
+    return this.entries.get(runId)?.stopReason;
   }
 
   /** Interrupt all active subagents of a parent run, including descendants. */
   private interruptActiveChildren(
     parentRunId: RunId,
     visited: Set<string>,
+    reason: RunStopReason | undefined,
   ): void {
     // Preparation and final delivery outlive the engine handle; stop their
     // activation as well as the live run below. The activation is keyed
@@ -827,10 +832,12 @@ export class RunRegistry {
       const key = `activation:${activation.runId}`;
       if (visited.has(key)) continue;
       visited.add(key);
+      this.markStopped(activation.runId, reason);
       activation.interrupt();
     }
     for (const handle of this.handles()) {
-      if (handle.isOwnedBy(parentRunId)) this.terminate(handle, visited, true);
+      if (handle.isOwnedBy(parentRunId))
+        this.terminate(handle, visited, true, reason);
     }
   }
 
@@ -838,10 +845,13 @@ export class RunRegistry {
     handle: RunHandle,
     visited: Set<string>,
     cascadeChildren: boolean,
+    reason: RunStopReason | undefined,
   ): boolean {
     if (visited.has(handle.runId)) return false;
     visited.add(handle.runId);
-    if (cascadeChildren) this.interruptActiveChildren(handle.runId, visited);
+    if (cascadeChildren)
+      this.interruptActiveChildren(handle.runId, visited, reason);
+    this.markStopped(handle.runId, reason);
     // A child run is its loop, not only the turn this handle runs: stopping
     // it ends the loop too, so the interrupted turn is not delivered to the
     // parent as a completed one. A child loop's activation carries the stop

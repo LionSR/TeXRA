@@ -52,7 +52,7 @@
     "src/agent/runtime/executeAgent.ts": 544,
     "src/agent/runtime/loop/toolUse.ts": 712,
     "src/agent/runtime/loop/toolUseDispatch.ts": 972,
-    "src/agent/runtime/ModelInvoker.ts": 1268,
+    "src/agent/runtime/ModelInvoker.ts": 1146,
     "src/agent/runtime/run/modelBinding.ts": 1010,
     "src/agent/runtime/runRegistry.ts": 1021,
     "src/agent/runtime/SessionHandle.ts": 1207,

@@ -11,12 +11,15 @@ import {
   writeDoctorReport,
   type DoctorReport,
 } from '../runtime/doctor';
+import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
+import { pruneStorage } from '../runtime/pruneStorage';
 
 import { getCliModelAccessList } from '../runtime/modelAccess';
 import { getCliAuthProfile } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -79,17 +82,42 @@ async function runDoctor(context: CliContext): Promise<number> {
   return doctorExitCode(report);
 }
 
+const DOCTOR_ARGS = {
+  ...GLOBAL_ARGS,
+  'prune-storage': {
+    type: 'boolean',
+    description:
+      'List the workspace stores whose project is gone, and delete them once confirmed',
+  },
+  yes: {
+    type: 'boolean',
+    alias: 'y',
+    description:
+      'Delete the listed stores without asking (with --prune-storage)',
+  },
+} as const;
+
+/** `--prune-storage` is a program on the process runtime, which reads the
+ *  global root's store records: the one arm of this command that can take
+ *  `defineCliCommand`. */
+const pruneStorageCommand = defineCliCommand({
+  meta: { name: 'doctor' },
+  args: DOCTOR_ARGS,
+  run: (context, ctx) => pruneStorage(context, ctx.args.yes === true),
+  catchExitCode: CliExitCode.ModelOrNetworkError,
+});
+
 export const doctorCommand = defineCommand({
   meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
+  args: DOCTOR_ARGS,
   // The one command that cannot take `defineCliCommand`: that helper installs
   // the process runtime and runs the command's program on it, and this report
   // can borrow a runtime at neither end — none exists when the init fold
   // begins, and an init that fails disposes the one it installed before it
   // re-raises. So the `contextFromArgs` → `setExitCode` fold stays here.
   async run(ctx) {
+    if (ctx.args['prune-storage'] === true)
+      return pruneStorageCommand.run?.(ctx);
     const context = await contextFromArgs(ctx.args, ctx.rawArgs, {
       printConfigWarnings: false,
     });

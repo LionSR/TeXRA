@@ -457,9 +457,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     context.session.roots,
   );
   const success = yield* Effect.suspend(() => {
-    const stop = runs.stop(runId, {
-      detachActiveChildren,
-    });
+    const stop = runs.stop(runId, { detachActiveChildren, reason: 'user' });
     // Asked after the settlement: a detaching stop interrupts the run
     // only once its children have left it, so that is when it knows
     // whether a live target took the stop.

@@ -23,6 +23,7 @@ import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
+import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { SessionView } from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -78,8 +79,9 @@ interface SessionExitControllerContext {
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
-  /** Stop the active run (writes a `halted` `run.position`). */
-  readonly interruptActive: () => void;
+  /** Stop the active run (writes a `halted` `run.position`): Ctrl-C on a
+   *  running turn is a `user` stop, every exit path a `shutdown`. */
+  readonly interruptActive: (reason: RunStopReason) => void;
   /** The user's own `--quiet`: the TUI silences the log sink regardless. */
   readonly quiet: boolean;
 }
@@ -177,7 +179,7 @@ export function createSessionExitController(
     if (Date.now() < exitConfirmationExpiresAt) {
       void teardown({ kind: 'signal', exitCode: CliExitCode.Interrupted });
     } else if (session.canStopVisibleRun()) {
-      ctx.interruptActive();
+      ctx.interruptActive('user');
       armExit();
     } else if (session.isResumableIdle()) {
       // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
@@ -189,7 +191,7 @@ export function createSessionExitController(
       // `TuiSession.isResumableIdle`).
       void teardown({ kind: 'signal', exitCode: session.runExitCode });
     } else {
-      ctx.interruptActive();
+      ctx.interruptActive('shutdown');
       requestInputExit();
     }
   };
@@ -197,7 +199,7 @@ export function createSessionExitController(
   // suspended so its `run.snapshot` stays resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
     if (session.canStopVisibleRun()) {
-      ctx.interruptActive();
+      ctx.interruptActive('shutdown');
     }
     void teardown({ kind: 'signal', exitCode });
   };
@@ -294,7 +296,7 @@ export function createSessionExitController(
     const interruptPendingRun = (): boolean => {
       if (!chatTuiRunPending(session) || session.isResumableIdle())
         return false;
-      ctx.interruptActive();
+      ctx.interruptActive('shutdown');
       return true;
     };
     // Interrupt an actively-running turn BEFORE draining the queue. A queued

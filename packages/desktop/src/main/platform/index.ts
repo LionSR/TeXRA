@@ -192,9 +192,10 @@ export const initializeElectronPlatform = Effect.fn(
   > = Effect.gen(function* () {
     const globalStateStore = yield* AppState;
     const agentDirectories = yield* AgentDirectories;
-    const workspaceStateStore = yield* openProjectStateStore(storage).pipe(
-      Scope.provide(processScope),
-    );
+    const workspaceStateStore = yield* openProjectStateStore(
+      storage,
+      undefined,
+    ).pipe(Scope.provide(processScope));
     repairLaunchPath();
     const processRoots = createNodeWorkspaceRoots({
       host: 'desktop',

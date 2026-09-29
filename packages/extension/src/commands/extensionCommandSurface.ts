@@ -36,6 +36,7 @@ import {
 } from '@commands/latex/figCommands';
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
@@ -43,13 +44,14 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
   EXTENSION_COMMAND_HANDLERS,
   type ExtensionCommandActions,
 } from './extensionCommandHandlers';
+
+const externalOpener = new VscodeExternalOpener();
 
 export function createExtensionCommandActions(
   context: vscode.ExtensionContext,
@@ -58,11 +60,6 @@ export function createExtensionCommandActions(
   secrets: PlatformSecrets,
   session: SessionHandle,
 ): ExtensionCommandActions {
-  // The walkthrough and the docs page are VS Code calls; each is one
-  // foreign edge lifted here.
-  const fromPromise = (run: () => PromiseLike<unknown>) =>
-    Effect.asVoid(Effect.tryPromise({ try: run, catch: ensureError }));
-
   return {
     showSettings: (tab, agentSubTab) =>
       settingsViewProvider.showSettingsView(tab, agentSubTab),
@@ -83,19 +80,14 @@ export function createExtensionCommandActions(
           progressViewProvider.presentLaunchedRun(runId),
         ),
       ),
-    openGettingStarted: () =>
-      fromPromise(() => sysOpenGettingStarted(context.extension.id)),
+    openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
       sysCreateSampleProject(context.extensionPath, session),
     downloadArXivSource: () => latexDownloadArXivSource(session),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     openDoc: (page) =>
       page
-        ? fromPromise(() =>
-            vscode.env.openExternal(
-              vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
-            ),
-          )
+        ? externalOpener.openExternal(`https://texra.ai/guide/${page}.html`)
         : Effect.void,
     indentCurrentTeX: () => latexIndentCurrentTeX(session),
     fixCompilation: () => latexFixCompilation(session),

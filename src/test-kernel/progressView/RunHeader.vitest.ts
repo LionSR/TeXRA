@@ -97,7 +97,9 @@ describe('run-header over the fold', () => {
     expect(stop?.tagName.toLowerCase()).toBe('wa-button');
     expectAnchoredTooltip(element, ELEMENT_IDS.STOP_STREAM_BTN);
     stop?.click();
-    expect(requests).toEqual([{ kind: 'run.stop', runId: ROOT }]);
+    expect(requests).toEqual([
+      { kind: 'run.stop', runId: ROOT, reason: 'user' },
+    ]);
   });
 
   it('offers deleting a workflow run’s output files only once it has stopped', async () => {

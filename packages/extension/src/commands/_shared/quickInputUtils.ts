@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 /**
@@ -9,22 +10,24 @@ import * as vscode from 'vscode';
  *
  * The `setup` function is called to attach `onDidAccept` and any other event
  * handlers; the caller does NOT need to register `onDidHide` or call `show()`
- * — this helper handles both. Resolves with `undefined` when dismissed.
+ * — this helper handles both. Answers `undefined` when dismissed, and closes
+ * the input when the wait is interrupted.
  */
-export async function settleQuickInput<T>(
+export function settleQuickInput<T>(
   input: vscode.QuickInput,
   setup: (accept: (value: T | undefined) => void) => void,
-): Promise<T | undefined> {
-  return new Promise<T | undefined>((resolve) => {
+): Effect.Effect<T | undefined> {
+  return Effect.callback<T | undefined>((resume) => {
     let settled = false;
     const accept = (value: T | undefined): void => {
       if (settled) return;
       settled = true;
-      resolve(value);
+      resume(Effect.succeed(value));
       input.dispose();
     };
     setup(accept);
     input.onDidHide(() => accept(undefined));
     input.show();
+    return Effect.sync(() => input.dispose());
   });
 }

@@ -39,7 +39,7 @@ class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
 export interface CodexDeviceLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
+  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
 }
 
 /**
@@ -58,7 +58,7 @@ export const loginWithDeviceCode = Effect.fn(
     });
   }
 
-  options.onPrompt({
+  yield* options.onPrompt({
     userCode,
     verificationUrl: CODEX_DEVICE_VERIFICATION_URL,
   });

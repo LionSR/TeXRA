@@ -1,7 +1,10 @@
+import { execFile } from 'node:child_process';
+import { platform } from 'node:os';
 import { Box, Text, useInput, useWindowSize } from 'ink';
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
+import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
@@ -22,6 +25,30 @@ export function appendSlashCommandEcho(line: string): void {
   if (!shouldRedactSlashInput(line)) appendLocalUserTranscript(line.trim());
 }
 
+const CLIPBOARD_TOOL: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: 'pbcopy',
+  win32: 'clip',
+};
+
+/**
+ * Put text on the system clipboard. The framed panel hard-wraps a long URL
+ * and adds its borders, so a mouse selection cannot copy it cleanly. OSC 52
+ * reaches the local clipboard over SSH; the platform tool covers terminals
+ * without OSC 52 (Terminal.app).
+ */
+function copyToClipboard(text: string): void {
+  writeTerminalSequence(
+    `\u001B]52;c;${Buffer.from(text).toString('base64')}\u0007`,
+  );
+  const child = execFile(
+    CLIPBOARD_TOOL[platform()] ?? 'wl-copy',
+    () => undefined,
+  );
+  // A missing tool must not crash the TUI; OSC 52 above is the fallback.
+  child.stdin?.on('error', () => undefined);
+  child.stdin?.end(text);
+}
+
 /** Submit-side busy/settled surface for the active registered form. */
 function FormBusyFrame(props: {
   readonly progress: FormProgress;
@@ -30,8 +57,20 @@ function FormBusyFrame(props: {
   const { progress } = props;
   const { columns } = useWindowSize();
   const settled = progress.status !== 'running';
+  const [copied, setCopied] = useState(false);
+  // Once archived, the message has been written to scrollback and is no
+  // longer "live" for display/sizing purposes, even though the raw value is
+  // kept on `progress.copyableMessage` for archiveCopyable's own use.
+  const liveCopyable = progress.copyableMessageArchived
+    ? undefined
+    : progress.copyableMessage;
   useInput((input, key) => {
     if (key.ctrl) return;
+    if (input === 'c' && liveCopyable) {
+      copyToClipboard(/https?:\/\/\S+/.exec(liveCopyable)?.[0] ?? liveCopyable);
+      setCopied(true);
+      return;
+    }
     if (settled) {
       progress.dismiss();
       return;
@@ -45,6 +84,9 @@ function FormBusyFrame(props: {
   const title = `${progress.title}${titleSuffix}`;
   const innerWidth = formFrameContentWidth(columns);
   const hints = [
+    ...(liveCopyable
+      ? [{ key: 'c', action: copied ? 'copied' : 'copy link' }]
+      : []),
     settled
       ? { key: 'any key', action: 'close' }
       : { key: 'Esc', action: 'cancel' },
@@ -61,20 +103,14 @@ function FormBusyFrame(props: {
     (copyableMessage === progress.message
       ? 0
       : 1 + wrappedRows(copyableMessage));
-  // Once archived, the message has been written to scrollback and is no
-  // longer "live" for display/sizing purposes, even though the raw value is
-  // kept on `progress.copyableMessage` for archiveCopyable's own use.
-  const liveCopyableMessage = progress.copyableMessageArchived
-    ? undefined
-    : progress.copyableMessage;
   const copyableDoesNotFit =
-    liveCopyableMessage !== undefined &&
+    liveCopyable !== undefined &&
     props.availableRows !== undefined &&
-    requiredRows(liveCopyableMessage) > props.availableRows;
+    requiredRows(liveCopyable) > props.availableRows;
   useLayoutEffect(() => {
     if (copyableDoesNotFit) progress.archiveCopyable?.();
   }, [copyableDoesNotFit, progress]);
-  const spinnerFrozen = liveCopyableMessage !== undefined;
+  const spinnerFrozen = liveCopyable !== undefined;
   const displayMessage = copyableDoesNotFit
     ? 'Authentication instructions are being written to scrollback.'
     : progress.message;
@@ -90,10 +126,10 @@ function FormBusyFrame(props: {
         displayMessage && <Text>{displayMessage}</Text>
       )}
       {!copyableDoesNotFit &&
-        liveCopyableMessage &&
-        liveCopyableMessage !== progress.message && (
+        liveCopyable &&
+        liveCopyable !== progress.message && (
           <Box marginTop={1}>
-            <Text>{liveCopyableMessage}</Text>
+            <Text>{liveCopyable}</Text>
           </Box>
         )}
       <Box marginTop={1}>

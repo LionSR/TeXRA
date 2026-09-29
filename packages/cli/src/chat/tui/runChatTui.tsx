@@ -336,7 +336,7 @@ export async function runChat(
     changes: runtimeSession.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
-        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit.`,
+        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
       );
       session.runExitCode = CliExitCode.AgentError;
     },
@@ -416,7 +416,7 @@ export async function runChat(
     }
 
     const meta = sessionMetaSignal.get();
-    if (isRunPending) chatController.stop();
+    if (isRunPending) chatController.stop('user');
     followUpQueue.clear();
     chatController.clearPendingSkills();
     session.clearRunState();
@@ -548,7 +548,7 @@ export async function runChat(
     getApprovalPolicy,
     flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
-    interruptActive: () => chatController.stop(),
+    interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's

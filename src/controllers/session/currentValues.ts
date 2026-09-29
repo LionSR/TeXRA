@@ -6,9 +6,17 @@
  * `BEGIN IMMEDIATE` with no aggregate claim, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
  * `Database` hands it the connection's statements, transaction and wake
- * level.
+ * level, over which it also serves the values' change feed.
  */
-import { Clock, Effect, Result, type SubscriptionRef } from 'effect';
+import {
+  Clock,
+  Duration,
+  Effect,
+  Result,
+  Schedule,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
@@ -26,7 +34,6 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { currentValueChangeFeed } from './appStateChanges';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 
 type Rows = readonly Readonly<Record<string, unknown>>[];
@@ -40,6 +47,19 @@ INSERT INTO current_value (family, key, version, value, at) VALUES (?, ?, ${VALU
 ON CONFLICT(family, key) DO UPDATE SET
   version = excluded.version, value = excluded.value, at = excluded.at
 `;
+
+/** The keys' rows in key order: their text is equal exactly when no value
+ *  changed. */
+const SNAPSHOT = `SELECT key, value FROM current_value
+  WHERE family = ? AND key IN (SELECT value FROM json_each(?))
+  ORDER BY key`;
+
+/** A failed change-feed read's backoff: 250 ms doubling, at most 30 s. */
+const READ_RETRY = Schedule.exponential('250 millis').pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+  ),
+);
 
 /** A row a newer build wrote: never decoded as this build's shape. */
 const newerValue = (
@@ -179,7 +199,36 @@ export function currentValues(store: {
           Effect.map((listed) => listed.flat()),
         ),
       ),
-    changes: currentValueChangeFeed(level, exec),
+    /** Each wake reads the keys' rows, and only a changed snapshot emits. A
+     *  failed read is logged and read again, holding the wake until it
+     *  reads (the database poll's own backoff), so no change is missed. */
+    changes: (family, keys) =>
+      SubscriptionRef.changes(level).pipe(
+        Stream.mapEffect(() =>
+          exec(SNAPSHOT, [family, JSON.stringify(keys)]).pipe(
+            Effect.map((rows) =>
+              JSON.stringify(
+                rows.map((row) => [
+                  z.string().parse(row.key),
+                  z.string().parse(row.value),
+                ]),
+              ),
+            ),
+            Effect.tapError((error) =>
+              Effect.logWarning(
+                `Could not read whether ${keys.join(', ')} changed; retrying.`,
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel('sessionDatabase'),
+              ),
+            ),
+            Effect.retry(READ_RETRY),
+            Effect.orDie,
+          ),
+        ),
+        Stream.changesWith((a, b) => a === b),
+        Stream.as(undefined),
+      ),
   };
   return {
     values,

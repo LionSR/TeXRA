@@ -302,8 +302,7 @@ export class RunHeader extends LitElement {
     if (!run) return nothing;
     const statusLabel = run.statusLabel;
     const goal = goalStateOf(run);
-    // The fold's `actions` is the one reading of what the run's state
-    // licenses; the header offers exactly that.
+    // The header offers exactly what the fold's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const canGrant = run.actions.includes('grant');
     const progressTitle = getProgressBadgeTitle(
@@ -356,6 +355,7 @@ export class RunHeader extends LitElement {
                     SessionUiEvents.runtime({
                       kind: 'run.stop',
                       runId: run.id,
+                      reason: 'user',
                     }),
                   ),
               })
