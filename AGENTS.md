@@ -281,7 +281,6 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 
   Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
-    - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
     - `utils/core/pathCore.ts` - sibling Node-only path module

@@ -32,11 +32,6 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Check if value is a finite number (excludes NaN and ±Infinity). */
-export function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 /** Check if a value is a thenable (has a callable `.then`). */
 export function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof (value as PromiseLike<unknown> | null)?.then === 'function';

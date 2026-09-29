@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
-import { XMLParser } from 'fast-xml-parser';
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -11,11 +10,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import {
-  OUTPUT_DOCUMENT_TAG,
-  OUTPUT_DOCUMENTS_TAG,
-  SCRATCHPAD_TAG,
-} from '@shared/schemas';
+import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
@@ -23,7 +18,7 @@ import {
   getFileDirectory,
 } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatResultCount,
   normalizeLineEndings,
@@ -31,7 +26,6 @@ import {
 import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import {
   DOCUMENT_NAME_REGEX,
-  extractContentFromXMLbyTagMultiple,
   extractDocuments,
   type NamedDocument,
 } from '@utils/text/xmlExtraction';
@@ -40,6 +34,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import {
   assignByContentSimilarity,
   collectLatexFencedBlocks as collectLatexFencedBlocksFromResponse,
+  stripScratchpad,
 } from './extraction/contentSimilarity';
 import {
   extractFilenameHeaderDocuments,
@@ -67,16 +62,6 @@ const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
 
-/** Shared XMLParser configuration for scratchpad output extraction */
-const XML_PARSER_OPTIONS = {
-  ignoreAttributes: false,
-  parseTagValue: true,
-  textNodeName: 'content',
-  attributeNamePrefix: '',
-  processEntities: false,
-  ignoreDeclaration: true,
-} as const;
-
 export class XmlOutputManager {
   constructor(
     private readonly agentConfig: AgentConfig,
@@ -103,16 +88,14 @@ export class XmlOutputManager {
       const suffix =
         result.method === 'latex'
           ? 'from \\documentclass block'
-          : 'using fallback method';
+          : 'from document tags';
       this.logger.debug(
         `Recovered ${OUTPUT_DOCUMENTS_TAG} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
       );
       return result.documents;
     }
 
-    this.logger.debug(
-      `No ${OUTPUT_DOCUMENTS_TAG} found in output file using fallback method`,
-    );
+    this.logger.debug(`No ${OUTPUT_DOCUMENTS_TAG} found in output file`);
     return null;
   }
 
@@ -256,54 +239,24 @@ export class XmlOutputManager {
       const rawOutputContent = normalizeLineEndings(
         yield* fs.readFileString(outputLocation.absolutePath),
       );
+      // The scratchpad is reasoning, not output: a tag it mentions must be
+      // neither counted nor extracted as a document.
+      const response = stripScratchpad(rawOutputContent);
       // Count document tag occurrences with name attributes (case-sensitive to
       // match extraction).
       const expectedDocumentCount =
-        rawOutputContent.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
+        response.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
 
-      // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
-      // parser treats thinking/document bodies as opaque text); the header and
-      // similarity tiers below read the raw response instead.
+      // The document-tag tiers read the CDATA-wrapped variant (which closes
+      // an unclosed <document>); the header and similarity tiers below read
+      // the raw response instead.
       const cdataWrapped = addCdataToTagsMultiple(
-        rawOutputContent,
-        [SCRATCHPAD_TAG, OUTPUT_DOCUMENT_TAG],
+        response,
+        [OUTPUT_DOCUMENT_TAG],
         { tag: OUTPUT_DOCUMENT_TAG, container: OUTPUT_DOCUMENTS_TAG },
       );
 
-      // A response the XML parser refuses is expected input, not a defect:
-      // every later tier below exists to recover from exactly that, so the
-      // parse failure is reported at debug and extraction continues.
-      let documents: NamedDocument[] | null = yield* Effect.try({
-        try: () => {
-          const parser = new XMLParser(XML_PARSER_OPTIONS);
-          const root = parser.parse(cdataWrapped) as Record<string, unknown>;
-          return extractContentFromXMLbyTagMultiple(root, OUTPUT_DOCUMENTS_TAG);
-        },
-        catch: ensureError,
-      }).pipe(
-        Effect.flatMap((parsed) =>
-          Effect.sync((): NamedDocument[] | null => {
-            if (parsed.documents === null) {
-              this.logger.debug(
-                `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML (${parsed.reason}), attempting fallback extraction...`,
-              );
-            }
-            return parsed.documents;
-          }),
-        ),
-        Effect.catch((err) =>
-          Effect.sync((): NamedDocument[] | null => {
-            this.logger.debug(
-              `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
-            );
-            return null;
-          }),
-        ),
-      );
-
-      if (!documents) {
-        documents = this.extractMultipleDocumentsByRegex(cdataWrapped);
-      }
+      let documents = this.extractMultipleDocumentsByRegex(cdataWrapped);
 
       // The files this agent is expected to write: the declared outputFiles
       // when present (single-artifact agents like ocr / paper2slide, whose
