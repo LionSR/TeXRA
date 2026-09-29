@@ -10,11 +10,7 @@ import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents } from '@agent/index';
 import type { AgentConfig } from '@agent/runtime';
-import {
-  CliUsageError,
-  type CliContext,
-  readCliVersion,
-} from '@cli/runtime/cliContext';
+import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
@@ -27,10 +23,6 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import {
-  formatInteractiveTerminalFailure,
-  interactiveTerminalFailure,
-} from '@cli/runtime/terminalRequirements';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -143,27 +135,8 @@ export async function runChat(
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  // `mode === 'headless'` already covers --print / CI / non-TTY stdin
-  // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
-  // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
-  // mount and emit garbled output instead of a usable session).
-  const terminalFailure = interactiveTerminalFailure(context);
-  if (terminalFailure) {
-    // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
-    // actionable advice is "use `texra run`", not "fix your TERM".
-    writeTextStderr(
-      formatInteractiveTerminalFailure(terminalFailure, {
-        headlessMessage:
-          'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
-        dumbTerminalCommand: 'chat',
-        dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
-      }),
-    );
-    return { exitCode: CliExitCode.Usage };
-  }
-
   // Platform signals hand off before Ink mounts; chat keeps the entry runtime.
-  const runtime = await installCliProcessRuntime(context.storageRoot, {
+  const runtime = installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
     minimumLogLevel: context.minimumLogLevel,
   });
@@ -251,7 +224,7 @@ export async function runChat(
         cliMultiAgentPresetId: initialPresetId,
         delegationAgentScope:
           initialResume?.config.delegationAgentScope ?? undefined,
-        version: yield* Effect.promise(readCliVersion),
+        version: context.version,
       });
       if (modelSelection.notice) {
         appendLocalAssistantTranscript(modelSelection.notice);
@@ -336,7 +309,7 @@ export async function runChat(
     changes: runtimeSession.viewChanges,
     onFailure: (error) => {
       sessionViewFailureSignal.set(
-        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit.`,
+        `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
       );
       session.runExitCode = CliExitCode.AgentError;
     },
@@ -416,7 +389,7 @@ export async function runChat(
     }
 
     const meta = sessionMetaSignal.get();
-    if (isRunPending) chatController.stop();
+    if (isRunPending) chatController.stop('user');
     followUpQueue.clear();
     chatController.clearPendingSkills();
     session.clearRunState();
@@ -548,7 +521,7 @@ export async function runChat(
     getApprovalPolicy,
     flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
-    interruptActive: () => chatController.stop(),
+    interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's

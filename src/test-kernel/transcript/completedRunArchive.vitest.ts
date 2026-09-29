@@ -29,7 +29,7 @@ import {
   aggregateId,
   RunSnapshotPayloadSchema,
 } from '@shared/schemas';
-import type { LogLevel, RunId, TodoItem } from '@shared/schemas';
+import type { JsonValue, LogLevel, RunId, TodoItem } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -118,12 +118,12 @@ interface LogRow {
   readonly level: LogLevel;
   readonly messageType: string;
   readonly text?: string;
-  readonly data?: unknown;
+  readonly data?: JsonValue;
 }
 
 function logRow(
   messageType: string,
-  fields: { text?: string; data?: unknown },
+  fields: { text?: string; data?: JsonValue },
 ): LogRow {
   return { level: LOG_LEVELS.INFO, messageType, ...fields };
 }

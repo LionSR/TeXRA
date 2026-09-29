@@ -140,7 +140,7 @@ describe('CLI init command', () => {
     );
     mocks.installCliProcessRuntime
       .mockReset()
-      .mockImplementation(async () => testRuntime());
+      .mockImplementation(() => testRuntime());
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;
     });

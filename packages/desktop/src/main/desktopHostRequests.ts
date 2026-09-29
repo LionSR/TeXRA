@@ -89,6 +89,7 @@ import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
+import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
@@ -99,6 +100,7 @@ interface DesktopHostRequestsOptions {
   files: DesktopFileSelection;
   snapshot: HostSnapshotSource;
   draftRequests: HostDraftRequests;
+  workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   workspacePath: string | undefined;
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
@@ -141,14 +143,10 @@ export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
   const { session, host, run, runtime } = options;
-  /** The rooted filesystems of this window's paper, for the housekeeping
-   *  programs. An open session holds a snapshot of its roots for its whole
-   *  lifetime, so the layer is built once from it here, never from an
-   *  ambient store. */
+  /** The rooted filesystems of this window's paper, built once from the
+   *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(session.roots);
-  // Shared controllers propagate request failures to the dispatcher: the
-  // notice IS the refusal the request answers with, and the request rethrows
-  // it unchanged.
+  // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
   const draftRequests = options.draftRequests.attach(session, (recording) => {
@@ -594,6 +592,8 @@ export function createDesktopHostRequests(
           return yield* Effect.fail(notOnDesktop("The editor's current file"));
         case 'extractFigures':
           return yield* Effect.fail(notOnDesktop('Figure extraction'));
+        case 'workspaceFile':
+          return yield* options.workspaceFile(request.action);
       }
     });
   }

@@ -398,7 +398,10 @@ function handle(
         const detachActiveChildren =
           req.detachActiveChildren ??
           (yield* detachSubagentsOnStop(session.roots));
-        yield* runs.stop(req.runId, { detachActiveChildren }).settlement;
+        yield* runs.stop(req.runId, {
+          detachActiveChildren,
+          reason: req.reason,
+        }).settlement;
       }).pipe(
         // The stop fails when the setting could not be read or the run's
         // terminal row was refused (a live foreign owner, a rolled-back

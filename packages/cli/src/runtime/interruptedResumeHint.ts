@@ -49,9 +49,10 @@ export function tryReadCliCwd(): string | undefined {
 export function writeInterruptedResumeHint(
   hint: string,
   waitForWrite = false,
-): Promise<void> | undefined {
-  if (waitForWrite) return writeTextStderrAndWait(hint);
-  writeTextStderr(hint);
+): Effect.Effect<void> {
+  return waitForWrite
+    ? writeTextStderrAndWait(hint)
+    : Effect.sync(() => writeTextStderr(hint));
 }
 
 /** Format a copyable command after the caller has established resumability. */

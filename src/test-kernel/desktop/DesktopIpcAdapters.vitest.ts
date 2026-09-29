@@ -97,7 +97,7 @@ describe('desktop IPC adapters', () => {
         const send = (command: string) =>
           withProcessServices(
             runtime,
-            onboarding.handleMessage({ command }) ??
+            onboarding.routes[command]?.({ command }) ??
               Effect.die(`${command} is not an onboarding command`),
           );
 
@@ -120,9 +120,7 @@ describe('desktop IPC adapters', () => {
           shouldShow: false,
         });
 
-        expect(
-          onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
-        ).toBeUndefined();
+        expect(onboarding.routes['desktop:showOnboarding']).toBeUndefined();
 
         postToRenderer.mockClear();
         yield* withProcessServices(runtime, onboarding.skipOnboarding());

@@ -20,10 +20,7 @@ import {
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import {
-  followToolEditDecisions,
-  toolEditInteractions,
-} from '@controllers/approval/toolEditHostWiring';
+import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import {
   type ProcessRuntime,
   withProcessServices,
@@ -139,7 +136,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     // (`request.opened` folds into the view), and a surface's `request.decide`
     // settles it there; the staged preview is discarded when the request
     // resolves, whichever way.
-    const spawn = desktopSpawner(runtime, yield* Scope.Scope);
+    const scope = yield* Scope.Scope;
+    const spawn = desktopSpawner(runtime, scope);
     const toolEditApprovals = new ToolEditApprovalController({
       host: new DesktopToolEditApprovalHost({
         ui: {
@@ -160,20 +158,15 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         ),
       ),
     );
-    yield* Effect.forkScoped(
-      followToolEditDecisions(session, runtime, toolEditApprovals),
-      { startImmediately: true },
-    );
     // Attached for the window's life, before the first run of this window
     // asks anything. This host presents only the tool-edit preview; every
     // other request (bash, plan, proposal, retry, question) is listed by the
     // fold and answered by a surface's `request.decide`.
-    yield* Effect.acquireRelease(
-      session.interactions.use({
+    yield* withProcessServices(
+      runtime,
+      attachSessionHost(session, toolEditApprovals, {
         emit: handlePresentationEvent,
-        ...toolEditInteractions(toolEditApprovals, runtime, spawn),
-      }),
-      (detach) => Effect.sync(detach),
+      }).pipe(Scope.provide(scope)),
     );
 
     /**

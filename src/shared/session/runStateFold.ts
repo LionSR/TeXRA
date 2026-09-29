@@ -9,9 +9,6 @@ import { Data, Result } from 'effect';
 import {
   assistantMessageFromResult,
   type Continuation,
-  type MessageSchema,
-  type ModelOrigin,
-  type RemoteOperation,
   type TurnResult,
 } from '@texra-ai/llm/turn';
 import {
@@ -51,7 +48,9 @@ import {
   type SharedRunRow,
   writable,
 } from './runRows';
+import { openAttemptAfter, type OpenAttempt } from './openAttempt';
 import { mutate } from './stateOperation';
+import type { HistoryMessage, Live, RunLedgerRow } from './ledgerTurns';
 import type { z } from 'zod';
 
 /**
@@ -68,30 +67,28 @@ import type { z } from 'zod';
  * by, or a listing names a model the ledger does not. An explicit list
  * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself.
  */
-export type RunLedgerDraft = Extract<
-  SessionEventDraft,
-  {
-    type:
-      | 'run.position'
-      | 'model.message'
-      | 'model.compaction'
-      | 'tool.intent'
-      | 'tool.binding'
-      | 'tool.result'
-      | 'model.retry'
-      | 'run.snapshot'
-      | 'tools.offered'
-      | 'context.blob'
-      | 'hook.outcome'
-      | 'output.produced'
-      | 'tool.start'
-      | 'tool.end'
-      | 'stream.end'
-      | 'request.opened'
-      | 'request.decided'
-      | 'followup.consumed';
-  }
+export type RunLedgerDraft = Live<
+  Extract<SessionEventDraft, { type: RunLedgerDraftType }>
 >;
+type RunLedgerDraftType =
+  | 'run.position'
+  | 'model.message'
+  | 'model.compaction'
+  | 'tool.intent'
+  | 'tool.binding'
+  | 'tool.result'
+  | 'model.retry'
+  | 'run.snapshot'
+  | 'tools.offered'
+  | 'context.blob'
+  | 'hook.outcome'
+  | 'output.produced'
+  | 'tool.start'
+  | 'tool.end'
+  | 'stream.end'
+  | 'request.opened'
+  | 'request.decided'
+  | 'followup.consumed';
 
 export class RunLedgerInconsistent extends Data.TaggedError(
   'RunLedgerInconsistent',
@@ -101,7 +98,8 @@ export class RunLedgerInconsistent extends Data.TaggedError(
     | 'orphan-settlement' // a tool.result under no pending response
     | 'unknown-run-row' // an unrecognized type on the run aggregate
     | 'mismatched-delivery' // a delivering append does not settle its response
-    | 'invalid-mutation'; // a tool.result state operation names no slice or leaves an invalid state
+    | 'invalid-mutation' // a tool.result state operation names no slice or leaves an invalid state
+    | 'unreadable-turn'; // a stored turn this build of the package cannot parse
   readonly detail: string;
   readonly commit: CommitOrdinal | null;
 }> {}
@@ -109,20 +107,6 @@ export class RunLedgerInconsistent extends Data.TaggedError(
 /** The loop state a `run.snapshot` restores. */
 const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
 type LoopState = z.output<typeof LoopStateSchema>;
-type Message = z.output<typeof MessageSchema>;
-
-type OpenAttempt = {
-  readonly invocation: InvocationRef;
-  readonly request: string; // its recorded request's address
-  readonly origin: ModelOrigin;
-  readonly delivery: 'stream' | 'blocking' | 'background';
-  readonly providerResponseId: string | null;
-  readonly returnedModel: string | null;
-  readonly accepted: {
-    readonly operation: RemoteOperation;
-    readonly deadlineAtMs: number;
-  } | null;
-};
 
 type Settlement = Pick<
   ToolResultPayload,
@@ -175,7 +159,7 @@ export type RunState = RunPosition & {
   readonly declinedRoutes: SnapshotRuntime['declinedRoutes'];
   /** Canonical provider history, in order. The pending response's assistant
    *  message enters only with its delivering `append`. */
-  readonly messages: readonly Message[];
+  readonly messages: readonly HistoryMessage[];
   readonly continuation: Continuation | null;
   readonly openAttempt: OpenAttempt | null;
   /** The last completed turn, from its `response` row: the finish reason a
@@ -369,13 +353,13 @@ const opened = (state: RunState | null): state is RunState =>
 
 function foldRow(
   current: RunState | null,
-  row: SessionEvent,
+  row: RunLedgerRow,
   pass: FoldPass,
 ): Fold | null {
   const commit = row.commit;
   /** `messages` with `added` appended: the pass's own array, written once
    *  copied, so a batch of rows appends without re-copying the history. */
-  const appended = (state: RunState, ...added: readonly Message[]) => {
+  const appended = (state: RunState, ...added: readonly HistoryMessage[]) => {
     const messages = writable(pass, state.messages, (m) => [...m]);
     for (const message of added) messages.push(message);
     return messages;
@@ -482,32 +466,17 @@ function foldRow(
         }
         case 'identified':
         case 'accepted':
+        case 'cancelled':
         case 'response': {
           const open = state.openAttempt;
           if (open === null || !sameInvocation(open.invocation, p.invocation)) {
             return outOfOrder(`${p.kind} names no open attempt`);
           }
-          if (p.kind === 'identified') {
-            return Result.succeed({
-              ...state,
-              openAttempt: {
-                ...open,
-                providerResponseId: p.providerResponseId,
-                returnedModel: p.returnedModel,
-              },
-            });
-          }
-          if (p.kind === 'accepted') {
-            return Result.succeed({
-              ...state,
-              openAttempt: {
-                ...open,
-                accepted: {
-                  operation: p.operation,
-                  deadlineAtMs: p.deadlineAtMs,
-                },
-              },
-            });
+          if (p.kind !== 'response') {
+            const next = openAttemptAfter(open, p);
+            return typeof next === 'string'
+              ? outOfOrder(next)
+              : Result.succeed({ ...state, openAttempt: next });
           }
           if (state.pendingResponse !== null) {
             return outOfOrder(
@@ -771,7 +740,7 @@ function foldRow(
  */
 export function foldRunState(
   state: RunState | null,
-  rows: readonly SessionEvent[],
+  rows: readonly RunLedgerRow[],
 ): Result.Result<RunState | null, RunLedgerInconsistent> {
   let current = state;
   const pass: FoldPass = new WeakSet();

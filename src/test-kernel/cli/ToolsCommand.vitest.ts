@@ -61,7 +61,7 @@ describe('CLI tools command', () => {
       .mockReturnValue(Effect.succeed({ globalState, runtime: testRuntime() }));
     mocks.installCliProcessRuntime
       .mockReset()
-      .mockImplementation(async () => testRuntime());
+      .mockImplementation(() => testRuntime());
     mocks.readCliToolGuide.mockReset().mockReturnValue({
       text: 'Install help',
       command: 'echo install',
@@ -135,7 +135,7 @@ describe('CLI tools command', () => {
     // first line of an NDJSON run was not a record and the stream would not
     // parse. The channel writer emits unconditionally now: no gate decides
     // whether such a line is written.
-    mocks.installCliProcessRuntime.mockImplementation(async () => {
+    mocks.installCliProcessRuntime.mockImplementation(() => {
       writeLogEntry({
         level: 'DEBUG',
         fiberId: '',

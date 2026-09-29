@@ -1,5 +1,6 @@
 import { z, type ZodIssue } from 'zod';
 
+import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
 
 /**
@@ -20,7 +21,7 @@ export type FileReference = z.infer<typeof FileReferenceSchema>;
  * Schema for file attachments with optional binary data.
  * Extends FileReferenceSchema with binary payload fields.
  */
-export const ToolFileAttachmentSchema = FileReferenceSchema.extend({
+const ToolFileAttachmentSchema = FileReferenceSchema.extend({
   /** Base64 encoded payload when inline transport is supported */
   base64Data: z.string().optional(),
   /** Raw bytes for providers that require binary uploads */
@@ -118,7 +119,7 @@ const ToolResultSharedFields = {
   attachmentSummary: z.string().optional(),
 };
 
-export const ExecutedToolResultSchema = z.object({
+const ExecutedToolResultSchema = z.object({
   status: z.literal('executed'),
   /** Detailed output from the tool */
   output: z.string().optional(),
@@ -134,7 +135,7 @@ export const ExecutedToolResultSchema = z.object({
   ...ToolResultSharedFields,
 });
 
-export const ErrorToolResultSchema = z.object({
+const ErrorToolResultSchema = z.object({
   status: z.literal('error'),
   /** Error message if tool run failed */
   error: z.string().min(1),
@@ -165,3 +166,59 @@ export class ToolError extends Error {
     this.summary = options?.summary;
   }
 }
+
+/** `ToolFileAttachment.bytes` is a `Uint8Array`, which JSON does not
+ *  reconstruct; a path alone is not recoverable content; a capture failure
+ *  records the omission and its reason rather than a claim that bytes were
+ *  included. */
+export const SettledAttachmentSchema = z.strictObject({
+  path: z.string().min(1),
+  mimeType: z.string().min(1),
+  description: z.string().optional(),
+  content: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('base64'), data: z.base64() }),
+    z.strictObject({
+      kind: z.literal('metadata-only'),
+      reason: z.string().min(1),
+    }),
+  ]),
+});
+
+/**
+ * The follow-up builder's input. Derived from the exported members, never
+ * re-declared: `files` loses its binary payload and `diagnostics` is narrowed
+ * from `z.unknown()` to JSON, because an arbitrary value in a durable payload
+ * is a `JSON.stringify` throw waiting for a cycle or a BigInt.
+ *
+ * `SettledFileSchema` is derived from `ToolFileAttachmentSchema`, NOT rebuilt
+ * as a `strictObject`: its base `FileReferenceSchema` is a `z.looseObject`
+ * and real attachments carry `base64Data`/`bytes` plus whatever extra keys a
+ * tool attached, so a strict rebuild would refuse every executed result that
+ * has an attachment. That same looseness is why the two binary fields go
+ * through a transform rather than `.omit()`: on a loose object an omitted key
+ * is only undeclared, so `base64Data` and the `Uint8Array` in `bytes` would
+ * pass through as unknown keys and land in the row anyway. What the transform
+ * leaves is then validated as JSON, exactly as `diagnostics` is: the loose
+ * keys a tool attached are `unknown`, and a third byte buffer or a cyclic
+ * object among them is the same `JSON.stringify` throw, on a row that is
+ * already committed. The check runs after the transform rather than as a
+ * `.pipe`, so the accepted input stays the real attachment a tool produced.
+ */
+const SettledFileMetadataSchema = ToolFileAttachmentSchema.omit({
+  base64Data: true,
+  bytes: true,
+}).catchall(JsonValueSchema);
+const SettledFileSchema = ToolFileAttachmentSchema.transform(
+  ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
+).superRefine((file, ctx) => {
+  const metadata = SettledFileMetadataSchema.safeParse(file);
+  if (metadata.success) return;
+  for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
+});
+export const SettledToolResultSchema = z.discriminatedUnion('status', [
+  ExecutedToolResultSchema.omit({ files: true }).extend({
+    files: z.array(SettledFileSchema).optional(),
+    diagnostics: JsonValueSchema.optional(),
+  }),
+  ErrorToolResultSchema.extend({ diagnostics: JsonValueSchema.optional() }),
+]);

@@ -44,7 +44,7 @@ await Effect.runPromise(
     catch: ensureError,
   }).pipe(
     Effect.catch((error: unknown) =>
-      Effect.promise(async () => {
+      Effect.sync(() => {
         writeTextStderr(`TeXRA CLI failed: ${cliErrorMessage(error)}`);
         // Usage errors are handled inside runCli (exit 2) and classified run
         // failures are consumed into an exit code at executeCliRequest (never
@@ -52,7 +52,7 @@ await Effect.runPromise(
         // fires on genuinely UNEXPECTED crashes; point the user at the
         // tracker. formatCrashReportLine keeps the report link off the usage
         // path even if a usage error is ever rethrown.
-        const reportLine = formatCrashReportLine(error, await readCliBugsUrl());
+        const reportLine = formatCrashReportLine(error, readCliBugsUrl());
         if (reportLine) writeTextStderr(reportLine);
         process.exitCode = CliExitCode.AgentError;
       }),

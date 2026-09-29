@@ -382,7 +382,7 @@ describe('CLI model-access status lines', () => {
           },
           lines: [
             'ChatGPT preference: On · chatgpt@example.com',
-            'Grok preference: Off · sign in required to enable',
+            'Grok preference: Off · select to sign in and turn on',
             'Kimi Code preference: Off · key required to enable',
             'GLM Coding Plan preference: Off · key required to enable',
             'Otherwise: Your own API keys',

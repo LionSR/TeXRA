@@ -47,7 +47,7 @@ const mocks = vi.hoisted(() => ({
   registerBuiltinSlashCommands: vi.fn(),
   render: vi.fn(),
   resolveChatDefaults: vi.fn(),
-  runCliPlatformShutdownSequence: vi.fn(),
+  cliPlatformShutdownSequence: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
   startRootRun: vi.fn(),
@@ -86,7 +86,8 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
 vi.mock('@cli/runtime/initPlatform', () => ({
   handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
   initCliPlatform: mocks.initCliPlatform,
-  runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
+  cliPlatformShutdownSequence: mocks.cliPlatformShutdownSequence,
+  runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
@@ -278,13 +279,11 @@ describe('runChat signal ownership wiring', () => {
         return cliServices();
       }),
     );
-    mocks.installCliProcessRuntime.mockImplementation(async () =>
-      testRuntime(),
-    );
+    mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
     });
-    mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
+    mocks.cliPlatformShutdownSequence.mockReturnValue(Effect.void);
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
     mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
     mocks.resolveChatDefaults.mockResolvedValue({

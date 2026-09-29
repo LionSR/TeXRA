@@ -135,14 +135,9 @@ export function warnApprovalDenied(
 const askCliApprovalQuestion = Effect.fn(
   'approvalPrompts.askCliApprovalQuestion',
 )(function* (context: CliContext, request: CliPromptRequest) {
-  // The injected prompt is a Promise port the tests supply; the terminal
-  // prompt is already an Effect, so only the former needs a lift.
   const injected = context.approvalPrompt;
   return injected
-    ? yield* Effect.tryPromise({
-        try: () => injected(request),
-        catch: (cause) => cause as Error,
-      })
+    ? yield* injected(request)
     : yield* askCliQuestion(
         request.summary
           ? `${request.summary}\n${request.prompt}`

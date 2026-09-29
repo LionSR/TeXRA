@@ -40,7 +40,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
+import {
+  SettingsViewInboundMessageSchema,
+  type SettingsViewOutboundMessage,
+} from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
@@ -63,7 +66,7 @@ type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
  * webview validates, not `unknown`, so a builder's Effect passed without
  * `yield*` is a compile error rather than a serialized Effect it drops.
  */
-function postToWebview(
+export function postToWebview(
   webview: vscode.Webview,
   message: SettingsViewOutboundMessage,
 ): Effect.Effect<void, Error> {
@@ -266,20 +269,24 @@ export class SettingsViewMessageHandler {
     });
   }
 
-  /** Validate at the webview edge and run the selected program once. */
+  /**
+   * Validate at the webview edge and settle the selected program; the host's
+   * event listener is the one boundary that runs it.
+   */
   public handleMessage(
     message: unknown,
     webviewView: SettingsWebview,
-  ): Promise<void> {
-    this.activeView = webviewView;
-    const program = this.body.handleMessage(message, this.handlerRegistry);
-    return this.runtime.runPromise(
-      program ??
-        Effect.logDebug('Message validation failed').pipe(
-          Effect.annotateLogs({ data: message }),
-          withLogChannel(this.channel),
-        ),
-    );
+  ): Effect.Effect<void, never, ProcessServices> {
+    return Effect.suspend(() => {
+      this.activeView = webviewView;
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      return parsed.success
+        ? this.body.handleMessage(parsed.data, this.handlerRegistry)
+        : Effect.logDebug('Message validation failed').pipe(
+            Effect.annotateLogs({ data: message, error: parsed.error.message }),
+            withLogChannel(this.channel),
+          );
+    });
   }
 
   private handleRequestModelAccess(

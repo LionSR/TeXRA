@@ -8,8 +8,7 @@ import {
 } from '../shared/desktopLogMessages.js';
 import type { SaveDialogOptions, SaveDialogReturnValue } from 'electron';
 import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
+  DesktopCommandRoutes,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 
@@ -32,7 +31,7 @@ export interface DesktopLogIpcOptions {
 export function createDesktopLogIpc(
   renderer: DesktopRenderer,
   options: DesktopLogIpcOptions,
-): DesktopMessageHandler {
+): DesktopCommandRoutes {
   function postSnapshot(): DesktopLogSnapshot {
     const log = options.readLog();
     renderer.postToRenderer({
@@ -88,17 +87,10 @@ export function createDesktopLogIpc(
     );
 
   return {
-    handleMessage(message: DesktopCommandMessage) {
-      switch (message.command) {
-        case DESKTOP_LOG_COMMANDS.REQUEST_LOG:
-          return Effect.sync(postSnapshot);
-        case DESKTOP_LOG_COMMANDS.COPY_LOG:
-          return Effect.suspend(() => copyLog(postSnapshot().text));
-        case DESKTOP_LOG_COMMANDS.EXPORT_LOG:
-          return Effect.suspend(() => exportLog(postSnapshot().text));
-        default:
-          return undefined;
-      }
-    },
+    [DESKTOP_LOG_COMMANDS.REQUEST_LOG]: () => Effect.sync(postSnapshot),
+    [DESKTOP_LOG_COMMANDS.COPY_LOG]: () =>
+      Effect.suspend(() => copyLog(postSnapshot().text)),
+    [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () =>
+      Effect.suspend(() => exportLog(postSnapshot().text)),
   };
 }

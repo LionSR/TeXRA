@@ -22,7 +22,6 @@ import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 import {
-  Cause,
   Clock,
   Duration,
   Scope,
@@ -40,7 +39,6 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
-  DISPLAY_EVENT_TYPES,
   edgesOf,
   isDisplaySessionEvent,
   validateInquiryTransition,
@@ -89,6 +87,7 @@ import {
   type ProjectionOp,
 } from './projections';
 import {
+  DISPLAY_READ_TYPES,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
@@ -99,11 +98,13 @@ import {
   decodeRow,
   encodeDraft,
   prepareEventDraft,
+  settleCards,
   unreadableKinds,
   verdictBook,
   type EncodedRow,
 } from './rowCodec';
-import { assertStoreFormat, openStore } from './storeSchema';
+import { isDamaged } from './storeAside';
+import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -234,7 +235,7 @@ export const databaseLayer = (
       const decodedRows = (statement: string, params: readonly unknown[]) =>
         exec(statement, params).pipe(
           Effect.flatMap(verdicts.decodeAll),
-          Effect.map(({ events }) => events),
+          Effect.map(({ events }) => settleCards(events)),
         );
       const refuseBlocked = verdicts.refuse;
       const currentCommit = exec(highWater, []).pipe(
@@ -279,9 +280,7 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      const displayTypes = JSON.stringify(DISPLAY_EVENT_TYPES);
-      // `readAll` narrowed by type, off `event_type_commit`, plus the
-      // projected rows. The range binds once, on the outer select.
+      // `readAll` narrowed by type, plus projected rows; the range binds once.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -323,12 +322,9 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // A failed read (a busy wait past the timeout, an I/O error) is logged
-      // and the poll backs off, doubling from 250 ms to at most 30 s over a
-      // streak of failures and resetting on the first healthy tick, so a
-      // blip neither ends change notification nor slows it afterwards. The
-      // version is checkpointed only once the commit behind it is read, so a
-      // tick that fails between the two reads retries both.
+      // A failed read is logged and the poll backs off, 250 ms doubling to
+      // 30 s over a streak, reset on the first healthy tick. The version is
+      // checkpointed only once the commit behind it is read.
       let failures = 0;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
@@ -632,12 +628,9 @@ export const databaseLayer = (
             }),
           ),
         );
-      /**
-       * Bring every projection to this build's version and to the store's
-       * high-water commit before a read of it: a projection another build
-       * versioned differently is emptied and rebuilt, and one that is behind
-       * catches up, 1,000 rows per transaction.
-       */
+      /** Before a read, a projection another build versioned is emptied and
+       *  rebuilt, and one behind the high-water commit catches up, 1,000
+       *  rows per transaction. */
       const ensureProjections = Effect.gen(function* () {
         if (yield* query(projectionsCurrent)) return;
         let done = false;
@@ -898,9 +891,8 @@ export const databaseLayer = (
             );
           }
           if (edges.closes) {
-            // C5/C9: admission must hold every open dependent claim.
-            // This check shares the write transaction with the tombstone
-            // and recursive closure, so no claimant can change between them.
+            // C5/C9: admission must hold every open dependent claim, in the
+            // tombstone's transaction, so no claimant can change between.
             const unowned = yield* execOne(unownedDependent, [
               ...columns,
               identity.ownerId,
@@ -944,7 +936,7 @@ export const databaseLayer = (
           projected(
             Effect.gen(function* () {
               const rows = yield* decodedRows(display, [
-                displayTypes,
+                DISPLAY_READ_TYPES,
                 fromCommit,
                 yield* currentCommit,
               ]);
@@ -988,7 +980,7 @@ export const databaseLayer = (
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
-              displayTypes,
+              DISPLAY_READ_TYPES,
               ...aggregateColumns(id),
               fromSeq,
             ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
@@ -1217,6 +1209,7 @@ export const databaseLayer = (
                       }
                       if (digests.length > 0)
                         yield* exec(collectBlobs, [JSON.stringify(digests)]);
+                      yield* reclaimFreePages(sql);
                     }),
                   );
                   yield* query(verdicts.retain);
@@ -1264,12 +1257,34 @@ export const databaseLayer = (
     }),
   ).pipe(Layer.provide(Reactivity.layer));
 
+/** Whether another process has the store open (its exclusive lock is
+ *  refused), or the file is no SQLite store at all (NOTADB, CORRUPT). */
+export const storeOpenElsewhere = (filename: string) =>
+  Effect.scoped(
+    Effect.flatMap(
+      SqliteClient.make({ filename, disableWAL: true, busyTimeout: 0 }),
+      (sql) =>
+        Effect.andThen(
+          sql.unsafe('PRAGMA locking_mode = EXCLUSIVE'),
+          sql.unsafe('BEGIN EXCLUSIVE'),
+        ),
+    ),
+  ).pipe(
+    Effect.as('free' as const),
+    Effect.catchIf(isBusy, () => Effect.succeed('open' as const)),
+    Effect.catchCause((cause) =>
+      isDamaged(cause)
+        ? Effect.succeed('unreadable' as const)
+        : Effect.failCause(cause),
+    ),
+    Effect.provide(Reactivity.layer),
+  );
+
 /**
  * The process's handle on the global storage root: one connection, schema and
- * `data_version` poll for every application record of that root, built with
- * the runtime the entry hands it to and closed with it. Building it creates
- * the directory, the SQLite file and the poll fiber, so an entry that must
- * create none passes a refusing layer (`installProcessRuntime`'s option).
+ * `data_version` poll for every application record of that root, closed with
+ * the entry's runtime. Building it creates the directory, the file and the
+ * poll fiber, so an entry that must create none passes a refusing layer.
  */
 export const globalDatabaseLayer = (
   storage: string,
@@ -1286,26 +1301,10 @@ export const globalDatabaseLayer = (
     ),
   );
 
-/** Preserve interruption and each SQL/validation failure at the database boundary. */
+/** Interruption stays; a failure or a driver defect becomes `failed`'s. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
   return <A, EOp, R>(
     operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
-    operation.pipe(
-      Effect.catchCause((cause) =>
-        Effect.failCause(
-          Cause.fromReasons(
-            cause.reasons.map((reason) =>
-              reason._tag === 'Interrupt'
-                ? reason
-                : Cause.makeFailReason(
-                    failed(
-                      reason._tag === 'Fail' ? reason.error : reason.defect,
-                    ),
-                  ),
-            ),
-          ),
-        ),
-      ),
-    );
+    operation.pipe(Effect.catchDefect(Effect.fail), Effect.mapError(failed));
 }

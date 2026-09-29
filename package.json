@@ -61,7 +61,8 @@
     "check:desktop-installers": "node scripts/verify-desktop.mjs installers",
     "sync:notice": "node scripts/sync-notice-files.mjs",
     "check:notice": "node scripts/sync-notice-files.mjs --check",
-    "sync:remote-agents": "node scripts/sync-remote-agents.mjs"
+    "sync:remote-agents": "node scripts/sync-remote-agents.mjs",
+    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.2",

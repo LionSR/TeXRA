@@ -611,7 +611,7 @@ describe('CLI run command, workflow agents', () => {
             ['paper.tex'],
             [],
             root,
-            { readStdinText: expect.any(Function) },
+            { readStdinText: expect.anything() },
             expect.any(Function),
           );
           const config = mocks.executeCliConfig.mock.calls[0]?.[0];
@@ -1450,7 +1450,8 @@ describe('CLI run command, workflow agents', () => {
                   [],
                   () => true,
                 );
-              options.onInterruptedRunFinalized?.('abc010');
+              yield* options.onInterruptedRunFinalized?.('abc010') ??
+                Effect.void;
               return run;
             }),
         );

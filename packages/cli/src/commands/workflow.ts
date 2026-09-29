@@ -335,8 +335,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
-    ): Promise<void> | undefined => {
-      if (!recoveryInputIsDurable || resumeHintWritten) return;
+    ): Effect.Effect<void> => {
+      if (!recoveryInputIsDurable || resumeHintWritten) return Effect.void;
       resumeHintWritten = true;
       const hint = formatInterruptedResumeHint(
         runContext,
@@ -358,7 +358,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
             canAdvertiseInterruptedRun,
           )
         )
-          writeResumeHint(runId);
+          yield* writeResumeHint(runId);
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,

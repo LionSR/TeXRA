@@ -6,10 +6,7 @@ import {
   DesktopCloseProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 /** What the window lets the renderer do to its open projects. */
 export interface DesktopProjectsIpcActions {
@@ -24,35 +21,21 @@ export interface DesktopProjectsIpcActions {
 
 /**
  * Renderer traffic about projects: the list it asks for once it boots, and
- * the select and close requests. safeParse, not parse: dispatch has no
- * catch, so a malformed message is dropped, not an unhandled rejection.
+ * the select and close requests.
  */
 export function createDesktopProjectsIpc(
   actions: DesktopProjectsIpcActions,
-): DesktopMessageHandler {
+): DesktopCommandRoutes {
   return {
-    handleMessage(message: DesktopCommandMessage) {
-      switch (message.command) {
-        case DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS:
-          return Effect.sync(() => actions.postProjects());
-        case DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT: {
-          const parsed = DesktopSelectProjectMessageSchema.safeParse(message);
-          return parsed.success
-            ? actions.selectProject(parsed.data.key)
-            : Effect.void;
-        }
-        case DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT: {
-          const parsed = DesktopCloseProjectMessageSchema.safeParse(message);
-          return parsed.success
-            ? actions.closeProject(
-                parsed.data.key,
-                parsed.data.hasUnsavedChanges,
-              )
-            : Effect.void;
-        }
-        default:
-          return undefined;
-      }
-    },
+    [DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS]: () =>
+      Effect.sync(() => actions.postProjects()),
+    [DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT]: parsedRoute(
+      DesktopSelectProjectMessageSchema,
+      (message) => actions.selectProject(message.key),
+    ),
+    [DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT]: parsedRoute(
+      DesktopCloseProjectMessageSchema,
+      (message) => actions.closeProject(message.key, message.hasUnsavedChanges),
+    ),
   };
 }

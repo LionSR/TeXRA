@@ -5,6 +5,8 @@ import { nothing, type TemplateResult } from 'lit';
 
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { Theme } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
+import type { HostOutcome } from '@shared/session/sessionFrames';
 import { postMessage } from '@shared/hostBridge';
 
 import {
@@ -16,16 +18,12 @@ import {
 } from '../shared/desktopShellState';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { createEditorPane } from './editorPane';
-import {
-  disposePendingFileRequests,
-  requestFileRead,
-  requestFileWrite,
-  requestFiles,
-} from './fileRequests';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
 import { createWorkbenchController } from './workbenchController';
+
+const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
 export function createProjectWorkbench(options: {
   session: string;
@@ -79,10 +77,39 @@ export function createProjectWorkbench(options: {
   }
   const send = (command: string, payload?: Record<string, unknown>) =>
     postMessage(command, { ...payload, session });
+  // The editor's file I/O is a host request answered to the pane; the
+  // session's close fails whatever is still pending.
+  const unexpected = (outcome: HostOutcome) =>
+    new Error(`The host answered a file request with ${outcome.kind}.`);
+  // A read or a list on a hung mount would otherwise leave the pane's refresh
+  // pending until the project closes. A write is never abandoned: the host
+  // cannot cancel it, and a retry must not race a write still in flight.
+  const workspaceFile = (
+    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
+  ) =>
+    surfaces.answer(
+      {
+        kind: 'host.request',
+        session,
+        requestId: crypto.randomUUID(),
+        request: { kind: 'workspaceFile', action },
+      },
+      action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
+    );
   const editorPane = createEditorPane({
-    listFiles: (directory) => requestFiles(session, directory),
-    readFile: (path) => requestFileRead(session, path),
-    writeFile: (path, contents) => requestFileWrite(session, path, contents),
+    listFiles: async (directory) => {
+      const outcome = await workspaceFile({ kind: 'list', directory });
+      if (outcome.kind !== 'entries') throw unexpected(outcome);
+      return outcome.entries;
+    },
+    readFile: async (path) => {
+      const outcome = await workspaceFile({ kind: 'read', path });
+      if (outcome.kind !== 'contents') throw unexpected(outcome);
+      return outcome.contents;
+    },
+    writeFile: async (path, contents) => {
+      await workspaceFile({ kind: 'write', path, contents });
+    },
     onRequestOpen: (path) =>
       updateState(
         openWorkbenchTab(getState(), { kind: 'editor', target: path }),
@@ -150,7 +177,6 @@ export function createProjectWorkbench(options: {
     dispose() {
       disposed = true;
       editorPane.dispose();
-      disposePendingFileRequests(session);
       terminalPane.disposeAll();
       for (const tab of getState().workbenchTabs) {
         if (tab.kind === 'pdf') pdfPane.dispose(tab.id);

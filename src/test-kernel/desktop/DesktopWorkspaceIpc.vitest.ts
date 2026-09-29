@@ -18,17 +18,12 @@ import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 let fixtureRoot = '';
 let workspacePath = '';
 let externalPath = '';
 let missingExternalPath = '';
-
-// Editor file I/O is request/response RPC correlated by request id; the main
-// process echoes the renderer-supplied id in its reply.
-const REQUEST_ID = '123e4567-e89b-42d3-a456-426614174000';
 
 function createPtyHost(): DesktopPtyHost {
   return {
@@ -55,7 +50,6 @@ type WorkspaceIpcOptions = Parameters<typeof createDesktopWorkspaceIpc>[1];
 function createIpc(
   postToRenderer: (message: unknown) => void,
   overrides: Partial<WorkspaceIpcOptions> = {},
-  onAsyncError: (error: unknown) => void = vi.fn(),
 ) {
   const runtime = testRuntime();
   const options: WorkspaceIpcOptions = {
@@ -73,37 +67,10 @@ function createIpc(
   runtime.runSync(
     Effect.forkIn(ipc.followFilesWritten, scope, { startImmediately: true }),
   );
-  return {
-    ...ipc,
-    // Runs the answered program the way the window's router does: forked,
-    // with its failure handed to the async-error reporter.
-    handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
-      const program = ipc.handleMessage({ ...message, session: workspacePath });
-      if (!program) return false;
-      runtime.runFork(
-        program.pipe(
-          Effect.catch((error) => Effect.sync(() => onAsyncError(error))),
-        ),
-      );
-      return true;
-    },
-  };
+  return ipc;
 }
 
 const liveScopes: Scope.Closeable[] = [];
-
-/** Resolve the returned promise the next time `mock` is called with an
- *  argument matching `predicate`. The mock's own return stays undefined. */
-function nextCall(
-  mock: ReturnType<typeof vi.fn>,
-  predicate: (arg: unknown) => boolean,
-): Promise<void> {
-  const called = createDeferred();
-  mock.mockImplementationOnce((arg: unknown) => {
-    if (predicate(arg)) called.resolve();
-  });
-  return called.promise;
-}
 
 describe('desktop workspace IPC', () => {
   const tempDirs = useTempDirs();
@@ -176,131 +143,85 @@ describe('desktop workspace IPC', () => {
       }),
   );
 
-  it('reads regular workspace files but rejects symlink targets outside the workspace', async () => {
-    const postToRenderer = vi.fn();
-    const onAsyncError = vi.fn();
-    const ipc = createIpc(postToRenderer, {}, onAsyncError);
+  it.effect(
+    'reads regular workspace files but rejects symlink targets outside the workspace',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
 
-    const fileRead = nextCall(
-      postToRenderer,
-      (message) =>
-        (message as { command?: string }).command ===
-          DESKTOP_WORKSPACE_COMMANDS.FILE_READ &&
-        (message as { path?: string }).path === 'paper.tex',
-    );
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
-      requestId: REQUEST_ID,
-      path: 'paper.tex',
-    });
-    await fileRead;
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-      requestId: REQUEST_ID,
-      path: 'paper.tex',
-      contents: 'inside',
-    });
+        expect(
+          yield* ipc
+            .file({ kind: 'read', path: 'paper.tex' })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'contents', contents: 'inside' });
 
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
-      requestId: REQUEST_ID,
-      path: 'linked.tex',
-    });
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
-      requestId: REQUEST_ID,
-      path: 'linked.tex',
-      contents: 'overwritten',
-    });
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
-      requestId: REQUEST_ID,
-      path: 'dangling-linked.tex',
-      contents: 'created outside',
-    });
-
-    const asyncErrorsReported = createDeferred();
-    onAsyncError.mockImplementation(() => {
-      if (onAsyncError.mock.calls.length === 3) asyncErrorsReported.resolve();
-    });
-    await asyncErrorsReported.promise;
-    expect(onAsyncError).toHaveBeenCalledTimes(3);
-    expect(postToRenderer).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-        path: 'linked.tex',
+        const refused = [
+          ipc.file({ kind: 'read', path: 'linked.tex' }),
+          ipc.file({
+            kind: 'write',
+            path: 'linked.tex',
+            contents: 'overwritten',
+          }),
+          ipc.file({
+            kind: 'write',
+            path: 'dangling-linked.tex',
+            contents: 'created outside',
+          }),
+        ];
+        for (const program of refused) {
+          const exit = yield* Effect.exit(
+            program.pipe(Effect.provide(context)),
+          );
+          expect(Exit.isFailure(exit)).toBe(true);
+        }
+        expect(readFileSync(externalPath, 'utf8')).toBe('outside');
+        expect(existsSync(missingExternalPath)).toBe(false);
       }),
-    );
-    expect(postToRenderer).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
-        path: 'linked.tex',
+  );
+
+  it.effect(
+    'keeps a UTF-8 byte-order mark when reading, so a save cannot delete it',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
+
+        writeFileSync(
+          join(workspacePath, 'bom.tex'),
+          Buffer.concat([
+            Buffer.from([0xef, 0xbb, 0xbf]),
+            Buffer.from('hi', 'utf8'),
+          ]),
+        );
+        expect(
+          yield* ipc
+            .file({ kind: 'read', path: 'bom.tex' })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'contents', contents: '\uFEFFhi' });
       }),
-    );
-    expect(readFileSync(externalPath, 'utf8')).toBe('outside');
-    expect(existsSync(missingExternalPath)).toBe(false);
-  });
+  );
 
-  it('keeps a UTF-8 byte-order mark when reading, so a save cannot delete it', async () => {
-    const postToRenderer = vi.fn();
-    const ipc = createIpc(postToRenderer);
+  it.effect(
+    'recreates a workspace file deleted after the editor loaded it',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
+        rmSync(join(workspacePath, 'paper.tex'));
 
-    writeFileSync(
-      join(workspacePath, 'bom.tex'),
-      Buffer.concat([
-        Buffer.from([0xef, 0xbb, 0xbf]),
-        Buffer.from('hi', 'utf8'),
-      ]),
-    );
-    const bomRead = nextCall(
-      postToRenderer,
-      (message) =>
-        (message as { command?: string }).command ===
-          DESKTOP_WORKSPACE_COMMANDS.FILE_READ &&
-        (message as { path?: string }).path === 'bom.tex',
-    );
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
-      requestId: REQUEST_ID,
-      path: 'bom.tex',
-    });
-    await bomRead;
-    expect(postToRenderer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-        path: 'bom.tex',
-        contents: '\uFEFFhi',
+        expect(
+          yield* ipc
+            .file({
+              kind: 'write',
+              path: 'paper.tex',
+              contents: 'recovered buffer',
+            })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'done' });
+        expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          'recovered buffer',
+        );
       }),
-    );
-  });
-
-  it('recreates a workspace file deleted after the editor loaded it', async () => {
-    const postToRenderer = vi.fn();
-    const ipc = createIpc(postToRenderer);
-    rmSync(join(workspacePath, 'paper.tex'));
-
-    const fileWritten = nextCall(
-      postToRenderer,
-      (message) =>
-        (message as { command?: string }).command ===
-          DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN &&
-        (message as { path?: string }).path === 'paper.tex',
-    );
-    ipc.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
-      requestId: REQUEST_ID,
-      path: 'paper.tex',
-      contents: 'recovered buffer',
-    });
-
-    await fileWritten;
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
-      requestId: REQUEST_ID,
-      path: 'paper.tex',
-    });
-    expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
-      'recovered buffer',
-    );
-  });
+  );
 });

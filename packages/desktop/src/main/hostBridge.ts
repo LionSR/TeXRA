@@ -1,66 +1,69 @@
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
 import { assertKnownOutboundMessage } from '@shared/utils/dispatcher';
+import type { DownMessage } from '@shared/session/sessionFrames';
 
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages.js';
 import {
+  ELECTRON_SESSION_MESSAGE_CHANNEL,
+  ELECTRON_SESSION_PUSH_CHANNEL,
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../shared/hostBridgeChannels.js';
 
-/** The session protocol's messages are keyed by `kind`; every other push
- *  on the channel by `command`. */
-function isSessionMessage(message: unknown): boolean {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'kind' in message &&
-    !('command' in message)
-  );
-}
-
 interface DesktopHostBridgeOptions {
-  onRendererMessage?: (message: unknown, window: BrowserWindow) => void;
+  /** A `desktop:*` or settings-view command from the renderer. */
+  onCommand(message: unknown): void;
+  /** An `UpMessage` from the renderer's session transport. */
+  onSession(message: unknown): void;
 }
 
-interface DesktopHostBridge {
+export interface DesktopHostBridge {
+  /** A `desktop:*` or settings-view command push. */
   postToRenderer(message: unknown): void;
+  postSession(message: DownMessage): void;
   dispose(): void;
 }
 
 export function installDesktopHostBridge(
   window: BrowserWindow,
-  options: DesktopHostBridgeOptions = {},
+  options: DesktopHostBridgeOptions,
 ): DesktopHostBridge {
   let disposed = false;
-  const listener = (event: IpcMainEvent, message: unknown) => {
-    if (event.sender !== window.webContents) return;
-    options.onRendererMessage?.(message, window);
+  const listen = (channel: string, handle: (message: unknown) => void) => {
+    const listener = (event: IpcMainEvent, message: unknown) => {
+      if (event.sender === window.webContents) handle(message);
+    };
+    ipcMain.on(channel, listener);
+    return () => ipcMain.off(channel, listener);
   };
-  ipcMain.on(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, listener);
+  const stops = [
+    listen(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, options.onCommand),
+    listen(ELECTRON_SESSION_MESSAGE_CHANNEL, options.onSession),
+  ];
 
   const dispose = () => {
     if (disposed) return;
     disposed = true;
-    ipcMain.off(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, listener);
+    for (const stop of stops) stop();
   };
   window.once('closed', dispose);
+  const push = (channel: string, message: unknown) => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+    window.webContents.send(channel, message);
+  };
   return {
     postToRenderer: (message) => {
       // Dev/test-only shape check (no-op in prod, see
-      // `assertKnownOutboundMessage`). Desktop multiplexes the session
-      // protocol's three down messages (frames, responses, surface
-      // actions; PRD 8), which the session bridge builds as typed
-      // `DownMessage`s, and the desktop-only `desktop:*` commands
+      // `assertKnownOutboundMessage`): the desktop-only `desktop:*` commands
       // (workspace file I/O, terminal, overlays, shell, logs, onboarding,
-      // papers) onto this one renderer-push channel; the settings view's
-      // pushes pass through unchecked, as before.
-      if (!isSessionMessage(message)) {
-        assertKnownOutboundMessage([DesktopOutboundMessageSchema], message);
-      }
-      if (window.isDestroyed() || window.webContents.isDestroyed()) return;
-      window.webContents.send(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
+      // papers); the settings view's pushes pass through unchecked, as
+      // before.
+      assertKnownOutboundMessage([DesktopOutboundMessageSchema], message);
+      push(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
     },
+    // Typed `DownMessage`s the session bridge builds: nothing to check.
+    postSession: (message) => push(ELECTRON_SESSION_PUSH_CHANNEL, message),
     dispose,
   };
 }

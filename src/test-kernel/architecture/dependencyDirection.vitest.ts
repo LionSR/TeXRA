@@ -122,16 +122,17 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // outermost boundary of the process, so there is nothing above it to run on
   // and no runtime left once the drain has disposed the process one.
   'packages/cli/src/bin/texra.ts': 1,
-  // `contextFromArgs`, the CLI's pre-runtime context edge: the one program it
-  // runs builds the whole `CliContext`, which opens the project and user
-  // `config.json` stores BEFORE `initCliPlatform` (and with it
-  // `installCliProcessRuntime`), so no process runtime exists to borrow; the
-  // program needs the filesystem and the process environment (as a
-  // ConfigProvider). `initCliPlatform` installs
-  // that same provider as the workspace roots' config, so every post-init
-  // reader resolves its rows through the roots rather than coming through
-  // here. Its three citty callers take the resolved context as a value.
-  'packages/cli/src/commands/_helpers/context.ts': 1,
+  // `defineCliCommand`'s first step, the CLI's pre-runtime context edge: the
+  // one program it runs (`contextFromArgs`) builds the whole `CliContext`,
+  // which opens the project and user `config.json` stores BEFORE
+  // `initCliPlatform` (and with it `installCliProcessRuntime`), so no process
+  // runtime exists to borrow; the program needs the filesystem and the process
+  // environment (as a ConfigProvider). `initCliPlatform` installs that same
+  // provider as the workspace roots' config, so every post-init reader
+  // resolves its rows through the roots rather than coming through here. Every
+  // command but `doctor` enters through this one run and hands the resolved
+  // context to its builder as a value.
+  'packages/cli/src/commands/_helpers/defineCliCommand.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
   // process-runtime install with the plane as one of the values that install
@@ -139,7 +140,9 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // program reads no service.
   'packages/cli/src/runtime/supabaseAuth.ts': 1,
   // `texra doctor`, the one command whose whole job is to report on a process
-  // whose platform may not have initialized. Its one program folds
+  // whose platform may not have initialized. Its one program builds the
+  // context (`contextFromArgs`, which `defineCliCommand` runs for every other
+  // command), then folds
   // `initCliPlatform`'s outcome into data and renders the report from it, and
   // it can borrow a process runtime at neither end: none exists when the fold
   // begins, and an init that fails disposes the runtime it installed before it

@@ -593,7 +593,9 @@ describe('headless delegation', () => {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
       untrackRun(session.runs, runId);
-      await Effect.runPromise(session.runs.stop(runId).settlement);
+      await Effect.runPromise(
+        session.runs.stop(runId, { reason: 'user' }).settlement,
+      );
     }
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);

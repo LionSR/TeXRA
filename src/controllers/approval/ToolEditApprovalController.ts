@@ -14,7 +14,7 @@
  * at a host boundary (the Effect-4 migration's R1, frozen at zero below one
  * by `config/ratchets/effect-migration-baseline.json`) and this controller is
  * host-agnostic, so the host that owns a controller supplies the fiber
- * (`toolEditHostWiring.ts` is the wiring both hosts share).
+ * (`attachSessionHost.ts` is the wiring both hosts share).
  *
  * Two shapes recur. **Admission is synchronous, the work is an Effect**: the
  * bookkeeping — the map write, the `Deferred` a later caller joins — happens

@@ -675,6 +675,10 @@ export function createExtensionHostRequests(
         case 'extractFigures':
           yield* commandVerb('texra.extractTikzFigures');
           return done;
+        case 'workspaceFile':
+          return yield* Effect.fail(
+            new Rejected({ reason: 'The file editor is a desktop feature.' }),
+          );
       }
     });
   }

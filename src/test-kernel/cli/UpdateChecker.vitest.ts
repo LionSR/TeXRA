@@ -10,6 +10,8 @@ import {
   notifyCliUpdate,
   resetCliUpdateNotifyLatchForTests,
 } from '@cli/runtime/updateChecker';
+import { withProcessServices } from '@platform/processRuntime';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
@@ -217,8 +219,8 @@ describe('notifyCliUpdate', () => {
 
   effectIt.live('runs the check at most once per process', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() => notifyCliUpdate(context));
-      yield* Effect.promise(() => notifyCliUpdate(context));
+      yield* withProcessServices(testRuntime(), notifyCliUpdate(context));
+      yield* withProcessServices(testRuntime(), notifyCliUpdate(context));
 
       expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
     }),

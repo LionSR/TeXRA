@@ -1,20 +1,40 @@
+import { Effect } from 'effect';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { Effect } from 'effect';
+import type { z } from 'zod';
 
 export type DesktopCommandMessage = { command: string } & Record<
   string,
   unknown
 >;
 
-/**
- * One inbound command namespace. It answers the program for a command it
- * owns, or `undefined` when the command is not its own; the window's one
- * router runs that program and reports whatever it fails with.
- */
-export interface DesktopMessageHandler {
-  handleMessage(
-    message: DesktopCommandMessage,
-  ): Effect.Effect<void, Error, ProcessServices> | undefined;
+/** The program one inbound command runs. The window's one router runs it and
+ *  reports whatever it fails with. */
+export type DesktopCommandRoute = (
+  message: DesktopCommandMessage,
+) => Effect.Effect<void, Error, ProcessServices>;
+
+/** The commands one surface owns, by name. A command with no entry here has
+ *  no owner, and the router says so. */
+export type DesktopCommandRoutes = Readonly<
+  Record<string, DesktopCommandRoute>
+>;
+
+/** A route whose message must match `schema`. One that does not is renderer
+ *  drift: logged, and no program runs. */
+export function parsedRoute<S extends z.ZodType>(
+  schema: S,
+  handle: (message: z.output<S>) => Effect.Effect<void, Error, ProcessServices>,
+): DesktopCommandRoute {
+  return (message) => {
+    const parsed = schema.safeParse(message);
+    return parsed.success
+      ? handle(parsed.data)
+      : Effect.sync(() =>
+          console.warn(
+            `Dropped a malformed ${message.command} message: ${parsed.error.message}`,
+          ),
+        );
+  };
 }
 
 export interface DesktopRenderer {

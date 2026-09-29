@@ -68,7 +68,7 @@ describe('CLI auth command', () => {
       .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
     mocks.installCliProcessRuntime
       .mockReset()
-      .mockImplementation(async () => testRuntime());
+      .mockImplementation(() => testRuntime());
     mocks.signOutCliSubscription
       .mockReset()
       .mockReturnValue(Effect.succeed({}));

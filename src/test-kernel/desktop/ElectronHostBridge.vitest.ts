@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared host bridge
 import {
+  ELECTRON_SESSION_MESSAGE_CHANNEL,
+  ELECTRON_SESSION_PUSH_CHANNEL,
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '@desktop/shared/hostBridgeChannels';
@@ -23,11 +25,13 @@ interface MainHostBridgeModule {
         send(channel: string, message: unknown): void;
       };
     },
-    options?: {
-      onRendererMessage?(message: unknown, window: unknown): void;
+    options: {
+      onCommand(message: unknown): void;
+      onSession(message: unknown): void;
     },
   ): {
     postToRenderer(message: unknown): void;
+    postSession(message: unknown): void;
     dispose(): void;
   };
 }
@@ -93,11 +97,11 @@ describe('desktop Electron host bridge', () => {
   it('keeps IPC listeners through canceled closes and removes them after unload', async () => {
     const contextBridge = { exposeInMainWorld: vi.fn() };
     const ipcRenderer = { on: vi.fn(), off: vi.fn(), send: vi.fn() };
-    const listeners = new Map<string, () => void>();
+    const listeners = new Map<string, Array<() => void>>();
     vi.stubGlobal(
       'addEventListener',
       vi.fn((event: string, listener: () => void) => {
-        listeners.set(event, listener);
+        listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       }),
     );
 
@@ -111,21 +115,26 @@ describe('desktop Electron host bridge', () => {
     // A dirty renderer can cancel beforeunload and remain alive. Its host IPC
     // listener must stay connected until Chromium completes the unload.
     expect(ipcRenderer.off).not.toHaveBeenCalled();
-    listeners.get('unload')?.();
-    expect(ipcRenderer.off).toHaveBeenCalledOnce();
+    for (const unload of listeners.get('unload') ?? []) unload();
+    expect(ipcRenderer.off).toHaveBeenCalledTimes(2);
     expect(ipcRenderer.off).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_PUSH_CHANNEL,
       hostListener,
     );
+    expect(ipcRenderer.off).toHaveBeenCalledWith(
+      ELECTRON_SESSION_PUSH_CHANNEL,
+      expect.any(Function),
+    );
   });
 
   it('routes main-process bridge messages over fixed Electron channels', async () => {
-    let rendererListener:
-      ((event: { sender: unknown }, message: unknown) => void) | undefined;
+    const listeners = new Map<
+      string,
+      (event: { sender: unknown }, message: unknown) => void
+    >();
     const ipcMain = {
       on: vi.fn((channel, listener) => {
-        expect(channel).toBe(ELECTRON_WEBVIEW_MESSAGE_CHANNEL);
-        rendererListener = listener;
+        listeners.set(channel, listener);
       }),
       off: vi.fn(),
     };
@@ -133,15 +142,23 @@ describe('desktop Electron host bridge', () => {
       await loadMainHostBridgeModule(ipcMain);
     const sends: Array<{ channel: string; message: unknown }> = [];
     const { closedListeners, webContents, window } = fakeMainWindow(sends);
-    const rendererMessages: unknown[] = [];
+    const commands: unknown[] = [];
+    const sessions: unknown[] = [];
     const bridge = installDesktopHostBridge(window, {
-      onRendererMessage: (message) => rendererMessages.push(message),
+      onCommand: (message) => commands.push(message),
+      onSession: (message) => sessions.push(message),
     });
 
-    expect(rendererListener).toBeDefined();
-    rendererListener?.({ sender: {} }, { ignored: true });
-    rendererListener?.({ sender: webContents }, { command: 'ready' });
-    expect(rendererMessages).toEqual([{ command: 'ready' }]);
+    // Each channel reaches its own handler, and only from this window.
+    const commandListener = listeners.get(ELECTRON_WEBVIEW_MESSAGE_CHANNEL);
+    const sessionListener = listeners.get(ELECTRON_SESSION_MESSAGE_CHANNEL);
+    expect(commandListener).toBeDefined();
+    commandListener?.({ sender: {} }, { ignored: true });
+    commandListener?.({ sender: webContents }, { command: 'ready' });
+    sessionListener?.({ sender: {} }, { ignored: true });
+    sessionListener?.({ sender: webContents }, { kind: 'subscribe' });
+    expect(commands).toEqual([{ command: 'ready' }]);
+    expect(sessions).toEqual([{ kind: 'subscribe' }]);
 
     // `theme` must be a real `ProgressSetThemeMessageSchema` value
     // ('dark' | 'light') — `postToRenderer` now runs every message through
@@ -150,17 +167,24 @@ describe('desktop Electron host bridge', () => {
     // here instead of exercising the channel-routing behavior under test.
     const hostMessage = { command: 'setTheme', theme: 'dark' };
     bridge.postToRenderer(hostMessage);
+    const frame = { kind: 'surface.action', session: 's' };
+    bridge.postSession(frame);
     expect(sends).toEqual([
       { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message: hostMessage },
+      { channel: ELECTRON_SESSION_PUSH_CHANNEL, message: frame },
     ]);
 
     bridge.dispose();
     expect(ipcMain.off).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-      rendererListener,
+      commandListener,
+    );
+    expect(ipcMain.off).toHaveBeenCalledWith(
+      ELECTRON_SESSION_MESSAGE_CHANNEL,
+      sessionListener,
     );
     closedListeners[0]?.();
-    expect(ipcMain.off).toHaveBeenCalledTimes(1);
+    expect(ipcMain.off).toHaveBeenCalledTimes(2);
   });
 
   // #8123: `postToRenderer` routes every message through the outbound Zod
@@ -171,7 +195,10 @@ describe('desktop Electron host bridge', () => {
       off: vi.fn(),
     });
     const { window } = fakeMainWindow([]);
-    const bridge = installDesktopHostBridge(window);
+    const bridge = installDesktopHostBridge(window, {
+      onCommand: vi.fn(),
+      onSession: vi.fn(),
+    });
     // `desktop:showPdf` is claimed by `DesktopOutboundMessageSchema`, so a
     // payload missing `pdfPath` fails validation instead of passing through
     // unchecked.

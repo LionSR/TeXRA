@@ -47,6 +47,8 @@ import {
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
+  toJsonValue,
+  type JsonValue,
   type LogLevel,
   type MessageType,
   type NormalizedToolUse,
@@ -321,10 +323,11 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_PLATFORM_SERVICES = await (
-  await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
+const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
+  HARNESS_STORAGE_ROOT,
+  {
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
-  })
+  },
 ).runPromise(
   initCliPlatform({
     // The same provider the harness context resolves its rows through,
@@ -614,7 +617,7 @@ interface HarnessLogRow {
   readonly timestamp: number;
   readonly messageType: MessageType;
   readonly text?: string;
-  readonly data?: unknown;
+  readonly data?: JsonValue;
   readonly groupId?: string;
 }
 
@@ -696,13 +699,13 @@ function harnessToolEntry(
     level: LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType: MESSAGE_TYPES.TOOL_USE,
-    data: {
+    data: toJsonValue({
       toolName: toolUse.toolName,
       input: toolUse.input,
       output: toolUse.outputText,
       summary: toolUse.headerSummary,
       status: toolUse.status,
-    },
+    }),
   };
 }
 

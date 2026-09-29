@@ -19,12 +19,13 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 import { unsupported } from '@shared/utils/dispatcher';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { DesktopMessageHandler } from './desktopIpcTypes.js';
+import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -69,10 +70,19 @@ export interface DesktopSettingsIpcOptions {
 
 type SettingsViewBody = ReturnType<typeof createSettingsViewBody>;
 
-export interface DesktopSettingsIpc
-  extends
-    DesktopMessageHandler,
-    Pick<SettingsViewBody, 'refreshAfterAuthChange' | 'signInSubscription'> {}
+/** The commands the settings view posts to its host. */
+export const SETTINGS_VIEW_INBOUND_COMMANDS =
+  SettingsViewInboundMessageSchema.options.flatMap((option) => [
+    ...option.shape.command.values,
+  ]);
+
+export interface DesktopSettingsIpc extends Pick<
+  SettingsViewBody,
+  'refreshAfterAuthChange' | 'signInSubscription'
+> {
+  /** The one route every inbound settings command runs. */
+  readonly route: DesktopCommandRoute;
+}
 
 /**
  * The settings surface of one project, with its app-signal subscriptions
@@ -88,30 +98,27 @@ export function createDesktopSettingsIpc(
   const { bindings, spawn, signInPresentation } = options;
 
   /**
-   * Show one informational part of a sign-in without waiting for it: failing
-   * to show a notice never aborts the sign-in it describes, and awaiting it
-   * would block the approval poll or the OAuth callback wait. A failure is
-   * reported in its own dialog, and a dialog that fails too is logged.
+   * Show one informational part of a sign-in, reporting a failure in its own
+   * dialog and a dialog that fails too in the log: failing to show a notice
+   * never aborts the sign-in it describes. The caller decides whether the flow
+   * waits for it, which it must not for a part that blocks until the user acts.
    */
-  const presentInBackground = (
+  const reportPresentation = (
     displayName: string,
     present: Effect.Effect<void, Error>,
-  ) => {
-    spawn(
-      present.pipe(
-        Effect.catch((failure) =>
-          bindings.notify.showErrorMessage(
-            `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
-          ),
+  ) =>
+    present.pipe(
+      Effect.catch((failure) =>
+        bindings.notify.showErrorMessage(
+          `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
         ),
-        Effect.catchTag('NotificationFailed', (notice) =>
-          Effect.logError(notice.message).pipe(
-            withLogChannel(SETTINGS_LOG_CHANNEL),
-          ),
+      ),
+      Effect.catchTag('NotificationFailed', (notice) =>
+        Effect.logError(notice.message).pipe(
+          withLogChannel(SETTINGS_LOG_CHANNEL),
         ),
       ),
     );
-  };
 
   /**
    * The loopback browser is the normal route; failing to reach one is a
@@ -126,7 +133,7 @@ export function createDesktopSettingsIpc(
         transport: 'auto',
         present: {
           presentDeviceCode: (prompt) =>
-            presentInBackground(
+            reportPresentation(
               displayName,
               signInPresentation.presentSubscriptionDeviceCode(
                 prompt,
@@ -144,11 +151,13 @@ export function createDesktopSettingsIpc(
               ),
               Effect.andThen(
                 Effect.sync(() =>
-                  presentInBackground(
-                    displayName,
-                    signInPresentation.presentSubscriptionSignInUrl(
-                      url,
+                  spawn(
+                    reportPresentation(
                       displayName,
+                      signInPresentation.presentSubscriptionSignInUrl(
+                        url,
+                        displayName,
+                      ),
                     ),
                   ),
                 ),
@@ -226,7 +235,9 @@ export function createDesktopSettingsIpc(
   const settingsIpc: DesktopSettingsIpc = {
     refreshAfterAuthChange: body.refreshAfterAuthChange,
     signInSubscription: body.signInSubscription,
-    handleMessage: (message) => body.handleMessage(message, registry),
+    route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
+      body.handleMessage(message, registry),
+    ),
   };
   return Effect.as(
     Effect.forEach(

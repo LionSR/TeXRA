@@ -44,9 +44,7 @@ export class FileLister {
         Effect.as([]),
       );
     }
-    return Effect.promise(() =>
-      getFilesRecursively(root, getFileListConfig(fileType)),
-    );
+    return getFilesRecursively(root, getFileListConfig(fileType));
   }
 }
 

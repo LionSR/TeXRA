@@ -10,7 +10,6 @@ import {
   Fiber,
   FileSystem,
   Scope,
-  Stream,
   SubscriptionRef,
 } from 'effect';
 
@@ -26,10 +25,6 @@ import {
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import {
-  followToolEditDecisions,
-  toolEditInteractions,
-} from '@controllers/approval/toolEditHostWiring';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import {
@@ -42,6 +37,7 @@ import {
   type HostSnapshotSource,
 } from '@controllers/session/hostSnapshotSource';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
+import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -294,30 +290,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
       session,
     });
-    const toolEditReleases = this.runtime.runFork(
-      followToolEditDecisions(session, this.runtime, this.toolEditApprovals),
-    );
-    // A workflow run's `run.end` is the completion chime, one per process
-    // (PRD 12.4), never a renderer transition hook that every subscriber
-    // would replay. A failed run does not chime.
-    const sessionEvents = this.runtime.runFork(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
-        Effect.sync(() => {
-          if (
-            event.type === 'run.end' &&
-            event.output.category === 'workflow' &&
-            event.outcome !== 'failed'
-          )
-            this.chime();
-        }),
-      ),
-    );
     const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
-      dispose: () =>
-        this.runtime.runFork(
-          Fiber.interruptAll([toolEditReleases, sessionEvents, attention]),
-        ),
+      dispose: () => this.runtime.runFork(Fiber.interrupt(attention)),
     });
 
     const hostRequests = createExtensionHostRequests({
@@ -341,9 +316,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them.
-    const detachHostInteractions = this.runtime.runSync(
-      session.interactions.use({
+    // request row decides them. A workflow run's `run.end` is the completion
+    // chime, one per process (PRD 12.4), never a renderer transition hook
+    // that every subscriber would replay. A failed run does not chime.
+    const hostScope = this.runtime.runSync(Scope.make());
+    this.runtime.runSync(
+      attachSessionHost(session, this.toolEditApprovals, {
         ...createAgentPresentationHost(
           this,
           globalState,
@@ -373,16 +351,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 cause,
               }),
           }),
-        // Staging is the host's half of a `request.opened`; the fold lists the
-        // request either way, so a staging failure is reported, never swallowed.
-        ...toolEditInteractions(
-          this.toolEditApprovals,
-          this.runtime,
-          (program) => this.runtime.runFork(program),
-        ),
-      }),
+        onEvent: (event) =>
+          Effect.sync(() => {
+            if (
+              event.type === 'run.end' &&
+              event.output.category === 'workflow' &&
+              event.outcome !== 'failed'
+            )
+              this.chime();
+          }),
+      }).pipe(Scope.provide(hostScope)),
     );
-    this.disposables.push({ dispose: detachHostInteractions });
+    this.disposables.push({
+      dispose: () => this.runtime.runFork(Scope.close(hostScope, Exit.void)),
+    });
 
     this.watchWorkspace();
   }

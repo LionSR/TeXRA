@@ -36,9 +36,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  browserMocks.installCliProcessRuntime.mockImplementation(() =>
-    Promise.resolve(testRuntime()),
-  );
+  browserMocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
   return {
     ...actual,
     installCliProcessRuntime: browserMocks.installCliProcessRuntime,

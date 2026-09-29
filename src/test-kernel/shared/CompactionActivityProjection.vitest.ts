@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
+  type JsonValue,
   type MessageType,
   type TranscriptEvent,
 } from '@shared/schemas';
@@ -40,7 +41,7 @@ function projectCompactionActivities(
 function logAt(
   position: number,
   messageType: MessageType,
-  data?: unknown,
+  data?: JsonValue,
 ): Positioned {
   return {
     position,
