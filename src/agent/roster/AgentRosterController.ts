@@ -8,7 +8,6 @@ import type {
 } from '@platform/interfaces';
 import type {
   AgentCategory,
-  AgentModePreset,
   AgentRosterCategorySelection,
   AgentRosterSelection,
   AgentSource,
@@ -34,9 +33,11 @@ import { unique } from '@utils/core';
 import {
   forgetHiddenAgent,
   readAgentRosterSelection,
+  selectedIdentifiers,
   recordCustomChoices,
   serializeWorkspaceWrite,
   unlistedCustomAgents,
+  visibleAgents,
 } from './rosterWorkspaceState';
 
 export interface AgentRosterEntry {
@@ -66,21 +67,6 @@ export interface AgentRosterControllerDeps<
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
-}
-
-function selectedIdentifiers(
-  selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
-  category: AgentCategory,
-  presets: readonly AgentModePreset[],
-): readonly string[] | undefined {
-  if (selection.kind === 'all') return undefined;
-  if (selection.kind === 'custom') {
-    const categorySelection = selection.agentKeys[category];
-    return categorySelection === 'all' ? undefined : categorySelection;
-  }
-  const preset = presets.find((candidate) => candidate.id === selection.teamId);
-  if (!preset) return undefined;
-  return preset.agents[category];
 }
 
 export class AgentRosterController<
@@ -138,7 +124,12 @@ export class AgentRosterController<
         category,
         yield* this.allPresets(),
       );
-      if (identifiers === undefined) return this.deps.getAgents(category);
+      if (identifiers === undefined) {
+        return yield* visibleAgents(
+          this.deps.repoState,
+          this.deps.getAgents(category),
+        );
+      }
       const { entries } = this.resolveIdentifiers(category, identifiers);
       return [
         ...entries,
@@ -294,15 +285,6 @@ export class AgentRosterController<
     });
   }
 
-  private materializeCategorySelection(
-    selection: AgentRosterCategorySelection,
-    category: AgentCategory,
-  ): string[] {
-    return selection === 'all'
-      ? this.deps.getAgents(category).map(agentKeyOf)
-      : [...selection];
-  }
-
   private writeSelection(
     selection: AgentRosterSelection,
   ): Effect.Effect<void, StateWriteFailed> {
@@ -426,10 +408,13 @@ export class AgentRosterController<
         const selections = yield* Effect.all(
           byCategory((category) => this.effectiveCategorySelection(category)),
         );
-        const target = this.materializeCategorySelection(
-          selections[input.category],
-          input.category,
-        );
+        const target =
+          selections[input.category] === 'all'
+            ? (yield* visibleAgents(
+                this.deps.repoState,
+                this.deps.getAgents(input.category),
+              )).map(agentKeyOf)
+            : [...selections[input.category]];
         const key = agentKeyOf(input);
         const index = target.findIndex((candidate) =>
           agentMatchesIdentifier(input, candidate),

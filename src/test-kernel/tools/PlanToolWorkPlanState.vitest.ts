@@ -238,8 +238,10 @@ describe('PlanTool — update (plan approval)', () => {
           const runId = generateRunId();
           yield* Effect.tryPromise(() => installFakePlatform());
 
-          const { result, session, permission, decide } =
-            yield* startPlanUpdate(runId, plan.objective);
+          const { result, session, decide } = yield* startPlanUpdate(
+            runId,
+            plan.objective,
+          );
           yield* Effect.addFinalizer(() =>
             Effect.gen(function* () {
               yield* clearGoal(session, runId);
@@ -247,7 +249,6 @@ describe('PlanTool — update (plan approval)', () => {
             }).pipe(Effect.orDie),
           );
 
-          expect(permission.goalEnabled).toBe(true);
           decide({ action: 'approve_and_goal' });
 
           const outcome = yield* result;

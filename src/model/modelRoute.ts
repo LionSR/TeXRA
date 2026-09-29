@@ -162,7 +162,7 @@ export function decideModelRoute(
   // The subscriptions are preferences: signed out, the model takes its key.
   if (
     facts.chatgptSubscription &&
-    !facts.useOpenRouter &&
+    !shouldRouteModelThroughOpenRouter(config, facts.useOpenRouter) &&
     isCodexSubscriptionEligible(config)
   ) {
     return { kind: 'chatgpt-subscription' };

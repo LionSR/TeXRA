@@ -469,6 +469,8 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       offeredSkills: [],
       offeredSystem: null,
       contents: {},
+      hookOutcomes: {},
+      offeredHooks: [],
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
