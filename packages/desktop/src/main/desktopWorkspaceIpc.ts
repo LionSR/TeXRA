@@ -38,11 +38,11 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
   type DesktopBrowserBounds,
+  type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
-  DesktopRenderer,
 } from './desktopIpcTypes.js';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
@@ -247,7 +247,7 @@ const resolveWorkspaceWritePath = Effect.fn(
 });
 
 export function createDesktopWorkspaceIpc(
-  renderer: DesktopRenderer,
+  renderer: { postToRenderer(message: DesktopWorkspaceReply): void },
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
@@ -274,7 +274,7 @@ export function createDesktopWorkspaceIpc(
    */
   function reportRequestFailure<E extends Error>(
     error: E,
-    message: DesktopCommandMessage,
+    message: DesktopWorkspaceReply,
   ): Effect.Effect<never, E> {
     return Effect.andThen(
       Effect.sync(() => renderer.postToRenderer(message)),

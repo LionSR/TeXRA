@@ -3,7 +3,7 @@
  *
  * `runStateFold` produces what the loop continues from and `sessionFold`
  * produces what people see, but five row types carry the same facts to both:
- * the loop's position (`flow.step`), the requests a run has open
+ * the loop's position (`run.position`), the requests a run has open
  * (`request.opened`, `request.decided`) and the input it has not taken
  * (`followup.queued`, `followup.consumed`). Folding them twice is how a row
  * type lands in one fold and not the other; this module holds the single
@@ -18,7 +18,7 @@
  * delivered, where the same row means the opening simply never arrived.
  */
 import {
-  type FlowStep,
+  type PositionAt,
   type PermissionPayload,
   type RequestDecision,
   type RoundOutput,
@@ -32,7 +32,7 @@ import {
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
 const SHARED_RUN_ROW_TYPES = {
-  'flow.step': true,
+  'run.position': true,
   'request.opened': true,
   'request.decided': true,
   'followup.queued': true,
@@ -64,7 +64,7 @@ type RequestState = {
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content'
+  'followUpId' | 'content' | 'holdUntil'
 >;
 
 /**
@@ -74,16 +74,50 @@ export type QueuedFollowUp = Pick<
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  readonly step: FlowStep | null;
+  readonly at: PositionAt | null;
   readonly outcome: RunOutcome | null;
-  readonly round: number;
   readonly turn: number;
-  readonly continuationIndex: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
   /** Complete output collection from the newest `output.produced` row. */
   readonly roundOutputs: RoundOutput[];
 };
+
+/**
+ * Where the loop stands, as its own branches read it: a settled boundary
+ * (`initial`, `waiting`, `halted`) or somewhere inside a turn. Fold-only,
+ * never written: derived from the run's `run.position` rows.
+ */
+export type RunLoopPhase =
+  | 'initial'
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'halted';
+
+/**
+ * The phase a position leaves an opened loop in. A `halted` position moves
+ * none: a stop keeps the phase the loop stopped in, so a resume continues
+ * from there. `turn.ready` is input consumed at a park, still a boundary;
+ * a `turn.end` that no `waiting` or `turn.begin` follows in its batch is the
+ * round loop's last round closed, the run concluded before its terminal
+ * row. An unopened run stays unopened, for `load` to refuse.
+ */
+const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
+  {
+    'turn.ready': 'waiting',
+    'turn.begin': 'model.ready',
+    'response.ready': 'model.submitted',
+    'results.ready': 'results.ready',
+    'turn.end': 'halted',
+    waiting: 'waiting',
+  };
+export const phaseAfter = (
+  phase: RunLoopPhase | null,
+  at: PositionAt | null | undefined,
+): RunLoopPhase | null =>
+  at == null || at === 'halted' || phase === null ? phase : PHASE_AT[at];
 
 /**
  * What these rows say about one run: its position and the input it has not
@@ -120,14 +154,39 @@ export function byId<T>(
   return record;
 }
 
+/** A fresh null-prototype copy of an id-keyed record. */
+export const copyById = <T>(record: Readonly<Record<string, T>>) =>
+  byId(Object.entries(record));
+
+/**
+ * The containers one fold pass created. A pass (one fold over a batch of
+ * rows) copies a container the first time a row writes it and writes that
+ * copy in place after, so a batch costs one copy per container instead of one
+ * per row, and nothing reachable from the state the pass started from is ever
+ * written. Only the pass's result escapes it; the next pass copies again.
+ */
+export type FoldPass = WeakSet<object>;
+
+/** `value` itself when this pass created it, else a copy the pass now owns.
+ *  Without a pass every write copies, one row at a time. */
+export function writable<T extends object, W extends T>(
+  pass: FoldPass | undefined,
+  value: T,
+  copy: (value: T) => W,
+): W {
+  // Only `copy` put a value in the pass, so an owned value is a `W`.
+  if (pass?.has(value) === true) return value as W;
+  const fresh = copy(value);
+  pass?.add(fresh);
+  return fresh;
+}
+
 /** The position before any of these rows folded. */
 export const freshRunPosition = (): RunPosition => ({
   family: null,
-  step: null,
+  at: null,
   outcome: null,
-  round: 0,
   turn: 0,
-  continuationIndex: 0,
   requests: byId([]),
   roundOutputs: [],
 });
@@ -154,10 +213,44 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The rows that end a run for its held input (`holdUntil: 'senderEnd'`):
+ *  what `SessionEvents.runEnded` records and what wakes a waiting take. A
+ *  `run.activate` starts the next lifecycle: "ended" is the latest one's. */
+const RUN_TERMINAL_TYPES = ['run.end', 'run.removed'] as const;
+export const endsRun = (row: Pick<SessionEvent, 'type'>): boolean =>
+  (RUN_TERMINAL_TYPES as readonly string[]).includes(row.type);
+/** The rows that decide, latest first wins, whether a run has ended and
+ *  whether its input is closed. */
+export const RUN_LIFECYCLE_TYPES = [
+  ...RUN_TERMINAL_TYPES,
+  'run.activate',
+  'followup.closed',
+] as const;
+/** A run's lifecycle standing from its rows in commit order, after `from`:
+ *  ended when its latest `run.end` / `run.removed` follows its latest
+ *  `run.activate`, and input-closed when a `followup.closed` or
+ *  `run.removed` does. */
+export function lifecycleOf(
+  rows: readonly Pick<SessionEvent, 'type'>[],
+  from = { ended: false, closed: false },
+): { readonly ended: boolean; readonly closed: boolean } {
+  let { ended, closed } = from;
+  for (const { type } of rows) {
+    if (type === 'run.activate') ended = closed = false;
+    if (endsRun({ type })) ended = true;
+    if (type === 'followup.closed' || type === 'run.removed') closed = true;
+  }
+  return { ended, closed };
+}
+
 /** The shared rows that move a run's pending input, not its position. */
+export const FOLLOW_UP_TYPES = [
+  'followup.queued',
+  'followup.consumed',
+] as const;
 type FollowUpRow = Extract<
   SharedRunRow,
-  { type: 'followup.queued' | 'followup.consumed' }
+  { type: (typeof FOLLOW_UP_TYPES)[number] }
 >;
 
 export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
@@ -168,55 +261,41 @@ export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
  * for the run yet: queued input and the loop's own position open one, a
  * request, a consumption or an output presupposes it and moves nothing. A
  * reader that folds only the position (`RunState`) applies only the rows
- * that move it.
+ * that move it. A fold over a batch passes its `pass`, and the containers a
+ * verdict carries are then the pass's own, written in place by later rows.
  */
 export function applyRunRow(
   current: RunPosition | null,
   row: Exclude<SharedRunRow, FollowUpRow>,
+  pass?: FoldPass,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
+  pass?: FoldPass,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunPosition | null,
   row: SharedRunRow,
+  pass?: FoldPass,
 ): RunRowVerdict {
   // A follow-up row enters only through the `RunRows` overload.
   const slice = current as RunRows | null;
   switch (row.type) {
-    case 'flow.step': {
+    case 'run.position': {
       const p = row.payload;
       const rows = current ?? freshRunRows();
-      if (rows.family !== null && rows.family !== p.family) {
-        return { kind: 'contradiction', detail: 'a step of another family' };
-      }
-      // A continuation counts within its round: a reflection round opens at
-      // continuation 0, so the index is monotone only while the round holds.
-      const round = p.round ?? rows.round;
-      const coordinates = [
-        ['round', p.round],
-        ['turn', p.turn],
-        [
-          'continuationIndex',
-          round === rows.round ? p.continuationIndex : null,
-        ],
-      ] as const;
-      for (const [name, value] of coordinates) {
-        if (value != null && value < rows[name]) {
-          return {
-            kind: 'contradiction',
-            detail: `${name} ${value} is below ${rows[name]}`,
-          };
-        }
+      if (p.turn != null && p.turn < rows.turn) {
+        return {
+          kind: 'contradiction',
+          detail: `turn ${p.turn} is below ${rows.turn}`,
+        };
       }
       return applied({
         family: p.family,
-        step: p.step,
-        round,
+        at: p.at,
         turn: p.turn ?? rows.turn,
-        continuationIndex: p.continuationIndex ?? rows.continuationIndex,
-        outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,
+        outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
     }
     case 'request.opened': {
@@ -227,20 +306,14 @@ export function applyRunRow(
           detail: `request ${row.requestId} opened twice`,
         };
       }
-      return applied({
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            {
-              payload: row.payload,
-              thread: row.thread ?? null,
-              resolved: false,
-              decision: null,
-            },
-          ],
-        ]),
-      });
+      const requests = writable(pass, current.requests, copyById);
+      requests[row.requestId] = {
+        payload: row.payload,
+        thread: row.thread ?? null,
+        resolved: false,
+        decision: null,
+      };
+      return applied({ requests });
     }
     case 'request.decided': {
       if (current === null) return { kind: 'unchanged' };
@@ -248,15 +321,13 @@ export function applyRunRow(
       if (request === undefined) {
         return { kind: 'unresolved', requestId: row.requestId };
       }
-      return applied({
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            { ...request, resolved: true, decision: row.decision },
-          ],
-        ]),
-      });
+      const requests = writable(pass, current.requests, copyById);
+      requests[row.requestId] = {
+        ...request,
+        resolved: true,
+        decision: row.decision,
+      };
+      return applied({ requests });
     }
     case 'followup.queued': {
       // Queued input may precede everything else a run writes, so it opens
@@ -264,13 +335,19 @@ export function applyRunRow(
       // delivery id is the same follow-up, already queued once.
       const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
-      return applied({
-        followUps: [
-          ...rows.followUps,
-          { followUpId: row.followUpId, content: row.content },
-        ],
-        followUpIds: new Set([...rows.followUpIds, row.followUpId]),
+      const followUps = writable(pass, rows.followUps, (f) => [...f]);
+      followUps.push({
+        followUpId: row.followUpId,
+        content: row.content,
+        ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
       });
+      const followUpIds = writable(
+        pass,
+        rows.followUpIds,
+        (ids) => new Set(ids),
+      );
+      followUpIds.add(row.followUpId);
+      return applied({ followUps, followUpIds });
     }
     case 'followup.consumed': {
       // The consumer commits this with the message the follow-up became. An
@@ -285,10 +362,14 @@ export function applyRunRow(
       if (!removed && slice.followUpIds.has(row.followUpId)) {
         return { kind: 'unchanged' };
       }
-      return applied({
-        ...(removed ? { followUps } : {}),
-        followUpIds: new Set([...slice.followUpIds, row.followUpId]),
-      });
+      if (removed) pass?.add(followUps);
+      const followUpIds = writable(
+        pass,
+        slice.followUpIds,
+        (ids) => new Set(ids),
+      );
+      followUpIds.add(row.followUpId);
+      return applied({ ...(removed ? { followUps } : {}), followUpIds });
     }
     case 'output.produced':
       // Each row carries the run's whole collection: the newest replaces it.
@@ -307,9 +388,10 @@ export function applyRunRow(
  */
 export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
   let slice = freshRunRows();
+  const pass: FoldPass = new WeakSet();
   for (const row of rows) {
     if (!isSharedRunRow(row)) continue;
-    const verdict = applyRunRow(slice, row);
+    const verdict = applyRunRow(slice, row, pass);
     if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
       throw new Error(
         `${row.type} on ${row.aggregateId}: ${
@@ -337,13 +419,13 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
   switch (row.type) {
     case 'run.activate':
       return RUN_PHASE.RUNNING;
-    case 'flow.step':
-      if (row.payload.step === 'halted') return null;
-      return row.payload.step === 'waiting'
+    case 'run.position':
+      if (row.payload.at === 'halted') return null;
+      return row.payload.at === 'waiting'
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
     case 'child.park':
-      return row.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING;
+      return row.phase === 'resumed' ? RUN_PHASE.RUNNING : RUN_PHASE.WAITING;
     case 'run.end':
       return row.outcome;
     default:

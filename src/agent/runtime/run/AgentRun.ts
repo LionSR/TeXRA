@@ -8,61 +8,46 @@
  * the loop and the invoker take it from context.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Context, Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   AgentPrompt,
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { withLogChannel } from '@logger/effectLog';
+import {
+  declaredToolNames,
+  type StepToolInputs,
+} from '@agent/runtime/agentToolResolution';
+import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
+  AGENT_SOURCE,
   AgentCategory,
+  MESSAGE_TYPES,
   DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
   type JsonValue,
+  type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
-  type UserVariableChannels,
 } from '@shared/schemas';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
-import type {
-  CompositionKey,
-  Compositions,
-  PinnedComposition,
-} from '@tools/compositions';
+import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import type { ToolRegistry } from '@tools/toolTable';
-import { processToolHost } from '@utils/config/platformSettings';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
-import { offeredToolset } from './tools';
+import type { OpenStep } from '../loop/step';
 import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
-
-/**
- * The routes a launch declines before it has any ledger state: an
- * own-API-key fallback turns away from every subscription route, since the
- * user answered a quota prompt by choosing to pay with their own key.
- */
-function launchDeclinedRoutes(
-  ctx: AgentLaunchContext,
-): readonly DeclinableUsageRoute[] {
-  return ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : [];
-}
 
 /**
  * Immutable per-run tool policy, resolved by the launch and read from the
@@ -76,8 +61,9 @@ export interface ToolPolicy {
   readonly approvalPromptsUnavailable?: boolean;
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
-  /** The composition a delegated child joins: the one its parent pinned. */
-  readonly composition?: CompositionKey;
+  /** What the parent's step offered when it launched this delegated child:
+   *  the child can only narrow it. */
+  readonly parentOffered?: readonly OfferedTool[];
 }
 
 interface RunCallbacks {
@@ -91,8 +77,7 @@ export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
-  /** The setting with the run's resolved tool list; the loop of the run's
-   *  family narrows it. */
+  /** The setting, with the tools the agent declares. */
   readonly setting: AgentSetting;
   readonly prompt: AgentPrompt;
   readonly logger: AgentTrace;
@@ -102,34 +87,46 @@ export interface AgentRunShape {
   readonly delegationAgentScope?: AgentDelegationScope | null;
   /**
    * Record that this run met an approval-policy denial: a request settled as
-   * denied, or (with `withheldTools`) approval-gated tools were withheld from
-   * the model when the run resolved its tools.
+   * denied, or approval-gated tools were withheld from the model when the
+   * run resolved its tools.
    */
-  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
+  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
-  readonly userVarChannels: UserVariableChannels;
+  /** What the run opens from; null for a tool-use run whose rows hold its
+   *  opening, which a resume never renders again. */
+  readonly opening: TemplateOpening | null;
   /** Initial user row to log after the loop has inserted launch media. */
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
-  readonly tools: IToolRegistry;
+  /** What each step resolves its tools from (`loop/step.ts`). */
+  readonly toolInputs: StepToolInputs;
   /**
-   * The composition the run pinned (or joined, as a delegated child) for its
-   * lifetime: its children join it, and its plugins' services reach its
-   * tool calls.
+   * The run's current step: the tools it offers and the pin that holds its
+   * catalog generation, replaced by each new step. A delegated child reads
+   * what its parent's step offered here.
    */
-  readonly composition: PinnedComposition;
-  /** The toolset the run was offered at open, which a tool-use snapshot
-   *  records; a resumed run carries its recorded set forward unchanged. */
-  readonly toolset: ReturnType<typeof offeredToolset>;
+  readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /** The value the terminal tool captured, read by the loop at its exit. A
    *  plain slot: the tool's capture callback is synchronous. */
   readonly structured: { value: JsonValue | undefined };
-  /** The run's live model binding; a mid-run switch replaces it. */
+  /** The run's live model binding; replaced only through `swapModel`. */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+  /**
+   * Replace the binding: `next` binds into a scope of its own, forked from
+   * the run's, and the binding it returns goes into force; the retired
+   * binding's scope closes at once, releasing its socket, ping fiber and
+   * uploads. `next` returning the binding it was handed keeps it, and a
+   * failure or interruption closes the fork and leaves the binding as it
+   * was. The one writer of `model`: a switch, a manual retry's rebind and a
+   * reacquired connection all come through here.
+   */
+  readonly swapModel: <E, R>(
+    next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
+  ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
   /**
    * Subscription routes this run must not bind: the launch's own-API-key
    * fallback, plus every retry the user answered with their own key. The
@@ -140,12 +137,9 @@ export interface AgentRunShape {
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
-   * the run's layer is released. A model bound mid-run (a manual retry's
-   * rebind, a host-admitted switch) is acquired into it, so an editor model
-   * or uploaded file it holds retires with the run. Parallel, so a run that
-   * replaced its binding repeatedly closes every retained release — each
-   * already bounded — concurrently, instead of paying one release per
-   * replaced binding in sequence.
+   * the run's layer is released. What the run holds for its whole life (its
+   * plugins, its step, the binding in force) is a child of it, so they close
+   * together rather than one after another.
    */
   readonly scope: Scope.Scope;
   /**
@@ -155,7 +149,6 @@ export interface AgentRunShape {
    * plain slot: the host's request is synchronous.
    */
   readonly pendingModelSwitch: { value: string | null };
-  readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
 }
 
@@ -172,7 +165,7 @@ interface AgentRunLayerInput {
 
 /**
  * Build the run's service from its launch context. The model identity of a
- * resumed run comes from the latest `flow.snapshot` (the one indexed read
+ * resumed run comes from the latest `run.snapshot` (the one indexed read
  * L0 provided), never from a file; a fresh run binds the launch's model
  * under the route the launch context already resolved.
  */
@@ -182,11 +175,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  | RunLedger
-  | LanguageModel
-  | HttpClient.HttpClient
-  | ToolRegistry
-  | Compositions
+  RunLedger | LanguageModel | HttpClient.HttpClient | LiveTools
 > =>
   Layer.effect(
     AgentRun,
@@ -195,9 +184,8 @@ export const agentRunLayer = (
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
       const layerScope = yield* Effect.scope;
-      // One parallel child holds every binding the run acquires: at close,
-      // each replaced binding's remaining release runs concurrently under
-      // its own deadline rather than one after another.
+      // One parallel child holds what the run holds for its life; at close
+      // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
       const { setting } = ctx;
@@ -220,93 +208,73 @@ export const agentRunLayer = (
           })
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
-      // The composition is pinned in this layer's scope, so the run holds it
-      // until its layer is released; a delegated child joins its parent's.
-      const resolved = yield* resolveAgentTools({
-        tools: setting.tools,
-        logger,
-        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
-        host: processToolHost(),
+      // The loaded plugins (MCP servers) the declared tools name, held for
+      // the run's life; the read's problems reach its transcript. A
+      // workflow run's rounds offer no tools, so it holds none.
+      const workflow = setting.agentCategory === AgentCategory.Workflow;
+      // A plugin agent that names no tools inherits them, as a Claude Code
+      // subagent does: a child every tool its parent's step offered (the
+      // narrow-only rule then keeps exactly those), a top-level run the
+      // standard file, shell and web tools and the installed plugins' tools.
+      const inherits =
+        config.agentSource === AGENT_SOURCE.PLUGIN &&
+        setting.agentCategory === AgentCategory.ToolUse &&
+        setting.tools.length === 0;
+      const parentOffered = ctx.toolPolicy.parentOffered;
+      const tools = inherits
+        ? (
+            parentOffered
+              ?.filter(({ plugin }) => plugin !== 'run')
+              .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
+          ).map((name) => ({ name }))
+        : setting.tools;
+      const declared = declaredToolNames(tools);
+      const held = yield* (yield* LiveTools)
+        .hold(workflow ? [] : declared)
+        .pipe(Scope.provide(scope));
+      for (const warning of held.warnings) logger.warn(warning);
+      const toolInputs: StepToolInputs = {
+        tools,
+        approvalPromptsUnavailable:
+          ctx.toolPolicy.approvalPromptsUnavailable === true,
+        host: session.roots.host,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
-          : input.tools,
-        // The reflection family injects none: memory and plan are tool-use
+          : (input.tools ?? []),
+        // A workflow run injects none: memory and plan are tool-use
         // infrastructure.
-        injectTools: setting.agentCategory === AgentCategory.ToolUse,
+        // A plugin agent that names its tools gets only those.
+        injectTools:
+          setting.agentCategory === AgentCategory.ToolUse &&
+          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+        // The installed plugins' tools reach a top-level run of any agent but
+        // a plugin agent that names its tools; a child gets what it declares,
+        // narrowed to its parent's.
+        injectInstalled:
+          setting.agentCategory === AgentCategory.ToolUse &&
+          parentOffered === undefined &&
+          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         delegationScope: ctx.delegationAgentScope ?? undefined,
-        inherited: ctx.toolPolicy.composition,
-      });
-      yield* Effect.logDebug(
-        `Run ${runId} pinned tool composition ${resolved.pinned.key.hash}`,
-      ).pipe(
-        // The key's own composition, which the logged hash is over: a child's
-        // is its parent's.
-        Effect.annotateLogs({ data: resolved.pinned.key.composition }),
-        withLogChannel('AgentRun'),
-      );
-
+        parentOffered,
+        held,
+      };
       const snapshot = yield* ledger.latestSnapshot(runId);
-      // A resumed tool-use run offers the tools it recorded at open that
-      // still resolve, in recorded order, and never one it was not offered.
-      // Each recorded tool that no longer resolves (a plugin disabled or
-      // removed, a dependency gone) is named in the run's transcript; a call
-      // the model still makes to it settles as `tool_unavailable`.
-      const recorded =
-        snapshot?.payload.family === 'toolUse'
-          ? {
-              offeredTools: snapshot.payload.state.offeredTools,
-              toolsetHash: snapshot.payload.state.toolsetHash,
-            }
-          : null;
-      const toolset = recorded ?? offeredToolset(resolved.definitions);
-      let { definitions, registry: tools } = resolved;
-      if (recorded !== null) {
-        const byName = new Map(definitions.map((d) => [d.name, d]));
-        definitions = recorded.offeredTools.flatMap((name) => {
-          const definition = byName.get(name);
-          return definition ? [definition] : [];
-        });
-        const kept = new Map(
-          definitions.flatMap(({ name }) => {
-            const tool = resolved.registry.get(name);
-            return tool ? [[name, tool] as const] : [];
-          }),
+      // A workflow agent's rounds offer no tools: a fresh run says so rather
+      // than narrowing its YAML's declared `tools:` silently.
+      if (workflow && snapshot === null && declared.length > 0) {
+        logger.warn(
+          `The workflow family advertises no tools under this release, so the tools this agent declares are not offered to the model: ${declared.join(', ')}. Run the agent in the tool-use family if it needs them.`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
         );
-        tools = new MapToolRegistry(kept);
-        const warnings = recorded.offeredTools
-          .filter((name) => !byName.has(name))
-          .map(
-            (name) =>
-              `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
-          );
-        if (
-          warnings.length === 0 &&
-          offeredToolset(definitions).toolsetHash !== recorded.toolsetHash
-        ) {
-          warnings.push(
-            'A tool offered to this run changed its input schema since the run opened; the resumed run offers the current schema.',
-          );
-        }
-        // Both the process log and the run's transcript (the trace's `log`
-        // row) carry each warning.
-        for (const message of warnings) {
-          yield* Effect.logWarning(message).pipe(withLogChannel('AgentRun'));
-          logger.warn(message);
-        }
       }
 
-      // The model of a resumed run is the one its latest snapshot names; a
-      // fresh run binds the launch model under the route the launch context
-      // resolved for it (including a persisted compatibility key).
+      // The model and route of a resumed run are the ones its latest snapshot
+      // names; a fresh run binds the launch model under today's default route.
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
-      const compatibilityKey =
-        persisted !== null
-          ? persisted.modelCompatibilityKey
-          : ctx.modelCompatibilityKey;
+      const compatibilityKey = persisted?.modelCompatibilityKey ?? null;
       const modelConfig =
         modelId === config.model ? ctx.modelConfig : MODEL_CONFIGS[modelId];
       if (!modelConfig) {
@@ -316,10 +284,16 @@ export const agentRunLayer = (
       }
       // The routes this run declines: a resumed run replays the set its
       // snapshot recorded, a fresh own-API-key fallback declines every
-      // subscription route from its first binding. Nothing here reads or
+      // subscription route from its first binding (the user answered a quota
+      // prompt by choosing to pay with their own key). Nothing here reads or
       // writes the user's stored preferences.
-      const declinedRoutes =
-        persisted?.declinedRoutes ?? launchDeclinedRoutes(ctx);
+      const declinedRoutes: readonly DeclinableUsageRoute[] =
+        persisted?.declinedRoutes ??
+        (ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : []);
+      // Each binding owns a scope forked from the run's; only the one in
+      // force is open. `bindingScope` is written only inside the ref's
+      // update, which serializes every swap.
+      let bindingScope = yield* Scope.fork(scope);
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
@@ -328,15 +302,34 @@ export const agentRunLayer = (
         declinedRoutes,
         agentCategory: config.agentCategory,
         temperature: setting.temperature,
-      }).pipe(Scope.provide(scope));
+      }).pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
+      const swapModel: AgentRunShape['swapModel'] = (next) =>
+        SynchronizedRef.updateAndGetEffect(model, (current) =>
+          Effect.gen(function* () {
+            const fork = yield* Scope.fork(scope);
+            const replacement = yield* next(current).pipe(
+              Scope.provide(fork),
+              Effect.onExit((exit) =>
+                Exit.isSuccess(exit) && exit.value !== current
+                  ? Effect.void
+                  : Scope.close(fork, Exit.void),
+              ),
+            );
+            if (replacement === current) return current;
+            const retired = bindingScope;
+            bindingScope = fork;
+            yield* Scope.close(retired, Exit.void);
+            return replacement;
+          }),
+        );
       const pendingModelSwitch: { value: string | null } = { value: null };
 
       return {
         runId,
         session,
         config,
-        setting: { ...setting, tools: definitions },
+        setting,
         prompt: ctx.prompt,
         logger,
         parentStage: ctx.parentStage,
@@ -345,19 +338,18 @@ export const agentRunLayer = (
         delegationAgentScope: ctx.delegationAgentScope,
         onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
-        userVarChannels: ctx.userVarChannels,
+        opening: ctx.opening,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
-        tools,
-        composition: resolved.pinned,
-        toolset,
+        toolInputs,
+        steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
         structured,
         model,
+        swapModel,
         declinedRoutes,
         scope,
         pendingModelSwitch,
-        usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
       };
     }),

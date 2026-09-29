@@ -8,7 +8,11 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { ContinuationSchema, RemoteOperationSchema } from '@texra-ai/llm/turn';
+import {
+  ContinuationSchema,
+  RemoteOperationSchema,
+  completedTurn,
+} from '@texra-ai/llm/turn';
 import {
   RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
@@ -16,7 +20,6 @@ import {
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   BackgroundEvent,
@@ -50,6 +53,9 @@ const CONFIG: OpenAIResponsesConfiguration = {
     'max',
   ],
   instructions: { kind: 'optional' },
+  continuationInheritsInstructions: false,
+  supportsForcedToolChoice: true,
+  requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',
   defaults: {
@@ -407,7 +413,7 @@ describe('native OpenAI Responses protocol', () => {
             );
             expect(secondBody).not.toHaveProperty('instructions');
             expect(secondBody).not.toHaveProperty('reasoning');
-            const result = yield* model.generateTurn(turn);
+            const result = yield* completedTurn(model.streamTurn(turn));
             expect(result.finishReason).toBe('stop');
             expect(fetch).toHaveBeenCalledTimes(transport === 'http' ? 3 : 2);
             expect(frames).toHaveLength(transport === 'http' ? 0 : 1);
@@ -663,7 +669,7 @@ describe('native OpenAI Responses protocol', () => {
                 turn.mode === 'foreground',
             );
             expect(turn.transport.kind).toBe('websocket');
-            const first = yield* model.generateTurn(turn);
+            const first = yield* completedTurn(model.streamTurn(turn));
             assert(first.providerResponseId !== null);
             expect(first.continuation).toBeUndefined();
             const nextRequest: TurnRequest = {
@@ -707,13 +713,15 @@ describe('native OpenAI Responses protocol', () => {
               yield* Effect.flip(model.estimateInputTokens(cold)),
             ).toMatchObject({ kind: 'provider-rejection' });
             expect(countFetch).toHaveBeenCalledTimes(1);
-            const second = yield* model.generateTurn(next);
+            const second = yield* completedTurn(model.streamTurn(next));
             assert(second.providerResponseId !== null);
             expect(second.providerResponseId).toBe('resp_2');
             expect(second.finishReason).toBe(outcome);
             expect(second.continuation).toBeUndefined();
             const http = modelWith(vi.fn(), configuration);
-            expect(yield* Effect.flip(http.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(http.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'unsupported',
             });
             expect(connections).toBe(1);
@@ -797,13 +805,15 @@ describe('native OpenAI Responses protocol', () => {
             });
             const turn = yield* model.prepareTurn(REQUEST);
             assert(turn.mode === 'foreground');
-            const fiber = yield* model
-              .generateTurn(turn)
-              .pipe(Effect.forkChild);
+            const fiber = yield* completedTurn(model.streamTurn(turn)).pipe(
+              Effect.forkChild,
+            );
             yield* Effect.promise(() =>
               vi.waitFor(() => expect(requests).toBe(1)),
             );
-            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(model.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'unsupported',
             });
             yield* Fiber.interrupt(fiber);
@@ -813,7 +823,9 @@ describe('native OpenAI Responses protocol', () => {
             yield* Effect.promise(() =>
               vi.waitFor(() => expect(closes).toBe(1)),
             );
-            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(model.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'transport',
             });
             expect(connections).toBe(1);
@@ -821,14 +833,16 @@ describe('native OpenAI Responses protocol', () => {
               kind: 'api-key',
               apiKey: 'synthetic-not-a-secret',
             });
-            expect(yield* Effect.flip(fresh.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(fresh.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'unsupported',
             });
             const admitted = yield* fresh.prepareTurn(REQUEST);
             assert(admitted.mode === 'foreground');
-            expect((yield* fresh.generateTurn(admitted)).finishReason).toBe(
-              'stop',
-            );
+            expect(
+              (yield* completedTurn(fresh.streamTurn(admitted))).finishReason,
+            ).toBe('stop');
             expect(connections).toBe(2);
             expect(requests).toBe(2);
           }),
@@ -933,7 +947,9 @@ describe('native OpenAI Responses protocol', () => {
             const turn = yield* model.prepareTurn(REQUEST);
             assert(turn.mode === 'foreground');
             // Separate frames may arrive before or after the terminal is consumed.
-            const first = yield* Effect.result(model.generateTurn(turn));
+            const first = yield* Effect.result(
+              completedTurn(model.streamTurn(turn)),
+            );
             if (first._tag === 'Success') {
               expect(variant).toBe('post-terminal');
               expect(first.success).toMatchObject({
@@ -966,7 +982,7 @@ describe('native OpenAI Responses protocol', () => {
             yield* Effect.promise(() =>
               vi.waitFor(() => expect(closed).toBe(true)),
             );
-            yield* Effect.flip(model.generateTurn(turn));
+            yield* Effect.flip(completedTurn(model.streamTurn(turn)));
             expect(requests).toBe(1);
           }),
         );
@@ -1056,7 +1072,7 @@ describe('native OpenAI Responses protocol', () => {
             });
             const turn = yield* model.prepareTurn({ ...REQUEST, system: ' ' });
             assert(turn.mode === 'foreground');
-            const result = yield* model.generateTurn(turn);
+            const result = yield* completedTurn(model.streamTurn(turn));
             assert(result.providerResponseId !== null);
             expect(result.continuation).toBeUndefined();
             expect(
@@ -1118,7 +1134,7 @@ describe('native OpenAI Responses protocol', () => {
             });
             const turn = yield* model.prepareTurn(REQUEST);
             assert(turn.mode === 'foreground');
-            yield* model.generateTurn(turn);
+            yield* completedTurn(model.streamTurn(turn));
             peer!.send(
               JSON.stringify({
                 type: 'response.created',
@@ -1132,7 +1148,9 @@ describe('native OpenAI Responses protocol', () => {
             yield* Effect.promise(() =>
               vi.waitFor(() => expect(closed).toBe(true)),
             );
-            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(model.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'malformed-output',
             });
             expect(requests).toBe(1);
@@ -1172,7 +1190,9 @@ describe('native OpenAI Responses protocol', () => {
               vi.waitFor(() => expect(pings).toBeGreaterThan(0)),
             );
             yield* TestClock.adjust(55 * 60_000 - 30_000);
-            expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+            expect(
+              yield* Effect.flip(completedTurn(model.streamTurn(turn))),
+            ).toMatchObject({
               kind: 'transport',
             });
             expect(connections).toBe(1);
@@ -1182,34 +1202,16 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.effect.each(['Chat', 'Responses'] as const)(
-    '%s rejects ambient header overrides and disables SDK diagnostic logging',
-    (protocol) =>
+  it.effect(
+    'rejects ambient header overrides and disables SDK diagnostic logging',
+    () =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           new Response('data: malformed-provider-data\n\n', {
             headers: { 'content-type': 'text/event-stream' },
           }),
         );
-        const construct = () =>
-          protocol === 'Responses'
-            ? modelWith(fetch)
-            : openaiChatModel(
-                {
-                  protocol: 'openai-chat',
-                  requestedModel: CONFIG.requestedModel,
-                  deployment: CONFIG.deployment,
-                  supportsTemperature: true,
-                  supportedEfforts: [],
-                  defaults: {
-                    temperature: 0,
-                    effort: null,
-                    maxOutputTokens: 100,
-                    parallelToolCalls: true,
-                  },
-                },
-                { apiKey: 'synthetic-not-a-secret', fetch },
-              );
+        const construct = () => modelWith(fetch);
         vi.stubEnv(
           'OPENAI_CUSTOM_HEADERS',
           'Authorization: Bearer other-account',
@@ -1224,7 +1226,9 @@ describe('native OpenAI Responses protocol', () => {
         const model = construct();
         const turn = yield* model.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
-        expect(yield* Effect.flip(model.generateTurn(turn))).toMatchObject({
+        expect(
+          yield* Effect.flip(completedTurn(model.streamTurn(turn))),
+        ).toMatchObject({
           kind: 'malformed-output',
         });
         expect(fetch).toHaveBeenCalledTimes(1);
@@ -1329,7 +1333,7 @@ describe('native OpenAI Responses protocol', () => {
         });
         assert(turn.mode === 'foreground');
         const sentOutput = Effect.gen(function* () {
-          yield* model.generateTurn(turn);
+          yield* completedTurn(model.streamTurn(turn));
           const request = fetch.mock.calls.findLast(([url]) =>
             String(url).endsWith('/responses'),
           );
@@ -1577,7 +1581,7 @@ describe('native OpenAI Responses protocol', () => {
         };
         const next = yield* model.prepareTurn(nextRequest);
         assert(next.mode === 'foreground');
-        yield* model.generateTurn(next);
+        yield* completedTurn(model.streamTurn(next));
         expect(
           JSON.parse(String(fetch.mock.calls.at(-1)?.[1]?.body)),
         ).toMatchObject({
@@ -1617,6 +1621,144 @@ describe('native OpenAI Responses protocol', () => {
         for (const [url] of retrievals)
           expect(String(url)).toContain('reasoning.encrypted_content');
         expect(fetch).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  it.effect(
+    'reads an xAI receipt and chains without resending instructions',
+    () =>
+      Effect.gen(function* () {
+        const message = {
+          ...MESSAGE,
+          phase: undefined,
+          content: [
+            {
+              type: 'output_text',
+              text: 'Done.',
+              annotations: [],
+              logprobs: null,
+            },
+          ],
+        };
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () =>
+            response(
+              events(
+                [message],
+                snapshot([message], {
+                  service_tier: 'default',
+                  usage: {
+                    input_tokens: 32,
+                    output_tokens: 9,
+                    total_tokens: 151,
+                    input_tokens_details: { cached_tokens: 8 },
+                    output_tokens_details: { reasoning_tokens: 110 },
+                    cost_in_usd_ticks: 70,
+                  },
+                }),
+              ),
+            ),
+          );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          continuationInheritsInstructions: true,
+          defaults: { ...CONFIG.defaults, store: true },
+        });
+        const first = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+        });
+        assert(first.mode === 'foreground');
+        const result = yield* completedTurn(model.streamTurn(first));
+        assert(result.kind === 'http');
+        expect(result.usage?.providerUsage).toEqual({
+          kind: 'xai',
+          costInUsdTicks: 70,
+          serviceTier: 'default',
+        });
+        assert(result.continuation !== undefined);
+        const next = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+          continuation: result.continuation,
+          messages: [
+            ...first.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
+          ],
+        });
+        assert(next.mode === 'foreground');
+        yield* completedTurn(model.streamTurn(next));
+        const [opening, chained] = fetch.mock.calls.map(([, init]) =>
+          JSON.parse(String(init?.body)),
+        );
+        expect(opening).toMatchObject({ instructions: 'policy' });
+        expect(chained).toMatchObject({ previous_response_id: 'resp_1' });
+        expect(chained).not.toHaveProperty('instructions');
+      }),
+  );
+
+  it.effect(
+    'sends a compatible route only its documented fields and reads Zhipu output',
+    () =>
+      Effect.gen(function* () {
+        const reasoning = {
+          type: 'reasoning',
+          id: 'rs_1',
+          content: { type: 'reasoning_text', text: 'think' },
+        };
+        const message = {
+          type: 'message',
+          id: 'msg_1',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'Done.' }],
+        };
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            events(
+              [reasoning, message],
+              snapshot([reasoning, message], {
+                usage: { input_tokens: 5, output_tokens: 3 },
+              }),
+            ),
+          ),
+        );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          supportsForcedToolChoice: false,
+          requestDialect: 'compatible',
+        });
+        expect(
+          (yield* Effect.flip(
+            model.prepareTurn({
+              ...REQUEST,
+              toolChoice: { name: 'read_file' },
+            }),
+          )).kind,
+        ).toBe('unsupported');
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const result = yield* completedTurn(model.streamTurn(turn));
+        const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+        expect(body).not.toHaveProperty('include');
+        expect(body).not.toHaveProperty('store');
+        expect(body.tools[0]).not.toHaveProperty('strict');
+        expect(result.content[0]).toMatchObject({
+          kind: 'reasoning',
+          summary: [],
+          content: [{ kind: 'text', text: 'think' }],
+        });
+        expect(result.usage).toMatchObject({
+          inputTokens: 5,
+          outputTokens: 3,
+          totalTokens: null,
+        });
       }),
   );
 
@@ -1887,7 +2029,7 @@ describe('native OpenAI Responses protocol', () => {
               }),
           ),
         );
-        if (variant === 'changed' || variant === 'sparse') {
+        if (variant === 'sparse') {
           assert(exit._tag === 'Failure');
           expect(
             exit.cause.reasons.find(Cause.isFailReason)?.error,
@@ -2322,7 +2464,7 @@ describe('native OpenAI Responses protocol', () => {
           .pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
-              return model.generateTurn(turn);
+              return completedTurn(model.streamTurn(turn));
             }),
           );
         expect(next.content[0]).toMatchObject({
@@ -2353,6 +2495,72 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
+    "replays another model's history as plain content after a model switch",
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementationOnce(async () => response(events(OUTPUT)))
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const first = yield* modelWith(fetch)
+          .prepareTurn(REQUEST)
+          .pipe(
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return completedTurn(modelWith(fetch).streamTurn(turn));
+            }),
+          );
+        // The same route, another model: the run switched after this turn.
+        const switched = modelWith(fetch, {
+          ...CONFIG,
+          requestedModel: 'switched-model',
+        });
+        const next = yield* switched.prepareTurn({
+          ...REQUEST,
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: first.requestedOrigin,
+              content: first.content,
+            },
+            {
+              role: 'tool',
+              results: [0, 1].map((callOrdinal) => ({
+                callOrdinal,
+                status: 'success' as const,
+                content: [{ kind: 'text' as const, text: 'ok' }],
+              })),
+            },
+          ],
+        });
+        assert(next.mode === 'foreground');
+        yield* completedTurn(switched.streamTurn(next));
+        // No reasoning item, item id, status or encrypted content of the
+        // model that wrote the history reaches the one it switched to.
+        expect(
+          JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input.slice(1),
+        ).toEqual([
+          { role: 'assistant', content: 'I will check.Then compare.' },
+          {
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'read_file',
+            arguments: '{"path":"a"}',
+          },
+          {
+            type: 'function_call',
+            call_id: 'call_2',
+            name: 'read_file',
+            arguments: '{"path":"b"}',
+          },
+          { type: 'function_call_output', call_id: 'call_1', output: 'ok' },
+          { type: 'function_call_output', call_id: 'call_2', output: 'ok' },
+        ]);
+      }),
+  );
+
+  it.effect(
     'freezes selected controls and distinguishes absent controls, explicit null and numeric zero',
     () =>
       Effect.gen(function* () {
@@ -2370,7 +2578,7 @@ describe('native OpenAI Responses protocol', () => {
         config.defaults.reasoning = null;
         config.defaults.serviceTier = null;
         assert(turn.mode === 'foreground');
-        yield* model.generateTurn(turn);
+        yield* completedTurn(model.streamTurn(turn));
         expect(
           JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)),
         ).toMatchObject({
@@ -2387,7 +2595,7 @@ describe('native OpenAI Responses protocol', () => {
           .pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
-              return model.generateTurn(turn);
+              return completedTurn(model.streamTurn(turn));
             }),
           );
         const omitted = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
@@ -2406,7 +2614,7 @@ describe('native OpenAI Responses protocol', () => {
         yield* withoutTemperature.prepareTurn(REQUEST).pipe(
           Effect.flatMap((turn) => {
             assert(turn.mode === 'foreground');
-            return withoutTemperature.generateTurn(turn);
+            return completedTurn(withoutTemperature.streamTurn(turn));
           }),
         );
         expect(
@@ -2429,16 +2637,6 @@ describe('native OpenAI Responses protocol', () => {
                 kind: 'reasoning',
                 summary: [],
                 evidence: { kind: 'openrouter-reasoning', details: [] },
-              },
-              {
-                kind: 'file-annotation',
-                hash: 'provider-file',
-                evidence: { kind: 'openrouter-file-annotation' },
-              },
-              {
-                kind: 'url-citation',
-                url: 'https://example.org/source',
-                evidence: { kind: 'openrouter-url-citation' },
               },
             ] as const
           ).map((part) => ({
@@ -2492,7 +2690,7 @@ describe('native OpenAI Responses protocol', () => {
         expect(turn.system).toBe('selected instructions');
         expect(turn.transport).toEqual({ kind: 'http' });
         expect(turn.controls.maxOutputTokens).toBeNull();
-        const result = yield* model.generateTurn(turn);
+        const result = yield* completedTurn(model.streamTurn(turn));
         const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
         const headers = new Headers(fetch.mock.calls[0]?.[1]?.headers);
         expect(headers.get('authorization')).toBe('Bearer selected-token');
@@ -2535,9 +2733,9 @@ describe('native OpenAI Responses protocol', () => {
             },
           },
         ])
-          expect(yield* Effect.flip(model.generateTurn(altered))).toMatchObject(
-            { kind: 'unsupported' },
-          );
+          expect(
+            yield* Effect.flip(completedTurn(model.streamTurn(altered))),
+          ).toMatchObject({ kind: 'unsupported' });
         expect(fetch).toHaveBeenCalledTimes(1);
       }),
   );
@@ -2563,7 +2761,7 @@ describe('native OpenAI Responses protocol', () => {
         const result = yield* model.prepareTurn(REQUEST).pipe(
           Effect.flatMap((turn) => {
             assert(turn.mode === 'foreground');
-            return model.generateTurn(turn);
+            return completedTurn(model.streamTurn(turn));
           }),
         );
         expect(result).toMatchObject({
@@ -2575,10 +2773,6 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect.each([
-    {
-      name: 'changed encrypted content',
-      final: snapshot([{ ...REASONING, encrypted_content: 'changed' }]),
-    },
     {
       name: 'changed message phase',
       final: snapshot([REASONING, { ...MESSAGE, phase: 'final_answer' }]),
@@ -2719,7 +2913,7 @@ describe('native OpenAI Responses protocol', () => {
           model.prepareTurn(REQUEST).pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
-              return model.generateTurn(turn);
+              return completedTurn(model.streamTurn(turn));
             }),
           ),
         );

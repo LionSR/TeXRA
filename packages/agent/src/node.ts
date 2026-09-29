@@ -6,17 +6,16 @@ import { Effect } from 'effect';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 
 import type { AgentPlatform } from './index.js';
 
@@ -24,7 +23,13 @@ import type { AgentPlatform } from './index.js';
 export interface NodePlatformOptions {
   readonly agentsDir: string;
   readonly workspaceDir?: string;
-  readonly storageDir?: string;
+  /**
+   * The directory this platform stores run history, checkpoints and its
+   * global state under, and reads its `mcp.json` from. Required: the package
+   * never falls back to the user's own `~/.texra`, which belongs to the
+   * TeXRA hosts.
+   */
+  readonly storageDir: string;
 }
 
 const NO_PERSISTED_SECRETS =
@@ -61,17 +66,12 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = canonicalizeWorkspacePath(
     options.workspaceDir ?? process.cwd(),
   );
-  const storageRoot = options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT;
   const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
-    // The two process ports `composeProcess` serves: this platform resumes
-    // nothing and has no editor behind it.
-    agentResume: {
-      tryResumeRun: () => Effect.succeed(false),
-    },
+    // No editor behind this platform.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    lifecycle: createLifecycleHost(),
+    mcpConfigPath: mcpConfigPathOf(options.storageDir),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),
@@ -79,13 +79,15 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       builtInToolUse: () => Effect.succeed(''),
     },
     roots: createNodeWorkspaceRoots({
+      host: 'sdk',
       workspacePath: workspaceDir,
-      storage: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-      globalStorage: resolveGlobalStoragePath(storageRoot),
+      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
+      globalStorage: resolveGlobalStoragePath(options.storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),
       workspaceState: new MemoryStateStore(),
+      repoState: new MemoryStateStore(),
       globalState,
     }),
   };

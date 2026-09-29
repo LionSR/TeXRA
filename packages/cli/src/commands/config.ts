@@ -13,6 +13,7 @@ import { unique } from '@utils/core';
 
 import {
   CliUsageError,
+  failUsage,
   readCliAmbientState,
   type CliContext,
 } from '../runtime/cliContext';
@@ -66,10 +67,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
     yield* Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
-      Effect.map(readSetting(entry, stores, 'cli'), (value) => [
-        entry.key,
-        value,
-      ]),
+      Effect.map(readSetting(entry, stores), (value) => [entry.key, value]),
     ),
   );
   const record = { settings, agents };
@@ -105,7 +103,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   const roots = services.roots;
   // The controller below resolves agent keys, so the registry must be loaded
   // first; the honest roster read happens once, later, where it is emitted.
-  yield* loadAgents({ includeRemote: false });
+  yield* loadAgents();
   const roster = createWorkspaceAgentRosterController(roots);
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;
@@ -116,17 +114,17 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     customRequested,
   ].filter(Boolean).length;
   if (workspaceChoices > 1) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Choose one workspace roster: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
     );
   }
   if (input.defaultTeam && input.clearDefault) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Use either --default-team or --clear-default, not both.',
     );
   }
   if (input.defaultAgent && input.clearDefaultAgent) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Use either --default-agent or --clear-default-agent, not both.',
     );
   }
@@ -166,7 +164,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     );
     if (!selected) {
       const names = available.map((agent) => agent.name).join(', ');
-      throw new CliUsageError(
+      return yield* failUsage(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
@@ -230,10 +228,7 @@ const configAgentsCommand = defineCliCommand({
   },
   run: (context, ctx) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
+      const services = yield* initCliPlatform(context);
       return yield* configureAgentRoster(context, services, {
         inherit: ctx.args.inherit === true,
         all: ctx.args.all === true,
@@ -253,10 +248,7 @@ const configShowCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   run: (context) =>
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
+      const services = yield* initCliPlatform(context);
       return yield* showConfig(context, services);
     }),
 });
@@ -277,7 +269,7 @@ const configEditCommand = defineCliCommand({
       );
     }
     return Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform(context);
       // The config TUI's module is loaded lazily, so a headless `config show`
       // in the same process never pays for Ink. The TUI itself is part of
       // this program rather than a second run past a Promise edge: its Ink

@@ -11,7 +11,12 @@ import { byString } from '@utils/core';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
-import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
+import {
+  type SkillLoadIssue,
+  issue,
+  loadCommandFile,
+  loadSkillDirectory,
+} from './skillLoader';
 import type { Skill } from './SkillSchema';
 
 export { type SkillLoadIssue } from './skillLoader';
@@ -30,13 +35,20 @@ interface SkillRootScan {
 }
 
 /** Scope vocabulary comes from the shared wire-contract enum
- *  (`@shared/schemas/activeSkills`) so the loader and the persisted snapshot
- *  can't drift. */
+ *  (`@shared/schemas/activeSkills`) so the loader and the persisted
+ *  disabled-source setting can't drift. */
 export interface SkillSource {
   readonly scope: ActiveSkillSourceScope;
   readonly path: string;
   readonly label?: string;
   readonly required?: boolean;
+  /** The plugin that ships these skills: a tool plugin, whose switch gates
+   *  them, or an installed plugin (`plugin:<name>`). */
+  readonly plugin?: string;
+  /** The installed plugin whose skills these are, named `<namespace>:<name>`. */
+  readonly namespace?: string;
+  /** `path` is one plugin command file, read as the skill its name names. */
+  readonly command?: boolean;
 }
 
 /**
@@ -159,6 +171,25 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   return { skills, errors };
 });
 
+/** One plugin command file, scanned as a root holding the one skill it is. */
+const scanCommandFile = Effect.fn('skills.scanCommandFile')(function* (
+  file: string,
+): Effect.fn.Return<SkillRootScan, never, FileSystem.FileSystem> {
+  const loaded = yield* loadCommandFile(file);
+  return {
+    skills: loaded.skill
+      ? [
+          {
+            skill: loaded.skill,
+            realPath: file,
+            entryName: path.basename(file),
+          },
+        ]
+      : [],
+    errors: loaded.errors,
+  };
+});
+
 /**
  * Validate a `required` skill source, returning an issue when the path is
  * missing or not a directory. Optional sources skip this check entirely.
@@ -172,7 +203,9 @@ function validateRequiredSource(
     });
   return FileSystem.FileSystem.use((fs) => fs.stat(source.path)).pipe(
     Effect.map((info) =>
-      info.type === 'Directory' ? undefined : notADirectory(),
+      info.type === (source.command ? 'File' : 'Directory')
+        ? undefined
+        : notADirectory(),
     ),
     Effect.catch((error) => {
       if (error.reason._tag === 'NotFound') {
@@ -249,7 +282,22 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
           }
         }
 
-        const result = yield* scanSkillRoot(source.path);
+        const scanned = source.command
+          ? yield* scanCommandFile(source.path)
+          : yield* scanSkillRoot(source.path);
+        const result =
+          source.namespace === undefined
+            ? scanned
+            : {
+                ...scanned,
+                skills: scanned.skills.map((entry) => ({
+                  ...entry,
+                  skill: {
+                    ...entry.skill,
+                    name: `${source.namespace}:${entry.skill.name}`,
+                  },
+                })),
+              };
         errors.push(
           ...result.errors.map((error) =>
             source.required === true &&

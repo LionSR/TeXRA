@@ -16,6 +16,7 @@ import {
   texraApprovalDenialMessage,
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
+  type ApprovalPolicyDenial,
   type TexraApprovalPolicy,
   type TexraApprovalPolicyDecision,
 } from '@shared/approvalPolicy';
@@ -52,33 +53,28 @@ function executableDecision(
 }
 
 /**
- * The approval options of every CLI tool-use launch. When this run can never
- * present an approval prompt, the runtime withholds approval-gated tools up
- * front rather than let each request settle as denied; a policy denial warns
- * once. The policy is the session's at launch, the one the run is pinned to.
+ * Whether no approval prompt of this CLI host can be answered under the
+ * session's policy: the host's answer to the session, which withholds
+ * approval-gated tools up front from every run it launches or resumes rather
+ * than let each request settle as denied.
  */
-export function cliToolUseApprovalOptions(
+export function cliApprovalPromptsUnavailable(
+  session: SessionHandle,
+  context: CliContext,
+): boolean {
+  return isTexraApprovalDenied(
+    executableDecision(context, session.approvalPolicy),
+  );
+}
+
+/** Every CLI tool-use launch's `onApprovalPolicyDenial`: a policy denial
+ *  warns once. */
+export function cliApprovalDenialHandler(
   session: SessionHandle,
   context: CliContext,
   runId?: RunId,
-): {
-  readonly approvalPromptsUnavailable: boolean;
-  readonly onApprovalPolicyDenial: (withheldTools?: readonly string[]) => void;
-} {
-  return {
-    approvalPromptsUnavailable: isTexraApprovalDenied(
-      executableDecision(context, session.approvalPolicy),
-    ),
-    onApprovalPolicyDenial: (withheldTools) =>
-      warnApprovalDenied(
-        session,
-        context,
-        withheldTools
-          ? { kind: 'withheldTools', tools: withheldTools }
-          : { kind: 'executable' },
-        runId,
-      ),
-  };
+): (denial: ApprovalPolicyDenial) => void {
+  return (denial) => warnApprovalDenied(session, context, denial, runId);
 }
 
 /** The policy's answer for a gated executable request, or `undefined` to

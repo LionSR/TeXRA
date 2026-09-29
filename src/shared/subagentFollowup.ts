@@ -89,17 +89,6 @@ function followupText(text: unknown): string | undefined {
   return typeof text === 'string' ? text : undefined;
 }
 
-export function stripOrchestratorFollowup(text: unknown): string {
-  const normalized = followupText(text);
-  if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
-
-  const trimmed = normalized.trim();
-  const match = trimmed.match(
-    /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
-  );
-  return match?.[1]?.trim() ?? normalized;
-}
-
 function attr(xml: string, name: string): string | undefined {
   return new RegExp(`(?:^|\\s)${escapeRegExp(name)}="([^"]*)"`).exec(xml)?.[1];
 }
@@ -241,6 +230,14 @@ export function formatWorkflowScriptDeliverySummary(
   ].join('\n');
 }
 
+/** The child run a progress envelope reports on, or undefined for any
+ *  other text. */
+export function subagentProgressRunId(text: string): string | undefined {
+  return deliveryTagOf(text) === DELIVERY_TAG.subagentProgress
+    ? attr(text.trim(), 'id')
+    : undefined;
+}
+
 /** Format a typed progress update as XML for injection into orchestrator context. */
 export function formatSubagentProgress(
   runId: string,
@@ -355,10 +352,6 @@ export function summarizeSubagentFollowup(text: unknown): string {
   const body = elementBody(trimmed, tag);
   const firstLine = body?.split('\n')[0]?.trim();
   return firstLine || normalized;
-}
-
-export function summarizeFollowupMessage(text: unknown): string {
-  return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
 }
 
 type IncompleteEmbeddedSubagentFollowup = {

@@ -40,7 +40,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   CUSTOMIZE_AGENT: 'customizeAgent',
   DELETE_CUSTOM_AGENT: 'deleteCustomAgent',
   REVEAL_AGENT_FILE: 'revealAgentFile',
-  VIEW_REMOTE_AGENT_PROMPT: 'viewRemoteAgentPrompt',
   // Custom agent directory commands
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
@@ -58,24 +57,20 @@ export const SETTINGS_VIEW_COMMANDS = {
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
+  // Installed plugin actions (install, enable, disable, update, remove)
+  PLUGIN_ACTION: 'pluginAction',
   // GitHub token commands (for PR subscription tool)
-  GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
   UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
   SET_GITHUB_TOKEN: 'setGitHubToken',
   REMOVE_GITHUB_TOKEN: 'removeGitHubToken',
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
   // Subscription sign-in status, provider-keyed in its payload.
   UPDATE_SUBSCRIPTION_AUTH_STATUS: 'updateSubscriptionAuthStatus',
-  // ChatGPT subscription (Codex) sign-in commands
-  SIGN_IN_CHATGPT: 'signInChatGpt',
-  SIGN_OUT_CHATGPT: 'signOutChatGpt',
-  SET_CHATGPT_PREFER_SUBSCRIPTION: 'setChatGptPreferSubscription',
-  // Grok (xAI SuperGrok) subscription sign-in commands
-  SIGN_IN_GROK: 'signInGrok',
-  SIGN_OUT_GROK: 'signOutGrok',
-  SET_GROK_PREFER_SUBSCRIPTION: 'setGrokPreferSubscription',
+  // Subscription sign-in commands, provider-keyed in their payload.
+  SIGN_IN_SUBSCRIPTION: 'signInSubscription',
+  SIGN_OUT_SUBSCRIPTION: 'signOutSubscription',
+  SET_SUBSCRIPTION_PREFERENCE: 'setSubscriptionPreference',
   GET_SUBSCRIPTION_USAGE: 'getSubscriptionUsage',
-  GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',
   UNSUBSCRIBE_PR: 'unsubscribePR',
   OPEN_PR_SUBSCRIPTION_STREAM: 'openPRSubscriptionStream',

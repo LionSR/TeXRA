@@ -121,8 +121,8 @@ export interface SupabaseAuthInit {
 
 /**
  * The host's TeXRA account plane: the GoTrue client, the session coordinator
- * that owns the stored session, and the signed-in probes the account UI, the
- * remote catalog, telemetry, and the setup tools read. Every probe settles
+ * that owns the stored session, and the signed-in probes the account UI,
+ * telemetry, and the setup tools read. Every probe settles
  * its own failure to the signed-out answer (logging where the facade did), so
  * a program that only asks "is there a session" never fails; a composition
  * with no account plane serves {@link unavailableSupabaseAuth}.
@@ -175,18 +175,6 @@ export class SupabaseAuth extends Context.Service<
     return Layer.succeed(SupabaseAuth)(auth);
   }
 }
-
-/**
- * The signed-in probe for catalog gating: the account plane's `authenticated`
- * where the process composition serves one, `false` where it does not (the
- * embeddable agent package composes no account plane). Binding this into a
- * port keeps that port's type free of a `SupabaseAuth` requirement.
- */
-export const supabaseAuthenticated: Effect.Effect<boolean> = Effect.flatMap(
-  Effect.serviceOption(SupabaseAuth),
-  (auth) =>
-    auth._tag === 'Some' ? auth.value.authenticated : Effect.succeed(false),
-);
 
 /**
  * Build the account plane against TeXRA's Supabase backend, capturing the

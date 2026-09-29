@@ -34,13 +34,12 @@ describe('persisted parent edge', () => {
             aggregateId: aggregateId('run', 'aaa010' as RunId),
             identity: { kind: 'agent', agent: 'assistant' },
             category: 'toolUse',
-            isRemote: false,
             userFollowUpSupport: 'unsupported',
             parent: { id: 'aaa0ff' as RunId },
           },
         ]);
         expect(rows[0]).toMatchObject({
-          parent: { id: 'aaa0ff', startCommit: 1 },
+          parent: { id: 'aaa0ff', uid: expect.any(String) },
         });
         const ownRows = yield* session.readRunRecords('aaa010' as RunId);
         expect(ownRows).toHaveLength(1);

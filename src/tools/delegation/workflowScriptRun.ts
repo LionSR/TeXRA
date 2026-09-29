@@ -1,4 +1,4 @@
-import { Cause, Exit } from 'effect';
+import { Cause, Data, Exit } from 'effect';
 
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -21,6 +21,20 @@ import { formatWorkflowCallLine } from '@ui/copy/workflowCall';
 import { generateShortId } from '@utils/core';
 
 /**
+ * A workflow subagent that ran but cannot resolve its agent() call: it ended
+ * with a non-completed outcome, or completed without the output files a
+ * workflow agent owes. The script sees it as that call's rejection.
+ */
+export class WorkflowSubagentUnsuccessful extends Data.TaggedError(
+  'WorkflowSubagentUnsuccessful',
+)<{ readonly message: string }> {}
+
+/** A waited workflow run that settled without the report it owes its caller. */
+export class WorkflowScriptReportMissing extends Data.TaggedError(
+  'WorkflowScriptReportMissing',
+)<{ readonly message: string }> {}
+
+/**
  * `onEvent` is omitted deliberately: this projection owns the engine's event
  * slot outright, so a caller cannot pass a handler that would be silently
  * discarded. What the run did is read back off the cards through `tally`.
@@ -37,16 +51,12 @@ type WorkflowScriptRunWithProgressOptions<R> = Omit<
   readonly onActivity?: (line: string) => void;
 };
 
+/** An entry's recorded spend, for the display-only summary: no usage is no
+ *  spend, and an entry that is not a run result counts 0 (the summary's
+ *  settle step warns about it, `workflowScriptStrategy.settleSummary`). */
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = RunEndSchema.safeParse(entry.result);
-  if (!result.success) {
-    throw new Error(
-      `Workflow journal entry ${entry.index} is not a run result.`,
-      { cause: result.error },
-    );
-  }
-  // No usage recorded is no spend.
-  return result.data.usage?.totalCost ?? 0;
+  return result.success ? (result.data.usage?.totalCost ?? 0) : 0;
 }
 
 /**
@@ -57,8 +67,8 @@ function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
 type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
 
 interface WorkflowAttemptCostTracker {
-  /** Record one physical child attempt and return this tool invocation's live total. */
-  record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
+  /** Record one physical child attempt. */
+  record(invocation: WorkflowAttemptIdentity, costUsd: number): void;
   /**
    * Return this tool invocation's final total. Replayed/recovered journal
    * entries with no physical-attempt callback contribute zero.
@@ -68,32 +78,22 @@ interface WorkflowAttemptCostTracker {
 
 /**
  * Track one tool invocation's physical attempts in callback order per journal
- * key. The production child runner emits exactly one callback for every
- * physical attempt, including `undefined` cost (normalized to zero), and emits
- * none for replay or stable recovery. For a completed key, all callbacks but
- * the last are discarded retries; only the last can correspond to the journal
- * result, so its charge is `max(observer, journal)` rather than another sum.
- * `record` and `total` therefore return comparable attempt-scoped USD totals
- * for the loop-owned best-value latch without charging historical entries.
- *
- * This is the workflow path's conversion step in the shared cost contract
- * (`ChildRunPorts` in `@agent/runtime/childRunLoop`): the loop retains
- * max(best) over *cumulative* observations, so this tracker turns the
- * engine's per-attempt deltas into invocation-cumulative totals before they
- * reach `recordCost`. `total()` never undercuts the live-observed sum — the
- * journal fallback only raises a completed key's last attempt.
+ * key, for the delivery summary's cost line. The agent runner emits exactly
+ * one callback for every physical attempt, with the cost its run's rows add
+ * up to, and none for replay or stable recovery. For a completed key, all
+ * callbacks but the last are discarded retries; only the last can correspond
+ * to the journal result, so its charge is `max(observer, journal)` rather
+ * than another sum. The summary is display: every attempt's spend is already
+ * on its own run, where session totals read it.
  */
 export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   const attemptsByIdentity = new Map<string, number[]>();
-  let observedTotalUsd = 0;
 
   return {
     record: (invocation, costUsd) => {
-      observedTotalUsd += costUsd;
       const attempts = attemptsByIdentity.get(invocation.key) ?? [];
       attempts.push(costUsd);
       attemptsByIdentity.set(invocation.key, attempts);
-      return observedTotalUsd;
     },
     total: (finalJournal) => {
       const journalIdentities = new Set<string>();
@@ -134,6 +134,8 @@ export interface WorkflowScriptProgressProjection<R> {
   readonly tally: () => {
     readonly phaseCount: number;
     readonly tally: WorkflowTally;
+    /** Labels of the calls a stop cancelled while they ran (not queued). */
+    readonly stopped: readonly string[];
   };
 }
 
@@ -157,6 +159,7 @@ export function projectWorkflowScriptProgress<R>(
   const projectionId = generateShortId();
   const cards = new Map<WorkflowCallProgress['id'], WorkflowCallProgress>();
   const planTaskIds = new Set<string>();
+  const cutShort = new Map<WorkflowCallProgress['id'], string>();
   let currentPhase: string | undefined;
 
   const phaseFor = (
@@ -232,6 +235,10 @@ export function projectWorkflowScriptProgress<R>(
       case 'call': {
         const { call } = event;
         const previous = cards.get(call.id)?.status;
+        // The terminal sweep cancels queued calls too: only one that was
+        // running when cancelled was cut short.
+        if (call.status === 'cancelled' && previous === 'running')
+          cutShort.set(call.id, call.label);
         emitCall(call);
         if (call.status === previous) return;
         if (call.status === 'running') onActivity?.(`Running: ${call.label}`);
@@ -271,6 +278,7 @@ export function projectWorkflowScriptProgress<R>(
         [...planTaskIds].filter((id) => !cards.has(id)).length,
         true,
       ),
+      stopped: [...cutShort.values()],
     }),
   };
 }

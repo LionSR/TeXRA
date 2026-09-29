@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { packRunOutputs } from '@housekeeping/runDirOps';
+import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { type FileOpResult } from '@shared/schemas';
@@ -20,37 +20,28 @@ const showPackResult = (
   folderPath: string | undefined,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    switch (result.status) {
-      case 'success': {
-        const folder = result.outputFolder;
-        if (!folder || !folderPath) return;
-        vscode.window
-          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-          .then((sel) => {
-            if (sel === 'Open Folder') {
-              void vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(folderPath),
-              );
-            }
-          });
-        break;
-      }
-      case 'noFiles':
-        vscode.window.showInformationMessage(
-          `No files found to pack for ${inputFile}`,
-        );
-        break;
-      case 'missingParams':
-        yield* Effect.forkDetach(
-          showLoggedMessage(CHANNEL, 'Select an input file before packing.'),
-        );
-        break;
-      case 'error':
-        void vscode.window.showErrorMessage(
-          `Error during packing: ${result.error}`,
-        );
-        break;
+    const { level, text } = fileOpResultMessage('pack', result, inputFile);
+    if (result.status === 'success' && folderPath) {
+      yield* Effect.forkDetach(
+        Effect.gen(function* () {
+          const sel = yield* Effect.promise(() =>
+            vscode.window.showInformationMessage(text, 'Open Folder'),
+          );
+          if (sel !== 'Open Folder') return;
+          yield* Effect.promise(() =>
+            vscode.commands.executeCommand(
+              'revealFileInOS',
+              vscode.Uri.file(folderPath),
+            ),
+          );
+        }),
+      );
+    } else if (result.status === 'missingParams') {
+      yield* Effect.forkDetach(showLoggedMessage(CHANNEL, text));
+    } else if (level === 'error') {
+      void vscode.window.showErrorMessage(text);
+    } else {
+      void vscode.window.showInformationMessage(text);
     }
   });
 

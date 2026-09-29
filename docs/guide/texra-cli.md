@@ -37,6 +37,14 @@ texra agents list
 texra config
 ```
 
+Run `texra` with no model connected and the chat still opens, with a
+**Connect a model** panel in front: sign in with a ChatGPT or Grok
+subscription, or add a provider API key. A message typed before you connect
+is sent as soon as you do. On your first run TeXRA then hands the chat to the
+setup assistant and opens `/agent`, where you pick an agent or a **team** (a
+preset such as Lean Project, led by its orchestrator); `/agent` stays
+available until your first message in any new chat.
+
 For a guided first run, use `texra setup`. It walks you through sign-in
 (TeXRA account, ChatGPT subscription, or an API key), checks your
 environment, shows the agent roster, and starts your first task:
@@ -110,8 +118,13 @@ include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
-Final run result objects report their terminal state through `outcome` and
-name the run through `runId`.
+Final run result objects report their terminal state through `outcome` and name
+the run through `runId`. A `texra run` result also records the plugins it ran
+with: `plugins` lists the installed plugins that loaded when it started or
+resumed, enabled and trusted (`name`, `source`, and for a fetched plugin its
+`ref` and pinned `commit`). The
+tools a run offered can change between its model requests when a plugin is
+switched on or off; the run records each change in its history.
 
 ### NDJSON contract, version 2
 
@@ -122,8 +135,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 - `kind: "progress"` records carry a session event verbatim. `event` is the
   event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
-  the rest of the event under its own field names. A run's events name it
-  through `payload.aggregateId`, the JSON array `["run", "<run id>"]`; a
+  the rest of the event under its own field names. A `usage` event is one
+  priced model turn, so a run's spend is the sum of its `usage` events. A
+  run's events name it through `payload.aggregateId`, the JSON array
+  `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live child roster as
@@ -140,8 +155,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 ## Authentication
 
 Model calls run on your own provider API keys, or on a provider subscription
-you already pay for. Signing in to TeXRA is a separate, optional step that
-unlocks the hosted research-agent catalog.
+you already pay for. Signing in to TeXRA is a separate, optional step: every
+agent ships bundled, so no agent needs it.
 
 **Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -171,9 +186,9 @@ or out and sets which subscription serves each provider's models, and
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
-**Sign in to your TeXRA account** to use the hosted research-agent
-catalog. Remote agents then resolve by name like any local agent. Sign-in does
-not supply model access; runs still use the credentials above.
+**Sign in to your TeXRA account** if you use account features. Sign-in does
+not supply model access, and no agent needs it; runs use the credentials
+above.
 
 ```bash
 texra login                 # pick GitHub or Google, then sign in via browser
@@ -223,7 +238,7 @@ Code extension. Running bare `texra` in a terminal opens this same session.
 ```bash
 texra chat                          # default chat agent and model
 texra chat --agent research         # pick a tool-use agent for the session
-texra chat --model deepseekT        # override the session model
+texra chat --model deepseek41T      # override the session model
 # headless tool-use run for scripts and CI
 texra run review --input main.tex --instruction "Check the proof." --print
 ```
@@ -298,41 +313,68 @@ skill with `/skills` to apply it to your next request.
 
 ### Plugins
 
-TeXRA installs plugins published for Claude Code and Codex and loads their
-skills. It reads the plugin's own manifest, `.claude-plugin/plugin.json` or
-`.codex-plugin/plugin.json`, and takes skills from the plugin's `skills/`
-folder and any `skills` path the manifest declares.
+TeXRA installs plugins published for Claude Code and Codex. It reads the
+plugin's own manifest, `.claude-plugin/plugin.json` or
+`.codex-plugin/plugin.json`, and the folders beside it: skills from `skills/`,
+commands from `commands/`, agents from `agents/`, MCP servers from `.mcp.json`,
+plus any of these paths the manifest declares.
 
 ```bash
 texra plugin install github.com/LionSR/AgenticPublicationProtocol
 texra plugin install github.com/<owner>/<repo>@v1.0.0
 texra plugin install https://example.org/plugins.git --ref main
 texra plugin install ./my-plugin
+texra plugin enable paper-protocol
 texra plugin list
 texra plugin update
+texra plugin disable paper-protocol
 texra plugin remove paper-protocol
 ```
 
-A git source is fetched into `~/.texra/plugins/<name>/` and pinned to the
-commit it resolved to. `texra plugin update` fetches the same branch or tag
-again and pins the new commit. A local folder is used in place and is not
-copied, so edits to it show up at once; removing it only forgets it.
+An installed plugin stays off until you enable it. `texra plugin enable` shows
+what the plugin declares (its skills, commands, agents, and each MCP server's
+command line) and asks you to trust it. The trust covers that version, every
+file in the plugin folder, and the MCP servers' commands, arguments and
+environment values. If any of those change, the plugin loads nothing until you
+enable it again and trust it anew. A program or file outside the plugin that a
+server runs, such as `node`, is listed as external and trusted by its path,
+size and date, not by its content. A plugin cannot be named `custom`,
+`remote`, `plugin`, `builtInWorkflow` or `builtInToolUse`.
+A plugin with hooks or LSP servers runs code of its own and cannot be enabled
+yet; output styles and apps are not loaded.
+
+An enabled, trusted plugin loads under its own name: its skills and commands
+are skills named `<plugin>:<name>`, its agents are tool-use agents named
+`<plugin>:<name>`, and every top-level tool-use run is offered its MCP servers'
+tools, named `mcp__plugin_<plugin>_<server>__<tool>`. A plugin agent that lists
+`tools` gets only those; one that lists none inherits them: a subagent gets
+every tool its parent was offered, and a top-level run the file, shell and web
+tools plus the installed plugins' tools. A subagent never gets more than its
+parent was offered. Each server runs as its own
+process in the plugin folder, and its tool calls are approved like shell
+commands. Enabling, disabling or changing a plugin reaches a running
+conversation at its next model request, which records the change; a call to a
+tool that has since gone is refused. What a plugin took part in stays in the
+history after you disable or remove it.
+
+A fetched plugin lives in `~/.texra/v1/global-storage/plugins/<name>/`, pinned
+to the commit its branch or tag resolved to. `texra plugin update` fetches the
+same branch or tag again and pins the new commit. If removing a plugin could
+not delete its folder, `texra plugin remove` again finishes the job. A local
+folder is used in
+place and is not copied, so edits to it show up at once; removing it only
+forgets it.
 
 A repository with a marketplace file (`.claude-plugin/marketplace.json` or
 `.agents/plugins/marketplace.json`) and no plugin manifest of its own installs
 the plugin it lists. When it lists several, name the ones you want with
 `--plugin <name>`, which may be repeated. <!-- guidance-refs-ignore -->
 
-Plugin skills count as user skills: they rank below the skills in
-`~/.texra/skills` and above imported and bundled skills, and the user source
-switch in the Skills settings turns them off with the rest. The VS Code
-extension reads the same install, and its Agents page lists installed plugins under Skills.
-The desktop app keeps its own settings and does not load them yet.
-
-TeXRA loads only skills from a plugin for now. It does not load or run a
-plugin's MCP servers, hooks, commands, agents, LSP servers, output styles or
-apps. `texra plugin list` shows which of these a plugin contains, as
-`ignored`. Nothing in the plugin is executed during install or update.
+The CLI, the VS Code extension and the desktop app share one install record
+and one set of trust decisions. The Skills section of the Agents settings page
+in the extension and the desktop lists installed plugins and installs,
+enables, disables, updates and removes them; enabling there asks for trust in
+a dialog.
 
 ## Shell completion
 

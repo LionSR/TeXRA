@@ -41,12 +41,6 @@ interface DesktopSupabaseAuth {
   /** Start the browser sign-in for one provider. The attempt outlives the
    *  call: its outcome is reported through the host, not to the caller. */
   signIn(provider?: OAuthProvider): Effect.Effect<void>;
-  /** Start the browser sign-in and answer whether a session landed before
-   *  the callback deadline. */
-  signInAndWaitForSession(
-    provider?: OAuthProvider,
-    options?: { timeoutMs?: number },
-  ): Effect.Effect<boolean>;
   signOut(): Effect.Effect<void, Error>;
   dispose(): void;
 }
@@ -255,11 +249,6 @@ export function createDesktopSupabaseAuth(
   return {
     signIn: (provider = DEFAULT_OAUTH_PROVIDER) =>
       Effect.asVoid(Effect.forkDetach(runAttempt(provider))),
-
-    signInAndWaitForSession: (
-      provider = DEFAULT_OAUTH_PROVIDER,
-      waitOptions = {},
-    ) => runAttempt(provider, waitOptions.timeoutMs),
 
     signOut: () =>
       withProcessServices(

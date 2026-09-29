@@ -34,9 +34,28 @@ function settleReservation(
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
-  private readonly inFlight = new Map<RunId, AgentCliSessionEntry>();
+  /** Each live child's hold on this registry, ended by `releaseByRunId`. */
+  private readonly holds = new Map<RunId, Deferred.Deferred<void>>();
 
-  constructor(private readonly runs: RunRegistry) {}
+  constructor(
+    private readonly runs: RunRegistry,
+    /** The plugin layer's hold (`PluginHold`) on this registry. */
+    private readonly hold: (until: Effect.Effect<void>) => Effect.Effect<void>,
+  ) {}
+
+  /**
+   * Keep this registry up while the child `runId` lives, released with its
+   * aliases: a plugin switched off and on while the child runs keeps the
+   * registry that routes the child's follow-ups, instead of building an
+   * empty one that would launch a second loop for the same thread.
+   */
+  holdWhileLive(runId: RunId): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const done = Deferred.makeUnsafe<void>();
+      this.holds.set(runId, done);
+      return this.hold(Deferred.await(done));
+    });
+  }
 
   /**
    * Atomically reserve an unowned SDK session id. Returns a release handle
@@ -67,11 +86,6 @@ export class AgentCliSessionRegistry {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     settleReservation(previous, entry);
-  }
-
-  /** Track a launched loop before its SDK session id is safe to publish. */
-  trackInFlight(entry: AgentCliSessionEntry): void {
-    this.inFlight.set(entry.runId, entry);
   }
 
   lookup(sessionId: string): AgentCliSessionEntry | undefined {
@@ -107,36 +121,15 @@ export class AgentCliSessionRegistry {
     settleReservation(state, undefined);
   }
 
-  /** Release every alias and in-flight handle owned by one child run. */
+  /** Release every alias owned by one child run, and its hold. */
   releaseByRunId(runId: RunId): void {
-    this.inFlight.delete(runId);
     for (const [sessionId, state] of this.sessions) {
       if (state.kind === 'active' && state.entry.runId === runId) {
         this.sessions.delete(sessionId);
       }
     }
-  }
-
-  /**
-   * Interrupt every registered CLI-backed session. Registries are keyed by
-   * runtime session (`agentCliSessionStores`), so "every" is already scoped
-   * to one session's own agent-CLI children.
-   */
-  interruptAll(): void {
-    const interrupted = new Set<RunId>();
-    const interrupt = (entry: AgentCliSessionEntry): void => {
-      if (interrupted.has(entry.runId)) return;
-      // The run's stop is its fiber's interruption, reached through the
-      // child loop's activation when one is reserved — the loop's signal is
-      // what a strategy's in-flight turn observes — and the fiber directly
-      // wherever no loop is (a launch, or a settled loop's residue).
-      if (!this.runs.interruptActive(entry.runId)) return;
-      interrupted.add(entry.runId);
-    };
-
-    for (const entry of this.inFlight.values()) interrupt(entry);
-    for (const state of this.sessions.values()) {
-      if (state.kind === 'active') interrupt(state.entry);
-    }
+    const hold = this.holds.get(runId);
+    this.holds.delete(runId);
+    if (hold) Deferred.doneUnsafe(hold, Effect.void);
   }
 }

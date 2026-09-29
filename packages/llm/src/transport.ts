@@ -1,6 +1,5 @@
 // Third-party imports
 import { Cause, Effect, Exit, type Scope, Stream } from 'effect';
-import { Sse } from 'effect/unstable/encoding';
 import { z } from 'zod';
 
 // Local imports - canonical protocol binding
@@ -11,47 +10,6 @@ import { MessageSchema } from './message.js';
 
 // Local imports - canonical model errors
 import { ModelError } from './errors.js';
-
-/**
- * The server-sent events carried by a byte stream, ending at the `[DONE]`
- * sentinel that terminates an OpenAI-compatible chat stream.
- *
- * The parser is fed per decoded chunk and drained into the events it
- * completed, so an event split across chunks emits once it is whole.
- * `maxEventSize` is uncapped to preserve the prior no-added-cap policy — it
- * is not a bounded-memory claim — and a `retry` field is only a reconnect
- * hint, which these one-shot operations never act on.
- */
-export const sseEvents = <E>(
-  bytes: Stream.Stream<Uint8Array, E>,
-  malformedMessage: string,
-): Stream.Stream<Sse.Event, E | ModelError> => {
-  let parsedEvents: Sse.Event[] = [];
-  const parser = Sse.makeParser(
-    (event) => {
-      if (event._tag === 'Event') parsedEvents.push(event);
-    },
-    { maxEventSize: Number.POSITIVE_INFINITY },
-  );
-  return bytes.pipe(
-    Stream.decodeText,
-    Stream.mapEffect((text) =>
-      Effect.gen(function* () {
-        parsedEvents = [];
-        const failure = parser.feed(text);
-        if (failure !== undefined)
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: malformedMessage,
-            cause: failure,
-          });
-        return parsedEvents;
-      }),
-    ),
-    Stream.flattenIterable,
-    Stream.takeUntil((event) => event.data === '[DONE]'),
-  );
-};
 
 /**
  * The value a pull source yields while it is not done: the `value` of the
@@ -176,8 +134,9 @@ export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
  * pending read. Cancel repeats an errored reader's original failure; only that
- * repeat (the abort reason or the primary transport cause) is dropped, and
- * distinct cleanup defects stay in the scope's combined failure.
+ * repeat (the abort reason, or the cause the primary failure already carries,
+ * such as a transport error or a parser's rejection of a streamed event) is
+ * dropped, and distinct cleanup defects stay in the scope's combined failure.
  */
 export const readerAbortSignal = (
   reader: () => ReadableStreamDefaultReader<unknown> | undefined,
@@ -197,7 +156,6 @@ export const readerAbortSignal = (
               (reason) =>
                 Cause.isFailReason(reason) &&
                 reason.error instanceof ModelError &&
-                reason.error.kind === 'transport' &&
                 reason.error.cause === cause,
             ))
             ? Effect.void

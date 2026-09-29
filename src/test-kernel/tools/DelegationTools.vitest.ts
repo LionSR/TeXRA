@@ -5,9 +5,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
@@ -19,13 +19,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
 }));
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { RunHandle } from '@agent/runtime/RunHandle';
-import { AgentCategory, type RunId } from '@shared/schemas';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {
@@ -92,71 +86,6 @@ describe('DelegationTools', () => {
       ]).pipe(Effect.provide(nodePlatformLayer));
 
       assert.strictEqual(result, null);
-    }),
-  );
-});
-
-describe('DelegateAgentTool resume ownership', () => {
-  const runId = 'ce5c3e0a1d77' as RunId;
-  const parentRunId = 'ba7e0f19c2d4' as RunId;
-
-  function makeHandle(): RunHandle {
-    return testRunHandle({
-      runId,
-      parent: parentRunId,
-      agent: 'review',
-      category: AgentCategory.ToolUse,
-      trace: { emit: vi.fn() } as never,
-    });
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it.effect('reports a merged recovery failure to the parent', () =>
-    Effect.gen(function* () {
-      const reported = yield* Deferred.make<void>();
-      const queued = { status: 'queued', wake: 'failed' };
-      mocks.submitFollowUp
-        .mockReturnValueOnce(Effect.succeed(queued))
-        .mockImplementationOnce(() =>
-          Deferred.succeed(reported, undefined).pipe(Effect.as(queued)),
-        )
-        .mockReturnValue(Effect.succeed(queued));
-
-      const session = {
-        runs: { getHandle: () => makeHandle() },
-      } as never;
-
-      yield* DelegateAgentTool.call({
-        execution_id: runId,
-        instruction: 'Keep going.',
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session,
-              runId: parentRunId,
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: 'parent-model',
-              }),
-              toolPolicy: {},
-            },
-          }),
-        ),
-      );
-
-      // The wake-failure delivery is forked detached inside the tool; the mock
-      // completes this deferred when that fiber makes the second call.
-      yield* Deferred.await(reported);
-      expect(mocks.submitFollowUp).toHaveBeenCalledTimes(2);
-      expect(mocks.submitFollowUp).toHaveBeenLastCalledWith(
-        parentRunId,
-        expect.objectContaining({ origin: 'subagent_result' }),
-        expect.anything(),
-      );
     }),
   );
 });

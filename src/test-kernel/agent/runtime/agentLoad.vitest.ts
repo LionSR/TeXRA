@@ -8,10 +8,7 @@ import { afterAll, beforeAll, describe, afterEach, vi } from 'vitest';
 
 import { getAgent, loadAgents, refresh } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import {
-  loadAgentSettingAndPrompts,
-  validateAgentYamlContent,
-} from '@agent/runtime/agentLoad';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -64,55 +61,6 @@ afterAll(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
-describe('validateAgentYamlContent', () => {
-  it.effect(
-    'rejects root settings that only satisfy the partial YAML schema',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.flip(
-          validateAgentYamlContent(
-            [
-              'name: bad_tool_use_root',
-              'settings:',
-              '  agentCategory: toolUse',
-              '  rounds: 2',
-              '',
-            ].join('\n'),
-          ),
-        );
-      }),
-  );
-
-  it.effect(
-    'keeps inherited child settings partial before parent merging',
-    () =>
-      validateAgentYamlContent(
-        [
-          'name: child',
-          'inherits: parent',
-          'settings:',
-          '  rounds: 2',
-          'prompts:',
-          '  userRequest: Override the parent request.',
-          '',
-        ].join('\n'),
-      ),
-  );
-
-  it.effect('validates root agents after resolving raw tool names', () =>
-    validateAgentYamlContent(
-      [
-        'name: root_tool_use',
-        'settings:',
-        '  agentCategory: toolUse',
-        '  tools:',
-        '    - grep',
-        '',
-      ].join('\n'),
-    ),
-  );
-});
-
 describe('loadAgentSettingAndPrompts', () => {
   // The loader reads its YAML through the process filesystem, so the
   // definitions under test are real files in a temp directory of this
@@ -130,8 +78,17 @@ describe('loadAgentSettingAndPrompts', () => {
 
   /** The loader on the process filesystem it reads its definitions through. */
   const loadDefinition = (entry: AgentEntry) =>
-    loadAgentSettingAndPrompts(entry).pipe(
-      Effect.provide(Layer.merge(nodePlatformLayer, testHttpClientLayer)),
+    loadAgentSettingAndPrompts(
+      entry,
+      Effect.succeed({ loadable: [], withheld: [] }),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          nodePlatformLayer,
+          testHttpClientLayer,
+          AppState.layer(new FakeStateStore()),
+        ),
+      ),
     );
 
   beforeAll(async () => {
@@ -233,24 +190,21 @@ describe('agent registry load state', () => {
     );
   });
 
-  it.effect('runs a single scan for loads that start together', () =>
+  it.effect('answers loads from the published catalog without a rescan', () =>
     Effect.gen(function* () {
       const counter = { scans: 0 };
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* onGlobalStorage(refresh({ includeRemote: false }));
+      yield* onGlobalStorage(refresh());
       counter.scans = 0;
 
       yield* Effect.all(
-        [
-          onGlobalStorage(loadAgents({ includeRemote: true })),
-          onGlobalStorage(loadAgents({ includeRemote: true })),
-        ],
+        [onGlobalStorage(loadAgents()), onGlobalStorage(loadAgents())],
         { concurrency: 'unbounded' },
       );
 
-      assert.strictEqual(counter.scans, 1);
+      assert.strictEqual(counter.scans, 0);
       assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
     }),
   );
@@ -261,7 +215,7 @@ describe('agent registry load state', () => {
       yield* Effect.promise(() =>
         installDirectories(countingDirectories(counter)),
       );
-      yield* onGlobalStorage(refresh({ includeRemote: false }));
+      yield* onGlobalStorage(refresh());
       assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
 
       const scanFailure = new Error('agent directory unavailable');
@@ -281,9 +235,7 @@ describe('agent registry load state', () => {
         }),
       );
 
-      const error = yield* Effect.flip(
-        onGlobalStorage(refresh({ includeRemote: false })),
-      );
+      const error = yield* Effect.flip(onGlobalStorage(refresh()));
       assert.ok(error instanceof Error);
       assert.strictEqual(error.message, scanFailure.message);
 

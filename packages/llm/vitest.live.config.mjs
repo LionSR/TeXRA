@@ -1,5 +1,5 @@
 /**
- * The `live` project: one suite per HTTP protocol, run against the real
+ * The `live` project: one suite per HTTP route, run against the real
  * provider.
  *
  * It is a separate config, not a third project in the root `vitest.config.mjs`,
@@ -10,9 +10,9 @@
  * labelled CI job in `.github/workflows/live-llm.yml`.
  *
  * Each suite gates itself on its own key, so a run with one key exercises one
- * protocol and skips the other ten. `vscode-lm`, the twelfth protocol, has no
- * suite here: it is acquired through the extension host's `vscode.lm` API and
- * its live check belongs to an Extension Development Host job.
+ * route and skips the others. `vscode-lm` has no suite here: it is acquired
+ * through the extension host's `vscode.lm` API and its live check belongs to
+ * an Extension Development Host job.
  */
 
 // Node imports

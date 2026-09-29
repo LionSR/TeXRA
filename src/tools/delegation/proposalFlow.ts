@@ -28,7 +28,12 @@ import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import {
+  decideProposalApproval,
+  texraApprovalDenialMessage,
+} from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
+import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { generateShortId } from '@utils/core';
@@ -171,8 +176,10 @@ export function proposalResultToToolResult(
 
 interface DelegationProposalDecision {
   readonly result: RequestDecision;
-  /** True only when the run's proposal-bypass policy supplied approval. */
-  readonly autoApproved: boolean;
+  /** How the child's own grants record this approval (see
+   *  {@link DelegatedChildApproval}); `inherit` unless the run's proposal
+   *  bypass supplied it. */
+  readonly childApproval: DelegatedChildApproval;
 }
 
 /** Request the shared proposal decision, honoring the run's bypass policy. */
@@ -185,27 +192,41 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     DatabaseNotOwner | DatabaseWriteFailed
   > {
     const { session, runId } = parent.run;
-    if (session.approvals.proposal.isBypassed(runId)) {
-      return { result: { action: 'approve' }, autoApproved: true };
-    }
-
-    // A run that can never present approval prompts withholds
-    // `requiresApproval` tools from the model up front (resolveAgentTools),
-    // so a delegation tool that still executes here was deliberately offered
-    // for unattended use: delegate_multi_agents in a headless CLI run. The
-    // proposal is the interactive review surface, not the security gate:
-    // proceed without one. `autoApproved: false` keeps the child on
-    // inherited per-kind approval state, so `--approval-policy never` still
-    // denies bash and edits downstream.
-    if (parent.run.toolPolicy.approvalPromptsUnavailable === true) {
-      return { result: { action: 'approve' }, autoApproved: false };
+    const decision = decideProposalApproval({
+      policy: session.approvalPolicy,
+      scopedBypass: session.approvals.proposal.isBypassed(runId),
+      canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
+    });
+    switch (decision) {
+      case 'deny-policy':
+        parent.run.onApprovalPolicyDenial?.({ kind: 'proposal' });
+        return {
+          result: {
+            action: 'deny',
+            reason: texraApprovalDenialMessage(decision),
+          },
+          childApproval: 'inherit',
+        };
+      case 'bypass':
+        return {
+          result: { action: 'approve' },
+          childApproval: session.approvals.proposal.isAutonomous(runId)
+            ? 'goal-approved'
+            : 'auto-approved',
+        };
+      case 'unattended':
+        // `inherit` keeps the child on inherited per-kind approval state,
+        // so its bash and edits still gate.
+        return { result: { action: 'approve' }, childApproval: 'inherit' };
+      case 'present':
+        break;
     }
 
     const result = yield* session.openRequest(runId, {
       kind: 'proposal',
       data: { requestId: generateShortId(), runId, ...proposal },
     });
-    return { result, autoApproved: false };
+    return { result, childApproval: 'inherit' };
   },
 );
 
@@ -218,15 +239,17 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   parent: DelegationParent,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-  agentName: string,
 ) {
   const decision = yield* requestDelegationProposal(proposal, parent);
   const { runId } = parent.run;
-  if (decision.autoApproved) {
+  if (decision.childApproval !== 'inherit') {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
-    return yield* executeSubagent(parent, proposal, agentName, runId, {
-      approvalMeta: { autoApproved: true },
+    return yield* executeSubagent(parent, proposal, runId, {
+      approvalMeta: {
+        autoApproved: true,
+        childApproval: decision.childApproval,
+      },
     });
   }
 
@@ -234,7 +257,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
 
   const nonApproveResult = proposalResultToToolResult(
     result,
-    agentName,
+    proposal.agent,
     proposal,
   );
   if (nonApproveResult) return nonApproveResult;
@@ -306,8 +329,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
       agentSource: resolvedAgentOverride.source,
     }),
   };
-  const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
-  return yield* executeSubagent(parent, effective, effectiveAgentName, runId, {
+  return yield* executeSubagent(parent, effective, runId, {
     approvalMeta: {
       autoApproved: false,
       ...(modelOverride && {

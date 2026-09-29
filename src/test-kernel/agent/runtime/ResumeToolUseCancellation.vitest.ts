@@ -1,13 +1,12 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchContext: vi.fn(),
-  readView: vi.fn(),
-  invokeModelOrTool: vi.fn(),
-  runFlowWithLifecycle: vi.fn(),
+  readRunRecords: vi.fn(),
+  runWithLifecycle: vi.fn(),
   runToolUse: vi.fn(),
   agentRunLayer: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
@@ -30,8 +29,14 @@ vi.mock('@agent/runtime/AgentLaunchContext', async () => {
 // The lifecycle wrapper is the Effect the lane hands its runner to; the
 // suite's subject is what the lane passes, so the wrapper just runs it.
 vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
-  runFlowWithLifecycle: (...args: unknown[]) =>
-    mocks.runFlowWithLifecycle(...args),
+  runWithLifecycle: (...args: unknown[]) => mocks.runWithLifecycle(...args),
+}));
+
+// The launch terminal's backstop row: the lifecycle this suite stubs owns
+// the run's ending, so the backstop keeps it.
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
+  finalizeRun: () => Effect.succeed({ ok: true, outcome: 'completed' }),
 }));
 
 vi.mock('@agent/runtime/loop/toolUse', () => ({
@@ -40,15 +45,19 @@ vi.mock('@agent/runtime/loop/toolUse', () => ({
 
 // The per-run services the lane provides are built and exercised by the loop
 // suites. Here only the layer's *input* matters: the tools the lane hands the
-// run and the callbacks it wires, so the layer itself is empty and its input
-// is captured.
+// run and the callbacks it wires, so the layer carries only the composition
+// the launch reads back for its result, and its input is captured.
 vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
   const { Layer } = await import('effect');
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/run/AgentRun')>();
   return {
-    ...(await importOriginal<typeof import('@agent/runtime/run/AgentRun')>()),
+    ...actual,
     agentRunLayer: (...args: unknown[]) => {
       mocks.agentRunLayer(...args);
-      return Layer.empty;
+      return Layer.succeed(actual.AgentRun)({
+        composition: { key: { hash: 'test-composition' } },
+      } as never);
     },
   };
 });
@@ -56,11 +65,6 @@ vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
 vi.mock('@agent/runtime/ModelInvoker', async () => {
   const { Layer } = await import('effect');
   return { modelInvokerLayer: () => Layer.empty };
-});
-
-vi.mock('@agent/runtime/FollowUps', async () => {
-  const { Layer } = await import('effect');
-  return { followUpsLayer: Layer.empty };
 });
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -85,27 +89,15 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
+  type AggregateId,
   RUN_OUTCOME,
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
-import { emptySessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { ensureError } from '@utils/errors/errorMessage';
-
-/** The part of `ToolUseStart` this suite drives. */
-interface InterruptibleLoopStart {
-  attachment: {
-    attach: (flowContext: TestFlowContext) => void;
-    detach: (flowContext: TestFlowContext) => void;
-  };
-}
-
-interface TestFlowContext {
-  interrupt(): void;
-}
 
 /** Empty totals: this suite never bills a turn. */
 const NO_USAGE = {
@@ -136,27 +128,29 @@ const LANE_SESSION = {
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
-    // No parent is detaching this run, so its release waits on nothing.
-    throughDetach: () => Effect.void,
   },
-  acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseClaims: mocks.releaseClaims },
-  releaseClaims: SessionHandle.prototype.releaseClaims,
-  // The resumed run reads its parent edge off the session's cold fold, so the
+  // The resume's hold on the run's claim: its release is what the suite
+  // observes, when the resume's scope closes.
+  acquireClaims: (id: AggregateId) =>
+    Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
+  holdRunClaim: SessionHandle.prototype.holdRunClaim,
+  // The resumed run reads its parent edge off the run's records, so the
   // lineage fixture is that read.
-  readView: (...args: unknown[]) =>
+  readRunRecords: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => mocks.readView(...args),
+      try: () => mocks.readRunRecords(...args),
       catch: ensureError,
     }),
   status: {},
+  // A surface that can present approval prompts.
+  interactions: { approvalPromptsUnavailable: false },
   settlePublications,
-  releaseRunLease: SessionHandle.prototype.releaseRunLease,
+  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 function resumeToolUseFromResumeData(
   resume: Parameters<typeof resumeOnLane>[0],
-  options: ResumeToolUseFromResumeDataOptions = {},
+  options: Partial<ResumeToolUseFromResumeDataOptions> = {},
 ) {
   return Effect.provide(
     resumeOnLane(resume, { session: LANE_SESSION, ...options }),
@@ -171,9 +165,13 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     runId,
     session: LANE_SESSION,
     config: { agent: 'test-agent', model: 'test-model' },
-    userVarChannels: { MODEL: 'test-model' },
+    opening: {
+      inputs: {},
+      catalog: [],
+      activated: [],
+      attachedMemoryMisses: [],
+    },
     attachedMemoryMisses: [],
-    usageMonitor: { recordUsage: vi.fn() },
   } as unknown as AgentLaunchContext;
 }
 
@@ -189,10 +187,10 @@ function completedTurn() {
 }
 
 /** Handle stub for tests that only need the flow to run to completion. */
-function noopFlowHandle(): unknown {
+function noopRunHandle(): unknown {
   return {
-    attachToolUseFlow: vi.fn(),
-    detachToolUseFlow: vi.fn(),
+    attachControls: vi.fn(),
+    detachControls: vi.fn(),
   };
 }
 
@@ -204,15 +202,15 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         createToolUseResumeData({ runId, agentConfig }),
     );
     mocks.releaseClaims.mockReturnValue(Effect.void);
-    mocks.readView.mockReset().mockResolvedValue(emptySessionView('resume'));
+    mocks.readRunRecords.mockReset().mockResolvedValue([]);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
-    mocks.runFlowWithLifecycle.mockImplementation(
+    mocks.runWithLifecycle.mockImplementation(
       (
         _context: unknown,
         run: (liveHandle: unknown) => Effect.Effect<unknown, unknown>,
-      ) => run(noopFlowHandle()),
+      ) => run(noopRunHandle()),
     );
   });
 
@@ -220,7 +218,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     Effect.gen(function* () {
       const storageError = new Error('run lineage unavailable');
       const snapshot = createToolUseResumeData({ runId: 'e80481' as RunId });
-      mocks.readView.mockRejectedValueOnce(storageError);
+      mocks.readRunRecords.mockRejectedValueOnce(storageError);
 
       expect(yield* Effect.flip(resumeToolUseFromResumeData(snapshot))).toBe(
         storageError,
@@ -248,101 +246,58 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       }),
   );
 
-  it.effect('rejects a resumed launch that is not a tool-use agent', () =>
-    Effect.gen(function* () {
-      const resume = createToolUseResumeData({ runId: 'e80483' as RunId });
-      // The guard runs inside the lifecycle so its failure ends the started
-      // stream; the mocked lifecycle only has to run the body.
-      mocks.runFlowWithLifecycle.mockImplementationOnce(
-        (_context: unknown, runner: (...args: unknown[]) => unknown) =>
-          runner({}),
-      );
-      mocks.buildAgentLaunchContext.mockResolvedValueOnce({
-        setting: { agentCategory: AgentCategory.Workflow },
-        runId: resume.runId,
-        session: {
-          releaseRunLease: vi.fn(async () => {}),
-        },
-      } as unknown as AgentLaunchContext);
-
-      const error = yield* Effect.flip(resumeToolUseFromResumeData(resume));
-      expect(error).toBeInstanceOf(Error);
-      expect(error.message).toContain(
-        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-      );
-    }),
+  it.effect(
+    'withholds approval-gated tools on a resume when the session surface cannot present prompts',
+    () =>
+      Effect.gen(function* () {
+        // An automatic resume passes no approval option: the fact is the
+        // session's, as an embedder with no approval channel declares it.
+        const runId = 'e80490' as RunId;
+        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+          buildResumeContext(runId),
+        );
+        mocks.runToolUse.mockReturnValueOnce(Effect.succeed(completedTurn()));
+        yield* Effect.provide(
+          resumeOnLane(createToolUseResumeData({ runId }), {
+            session: {
+              ...(LANE_SESSION as object),
+              interactions: { approvalPromptsUnavailable: true },
+            } as never,
+          }),
+          fakeProcessServices(),
+        ).pipe(Effect.ignore);
+        expect(mocks.buildAgentLaunchContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            toolPolicy: { approvalPromptsUnavailable: true },
+          }),
+        );
+      }),
   );
 
   it.effect(
-    'interrupts at flow attachment before substantive work starts',
+    'a stop asked before the resumed loop starts interrupts the run first',
     () =>
       Effect.gen(function* () {
         const runId = 'e80491' as RunId;
         const context = buildResumeContext(runId);
-        const order: string[] = [];
         const tools = [
           {
             definition: { name: 'run_scoped' },
             call: vi.fn(),
           },
         ] as unknown as readonly ITool[];
-        let attachedContext: TestFlowContext | undefined;
-        const handle = {
-          attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('attach');
-            attachedContext = flowContext;
-          }),
-          detachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
-            order.push('detach');
-            if (attachedContext === flowContext) attachedContext = undefined;
-          }),
-        };
-
         mocks.buildAgentLaunchContext.mockResolvedValueOnce(context);
-        mocks.runFlowWithLifecycle.mockImplementationOnce(
-          (
-            _context: unknown,
-            run: (liveHandle: typeof handle) => Effect.Effect<unknown, unknown>,
-          ) => run(handle),
-        );
-        mocks.runToolUse.mockImplementationOnce(
-          (start: InterruptibleLoopStart) =>
-            Effect.sync(() => {
-              let interrupted = false;
-              const flowContext: TestFlowContext = {
-                interrupt: () => {
-                  order.push('interrupt');
-                  interrupted = true;
-                },
-              };
-              start.attachment.attach(flowContext);
-              if (!interrupted) mocks.invokeModelOrTool();
-              start.attachment.detach(flowContext);
-              return {
-                outcome: interrupted
-                  ? RUN_OUTCOME.CANCELLED
-                  : RUN_OUTCOME.COMPLETED,
-                response: '',
-                files: [],
-                usage: NO_USAGE,
-                structured: undefined,
-              };
-            }),
+
+        const exit = yield* Effect.exit(
+          resumeToolUseFromResumeData(createToolUseResumeData({ runId }), {
+            tools,
+            isCancellationRequested: () => true,
+          }),
         );
 
-        const snapshot = createToolUseResumeData({ runId });
-
-        const result = yield* resumeToolUseFromResumeData(snapshot, {
-          tools,
-          isCancellationRequested: () => {
-            order.push('query');
-            expect(attachedContext).toBeDefined();
-            return true;
-          },
-          onCancellationAtFlowAttachment: () => order.push('cancel'),
-        });
-
-        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        // The run's own fiber is interrupted: no loop, so nothing to attach.
+        expect(Exit.hasInterrupts(exit)).toBe(true);
+        expect(mocks.runToolUse).not.toHaveBeenCalled();
         // The run-scoped tools reach the loop through the run's own layer.
         expect(mocks.agentRunLayer).toHaveBeenCalledWith(
           context,
@@ -351,14 +306,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', runId),
         );
-        expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
-        expect(order).toEqual([
-          'attach',
-          'query',
-          'cancel',
-          'interrupt',
-          'detach',
-        ]);
       }),
   );
 

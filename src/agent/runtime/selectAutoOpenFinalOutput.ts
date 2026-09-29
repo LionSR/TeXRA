@@ -1,17 +1,19 @@
 import { Effect } from 'effect';
-import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
- * Decide whether a finished workflow should auto-open a final output, and which
+ * Decide whether a finished run should auto-open a final output, and which
  * one. Shared policy across hosts (VS Code extension, desktop) so a multi-round
- * run resolves the same file everywhere instead of each host picking its own:
+ * run resolves the same file everywhere instead of each host picking its own.
+ * Hosts ask once the launch has returned, so this presentation never runs
+ * inside the run whose outcome it shows:
  *
+ * - Only a `completed` workflow qualifies — cancelled or failed runs may
+ *   carry partial outputs the user did not ask to review.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
- * - Only a `completed` run qualifies — cancelled or failed runs may carry
- *   partial outputs the user did not ask to review.
  * - Which file counts as final is {@link finalWorkflowOutput}'s call, shared
  *   with the CLI's `--output` copy and text result.
  *
@@ -24,9 +26,15 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  */
 export function selectAutoOpenFinalOutput(
   stores: SettingsStores,
-  result: WorkflowFlowResult,
+  result: RunEndResult,
 ) {
   return Effect.gen(function* () {
+    if (
+      result.output.category !== 'workflow' ||
+      result.outcome !== RUN_OUTCOME.COMPLETED
+    ) {
+      return undefined;
+    }
     if (
       !(yield* readSettingFrom<boolean>(
         stores,
@@ -35,7 +43,6 @@ export function selectAutoOpenFinalOutput(
     ) {
       return undefined;
     }
-    if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;
 
     return finalWorkflowOutput(result.output.outputs);
   });

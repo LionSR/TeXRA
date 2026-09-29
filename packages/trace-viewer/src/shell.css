@@ -33,7 +33,7 @@ body .trace-viewer-error h1 {
   font-size: 1.25em;
 }
 
-/* The scrubber over the run's flow.step rows (main.ts): a footer under the
+/* The scrubber over the run's run.position rows (main.ts): a footer under the
    shell, hidden for a run whose loop never stepped. */
 body .trace-scrubber {
   display: flex;

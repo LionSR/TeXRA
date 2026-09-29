@@ -3,36 +3,16 @@ import { Effect, type FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import {
-  buildInitialToolUsePrompts,
-  PromptBuilder,
-} from '@agent/prompt/PromptBuilder';
+import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-/** The system prompt reads `.texrarules` through `FileSystem`, so the
+/** The system prompt reads `AGENTS.md` through `FileSystem`, so the
  *  standard library's own is what these renders run over. */
 const overNodePlatform = <A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem | ChildProcessSpawner>,
 ): Effect.Effect<A, E> => Effect.provide(program, nodePlatformLayer);
-
-function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {
-  return buildInitialToolUsePrompts(
-    {
-      systemPrompt: 'system',
-      userPrefix: '',
-      userRequest: 'request',
-    } as AgentPrompt,
-    {},
-    undefined,
-    {
-      workspace: undefined,
-      settings: makeFakeSettingsStores().stores,
-      resolvedToolNames: ['memory'],
-    },
-  );
-}
 
 describe('PromptBuilder', () => {
   it.effect('uses array-based userRequest entries for reflections', () =>
@@ -55,37 +35,36 @@ describe('PromptBuilder', () => {
     }),
   );
 
-  it.effect(
-    'keeps pinned-memory consultation unconditional even for self-contained requests',
-    () =>
-      Effect.gen(function* () {
-        // Regression test for #7957: relevance gating (added in #7855) must not
-        // silently drop pinned memories, which are documented as loading every
-        // session (docs/guide/memory.md, MemoryTool's description).
-        const prompts = yield* overNodePlatform(buildMemoryPrompts());
+  it('keeps pinned-memory consultation unconditional even for self-contained requests', () => {
+    // Regression test for #7957: relevance gating (added in #7855) must not
+    // silently drop pinned memories, which are documented as loading every
+    // session (docs/guide/memory.md, MemoryTool's description).
+    const instructionSuffix = memoryPromptSection({
+      offered: ['memory'],
+      isChild: false,
+      isAnthropic: false,
+      bibPath: '',
+    });
 
-        // Behavioral contract, not exact prose (review note on #7959): pinned
-        // files must be individually viewed at session start — a directory
-        // listing alone does not load their content — and this must hold even
-        // for self-contained-looking requests.
-        expect(prompts.instructionSuffix).toMatch(
-          /Pinned memories are always loaded/,
-        );
-        expect(prompts.instructionSuffix).toMatch(
-          /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
-        );
-        expect(prompts.instructionSuffix).toMatch(
-          /regardless of how self-contained|even for requests that otherwise look self-contained/,
-        );
-        expect(prompts.instructionSuffix).not.toMatch(
-          /When memory is relevant, consult pinned memories first/,
-        );
-        expect(prompts.instructionSuffix).toMatch(
-          /When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history/,
-        );
-        expect(prompts.instructionSuffix).not.toMatch(
-          /^ +- When git is available, look into git history/m,
-        );
-      }),
-  );
+    // Behavioral contract, not exact prose (review note on #7959): pinned
+    // files must be individually viewed at session start — a directory
+    // listing alone does not load their content — and this must hold even
+    // for self-contained-looking requests.
+    expect(instructionSuffix).toMatch(/Pinned memories are always loaded/);
+    expect(instructionSuffix).toMatch(
+      /`view` each \[pinned\] file|`view` each pinned file|read each pinned memory file/,
+    );
+    expect(instructionSuffix).toMatch(
+      /regardless of how self-contained|even for requests that otherwise look self-contained/,
+    );
+    expect(instructionSuffix).not.toMatch(
+      /When memory is relevant, consult pinned memories first/,
+    );
+    expect(instructionSuffix).toMatch(
+      /When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history/,
+    );
+    expect(instructionSuffix).not.toMatch(
+      /^ +- When git is available, look into git history/m,
+    );
+  });
 });

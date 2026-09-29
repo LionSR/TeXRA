@@ -13,13 +13,12 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
   type Message,
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -28,7 +27,6 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
@@ -40,15 +38,14 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
-  attachTestTranscriptFold,
+  createTestRunTrace,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId, generateShortId } from '@utils/core';
@@ -67,7 +64,7 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // ---------------------------------------------------------------------------
 
 const ORIGIN = {
-  protocol: 'deepseek-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',
   deployment: {
@@ -95,6 +92,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,
@@ -104,6 +102,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -175,6 +174,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -194,7 +194,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               return {
                 kind: 'failed' as const,
                 state: yield* cell.append([
-                  snapshotRow(run.runId, state, {
+                  ...snapshotRow(run.runId, state, {
                     runtime: { lastError: scripted.failWith },
                   }),
                 ]),
@@ -211,6 +211,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',
@@ -227,6 +228,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                         cause: 'context-limit' as const,
                         continuation: null,
                         continuationDropped: null,
+                        usage: null,
                       },
                     },
                   ]
@@ -241,14 +243,14 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   turn,
                   calls: dispatchFactsFor(
                     turn,
-                    run.tools,
+                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
                   ),
                   usage: null,
                 },
               },
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             return {
               kind: 'response' as const,
@@ -308,31 +310,27 @@ function agentRunTestLayer(init: LoopInit) {
         // The launch stores a real run carries; no fixture reads through them.
         stores: hostStores(),
         toolPolicy: { stopAfterCycle: true },
-        userVarChannels: {},
+        opening: {
+          inputs: {},
+          activated: [],
+          attachedMemoryMisses: [],
+        },
         initialUserMessageForTranscript:
           'initialUserMessageForTranscript' in init
             ? init.initialUserMessageForTranscript
             : 'Do the thing.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry(tools),
+        ...testRunTools(hostStores(), tools),
         finalToolName: init.finalToolName ?? null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
         structured: init.structured ?? { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            runStageId: undefined,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
-        ),
         callbacks: {},
       } satisfies AgentRunShape;
     }),
@@ -346,7 +344,6 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer(),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
@@ -397,8 +394,10 @@ describe('the tool-use turn', () => {
     () =>
       Effect.gen(function* () {
         const session = quietSession();
-        const logger = new TraceEmitter();
-        const responseFinalized = vi.spyOn(logger, 'responseFinalized');
+        const finalized: string[] = [];
+        const logger = new TraceEmitter((event) => {
+          if (event.type === 'response.finalized') finalized.push(event.text);
+        });
 
         const { state } = yield* runScript({
           runId: startedRun(session),
@@ -413,9 +412,7 @@ describe('the tool-use turn', () => {
 
         // The tool-calling round is not the end of the turn, so only the
         // text round's response is finalized, once, with its text.
-        expect(responseFinalized).toHaveBeenCalledExactlyOnceWith(
-          'Done \\checkmark',
-        );
+        expect(finalized).toEqual(['Done \\checkmark']);
         expect(state?.messages.at(-1)?.role).toBe('assistant');
       }),
   );
@@ -668,9 +665,9 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
   ])('persists a $name turn as one structural session stage', (scenario) =>
     Effect.gen(function* () {
       const session = quietSession();
-      const logger = new TraceEmitter();
       const runId = startedRun(session);
-      const recorder = attachTestTranscriptFold(logger, runId);
+      const recorder = createTestRunTrace(runId);
+      const logger = recorder.trace;
 
       try {
         const { result } = yield* runScript({
@@ -693,7 +690,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         // The turn is the only structural stage: rounds are row facts.
         expect(groups.some((group) => group.kind === 'round')).toBe(false);
       } finally {
-        recorder.unsubscribe();
+        recorder.dispose();
       }
     }),
   );

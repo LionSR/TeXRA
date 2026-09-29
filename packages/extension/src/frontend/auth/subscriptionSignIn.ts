@@ -47,16 +47,15 @@ function vscodePresenter(
     presentDeviceCode: (prompt) => {
       void vscode.env.clipboard.writeText(prompt.userCode);
       const openUrl = prompt.verificationUrlComplete ?? prompt.verificationUrl;
-      void vscode.window
-        .showInformationMessage(
+      void (async () => {
+        const choice = await vscode.window.showInformationMessage(
           `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}. The code was copied to the clipboard.`,
           `Open ${displayName}`,
-        )
-        .then((choice) => {
-          if (choice === `Open ${displayName}`) {
-            void vscode.env.openExternal(vscode.Uri.parse(openUrl));
-          }
-        });
+        );
+        if (choice === `Open ${displayName}`) {
+          await vscode.env.openExternal(vscode.Uri.parse(openUrl));
+        }
+      })();
     },
     presentSignInUrl: (url) =>
       Effect.gen(function* () {

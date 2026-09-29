@@ -1,6 +1,12 @@
 import * as vm from 'node:vm';
 
-import { parse, type AnyNode, type Program } from 'acorn';
+import {
+  parse,
+  tokenizer,
+  type AnyNode,
+  type Position,
+  type Program,
+} from 'acorn';
 import { full as walkAst } from 'acorn-walk';
 import { z } from 'zod';
 
@@ -21,15 +27,64 @@ interface ExportedMetaDeclaration {
   literalEnd: number;
 }
 
-function parseProgram(source: string): Program {
+/**
+ * The body runs as a generator function, so it is parsed as one: the leading
+ * `export` keyword is blanked (offsets stay put) and the source wrapped in a
+ * generator declaration on the same first line, so reported lines match.
+ */
+const BODY_PREFIX = 'function* workflow() {';
+
+const META_POSITION_ERROR =
+  'Workflow script must begin with `export const meta = { name, description, ... }` (only whitespace/comments may precede it).';
+
+const MODULE_LOADING_ERROR =
+  'Workflow scripts cannot import modules; use only the injected primitives (agent, all, forEach, attempt, retry, timeout, log, phase, args, files).';
+
+function parseProgram(source: string): {
+  program: Program;
+  exportRange: readonly [number, number] | undefined;
+} {
+  let exportRange: readonly [number, number] | undefined;
   try {
-    return parse(source, {
+    const first = tokenizer(source, {
       ecmaVersion: 'latest',
       sourceType: 'module',
-      allowReturnOutsideFunction: true,
-    });
+    }).getToken();
+    if (first.type.keyword === 'export') exportRange = [first.start, first.end];
+  } catch {
+    // Unreadable tokens are reported by the parse below, with a location.
+  }
+  const blanked =
+    exportRange === undefined
+      ? source
+      : source.slice(0, exportRange[0]) +
+        ' '.repeat(exportRange[1] - exportRange[0]) +
+        source.slice(exportRange[1]);
+  const wrapped = `${BODY_PREFIX}${blanked}\n}`;
+  try {
+    return {
+      program: parse(wrapped, { ecmaVersion: 'latest', sourceType: 'module' }),
+      exportRange,
+    };
   } catch (error) {
-    throw new Error(`Invalid workflow script syntax: ${toErrorMessage(error)}`);
+    const { pos, loc } = error as { pos?: number; loc?: Position };
+    if (pos !== undefined && wrapped.startsWith('import', pos)) {
+      throw new Error(MODULE_LOADING_ERROR);
+    }
+    if (pos !== undefined && wrapped.startsWith('export', pos)) {
+      throw new Error(META_POSITION_ERROR);
+    }
+    const where =
+      loc === undefined
+        ? ''
+        : ` (${loc.line}:${loc.line === 1 ? loc.column - BODY_PREFIX.length : loc.column})`;
+    const reason = toErrorMessage(error).replace(/ \(\d+:\d+\)$/, '');
+    if (/\bawait\b/.test(reason)) {
+      throw new Error(
+        `Invalid workflow script syntax: ${reason}${where}. Workflow scripts are generators: write \`yield* agent(...)\` and \`yield* all([...])\`, not \`await\`.`,
+      );
+    }
+    throw new Error(`Invalid workflow script syntax: ${reason}${where}`);
   }
 }
 
@@ -53,14 +108,15 @@ function rejectsModuleLoading(program: Program): boolean {
 
 function exportedMetaDeclaration(
   program: Program,
+  exportRange: readonly [number, number] | undefined,
 ): ExportedMetaDeclaration | undefined {
-  const first = program.body[0];
-  if (first?.type !== 'ExportNamedDeclaration' || !first.declaration) {
+  const wrapper = program.body[0];
+  if (exportRange === undefined || wrapper?.type !== 'FunctionDeclaration') {
     return undefined;
   }
-  const declaration = first.declaration;
+  const declaration = wrapper.body.body[0];
   if (
-    declaration.type !== 'VariableDeclaration' ||
+    declaration?.type !== 'VariableDeclaration' ||
     declaration.kind !== 'const'
   ) {
     return undefined;
@@ -74,18 +130,20 @@ function exportedMetaDeclaration(
   ) {
     return undefined;
   }
+  const offset = BODY_PREFIX.length;
   return {
-    exportStart: first.start,
-    declarationStart: declaration.start,
-    literalStart: meta.init.start,
-    literalEnd: meta.init.end,
+    exportStart: exportRange[0],
+    declarationStart: declaration.start - offset,
+    literalStart: meta.init.start - offset,
+    literalEnd: meta.init.end - offset,
   };
 }
 
 /**
- * Statically validates a workflow script: extracts and zod-parses the
- * `export const meta = {...}` literal (evaluated in a bare realm so it must
- * be self-contained), and rejects module imports. The body is not executed.
+ * Statically validates a workflow script: parses it as a generator body,
+ * extracts and zod-parses the `export const meta = {...}` literal (evaluated
+ * in a bare realm so it must be self-contained), and rejects module imports.
+ * The body is not executed. An `await` gets a pointed syntax error.
  *
  * Acorn owns tokenization and structural scanning so strings, comments, regex
  * literals, and modern syntax cannot confuse the import ban or meta offsets.
@@ -94,20 +152,14 @@ function exportedMetaDeclaration(
  * (no dynamic-import callback is wired).
  */
 export function parseWorkflowScript(source: string): ParsedWorkflowScript {
-  const program = parseProgram(source);
+  const { program, exportRange } = parseProgram(source);
 
   if (rejectsModuleLoading(program)) {
-    throw new Error(
-      'Workflow scripts cannot import modules; use only the injected primitives (agent, parallel, log, phase, args, files).',
-    );
+    throw new Error(MODULE_LOADING_ERROR);
   }
 
-  const metaDeclaration = exportedMetaDeclaration(program);
-  if (!metaDeclaration) {
-    throw new Error(
-      'Workflow script must begin with `export const meta = { name, description, ... }` (only whitespace/comments may precede it).',
-    );
-  }
+  const metaDeclaration = exportedMetaDeclaration(program, exportRange);
+  if (!metaDeclaration) throw new Error(META_POSITION_ERROR);
 
   const literal = source.slice(
     metaDeclaration.literalStart,

@@ -217,6 +217,67 @@ describe('arXiv source download filenames', () => {
   );
 
   it.live(
+    'refuses an archive entry that already exists at the root, then places a clean one',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-root-', tempDirs),
+        );
+        const archive = yield* Effect.promise(async () => {
+          const srcDir = await makeTempDir('texra-arxiv-tar-', tempDirs);
+          await fs.mkdir(path.join(srcDir, 'figures'));
+          await fs.writeFile(path.join(srcDir, 'main.tex'), 'arxiv');
+          await fs.writeFile(path.join(srcDir, 'figures/a.txt'), 'fig');
+          const tarPath = path.join(srcDir, 'source.tar');
+          await tar.c({ cwd: srcDir, file: tarPath }, ['main.tex', 'figures']);
+          await fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine');
+          return fs.readFile(tarPath);
+        });
+        const download = ArxivProcessor.downloadSource('2404.12175', {
+          workspaceRoot,
+          formatter: null,
+          autoIndent: false,
+          destination: 'root',
+        }).pipe(
+          onFetch(
+            vi.fn(
+              async () =>
+                new Response(archive, {
+                  headers: {
+                    'content-disposition': 'attachment; filename="source.tar"',
+                  },
+                }),
+            ),
+          ),
+        );
+        const listRoot = Effect.promise(async () =>
+          (await fs.readdir(workspaceRoot)).sort(),
+        );
+        const error = yield* Effect.flip(download);
+        expect(error.message).toBe(
+          `Target already exists: ${path.join(workspaceRoot, 'main.tex')}`,
+        );
+        expect(yield* listRoot).toStrictEqual(['main.tex']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(workspaceRoot, 'main.tex'), 'utf8'),
+          ),
+        ).toBe('mine');
+
+        yield* Effect.promise(() =>
+          fs.rm(path.join(workspaceRoot, 'main.tex')),
+        );
+        yield* download;
+        expect(yield* listRoot).toStrictEqual(['figures', 'main.tex']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(workspaceRoot, 'figures/a.txt'), 'utf8'),
+          ),
+        ).toBe('fig');
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
     'closes an interrupted body writer before deleting its partial download',
     () =>
       Effect.gen(function* () {

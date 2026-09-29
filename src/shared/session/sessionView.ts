@@ -21,23 +21,26 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
+  JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
   requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
+  RunActionSchema,
   RunIdentitySchema,
-  RunFlowSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
+  RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
   RunIdSchema,
   TaskGroupSchema,
   TodoItemSchema,
   TokenUsageStatsSchema,
+  sumUsageStats,
+  type TokenUsageStats,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
   type PermissionPayload,
@@ -84,13 +87,39 @@ const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
  *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
 export type RunGroup = z.infer<typeof RunGroupSchema>;
 
+/**
+ * Where a run's loop stands, in the one coordinate its category counts: a
+ * workflow agent counts zero-based rounds (each round is one turn), every
+ * other run its one-based turn. The row's `round` counts model calls, not
+ * rounds, so no surface reads it.
+ */
+const LoopCoordinateSchema = z.strictObject({
+  kind: z.enum(['round', 'turn']),
+  index: z.int().nonnegative(),
+});
+export type LoopCoordinate = z.infer<typeof LoopCoordinateSchema>;
+
+/**
+ * The coordinate a run counts its position in: the one rule, applied by the
+ * fold, that every surface reads through `RunView.position`. The loop
+ * advances `turn`, one-based (the loop commits `state.turn + 1` from a zero
+ * start, and the child loop counts its first turn as 1). A workflow agent
+ * counts rounds: each round is one turn, so its zero-based round index is
+ * the turn less one, and a run that has not opened its first turn has none.
+ */
+export function loopCoordinate(
+  turn: number,
+  category: AgentCategory,
+): LoopCoordinate | null {
+  if (category !== AgentCategory.Workflow) return { kind: 'turn', index: turn };
+  return turn > 0 ? { kind: 'round', index: turn - 1 } : null;
+}
+
 const RunViewCommonSchema = z.object({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
-  // Launch facts from the `run.start` payload, never derived (5.2).
-  isRemote: z.boolean(),
   /** Current sequence-row owner; null when unclaimed. */
   ownerId: OwnerIdSchema.nullable(),
   /** The current claim belongs to this process, independently of parentage. */
@@ -105,8 +134,11 @@ const RunViewCommonSchema = z.object({
   command: z.string().nullable(),
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
+  /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
+   *  undecoded here, read through its plugin's reader. */
+  facts: z.record(z.string(), JsonValueSchema),
   worktree: WorktreeInfoSchema.nullable(),
-  /** The durable phase, folded from `run.activate` (running), `flow.step`
+  /** The durable phase, folded from `run.activate` (running), `run.position`
    *  (`waiting` parks, any other step runs), `child.park` (an agent-CLI
    *  child's own park row, which has no loop to step), and `run.end` (the
    *  outcome); `ready` before the first activation folds (3.3). An
@@ -120,7 +152,7 @@ const RunViewCommonSchema = z.object({
   /**
    * The terminal status once nothing can move it: for a run this process
    * owns, after its `run.end` has folded (a user stop publishes CANCELLED
-   * while the flow still writes its closing rows); for any other run, the
+   * while the loop still writes its closing rows); for any other run, the
    * terminal status itself. Null while anything can still move.
    * What licenses a host to paint an open group as interrupted and the
    * session to release the run's sidecar record.
@@ -142,11 +174,12 @@ const RunViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  /** The loop's latest `flow.step`: family, step, and coordinates. Null
-   *  before the first step and after every activation, and null for the
-   *  whole life of a run with no loop of its own — an agent-CLI child
-   *  parks through `child.park`, which carries a phase and no position. */
-  flow: RunFlowSchema.nullable(),
+  /** Where the run's loop stands, in the coordinate its category counts,
+   *  folded from its latest `run.position`. Null before the first position
+   *  and after every activation, and null for the whole life of a run with
+   *  no loop of its own — an agent-CLI child parks through `child.park`,
+   *  which carries a phase and no position. */
+  position: LoopCoordinateSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */
@@ -158,9 +191,10 @@ const RunViewCommonSchema = z.object({
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
-  /** Descendants by status; `running` counts the live ones (`isLiveRun`).
-   *  No separate waiting or interrupted count: both force expansion, so a
-   *  collapsed parent never hides a row that needs the user. */
+  /** Descendants by status: `running` counts the live ones (`isLiveRun`)
+   *  still working a turn, `finished` the ended ones and those parked idle
+   *  between turns. No separate waiting or interrupted count: both force
+   *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: z.object({
     total: z.int().nonnegative(),
     running: z.int().nonnegative(),
@@ -169,6 +203,8 @@ const RunViewCommonSchema = z.object({
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
+  /** What a host may offer on the run now (`runActions`). */
+  actions: z.array(RunActionSchema).readonly(),
   /** This run or a descendant needs the user; outranks the surface's
    *  collapsed choice. */
   forceExpanded: z.boolean(),
@@ -198,8 +234,6 @@ const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
-  /** Per run: concurrent runs hold independent goals. */
-  goal: GoalStateSchema,
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
 
@@ -221,7 +255,10 @@ export type RunView = z.infer<typeof RunViewSchema>;
  * Not `group` alone: a spawned child that has not activated yet is `ready`
  * and sorts under `recent`, yet it is live.
  */
-export function isLiveRun(run: Pick<RunView, 'group' | 'status'>): boolean {
+export function isLiveRun(
+  run: Pick<RunView, 'group' | 'status' | 'substate'>,
+): boolean {
+  if (run.substate === RUN_SUBSTATE.PAUSED) return false;
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
 }
 
@@ -416,6 +453,23 @@ export function emptySessionView(
 type RunTopology = {
   readonly runs: ReadonlyMap<RunId, { readonly childIds: readonly RunId[] }>;
 };
+
+/**
+ * The spend of a run tree: `rootRunId` and every run under it, finished or
+ * not. Each run's `usage` is its own priced model calls only, so this sum is
+ * the one reading of a session's (or a root run's) total every host shows.
+ */
+export function runTreeUsage(
+  view: Pick<SessionView, 'runs'>,
+  rootRunId: RunId | undefined,
+): TokenUsageStats {
+  return sumUsageStats(
+    descendantRuns(view, rootRunId, { includeRoot: true }).flatMap((id) => {
+      const run = view.runs.get(id);
+      return run ? [run.usage] : [];
+    }),
+  );
+}
 
 /**
  * Every run under `rootRunId`, parents first: the topology `childIds`

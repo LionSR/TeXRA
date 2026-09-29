@@ -18,6 +18,7 @@
  */
 
 // Local imports
+import type { SettingHost } from '@shared/state/stateSettings';
 import { installSkillContributions } from '@skills/runtimeSkills';
 import {
   hostSkillContributions,
@@ -32,6 +33,8 @@ import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
+  /** The product host opening these roots (`WorkspaceRoots.host`). */
+  readonly host: SettingHost;
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */
   readonly workspacePath: string | undefined;
   /** The storage root opened for this workspace (`resolveWorkspaceStoragePath`). */
@@ -46,6 +49,8 @@ export interface NodeWorkspaceRootsInit {
    */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly workspaceState: StateStore;
+  /** The repository settings (`WorkspaceRoots.repoState`). */
+  readonly repoState: StateStore;
   /** The process's application state store (`WorkspaceRoots.globalState`). */
   readonly globalState: StateStore;
 }
@@ -60,6 +65,7 @@ export function createNodeWorkspaceRoots(
   init: NodeWorkspaceRootsInit,
 ): WorkspaceRoots {
   return {
+    host: init.host,
     workspace: init.workspacePath,
     storage: init.storage,
     globalStorage: init.globalStorage,
@@ -68,6 +74,7 @@ export function createNodeWorkspaceRoots(
         ? new JsonConfigProvider(init.config)
         : init.config,
     workspaceState: init.workspaceState,
+    repoState: init.repoState,
     globalState: init.globalState,
   };
 }

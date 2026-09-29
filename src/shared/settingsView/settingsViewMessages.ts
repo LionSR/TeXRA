@@ -50,11 +50,13 @@ import {
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
+import {
+  PluginActionMessageSchema,
+  PluginListItemSchema,
+} from './pluginMessages';
 
-// Re-export the types and values needed by settings consumers from the
-// individual view-message modules so the historical settings surface (single
-// import site) stays intact. Keep this selective: the schemas themselves are
-// deliberately not re-exported here.
+// Re-export what settings consumers need from the view-message modules, so
+// they keep one import site; the schemas themselves stay unexported here.
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
@@ -196,9 +198,7 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
 
-// ============================================================
-// Agent selection data schema
-// ============================================================
+// ==================== Agent selection data schema ====================
 
 /**
  * Agent selection data for the settings view.
@@ -228,9 +228,7 @@ const UpdateAgentSelectionMessageSchema = z.object({
   customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
 
-// ============================================================
-// Model selection data schema
-// ============================================================
+// ==================== Model selection data schema ====================
 
 /**
  * Display labels for llm-zoo's reasoning efforts, written low → high because
@@ -372,7 +370,6 @@ export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 /** Individual tool within a group — carries an optional description for tooltips. */
 const ToolInfoSchema = z.object({
   name: z.string(),
-  description: z.string().optional(),
 });
 
 /** One setup action exposed by a tool dashboard card. */
@@ -414,11 +411,12 @@ const UpdateToolDashboardMessageSchema = z.object({
   items: z.array(ToolDashboardItemSchema),
 });
 
-/** Outbound: discovered skill inventory for the consolidated Skills tab. */
+/** Outbound: the Skills tab's skills, their issues and installed plugins. */
 const UpdateSkillsListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
   skills: z.array(SkillDisplayItemSchema),
   issues: z.array(SkillDisplayIssueSchema),
+  plugins: z.array(PluginListItemSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
@@ -466,9 +464,6 @@ const UpdateSubscriptionAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
   status: SubscriptionAuthStatusSchema,
 });
-export type UpdateSubscriptionAuthStatusMessage = z.infer<
-  typeof UpdateSubscriptionAuthStatusMessageSchema
->;
 
 const UpdateSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
@@ -579,11 +574,6 @@ export const dispatchSettingsViewOutbound = createDispatcher(
   SettingsViewOutboundMessageSchema,
 );
 
-/** Inbound message carrying a single boolean `enabled` toggle. */
-function enabledFlag<T extends string>(command: T) {
-  return z.object({ command: z.literal(command), enabled: z.boolean() });
-}
-
 /** Inbound message addressed to a provider by name. */
 function providerCommand<T extends string>(command: T) {
   return z.object({ command: z.literal(command), provider: z.string().min(1) });
@@ -660,7 +650,6 @@ const OpenAgentFolderMessageSchema = z.object({
 const CreateAgentMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
   category: AgentCategorySchema,
-  mode: z.enum(['ai', 'template']).prefault('ai'),
 });
 const CustomizeAgentMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
@@ -672,10 +661,6 @@ const DeleteCustomAgentMessageSchema = z.object({
 const RevealAgentFileMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
 );
-const ViewRemoteAgentPromptMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
-  agentName: z.string().min(1),
-});
 
 // Custom agent directory inbound messages
 const SetCustomAgentDirMessageSchema = commandOnly(
@@ -724,9 +709,6 @@ export type ToolCommandKind = z.infer<
   typeof RunToolCommandMessageSchema
 >['kind'];
 // GitHub token messages (for PR subscription tool)
-const GetGitHubTokenStatusMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
-);
 const SetGitHubTokenMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
 );
@@ -736,33 +718,24 @@ const RemoveGitHubTokenMessageSchema = commandOnly(
 const OpenGitHubTokenUrlMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
 );
-// ChatGPT subscription (Codex) sign-in messages
-const SignInChatGptMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-);
-const SignOutChatGptMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-);
-const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
-  SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-);
-// Grok (xAI) subscription sign-in messages
-const SignInGrokMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK,
-);
-const SignOutGrokMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK,
-);
-const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
-  SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,
-);
+// Subscription sign-in messages, addressed by provider
+const SignInSubscriptionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+});
+const SignOutSubscriptionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+});
+const SetSubscriptionPreferenceMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  enabled: z.boolean(),
+});
 const GetSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: z.boolean().optional(),
 });
-const GetPRSubscriptionsMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
-);
 const UnsubscribePRMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
   key: z.string().min(1),
@@ -820,6 +793,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RecheckToolStatusMessageSchema,
     ToggleToolMessageSchema,
     RunToolCommandMessageSchema,
+    PluginActionMessageSchema,
     // LaTeX settings messages
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
@@ -853,25 +827,18 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
-    ViewRemoteAgentPromptMessageSchema,
     // Custom agent directory messages
     SetCustomAgentDirMessageSchema,
     ResetCustomAgentDirMessageSchema,
     // GitHub token messages
-    GetGitHubTokenStatusMessageSchema,
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
-    // ChatGPT subscription sign-in messages
-    SignInChatGptMessageSchema,
-    SignOutChatGptMessageSchema,
-    SetChatGptPreferSubscriptionMessageSchema,
-    // Grok subscription sign-in messages
-    SignInGrokMessageSchema,
-    SignOutGrokMessageSchema,
-    SetGrokPreferSubscriptionMessageSchema,
+    // Subscription sign-in messages
+    SignInSubscriptionMessageSchema,
+    SignOutSubscriptionMessageSchema,
+    SetSubscriptionPreferenceMessageSchema,
     GetSubscriptionUsageMessageSchema,
-    GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,
     OpenPRSubscriptionStreamMessageSchema,
     // Generic catalog-driven scalar-setting write

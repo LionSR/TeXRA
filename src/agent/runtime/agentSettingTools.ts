@@ -1,9 +1,7 @@
 /**
- * The load-time check on an agent's parsed `tools:`. Shared by the local
- * definition loader ({@link ./agentLoad}) and the remote one
- * (`@agent/remote/RemoteAgentLoader`); each reports the warning on its own
- * log channel. The `{ name }` shorthand itself is parsed by the settings
- * schema.
+ * The load-time check on an agent's parsed `tools:`, reported by the
+ * definition loader ({@link ./agentLoad}) on its own log channel. The
+ * `{ name }` shorthand itself is parsed by the settings schema.
  */
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { AgentCategory } from '@shared/schemas';
@@ -12,8 +10,8 @@ import { AgentCategory } from '@shared/schemas';
  * Set when the declared tools can never run; the caller logs it at warn.
  *
  * Latent silent-failure trap: the shared settings schema accepts `tools:`
- * for every category, but a workflow (reflection) run only *sends* the
- * definitions to the provider; a returned tool call is never dispatched.
+ * for every category, but a workflow run offers none of them to the model,
+ * so they never run.
  * Say so at load time instead of letting the agent author discover it from
  * a model that keeps asking for a tool that never answers.
  */

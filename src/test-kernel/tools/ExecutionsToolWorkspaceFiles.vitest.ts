@@ -18,6 +18,7 @@ import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
@@ -37,7 +38,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 /**
- * Move a run's phase the way its loop does: a `flow.step` row, which is the
+ * Move a run's phase the way its loop does: a `run.position` row, which is the
  * one fact the fold derives a live phase from (one run model, 3.3).
  */
 function foldRunPhase(
@@ -49,9 +50,9 @@ function foldRunPhase(
   return Effect.gen(function* () {
     session.publish([
       {
-        type: 'flow.step',
+        type: 'run.position',
         aggregateId: aggregateId('run', runId),
-        payload: { family: 'toolUse', step },
+        payload: { family: 'toolUse', at: step },
       },
     ]);
     yield* session.settlePublications().pipe(Effect.orDie);
@@ -67,7 +68,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     fn,
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 }
 
@@ -78,6 +79,7 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
+  readResult: vi.fn(),
   readWorkspaceFiles: vi.fn(),
 }));
 
@@ -94,6 +96,7 @@ vi.mock('@agent/storage/runRecords', async () => {
         readReport: () => Effect.promise(() => mocks.readReport()),
         readResultMeta: () => Effect.promise(() => mocks.readResultMeta()),
         readRunEnd: () => Effect.promise(() => mocks.readRunEnd()),
+        readResult: () => Effect.promise(() => mocks.readResult()),
         readWorkspaceFiles: () =>
           Effect.promise(() => mocks.readWorkspaceFiles()),
       }),
@@ -157,6 +160,7 @@ describe('ExecutionsTool', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readRunEnd.mockResolvedValue(null);
+    mocks.readResult.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
@@ -258,6 +262,77 @@ describe('ExecutionsTool', () => {
       ),
   );
 
+  // Regression: a wait that returned a finished child's result left the
+  // child's queued delivery pending, so the parent took the same result
+  // again as a follow-up and ran a second turn.
+  it.live(
+    'withdraws the queued delivery of a child whose result a wait returned',
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'waiting',
+            RUN_PHASE.WAITING,
+          );
+          mocks.readReport.mockResolvedValue(
+            '<subagent-result>full report</subagent-result>',
+          );
+          session.followUps.claimLive(parentRunId, 'loop');
+          const delivery = {
+            text: 'child result',
+            from: { kind: 'run' as const, runId: childRunId },
+            deliveryId: `${childRunId}:turn:1:delivery`,
+          };
+          yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toHaveLength(1);
+
+          const waited = yield* ExecutionsTool.call({
+            path: `/executions/${childRunId}`,
+            action: 'wait',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session, runId: parentRunId, toolPolicy: {} },
+              }),
+            ),
+          );
+
+          expect(waited.output).toContain(
+            '<subagent-result>full report</subagent-result>',
+          );
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
+          // The child loop's replayed wake finds the row consumed.
+          expect(
+            yield* session.followUps.submit(
+              parentRunId,
+              delivery,
+              'live_owner',
+            ),
+          ).toEqual({ kind: 'duplicate' });
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
+        }),
+      ),
+  );
+
   // The blocking wait wakes on the fold's own phase move, read off the
   // session's view stream, well inside its deadline.
   it.live(
@@ -309,6 +384,61 @@ describe('ExecutionsTool', () => {
     { timeout: 5000 },
   );
 
+  it.live(
+    "wakes a blocking wait when the waiting run is sent a child's report",
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'turn.begin',
+            RUN_PHASE.RUNNING,
+          );
+          const wait = yield* Effect.forkChild(
+            ExecutionsTool.call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+              timeout: 600,
+            }).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session, runId: parentRunId, toolPolicy: {} },
+                }),
+              ),
+            ),
+          );
+          yield* Effect.yieldNow;
+          // The child stays RUNNING: only the committed report can end it.
+          session.publish([
+            {
+              type: 'followup.queued',
+              aggregateId: aggregateId('run', parentRunId),
+              followUpId: 'child-report',
+              content: {
+                text: '<subagent-progress id="c41d0000000d" agent="review" type="started" />',
+                from: { kind: 'run', runId: childRunId, relation: 'child' },
+              },
+            },
+          ]);
+          const result = yield* Fiber.join(wait);
+          expect(result.status).not.toBe('error');
+        }),
+      ),
+    { timeout: 5000 },
+  );
+
   it.live('reads running task lists from session snapshot state', () =>
     withTempStorage(() =>
       withSession((session) =>
@@ -353,7 +483,10 @@ describe('ExecutionsTool', () => {
               path: `/executions/${childRunId}`,
             }),
             ExecutionsTool.call({
-              path: `/executions/${childRunId}/todos`,
+              path: '/executions',
+              action: 'query',
+              sql: 'SELECT content FROM todos WHERE run_id = ?',
+              params: [childRunId],
             }),
           ]).pipe(
             Effect.provide(
@@ -437,58 +570,26 @@ describe('ExecutionsTool', () => {
       ),
   );
 
-  it.live.each([
-    {
-      label: 'subagent',
-      record: {
-        producer: 'subagent' as const,
-        agentName: 'reviewer',
-        wallTimeMs: 20,
+  it.live("serves the run's joined result envelope", () =>
+    Effect.gen(function* () {
+      // The join of the producer record and the terminal result is
+      // `getRunRecords().readResult`'s; the endpoint serves it verbatim.
+      const envelope = {
+        outcome: 'completed' as const,
+        usage: { totalCost: 0.2 },
         output: {
           category: 'toolUse' as const,
           response: 'Checked the proof.',
           files: ['notes.md'],
         },
-      },
-    },
-    {
-      label: 'CLI workflow',
-      record: {
-        producer: 'cliWorkflow' as const,
-        copiedOutput: '/workspace/polished.tex',
-        output: {
-          category: 'workflow' as const,
-          outputs: [],
-          compileFailures: [],
-          diffs: [],
-        },
-      },
-    },
-  ])('exposes only the final envelope for a $label result', ({ record }) =>
-    Effect.gen(function* () {
-      // The terminal fact comes from the `run.end` row; the producer record
-      // contributes the delivery-enriched output and nothing else.
-      const runEnd = {
-        outcome: 'completed' as const,
-        usage: { totalCost: 0.2 },
-        output: { category: 'toolUse' as const, response: '', files: [] },
       };
-      mocks.readResultMeta.mockResolvedValue(record);
-      mocks.readRunEnd.mockResolvedValue(runEnd);
+      mocks.readResult.mockResolvedValue(envelope);
 
       const result = yield* ExecutionsTool.call({
         path: '/executions/abc123/result',
       });
 
-      expect(JSON.parse(result.output ?? '')).toEqual({
-        outcome: 'completed',
-        usage: { totalCost: 0.2 },
-        output: record.output,
-      });
-      expect(result.output).not.toContain('producer');
-      expect(result.output).not.toContain('agentName');
-      expect(result.output).not.toContain('wallTimeMs');
-      expect(result.output).not.toContain('copiedOutput');
+      expect(JSON.parse(result.output ?? '')).toEqual(envelope);
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -502,14 +603,22 @@ describe('ExecutionsTool', () => {
     ),
   );
 
-  // The advertised /executions/{id}/todos endpoint must resolve a task list
-  // exactly as the completed summary does, from the same committed stream fold.
+  // The history query must resolve a task list exactly as the completed
+  // summary does, from the same committed rows.
   it.live.each([
-    { label: 'completed summary', toolPath: '/executions/abc123' },
-    { label: 'todos endpoint', toolPath: '/executions/abc123/todos' },
+    { label: 'completed summary', input: { path: '/executions/abc123' } },
+    {
+      label: 'history query',
+      input: {
+        path: '/executions',
+        action: 'query',
+        sql: 'SELECT content FROM todos WHERE run_id = ?',
+        params: ['abc123'],
+      },
+    },
   ])(
     'reads completed todos from committed stream events via the $label',
-    ({ toolPath }) =>
+    ({ input }) =>
       Effect.gen(function* () {
         yield* withTempStorage(() =>
           withSession((session) =>
@@ -534,9 +643,7 @@ describe('ExecutionsTool', () => {
               ]);
               yield* session.settlePublications();
               mocks.readConfig.mockResolvedValue(config);
-              const result = yield* ExecutionsTool.call({
-                path: toolPath,
-              }).pipe(
+              const result = yield* ExecutionsTool.call(input).pipe(
                 Effect.provide(
                   nativeToolTestLayer({
                     run: { session: session, runId: runId, toolPolicy: {} },

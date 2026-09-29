@@ -4,15 +4,10 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import {
   CODEX_BACKEND_BASE_URL,
-  CodexAuthError,
   codexCoordinator,
-  formatCodexAuthUnavailableMessage,
+  SubscriptionOAuthError,
 } from '@auth/codex';
-import {
-  XaiAuthError,
-  formatXaiAuthUnavailableMessage,
-  xaiCoordinator,
-} from '@auth/xai';
+import { xaiCoordinator } from '@auth/xai';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
@@ -30,6 +25,7 @@ import {
   type ModelRoute,
 } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
+import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -41,6 +37,7 @@ import type {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -108,19 +105,29 @@ export function routeBearer(credential: RouteCredential): string {
   }
 }
 
+/** A bearer route's model transport: its secret over the long-stream fetch. */
+export function bearerTransport(credential: RouteCredential) {
+  return { apiKey: routeBearer(credential), fetch: longRunningModelFetch };
+}
+
 /**
  * A subscription session failure the user must act on, minted as the loop's
  * own error: the "sign in again, or turn off the preference" instruction, not
  * a raw auth error. Anything else keeps its identity.
  */
-function subscriptionAuthFailure<E extends Error>(
+function subscriptionAuthFailure(
   error: Error,
-  AuthError: abstract new (...args: never[]) => E,
-  format: (error: E) => string,
+  copy: (typeof SUBSCRIPTION_AUTH_COPY)[keyof typeof SUBSCRIPTION_AUTH_COPY],
 ): Error {
-  return error instanceof AuthError
-    ? new AgentError(format(error), { cause: error })
-    : error;
+  if (!(error instanceof SubscriptionOAuthError)) return error;
+  const turnOff = `turn off "${copy.preferLabel}".`;
+  const action = error.needsReauth
+    ? `${copy.signInLabel} again, or ${turnOff}`
+    : `Try again in a moment, or ${turnOff}`;
+  return new AgentError(
+    `${copy.subscriptionLabel} unavailable: ${error.message} ${action}`,
+    { cause: error },
+  );
 }
 
 /** How one OAuth subscription route reads its signed-in session. */
@@ -170,11 +177,7 @@ const SUBSCRIPTION_ROUTES: {
         } as const;
       }),
     authFailure: (error) =>
-      subscriptionAuthFailure(
-        error,
-        CodexAuthError,
-        formatCodexAuthUnavailableMessage,
-      ),
+      subscriptionAuthFailure(error, SUBSCRIPTION_AUTH_COPY.chatgpt),
   },
   'xai-subscription': {
     provider: 'xai',
@@ -190,11 +193,7 @@ const SUBSCRIPTION_ROUTES: {
           }) as const,
       ),
     authFailure: (error) =>
-      subscriptionAuthFailure(
-        error,
-        XaiAuthError,
-        formatXaiAuthUnavailableMessage,
-      ),
+      subscriptionAuthFailure(error, SUBSCRIPTION_AUTH_COPY.grok),
   },
 };
 

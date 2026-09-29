@@ -129,7 +129,12 @@ for (const [entry, target] of Object.entries(manifest.exports)) {
   const entryGraphText = (
     await Promise.all([...entryGraph].map((file) => readFile(file, 'utf8')))
   ).join('\n');
-  for (const provider of ['@anthropic-ai/sdk', '@google/genai', 'openai']) {
+  for (const provider of [
+    '@anthropic-ai/sdk',
+    '@google/genai',
+    '@openrouter/sdk',
+    'openai',
+  ]) {
     const providerImport = new RegExp(
       `(?:from|import\\s*\\()\\s*['"]${provider.replaceAll('/', '\\/')}(?:/|['"])`,
     );

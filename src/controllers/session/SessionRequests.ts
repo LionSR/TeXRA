@@ -30,18 +30,17 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionApprovals,
   SessionRequests,
 } from '@agent/runtime/runApprovalQueue';
-import { AgentResume, type AgentResumePort } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
 } from '@shared/schemas';
-import type { LocalRuntimeState, RunId } from '@shared/schemas';
+import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
@@ -58,16 +57,20 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import { runActionRefusal } from '@shared/session/runActions';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
+/** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'readAll' | 'removeRun'
->;
+  'aggregateState' | 'readAll'
+> &
+  Pick<SessionEventsShape, 'removeRun'>;
 
 /**
  * The session's requests: its approval state and the handler that admits
@@ -81,7 +84,6 @@ export function sessionRequests(
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
-  agentResume: AgentResumePort,
 ): SessionRequests {
   /**
    * One in-process serial lane per request id. `decideRequest`'s checked
@@ -96,6 +98,7 @@ export function sessionRequests(
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
+    yield* requireRunAction(session, req);
     const admitted = yield* admit(log, local, req);
     return yield* handle(
       session,
@@ -108,7 +111,6 @@ export function sessionRequests(
     ).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
       Effect.provideService(Runs, session.runs),
-      Effect.provideService(AgentResume, agentResume),
     );
   });
   const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
@@ -116,10 +118,14 @@ export function sessionRequests(
     mode: DeletionMode,
     expectedStartCommit: number,
   ) {
-    const admitted = yield* admit(log, local, {
-      kind: 'run.delete',
-      runId,
-    });
+    // Listing-driven removal (`texra history delete`, the leftover-shell
+    // sweep) acts through the registry's inactive-run step and the claim,
+    // which refuse a run anything still holds; the view's liveness of a
+    // spawned run this process registered and never started is not theirs.
+    // Deliberately not gated on `actions` either: an explicit delete is how
+    // a user clears a run this process cannot read (the UI never offers
+    // it), and the claim still protects a run a live process holds.
+    const admitted = yield* admit(log, local, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
         new Unavailable({
@@ -133,6 +139,39 @@ export function sessionRequests(
     );
   });
   return { approvals, request, removeRun };
+}
+
+/** The run action a request performs, where the run's `actions` gates it. */
+const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
+  'run.delete': 'delete',
+  'run.compact': 'compact',
+  'policy.set': 'grant',
+};
+
+/**
+ * Refuse a delete, compaction or approval grant the run's current `actions`
+ * no longer holds, with its reason: the host rendered it from an earlier
+ * view, and the run may have started or ended since. A run the view has not
+ * folded yet, and one another process holds, are left to `admit` and the
+ * claim (the latter answers `NotOwner`); any other run this process cannot
+ * act on is refused here. A stop is not gated: it is always safe to ask,
+ * and a run just launched may not have folded live.
+ */
+function requireRunAction(
+  session: Pick<SessionHandle, 'view'>,
+  req: RuntimeRequest,
+): Effect.Effect<void, RequestError> {
+  const action = GATED_ACTIONS[req.kind];
+  if (action === undefined) return Effect.void;
+  const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
+  const run = SubscriptionRef.getUnsafe(session.view).runs.get(runId);
+  // `readOnly` with a foreign owner: a live one (a dead owner's run is not
+  // read-only), whose claim answers for the run.
+  const heldElsewhere =
+    run !== undefined && run.readOnly && run.ownerId !== null && !run.ownedHere;
+  return run === undefined || heldElsewhere || run.actions.includes(action)
+    ? Effect.void
+    : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
 }
 
 /** Admit against current sequence-row existence and claims. A foreign owner
@@ -206,7 +245,7 @@ function decide(
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-): Effect.Effect<Outcome, RequestError, InquiryRecords | AgentResume> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   // A run whose owner is gone (proved dead, or a claim already released)
   // takes no append until this process holds its claim: the decision
   // acquires it with the fencing resume uses and gives it back, so a later
@@ -345,7 +384,7 @@ function handle(
   log: SessionRequestLog,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs | AgentResume> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs> {
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {
@@ -356,7 +395,7 @@ function handle(
         const detachActiveChildren =
           req.detachActiveChildren ??
           (yield* detachSubagentsOnStop(session.roots));
-        yield* runs.stopAgentRun(req.runId, { detachActiveChildren });
+        yield* runs.stop(req.runId, { detachActiveChildren }).settlement;
       }).pipe(
         // The stop fails when the setting could not be read or the run's
         // terminal row was refused (a live foreign owner, a rolled-back
@@ -394,6 +433,7 @@ function handle(
         req.runId,
         {
           text: req.text,
+          from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
           ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
         },

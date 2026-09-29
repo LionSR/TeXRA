@@ -25,6 +25,8 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
+import { recordingTrace } from './progressTestUtils';
+
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',
@@ -55,16 +57,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await Effect.runPromise(closeSession(session.roots.storage));
 });
-
-function recordingTrace(): {
-  readonly trace: TraceEmitter;
-  readonly events: AgentEvent[];
-} {
-  const trace = new TraceEmitter();
-  const events: AgentEvent[] = [];
-  trace.subscribe((event) => events.push(event));
-  return { trace, events };
-}
 
 function stageId(events: readonly AgentEvent[], label: string): string {
   const event = events.find(
@@ -183,7 +175,7 @@ describe('workflow-script progress bridge', () => {
   ],
 }
 phase('Research')
-return await agent('Inspect', { id: 'inspect' })`,
+return yield* agent('Inspect', { id: 'inspect' })`,
       );
 
       const plans = events.filter((event) => event.type === 'workflow.plan');
@@ -228,7 +220,7 @@ return await agent('Inspect', { id: 'inspect' })`,
 log('Preparing the workflow')
 phase('Research')
 log('Checking the source')
-return await agent('Inspect', { id: 'inspect' })`,
+return yield* agent('Inspect', { id: 'inspect' })`,
         );
 
         const phaseId = stageId(events, 'Research');
@@ -311,14 +303,14 @@ return await agent('Inspect', { id: 'inspect' })`,
   ],
 }
 phase('Investigate')
-await agent('Extract', {
+yield* agent('Extract', {
   id: 'claims',
   agentName: 'researcher',
   model: 'gpt56',
   schema: { type: 'object', properties: { claims: { type: 'array' } } },
 })
 phase('Revise')
-return await agent('Rewrite', {
+return yield* agent('Rewrite', {
   id: 'intro',
   agentName: 'polish',
   inputFiles: ['paper/introduction.tex'],
@@ -396,7 +388,7 @@ return await agent('Rewrite', {
   ],
 }
 phase('Research')
-return await agent('Run one', { id: 'used' })`,
+return yield* agent('Run one', { id: 'used' })`,
       );
 
       // The plan marker is what lists the phase; no stage and no card claim
@@ -427,7 +419,7 @@ return await agent('Run one', { id: 'used' })`,
   tasks: [{ id: 'loose', label: 'Loose task' }],
 }
 phase('Research')
-return await agent('Run loose', { id: 'loose' })`,
+return yield* agent('Run loose', { id: 'loose' })`,
         );
 
         // meta.tasks[].phase is optional, so the plan can declare a task with no
@@ -470,7 +462,7 @@ return await agent('Run loose', { id: 'loose' })`,
   tasks: [{ id: 'loose', label: 'Loose task' }],
 }
 phase('Research')
-return await agent('Run loose', { id: 'loose' })`,
+return yield* attempt(agent('Run loose', { id: 'loose' }))`,
           {
             runAgent: () =>
               Effect.sync(function () {
@@ -511,8 +503,8 @@ return await agent('Run loose', { id: 'loose' })`,
     { id: 'refused', label: 'Refused audit', phase: 'Audit' },
   ],
 }
-await agent('Run first', { id: 'first' })
-return await agent('Run refused', { id: 'refused' })`,
+yield* agent('Run first', { id: 'first' })
+return yield* agent('Run refused', { id: 'refused' })`,
             { maxAgentCalls: 1 },
           ),
         ),
@@ -540,9 +532,9 @@ return await agent('Run refused', { id: 'refused' })`,
             trace,
             'duplicate-logical-id',
             `${meta}
-return await parallel([
-  () => agent('First prompt', { id: 'shared-journal-id' }),
-  () => agent('Second prompt', { id: 'shared-journal-id' }),
+return yield* all([
+  agent('First prompt', { id: 'shared-journal-id' }),
+  agent('Second prompt', { id: 'shared-journal-id' }),
 ])`,
           ),
         ),
@@ -559,7 +551,7 @@ return await parallel([
     () =>
       Effect.gen(function* () {
         const script = `${meta}
-return await agent('Read', { phase: 'Review' })`;
+return yield* agent('Read', { phase: 'Review' })`;
         yield* runScript(recordingTrace().trace, 'cached', script, {
           runAgent: () =>
             Effect.sync(function () {
@@ -588,7 +580,7 @@ return await agent('Read', { phase: 'Review' })`;
     Effect.gen(function* () {
       const script = `${meta}
 phase('Review')
-return await agent('Read', { id: 'read' })`;
+return yield* agent('Read', { id: 'read' })`;
       yield* runScript(recordingTrace().trace, 'twice-resumed', script, {
         runAgent: () =>
           Effect.sync(function () {
@@ -631,9 +623,7 @@ return await agent('Read', { id: 'read' })`;
   description: 'opens a declared phase from an agent event',
   phases: [{ title: 'Research' }, { title: 'Write' }],
 }
-const early = agent('Draft', { phase: 'Write' })
-phase('Write')
-return await early`;
+return yield* agent('Draft', { phase: 'Write' })`;
 
         yield* runScript(trace, 'early-phase-agent', script);
 
@@ -665,7 +655,7 @@ return await early`;
   }],
 }
 phase('  Review  ')
-return await agent('Review the argument', { id: 'review-task' })`;
+return yield* agent('Review the argument', { id: 'review-task' })`;
 
         yield* runScript(trace, 'trimmed-declared-task-phase', script);
 
@@ -699,8 +689,8 @@ return await agent('Review the argument', { id: 'review-task' })`;
   it.live('renders each call cost on live finish lines only', () =>
     Effect.gen(function* () {
       const script = `${meta}
-await agent('First')
-return await agent('Second')`;
+yield* agent('First')
+return yield* agent('Second')`;
       const { trace, events } = recordingTrace();
       // The runner reports spend the way production does; the engine folds it
       // into the run snapshot and stamps it on the terminal event.
@@ -737,7 +727,7 @@ return await agent('Second')`;
   it.live('uses a new task-card identity for a deterministic relaunch', () =>
     Effect.gen(function* () {
       const script = `${meta}
-return await agent('Draft')`;
+return yield* agent('Draft')`;
       const first = recordingTrace();
       yield* runScript(first.trace, 'relaunch-card-id', script, {
         runAgent: vi.fn(() => Effect.succeed('done')),
@@ -774,7 +764,7 @@ return await agent('Draft')`;
         trace,
         'late-user-skip',
         `${meta}
-return await agent('Late skip')`,
+return yield* attempt(agent('Late skip'))`,
         {
           runAgent: (invocation: WorkflowAgentInvocation) =>
             Effect.gen(function* () {
@@ -823,7 +813,7 @@ return await agent('Late skip')`,
         'agent-failure',
         `${meta}
 phase('Analysis')
-return await agent('Unsuccessful')`,
+return yield* attempt(agent('Unsuccessful'))`,
         {
           runAgent: () =>
             Effect.sync(function () {
@@ -870,10 +860,13 @@ return await agent('Unsuccessful')`,
           'parallel-phases',
           `${meta}
 phase('First')
-const slow = agent('slow')
-phase('Second')
-const fast = agent('fast')
-return await Promise.all([slow, fast])`,
+return yield* all([
+  agent('slow'),
+  function* () {
+    phase('Second')
+    return yield* agent('fast')
+  },
+])`,
           { runAgent },
         );
 
@@ -904,9 +897,12 @@ return await Promise.all([slow, fast])`,
         trace,
         'late-phase',
         `${meta}
-const pending = agent('before phase')
-phase('Later')
-return await pending`,
+return yield* all([
+  agent('before phase'),
+  function* () {
+    phase('Later')
+  },
+])`,
       );
 
       const completion = workflowCallEvent(events, 'before phase', 'completed');
@@ -932,7 +928,7 @@ return await pending`,
               trace,
               'runner-abort',
               `${meta}
-return await agent('Abort', { phase: 'Run' })`,
+return yield* agent('Abort', { phase: 'Run' })`,
               {
                 runAgent: (invocation: WorkflowAgentInvocation) =>
                   Effect.sync(function () {
@@ -968,61 +964,6 @@ return await agent('Abort', { phase: 'Run' })`,
           ),
         );
       }),
-  );
-
-  it.live('marks an abandoned call failed after interruption', () =>
-    Effect.gen(function* () {
-      const { trace, events } = recordingTrace();
-      const { activities, onActivity } = collectActivities();
-      const started = yield* Deferred.make<void>();
-      const run = runScript(
-        trace,
-        'orphaned-runner',
-        `${meta}
-agent('Orphaned', { phase: 'Run' })
-await agent('Confirm started')
-return 'guest success'`,
-        {
-          runAgent: (invocation: WorkflowAgentInvocation) =>
-            Effect.gen(function* () {
-              if (invocation.prompt === 'Confirm started') {
-                yield* Deferred.await(started);
-                return 'ready';
-              }
-              invocation.report({
-                childRunId: 'orphaned@model#abcdef' as RunId,
-                costUsd: 0.03,
-              });
-              yield* Deferred.succeed(started, undefined);
-              return yield* Effect.never;
-            }),
-          onActivity,
-        },
-      );
-
-      const fiber = yield* run.pipe(Effect.forkScoped);
-      yield* Deferred.await(started);
-      yield* Fiber.join(fiber);
-
-      const phaseId = stageId(events, 'Run');
-      expect(workflowCallEvent(events, 'Orphaned', 'failed')).toMatchObject({
-        stageId: phaseId,
-        call: {
-          error: 'The workflow ended before this call completed.',
-          costUsd: 0.03,
-          childRunId: 'orphaned@model#abcdef',
-        },
-      });
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: phaseId,
-        status: RUN_OUTCOME.FAILED,
-      });
-      expect(activities).toContain('Running: Orphaned');
-      expect(activities).toContain(
-        'Failed: Orphaned · Edits files · $0.030 — The workflow ended before this call completed.',
-      );
-    }),
   );
 
   it.live('closes every opened phase after a script failure', () =>

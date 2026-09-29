@@ -4,6 +4,8 @@
  * settings rows its plugin declares (Codex and Claude Code today).
  */
 
+import '@awesome.me/webawesome/dist/components/radio/radio.js';
+import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -201,22 +203,30 @@ export class ToolsTab extends LitElement {
         })}
         <div class="settings-section">
           <div class="setting-block">
-            <label class="settings-row-label" for="texra-approval-policy">
-              Approval policy
-            </label>
-            <wa-select
+            <!-- Three choices, all visible: the one control that decides how
+              much the user stays in the loop is not hidden in a dropdown. -->
+            <wa-radio-group
               id="texra-approval-policy"
+              label="Approval policy"
+              orientation="horizontal"
               value=${this.approvalPolicy}
               @change=${this.handleApprovalPolicyChange}
             >
               ${TEXRA_APPROVAL_POLICY_OPTIONS.map(
                 (option) => html`
-                  <wa-option value=${option.value}
-                    >${option.label} — ${option.description}</wa-option
+                  <wa-radio appearance="button" value=${option.value}
+                    >${option.label}</wa-radio
                   >
                 `,
               )}
-            </wa-select>
+            </wa-radio-group>
+            <p class="settings-row-help">
+              ${
+                TEXRA_APPROVAL_POLICY_OPTIONS.find(
+                  (option) => option.value === this.approvalPolicy,
+                )?.description
+              }
+            </p>
           </div>
           ${
             // The two switches refine Ask only (decideTexraApproval ignores

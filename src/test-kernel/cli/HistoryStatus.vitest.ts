@@ -9,7 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
@@ -25,10 +24,10 @@ import {
   aggregateId,
   CLI_RUN_STATUS,
   AgentCategory,
-  FlowSnapshotPayloadSchema,
+  RunSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
-import type { FlowSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
+import type { RunSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -63,30 +62,18 @@ beforeEach(async () => {
 });
 
 const SNAPSHOT_RUNTIME = {
-  phase: 'waiting',
-  round: 0,
-  turn: 0,
-  continuationIndex: 0,
   modelId: 'deepseekT',
   modelCompatibilityKey: null,
   lastError: null,
   declinedRoutes: [],
 };
 
-/** The opening `flow.snapshot` of a run of either family. */
-function snapshotPayload(
-  family: 'toolUse' | 'reflection',
-): FlowSnapshotPayload {
-  return FlowSnapshotPayloadSchema.parse({
-    family,
+/** A run's opening `run.snapshot`. */
+function snapshotPayload(): RunSnapshotPayload {
+  return RunSnapshotPayloadSchema.parse({
+    family: 'toolUse',
     runtime: SNAPSHOT_RUNTIME,
-    state:
-      family === 'toolUse'
-        ? { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) }
-        : {
-            totalRounds: 2,
-            workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-          },
+    state: { stateSlices: null },
   });
 }
 
@@ -95,7 +82,6 @@ async function seedSnapshot(
   id: RunId,
   config: AgentConfig,
   agent: string,
-  family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
     registerRun(testDefaultSession(), id, config, {
@@ -105,13 +91,13 @@ async function seedSnapshot(
   await Effect.runPromise(
     testDefaultSession().commit([
       {
-        type: 'flow.snapshot',
+        type: 'run.snapshot',
         aggregateId: aggregateId('run', id),
-        payload: snapshotPayload(family),
+        payload: snapshotPayload(),
       },
     ]),
   );
-  await Effect.runPromise(testDefaultSession().releaseRunLease(id));
+  await Effect.runPromise(testDefaultSession().commitRunEnd(id));
 }
 
 describe('CLI history status formatting', () => {
@@ -181,7 +167,7 @@ describe('CLI history status formatting', () => {
       Effect.gen(function* () {
         const id = 'bad-f10' as RunId;
         yield* Effect.promise(() =>
-          seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse'),
+          seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator'),
         );
 
         const details = yield* withProcessServices(
@@ -189,11 +175,11 @@ describe('CLI history status formatting', () => {
           readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
         );
 
-        expect(details?.hasFlowRecord).toBe(true);
+        expect(details?.checkpointPresent).toBe(true);
         expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
         expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
         expect(formatCliHistoryDetailsText(details!)).toContain(
-          'Flow record: present',
+          'Checkpoint: present',
         );
       }),
   );
@@ -201,19 +187,17 @@ describe('CLI history status formatting', () => {
   it.effect('marks workflow snapshots as CLI-resumable', () =>
     Effect.gen(function* () {
       const id = 'c0ffee-f10' as RunId;
-      yield* Effect.promise(() =>
-        seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection'),
-      );
+      yield* Effect.promise(() => seedSnapshot(id, WORKFLOW_CONFIG, 'correct'));
 
       const details = yield* withProcessServices(
         testRuntime(),
         readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
       );
 
-      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.checkpointPresent).toBe(true);
       expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
       expect(formatCliHistoryDetailsText(details!)).toContain(
-        'Flow record: present',
+        'Checkpoint: present',
       );
     }),
   );
@@ -230,15 +214,14 @@ describe('CLI history status formatting', () => {
           identity: { kind: 'agent', agent: 'orchestrator' },
           category: AgentCategory.ToolUse,
           userFollowUpSupport: 'unsupported',
-          isRemote: false,
           parent: null,
         },
       ]);
       yield* testDefaultSession().commit([
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', id),
-          payload: snapshotPayload('toolUse'),
+          payload: snapshotPayload(),
         },
       ]);
 
@@ -247,7 +230,7 @@ describe('CLI history status formatting', () => {
         readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
       );
 
-      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.checkpointPresent).toBe(true);
       expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
     }),
   );

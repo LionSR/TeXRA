@@ -11,10 +11,6 @@ import {
 } from './protocol.js';
 
 // Local imports - canonical messages
-import {
-  MiniMaxDetectionSchema,
-  OpenRouterFileAnnotationSchema,
-} from './message.js';
 
 /** Enough evidence to observe accepted remote work, without a second transcript. */
 const ResponsesOperationSchema = z
@@ -80,23 +76,6 @@ const ModelErrorFieldsSchema = z.strictObject({
   operation: RemoteOperationSchema.optional(),
   providerEvidence: z
     .discriminatedUnion('kind', [
-      MiniMaxDetectionSchema.extend({
-        kind: z.literal('minimax'),
-        origin: OriginSchema.extend({
-          protocol: z.literal('minimax-chat'),
-        }).readonly(),
-        statusCode: z.int(),
-        statusMessage: z.string().optional(),
-      }).readonly(),
-      z
-        .strictObject({
-          kind: z.literal('openrouter'),
-          origin: OriginSchema.extend({
-            protocol: z.literal('openrouter-chat'),
-          }).readonly(),
-          fileAnnotations: z.array(OpenRouterFileAnnotationSchema).readonly(),
-        })
-        .readonly(),
       z
         .strictObject({
           kind: z.literal('vscode-lm'),

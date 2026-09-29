@@ -2,10 +2,12 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 import { ZodError } from 'zod';
 
 // Local imports - common
+import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { SkillNameSchema } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -161,6 +163,80 @@ function normalizeSkillDescription(
   }
 
   return { description, errors };
+}
+
+/**
+ * Read one plugin command (`commands/<name>.md`, a Claude Code slash command)
+ * as the skill its file name names: its frontmatter, when it has one, may
+ * give a description, and otherwise its first line of text does. Never
+ * fails, like {@link loadSkillDirectory}.
+ */
+export function loadCommandFile(
+  file: string,
+): Effect.Effect<LoadedSkill, never, FileSystem.FileSystem> {
+  const directoryName = path.basename(file, '.md');
+  return FileSystem.FileSystem.use((fs) => fs.readFileString(file)).pipe(
+    Effect.map((content): LoadedSkill => {
+      const split = splitFrontmatterFence(content);
+      const parsed =
+        split.kind === 'ok' ? safeParseYaml(split.frontmatterText) : undefined;
+      const frontmatter =
+        parsed !== undefined &&
+        Result.isSuccess(parsed) &&
+        isObject(parsed.success)
+          ? parsed.success
+          : {};
+      const body = (split.kind === 'ok' ? split.body : content).trim();
+      const nameResult = normalizeSkillName({}, directoryName, file);
+      if (!nameResult.name) return { errors: nameResult.errors };
+      if (!body)
+        return {
+          errors: [
+            issue('error', 'missing_description', 'Command file is empty', {
+              path: file,
+              name: nameResult.name,
+            }),
+          ],
+        };
+      const firstLine = body
+        .split('\n')
+        .map((line) => line.replace(/^#+\s*/, '').trim())
+        .find(Boolean);
+      const descriptionResult = normalizeSkillDescription(
+        { description: frontmatter.description ?? firstLine },
+        file,
+        nameResult.name,
+      );
+      const errors = [...nameResult.errors, ...descriptionResult.errors];
+      if (parsed !== undefined && Result.isFailure(parsed))
+        errors.push(
+          issue(
+            'warning',
+            'invalid_frontmatter',
+            `Ignoring the command's frontmatter: ${parsed.failure.message}`,
+            { path: file, name: nameResult.name },
+          ),
+        );
+      if (!descriptionResult.description) return { errors };
+      return {
+        skill: SkillSchema.parse({
+          name: nameResult.name,
+          description: descriptionResult.description,
+          body,
+          baseDir: path.dirname(file),
+          path: file,
+        }),
+        errors,
+      };
+    }),
+    Effect.catch((err) =>
+      Effect.succeed<LoadedSkill>({
+        errors: [
+          issue('error', 'read_error', toErrorMessage(err), { path: file }),
+        ],
+      }),
+    ),
+  );
 }
 
 /**

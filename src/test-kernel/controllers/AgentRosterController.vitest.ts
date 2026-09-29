@@ -36,7 +36,6 @@ const preset: AgentModePreset = {
     workflow: ['write'],
     toolUse: ['lead'],
   },
-  texraHostedAgents: [],
 };
 
 function controller(
@@ -46,7 +45,7 @@ function controller(
   const getAgents =
     overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
   return new AgentRosterController({
-    workspaceState,
+    repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
     getPresets: () => Effect.succeed([preset]),
@@ -77,9 +76,10 @@ describe('AgentRosterController', () => {
         kind: 'team',
         teamId: 'test-team',
       });
+      // The team names `lead`; a custom agent it does not name is shown too.
       expect(
         (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
-      ).toEqual(['lead']);
+      ).toEqual(['lead', 'search']);
     }),
   );
 
@@ -103,6 +103,43 @@ describe('AgentRosterController', () => {
           toolUse: ['builtInToolUse:lead'],
         },
       });
+      // Turned off, it stays off under a team that does not name it.
+      yield* roster.setTeam('test-team');
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead']);
+    }),
+  );
+
+  it.effect('keeps a hidden custom agent hidden when the roster is all', () =>
+    Effect.gen(function* () {
+      const roster = controller(
+        new FakeStateStore({
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: ['custom:search'],
+        }),
+      );
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead']);
+      // Editing one category leaves the others symbolic, so agents added
+      // later still appear there.
+      yield* roster.setEnabledAgentKeys('workflow', ['write']);
+      expect((yield* roster.snapshot()).selection).toEqual({
+        kind: 'custom',
+        agentKeys: { workflow: ['write'], toolUse: 'all' },
+      });
+    }),
+  );
+
+  it.effect('reads a bare name in a written list as choosing that agent', () =>
+    Effect.gen(function* () {
+      const roster = controller(new FakeStateStore());
+      // The CLI writes bare names (`--tool-use lead,search`).
+      yield* roster.setEnabledAgentKeys('toolUse', ['lead', 'search']);
+      yield* roster.setTeam('test-team');
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead', 'search']);
     }),
   );
 
@@ -172,20 +209,25 @@ describe('AgentRosterController', () => {
         expect(yield* roster.getEnabledAgentKeys('workflow')).toEqual([
           'builtInWorkflow:write',
           'future-reviewer',
+          'custom:review',
         ]);
 
         yield* roster.setAgentEnabled({
           category: 'toolUse',
           source: 'custom',
           name: 'search',
-          enabled: true,
+          enabled: false,
         });
 
         expect((yield* roster.snapshot()).selection).toEqual({
           kind: 'custom',
           agentKeys: {
-            workflow: ['builtInWorkflow:write', 'future-reviewer'],
-            toolUse: ['builtInToolUse:lead', 'custom:search'],
+            workflow: [
+              'builtInWorkflow:write',
+              'future-reviewer',
+              'custom:review',
+            ],
+            toolUse: ['builtInToolUse:lead'],
           },
         });
       }),
@@ -229,8 +271,8 @@ describe('AgentRosterController', () => {
         expect((yield* roster.snapshot()).selection).toEqual({
           kind: 'custom',
           agentKeys: {
-            workflow: ['builtInWorkflow:write'],
-            toolUse: ['builtInToolUse:lead'],
+            workflow: ['builtInWorkflow:write', 'custom:review'],
+            toolUse: ['builtInToolUse:lead', 'custom:search'],
           },
         });
       }),
@@ -244,7 +286,7 @@ describe('AgentRosterController', () => {
           workflow: [],
           toolUse: [
             { category: 'toolUse', source: 'custom', name: 'review' },
-            { category: 'toolUse', source: 'remote', name: 'review' },
+            { category: 'toolUse', source: 'plugin', name: 'review' },
           ],
         };
         const roster = controller(
@@ -253,16 +295,41 @@ describe('AgentRosterController', () => {
               kind: 'custom',
               agentKeys: {
                 workflow: [],
-                toolUse: ['remote:review'],
+                toolUse: ['plugin:review'],
               },
             },
+            // Hidden, so only the exact identity decides what shows.
+            [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: ['custom:review'],
           }),
           { getAgents: (category) => duplicateAgents[category] },
         );
 
         expect(yield* roster.getVisibleAgents('toolUse')).toEqual([
-          { category: 'toolUse', source: 'remote', name: 'review' },
+          { category: 'toolUse', source: 'plugin', name: 'review' },
         ]);
+      }),
+  );
+
+  it.effect(
+    'keeps hidden keys through an empty catalog; a delete drops only its own',
+    () =>
+      Effect.gen(function* () {
+        const workspaceState = new FakeStateStore({
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: [
+            'custom:review',
+            'custom:search',
+          ],
+        });
+        // The catalog has not published its first scan: no agent is known.
+        const roster = controller(workspaceState, { getAgents: () => [] });
+        const hidden = () =>
+          workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS);
+
+        yield* roster.setEnabledAgentKeys('toolUse', []);
+        expect(yield* hidden()).toEqual(['custom:review', 'custom:search']);
+
+        yield* roster.forgetDeletedAgent('review');
+        expect(yield* hidden()).toEqual(['custom:search']);
       }),
   );
 

@@ -2,18 +2,15 @@
 import { Effect } from 'effect';
 
 // Local imports - skills
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
-import {
-  discoverSkillSources,
-  type SkillLoadIssue,
-  type SourcedSkill,
-} from '@skills/loadSkills';
+import type { SkillLoadIssue, SourcedSkill } from '@skills/loadSkills';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import {
+  discoverRuntimeSkillSources,
   filterDiscoveredSkills,
   readDisabledSkills,
-  runtimeSkillSources,
 } from '@skills/runtimeSkills';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -30,8 +27,10 @@ export function readCliSkills(
   options: SkillSourceOptions = {},
 ) {
   return Effect.gen(function* () {
-    const result = yield* discoverSkillSources(
-      yield* runtimeSkillSources(cwd, stores, options),
+    const result = yield* discoverRuntimeSkillSources(
+      cwd,
+      yield* readInstalledPluginLoad(stores),
+      options,
     );
     return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
   });

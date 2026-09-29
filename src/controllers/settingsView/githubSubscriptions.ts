@@ -1,9 +1,10 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
 import type { RunId } from '@shared/schemas';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
+import { LiveTools } from '@tools/liveTools';
 
 interface GitHubSubscriptionOwner {
   readonly runId: RunId;
@@ -15,31 +16,49 @@ interface GitHubSubscriptionEntry {
   readonly owners: GitHubSubscriptionOwner[];
 }
 
+/**
+ * `read` over the GitHub plugin's subscriptions, which are its process
+ * services: `none` once its layer is down (switched off, and no step pins it).
+ */
+const whileUp = <A>(
+  none: A,
+  read: Effect.Effect<A, never, GitHubSubscriptions>,
+): Effect.Effect<A, never, LiveTools> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const services = yield* (yield* LiveTools).processServices(
+        'github-pr-subscription',
+      );
+      return Option.isSome(services)
+        ? yield* Effect.provide(read, services.value)
+        : none;
+    }),
+  );
+
 /** Builds the shared PR, issue, and repository subscription presentation. */
-export const listGitHubSubscriptionEntries = Effect.fn(
-  'githubSubscriptions.listEntries',
-)(function* (getRunLabel: (runId: RunId) => string | undefined) {
-  const subscriptions = yield* GitHubSubscriptions;
-
-  function toEntry(binding: {
-    key: string;
-    runIds: readonly RunId[];
-  }): GitHubSubscriptionEntry {
-    return {
-      key: binding.key,
-      owners: binding.runIds.map((runId) => ({
-        runId,
-        label: getRunLabel(runId) ?? runId,
-      })),
-    };
-  }
-
-  return [
-    ...subscriptions.pr.list().map(toEntry),
-    ...subscriptions.repo.list().map(toEntry),
-    ...subscriptions.issue.list().map(toEntry),
-  ];
-});
+export const listGitHubSubscriptionEntries = (
+  getRunLabel: (runId: RunId) => string | undefined,
+) =>
+  whileUp(
+    [],
+    Effect.map(GitHubSubscriptions, (subscriptions) => {
+      const toEntry = (binding: {
+        key: string;
+        runIds: readonly RunId[];
+      }): GitHubSubscriptionEntry => ({
+        key: binding.key,
+        owners: binding.runIds.map((runId) => ({
+          runId,
+          label: getRunLabel(runId) ?? runId,
+        })),
+      });
+      return [
+        ...subscriptions.pr.list().map(toEntry),
+        ...subscriptions.repo.list().map(toEntry),
+        ...subscriptions.issue.list().map(toEntry),
+      ];
+    }),
+  ).pipe(Effect.withSpan('githubSubscriptions.listEntries'));
 
 /**
  * What both Git tabs say when {@link unsubscribeGitHubKey} matched nothing —
@@ -56,14 +75,15 @@ export function noActiveGitHubSubscriptionMessage(key: string): string {
  * shape must not silently default to the repo registry (a destructive unbind),
  * so it is treated as an explicit no-match instead.
  */
-export const unsubscribeGitHubKey = Effect.fn(
-  'githubSubscriptions.unsubscribeKey',
-)(function* (key: string) {
-  const subscriptions = yield* GitHubSubscriptions;
-  if (key.includes('/pulls/')) return subscriptions.pr.unbindAll(key);
-  if (key.includes('/issues/')) return subscriptions.issue.unbindAll(key);
-  if (/^[^/\s]+\/[^/\s]+$/.test(key)) {
-    return subscriptions.repo.unbindAll(key);
-  }
-  return 0;
-});
+export const unsubscribeGitHubKey = (key: string) =>
+  whileUp(
+    0,
+    Effect.map(GitHubSubscriptions, (subscriptions) => {
+      if (key.includes('/pulls/')) return subscriptions.pr.unbindAll(key);
+      if (key.includes('/issues/')) return subscriptions.issue.unbindAll(key);
+      if (/^[^/\s]+\/[^/\s]+$/.test(key)) {
+        return subscriptions.repo.unbindAll(key);
+      }
+      return 0;
+    }),
+  ).pipe(Effect.withSpan('githubSubscriptions.unsubscribeKey'));

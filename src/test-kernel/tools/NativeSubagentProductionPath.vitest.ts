@@ -1,7 +1,7 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -24,6 +24,7 @@ import {
   type ModelOrigin,
   type ResolvedTurn,
   type TurnEvent,
+  type TurnRequest,
   type TurnResult,
 } from '@texra-ai/llm/turn';
 
@@ -43,6 +44,8 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -56,18 +59,15 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import {
-  AgentDirectories,
-  AgentResume,
-  AgentResumeFailed,
-  AppState,
-  type RecoveryContinuation,
-} from '@platform/interfaces';
+import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
+  aggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  type SessionEvent,
   AgentCategory,
 } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -77,7 +77,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  noStep,
   testModelCell,
 } from '@test/support/nativeToolTestLayer';
 import {
@@ -87,7 +87,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import {
   fakeHostAgentDirectories,
-  fakeHostAgentResume,
   setupPlatform,
   type FakeHost,
 } from '@test/support/setupPlatform';
@@ -97,7 +96,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
+import { requireDelegationParent } from '@tools/delegation/proposalFlow';
 import { executeSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 
@@ -105,6 +104,7 @@ const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
 const OUTER_RUN_ID = '0a95310a9531' as RunId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
+const WORKFLOW_CHILD_AGENT = 'workflow_child_9531';
 const PARENT_MODEL = 'gpt54';
 const CHILD_MODEL = 'gpt55';
 
@@ -115,6 +115,8 @@ let resumedRuns: RunId[];
 let parentFiber: Fiber.Fiber<unknown, Error> | undefined;
 interface ScriptedTurn {
   readonly text: string;
+  /** A tool the turn calls, with no arguments, after its text. */
+  readonly call?: string;
 }
 
 /** The http arm of a binding: `identified` events carry no editor origin. */
@@ -127,7 +129,7 @@ type HttpOrigin = Exclude<ModelOrigin, { protocol: 'vscode-lm' }>;
  */
 function scriptedOrigin(model: string): HttpOrigin {
   return {
-    protocol: 'openai-chat',
+    protocol: 'openai-responses',
     codecVersion: 1,
     requestedModel: model,
     deployment: {
@@ -137,18 +139,23 @@ function scriptedOrigin(model: string): HttpOrigin {
   };
 }
 
-function preparedTurn(origin: ModelOrigin): ResolvedTurn {
+/** The request as a Responses route prepares it: what the run records. */
+function preparedTurn(origin: ModelOrigin, request: TurnRequest): ResolvedTurn {
   return ResolvedTurnSchema.parse({
     ...origin,
     mode: 'foreground',
-    messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
-    tools: [],
+    system: request.system,
+    messages: request.messages,
+    tools: request.tools ?? [],
+    transport: { kind: 'http' },
     controls: {
       temperature: null,
       maxOutputTokens: 1024,
+      store: false,
       parallelToolCalls: false,
       toolChoice: 'auto',
-      effort: null,
+      reasoning: null,
+      serviceTier: null,
     },
   });
 }
@@ -157,18 +164,32 @@ function preparedTurn(origin: ModelOrigin): ResolvedTurn {
  * An answerless turn carries no content at all: the scripted transport ends
  * the turn without an assistant message rather than with an empty one.
  */
-function scriptedResult(origin: ModelOrigin, text: string): TurnResult {
+function scriptedResult(
+  origin: ModelOrigin,
+  { text, call }: ScriptedTurn,
+): TurnResult {
   return TurnResultSchema.parse({
     kind: 'http',
     providerResponseId: `resp-${origin.requestedModel}-${text.length}`,
     requestedOrigin: origin,
     returnedModel: null,
     modelFingerprint: null,
-    content:
-      text === ''
+    content: [
+      ...(text === ''
         ? []
-        : [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
+        : [{ kind: 'message', content: [{ kind: 'text', text }] }]),
+      ...(call === undefined
+        ? []
+        : [
+            {
+              kind: 'local-call',
+              providerCallId: `call-${call}`,
+              name: call,
+              argumentsText: '{}',
+            },
+          ]),
+    ],
+    finishReason: call === undefined ? 'stop' : 'tool-calls',
     usage: {
       inputTokens: 10,
       outputTokens: 5,
@@ -226,7 +247,7 @@ function scriptedBoundModel(
         text.includes('<subagent-progress') &&
         !text.includes('<subagent-result');
       observed.push({ model: config.name, messages: request.messages });
-      return Effect.succeed(preparedTurn(origin));
+      return Effect.succeed(preparedTurn(origin, request));
     },
     streamTurn: () =>
       Stream.unwrap(
@@ -261,13 +282,11 @@ function scriptedBoundModel(
               requestedOrigin: origin,
               returnedModel: null,
             },
-            { kind: 'completed', result: scriptedResult(origin, turn.text) },
+            { kind: 'completed', result: scriptedResult(origin, turn) },
           ];
           return Stream.fromIterable(events);
         }),
       ),
-    generateTurn: () =>
-      Effect.die(new Error('The run loops stream; they never generate.')),
   };
   return {
     modelId: config.name,
@@ -275,6 +294,7 @@ function scriptedBoundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: config.contextWindow,
     supportsVision: false,
@@ -289,50 +309,24 @@ function scriptedBoundModel(
       config.name,
     ]),
     backgroundCapable: false,
+    persistentConnection: false,
   };
-}
-
-function resumePersistedRun(
-  runId: RunId,
-  recovery?: RecoveryContinuation,
-): Effect.Effect<boolean, AgentResumeFailed> {
-  // The port's contract, not convenience: the fixture answers with the
-  // program the port declares, and records its ordering inside it.
-  return Effect.tryPromise({
-    try: async () => {
-      resumedRuns.push(runId);
-      const resumed = await testRuntime().runPromise(
-        resumeRun(runId, {
-          session,
-          recovery,
-          executeWorkflow: () =>
-            Effect.fail(
-              new Error('Workflow resume is not part of this fixture.'),
-            ),
-        }),
-      );
-      return 'started' in resumed && resumed.delivered;
-    },
-    catch: (cause) =>
-      new AgentResumeFailed({
-        runId,
-        message: 'Fixture resume failed.',
-        cause,
-      }),
-  });
 }
 
 async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
-  await Promise.all(
-    [PARENT_AGENT, CHILD_AGENT].map((name) =>
+  await Promise.all([
+    ...[PARENT_AGENT, CHILD_AGENT].map((name) =>
       writeFile(path.join(agentsDir, `${name}.yaml`), agentYaml(name)),
     ),
-  );
+    writeFile(
+      path.join(agentsDir, `${WORKFLOW_CHILD_AGENT}.yaml`),
+      workflowAgentYaml(WORKFLOW_CHILD_AGENT),
+    ),
+  ]);
   return {
     ...host,
-    agentResume: { tryResumeRun: resumePersistedRun },
     platform: {
       ...host.platform,
       agentDirectories: {
@@ -357,6 +351,25 @@ function agentYaml(name: string): string {
     // override that skipped prompt construction.
     'prompts:',
     `  systemPrompt: You are ${name}.`,
+    "  userRequest: '{{ INSTRUCTION }}'",
+    '',
+  ].join('\n');
+}
+
+/** A one-round workflow agent: its round rewrites the input documents. */
+function workflowAgentYaml(name: string): string {
+  return [
+    `name: ${name}`,
+    `description: Integration fixture ${name}.`,
+    'settings:',
+    '  agentCategory: workflow',
+    '  rounds: 1',
+    'prompts:',
+    `  systemPrompt: You are ${name}.`,
+    '  userPrefix: |',
+    '    <documents>',
+    '    {{ ALL_INPUTS }}',
+    '    </documents>',
     "  userRequest: '{{ INSTRUCTION }}'",
     '',
   ].join('\n');
@@ -389,7 +402,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.getActiveIds()) {
+  for (const runId of session.runs.activeIds()) {
     session.runs.interrupt(runId);
   }
 }
@@ -421,6 +434,17 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
  * point while its final delivery wakes the parent, so the claim, not the
  * lane, is the durable boundary these assertions read against.
  */
+/** Queue a user's input on a stopped run: the recovery its admission claims. */
+function queueRecovery(runId: RunId, text: string) {
+  return session.followUps
+    .submit(runId, { text, from: { kind: 'user' } }, 'recoverable')
+    .pipe(
+      Effect.map((queued) =>
+        queued.kind === 'queued' ? queued.lease : undefined,
+      ),
+    );
+}
+
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
     expect(await Effect.runPromise(session.ownsRun(runId))).toBe(false);
@@ -447,13 +471,10 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    DelegateAgentTool.call({
-      agent: null,
-      model: null,
-      instruction,
-      memories: [],
-      working_directory: null,
-      execution_id: runId,
+    ExecutionsTool.call({
+      path: `/executions/${runId}`,
+      action: 'send',
+      message: instruction,
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -557,7 +578,7 @@ async function launchWaitingChild(options: {
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },
-      composition: emptyPinnedComposition,
+      steps: noStep(),
     },
   };
   const launch = await testRuntime().runPromise(
@@ -572,7 +593,6 @@ async function launchWaitingChild(options: {
         memories: [],
         workingDirectory: process.cwd(),
       },
-      CHILD_AGENT,
       PARENT_RUN_ID,
     ).pipe(Effect.provideService(Runs, session.runs)),
   );
@@ -588,7 +608,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   beforeEach(async () => {
     await Effect.runPromise(
       Effect.provide(
-        refresh({ includeRemote: false }),
+        refresh(),
         Layer.mergeAll(
           unusedGlobalStorageFs(),
           nodePlatformLayer,
@@ -607,7 +627,20 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
     childId = undefined;
+    // Every wake: an admission that claimed the run's recovery.
     resumedRuns = [];
+    const followUps = session.followUps;
+    const submitBatch = followUps.submitBatch.bind(followUps);
+    vi.spyOn(followUps, 'submitBatch').mockImplementation((runId, ...rest) =>
+      submitBatch(runId, ...rest).pipe(
+        Effect.tap((submitted) =>
+          Effect.sync(() => {
+            if (submitted.kind === 'queued' && submitted.lease)
+              resumedRuns.push(runId);
+          }),
+        ),
+      ),
+    );
     parentFiber = undefined;
   });
 
@@ -615,7 +648,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(session.releaseRunLease(PARENT_RUN_ID));
+    await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
     await Effect.runPromise(teardownDefaultSession());
     vi.restoreAllMocks();
   });
@@ -646,7 +679,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
@@ -706,7 +739,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         yield* waitForParentTurns(2);
         const afterStop = yield* readCompletedRunConversation(
@@ -723,11 +756,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              extraFollowUps: [
-                { text: 'Continue after restart.', origin: 'user' },
-              ],
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
+              recovery: yield* queueRecovery(runId, 'Continue after restart.'),
             }),
           ),
         );
@@ -747,15 +776,22 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
-        yield* submitFollowUp(runId, 'Continue in the recovered run.', {
-          session,
-        }).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        yield* submitFollowUp(
+          runId,
+          {
+            text: 'Continue in the recovered run.',
+            from: { kind: 'user' as const },
+          },
+          {
+            session,
+          },
+        );
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
         expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
         // An already idle saved run needs no new input or model turn to
@@ -765,8 +801,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
             }),
           ).pipe(Effect.timeout('5 seconds')),
         ).toEqual({
@@ -784,7 +818,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect((yield* readChildTurnState(session, runId)).active).toBeNull();
         expect(childTurns).toHaveLength(0);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         modelBindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
@@ -795,11 +829,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              extraFollowUps: [
-                { text: 'Keep this unconsumed input.', origin: 'user' },
-              ],
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
+              recovery: yield* queueRecovery(
+                runId,
+                'Keep this unconsumed input.',
+              ),
             }),
           ),
         ).toEqual({
@@ -834,7 +867,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         // The answerless turn still delivers: its report/result overwrite turn 1's
         // with an explicitly empty response rather than replaying 'Result A.' — and
@@ -893,17 +926,25 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   );
 
   it.live(
-    'combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result',
+    'delivers concurrent distinct follow-ups in admission order, each exactly once',
     () =>
       Effect.gen(function* () {
-        // Two child turns: the initial launch plus one batch turn that drains both
-        // concurrent follow-ups together.
+        // Delivery is immediate on admission, so two concurrent sends reach
+        // the child in one batch turn or in two, whichever the turn boundary
+        // finds pending. What is guaranteed is the order the rows were
+        // admitted in and exactly-once delivery: a third scripted turn covers
+        // the two-batch case.
         const parentTurns = [
           { text: 'Parent ready.' },
           { text: 'Parent received result A.' },
           { text: 'Parent received result B.' },
+          { text: 'Parent received result C.' },
         ];
-        const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+        const childTurns = [
+          { text: 'Result A.' },
+          { text: 'Result B.' },
+          { text: 'Result C.' },
+        ];
         const { runId, parentContext } = yield* Effect.promise(() =>
           launchWaitingChild({ parentTurns, childTurns }),
         );
@@ -911,10 +952,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        // Submit two follow-ups concurrently, before the child drains the queue.
-        // The resumed child takes the whole queued batch and runs one turn
-        // with the combined batch, so both instructions reach the child in one
-        // ordered turn rather than sharing/overwriting one turn result.
         const [first, second] = yield* Effect.promise(() =>
           Promise.all([
             queueSecondAssertionFollowUp(
@@ -932,32 +969,67 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(first.status).toBe('executed');
         expect(second.status).toBe('executed');
 
-        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* waitForParentTurns(2);
-
-        // The child transcript has turn 1 (Result A) and the batch turn (Result B),
-        // with BOTH follow-up instructions recorded as user messages in the batch.
-        yield* session.settlePublications();
-        const archivedChild = yield* readCompletedRunConversation(
-          runId,
-          session,
+        // Both follow-ups consumed and answered, however they were batched.
+        const followUpTexts = (rows: readonly SessionEvent[]) =>
+          rows.flatMap((row) =>
+            row.type === 'followup.queued' ? [row.content.text] : [],
+          );
+        const childNodes = yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              await Effect.runPromise(session.settlePublications());
+              const archived = await Effect.runPromise(
+                readCompletedRunConversation(runId, session),
+              );
+              const nodes = archived.conversation ?? [];
+              const text = JSON.stringify(nodes);
+              expect(text).toContain('second assertion');
+              expect(text).toContain('third assertion');
+              expect(nodes.at(-1)?.kind).toBe('assistant-text');
+              expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING);
+              return nodes;
+            },
+            { timeout: 20_000 },
+          ),
         );
-        const childText = JSON.stringify(archivedChild.conversation);
-        expect(childText.match(/Result A\./g)).toHaveLength(1);
-        expect(childText.match(/Result B\./g)).toHaveLength(1);
-        expect(childText).toContain('second assertion');
-        expect(childText).toContain('third assertion');
+        const results = childNodes.flatMap((node) =>
+          node.kind === 'assistant-text' ? [node.text] : [],
+        );
+        const batches = results.length - 1;
+        expect([1, 2]).toContain(batches);
+        yield* waitForParentTurns(results.length);
 
-        // The parent received each distinct result exactly once.
+        // Admission order is the rows' commit order, and the child reads the
+        // sends in exactly that order, each once.
+        const admitted = followUpTexts(
+          yield* session.readAggregate(aggregateId('run', runId)),
+        )
+          .map((text) => text.match(/(second|third) assertion/)?.[1])
+          .filter((word) => word !== undefined);
+        expect([...admitted].sort()).toEqual(['second', 'third']);
+        const childText = JSON.stringify(childNodes);
+        const read = [...childText.matchAll(/(second|third) assertion/g)].map(
+          (match) => match[1],
+        );
+        expect(read).toEqual(admitted);
+
+        // Every child result reached the child's transcript and the parent
+        // exactly once, and no scripted turn is left over or missing.
         const archivedParent = yield* readCompletedRunConversation(
           PARENT_RUN_ID,
           session,
         );
         const parentText = JSON.stringify(archivedParent.conversation);
-        expect(parentText.match(/Result A\./g)).toHaveLength(1);
-        expect(parentText.match(/Result B\./g)).toHaveLength(1);
+        for (const result of results) {
+          expect(childText.split(result)).toHaveLength(2);
+          expect(parentText.split(result)).toHaveLength(2);
+        }
+        expect(results).toEqual(
+          ['Result A.', 'Result B.', 'Result C.'].slice(0, batches + 1),
+        );
         expect(resumedRuns).toEqual([]);
-        expect(parentTurns).toHaveLength(0);
+        expect(childTurns).toHaveLength(2 - batches);
+        expect(parentTurns).toHaveLength(2 - batches);
       }),
     60_000,
   );
@@ -1004,11 +1076,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             PARENT_RUN_ID,
             {
               text: report!,
-              origin: 'subagent_result',
+              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
               deliveryId,
             },
             { session },
-          ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+          );
         }
         yield* session.settlePublications();
         const afterReplay = JSON.stringify(
@@ -1023,11 +1095,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           {
             text: report!,
-            origin: 'subagent_result',
+            from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             deliveryId: `${deliveryId}:other`,
           },
           { session },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        );
         yield* waitForParentTurns(2);
         yield* session.settlePublications();
         const afterDistinct = JSON.stringify(
@@ -1102,7 +1174,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Stop the child before turn 2 persists any result. The registry stop
         // reaches the loop as well as the turn, so the turn is interrupted rather
         // than delivered as a cancelled completion.
-        const stopped = session.runs.kill(runId);
+        const stopped = session.runs.stop(runId);
         expect(stopped.accepted()).toBe(true);
         const stopFiber = yield* Effect.forkChild(stopped.settlement, {
           startImmediately: true,
@@ -1154,6 +1226,207 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const parsed = JSON.parse(resultView.output);
         expect(parsed.turnAttribution).toContain('interrupted');
         expect(parsed.output.response).toBe('Result A.');
+      }),
+    30_000,
+  );
+  /**
+   * A parent conversation that launches a workflow child from its own tool
+   * call. How it can fail:
+   * - the child's run takes the parent's follow-up input from the tool
+   *   call's context and ends it when the child settles, so the parked
+   *   parent's wait comes back empty and the parent halts cancelled;
+   * - the child's result then never reaches the parent as its next turn.
+   */
+  it.live(
+    'keeps the parent waiting for a workflow child it launched and delivers the result',
+    () =>
+      Effect.gen(function* () {
+        const observedRequests: ObservedRequest[] = [];
+        const parentTurns: ScriptedTurn[] = [
+          { text: 'Launching.', call: 'launch_workflow_child' },
+          { text: 'Parent launched the workflow child.' },
+          { text: 'Parent received the workflow result.' },
+        ];
+        const childTurns: ScriptedTurn[] = [
+          {
+            text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
+          },
+        ];
+        modelBindingMocks.bindModel.mockImplementation(
+          (input: { readonly config: BoundModel['config'] }) =>
+            Effect.succeed(
+              scriptedBoundModel(
+                input.config,
+                input.config.name === CHILD_MODEL ? childTurns : parentTurns,
+                observedRequests,
+              ),
+            ),
+        );
+        const workspace = session.roots.workspace!;
+        yield* Effect.promise(async () => {
+          await mkdir(workspace, { recursive: true });
+          await writeFile(path.join(workspace, 'notes.md'), 'Draft notes.\n');
+        });
+        // The delegation primitive `delegate_workflow` launches through, run
+        // on the parent's own tool call.
+        const launchWorkflowChild: ITool = {
+          definition: {
+            name: 'launch_workflow_child',
+            description: 'Launch the workflow child.',
+            parameters: {},
+          },
+          call: () =>
+            Effect.gen(function* () {
+              const parent = yield* requireDelegationParent(
+                'launch_workflow_child',
+                yield* ToolCall,
+              );
+              const launched = yield* executeSubagent(
+                parent,
+                {
+                  agent: WORKFLOW_CHILD_AGENT,
+                  agentSource: 'custom',
+                  agentCategory: AgentCategory.Workflow,
+                  model: CHILD_MODEL,
+                  instruction: 'Polish the notes.',
+                  inputFiles: ['notes.md'],
+                  memories: [],
+                },
+                PARENT_RUN_ID,
+              );
+              childId = childRunId(launched.output);
+              return launched;
+            }) as unknown as ReturnType<ITool['call']>,
+        };
+        const parentConfig = AgentConfigSchema.parse({
+          agent: PARENT_AGENT,
+          agentSource: 'custom',
+          agentCategory: AgentCategory.ToolUse,
+          model: PARENT_MODEL,
+          instruction: 'Polish the notes through the workflow child.',
+          workingDirectory: workspace,
+        });
+        yield* registerRun(session, PARENT_RUN_ID, parentConfig, {
+          identity: { kind: 'agent', agent: PARENT_AGENT },
+          parentRunId: OUTER_RUN_ID,
+        });
+        parentFiber = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            session.runs.launchRun(
+              PARENT_RUN_ID,
+              prepareAgentDefinition({ config: parentConfig, session }).pipe(
+                Effect.flatMap((definition) =>
+                  executeAgent(definition, PARENT_RUN_ID, {
+                    session,
+                    parentRunId: OUTER_RUN_ID,
+                    tools: [launchWorkflowChild],
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              await Effect.runPromise(
+                session.settlePublications(PARENT_RUN_ID),
+              );
+              const transcript = await Effect.runPromise(
+                readCompletedRunConversation(PARENT_RUN_ID, session),
+              );
+              expect(transcript.conversation).toContainEqual({
+                kind: 'assistant-text',
+                text: 'Parent received the workflow result.',
+              });
+              expect(session.runView(PARENT_RUN_ID)?.status).toBe(
+                RUN_PHASE.WAITING,
+              );
+            },
+            { timeout: 20_000 },
+          ),
+        );
+        const delivery = observedRequests.findLast(
+          ({ model }) => model === PARENT_MODEL,
+        );
+        expect(
+          delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
+        ).toContain('<subagent-result');
+        expect(session.followUps.hasLiveOwner(PARENT_RUN_ID)).toBe(true);
+        expect(parentTurns).toHaveLength(0);
+      }),
+    30_000,
+  );
+
+  /**
+   * Core commits a root workflow's outcome; the host presents it afterwards.
+   * How it can fail:
+   * - the host's open-final-output presentation runs inside the run, so its
+   *   failure ends a completed run FAILED;
+   * - the presentation is dropped rather than moved, so a completed run
+   *   never reaches its auto-open gate;
+   * - the presentation failure is swallowed instead of reaching the caller.
+   */
+  it.live(
+    'records a completed workflow as completed when its host presentation fails',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'b9531b9531b9' as RunId;
+        modelBindingMocks.bindModel.mockImplementation(
+          (input: { readonly config: BoundModel['config'] }) =>
+            Effect.succeed(
+              scriptedBoundModel(
+                input.config,
+                [
+                  {
+                    text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
+                  },
+                ],
+                [],
+              ),
+            ),
+        );
+        const workspace = session.roots.workspace!;
+        yield* Effect.promise(async () => {
+          await mkdir(workspace, { recursive: true });
+          await writeFile(path.join(workspace, 'notes.md'), 'Draft notes.\n');
+        });
+        // The host's presentation fails where it can: reading the auto-open
+        // gate from a settings store that throws.
+        const presentationFailure = new Error('The settings store is gone.');
+        const config = session.roots.config;
+        const get = config.get.bind(config);
+        const gateReads: string[] = [];
+        vi.spyOn(config, 'get').mockImplementation(((key: string) => {
+          if (key !== 'texra.agentOutputs.autoOpenFinal') return get(key);
+          gateReads.push(key);
+          throw presentationFailure;
+        }) as typeof config.get);
+
+        const launch = yield* Effect.exit(
+          launchDesktopAgent(
+            {
+              runId,
+              config: AgentConfigSchema.parse({
+                agent: WORKFLOW_CHILD_AGENT,
+                agentSource: 'custom',
+                agentCategory: AgentCategory.Workflow,
+                model: CHILD_MODEL,
+                instruction: 'Polish the notes.',
+                inputFiles: ['notes.md'],
+              }),
+            },
+            { session, runtime: testRuntime() },
+          ),
+        );
+
+        expect(
+          (yield* getRunRecords(session, runId).readRunEnd())?.outcome,
+        ).toBe(RUN_OUTCOME.COMPLETED);
+        expect(gateReads).toHaveLength(1);
+        expect(launch).toStrictEqual(Exit.die(presentationFailure));
       }),
     30_000,
   );

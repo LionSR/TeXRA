@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
-import { Effect, Result } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
@@ -347,8 +347,20 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   }
 
   writeTextStderr(style.muted(`Updating via ${method}…`));
-  const ok = await runtime.runPromise(runCliUpdate(method));
-  if (!ok) {
+  const update = await runtime.runPromiseExit(runCliUpdate(method));
+  if (Exit.isFailure(update)) {
+    // Ctrl-C on the installer interrupts the foreground command. No command
+    // boundary owns this exit, so the interrupt's exit code is set here, as
+    // the success path below exits here too; any other failure propagates.
+    if (!Cause.hasInterruptsOnly(update.cause))
+      throw Cause.squash(update.cause);
+    writeTextStderr(
+      style.muted('Update cancelled. Update later with: ') +
+        style.command(updateCmd),
+    );
+    process.exit(CliExitCode.Interrupted);
+  }
+  if (!update.value) {
     writeTextStderr(
       `${style.error('Update failed.')} Run manually: ${style.command(updateCmd)}`,
     );

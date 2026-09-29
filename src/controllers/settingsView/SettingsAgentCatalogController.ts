@@ -1,20 +1,17 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import type { AgentRosterController } from '@agent/roster/AgentRosterController';
-import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import {
-  resolveTeamRoster,
+  TeamCatalogPortFailed,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  AGENT_CATEGORIES,
-  agentName,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
@@ -39,7 +36,7 @@ interface SettingsAgentCatalogEntry {
 }
 
 interface SettingsAgentCatalogControllerDeps {
-  workspaceState: StateStore;
+  repoState: StateStore;
   roster: AgentRosterController<SettingsAgentCatalogEntry>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   now?: () => number;
@@ -59,22 +56,11 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.workspaceState.get<unknown>(
+        yield* this.deps.repoState.get<unknown>(
           WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
           [],
         ),
       );
-    });
-  }
-
-  /** Returns raw records so catalog writes preserve unparsed data. */
-  private getCustomPresetRecords() {
-    return Effect.gen({ self: this }, function* () {
-      const raw = yield* this.deps.workspaceState.get<unknown>(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        [],
-      );
-      return Array.isArray(raw) ? raw : [];
     });
   }
 
@@ -100,10 +86,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
    * Preview the team root for a preset's tool-use member list. Mirrors launch
    * semantics: the preview plans with the preset's own members only, so a
    * custom team with no delegating members previews no root — the same state
-   * the launcher disables with "no runnable team root". Built-in root
-   * definitions may be missing from the catalog before the remote catalog
-   * loads or the user signs in, so delegation-capable entries are synthesized
-   * for built-in root names the preset itself lists.
+   * the launcher disables with "no runnable team root".
    *
    * When `presetId` resolves to a launchable preset, the preview reuses that
    * preset's provenance and member lists so a built-in team plans with
@@ -123,7 +106,6 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         description: '',
         icon: 'bookmark',
         agents: { workflow: [], toolUse: toolUseAgents },
-        texraHostedAgents: [],
         source: 'custom',
       };
       // Only the tool-use root matters here, so workflow members stay
@@ -131,8 +113,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       return planTeamRun(preset, {
         resolveAgent: (category, identifier) =>
           category === 'toolUse'
-            ? (this.deps.roster.resolveAgent(category, identifier) ??
-              builtInRootStandIn(identifier))
+            ? this.deps.roster.resolveAgent(category, identifier)
             : undefined,
       }).rootAgent?.name;
     });
@@ -149,7 +130,10 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       return {
         ok: true as const,
         preset,
-        resolution: resolveTeamRoster(this.deps.roster, preset),
+        resolution: planTeamRun(preset, {
+          resolveAgent: (category, identifier) =>
+            this.deps.roster.resolveAgent(category, identifier),
+        }),
       };
     });
   }
@@ -162,7 +146,6 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       Effect.mapError(
         (cause) =>
           new TeamCatalogPortFailed({
-            member: 'commitPreset',
             message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -185,37 +168,32 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         description: `Custom team: ${[...agents.toolUse, ...agents.workflow].join(', ')}`,
         icon: 'bookmark',
         agents,
-        texraHostedAgents: AGENT_CATEGORIES.flatMap((category) =>
-          visible[category]
-            .filter((entry) => entry.source === 'remote')
-            .map((entry) => entry.name),
-        ),
       };
 
-      return yield* this.deps.workspaceState
-        .update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-          ...(yield* this.getCustomPresetRecords()),
-          preset,
-        ])
+      return yield* this.deps.repoState
+        .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+          Result.succeed([...presetRecords(stored), preset]),
+        )
         .pipe(Effect.as(preset));
     });
   }
 
   deleteCustomPreset(presetId: string) {
     return Effect.gen({ self: this }, function* () {
-      const records = yield* this.getCustomPresetRecords();
-      const presets = parseAgentModePresets(records);
-      const target = presets.find((preset) => preset.id === presetId);
+      const target = yield* this.getCustomPreset(presetId);
       if (!target) return null;
 
       return yield* this.deps.roster
         .removeTeamPreset(presetId, () =>
-          this.deps.workspaceState.update(
-            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-            records.filter(
-              (record) => !isObject(record) || record.id !== presetId,
-            ),
-          ),
+          this.deps.repoState
+            .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+              Result.succeed(
+                presetRecords(stored).filter(
+                  (record) => !isObject(record) || record.id !== presetId,
+                ),
+              ),
+            )
+            .pipe(Effect.asVoid),
         )
         .pipe(Effect.as(target));
     });
@@ -241,9 +219,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           .map((entry) => agentKeyOf(entry)),
       );
 
-      const current =
-        (yield* this.deps.roster.getEnabledAgentKeys(input.category)) ??
-        allAgents.map((entry) => agentKeyOf(entry));
+      const current = yield* this.enabledKeys(input.category);
 
       const updated = input.enabled
         ? [...new Set([...current, ...targetKeys])]
@@ -264,11 +240,22 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   private buildCategorySelectionItems(category: AgentCategory) {
     return Effect.gen({ self: this }, function* () {
-      const enabledKeys = yield* this.deps.roster.getEnabledAgentKeys(category);
+      const enabledKeys = yield* this.enabledKeys(category);
       return this.deps
         .getAgents(category)
         .map((entry) => this.toSelectionItem(entry, enabledKeys))
         .sort(byName);
+    });
+  }
+
+  /** The enabled keys; an `all` roster enables every visible agent, never a
+   *  custom agent the user hid. */
+  private enabledKeys(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      return (
+        (yield* this.deps.roster.getEnabledAgentKeys(category)) ??
+        (yield* this.deps.roster.getVisibleAgents(category)).map(agentKeyOf)
+      );
     });
   }
 
@@ -293,23 +280,8 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   }
 }
 
-/**
- * A delegation-capable stand-in for a built-in team root the preset lists but
- * the catalog has not loaded yet (pre-sign-in or pre-remote-fetch), so the
- * preview can plan with it without inventing phantom catalog members.
- */
-function builtInRootStandIn(
-  identifier: string,
-): SettingsAgentCatalogEntry | undefined {
-  const standIn: SettingsAgentCatalogEntry = {
-    name: agentName(identifier),
-    source: 'builtInToolUse',
-    category: 'toolUse',
-    tools: ['delegate_agent'],
-  };
-  return (BUILTIN_TEAM_ROOT_AGENT_NAMES as readonly string[]).includes(
-    standIn.name,
-  ) && agentMatchesIdentifier(standIn, identifier)
-    ? standIn
-    : undefined;
+/** The stored preset records as they are, unparsed, so a catalog write
+ *  preserves records this version cannot read. */
+function presetRecords(stored: unknown): unknown[] {
+  return Array.isArray(stored) ? stored : [];
 }

@@ -123,6 +123,7 @@ export class RunTabs extends LitElement {
         .run=${run}
         ?active=${run.id === selected}
         ?unseen=${this.unseen.has(run.id)}
+        .unread=${this.view?.queuedFollowUps.get(run.id)?.length ?? 0}
         ?expandable=${expandable}
         ?expanded=${expanded}
       ></run-tab>
@@ -185,9 +186,9 @@ export class RunTabs extends LitElement {
           <div @click=${this.handleTabClick}>${body}</div>
           ${when((view?.order.length ?? 0) === 0, () =>
             renderEmptyState({
-              icon: 'terminal',
-              title: 'No runs yet',
-              body: 'Start a task to see it here.',
+              icon: 'list-ul',
+              title: 'No tasks yet',
+              body: 'Tasks you start appear here.',
               headingTag: 'h3',
               className: 'log-placeholder',
             }),

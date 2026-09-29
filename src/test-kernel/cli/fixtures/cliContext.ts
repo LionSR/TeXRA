@@ -1,8 +1,22 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll } from 'vitest';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 
+/**
+ * This test file's own storage root, removed when the file finishes. A fixed
+ * path was shared with every other checkout on the machine, so a store a
+ * newer build wrote there (a later event format) failed the next run here.
+ */
+export const testStorageRoot = mkdtempSync(
+  join(tmpdir(), 'texra-test-storage-'),
+);
+afterAll(() => rmSync(testStorageRoot, { recursive: true, force: true }));
+
 const BASE_CLI_CONTEXT = {
-  storageRoot: '/tmp/texra-test-storage',
+  storageRoot: testStorageRoot,
   cwd: '/tmp/project',
   mode: 'headless',
   outputFormat: 'text',

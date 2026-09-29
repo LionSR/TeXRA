@@ -4,7 +4,6 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   DisplaySessionEventSchema,
-  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
   USER_FOLLOW_UP_SUPPORT,
@@ -56,7 +55,7 @@ function traceDocument(
         aggregateId: AGGREGATE,
         seq: index + 1,
         commit: index + 1,
-        ownerId: null,
+        origin: null,
         at: 1_767_225_600_000 + index,
         ...body,
       }),
@@ -73,7 +72,6 @@ function runStart(
     identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     category,
-    isRemote: false,
     worktree: null,
     parent: null,
   };
@@ -83,7 +81,7 @@ function runEnd(outcome: RunOutcome): Record<string, unknown> {
   return {
     type: 'run.end',
     outcome,
-    output: emptyRunEndOutput(AgentCategory.Workflow),
+    output: { category: 'workflow' },
   };
 }
 

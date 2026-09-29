@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
   persistChildRunDelivery: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(
+  commitRunEndAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
 }));
@@ -51,7 +51,6 @@ vi.mock(
 
 import { getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
-import type { WorkflowJournalEntry } from '@agent/workflowScript/types';
 const { finalizeRun: realFinalizeRun } = await vi.importActual<
   typeof import('@agent/storage/runLifecycle')
 >('@agent/storage/runLifecycle');
@@ -71,8 +70,6 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   emptyRunEndOutput,
@@ -84,6 +81,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createProcessSession,
@@ -92,23 +90,11 @@ import {
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-} from '@tools/agentCliSessionStores';
 import { createChildRun } from '@tools/delegation/childRun';
-import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 import { generateRunId } from '@utils/core';
 
 let session: SessionHandle;
 const trackedRunIds = new Set<RunId>();
-
-const childRunConfig = {
-  agentCategory: AgentCategory.ToolUse,
-  model: 'test-model',
-  agent: 'fake-cli',
-} as unknown as AgentConfig;
 
 const PARENT_RUN_ID = 'ffff01' as RunId;
 
@@ -145,7 +131,6 @@ const foldParentPhase = (active: boolean) =>
             type: 'run.activate',
             aggregateId,
             category: AgentCategory.ToolUse,
-            isRemote: false,
           }
         : {
             type: 'run.end',
@@ -300,18 +285,12 @@ const startLoop = (
     agentName: 'fake',
     strategy,
     ...extras,
-  }).pipe(
-    Effect.provideService(Runs, session.runs),
-    // No host resume in these fixtures: the port declines every wake.
-    Effect.provideService(AgentResume, {
-      tryResumeRun: () => Effect.succeed(false),
-    }),
-  );
+  }).pipe(Effect.provideService(Runs, session.runs));
 
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    const stop = session.runs.kill(runId);
+    const stop = session.runs.stop(runId);
     expect(stop.accepted()).toBe(true);
     yield* stop.settlement;
   });
@@ -323,8 +302,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'releaseRunLease').mockImplementation((runId) =>
-    Effect.promise(() => mocks.releaseRunLeaseAfterArtifacts(session, runId)),
+  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
+    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
   );
   mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
@@ -333,7 +312,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const runId of trackedRunIds) {
-    session.runs.untrack(runId);
+    untrackRun(session.runs, runId);
   }
   trackedRunIds.clear();
 });
@@ -350,15 +329,24 @@ describe('childRunLoop E2E fixtures', () => {
         const launch = vi.fn(() =>
           Effect.fail(new Error('Engine startup failed')),
         );
-        let stop: ReturnType<typeof session.runs.kill> | undefined;
+        let stop: ReturnType<typeof session.runs.stop> | undefined;
+        // The stop lands inside loop setup, after the queue claim and before
+        // the launch.
+        const claimChildRun = session.followUps.claimChildRun.bind(
+          session.followUps,
+        );
+        const claim = vi
+          .spyOn(session.followUps, 'claimChildRun')
+          .mockImplementationOnce((id) => {
+            const lease = claimChildRun(id);
+            if (outcome === RUN_OUTCOME.CANCELLED)
+              stop = session.runs.stop(runId);
+            return lease;
+          });
         const loop = yield* startLoop(runId, {
           ...createTerminalStrategy('Engine startup', launch),
           continuous: true,
-          onLoopStart: () => {
-            if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.kill(runId);
-          },
-        });
+        }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
         if (stop) {
           expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
@@ -379,7 +367,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -417,10 +405,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const registry = new AgentCliSessionRegistry(session.runs);
-        const releaseSessionOwnership = vi.fn(() =>
-          registry.releaseByRunId(runId),
-        );
+        const releaseSessionOwnership = vi.fn();
         trackChildHandle(runId, PARENT_RUN_ID);
         const interruptRun = vi.spyOn(session.runs, 'interrupt');
         const registerLoop = vi
@@ -436,9 +421,7 @@ describe('childRunLoop E2E fixtures', () => {
               runId,
               {
                 ...strategy,
-                onLoopStart: () => {
-                  registry.trackInFlight({ runId });
-                },
+                ownsBackgroundProcess: true,
                 releaseSessionOwnership,
               },
               { agentName: 'fake-cli' },
@@ -448,66 +431,45 @@ describe('childRunLoop E2E fixtures', () => {
 
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
           expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-          // The failed setup left no generation fiber behind, and the CLI
-          // registry's interrupt sweep reaches nothing of it.
+          // The failed setup left no generation fiber behind, and the
+          // shutdown drain reaches nothing of it.
           expect(session.runs.interrupt(runId)).toBe(false);
           interruptRun.mockClear();
-          registry.interruptAll();
+          session.runs.killBackgroundProcesses();
           expect(interruptRun).not.toHaveBeenCalled();
           expect(yield* queuedFollowUps(session, runId)).toEqual([]);
         } finally {
           registerLoop.mockRestore();
           interruptRun.mockRestore();
-          registry.releaseByRunId(runId);
         }
       }),
   );
 
-  it.effect.each([
-    {
-      name: 'CodexThreads',
-      track: (runId: RunId, runSession: SessionHandle) =>
-        codexThreadsFor(runSession.runs).trackInFlight({ runId }),
-      interruptAll: () => codexThreadsFor(session.runs).interruptAll(),
-      release: (runId: RunId) =>
-        codexThreadsFor(session.runs).releaseByRunId(runId),
-    },
-    {
-      name: 'ClaudeAgentSessions',
-      track: (runId: RunId, runSession: SessionHandle) =>
-        claudeAgentSessionsFor(runSession.runs).trackInFlight({ runId }),
-      interruptAll: () => claudeAgentSessionsFor(session.runs).interruptAll(),
-      release: (runId: RunId) =>
-        claudeAgentSessionsFor(session.runs).releaseByRunId(runId),
-    },
-  ])(
-    '$name interrupts a real initial-turn loop and releases ownership once',
-    ({ name, track, interruptAll, release }) =>
+  it.effect(
+    'shutdown drain interrupts a real agent-CLI initial-turn loop and releases ownership once',
+    () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const events: string[] = [];
         const aborted = vi.fn();
-        const releaseSessionOwnership = vi.fn(() => release(runId));
-        // The CLI session registries track process children, so the fixture
-        // is one: the loop's own fiber survives the stop (the ruled
-        // permanent resident) and the loop's abort signal is what reaches
-        // the strategy's in-flight launch — a native-shaped fixture would
-        // take the stop as the run fiber's interruption instead, which the
-        // launch's abort listener is not guaranteed to observe.
+        const releaseSessionOwnership = vi.fn();
+        // An agent-CLI child is a process child, so the fixture is one: the
+        // loop's own fiber survives the stop (the ruled permanent resident)
+        // and the loop's abort signal is what reaches the strategy's
+        // in-flight launch. A native-shaped fixture would take the stop as
+        // the run fiber's interruption instead, which the launch's abort
+        // listener is not guaranteed to observe.
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const launched = yield* Deferred.make<void>();
 
         const strategy: ChildRunStrategy<FakeTurn> = {
-          stageLabel: `${name} session`,
+          stageLabel: 'fake-cli session',
+          ownsBackgroundProcess: true,
           launch: (_ports, signal) =>
             Effect.gen(function* () {
-              events.push('launch');
               yield* Deferred.succeed(launched, undefined);
               return yield* Effect.callback<never, Error>((resume) => {
                 const rejectAbort = () => {
@@ -523,37 +485,27 @@ describe('childRunLoop E2E fixtures', () => {
           isTerminal: () => false,
           formatDelivery: () => Effect.succeed('unexpected delivery'),
           formatError: () => 'unexpected error',
-          onLoopStart: (runSession) => {
-            events.push('registered');
-            track(runId, runSession);
-          },
           releaseSessionOwnership,
         };
 
-        try {
-          const loop = yield* startLoop(runId, strategy, {
-            agentName: name,
-            childRun,
-          });
+        const loop = yield* startLoop(runId, strategy, {
+          agentName: 'fake-cli',
+          childRun,
+        });
 
-          expect(events).toEqual(['registered']);
-          expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-          // The loop body is a generation on the run's lane: it starts
-          // once the lane admits it, not inside `startChildRunLoop`.
-          yield* Deferred.await(launched);
-          expect(events).toEqual(['registered', 'launch']);
-          interruptAll();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        // The loop body is a generation on the run's lane: it starts once
+        // the lane admits it, not inside `startChildRunLoop`.
+        yield* Deferred.await(launched);
+        session.runs.killBackgroundProcesses();
 
-          // A process child's loop fiber survives the stop: the aborted
-          // turn ends the loop as interrupted and it finalizes CANCELLED.
-          yield* Fiber.join(loop);
-          expect(aborted).toHaveBeenCalledOnce();
-          expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          expect(session.runs.getHandle(runId)).toBeUndefined();
-        } finally {
-          release(runId);
-        }
+        // A process child's loop fiber survives the stop: the aborted turn
+        // ends the loop as interrupted and it finalizes CANCELLED.
+        yield* Fiber.join(loop);
+        expect(aborted).toHaveBeenCalledOnce();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
   );
 
@@ -572,13 +524,13 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
         // child activation.
         const stopping = yield* Effect.forkChild(
-          session.runs.stopAgentRun(PARENT_RUN_ID),
+          session.runs.stop(PARENT_RUN_ID).settlement,
           { startImmediately: true },
         );
         yield* rejectTurn(1, createAbortError());
@@ -594,7 +546,7 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -631,40 +583,43 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep a background child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, {
           childRun,
         });
-        const tryResumeRun = vi.fn(() => Effect.succeed(false));
         yield* Deferred.await(launchStarted);
 
         try {
           yield* foldParentPhase(true);
           expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
-              session,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              { text: 'active parent', from: { kind: 'user' as const } },
+              {
+                session,
+              },
+            ),
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
-          const userAdmission = vi.fn();
-          expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
-              session,
-              onAdmitted: userAdmission,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
-          ).toMatchObject({ status: 'failed' });
-          expect(userAdmission).toHaveBeenCalledWith(false);
           expect(
             yield* realSubmitFollowUp(
               PARENT_RUN_ID,
-              { text: 'late child result', origin: 'subagent_result' },
+              { text: 'restore me', from: { kind: 'user' as const } },
               { session },
-            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            ),
+          ).toMatchObject({ status: 'failed' });
+          expect(
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              {
+                text: 'late child result',
+                from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+              },
+              { session },
+            ),
           ).toMatchObject({ status: 'failed' });
           expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['active parent']);
 
@@ -676,9 +631,16 @@ describe('childRunLoop E2E fixtures', () => {
           });
           try {
             expect(
-              yield* realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
-                session,
-              }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+              yield* realSubmitFollowUp(
+                PARENT_RUN_ID,
+                {
+                  text: 'native child result',
+                  from: { kind: 'user' as const },
+                },
+                {
+                  session,
+                },
+              ),
             ).toEqual({ status: 'queued', wake: 'failed' });
           } finally {
             releaseNativeChild();
@@ -704,7 +666,7 @@ describe('childRunLoop E2E fixtures', () => {
             value: 'done',
           });
           yield* Deferred.await(formatStarted);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
           yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
@@ -713,7 +675,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(PARENT_RUN_ID);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
             value: 'done',
@@ -749,7 +711,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const retryRunId = loopRunId();
-        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'flow')!;
+        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'loop')!;
         const admissions: string[] = [];
         mocks.submitFollowUp.mockImplementation(
           (targetRunId, followUp, options) =>
@@ -859,7 +821,6 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         const { strategy, callCount, resolveTurn, turnStarted } =
           createFakeStrategy();
-        const onLoopStart = vi.fn();
         const onTurnSuccess = vi.fn();
         const parentWake = vi.fn();
         const deliveryStarted = yield* Deferred.make<void>();
@@ -875,12 +836,9 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, {
           ...strategy,
-          onLoopStart,
           onTurnSuccess,
         });
 
-        expect(onLoopStart).toHaveBeenCalledOnce();
-        expect(onLoopStart).toHaveBeenCalledWith(session);
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 
@@ -902,7 +860,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'keep going', origin: 'user' },
+            { text: 'keep going', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -938,9 +896,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
@@ -962,7 +918,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -985,9 +941,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const loop = yield* startLoop(runId, strategy, { childRun });
@@ -995,7 +949,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -1023,9 +977,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const releaseSessionOwnership = vi.fn();
@@ -1097,9 +1049,7 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const delivered = yield* Deferred.make<void>();
@@ -1178,7 +1128,7 @@ describe('childRunLoop E2E fixtures', () => {
         // the terminal it would interrupt is uninterruptible: the delivery
         // completes exactly once and the queue releases — there is no live
         // continuation the stop could tear down.
-        const stop = session.runs.kill(runId);
+        const stop = session.runs.stop(runId);
         expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
@@ -1195,7 +1145,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         // Regression: parent continuation submission can await the ENTIRE resumed
-        // turn (`agentResume.tryResumeRun` → … → `resumeToolUseFromResumeData`).
+        // turn (`resumeOnSession` → … → `resumeToolUseFromResumeData`).
         // Before #8093, the loop awaited split enqueue/wake work inline in the
         // turn loop, and only finalized this child (untracking its run
         // handle) afterward in the outer `finally` — so a resumed parent that
@@ -1209,9 +1159,7 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Finalize before the wake',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
 
@@ -1267,7 +1215,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'resume please', origin: 'user' },
+            { text: 'resume please', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -1320,25 +1268,23 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Fail a turn, then take an interrupt',
-          config: childRunConfig,
+          category: AgentCategory.ToolUse,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
         const { strategy, rejectTurn } = createFakeStrategy();
-        // Fires between the turn failure and the loop's finalize, which is the
+        // Fires once the failed turn settled, before the loop's finalize: the
         // window the stop latch has to win. Kill admission is synchronous, so
         // the stop latch is already set here and only the settlement is left
         // for the test to run once the loop is done.
         const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
-          stopSettlements.push(session.runs.kill(runId).settlement);
+          stopSettlements.push(session.runs.stop(runId).settlement);
         });
 
         const loop = yield* startLoop(runId, strategy, {
           childRun,
           agentName: 'fake-cli',
-          recordCost: interruptAfterFailure,
+          onTurnSettled: interruptAfterFailure,
         });
 
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
@@ -1403,9 +1349,7 @@ describe('childRunLoop E2E fixtures', () => {
             PARENT_RUN_ID,
             {
               run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-              userFollowUpSupport: 'terminalBacked',
-              description: 'Wait for a budget slot',
-              config: childRunConfig,
+              category: AgentCategory.ToolUse,
             },
           ).pipe(Effect.provideService(Runs, session.runs));
           trackedRunIds.add(second);
@@ -1441,149 +1385,5 @@ describe('childRunLoop E2E fixtures', () => {
           );
         }
       }),
-  );
-
-  it.effect(
-    'recordCost commits exactly once with the greatest observed value',
-    () =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const firstTurn = yield* Deferred.make<FakeTurn>();
-        const nextTurn = yield* Deferred.make<FakeTurn>();
-        const recordCost = vi.fn();
-        const firstDelivered = yield* Deferred.make<void>();
-        mocks.submitFollowUp.mockImplementation(() =>
-          Effect.as(Deferred.succeed(firstDelivered, undefined), {
-            status: 'sent',
-          }),
-        );
-
-        const strategy: ChildRunStrategy<FakeTurn> = {
-          stageLabel: 'Fake cost-tracking run',
-          launch: (ports: ChildRunPorts) =>
-            Effect.gen(function* () {
-              const turn = yield* Deferred.await(firstTurn);
-              ports.recordCost(0.2);
-              return turn;
-            }),
-          runTurn: (_items, ports: ChildRunPorts) =>
-            Effect.gen(function* () {
-              const turn = yield* Deferred.await(nextTurn);
-              ports.recordCost(undefined);
-              ports.recordCost(0.1);
-              return turn;
-            }),
-          isTerminal: (turn) => turn.kind === 'terminal',
-          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
-          formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
-        };
-
-        const loop = yield* startLoop(runId, strategy, { recordCost });
-
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-        yield* Deferred.succeed<FakeTurn, never>(firstTurn, {
-          kind: 'interim',
-          value: 'first',
-        });
-        yield* Deferred.await(firstDelivered);
-        expect(mocks.submitFollowUp).toHaveBeenCalledTimes(1);
-
-        expect(
-          yield* session.followUps.submit(
-            runId,
-            { text: 'go on', origin: 'user' },
-            'live_owner',
-          ),
-        ).toEqual({ kind: 'queued' });
-        yield* Deferred.succeed<FakeTurn, never>(nextTurn, {
-          kind: 'terminal',
-          value: 'final',
-        });
-
-        yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-        expect(recordCost).toHaveBeenCalledTimes(1);
-        expect(recordCost).toHaveBeenCalledWith(0.2);
-      }),
-  );
-
-  it.effect('settles mixed workflow attempt spend to the parent once', () =>
-    Effect.gen(function* () {
-      const entry = (
-        index: number,
-        key: string,
-        cost: number,
-      ): WorkflowJournalEntry => ({
-        index,
-        key,
-        result: {
-          outcome: 'completed',
-          usage: { totalCost: cost },
-          output: {
-            category: 'workflow',
-            outputs: [],
-            compileFailures: [],
-            diffs: [],
-          },
-        },
-      });
-      const historical = entry(0, 'historical', 0.8);
-      const completed = entry(1, 'completed', 0.5);
-      const recovered = entry(2, 'recovered', 0.5);
-      const tracker = createWorkflowAttemptCostTracker();
-      const recordCost = vi.fn();
-      const strategy = createTerminalStrategy(
-        'Workflow attempt cost',
-        (ports) =>
-          Effect.sync((): FakeTurn => {
-            ports.recordCost(tracker.record(completed, 0.1));
-            ports.recordCost(tracker.record(completed, 0));
-            ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
-            ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
-            ports.recordCost(tracker.total([historical, completed, recovered]));
-            return { kind: 'terminal', value: 'done' };
-          }),
-        () => Effect.succeed('delivered'),
-      );
-
-      const loop = yield* startLoop(loopRunId(), strategy, {
-        recordCost,
-      });
-
-      expect(yield* Fiber.join(loop)).toEqual({
-        kind: 'terminal',
-        value: 'done',
-      });
-      expect(recordCost).toHaveBeenCalledOnce();
-      expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
-    }),
-  );
-
-  it.effect('finalizes and wakes when the parent cost observer throws', () =>
-    Effect.gen(function* () {
-      const strategy = createTerminalStrategy(
-        'throwing cost observer',
-        (ports) =>
-          Effect.sync((): FakeTurn => {
-            ports.recordCost(0.4);
-            return { kind: 'terminal', value: 'done' };
-          }),
-        () => Effect.succeed('delivered'),
-      );
-      const recordCost = vi.fn(() => {
-        throw new Error('observer failed');
-      });
-
-      const loop = yield* startLoop(loopRunId(), strategy, { recordCost });
-
-      // The cost observer is forked with `startImmediately` inside the
-      // terminal block, so its thunk has already run when the loop exits.
-      expect(yield* Fiber.join(loop)).toEqual({
-        kind: 'terminal',
-        value: 'done',
-      });
-      expect(recordCost).toHaveBeenCalledOnce();
-      expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
-    }),
   );
 });

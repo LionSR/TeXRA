@@ -21,6 +21,10 @@ import {
 } from './errors.js';
 import { openaiFailure } from './openaiError.js';
 import { parseInboundToolArguments, pullStream } from './transport.js';
+import {
+  ResponsesUsageSchema,
+  responsesUsage,
+} from './openaiResponsesUsage.js';
 
 // The codec is the lowest module of this split: the input lowering, the
 // request surface and the entry all name the response origin and the completed
@@ -32,6 +36,10 @@ export type HttpTurnResult = Extract<
 >;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
+const ReasoningTextSchema = z.strictObject({
+  type: z.literal('reasoning_text'),
+  text: z.string(),
+});
 const OutputItemSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('message'),
@@ -44,9 +52,10 @@ const OutputItemSchema = z.discriminatedUnion('type', [
         z.strictObject({
           type: z.literal('output_text'),
           text: z.string(),
-          // Unsupported annotations/log probabilities cannot disappear in conversion.
-          annotations: z.array(z.never()),
-          logprobs: z.array(z.never()).optional(),
+          // Unsupported annotations/log probabilities cannot disappear in
+          // conversion; Zhipu omits the empty annotation list.
+          annotations: z.array(z.never()).optional(),
+          logprobs: z.array(z.never()).nullish(),
         }),
         z.strictObject({ type: z.literal('refusal'), refusal: z.string() }),
       ]),
@@ -57,13 +66,17 @@ const OutputItemSchema = z.discriminatedUnion('type', [
     id: z.string().min(1),
     status: ItemStatusSchema.optional(),
     encrypted_content: z.string().nullish(),
-    summary: z.array(
-      z.strictObject({ type: z.literal('summary_text'), text: z.string() }),
-    ),
-    content: z
+    // Zhipu reports no summary and one reasoning-text object, not a list.
+    summary: z
       .array(
-        z.strictObject({ type: z.literal('reasoning_text'), text: z.string() }),
+        z.strictObject({ type: z.literal('summary_text'), text: z.string() }),
       )
+      .default([]),
+    content: z
+      .union([
+        z.array(ReasoningTextSchema),
+        ReasoningTextSchema.transform((part) => [part]),
+      ])
       .optional(),
   }),
   z.strictObject({
@@ -116,11 +129,11 @@ export function agreesWithCompleted(
       (candidate.content === undefined ||
         isDeepStrictEqual(completed.content, candidate.content)) &&
       completed.evidence.itemId === candidate.evidence.itemId &&
+      // No `encryptedContent` check: OpenAI re-encrypts the same reasoning
+      // between the item's done event and the terminal snapshot, so the two
+      // opaque blobs differ byte for byte. The completed item's blob is kept.
       (candidate.evidence.status === undefined ||
-        completed.evidence.status === candidate.evidence.status) &&
-      (candidate.evidence.encryptedContent === undefined ||
-        completed.evidence.encryptedContent ===
-          candidate.evidence.encryptedContent)
+        completed.evidence.status === candidate.evidence.status)
     );
   }
   if (completed.kind === 'local-call' && candidate.kind === 'local-call') {
@@ -144,17 +157,6 @@ export function agreesWithCompleted(
   return false;
 }
 
-const UsageSchema = z.object({
-  input_tokens: z.int().nonnegative(),
-  output_tokens: z.int().nonnegative(),
-  total_tokens: z.int().nonnegative(),
-  input_tokens_details: z
-    .object({ cached_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
-  output_tokens_details: z
-    .object({ reasoning_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
-});
 export const ResponseSchema = z.object({
   id: z.string().min(1),
   object: z.literal('response'),
@@ -168,7 +170,8 @@ export const ResponseSchema = z.object({
     'incomplete',
   ]),
   output: z.array(OutputItemSchema),
-  usage: UsageSchema.nullish(),
+  usage: ResponsesUsageSchema.nullish(),
+  service_tier: z.string().nullish(),
   error: z.object({ code: z.string(), message: z.string() }).nullish(),
   incomplete_details: z
     .object({ reason: z.enum(['max_output_tokens', 'content_filter']) })
@@ -294,15 +297,7 @@ export const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
         incompleteReason: response.incomplete_details?.reason ?? null,
       },
       usage: response.usage
-        ? {
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-            totalTokens: response.usage.total_tokens,
-            cachedInputTokens:
-              response.usage.input_tokens_details?.cached_tokens ?? null,
-            reasoningTokens:
-              response.usage.output_tokens_details?.reasoning_tokens ?? null,
-          }
+        ? responsesUsage(response.usage, response.service_tier)
         : null,
     });
     if (!result.success || result.data.providerResponseId === null) {
@@ -483,7 +478,7 @@ export const DeltaEventSchema = EventSchema.extend({
   item_id: z.string().min(1),
   output_index: z.int().nonnegative(),
   delta: z.string(),
-  logprobs: z.array(z.never()).optional(),
+  logprobs: z.array(z.never()).nullish(),
 });
 
 /** One canonical foreground decoder for HTTP and WebSocket response events. */

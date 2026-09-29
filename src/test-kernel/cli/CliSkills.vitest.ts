@@ -6,14 +6,15 @@ import { Effect } from 'effect';
 import { afterEach, expect } from 'vitest';
 
 import {
-  installPlugins,
-  removePlugin,
-  setPluginEnabled,
-} from '@cli/runtime/plugins';
-import {
   formatCliSkillList,
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
+import { installPlugins, removePlugin } from '@common/plugins/installedPlugins';
+import {
+  disablePlugin,
+  enablePlugin,
+  readInstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
@@ -32,7 +33,7 @@ import { TOOL_PLUGINS } from '@tools/plugins';
 const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
-const settings = makeFakeSettingsStores().stores;
+const settings = makeFakeSettingsStores('cli').stores;
 async function writeSkill(
   root: string,
   dirName: string,
@@ -65,7 +66,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       options: { additionalPaths: ['.texra/skills'] },
       plugins: [],
-      disabledPlugins: new Set(),
     }).flatMap((tier) => tier.sources);
 
     expect(
@@ -84,7 +84,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
         options: {},
         plugins: [],
-        disabledPlugins: new Set(),
       }),
     ).toThrow('Duplicate skill source contribution id: lean4');
   });
@@ -223,11 +222,12 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           scope: 'bundled',
           label: 'bundled',
           path: path.join(resources, 'plugins', 'lean4', 'skills'),
+          plugin: 'lean4',
         });
         expect(result.errors).toEqual([]);
 
         // A switched-off plugin is one unit: its skills go with its tools.
-        const { stores } = makeFakeSettingsStores();
+        const { stores } = makeFakeSettingsStores('cli');
         yield* stores.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
           'lean4',
         ]);
@@ -241,7 +241,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
   );
 
   it.effect(
-    'installs a Claude Code plugin from a local directory into the user tier, and removes it',
+    'installs a Claude Code plugin from a local directory, loads its skills as <plugin>:<name> once trusted, and removes it',
     () =>
       Effect.gen(function* () {
         // Shaped like github.com/LionSR/AgenticPublicationProtocol: both
@@ -288,15 +288,27 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             'Publish a paper as an agent.',
           );
           await fs.mkdir(path.join(plugin, 'scripts'));
-          // A bundled skill of the same name: the installed plugin wins.
+          // A bundled skill of the same name: the plugin's is its own name.
           await writeSkill(
             path.join(resources, 'skills'),
             'load-paper',
             'The bundled copy.',
           );
         });
-        const stores = makeFakeSettingsStores().stores;
-        const env = { stores, pluginsDir: path.join(resources, 'plugins') };
+        const stores = makeFakeSettingsStores('cli').stores;
+        // The run catalog over the installed plugins as they load now.
+        const catalogNow = () =>
+          Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>
+            loadRuntimeSkillCatalog({
+              workspacePath: resources,
+              settings: stores,
+              plugins,
+            }),
+          );
+        const env = {
+          globalState: stores.globalState,
+          globalStorage: resources,
+        };
         initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
 
         const [installed] = yield* installPlugins(
@@ -309,37 +321,66 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           path: yield* Effect.promise(() => fs.realpath(plugin)),
         });
         expect(installed?.commit).toBeUndefined();
+        // Installed, it is disabled until the user trusts it.
+        expect(JSON.stringify((yield* catalogNow()).catalog)).not.toContain(
+          'plugin paper-protocol',
+        );
+        const asked: string[] = [];
+        yield* enablePlugin('paper-protocol', env, (review) =>
+          Effect.sync(() => {
+            asked.push(`${review.name} ${review.version}`);
+            return true;
+          }),
+        );
+        expect(asked).toEqual(['paper-protocol 1.0.0']);
 
-        const catalog = yield* loadRuntimeSkillCatalog(resources, stores);
-        const fromPlugin = catalog.skills.filter((skill) =>
-          ['load-paper', 'publish-paper'].includes(skill.name),
+        const catalog = yield* catalogNow();
+        const fromPlugin = catalog.catalog.filter((skill) =>
+          skill.name.startsWith('paper-protocol:'),
         );
+        // Tagged with the installed plugin, so a step that no longer loads
+        // it lists none of them.
         expect(fromPlugin).toEqual([
-          expect.objectContaining({ name: 'load-paper', source: 'user' }),
-          expect.objectContaining({ name: 'publish-paper', source: 'user' }),
+          expect.objectContaining({
+            name: 'paper-protocol:load-paper',
+            plugin: 'plugin:paper-protocol',
+          }),
+          expect.objectContaining({
+            name: 'paper-protocol:publish-paper',
+            plugin: 'plugin:paper-protocol',
+          }),
         ]);
-        expect(catalog.catalog).toContain(
-          '- load-paper: Load a published paper repository.\n  Source: plugin paper-protocol',
+        expect(JSON.stringify(catalog.catalog)).toContain(
+          '- paper-protocol:load-paper: Load a published paper repository.\\n  Source: plugin paper-protocol',
         );
-        expect(catalog.catalog).not.toContain('The bundled copy.');
+        expect(catalog.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
+        );
 
         // Disabled, the plugin stays installed and contributes nothing.
-        yield* setPluginEnabled('paper-protocol', false, env);
-        const disabled = yield* loadRuntimeSkillCatalog(resources, stores);
-        expect(disabled.catalog).not.toContain('plugin paper-protocol');
-        expect(disabled.skills).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        yield* disablePlugin('paper-protocol', env);
+        const disabled = yield* catalogNow();
+        expect(JSON.stringify(disabled.catalog)).not.toContain(
+          'plugin paper-protocol',
         );
-        yield* setPluginEnabled('paper-protocol', true, env);
-        expect(
-          (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
-        ).toContain('plugin paper-protocol');
+        expect(disabled.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
+        );
+        // The version it trusts is not asked about again.
+        yield* enablePlugin('paper-protocol', env, () =>
+          Effect.die('trust asked again'),
+        );
+        expect(JSON.stringify((yield* catalogNow()).catalog)).toContain(
+          'plugin paper-protocol',
+        );
 
         yield* removePlugin('paper-protocol', env);
-        const after = yield* loadRuntimeSkillCatalog(resources, stores);
-        expect(after.catalog).not.toContain('plugin paper-protocol');
-        expect(after.skills).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        const after = yield* catalogNow();
+        expect(JSON.stringify(after.catalog)).not.toContain(
+          'plugin paper-protocol',
+        );
+        expect(after.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
         // A local plugin is referenced in place, so removing it keeps it.
         yield* Effect.promise(() =>

@@ -30,6 +30,7 @@ import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
+import { createEditorFileNotice } from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
   type EditorFileEntry,
@@ -90,7 +91,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   treeHost.className = 'desktop-editor-tree';
   const editorHost = document.createElement('div');
   editorHost.className = 'desktop-editor-surface';
-  element.append(editorHost);
+  const notice = createEditorFileNotice({
+    onError: callbacks.onError,
+    retrySave: (path) => void open(path).then(save),
+  });
+  element.append(notice.element, editorHost);
 
   let disposed = false;
   const closedPaths = new Set<string>();
@@ -314,8 +319,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (editor) return editor;
     if (editorLoad) return editorLoad;
 
-    editorLoad = loadMonaco()
-      .then((loadedMonaco) => {
+    editorLoad = (async () => {
+      try {
+        const loadedMonaco = await loadMonaco();
         if (disposed) return undefined;
         monaco = loadedMonaco;
         const editorFontSize = getDesktopChromeFontSize();
@@ -344,21 +350,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           cursorBlinking: 'smooth',
         });
         return editor;
-      })
-      .catch((error: unknown) => {
-        callbacks.onError(error);
-        render(
-          html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
-            ${waIcon('triangle-exclamation', { slot: 'icon' })} The editor
-            failed to load.
-          </wa-callout>`,
-          editorHost,
-        );
+      } catch (error) {
+        notice.report(undefined, 'load', error);
         return undefined;
-      })
-      .finally(() => {
+      } finally {
         editorLoad = undefined;
-      });
+      }
+    })();
     return editorLoad;
   }
 
@@ -488,9 +486,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       if (!model || disposed || request !== latestOpenRequest) return;
       target.setModel(model);
       openPath = path;
+      notice.clear(path);
       renderTree();
     } catch (error) {
-      callbacks.onError(error);
+      if (!disposed) notice.report(path, 'open', error);
     }
   }
 
@@ -503,23 +502,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     loadingDirectories.clear();
     directoryErrors.clear();
     renderTree();
-    const treeRefresh = callbacks
-      .listFiles('')
-      .then((listedFiles) => {
+    const treeRefresh = (async () => {
+      try {
+        const listedFiles = await callbacks.listFiles('');
         if (revision !== treeRevision) return;
         treeNodes = buildEditorDirectoryEntries(listedFiles);
         treeError = undefined;
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (revision !== treeRevision) return;
         callbacks.onError(error);
         treeError = 'Could not list workspace files.';
-      })
-      .finally(() => {
-        if (revision !== treeRevision) return;
-        treeLoading = false;
-        renderTree();
-      });
+      } finally {
+        if (revision === treeRevision) {
+          treeLoading = false;
+          renderTree();
+        }
+      }
+    })();
     const modelRefreshes = [...models].map(([path, model]) =>
       syncCleanModel(path, model).catch((error: unknown) =>
         callbacks.onError(error),
@@ -565,9 +564,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         return;
       dirtyPaths.delete(path);
       callbacks.onDirtyChange(path, false);
+      notice.clear(path);
       renderTree();
     } catch (error) {
-      callbacks.onError(error);
+      if (!disposed) notice.report(path, 'save', error);
     } finally {
       const remainingWrites = (activeWrites.get(path) ?? 1) - 1;
       if (remainingWrites === 0) activeWrites.delete(path);

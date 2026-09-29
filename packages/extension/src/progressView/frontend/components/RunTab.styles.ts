@@ -150,14 +150,15 @@ export const runTabStyles = css`
 
   /* Reveal the metadata line on hover, focus, or selection. The agent name
      renders as inline text on this line, alongside the worktree chip,
-     timestamp, and model, when the title is the AI session one-liner. */
+     timestamp, and model, when the title is the AI session one-liner. A
+     host whose list is one line per row (the desktop rail) sets
+     --run-tab-meta-display: none; the row's tooltip carries the same facts. */
   .tab-container:hover .tab-meta,
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
-    display: flex;
+    display: var(--run-tab-meta-display, flex);
   }
 
-  .tab-meta .remote-agent,
   .tab-meta .run-kind {
     margin-inline-start: var(--wa-space-2xs);
   }
@@ -230,6 +231,14 @@ export const runTabStyles = css`
   .tab-resume {
     flex-shrink: 0;
     margin-inline-start: var(--wa-space-3xs);
+  }
+
+  /* A row at rest is its title and status glyph; its status detail (the
+     interrupted, held-elsewhere or unreadable notice) and Resume appear with
+     the metadata line, on hover, focus, or selection. */
+  .tab-container:not(:hover, :focus-within, .is-active)
+    :is(.tab-detail, .tab-resume) {
+    display: none;
   }
 
   .tab-container.is-read-only .tab-title {

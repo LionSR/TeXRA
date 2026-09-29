@@ -11,25 +11,20 @@ import {
   shell,
 } from 'electron';
 
-import { Cause, Data, Effect, Exit, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Data,
+  Effect,
+  Exit,
+  FileSystem,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { z } from 'zod';
-import { presentAgentFailure } from '@agent/runtime';
-import {
-  agentSourceDirectory,
-  getAgentsByCategory,
-  createWorkspaceAgentRosterController,
-  loadAgents,
-  refresh,
-} from '@agent/index';
+import { closeAllSessions, presentRunFailure } from '@agent/runtime';
+import { loadAgents } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
-import { SignInFailed } from '@common/errors/signInFailed';
-import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   SessionBridge,
   type AttachedPort,
@@ -43,7 +38,6 @@ import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { ExternalOpenFailed, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { DisposableStore } from '@platform/disposable';
 import type {
   AgentDirectoriesPort,
   StateStore,
@@ -57,27 +51,16 @@ import {
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
-  RunIdSchema,
   type RunId,
-  type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';
-import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { refreshToolAvailability } from '@tools/toolAvailability';
-import { killActiveRecording } from '@tools/media/audio';
+import { Cancelled } from '@shared/session/requestErrors';
+import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
 } from './desktopProjectRecords.js';
-import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import {
   DesktopAttentionPort,
@@ -117,6 +100,7 @@ import {
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
+  type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -131,15 +115,12 @@ import {
   type DesktopOnboardingIpc,
 } from './desktopOnboardingIpc.js';
 import { DesktopPromptController } from './desktopPromptController.js';
-import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
-import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import {
   createDesktopSettingsIpc,
   type DesktopSettingsIpc,
-  type DesktopSettingsUiHost,
+  type DesktopSettingsIpcOptions,
 } from './desktopSettingsIpc.js';
-import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
 import {
   createDesktopShellActions,
@@ -170,15 +151,11 @@ import {
   postDesktopSettingsView,
   type DesktopInboundRoute,
 } from '../shared/desktopCommandSurface.js';
-import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
-/** Window-owned post-launch funnel refresh. The process resume owner reads
- *  this; createWindow assigns it when onboarding IPC exists. */
-const afterLaunchFunnelRefresh: { current?: Effect.Effect<void> } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
@@ -191,14 +168,37 @@ if (e2eUserDataPath) {
 /** Show a run of a project in the window; the window assigns it. */
 const revealProjectRun: { current?: (key: string, runId: RunId) => void } = {};
 
-function focusOrReopenMainWindow(): void {
+/** The closed window's scope while it is still closing. */
+let releasingWindow: Promise<void> | undefined;
+
+/**
+ * Open the window once the closed one has released everything it held (its
+ * protocol-router subscription among them), so two windows' resources never
+ * overlap; then run `then`. A reopen queued twice opens one window.
+ */
+function reopenAfterRelease(then?: () => void): void {
+  const open = () => {
+    if (!mainWindow) reopenMainWindow?.();
+    then?.();
+  };
+  if (!releasingWindow) {
+    open();
+    return;
+  }
+  void releasingWindow.then(open).catch((error: unknown) => {
+    console.error('The desktop window could not be reopened:', error);
+  });
+}
+
+function focusOrReopenMainWindow(then?: () => void): void {
   if (!mainWindow) {
-    reopenMainWindow?.();
+    reopenAfterRelease(then);
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  then?.();
 }
 
 const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
@@ -206,7 +206,7 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   argv: process.argv.slice(1),
   execPath: process.execPath,
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
-  focusMainWindow: focusOrReopenMainWindow,
+  focusMainWindow: () => focusOrReopenMainWindow(),
 });
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
@@ -274,8 +274,6 @@ function createWindow(options: {
    * runs settles on it, and every handler and service below is handed it.
    */
   runtime: ProcessRuntime;
-  /** See ElectronPlatformInitResult.setupAuth. */
-  setupAuth: DesktopSetupAuth;
 }): void {
   const activeProject = () => options.projects.active();
   // This window's handle on the process runtime, as its opener handed it over.
@@ -324,19 +322,22 @@ function createWindow(options: {
     },
   });
   mainWindow = window;
-  // Window root: every resource scoped to this BrowserWindow registers here at
-  // creation, and the `closed` handler disposes the store (LIFO) instead of
-  // running a hand-ordered teardown ledger.
-  const windowResources = new DisposableStore();
+  // Window root: every resource tied to this BrowserWindow (its fibers, its
+  // subscriptions, its session attachments and IPC listener) is a finalizer
+  // or a child of this scope, and the `closed` handler closes it; its
+  // finalizers run in the reverse of their registration.
+  const windowScope = Scope.makeUnsafe();
+  const onWindowClosed = (release: () => void): void =>
+    runtime.runSync(Scope.addFinalizer(windowScope, Effect.sync(release)));
   // Project root: the resources bound to the project the window shows (its
-  // title, its settings surface and their subscriptions) live in this scope,
-  // which is closed and replaced when the window switches projects.
+  // title, its settings surface and their subscriptions) live in this child
+  // of the window's scope, closed and replaced when the window switches
+  // projects.
   let projectScope: Scope.Closeable | undefined;
   let attachedProject: DesktopProject | undefined;
-  windowResources.add(() => {
+  onWindowClosed(() => {
     attachedProject = undefined;
     settingsIpcRef.current = undefined;
-    if (projectScope) runtime.runFork(Scope.close(projectScope, Exit.void));
   });
   const ipcRef: {
     current?: { postToRenderer(message: unknown): void };
@@ -382,7 +383,6 @@ function createWindow(options: {
     showInfoMessage,
     showWarningMessage,
     confirmDialog,
-    presentTeamAvailabilityPrompt,
     showErrorDialog,
     showInstructionDialog,
     pickTranscriptExportFormat,
@@ -411,7 +411,7 @@ function createWindow(options: {
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
   };
-  // Detached so the launch does not wait on it; reports its own defects.
+  // Forked so the launch does not wait on it; reports its own defects.
   const refreshFunnelAfterLaunch: Effect.Effect<void> = Effect.suspend(() => {
     const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
     if (!refresh) return Effect.void;
@@ -422,7 +422,7 @@ function createWindow(options: {
       Effect.catchDefect((defect) =>
         Effect.sync(() => reportAsyncError(defect)),
       ),
-      Effect.forkDetach,
+      Effect.forkIn(windowScope),
       Effect.asVoid,
     );
   });
@@ -457,6 +457,9 @@ function createWindow(options: {
       },
     }).pipe(
       Effect.catch((error) => Effect.sync(() => reportBackgroundError(error))),
+      // Its dialog is this window's: a check still running when the window
+      // closes stops with it, and the next window checks again.
+      Effect.forkIn(windowScope),
     ),
   );
   const previewOptions = {
@@ -538,21 +541,11 @@ function createWindow(options: {
         return;
     }
   };
-  let teamSignInPending = false;
-  /** Every surface an account change touches, as one program: the agent
-   *  catalog, the settings view, then the onboarding funnel. */
+  /** Every surface an account change touches, as one program: the settings
+   *  view, then the onboarding funnel. */
   const refreshDesktopAuthSurfaces = () =>
     Effect.gen(function* () {
-      // Sign-in: a signed-out load already stamped the catalog as including
-      // remote, so only a forced refetch picks up the new account's agents.
-      // Sign-out also lands here, after the coordinator dropped the remote
-      // entries; refetching then would re-stamp a signed-out catalog.
-      if (!teamSignInPending && (yield* options.supabaseAuth.authenticated)) {
-        yield* refresh({ includeRemote: true });
-      }
-      yield* settingsIpcRef.current?.refreshAuthDependentData({
-        deferAgentCatalogRefresh: teamSignInPending,
-      }) ?? Effect.void;
+      yield* settingsIpcRef.current?.refreshAfterAuthChange() ?? Effect.void;
       yield* onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void;
     });
   const desktopAuthHost: DesktopSupabaseAuthHost = {
@@ -562,18 +555,17 @@ function createWindow(options: {
     showErrorMessage,
     onSessionChanged: refreshDesktopAuthSurfaces,
   };
-  const desktopAuth = windowResources.add(
-    createDesktopSupabaseAuth({
-      router: protocolLifecycle.router,
-      auth: options.supabaseAuth,
-      store: options.pendingOAuthStore,
-      host: desktopAuthHost,
-      runtime,
-    }),
-  );
+  const desktopAuth = createDesktopSupabaseAuth({
+    router: protocolLifecycle.router,
+    auth: options.supabaseAuth,
+    store: options.pendingOAuthStore,
+    host: desktopAuthHost,
+    runtime,
+  });
+  onWindowClosed(() => desktopAuth.dispose());
   /**
    * Sole owner of the desktop sign-in provider choice. Every sign-in entry
-   * point (login banner, credential settings, remote-agent catalog) routes
+   * point (login banner, credential settings) routes
    * here so the desktop offers the same providers as the extension quick pick
    * and the CLI select instead of assuming one account type.
    */
@@ -590,37 +582,6 @@ function createWindow(options: {
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
     });
-  const signInFailed = (cause: unknown) =>
-    new SignInFailed({
-      message: `The desktop sign-in could not run: ${toErrorMessage(cause)}`,
-      cause,
-    });
-  const signInForRemoteAgentCatalog = (): Effect.Effect<
-    boolean,
-    SignInFailed
-  > =>
-    Effect.gen(function* () {
-      const provider = yield* Effect.tryPromise({
-        try: chooseOAuthProvider,
-        catch: signInFailed,
-      });
-      if (provider === undefined) return false;
-      teamSignInPending = true;
-      return yield* Effect.gen(function* () {
-        const signedIn = yield* desktopAuth.signInAndWaitForSession(provider);
-        return signedIn && (yield* options.supabaseAuth.authenticated);
-      }).pipe(
-        Effect.mapError(signInFailed),
-        Effect.ensuring(
-          Effect.sync(() => {
-            teamSignInPending = false;
-          }),
-        ),
-      );
-    });
-  windowResources.add(
-    options.setupAuth.registerSignIn(signInForRemoteAgentCatalog),
-  );
   const folderPickerDefaultPath = () =>
     activeProject().root ?? app.getPath('home');
 
@@ -651,7 +612,7 @@ function createWindow(options: {
     );
   };
 
-  revealProjectRun.current = (key, runId) => {
+  const revealRun = (key: string, runId: RunId) => {
     const project =
       key === options.projects.fallback().key
         ? options.projects.fallback()
@@ -670,6 +631,13 @@ function createWindow(options: {
       ),
     );
   };
+  // Held by the process's attention wiring, so a closed window lets go of it
+  // rather than keeping its whole graph alive until the next window opens.
+  revealProjectRun.current = revealRun;
+  onWindowClosed(() => {
+    if (revealProjectRun.current === revealRun)
+      revealProjectRun.current = undefined;
+  });
 
   /** The renderer reports dirtiness for the addressed project, including a
    *  hidden one. Only explicit closure releases its resources. */
@@ -751,12 +719,6 @@ function createWindow(options: {
     openPath: previewHost.openPath,
     confirmAcceptFile: (message) =>
       confirmDialog({ message, confirmLabel: 'Replace file', project }),
-    chooseTeamAvailability: (unavailableNames) =>
-      presentTeamAvailabilityPrompt(
-        teamAvailabilityPrompt(unavailableNames),
-        project,
-      ),
-    signInForRemoteAgentCatalog,
     // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
@@ -915,10 +877,9 @@ function createWindow(options: {
       onboarding: requireOnboardingIpc(),
       openExternalUrl: requestPreviewHost.openExternal,
       recheckTools: () =>
-        refreshToolAvailability({
-          workspaceRoot: project.roots.workspace,
-          config: project.roots.config,
-        }),
+        Effect.flatMap(ToolAvailability, (tools) =>
+          Effect.asVoid(tools.refresh(project.roots)),
+        ),
     });
     const port = runtime.runSync(
       bridge.attach({
@@ -970,7 +931,7 @@ function createWindow(options: {
       projectBindings.set(key, bindProject(project));
     }
   };
-  windowResources.add(() => {
+  onWindowClosed(() => {
     for (const binding of projectBindings.values()) {
       binding.dispose();
     }
@@ -993,38 +954,6 @@ function createWindow(options: {
       (binding) => binding.snapshot.refreshCatalogs,
       { concurrency: 'unbounded', discard: true },
     );
-  const settingsUi: DesktopSettingsUiHost = {
-    showInfoMessage,
-    showErrorMessage,
-    confirmAction: (message, confirmLabel) =>
-      confirmDialog({ message, confirmLabel }),
-    openPath: previewHost.openPath,
-    // Selection is the surface's: a settings jump asks the shown project's
-    // surface to select the run, and reports a run the view no longer holds
-    // as missing. The settings wire carries the id as a plain string, so it
-    // is parsed here, at the view boundary: a string that is not a run id
-    // names no run the view could hold.
-    revealRun: async (rawRunId) => {
-      const binding = activeBinding();
-      if (!binding) return 'unavailable';
-      const runId = RunIdSchema.safeParse(rawRunId);
-      if (!runId.success) return 'missing';
-      const view = SubscriptionRef.getUnsafe(binding.project.session.view);
-      if (!view.runs.has(runId.data)) return 'missing';
-      binding.bridge.surfaceAction({ kind: 'select', runId: runId.data });
-      return 'revealed';
-    },
-    getRunLabel: (rawRunId) => {
-      const runId = RunIdSchema.safeParse(rawRunId);
-      if (!runId.success) return undefined;
-      return SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(
-        runId.data,
-      )?.label;
-    },
-    promptForSecret: (input) =>
-      promptController.request({ ...input, password: true }),
-    onError: reportAsyncError,
-  };
   const requireSettingsIpc = (): DesktopSettingsIpc => {
     const settingsIpc = settingsIpcRef.current;
     if (!settingsIpc) throw new Error('Desktop settings IPC is not attached.');
@@ -1054,7 +983,7 @@ function createWindow(options: {
     const documentBinding = projectBindings.get(project.key);
     const previousScope = projectScope;
     attachedProject = project;
-    const owner = Scope.makeUnsafe();
+    const owner = Scope.forkUnsafe(windowScope);
     projectScope = owner;
     const postForActiveProject = (message: unknown) => {
       if (projectScope !== owner) return false;
@@ -1062,49 +991,70 @@ function createWindow(options: {
     };
     settingsIpcRef.current = undefined;
     if (previousScope) runtime.runFork(Scope.close(previousScope, Exit.void));
-    const agentSettingsController = new DefaultDesktopAgentSettingsController({
-      roster: createWorkspaceAgentRosterController({
-        workspaceState: project.roots.workspaceState,
-        globalState: options.globalState,
-      }),
-      workspaceState: project.roots.workspaceState,
-      globalState: options.globalState,
-      registry: {
-        loadAgents,
-        refreshAgents: refresh,
-        getAgents: getAgentsByCategory,
+    const settingsBindings: DesktopSettingsIpcOptions['bindings'] = {
+      post: (message) =>
+        Effect.flatMap(message, (built) =>
+          Effect.sync(() => {
+            postForActiveProject(built);
+          }),
+        ),
+      notify: { showInfoMessage, showErrorMessage },
+      // The window's dialogs behind the host-neutral prompt port. The renderer
+      // overlay settles a prompt it could not deliver as "no answer", so
+      // `input` has no failure of its own; the native dialogs reject once the
+      // window they anchor to is gone.
+      prompt: {
+        input: (input) =>
+          promptController.request({
+            title: input.prompt ?? 'TeXRA',
+            prompt: input.prompt ?? '',
+            password: input.password,
+          }),
+        confirm: (message, promptOptions) =>
+          confirmDialog({
+            message,
+            detail: promptOptions.detail,
+            confirmLabel: promptOptions.confirmLabel,
+          }),
+        info: (message) => showInfoMessage(message).pipe(Effect.as(undefined)),
+        warning: (message) =>
+          showWarningMessage(message).pipe(Effect.as(undefined)),
       },
-      directory: {
-        getCustomAgentDirectory: () => options.agentDirectories.custom(),
-        getSourceDirectory: (source: AgentSource) =>
-          agentSourceDirectory(options.agentDirectories, source),
-        selectCustomAgentDirectory: async () => {
-          const result = await dialog.showOpenDialog(window, {
-            title: 'Select Custom Agents Folder',
-            defaultPath: folderPickerDefaultPath(),
-            properties: ['openDirectory', 'createDirectory'],
-          });
-          return result.canceled ? undefined : result.filePaths[0];
-        },
-        openPath: previewHost.openPath,
-        revealPath: async (filePath) => shell.showItemInFolder(filePath),
+      // The one browser hand-off every settings URL takes. Its failure reaches
+      // the settings body's own report, so the opener shows no dialog of its
+      // own: one failed open, one dialog.
+      externalOpener: {
+        openExternal: (url) => openExternalProgram(url, false),
       },
-      renderer: {
-        postToRenderer: postForActiveProject,
-      },
-      prompts: {
-        promptText: (input) => promptController.request(input),
-        confirm: ({ title, message }) =>
-          confirmDialog({ title, message, confirmLabel: 'Continue' }),
-        chooseTeamAvailability: presentTeamAvailabilityPrompt,
-      },
-      remoteCatalog: {
-        canAccess: () => options.supabaseAuth.authenticated,
-        signIn: signInForRemoteAgentCatalog,
-      },
-      notifications: { showInfoMessage, showErrorMessage },
-      resourcesPath: options.resourcesPath,
-      onCatalogChanged: (selectedToolUseAgent) =>
+      openPath: previewHost.openPath,
+      revealPath: (filePath) =>
+        Effect.sync(() => shell.showItemInFolder(filePath)),
+      // The desktop has no editor of its own and hands the path to the OS, so
+      // read-only YAML is shown through a temporary copy the external editor
+      // may save without touching the original.
+      showReadOnlyYaml: (fileName, text) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const target = join(
+            yield* fs.makeTempDirectory({ prefix: 'texra-agent-yaml-' }),
+            fileName,
+          );
+          yield* fs.writeFileString(target, text);
+          yield* previewHost.openPath(target);
+        }),
+      pickFolder: (title) =>
+        Effect.tryPromise({
+          try: async () => {
+            const result = await dialog.showOpenDialog(window, {
+              title,
+              defaultPath: folderPickerDefaultPath(),
+              properties: ['openDirectory', 'createDirectory'],
+            });
+            return result.canceled ? undefined : result.filePaths[0];
+          },
+          catch: ensureError,
+        }),
+      refreshCatalogs: (selectedToolUseAgent) =>
         Effect.gen(function* () {
           yield* refreshCatalogs();
           if (!selectedToolUseAgent) return;
@@ -1115,115 +1065,62 @@ function createWindow(options: {
             patch: { sessionType: 'toolUse', agent: selectedToolUseAgent },
           });
         }),
-    });
-    const credentialSettingsController =
-      new DefaultDesktopCredentialSettingsController({
-        runtime,
-        stores: project.roots,
-        workspaceState: project.roots.workspaceState,
-        globalState: options.globalState,
-        config: project.roots.config,
-        secrets: options.secrets,
-        renderer: {
-          postToRenderer: postForActiveProject,
-        },
-        // The window's dialogs behind the host-neutral prompt port. The
-        // renderer overlay settles a prompt it could not deliver as "no
-        // answer", so `input` has no failure of its own; the native dialogs
-        // reject once the window they anchor to is gone. `info` is the
-        // notification member with an answer nobody reads, so it is that
-        // program and its tag, not a re-wording of it.
-        prompt: {
-          input: (input) =>
-            promptController.request({
-              title: input.prompt ?? 'Set API key',
-              prompt: input.prompt ?? 'Enter API key',
-              password: input.password,
-            }),
-          confirm: (message, promptOptions) =>
-            confirmDialog({
-              message,
-              detail: promptOptions?.detail,
-              confirmLabel: promptOptions?.confirmLabel,
-            }),
-          info: (message) =>
-            showInfoMessage(message).pipe(Effect.map(() => undefined)),
-        },
-        externalOpener: {
+      refreshCredentialStatus: Effect.suspend(() =>
+        Effect.andThen(
+          Effect.forEach(
+            [...projectBindings.values()],
+            (binding) => binding.snapshot.refreshHostBanners,
+            { concurrency: 'unbounded', discard: true },
+          ),
+          onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
+        ),
+      ),
+      customAgentDirChanged: Effect.void,
+      // Selection is the surface's: a settings jump asks the shown project's
+      // surface to select the run, and reports a run the view no longer holds
+      // as missing.
+      revealRun: (runId) =>
+        Effect.sync(() => {
+          const binding = activeBinding();
+          if (!binding) return 'unavailable' as const;
+          const view = SubscriptionRef.getUnsafe(binding.project.session.view);
+          if (!view.runs.has(runId)) return 'missing' as const;
+          binding.bridge.surfaceAction({ kind: 'select', runId });
+          return 'revealed' as const;
+        }),
+      runLabel: (runId) =>
+        SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(runId)
+          ?.label,
+      stateSettingApplied: () => Effect.void,
+      runInTerminal: (_name, command) =>
+        Effect.sync(() => {
+          if (projectBindings.get(project.key) !== documentBinding) return;
+          postToRendererIfAlive({
+            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+            session: project.key,
+            initialCommand: command,
+          });
+        }),
+      // There is no editor whose settings the LaTeX page could recommend.
+      latexRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
+    };
+    settingsIpcRef.current = runtime.runSync(
+      createDesktopSettingsIpc({
+        bindings: settingsBindings,
+        signInPresentation: {
           // The sign-in variant is the same program with the window's own
-          // "could not open" dialog suppressed — the sign-in flow reports a
+          // "could not open" dialog suppressed: the sign-in flow reports a
           // missing browser itself and falls back to a device code.
-          openExternal: (url) => openExternalProgram(url, true),
           openSubscriptionSignInUrl: (url) => openExternalProgram(url, false),
           ...desktopSignInPresenters(window, previewHost.openExternal),
-        },
-        notifications: {
-          showInfoMessage,
-          showWarningMessage,
-          showErrorMessage,
         },
         auth: {
           signIn,
           signOut: () => desktopAuth.signOut(),
         },
-        onCredentialChanged: () =>
-          onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
-        onModelOptionsChanged: refreshCatalogs,
-        // Credential operations already show their specific failure dialog. Keep
-        // the shared callback log-only so one failure never opens a second,
-        // generic desktop-operation dialog.
-        onError: reportBackgroundError,
-      });
-    const toolingSettingsController =
-      new DefaultDesktopToolingSettingsController({
-        onError: reportAsyncError,
-        globalState: options.globalState,
-        config: project.roots.config,
-        workspaceRoot: project.roots.workspace,
-        runtime,
-        renderer: {
-          postToRenderer: postForActiveProject,
-        },
-        commands: {
-          run: async (command: string) => {
-            if (projectBindings.get(project.key) !== documentBinding) return;
-            postToRendererIfAlive({
-              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-              session: project.key,
-              initialCommand: command,
-            });
-          },
-        },
-        latexToolingController: new LatexToolingController({
-          checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-          findPath: findToolInCommonPaths,
-          detectPackageManager,
-          getPlatform: () => normalizePlatform(process.platform),
-          // Extension hosting is deliberately unavailable in TeXRA Desktop.
-          isLatexWorkshopInstalled: () => false,
-          getRecommendedStatus: () => ({
-            outDir: true,
-            autoRevealExclude: true,
-          }),
-          onDetectionError: reportBackgroundError,
-        }),
-      });
-    settingsIpcRef.current = runtime.runSync(
-      createDesktopSettingsIpc({
-        postToRenderer: postForActiveProject,
-        agentSettingsController,
-        credentialSettingsController,
-        toolingSettingsController,
-        globalState: options.globalState,
-        secrets: options.secrets,
-        // The one browser hand-off every settings URL takes. Its failure
-        // reaches the settings IPC's own report, so the opener shows no dialog
-        // of its own: one failed open, one dialog.
-        externalOpener: {
-          openExternal: (url) => openExternalProgram(url, false),
-        },
-        ui: settingsUi,
         session: project.session,
+        secrets: options.secrets,
+        resourcesPath: options.resourcesPath,
         runtime,
       }).pipe(
         // Gated on the same owner check as `postForActiveProject`: the old
@@ -1353,31 +1250,21 @@ function createWindow(options: {
             // the failure is presented here and the kickoff settles.
             Effect.catch((error) => {
               if (error instanceof Cancelled) return Effect.void;
-              const primaryError = primaryAgentError(error);
-              return presentAgentFailure(
-                setupSession.interactions,
-                {
-                  kind: classifyAgentError(primaryError),
-                  message:
-                    primaryError instanceof Rejected
-                      ? primaryError.reason
-                      : toErrorMessage(primaryError),
-                },
-                { replayWhenAttached: true },
-              );
+              return presentRunFailure(setupSession.interactions, error);
             }),
           );
         }),
       // Suspended so the "settings IPC not attached" guard raises when the
       // card's program runs, not when the port is built.
       signInWithChatGpt: () =>
-        Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
+        Effect.suspend(() =>
+          requireSettingsIpc().signInSubscription('chatgpt'),
+        ),
     },
   );
   onboardingIpcRef.current = onboardingIpc;
-  afterLaunchFunnelRefresh.current = refreshFunnelAfterLaunch;
   // The funnel is host state every open project's snapshot carries (8.1).
-  windowResources.add(
+  onWindowClosed(
     onboardingIpc.onFunnelChange((state) =>
       Effect.forEach(
         [...projectBindings.values()],
@@ -1424,13 +1311,10 @@ function createWindow(options: {
   /** Each document/project owns one auxiliary transport and its resources.
    *  Callbacks capture the project before any asynchronous file or PTY work. */
   function createProjectWorkspace(project: DesktopProject) {
-    const post = (message: unknown) => {
+    const post = (message: DesktopWorkspaceReply) => {
       if (projectBindings.get(project.key)?.workspace !== workspace)
         return false;
-      return postToRendererIfAlive({
-        ...(message as Record<string, unknown>),
-        session: project.key,
-      });
+      return postToRendererIfAlive({ ...message, session: project.key });
     };
     const ptyHost = createDesktopPtyHost({
       cwd: () => project.root,
@@ -1505,8 +1389,9 @@ function createWindow(options: {
       return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
-      // Navigation destroys the document, including its request correlations
-      // and recording ownership. Replace its ports while retaining sessions.
+      // Navigation destroys the document's request correlations (an open prompt
+      // answers undefined) and recording ownership: new ports, same sessions.
+      promptController.dispose();
       for (const binding of projectBindings.values()) {
         binding.dispose();
       }
@@ -1591,7 +1476,7 @@ function createWindow(options: {
       runtime.runFork(binding.port.receive(message));
     },
   });
-  windowResources.add(() => {
+  onWindowClosed(() => {
     promptController.dispose();
     hostBridge.dispose();
   });
@@ -1601,10 +1486,6 @@ function createWindow(options: {
   // Subscribed last: the first change it sees may bind a project, which
   // needs every window surface above. Its first element is the state just
   // attached, so it changes nothing.
-  const followScope = Scope.makeUnsafe();
-  windowResources.add(() => {
-    runtime.runFork(Scope.close(followScope, Exit.void));
-  });
   runtime.runFork(
     Stream.runForEach(
       SubscriptionRef.changes(options.projects.state),
@@ -1615,33 +1496,44 @@ function createWindow(options: {
         }).pipe(
           Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
         ),
-    ).pipe(Effect.forkIn(followScope)),
+    ).pipe(Effect.forkIn(windowScope)),
   );
   installMenu(SubscriptionRef.getUnsafe(options.projects.state).recent);
   window.once('closed', () => {
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
-    runtime.runSync(
-      Effect.try({
-        try: () => windowResources.dispose(),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => reportBackgroundError(error)),
-        ),
-      ),
-    );
     if (mainWindow === window) {
       mainWindow = null;
       if (process.platform === 'darwin') {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    // Resume the quit once Electron has finished closing this window. A quit
-    // requested from inside `closed` lands before the window leaves the
-    // window list, so Electron abandons it and emits `window-all-closed`
-    // instead of `will-quit`, which on macOS leaves the process running.
-    if (continueQuit) setImmediate(continueQuit);
+    // Published before the close starts, so a reopen asked for meanwhile
+    // waits for it even when every finalizer runs synchronously.
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => {
+      released = resolve;
+    });
+    releasingWindow = release;
+    runtime.runFork(
+      Scope.close(windowScope, Exit.void).pipe(
+        Effect.catchCause((cause) =>
+          Effect.sync(() => reportBackgroundError(Cause.squash(cause))),
+        ),
+        // Resume the quit once the window's resources are released and
+        // Electron has finished closing it. A quit requested from inside
+        // `closed` lands before the window leaves the window list, so
+        // Electron abandons it and emits `window-all-closed` instead of
+        // `will-quit`, which on macOS leaves the process running.
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (releasingWindow === release) releasingWindow = undefined;
+            released();
+            if (continueQuit) setImmediate(continueQuit);
+          }),
+        ),
+      ),
+    );
   });
   let windowPresented = false;
   const presentWindow = (): void => {
@@ -1680,44 +1572,47 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // Opened by the startup program below; a startup that fails before it
       // runs the shutdown handlers that read it.
       let projects: DesktopProjectRegistry | undefined;
-      // Read through thunks: the resume owner is the port that
-      // `initializeElectronPlatform` installs, so it exists before either.
-      const processResumeOwner = new DesktopProcessResumeOwner({
-        sessions: () =>
-          (projects ? [projects.fallback(), ...projects.list()] : []).map(
-            (p) => p.session,
-          ),
-        runtime: () => runtime,
-        onLaunchSettled: Effect.suspend(
-          () => afterLaunchFunnelRefresh.current ?? Effect.void,
-        ),
-      });
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
-      const { lifecycle, runtime, processScope, initialize } =
-        yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
-      registerRuntimeShutdownHandlers(lifecycle, {
-        beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
-        afterAgentShutdown: [killActiveRecording()],
-        // Agent shutdown runs first so its final events enter the
-        // process-owned stores. Flush in BEFORE so persistence cannot be
-        // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: Effect.suspend(
-          () => projects?.flushArtifacts() ?? Effect.void,
-        ),
-        // The external-editor patch directories recorded by every window's
-        // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [
-          withProcessServices(runtime, removeExternalDiffPatchDirs),
-        ],
-        // Every project's session, most recently opened first, released
-        // before the runtime they run on goes (or, before the registry
-        // opened, the fallback project's scope it would own).
-        releaseSessions: Effect.suspend(
+      const { runtime, processScope, initialize } =
+        yield* initializeElectronPlatform(moduleDirname);
+      // The process's shutdown is this scope's close. Its finalizers run in
+      // the reverse of their registration: every session closes (its runs stopped and settled, its
+      // artifacts flushed), the recording stops, the external-editor patch
+      // directories every window's diff host recorded are removed, every
+      // project is released (or, before the registry opened, the fallback
+      // project's scope), and the runtime goes last.
+      const shutdownScope = Scope.makeUnsafe();
+      const shutdown = yield* Effect.cached(
+        Scope.close(shutdownScope, Exit.void),
+      );
+      const reported = (what: string, step: Effect.Effect<void, Error>) =>
+        step.pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              console.error(`Shutdown: ${what} failed`, Cause.squash(cause)),
+            ),
+          ),
+        );
+      yield* Scope.addFinalizer(shutdownScope, disposeProcessRuntime(runtime));
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        Effect.suspend(
           () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
         ),
-        disposeRuntime: disposeProcessRuntime(runtime),
-      });
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported(
+          'removing the external-editor patch directories',
+          withProcessServices(runtime, removeExternalDiffPatchDirs),
+        ),
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported('stopping the active recording', hostDraftRequests.shutdown),
+      );
+      yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
 
       // Until the initial window is fully wired, any startup failure (platform
       // init included) runs the shutdown an ordinary application exit does.
@@ -1771,7 +1666,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             installDesktopBeforeQuitWiring({
               app,
               getMainWindow: () => mainWindow,
-              lifecycle,
+              shutdown,
               continueAfterWindowClose: (continueQuit) => {
                 continueQuitAfterWindowClose = continueQuit;
               },
@@ -1792,12 +1687,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 resourcesPath: platformInit.resourcesPath,
                 mainDir: platformInit.mainDir,
                 runtime,
-                setupAuth: platformInit.setupAuth,
               });
             reopenMainWindow();
             app.on('activate', () => {
               if (BrowserWindow.getAllWindows().length === 0)
-                reopenMainWindow?.();
+                reopenAfterRelease();
             });
           });
           // For the process lifetime: the fallback project's scope is the
@@ -1808,10 +1702,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               DesktopAttentionPort,
               electronAttentionPort({
                 window: () => mainWindow,
-                reveal: (key, runId) => {
-                  focusOrReopenMainWindow();
-                  revealProjectRun.current?.(key, runId);
-                },
+                reveal: (key, runId) =>
+                  focusOrReopenMainWindow(() =>
+                    revealProjectRun.current?.(key, runId),
+                  ),
               }),
             ),
             Effect.catchCause((cause) =>
@@ -1844,7 +1738,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             );
           }
         }),
-      ).pipe(Effect.onError(() => lifecycle.runShutdown));
+      ).pipe(Effect.onError(() => shutdown));
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),

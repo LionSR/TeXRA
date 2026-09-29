@@ -5,7 +5,7 @@ import type {
   ConfigWriteFailed,
   StateReadFailed,
 } from '@platform/interfaces';
-import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
+import { settingByKey } from '@shared/state/stateSettings';
 import {
   inspectSetting,
   readConfigSetting,
@@ -24,32 +24,6 @@ function requireEntry(key: string) {
 }
 
 /**
- * The host this process is, for the catalog rows whose storage slot differs
- * by host (the git identity rows live in worktree-shared workspace state on
- * the extension and desktop and in `.texra/config.json` on the CLI). One
- * process is one host, so the composition root installs it once, beside
- * `installProcessRuntime()`.
- */
-let installedHost: SettingHost | undefined;
-
-export function initProcessSettingHost(host: SettingHost): void {
-  installedHost = host;
-}
-
-/** Setting slots keep their extension layout until a root names the host. */
-const processSettingHost = (): SettingHost => installedHost ?? 'vscode';
-
-/**
- * The same host in the tool registry's naming, for `unavailableHosts`, or
- * `undefined` when no composition root named one (the agent package embedded
- * in another process, a test). The tool resolver withholds every host-bound
- * tool from such a process rather than guessing which host it is.
- */
-export function processToolHost(): 'cli' | 'desktop' | 'extension' | undefined {
-  return installedHost === 'vscode' ? 'extension' : installedHost;
-}
-
-/**
  * The one catalog reader: a setting read from the three slots the caller holds
  * as data. A session's `WorkspaceRoots` carries all three, so a tool call's
  * `call.roots`, a run's `session.roots` and a host command's `session.roots`
@@ -60,11 +34,10 @@ export function readSettingFrom<T>(
   stores: SettingsStores,
   key: string,
 ): Effect.Effect<T, StateReadFailed> {
-  return readSetting(
-    requireEntry(key),
-    stores,
-    processSettingHost(),
-  ) as Effect.Effect<T, StateReadFailed>;
+  return readSetting(requireEntry(key), stores) as Effect.Effect<
+    T,
+    StateReadFailed
+  >;
 }
 
 /**
@@ -90,11 +63,10 @@ export function inspectSettingFrom<T>(
   stores: SettingsStores,
   key: string,
 ): Effect.Effect<StoredSetting<T>, StateReadFailed> {
-  return inspectSetting(
-    requireEntry(key),
-    stores,
-    processSettingHost(),
-  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
+  return inspectSetting(requireEntry(key), stores) as Effect.Effect<
+    StoredSetting<T>,
+    StateReadFailed
+  >;
 }
 
 /** Read and validate one catalog-backed value from its config slot. */
@@ -131,11 +103,5 @@ export function writeSettingTo(
   value: unknown,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  return writeSetting(
-    requireEntry(key),
-    value,
-    stores,
-    processSettingHost(),
-    target,
-  );
+  return writeSetting(requireEntry(key), value, stores, target);
 }

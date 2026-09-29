@@ -21,10 +21,9 @@
  *    the call's effective sandbox mode.
  */
 
-import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -35,6 +34,7 @@ import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 import {
+  binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
   resolvePackageDir,
@@ -131,28 +131,28 @@ const codexBinaryInPlatformPackage = Effect.fn(
 )(function* (
   platformPkgDir: string,
   platformInfo: PlatformInfo,
-): Effect.fn.Return<string | undefined> {
-  const findInPlatformPackage = (packageDir: string): string | undefined => {
+): Effect.fn.Return<string | undefined, never, FileSystem.FileSystem> {
+  const findInPlatformPackage = Effect.fnUntraced(function* (
+    packageDir: string,
+  ) {
     const vendorDir = path.join(packageDir, 'vendor', platformInfo.triple);
-    const candidates = [
+    for (const candidate of [
       path.join(vendorDir, 'bin', CODEX_BINARY_NAME),
       path.join(vendorDir, 'codex', CODEX_BINARY_NAME),
-    ];
-    // A plain predicate on a path this module just built, over the real
-    // filesystem the packaged binary lives on. The static it replaces asked
-    // lstat, which counted a dangling symlink as present where `existsSync`'s
-    // access probe does not.
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) return candidate;
+    ]) {
+      const binary = yield* binaryIfPresent(candidate);
+      if (binary) return binary;
     }
     return undefined;
-  };
+  });
 
-  const direct = findInPlatformPackage(platformPkgDir);
+  const direct = yield* findInPlatformPackage(platformPkgDir);
   if (direct) return direct;
 
   const nested = yield* resolvePackageDir(platformPkgDir, platformInfo.pkg);
-  return nested === undefined ? undefined : findInPlatformPackage(nested);
+  return nested === undefined
+    ? undefined
+    : yield* findInPlatformPackage(nested);
 });
 
 /**
@@ -196,11 +196,9 @@ export const openCodexClient = Effect.fn('codex.openClient')(function* () {
   return { codex, codexPath };
 });
 
-/** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
-let configModule: typeof import('./codexConfig.js') | null = null;
-export const getCodexConfig = Effect.promise(
-  async () => (configModule ??= await import('./codexConfig.js')),
-);
+/** Lazy accessor for codexConfig.ts exports: Node's module cache answers
+ *  every call after the first. */
+export const getCodexConfig = Effect.promise(() => import('./codexConfig.js'));
 
 /**
  * The sandbox mode a codex call runs under: its own override, else the

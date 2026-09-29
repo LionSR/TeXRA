@@ -1,6 +1,6 @@
 /**
  * The resume identity a host launches a resumed run with, read from the run
- * aggregate's latest `flow.snapshot`. The run's state is `RunLedger.load`,
+ * aggregate's latest `run.snapshot`. The run's state is `RunLedger.load`,
  * folded by the loop that continues it: nothing here carries a conversation,
  * and no checkpoint file is parsed.
  */
@@ -13,13 +13,12 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
   AgentCategory,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
@@ -46,11 +45,7 @@ const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
 const runtimeOf = (
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null,
-): Extract<FlowSnapshotPayload, { family: 'toolUse' }>['runtime'] => ({
-  phase: 'initial',
-  round: 0,
-  turn: 0,
-  continuationIndex: 0,
+): RunSnapshotPayload['runtime'] => ({
   modelId,
   modelCompatibilityKey: compatibilityKey,
   lastError: null,
@@ -60,22 +55,11 @@ const runtimeOf = (
 function toolUseSnapshot(
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null = COMPATIBILITY_KEY,
-): FlowSnapshotPayload {
+): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
-  };
-}
-
-function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
-  return {
-    family: 'reflection',
-    runtime: runtimeOf(modelId, COMPATIBILITY_KEY),
-    state: {
-      totalRounds: 2,
-      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    },
+    state: { stateSlices: null },
   };
 }
 
@@ -90,14 +74,14 @@ describe('retrieveSessionResumeData', () => {
   /** Open the run aggregate the way a loop does: claim, then snapshot. */
   const openRun = Effect.fn('openRun')(function* (
     runId: RunId,
-    payload: FlowSnapshotPayload,
+    payload: RunSnapshotPayload,
   ) {
     publishTestRunStart(session, runId);
     yield* session.settlePublications();
     yield* session.ledger.acquire(runId);
     yield* session.ledger.appendBatch(runId, null, [
       {
-        type: 'flow.snapshot',
+        type: 'run.snapshot',
         aggregateId: aggregateId('run', runId),
         payload,
       },
@@ -114,10 +98,8 @@ describe('retrieveSessionResumeData', () => {
         expect(
           yield* retrieveSessionResumeData(runId, CONFIG, session),
         ).toMatchObject({
-          type: 'toolUse',
           runId,
           agentConfig: { model: 'gpt55' },
-          modelCompatibilityKey: COMPATIBILITY_KEY,
         });
       }),
   );
@@ -134,30 +116,14 @@ describe('retrieveSessionResumeData', () => {
     }),
   );
 
-  it.effect('retrieves a workflow run from its reflection snapshot', () =>
+  it.effect('retrieves a workflow run on the same resume identity', () =>
     Effect.gen(function* () {
       const runId = 'ab0003' as RunId;
-      yield* openRun(runId, reflectionSnapshot('gpt54'));
+      yield* openRun(runId, toolUseSnapshot('gpt54'));
 
       expect(
         yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
-      ).toMatchObject({ type: 'workflow', runId });
-    }),
-  );
-
-  // A family the launch config contradicts is corruption, never a silent
-  // "nothing to resume": the caller must be able to tell the two apart.
-  it.effect('refuses a tool-use launch onto a reflection run', () =>
-    Effect.gen(function* () {
-      const runId = 'ab0004' as RunId;
-      yield* openRun(runId, reflectionSnapshot('gpt54'));
-
-      const error = yield* Effect.flip(
-        retrieveSessionResumeData(runId, CONFIG, session),
-      );
-      expect(error.message).toContain(
-        `Run ${runId} is configured as toolUse but its snapshot is a reflection run.`,
-      );
+      ).toMatchObject({ runId, agentConfig: { agentCategory: 'workflow' } });
     }),
   );
 

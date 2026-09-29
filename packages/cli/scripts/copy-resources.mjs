@@ -12,6 +12,8 @@ const target = targetInput
   : path.resolve(packageDir, 'dist/resources');
 const runtimeResourceEntries = [
   'agents',
+  // The creator agent's reference docs (docs/agent-creation).
+  'docs',
   'plugins',
   'skills',
   'tool_use_agents',

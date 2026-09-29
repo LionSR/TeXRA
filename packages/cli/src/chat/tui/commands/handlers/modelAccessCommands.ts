@@ -60,10 +60,7 @@ export const applyCliModelAccessSelection = Effect.fn(
     stores,
     context?.cliContext,
     selection,
-    {
-      writeProgress: (message) =>
-        output.writeProgress(message, { copyable: true }),
-    },
+    { writeProgress: output.writeProgress },
   );
   bumpCodexPreferenceVersion();
   output.appendOutcome(collapseWhitespace(access.message));

@@ -11,13 +11,6 @@ interface DisposableRendererResources {
   disposeRendererResources(): void;
 }
 
-interface ShutdownLifecycle {
-  /** The platform's drain (`LifecycleHost.runShutdown`): it drains both
-   *  phases once and a later caller joins the drain in flight, so this
-   *  wiring keeps no "shutdown started" flag of its own. */
-  readonly runShutdown: Effect.Effect<void>;
-}
-
 interface MainWindow {
   close(): void;
   isDestroyed(): boolean;
@@ -69,7 +62,10 @@ export function bootstrapDesktopWindowLifecycle(
 export function installDesktopBeforeQuitWiring(options: {
   app: BeforeQuitApp;
   getMainWindow(): MainWindow | null;
-  lifecycle: ShutdownLifecycle;
+  /** The process's shutdown: its scope's close, run once, a later caller
+   *  joining the one in flight, so this wiring keeps no "shutdown started"
+   *  flag of its own. */
+  shutdown: Effect.Effect<void>;
   continueAfterWindowClose(continueQuit: () => void): void;
 }): void {
   let quitting = false;
@@ -87,7 +83,7 @@ export function installDesktopBeforeQuitWiring(options: {
     // while the drain is in flight joins that same drain, and `quitting`
     // arbitrates the quit the join lands on.
     void Effect.runPromise(
-      options.lifecycle.runShutdown.pipe(
+      options.shutdown.pipe(
         Effect.ensuring(
           Effect.sync(() => {
             quitting = true;

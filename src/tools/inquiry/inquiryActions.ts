@@ -14,7 +14,6 @@ import { Effect } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { AgentResume } from '@platform/interfaces';
 
 // Local imports - shared
 import {
@@ -159,7 +158,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     permission: ExternalInquiryPermission,
     decision: RequestDecision,
     session: SessionHandle,
-  ): Effect.fn.Return<void, Error, InquiryRecords | AgentResume> {
+  ): Effect.fn.Return<void, Error, InquiryRecords> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
     const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;
@@ -222,7 +221,11 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     // and re-delivering after one it did is a no-op.
     const result = yield* submitFollowUp(
       parentRunId,
-      { text, deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}` },
+      {
+        text,
+        from: { kind: 'user' },
+        deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
+      },
       { session },
     );
     if (result.status === 'failed') {

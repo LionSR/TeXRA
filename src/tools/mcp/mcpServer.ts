@@ -1,9 +1,9 @@
 /**
  * One stdio MCP server, brought up in a scope: spawned with a scrubbed
  * environment, initialized, its tools listed, and stopped (SIGTERM, then
- * SIGKILL) when the scope closes. The scope is the one the composition entry
- * that includes the server builds it in (`@tools/compositions`), so the
- * process lives exactly as long as some open composition names its spec.
+ * SIGKILL) when the scope closes. The scope is the hold the live catalog
+ * counts for its spec and revision (`@tools/liveTools`), so the process
+ * lives exactly as long as some open run names it.
  *
  * JSON-RPC runs over the same Effect connection the Lean language server
  * uses (`@tools/jsonRpc`), in newline framing. Each listed tool becomes a
@@ -31,6 +31,7 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/runtime/run/toolResultText';
+import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
@@ -38,8 +39,6 @@ import { errorResult, executed } from '@tools/core/result';
 import type { LoadedPluginTools } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
-
-import type { McpServerConfig } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
@@ -264,6 +263,7 @@ const connect = (config: McpServerConfig) =>
     const handle = yield* ChildProcess.make(config.command, [...config.args], {
       env: serverEnv(config),
       extendEnv: false,
+      ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     }).pipe(
       Effect.mapError(
         (error) =>

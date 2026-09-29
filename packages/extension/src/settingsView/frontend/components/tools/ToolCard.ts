@@ -445,16 +445,10 @@ export class ToolCard extends LitElement {
                         class="tool-id-tag"
                         variant="neutral"
                         appearance="filled"
-                        aria-label=${
-                          tool.description
-                            ? `${tool.name}: ${tool.description}`
-                            : tool.name
-                        }
+                        aria-label=${tool.name}
                         ><bdi dir="auto">${tool.name}</bdi></wa-badge
                       >
-                      <wa-tooltip for=${badgeId}
-                        >${tool.description ?? tool.name}</wa-tooltip
-                      >
+                      <wa-tooltip for=${badgeId}>${tool.name}</wa-tooltip>
                     </li>`;
                   })}
                 </ul>

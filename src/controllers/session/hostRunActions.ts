@@ -1,5 +1,6 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import {
+  Cause,
   Data,
   Deferred,
   Effect,
@@ -10,6 +11,7 @@ import {
 } from 'effect';
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
+import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage';
 import {
   validateRunRequest,
@@ -20,31 +22,21 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
-import {
-  API_PROVIDERS,
-  lookupApiKey,
-  hasUsableApiKey,
-  isApiProvider,
-} from '@model/apiProviders';
+import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
-import type { StateReadFailed } from '@platform/interfaces';
-import {
-  AgentResume,
-  type AgentResumeFailed,
-  type AppState,
-} from '@platform/interfaces';
+import type { AppState, StateReadFailed } from '@platform/interfaces';
 import { Secrets, type SecretsFailed } from '@platform/secrets';
 import {
   AgentCategory,
   agentKey,
   agentName,
-  ExhaustionReasonSchema,
-  isPlainAgentIdentity,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -75,6 +67,7 @@ import {
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
+import { runActionGuard } from './runActionGuard';
 
 const CHANNEL = 'HostRunActions';
 
@@ -107,7 +100,7 @@ class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
 }> {}
 
 /** The run's saved setup could not be read: the database would not answer,
- *  or it refused the committed `run.record` row (`cause`). */
+ *  or it refused the committed `run.config` row (`cause`). */
 class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly runId: RunId;
   readonly message: string;
@@ -117,7 +110,7 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /**
-   * Launch or resume a validated run; the host's own launcher reaches
+   * Launch a validated fresh run; the host's own launcher reaches
    * `runAgent`. The Effect settles with the launched run itself — a caller
    * that wants only the launch acknowledged races it against the `onRun`
    * gate instead of awaiting it. It fails with the launcher's own error; the
@@ -130,9 +123,11 @@ export interface HostRunActionPorts {
       /** This launch replaces a quota-exhausted retry the user answered
        *  with their own API key. */
       ownApiKeyFallback?: boolean;
-      onRun?: () => Effect.Effect<void>;
+      onRun?: (runId: RunId) => Effect.Effect<void>;
     },
   ): Effect.Effect<void, Error>;
+  /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
+  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed
@@ -143,7 +138,7 @@ export interface HostRunActionPorts {
    * closes the prompt without entering a key is not a failure.
    */
   promptForApiKey(
-    provider?: ApiProvider,
+    provider: ApiProvider,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
@@ -157,11 +152,7 @@ export interface HostRunActionPorts {
 export interface HostRunActions {
   resume(
     runId: RunId,
-  ): Effect.Effect<
-    void,
-    AgentResumeFailed | RequestRefusal | RunConfigUnreadable | RunLaunchFailed,
-    AgentResume
-  >;
+  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
   runNew(
     runId: RunId,
   ): Effect.Effect<
@@ -183,18 +174,23 @@ export interface HostRunActions {
   readConfig(
     runId: RunId,
   ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
-  /** The workflow toolbar's latexdiff and pack/clean requests, built from the
-   *  run's saved config and its outputs as the view holds them. `undefined`
-   *  when the run has no config or is not a workflow: the action is a no-op. */
+  /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
   workflowDiffRequest(
     runId: RunId,
-  ): Effect.Effect<WorkflowDiffRequest | undefined, RunConfigUnreadable>;
-  workflowFileOperationRequest(
-    runId: RunId,
   ): Effect.Effect<
-    WorkflowFileOperationRequest | undefined,
-    RunConfigUnreadable
+    WorkflowDiffRequest | undefined,
+    Rejected | RunConfigUnreadable
   >;
+  /** Pack or clean a workflow run's outputs, from its saved config and the
+   *  outputs the view holds: the action check, then `perform` with the run
+   *  held (claim included). No workflow config is a no-op. */
+  workflowFileOperation<E, R>(
+    runId: RunId,
+    operation: 'pack' | 'clean',
+    perform: (
+      request: WorkflowFileOperationRequest,
+    ) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E | Rejected | RunConfigUnreadable, R>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -220,10 +216,7 @@ export interface HostRunActions {
     getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
   restoreProposal(proposal: unknown): Effect.Effect<AgentConfig, Rejected>;
-  sendFollowUp(
-    runId: RunId,
-    text: string,
-  ): Effect.Effect<void, never, AgentResume>;
+  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export const createHostRunActions = (
@@ -237,6 +230,7 @@ export const createHostRunActions = (
     const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
+    const guard = runActionGuard(session);
 
     /** Validate a request an action built, then launch it: one that does
      *  not validate is refused before anything starts, a refusal the
@@ -323,28 +317,13 @@ export const createHostRunActions = (
 
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
-      function* (runId: RunId, action: string) {
-        const run = session.runView(runId);
-        if (run === undefined) {
-          return yield* Effect.fail(
-            new Unavailable({
-              runId,
-              reason: 'The run is no longer open.',
-            }),
-          );
-        }
-        if (!isPlainAgentIdentity(run.identity)) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: `Only TeXRA agent runs can be ${action} from here; this run is not one.`,
-            }),
-          );
-        }
+      function* (runId: RunId, action: 'resume' | 'runNew' | 'restore') {
+        yield* guard.require(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
           return yield* Effect.fail(
             new Rejected({
-              reason: `This run's configuration was not saved, so it cannot be ${action}.`,
+              reason: "This run's configuration was not saved.",
             }),
           );
         }
@@ -396,7 +375,6 @@ export const createHostRunActions = (
         );
 
     const apiKeyRetry = new ProgressApiKeyRetryController({
-      providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKey(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
       // A host that could not ask returns the port's `ApiKeyPromptFailed`.
@@ -426,14 +404,6 @@ export const createHostRunActions = (
       },
     });
 
-    /** The wire carries the reason as text; an unknown one is no reason. */
-    const exhaustionReasonOf = (
-      request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-    ) => {
-      const parsed = ExhaustionReasonSchema.safeParse(request.exhaustionReason);
-      return parsed.success ? parsed.data : undefined;
-    };
-
     /** The Copilot subscription's fallback: a replacement run on the user's
      *  own key for the model Copilot served, then the pending retry is
      *  cancelled in its favor. */
@@ -451,7 +421,6 @@ export const createHostRunActions = (
           );
           return;
         }
-        const exhaustionReason = exhaustionReasonOf(request);
         let fallback = getRuntimeModelDirectFallback(
           request.model,
           yield* getUseOpenRouter(session.roots),
@@ -466,10 +435,10 @@ export const createHostRunActions = (
         // OpenRouter preference while that prompt is open. Revalidate both the
         // exact retry identity and the effective credential owner after each
         // prompt so an old action cannot launch or alter a replacement request.
-        let prepared = yield* apiKeyRetry.ensureOwnApiKey({
-          provider: fallback.provider,
-          exhaustionReason,
-        });
+        let prepared = yield* apiKeyRetry.ensureOwnApiKey(
+          fallback.provider,
+          false,
+        );
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
@@ -481,10 +450,10 @@ export const createHostRunActions = (
         }
         if (currentFallback.provider !== fallback.provider) {
           fallback = currentFallback;
-          prepared = yield* apiKeyRetry.ensureOwnApiKey({
-            provider: fallback.provider,
-            exhaustionReason,
-          });
+          prepared = yield* apiKeyRetry.ensureOwnApiKey(
+            fallback.provider,
+            false,
+          );
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
@@ -517,6 +486,10 @@ export const createHostRunActions = (
           // waiter as the fiber's failure rather than a lost second resolver.
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
+            // A failure after start has no waiter: warn, and present it
+            // through the session's presenter, which skips a failure its run's
+            // terminal result already showed.
+            let launched = false;
             const requestFiber = yield* Effect.forkDetach(
               runAgentRequest(
                 { config: { ...config, model } },
@@ -524,9 +497,28 @@ export const createHostRunActions = (
                   ownApiKeyFallback: true,
                   onRun: () =>
                     Effect.sync(() => {
+                      launched = true;
                       Deferred.doneUnsafe(runStarted, Effect.void);
                     }),
                 },
+              ).pipe(
+                Effect.onExit((exit) => {
+                  if (!launched || Exit.isSuccess(exit)) return Effect.void;
+                  if (Cause.hasInterruptsOnly(exit.cause)) return Effect.void;
+                  const error = Cause.squash(exit.cause);
+                  return Effect.logWarning(
+                    `Own-key replacement of run ${runId} failed: ${toErrorMessage(error)}`,
+                  ).pipe(
+                    Effect.andThen(
+                      presentRunFailure(
+                        session.interactions,
+                        error,
+                        'Your own-key run failed: ',
+                      ),
+                    ),
+                    withLogChannel(CHANNEL),
+                  );
+                }),
               ),
             );
             return yield* Effect.raceFirst(
@@ -569,7 +561,7 @@ export const createHostRunActions = (
         const deliver = Effect.gen(function* () {
           const result = yield* submitFollowUp(
             runId,
-            { text },
+            { text, from: { kind: 'user' } },
             { session },
           ).pipe(
             Effect.catch((error) =>
@@ -602,48 +594,58 @@ export const createHostRunActions = (
         return Effect.forkDetach(deliver).pipe(Effect.asVoid);
       },
       /**
-       * Resume a settled run: a workflow relaunches through the
-       * host's launcher with its run id; a tool-use run carries
-       * canonical session state, so it goes through the resume port that
-       * restores it instead of starting a fresh run.
+       * Resume a settled run, of either category, on the session that holds
+       * it: it continues the run's own rows. A run that does not take it
+       * refuses the request (its reason already told); a workflow settles
+       * with its whole run, whose output opens then.
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 'resumed');
-        if (config.agentCategory !== AgentCategory.Workflow) {
-          yield* (yield* AgentResume).tryResumeRun(runId);
-          return;
-        }
-        yield* runAgentRequest({ config, runId });
-      }),
+        yield* nativeAgentRun(runId, 'resume');
+        const resumed = yield* resumeOnSession(runId, { session });
+        if (!('started' in resumed) || !resumed.delivered)
+          return yield* Effect.fail(
+            new Unavailable({
+              runId,
+              reason: 'This run could not be resumed.',
+            }),
+          );
+        if (resumed.result)
+          yield* ports
+            .openWorkflowOutput(resumed.result)
+            .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
+      }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 're-run');
+        const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
       }),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
+          yield* guard.idle(runId);
+          yield* guard.require(runId, 'diff');
           const config = yield* workflowConfig(runId);
           return config ? { runId } : undefined;
         },
       ),
-      workflowFileOperationRequest: Effect.fn(
-        'HostRunActions.workflowFileOperationRequest',
-      )(function* (runId) {
-        const config = yield* workflowConfig(runId);
-        if (!config) return undefined;
-        return {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles[0] ?? '',
-          outputFiles: unique(
-            [
-              ...config.outputFiles,
-              ...runOutputs.getKnownWorkspaceOutputPaths(runId),
-            ].filter(Boolean),
-          ),
-          runId,
-        };
-      }),
+      workflowFileOperation: (runId, operation, perform) =>
+        Effect.gen(function* () {
+          yield* guard.require(runId, operation);
+          yield* guard.hold(runId);
+          const config = yield* workflowConfig(runId);
+          if (!config) return;
+          yield* perform({
+            agent: config.agent,
+            model: config.model,
+            inputFile: config.inputFiles[0] ?? '',
+            outputFiles: unique(
+              [
+                ...config.outputFiles,
+                ...runOutputs.getKnownWorkspaceOutputPaths(runId),
+              ].filter(Boolean),
+            ),
+            runId,
+          });
+        }).pipe(Effect.scoped),
       runCompileFixer: Effect.fn(function* (runId) {
         if (!view().runs.has(runId)) {
           return yield* Effect.fail(
@@ -666,23 +668,20 @@ export const createHostRunActions = (
         }
       }),
       useOwnApiKey(request) {
-        if (request.exhaustionReason === 'copilot-subscription') {
-          return copilotFallback(request);
-        }
-        const provider =
-          request.provider != null && isApiProvider(request.provider)
-            ? request.provider
-            : undefined;
+        const offer = request.credentialSwitch;
+        if (offer.kind === 'copilot-fallback') return copilotFallback(request);
         return apiKeyRetry.useOwnApiKey({
           stream: request.runId,
           requestId: request.requestId,
-          model: request.model ?? undefined,
-          provider,
-          exhaustionReason: exhaustionReasonOf(request),
+          provider: offer.provider,
+          requireNewKey: offer.kind === 'new-key',
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-        return yield* nativeAgentRun(runId, 'restored');
+        return yield* nativeAgentRun(runId, 'restore').pipe(
+          Effect.tap(() => guard.hold(runId)),
+          Effect.scoped,
+        );
       }),
     };
   });

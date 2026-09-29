@@ -20,7 +20,6 @@ import {
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
-  formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
@@ -35,8 +34,7 @@ import { withCliAuthError } from './_helpers/cliAuthError';
 import { withUsageSections } from './_helpers/dispatch';
 import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
-import { chatgptAuthCommand } from './chatgptAuth';
-import { grokAuthCommand } from './grokAuth';
+import { defineSubscriptionAuthCommand } from './_helpers/subscriptionAuthCommand';
 
 type LoginCommandArgs = {
   readonly providerArg?: string;
@@ -137,7 +135,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   }
 
   if (init.device) {
-    yield* initCliPlatform({ ...context, quietLogs: true });
+    yield* initCliPlatform(context);
     // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
     // result stream stays machine-readable (same convention as --no-browser).
     const writeProgress = cliProgressWriter(context);
@@ -163,7 +161,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
     writeTextStderr(unsupportedLoginProviderMessage(provider));
     return yield* exitBeforePlatform(CliExitCode.Usage);
   }
-  const { runtime } = yield* initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = yield* initCliPlatform(context);
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
@@ -172,15 +170,10 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   const loginResult = yield* withCliAuthError(
     signInCliSupabase(runtime, {
       provider,
-      openBrowser: !init.noBrowser,
+      noBrowser: init.noBrowser,
       selectAccount: init.selectAccount,
       loginHint: init.loginHint,
-      manualBrowserHint: 'texra login --no-browser',
-      onAuthUrl: (url) => {
-        if (init.noBrowser) {
-          cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
-        }
-      },
+      writeProgress: cliProgressWriter(context),
     }),
   );
   if (!loginResult.ok) return CliExitCode.ModelOrNetworkError;
@@ -254,7 +247,7 @@ export const logoutCommand = defineCliCommand({
   },
   run: (context) =>
     Effect.gen(function* () {
-      yield* initCliPlatform({ ...context, quietLogs: true });
+      yield* initCliPlatform(context);
       const signOutResult = yield* withCliAuthError(signOutCliSupabase());
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
@@ -297,7 +290,7 @@ const authStatusCommand = defineCliCommand({
   run: (context) =>
     Effect.gen(function* () {
       const statusResult = yield* withCliAuthError(
-        initCliPlatform({ ...context, quietLogs: true }).pipe(
+        initCliPlatform(context).pipe(
           Effect.flatMap(() => getCliAuthProfile()),
         ),
       );
@@ -335,7 +328,24 @@ export const authCommand = defineCommand({
     login: loginCommand,
     logout: logoutCommand,
     status: authStatusCommand,
-    chatgpt: chatgptAuthCommand,
-    grok: grokAuthCommand,
+    chatgpt: defineSubscriptionAuthCommand({
+      providerId: 'chatgpt',
+      rootDescription:
+        'Sign in with your ChatGPT subscription to use Codex models',
+      loginDescription: 'Sign in with your ChatGPT subscription',
+      logoutDescription: 'Sign out of your ChatGPT subscription',
+      statusDescription: 'Show ChatGPT subscription sign-in status',
+      loginPayloadExtras: (account) => ({
+        accountId: account.accountId ?? null,
+      }),
+    }),
+    grok: defineSubscriptionAuthCommand({
+      providerId: 'grok',
+      rootDescription:
+        'Sign in with your Grok (xAI SuperGrok) account to use xAI models via subscription',
+      loginDescription: 'Sign in with your Grok (xAI SuperGrok) account',
+      logoutDescription: 'Sign out of your Grok subscription',
+      statusDescription: 'Show Grok subscription sign-in status',
+    }),
   } as const,
 });

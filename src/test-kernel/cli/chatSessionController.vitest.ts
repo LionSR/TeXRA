@@ -12,6 +12,7 @@ import {
   Exit,
   Fiber,
   Scope,
+  Stream,
   SubscriptionRef,
 } from 'effect';
 import { it } from '@effect/vitest';
@@ -28,7 +29,6 @@ const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   runAgent: vi.fn(),
   request: vi.fn(),
-  notifyFollowUpSent: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
   getRunRecords: vi.fn(),
@@ -39,7 +39,6 @@ const mocks = vi.hoisted(() => ({
   getActiveRunIds: vi.fn(),
   getRunHandle: vi.fn(),
   detachHostInteractions: vi.fn(),
-  attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
@@ -48,7 +47,6 @@ const mocks = vi.hoisted(() => ({
   clearLocalTranscript: vi.fn(),
   moveLocalTranscriptToRun: vi.fn(),
   reportRequestDefect: vi.fn(),
-  followUpSubmit: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -74,10 +72,7 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import {
-  describeFollowUpFailure,
-  type FollowUpRecoveryLease,
-} from '@agent/followUp';
+import { describeFollowUpFailure } from '@agent/followUp';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -109,7 +104,6 @@ import {
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
 import { DisposableStore } from '@platform/disposable';
-import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
   AgentCategory,
@@ -121,6 +115,8 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionView } from '@shared/session/sessionView';
+import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -155,8 +151,16 @@ import {
 setupPlatform(
   {},
   {
-    globalState: { get: mocks.globalGet, update: () => Effect.void },
-    workspaceState: { get: mocks.workspaceGet, update: () => Effect.void },
+    globalState: {
+      get: mocks.globalGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
+    workspaceState: {
+      get: mocks.workspaceGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
   },
 );
 
@@ -183,15 +187,6 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
   return session;
 }
 
-/** The controller's resume port, run the way the platform port runs it. */
-function runTryResume(
-  ctrl: ReturnType<typeof createChatSessionController>,
-  runId: RunId,
-  recovery?: RecoveryContinuation,
-): Promise<boolean> {
-  return testRuntime().runPromise(ctrl.tryResumeRun(runId, recovery));
-}
-
 /** The controller's resume command, run the way the Ink handler runs it. */
 function runResume(
   ctrl: ReturnType<typeof createChatSessionController>,
@@ -206,13 +201,6 @@ function runSubmit(
   line: string,
 ): Promise<void> {
   return testRuntime().runPromise(ctrl.submit(line));
-}
-
-/** An admitted interruption's settlement, as the composer awaits it. */
-function awaitAdmission<E>(
-  completion: Deferred.Deferred<boolean, E>,
-): Promise<boolean> {
-  return testRuntime().runPromise(Deferred.await(completion));
 }
 
 /** The claimed root run's settlement, run the way the exit drain runs it. */
@@ -285,6 +273,7 @@ function makeInit(
     runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
+    shutdownScope: scope,
     followUpQueue: Effect.runSync(makeFollowUpDeliveryQueue(scope)),
     initialAgent: 'demo-agent',
     initialModel: 'demo-model',
@@ -294,7 +283,7 @@ function makeInit(
       throw new Error('slash commands are not exercised here');
     },
     secrets: new FakeSecrets(),
-    stores: makeFakeSettingsStores().stores,
+    stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     // The agent boundary, injected the way the init seam intends: the bag is
     // the suite's own, so assertions read the same `mocks` entries the old
@@ -302,8 +291,6 @@ function makeInit(
     agentRuns: {
       launch: (...args: unknown[]) => mocks.runAgent(...args),
       resume: (...args: unknown[]) => mocks.resumeRun(...args),
-      attachResultToast: (...args: unknown[]) =>
-        mocks.attachTerminalResultToast(...args),
       records: (...args: unknown[]) => {
         const records = mocks.getRunRecords(...args);
         return {
@@ -364,6 +351,9 @@ function installSession(overrides: Record<string, unknown> = {}): void {
   const runs = {
     getActiveIds: mocks.getActiveRunIds,
     getHandle: mocks.getRunHandle,
+    // No run of these fixtures is live here: the chat adopts none.
+    isLive: () => false,
+    awaitDrained: () => Effect.void,
   };
   mocks.sessionStub.mockReturnValue({
     roots: testWorkspaceRoots(),
@@ -372,24 +362,20 @@ function installSession(overrides: Record<string, unknown> = {}): void {
       use: vi.fn(() => Effect.succeed(mocks.detachHostInteractions)),
     },
     requests: { request: mocks.request },
-    followUps: {
-      notifySent: mocks.notifyFollowUpSent,
-      claimRecovery: vi.fn((runId: RunId) => ({
-        runId,
-        kind: 'recovery' as const,
-      })),
-      useRecovery: vi.fn((recovery: FollowUpRecoveryLease) => recovery),
-      release: vi.fn(),
-      submitBatch: mocks.followUpSubmit.mockReturnValue(
-        Effect.succeed({ kind: 'queued' }),
-      ),
-    },
     approvals: { registerRunParent: vi.fn() },
     runs,
     // The parent edge the resume path reads cold, off the same seeded view
     // the TUI renders.
     readView: () => Effect.succeed(currentView()),
     ...overrides,
+    // The fold's level stream, over whichever view ref the case installed.
+    ...(overrides.view === undefined
+      ? { viewChanges: Stream.empty }
+      : {
+          viewChanges: SubscriptionRef.changes(
+            overrides.view as SubscriptionRef.SubscriptionRef<SessionView>,
+          ),
+        }),
   });
 }
 
@@ -413,10 +399,10 @@ function installOwnerSession(): {
         Effect.gen(function* (): Effect.fn.Return<Outcome> {
           if (req.kind === 'run.stop') {
             yield* session.runs
-              .stopAgentRun(req.runId, {
+              .stop(req.runId, {
                 detachActiveChildren: req.detachActiveChildren ?? undefined,
               })
-              // The handler words a refused stop as a request error; this
+              .settlement // The handler words a refused stop as a request error; this
               // stub has no such vocabulary, so a refusal is a defect here.
               .pipe(Effect.orDie);
           }
@@ -448,64 +434,11 @@ const defaultResumeRun = (_runId: RunId, options: ResumeRunOptions) =>
     // after its own retrieval succeeded, so every stand-in that reaches a launch
     // must run the hook or the caller never adopts the run.
     if (options.onResumeResolved) yield* options.onResumeResolved();
-    options.onFollowUpQueueReady?.({
-      runId: '7e5701' as RunId,
-      kind: 'recovery',
-    });
     return STARTED;
   });
 
 function resumeWithAutoResumeData(): void {
   mocks.resumeRun.mockImplementation(defaultResumeRun);
-}
-
-function makeInterruptedController(
-  runSettled: RootRunSettled,
-  runCompleted: boolean,
-) {
-  const session = makeSession({
-    runId: 'a11111' as RunId,
-    interruptedRunId: 'a11111' as RunId,
-    runSettled,
-    runCompleted,
-    stopRequested: true,
-  });
-  resumeWithAutoResumeData();
-  return {
-    ctrl: createChatSessionController(makeInit({ session })),
-    session,
-  };
-}
-
-async function retainInterruptedFollowUp(
-  ctrl: ReturnType<typeof createChatSessionController>,
-  text: string,
-): Promise<void> {
-  mocks.resumeRun
-    .mockReset()
-    .mockImplementation(defaultResumeRun)
-    .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
-  const admission = ctrl.admitInterruptedFollowUp({ text });
-  expect(admission.kind).toBe('accepted');
-  if (admission.kind !== 'accepted') return;
-  await expect(awaitAdmission(admission.completion)).resolves.toBe(false);
-}
-
-async function expectInterruptedRetry(
-  ctrl: ReturnType<typeof createChatSessionController>,
-  expectedTexts: readonly string[],
-): Promise<void> {
-  resumeWithAutoResumeData();
-  const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
-  expect(retry.kind).toBe('accepted');
-  if (retry.kind !== 'accepted') return;
-  await expect(awaitAdmission(retry.completion)).resolves.toBe(true);
-  expect(mocks.resumeRun).toHaveBeenCalledWith(
-    'a11111',
-    expect.objectContaining({
-      extraFollowUps: expectedTexts.map((text) => ({ text })),
-    }),
-  );
 }
 
 describe('CLI terminal outcome resolution', () => {
@@ -552,6 +485,14 @@ describe('CLI terminal outcome resolution', () => {
         // The read fails the way a corrupt store fails it: through the
         // session's own records port, typed.
         vi.spyOn(session, 'readRunRecords').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'run-records',
+              cause: new Error('metadata read failed'),
+            }),
+          ),
+        );
+        vi.spyOn(session, 'readAggregate').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'run-records',
@@ -619,7 +560,6 @@ describe('createChatSessionController', () => {
       emit: vi.fn(),
     });
     mocks.getActiveRunIds.mockReturnValue([]);
-    mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.request.mockImplementation(() =>
       Effect.succeed<Outcome>({ kind: 'done' }),
@@ -662,7 +602,6 @@ describe('createChatSessionController', () => {
         const childRun = 'c00001' as RunId;
         const { session: runtimeSession, runs } = installOwnerSession();
         const disposeAdapter = vi.fn();
-        const detachResultToast = vi.fn();
         const presentationHost = {
           emit: vi.fn(),
           close: mocks.presentationHostClose,
@@ -672,7 +611,6 @@ describe('createChatSessionController', () => {
         mocks.createTuiHostInteractions.mockReturnValue({
           dispose: disposeAdapter,
         });
-        mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
 
         const rootRunResult =
           createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
@@ -705,7 +643,7 @@ describe('createChatSessionController', () => {
             // stop lands there, untracks the root, and the run resolves
             // cancelled through its own result.
             admitInterruptibleRun(runs, runId, () => {
-              runs.untrack(runId);
+              untrackRun(runs, runId);
               rootRunResult.resolve({
                 category: 'toolUse',
                 runId,
@@ -719,8 +657,9 @@ describe('createChatSessionController', () => {
 
         const session = makeSession();
         const disposables = new DisposableStore();
+        const shutdownScope = Scope.makeUnsafe();
         const ctrl = createChatSessionController(
-          makeInit({ session, disposables }),
+          makeInit({ session, disposables, shutdownScope }),
         );
         ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
         const rootRun = session.runId;
@@ -743,12 +682,9 @@ describe('createChatSessionController', () => {
         // The local sever follows the committed `run.detach` now, so the
         // promotion lands with that batch rather than with the stop's admission.
         yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(runs.getHandle(childRun)?.isChild).toBe(false),
-          ),
+          vi.waitFor(() => expect(runs.getHandle(childRun)?.parent).toBeNull()),
         );
         expect(disposeAdapter).not.toHaveBeenCalled();
-        expect(detachResultToast).toHaveBeenCalledOnce();
         expect(mocks.presentationHostClose).not.toHaveBeenCalled();
 
         // The request opens on the child's own aggregate, which the launch
@@ -785,94 +721,16 @@ describe('createChatSessionController', () => {
         expect(yield* Fiber.join(approval)).toEqual({ action: 'approve' });
 
         // The host lives for the chat session, not for the runs it served.
-        runs.untrack(childRun);
+        untrackRun(runs, childRun);
         expect(disposeAdapter).not.toHaveBeenCalled();
 
         disposables.dispose();
         expect(disposeAdapter).toHaveBeenCalledOnce();
+        yield* Scope.close(shutdownScope, Exit.void);
         expect(mocks.presentationHostClose).toHaveBeenCalledOnce();
         runs.dispose();
       }),
   );
-
-  it('does not overlap terminal-result presenters across root launches', async () => {
-    const hostA = { emit: vi.fn() };
-    const hostB = { emit: vi.fn() };
-    const resultPresenters = new Set<(message: string) => void>();
-    mocks.attachTerminalResultToast.mockImplementation(() => {
-      const host =
-        mocks.attachTerminalResultToast.mock.calls.length === 1 ? hostA : hostB;
-      const present = (message: string) =>
-        host.emit('requestShowError', { message });
-      resultPresenters.add(present);
-      return () => resultPresenters.delete(present);
-    });
-    const runA =
-      createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
-    const runB = createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
-    const runAgentCalledTwice = createDeferred();
-    mocks.runAgent
-      .mockReturnValueOnce(
-        Effect.tryPromise({ try: () => runA.promise, catch: ensureError }),
-      )
-      .mockImplementationOnce(() => {
-        runAgentCalledTwice.resolve();
-        return Effect.tryPromise({
-          try: () => runB.promise,
-          catch: ensureError,
-        });
-      });
-
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    const config = makeRunRequest('Check presenter ownership.');
-    ctrl.startRootRun(config);
-    session.runId = 'a0000a' as RunId;
-    ctrl.stop();
-    for (const present of resultPresenters) present('Failure A');
-    runA.resolve({
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.CANCELLED,
-      runId: 'a0000a' as RunId,
-    });
-    await awaitRunSettled(session);
-
-    expect(resultPresenters).toHaveLength(0);
-
-    const presenterAdded = createDeferred();
-    mocks.attachTerminalResultToast.mockImplementationOnce(() => {
-      const host =
-        mocks.attachTerminalResultToast.mock.calls.length === 1 ? hostA : hostB;
-      const present = (message: string) =>
-        host.emit('requestShowError', { message });
-      resultPresenters.add(present);
-      presenterAdded.resolve();
-      return () => resultPresenters.delete(present);
-    });
-
-    ctrl.startRootRun(config);
-    await runAgentCalledTwice.promise;
-    expect(mocks.runAgent).toHaveBeenCalledTimes(2);
-    expect(mocks.attachTerminalResultToast).toHaveBeenCalledTimes(2);
-    expect(session.runCompleted).toBe(false);
-    await presenterAdded.promise;
-    expect(resultPresenters).toHaveLength(1);
-    for (const present of resultPresenters) present('Failure B');
-    runB.resolve({
-      category: 'toolUse',
-      outcome: RUN_OUTCOME.FAILED,
-      runId: 'b0000b' as RunId,
-    });
-    await awaitRunSettled(session);
-
-    expect(hostA.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-      message: 'Failure A',
-    });
-    expect(hostB.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
-      message: 'Failure B',
-    });
-    expect(resultPresenters).toHaveLength(0);
-  });
 
   it('reports a fresh-run defect and settles its claimed run slot', async () => {
     mocks.runAgent.mockReturnValueOnce(Effect.die(new Error('launch defect')));
@@ -912,28 +770,6 @@ describe('createChatSessionController', () => {
     expect(session.runCompleted).toBe(true);
   });
 
-  it('reserves the root-run slot before tryResumeRun awaits persisted state', async () => {
-    const configRead = createDeferred<null>();
-    const session = makeSession({ runCompleted: true });
-    // Nothing persisted for the run: the resume gives the slot back once the
-    // durable read it waited on resolves.
-    mocks.getRunRecords.mockReturnValue({
-      readConfig: () => configRead.promise,
-      exists: async () => false,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    const resumed = runTryResume(ctrl, 'a11111' as RunId);
-
-    expect(session.runSettled).toBeDefined();
-    expect(session.runCompleted).toBe(false);
-    expect(chatTuiCanStartRootRun(session)).toBe(false);
-
-    configRead.resolve(null);
-    await expect(resumed).resolves.toBe(false);
-    expect(session.runCompleted).toBe(true);
-  });
-
   it('reserves the root-run slot before resume() awaits the resolution', async () => {
     const configRead = createDeferred<null>();
     mocks.getRunRecords.mockReturnValue({
@@ -946,8 +782,7 @@ describe('createChatSessionController', () => {
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
 
     // The claim (tryClaimRootRunSlot) must land synchronously, before
-    // resume() ever reaches its first await — same contract as
-    // tryResumeRun above.
+    // resume() ever reaches its first await.
     expect(session.runSettled).toBeDefined();
     expect(session.runCompleted).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
@@ -1051,71 +886,6 @@ describe('createChatSessionController', () => {
 
     expect(session.runId).toBe('aaaaaa');
     expect(session.interruptedRunId).toBeUndefined();
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
-      kind: 'not_interrupted',
-    });
-  });
-
-  it('transfers an admitted interruption batch to manual resume', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl } = makeInterruptedController(teardown.settled, true);
-    const manualResumed = createDeferred();
-    const baseResumeRun = mocks.resumeRun.getMockImplementation();
-    mocks.resumeRun.mockImplementation((...args: unknown[]) => {
-      if (args[0] === 'aaaaaa') manualResumed.resolve();
-      return baseResumeRun!(...args);
-    });
-    const admission = ctrl.admitInterruptedFollowUp({
-      text: 'Preserve this accepted message.',
-    });
-    expect(admission.kind).toBe('accepted');
-    if (admission.kind !== 'accepted') return;
-
-    const manualResume = runResume(ctrl, 'aaaaaa' as RunId);
-    await teardown.settle();
-
-    await manualResume;
-    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    await manualResumed.promise;
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'aaaaaa',
-      expect.objectContaining({
-        extraFollowUps: [{ text: 'Preserve this accepted message.' }],
-      }),
-    );
-  });
-
-  it('resume() suspended on the resolution keeps a concurrent follow-up wake from also claiming the root-run slot', async () => {
-    // resume(A) suspends on the config read (an await-suspension point)
-    // with the slot already claimed; a follow-up wake (tryResumeRun for a
-    // different run) fires while A is still suspended. Exactly one caller
-    // (A) holds the slot end to end, so B must bail out rather than claim it
-    // and start work that A would clobber on waking.
-    const configRead = createDeferred<null>();
-    mocks.getRunRecords.mockReturnValue({
-      readConfig: () => configRead.promise,
-      exists: async () => false,
-    });
-    const session = makeSession({ runCompleted: true });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    const resumeA = runResume(ctrl, 'aaaaaa' as RunId);
-    // A is now suspended inside the config read; the slot is
-    // already claimed.
-    expect(session.runSettled).toBeDefined();
-    expect(session.runCompleted).toBe(false);
-
-    // The follow-up wake for a different run fires while A is still
-    // suspended. It must bail out synchronously, before reading anything,
-    // because the slot is already held.
-    const resumedB = runTryResume(ctrl, 'ab2222' as RunId);
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
-    await expect(resumedB).resolves.toBe(false);
-
-    // A remains the sole owner of the slot end to end.
-    configRead.resolve(null);
-    await resumeA;
-    expect(session.runCompleted).toBe(true);
   });
 
   it('honors a Ctrl-C issued while resume() is still rehydrating and never starts the resumed run', async () => {
@@ -1370,399 +1140,59 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Interrupted);
   });
 
-  it('reports a failed persisted-child wake while the CLI root slot is busy', async () => {
-    const session = makeSession({
-      runSettled: Effect.never,
-      runCompleted: false,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    await expect(runTryResume(ctrl, 'c00001' as RunId)).resolves.toBe(false);
-
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
-  });
-
-  it('allows WAITING results when auto-resuming queued tool-use snapshots', async () => {
-    const session = makeSession({ runCompleted: true });
-    patchSessionMeta({
-      cliMultiAgentPresetId: 'stale-team',
-      delegationAgentScope: {
-        workflow: ['custom:stale'],
-        toolUse: ['custom:stale'],
+  it('continues the stopped conversation through the session, in order, once the stopped generation settles', async () => {
+    // Typed while the stop settles: the first waits for the stopped
+    // generation, then goes to the session's own admission for that run; the
+    // admission resumed it, so the second goes to the resumed run directly,
+    // never waiting on its drain. The chat keeps no copy of either.
+    holdRun('a11111' as RunId);
+    installSession({
+      view: installableViewRef(),
+      runs: {
+        getActiveIds: mocks.getActiveRunIds,
+        getHandle: mocks.getRunHandle,
+        isLive: () => false,
+        // The resumed run never drains while the test runs.
+        awaitDrained: vi
+          .fn()
+          .mockReturnValueOnce(Effect.void)
+          .mockReturnValue(Effect.never),
       },
     });
-    mocks.resumeRun.mockImplementationOnce(() =>
-      Effect.tryPromise({
-        try: async () => ({
-          ...STARTED,
-          outcome: RUN_PHASE.WAITING,
-        }),
-        catch: ensureError,
-      }),
-    );
-    const init = makeInit({ session });
-    const ctrl = createChatSessionController(init);
-
-    await expect(runTryResume(ctrl, 'a11111' as RunId)).resolves.toBe(true);
-
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'a11111',
-      expect.objectContaining({
-        isCancellationRequested: expect.any(Function),
-      }),
-    );
-    const resumeOptions = mocks.resumeRun.mock.calls[0]?.[1] as
-      ResumeRunOptions | undefined;
-    expect(resumeOptions?.isCancellationRequested?.()).toBe(false);
-    session.stopRequested = true;
-    expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
-    expect(rootRunId.get()).toBe('a11111');
-    expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
-    expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
-  });
-
-  it('keeps an automatic resume cancelled after clear resets session state', async () => {
-    const leaseCheckStarted = createDeferred<void>();
-    const releaseLeaseCheck = createDeferred<void>();
-    const session = makeSession({ runCompleted: true });
-    let resumeOptions: ResumeRunOptions | undefined;
-    mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () => {
-            resumeOptions = options;
-            leaseCheckStarted.resolve();
-            await releaseLeaseCheck.promise;
-            return options.isCancellationRequested?.()
-              ? { failed: 'not_resumable' as const }
-              : STARTED;
-          },
-          catch: ensureError,
-        }),
-    );
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    const resume = runTryResume(ctrl, 'a11111' as RunId, {
-      runId: 'a11111' as RunId,
-      kind: 'recovery',
-    });
-    await leaseCheckStarted.promise;
-
-    ctrl.stop();
-    session.clearRunState();
-    expect(session.stopRequested).toBe(false);
-    expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
-
-    releaseLeaseCheck.resolve();
-    await expect(resume).resolves.toBe(false);
-    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
-  });
-
-  it('launcher resume supersedes stale interrupted recovery state', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-
-    await expect(runTryResume(ctrl, 'a11111' as RunId)).resolves.toBe(true);
-
-    expect(session.interruptedRunId).toBeUndefined();
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
-      kind: 'not_interrupted',
-    });
-  });
-
-  it('rejects recovery only until the interrupted run settles', async () => {
     const teardown = pendingRunClaim();
     const session = makeSession({
       runId: 'a11111' as RunId,
+      interruptedRunId: 'a11111' as RunId,
       runSettled: teardown.settled,
+      stopRequested: true,
     });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stop();
-    // Root finalization publishes slot availability before its run has
-    // completely settled.
-    session.markRunCompleted();
-    // `/clear` may reset the mutable session state while the interrupted run
-    // is still settling. The captured settlement must remain the guard.
-    session.clearRunState();
-
-    await expect(
-      runTryResume(ctrl, 'a11111' as RunId, {
-        runId: 'a11111' as RunId,
-        kind: 'recovery',
+    const ctrl = createChatSessionController(
+      makeInit({
+        session,
+        getSlashCommandContext: () => ({}) as SlashCommandContext,
       }),
-    ).resolves.toBe(false);
-
-    expect(session.stopRequested).toBe(false);
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
-
-    await teardown.settle();
-    resumeWithAutoResumeData();
-
-    await expect(
-      runTryResume(ctrl, 'a11111' as RunId, {
-        runId: 'a11111' as RunId,
-        kind: 'recovery',
-      }),
-    ).resolves.toBe(true);
-
-    expect(mocks.resumeRun).toHaveBeenCalledOnce();
-  });
-
-  it('retains every unsettled interrupted-run recovery blocker', async () => {
-    const firstTeardown = pendingRunClaim();
-    const secondTeardown = pendingRunClaim();
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-      runSettled: firstTeardown.settled,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stop();
-    session.markRunCompleted();
-    session.clearRunState();
-
-    session.markRunPending(secondTeardown.settled);
-    session.runId = 'a22222' as RunId;
-    ctrl.stop();
-    session.markRunCompleted();
-    session.clearRunState();
-
-    await secondTeardown.settle();
-    await expect(
-      runTryResume(ctrl, 'a11111' as RunId, {
-        runId: 'a11111' as RunId,
-        kind: 'recovery',
-      }),
-    ).resolves.toBe(false);
-
-    await firstTeardown.settle();
-    resumeWithAutoResumeData();
-    await expect(
-      runTryResume(ctrl, 'a11111' as RunId, {
-        runId: 'a11111' as RunId,
-        kind: 'recovery',
-      }),
-    ).resolves.toBe(true);
-
-    expect(mocks.resumeRun).toHaveBeenCalledOnce();
-  });
-
-  it('transfers an admitted interruption batch to launcher resume', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl } = makeInterruptedController(teardown.settled, true);
-    const admission = ctrl.admitInterruptedFollowUp({
-      text: 'Transfer this accepted message.',
-    });
-    expect(admission.kind).toBe('accepted');
-    if (admission.kind !== 'accepted') return;
-
-    const launcherResume = runTryResume(ctrl, 'a11111' as RunId);
-    await teardown.settle();
-
-    await expect(launcherResume).resolves.toBe(true);
-    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    expect(mocks.followUpSubmit).toHaveBeenCalledWith(
-      'a11111',
-      [{ text: 'Transfer this accepted message.' }],
-      'live_owner',
     );
-  });
-
-  it('holds a message submitted while interruption teardown finishes', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl, session } = makeInterruptedController(
-      teardown.settled,
-      false,
+    const sent: string[] = [];
+    mocks.request.mockImplementation((req: RuntimeRequest) =>
+      Effect.sync((): Outcome => {
+        if (req.kind === 'followUp.send') sent.push(`${req.runId} ${req.text}`);
+        return { kind: 'followUp', status: 'queued' };
+      }),
     );
 
-    const admission = ctrl.admitInterruptedFollowUp({
-      text: 'Do not drop this message.',
-    });
-    expect(admission.kind).toBe('accepted');
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
+    await runSubmit(ctrl, 'Do not drop this message.');
+    await runSubmit(ctrl, 'And this one.');
+    expect(sent).toEqual([]);
 
     session.markRunCompleted();
     await teardown.settle();
-    if (admission.kind !== 'accepted') return;
-    await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'a11111',
-      expect.objectContaining({
-        extraFollowUps: [{ text: 'Do not drop this message.' }],
-      }),
-    );
-    expect(session.stopRequested).toBe(false);
-  });
-
-  it('batches parallel messages into one interrupted resume', async () => {
-    const teardown = pendingRunClaim();
-    const { ctrl, session } = makeInterruptedController(
-      teardown.settled,
-      false,
-    );
-
-    const first = ctrl.admitInterruptedFollowUp({ text: 'First message.' });
-    const second = ctrl.admitInterruptedFollowUp({ text: 'Second message.' });
-    expect(first.kind).toBe('accepted');
-    expect(second.kind).toBe('accepted');
-    if (first.kind !== 'accepted' || second.kind !== 'accepted') return;
-    expect(second.completion).toBe(first.completion);
-
-    session.markRunCompleted();
-    await teardown.settle();
-    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
-    expect(mocks.resumeRun).toHaveBeenCalledOnce();
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'a11111',
-      expect.objectContaining({
-        extraFollowUps: [
-          { text: 'First message.' },
-          { text: 'Second message.' },
-        ],
-      }),
-    );
-  });
-
-  it('stops batching once ordinary follow-up routing is ready', async () => {
-    const resume = createDeferred<typeof STARTED>();
-    const { ctrl } = makeInterruptedController(Effect.void, true);
-    const resumeCalled = createDeferred();
-    mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) => {
-        resumeCalled.resolve();
-        return Effect.tryPromise({
-          try: async () => {
-            options.onFollowUpQueueReady?.({
-              runId: '7e5701' as RunId,
-              kind: 'recovery',
-            });
-            return resume.promise;
-          },
-          catch: ensureError,
-        });
-      },
-    );
-
-    const first = ctrl.admitInterruptedFollowUp({ text: 'Resume now.' });
-    expect(first.kind).toBe('accepted');
-    if (first.kind !== 'accepted') return;
-    await resumeCalled.promise;
-    expect(mocks.resumeRun).toHaveBeenCalledOnce();
-
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
-      kind: 'not_interrupted',
-    });
-    resume.resolve(STARTED);
-    await expect(awaitAdmission(first.completion)).resolves.toBe(true);
-  });
-
-  it('retains the interrupted conversation after a failed resume', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    expect(session.interruptedRunId).toBe('a11111');
-    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
-    expect(session.interruptedRunId).toBeUndefined();
-  });
-
-  it('discards retained interrupted follow-ups when the chat is cleared', async () => {
-    const { ctrl } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'Discard me.');
-    ctrl.clearInterruptedRecovery();
-
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Fresh chat.' })).toEqual({
-      kind: 'not_interrupted',
-    });
-  });
-
-  it('keeps retained follow-ups ahead of a retry after manual resume rollback', async () => {
-    mocks.setCliHelperModel.mockReturnValueOnce(
-      Effect.fail(new Error('load failed')),
-    );
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    await runResume(ctrl, 'aaaaaa' as RunId);
-    // The rollback rides the run chain now that the rehydration runs inside
-    // `resumeRun`'s adoption hook, so the retry follows the settled resume.
-    await awaitRunSettled(session);
-    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
-  });
-
-  it('keeps the seeded batch when manual resume is refused', async () => {
-    const { ctrl, session } = makeInterruptedController(Effect.void, true);
-    await retainInterruptedFollowUp(ctrl, 'First attempt.');
-    // A refusal that never reaches the follow-up queue hands the seeded batch
-    // back; nothing else owns it, so the resume must put it and the
-    // interrupted run back or the input typed during the interruption is
-    // lost.
-    mocks.resumeRun
-      .mockReset()
-      .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
-
-    await runResume(ctrl, 'aaaaaa' as RunId);
-
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'aaaaaa',
-      expect.objectContaining({
-        extraFollowUps: [{ text: 'First attempt.' }],
-      }),
-    );
-    await vi.waitFor(() => expect(session.interruptedRunId).toBe('a11111'));
-    await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
-  });
-
-  it('preserves root ownership when auto-resuming a child run', async () => {
-    const root = 'b00001' as RunId;
-    const child = 'c00001' as RunId;
-    rootRunId.set(root);
-    seedView(
-      viewWith([
-        makeRunView({ id: root }),
-        makeRunView({ id: child, parentId: root }),
+    await vi.waitFor(() =>
+      expect(sent).toEqual([
+        'a11111 Do not drop this message.',
+        'a11111 And this one.',
       ]),
     );
-    const ctrl = createChatSessionController(makeInit());
-
-    await expect(runTryResume(ctrl, child)).resolves.toBe(true);
-
-    expect(rootRunId.get()).toBe(root);
-  });
-
-  it('does not auto-resume after stop during helper-model setup', async () => {
-    const helperModel = createDeferred<void>();
-    const helperModelStarted = createDeferred();
-    const session = makeSession({ runCompleted: true });
-    const config = makeResumeConfig();
-    mocks.setCliHelperModel.mockImplementationOnce(() => {
-      helperModelStarted.resolve();
-      return Effect.tryPromise(() => helperModel.promise);
-    });
-    mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
-          try: async () =>
-            options.isCancellationRequested?.() === true
-              ? { failed: 'not_resumable' as const }
-              : STARTED,
-          catch: ensureError,
-        }),
-    );
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    const resumed = runTryResume(ctrl, 'a11111' as RunId);
-    await helperModelStarted.promise;
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
-      expect.anything(),
-      config.model,
-    );
-    ctrl.stop();
-    helperModel.resolve(undefined);
-
-    await expect(resumed).resolves.toBe(false);
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'a11111',
-      expect.objectContaining({
-        isCancellationRequested: expect.any(Function),
-      }),
-    );
+    expect(mocks.executeAgent).not.toHaveBeenCalled();
+    expect(session.interruptedRunId).toBeUndefined();
   });
 });

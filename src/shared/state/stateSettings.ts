@@ -27,7 +27,10 @@ import {
 import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentModePresetSchema,
+  AgentRosterSelectionSchema,
   AgentSkillsEnabledSchema,
+  HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   ChatgptCodexContextWindowSchema,
@@ -45,13 +48,13 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
-  InstalledPluginSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
-  SkillNameSchema,
+  INHERITED_AGENT_ROSTER,
+  QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -81,7 +84,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * One row carries the catalog facts that used to be answered in six places:
  *
  * - **`slots`** — where each host stores the value (`config` /
- *   `workspaceState` / `globalState`). Replaces the old `store` + `cliStore`
+ *   `workspaceState` / `repoState` / `globalState`). Replaces the old `store` + `cliStore`
  *   pair and the caller-chosen slot the git identity reader once took.
  * - **`honoredBy`** — whose *runtime* actually reads the key, with the reading
  *   file as evidence. Replaces `CLI_CORE_SETTING_PATHS`,
@@ -103,16 +106,24 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * `settingSlot(entry, host)`.
  */
 
-/** Hosts that may store, honor, or surface a setting. */
-export type SettingHost = 'vscode' | 'cli' | 'desktop';
+/**
+ * The product hosts, spelled once: for settings and `unavailableHosts`.
+ * `sdk` is the agent package embedded in someone else's process.
+ */
+const SETTING_HOSTS = ['vscode', 'cli', 'desktop', 'sdk'] as const;
+export type SettingHost = (typeof SETTING_HOSTS)[number];
 
-/** Storage slot a setting is read from / written to. */
-export type SettingStore = 'config' | 'workspaceState' | 'globalState';
+/**
+ * Storage slot a setting is read from / written to. `repoState` is shared by
+ * every checkout of one git repository (keyed by its root in the global
+ * database), so a repository has one value on every host and in every
+ * worktree.
+ */
+export type SettingStore =
+  'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 /** Storage slot per host. Absent means the host does not store the key. */
-type SettingSlots = {
-  readonly [H in SettingHost]?: SettingStore;
-};
+type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
 
 export type SettingsViewSnapshot =
   | 'approval'
@@ -255,7 +266,7 @@ export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
 
 /** Every host stores the setting in the same slot. */
 function sameSlot(store: SettingStore): SettingSlots {
-  return { vscode: store, cli: store, desktop: store };
+  return { vscode: store, cli: store, desktop: store, sdk: store };
 }
 
 /**
@@ -288,11 +299,11 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
  * a profile row and as one per-provider control on the Models tab. These rows
  * differ only in their default, copy, honoring reader, and Models-tab control,
  * so the uniform framing is written once here: the `category: 'model'` /
- * `settingsView: 'profile'` / Models-tab surface the region toggles already
- * share through `PROVIDER_ROUTING_SETTINGS`, plus the `configTarget: 'global'`
- * these config-tree rows require (the region toggles instead live in
- * `globalState` and set `cliConfig`). Returns a `CORE_SETTING_ROWS` body (key
- * and slot are added by the config-tree mapping).
+ * `settingsView: 'profile'` / Models-tab surface `globalProviderToggle` gives
+ * the GlobalState toggles, plus the `configTarget: 'global'` these config-tree
+ * rows require (the GlobalState toggles instead set `cliConfig`). Returns a
+ * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree
+ * mapping).
  */
 function modelProviderToggle(opts: {
   readonly default: boolean;
@@ -310,6 +321,36 @@ function modelProviderToggle(opts: {
     honoredBy: opts.honoredBy,
     surfaces: { settingsView: 'profile', models: [opts.model] },
   };
+}
+
+/**
+ * The `globalState` analog of `modelProviderToggle`: a boolean every host
+ * stores in GlobalState, rendered as a profile row, a CLI `/config` row, and
+ * one Models-tab control. The control's label and description are the row's
+ * title and description, so the copy is written once.
+ */
+function globalProviderToggle(opts: {
+  readonly key: string;
+  readonly default: boolean;
+  readonly honoredBy: SettingHonoredBy;
+  readonly onWrite?: SettingWriteEffects;
+  readonly model: ModelsTabSurface;
+}): SurfacedSettingEntry {
+  return surfacedSetting({
+    key: opts.key,
+    schema: z.boolean().prefault(opts.default),
+    title: opts.model.label,
+    description: opts.model.description,
+    category: 'model',
+    slots: sameSlot('globalState'),
+    honoredBy: opts.honoredBy,
+    ...(opts.onWrite && { onWrite: opts.onWrite }),
+    surfaces: {
+      settingsView: 'profile',
+      cliConfig: true,
+      models: [opts.model],
+    },
+  });
 }
 
 // ============================================================================
@@ -415,12 +456,6 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  'goal.enabled': {
-    schema: z.boolean().prefault(true),
-    description:
-      'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-    honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
-  },
   // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
@@ -501,13 +536,11 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  // Thin provider modules own the public prefer-switch surface; the shared
-  // factory in subscriptionPreference.ts is not a separate consumer key.
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
-    honoredBy: everyHost('src/model/codex/codexSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
@@ -524,7 +557,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    honoredBy: everyHost('src/model/xai/xaiSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   maxImageDimension: {
     schema: z.int().min(100).max(10000).prefault(2000),
@@ -675,23 +708,22 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
-    honoredBy: everyHost('src/agent/prompt/userVars.ts'),
+    honoredBy: everyHost('src/agent/prompt/templateInputs.ts'),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for file edits',
+    title: 'Require approval for file edits',
     description:
-      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
+      'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/toolEditApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for shell commands',
-    description:
-      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
+    title: 'Require approval for shell commands',
+    description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/bashApproval.ts'),
     surfaces: { settingsView: 'approval' },
@@ -752,7 +784,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
@@ -760,7 +792,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
       desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
     },
-    enumLabels: ['Never', 'Ask', 'Auto-approve'],
+    enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];
@@ -778,20 +810,10 @@ const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 /**
- * The one documented slot divergence in the catalog, carried by the git
- * identity rows: the extension and desktop store them in WorkspaceState —
- * where `WorktreeStateStore` additionally shares them across every worktree of
- * a repository, so one clone has one agent commit identity — while the CLI
- * reads them from `.texra/config.json`, which is where an existing user's
- * values already live. Do not move these rows to `config`: `.texra/` is
- * gitignored by default, so the project config file is per-checkout, not
- * repository-level, and the move would silently drop the worktree sharing.
+ * Repository-level settings (git identity, worktrees, coding-agent controls,
+ * roster): one value per repository on every host and in every worktree.
  */
-const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
-  vscode: 'workspaceState',
-  desktop: 'workspaceState',
-  cli: 'config',
-};
+const REPO_STATE_SLOTS = sameSlot('repoState');
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
@@ -826,19 +848,11 @@ const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
     region === undefined
       ? []
       : [
-          surfacedSetting({
+          globalProviderToggle({
             key: region.key,
-            schema: z.boolean().prefault(region.default),
-            title: region.control.label,
-            description: region.control.description,
-            category: 'model',
-            slots: sameSlot('globalState'),
+            default: region.default,
             honoredBy: everyHost(ROUTE_ENDPOINT_READER),
-            surfaces: {
-              settingsView: 'profile',
-              cliConfig: true,
-              models: [{ provider, ...region.control }],
-            },
+            model: { provider, ...region.control },
           }),
         ],
 );
@@ -852,7 +866,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -865,7 +879,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -876,7 +890,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -887,10 +901,32 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
-    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
+    slots: REPO_STATE_SLOTS,
     honoredBy: everyHost(GIT_WORKTREE_READER),
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
+
+  // --- Agent roster ----------------------------------------------------------
+  // Written and read by the roster and the settings view's agent catalog,
+  // which no catalog-driven UI renders.
+  {
+    key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/roster/AgentRosterController.ts'),
+  },
+  {
+    key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    schema: z.array(AgentModePresetSchema).prefault([]),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/index/agentRegistry.ts'),
+  },
+  {
+    key: WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
+    schema: HiddenCustomAgentKeysSchema.prefault([]),
+    slots: REPO_STATE_SLOTS,
+    honoredBy: everyHost('src/agent/roster/rosterWorkspaceState.ts'),
+  },
 
   // --- Multi-agent coordination --------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
@@ -898,7 +934,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // §2.1): they describe how *this user* wants child runs handled, not anything
   // about a particular checkout, so no worktree-scoping need is documented on
   // either row. Before the move the extension smuggled that same intent past a
-  // `workspaceState` slot via `WORKTREE_SHARED_KEYS`, while the Node hosts
+  // `workspaceState` slot via a worktree-shared key list, while the Node hosts
   // scoped the value per workspace-path hash — one row, two meanings.
   surfacedSetting({
     key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
@@ -945,7 +981,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex sandbox mode',
     description: 'Filesystem access mode used when TeXRA launches Codex.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -956,7 +992,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex reasoning effort',
     description: 'Reasoning effort hint passed to Codex runs.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -967,7 +1003,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Codex approval policy',
     description: 'When Codex should ask for approval before risky actions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: [
       'Auto approve',
@@ -983,7 +1019,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -996,7 +1032,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code permission mode',
     description: 'Permission policy used by Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: [
       'Prompt for risky actions',
@@ -1012,7 +1048,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Claude Code reasoning effort',
     description: 'Reasoning effort hint passed to Claude Code agent sessions.',
     category: 'ai-agents',
-    slots: sameSlot('workspaceState'),
+    slots: REPO_STATE_SLOTS,
     honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
     surfaces: { settingsView: 'approval', cliConfig: true },
@@ -1052,11 +1088,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
-    // handler (headless), so the CLI does not honor it.
+    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // CLI handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
-      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      vscode: { reader: 'src/agent/output/documentRounds.ts' },
+      desktop: { reader: 'src/agent/output/documentRounds.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1070,14 +1106,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
+    honoredBy: everyHost('src/agent/output/documentRounds.ts'),
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them. The timeout is kept
-  // out of the settings view (an insider knob) and edited from CLI `/config`;
-  // the rest are deferred from `/config` by product decision.
+  // Run by the documents plugin, so every host honors them. The timeout is
+  // kept out of the settings view (an insider knob) and edited from CLI
+  // `/config`; the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
@@ -1225,39 +1261,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- OpenRouter routing ----------------------------------------------------
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.USE_OPENROUTER,
-    schema: z.boolean().prefault(false),
-    title: 'Use OpenRouter for all models',
-    description:
-      'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost(PROVIDER_CONFIG_READER),
     onWrite: { invalidatesModelOptions: true },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'openRouter',
-          label: 'Use OpenRouter for all models',
-          description:
-            'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-        },
-      ],
+    model: {
+      provider: 'openRouter',
+      label: 'Use OpenRouter for all models',
+      description:
+        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
     },
   }),
 
   // --- Provider routing & region toggles --------------------------------------
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.KIMI_CODE_PREFER,
-    schema: z.boolean().prefault(false),
-    title: 'Prefer Kimi Code',
-    description:
-      'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
     // models, so enabling one clears the other on every write path.
@@ -1265,43 +1285,26 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       disablesWhenEnabled: [GlobalStateKey.USE_OPENROUTER],
       invalidatesModelOptions: true,
     },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'kimiCode',
-          label: 'Prefer Kimi Code',
-          description:
-            'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-        },
-      ],
+    model: {
+      provider: 'kimiCode',
+      label: 'Prefer Kimi Code',
+      description:
+        'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     },
   }),
   ...PROVIDER_ROUTING_SETTINGS,
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.GLM_CODING_PLAN,
-    schema: z.boolean().prefault(false),
-    title: 'GLM Coding Plan',
-    description:
-      'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost(ROUTE_ENDPOINT_READER),
     onWrite: { invalidatesModelOptions: true },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'glm',
-          label: 'GLM Coding Plan',
-          description:
-            'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-          warningUrl: 'https://z.ai/subscribe',
-          warningUrlLabel: 'Subscribe',
-        },
-      ],
+    model: {
+      provider: 'glm',
+      label: 'GLM Coding Plan',
+      description:
+        'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+      warningUrl: 'https://z.ai/subscribe',
+      warningUrlLabel: 'Subscribe',
     },
   }),
 
@@ -1317,13 +1320,13 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/toolAvailability.ts'),
+    honoredBy: everyHost('src/tools/plugins.ts'),
     openForm: 'tools',
     surfaces: { cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.DISABLED_SKILLS,
-    schema: z.array(SkillNameSchema).prefault([]),
+    schema: z.array(QualifiedSkillNameSchema).prefault([]),
     title: 'Skills',
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
@@ -1342,19 +1345,6 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     honoredBy: everyHost('src/skills/runtimeSkills.ts'),
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
-  }),
-  // Written only by `texra plugin install|update|remove`; the settings view
-  // lists it read-only, so the CLI command stays the one home for the action.
-  surfacedSetting({
-    key: GlobalStateKey.INSTALLED_PLUGINS,
-    schema: z.array(InstalledPluginSchema).prefault([]),
-    title: 'Installed plugins',
-    description:
-      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads the skills of each enabled one as user skills; `texra plugin disable` hides a plugin without removing it.',
-    category: 'tools',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
-    surfaces: { settingsView: 'skills' },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

@@ -4,11 +4,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  finalizeRun,
-  acquireResumedRunOwnership,
-  registerRun,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -16,6 +12,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace/root' });
 const baseConfig = AgentConfigSchema.parse({
@@ -113,7 +110,9 @@ describe('run registration and finalization', () => {
     (alreadyOwned) =>
       Effect.gen(function* () {
         yield* register();
-        if (!alreadyOwned) yield* session.releaseRunLease(runId);
+        // Registration left the birth claim standing; a run nobody drives
+        // any more has given it back.
+        if (!alreadyOwned) yield* Effect.scoped(session.holdRunClaim(runId));
         const failure = new DatabaseReadFailed({
           path: 'session.db',
           cause: new Error('database admission rejected'),
@@ -122,7 +121,7 @@ describe('run registration and finalization', () => {
           Effect.fail(failure),
         );
         expect(
-          yield* Effect.flip(acquireResumedRunOwnership(session, runId)),
+          yield* Effect.flip(Effect.scoped(session.holdRunClaim(runId))),
         ).toBe(failure);
         expect(yield* session.ownsRun(runId)).toBe(alreadyOwned);
       }),
@@ -133,18 +132,18 @@ describe('run registration and finalization', () => {
     () =>
       Effect.gen(function* () {
         yield* register();
-        yield* session.releaseRunLease(runId);
+        yield* Effect.scoped(session.holdRunClaim(runId));
         const failure = new Error('registration rejected');
         vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
           Effect.die(failure),
         );
         expect(yield* Effect.flip(register())).toBe(failure);
         const refused = yield* Effect.flip(
-          getRunRecords(session, runId).writeReport('unowned'),
+          seedReport(session, runId, 'unowned'),
         );
         expect(refused).toBeInstanceOf(Error);
         yield* session.acquireClaims(aggregateId('run', runId));
-        yield* getRunRecords(session, runId).writeReport('owned');
+        yield* seedReport(session, runId, 'owned');
         expect(yield* getRunRecords(session, runId).readReport()).toBe('owned');
       }),
   );

@@ -18,6 +18,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
@@ -70,7 +71,7 @@ describe('desktop agent run completion hook', () => {
       });
       onTestFinished(async () => {
         run.dispose();
-        await testRuntime().runPromise(session.dispose());
+        await testRuntime().runPromise(closeSessionOf(session));
       });
 
       const fiber = yield* Effect.forkChild(

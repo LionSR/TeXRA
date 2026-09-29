@@ -54,7 +54,7 @@ function deliver(message: DownMessage): void {
   window.dispatchEvent(new MessageEvent('message', { data: message }));
 }
 
-/** The `flow.step` index the view is read at; null is the whole document. */
+/** The `run.position` index the view is read at; null is the whole document. */
 let cut: number | null = null;
 /** Whether the current mount has been told to open the run. */
 let selected = false;

@@ -55,11 +55,13 @@ describe('default session lifecycle', () => {
           return testWorkspaceRoots();
         });
         const originalRoots = {
+          host: installedRoots.host,
           workspace: installedRoots.workspace,
           storage: installedRoots.storage,
           globalStorage: installedRoots.globalStorage,
           config: installedRoots.config,
           workspaceState: installedRoots.workspaceState,
+          repoState: installedRoots.repoState,
           globalState: installedRoots.globalState,
         } satisfies WorkspaceRoots;
         // The opener may hand over a record whose slots are inherited rather
@@ -123,11 +125,8 @@ describe('default session lifecycle', () => {
       expect(defect).toBeInstanceOf(Error);
       expect((defect as Error).message).toContain('already been initialized');
 
-      const disposeSpy = vi.spyOn(first, 'dispose');
-
       yield* teardownDefaultSession();
 
-      expect(disposeSpy).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
 
       const second = yield* initializeDefaultSession({

@@ -10,7 +10,6 @@
 
 import {
   AgentCategory,
-  countByStatus,
   STATUS_DISPLAY,
   type RunId,
   type RunIdentity,
@@ -86,13 +85,15 @@ export function formatRunStatus(run: RunView): string {
     : `${run.status}: ${run.statusDetail}`;
 }
 
-/** Format one run as a listing line. */
-export function formatListingLine(run: RunView): string {
+/** One /executions line. `marks` is what the line says about the run
+ *  relative to the caller: its relation and unread input. */
+export function formatListingLine(run: RunView, marks: string): string {
   const ts = formatTimestamp(new Date(run.launchedAt).toISOString());
   const modelTag = run.model === null ? '' : `  ${run.model}`;
   const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
+  const markSuffix = marks ? `  ${marks}` : '';
   const descSuffix = run.description ? `: ${run.description}` : '';
-  return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${descSuffix}`;
+  return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${markSuffix}${descSuffix}`;
 }
 
 /** Format a single child run as a summary line. */
@@ -103,17 +104,8 @@ export function formatChildLine(child: RunView): string {
 }
 
 /** Format todo items as a checklist. */
-export function formatTodoSection(todos: readonly TodoItem[]): string[] {
+function formatTodoSection(todos: readonly TodoItem[]): string[] {
   return todos.map((t) => `${STATUS_DISPLAY[t.status].icon} ${t.content}`);
-}
-
-/** Format a todo header with counts. */
-export function formatTodoHeader(
-  runId: RunId,
-  todos: readonly TodoItem[],
-): string {
-  const { completed, inProgress, pending } = countByStatus(todos);
-  return `Tasks for ${runId} (${completed} done, ${inProgress} active, ${pending} pending):`;
 }
 
 // ============================================================================

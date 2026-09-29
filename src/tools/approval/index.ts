@@ -9,6 +9,12 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 
+/** How a delegation was approved, as the child's own grants record it:
+ *  by the user's one-off answer (`inherit`), or by the run's proposal
+ *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
+export type DelegatedChildApproval =
+  'inherit' | 'auto-approved' | 'goal-approved';
+
 /**
  * Link a freshly resolved child subagent stream to its parent for approval
  * bypass resolution.
@@ -28,7 +34,7 @@ import type { RunId } from '@shared/schemas';
 export function configureDelegatedChildApprovals(
   childRunId: RunId,
   parentRunId: RunId | undefined,
-  policy: 'inherit' | 'auto-approved' = 'inherit',
+  policy: DelegatedChildApproval = 'inherit',
   session: SessionHandle,
 ): void {
   if (parentRunId) {
@@ -37,7 +43,11 @@ export function configureDelegatedChildApprovals(
   // The child's `run.start` is published by the time this runs, so the
   // write is not pre-activation setup: it publishes the child's
   // `approval.policy` like any other bypass change.
-  if (policy === 'auto-approved') {
+  // A child a goal's grant approved gets a goal grant of its own, never a
+  // human value, so a resume leaves it off until a human re-arms the goal.
+  if (policy === 'goal-approved') {
+    session.approvals.setGoalGrant(childRunId, ['toolEdit']);
+  } else if (policy === 'auto-approved') {
     session.approvals.toolEdit.bypass.setBypass(childRunId, true);
   }
 }
@@ -45,7 +55,7 @@ export function configureDelegatedChildApprovals(
 /**
  * Release all agent resources held for a deleted run: approval state AND
  * the follow-up queue. `forgetRunAncestry` clears the run's ancestry edges
- * and its explicit bypass values; `followUps.terminalize` drops the queue.
+ * and its explicit bypass values; `followUps.forget` drops the queue.
  * These always need to be cleared together when a run is removed, so this
  * is the single function hosts should call. The run's open requests need no
  * sweep: the fold drops them with the run's tombstone.
@@ -58,5 +68,5 @@ export function releaseRunResources(
   session: SessionHandle,
 ): void {
   session.approvals.forgetRunAncestry(runId);
-  session.followUps.terminalize(runId);
+  session.followUps.forget(runId);
 }

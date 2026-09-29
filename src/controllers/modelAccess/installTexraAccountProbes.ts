@@ -11,8 +11,7 @@ import { Effect } from 'effect';
 
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus } from '@auth/xai';
-import { setCodexSignedInProbe } from '@model/codex/codexSubscription';
-import { setXaiSignedInProbe } from '@model/xai/xaiSubscription';
+import { setSignedInProbe } from '@model/subscriptionAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 
 /**
@@ -22,10 +21,10 @@ import type { PlatformSecrets } from '@platform/secrets';
  * secrets-free.
  */
 export function installTexraAccountProbes(secrets: PlatformSecrets): void {
-  setCodexSignedInProbe(() =>
+  setSignedInProbe('chatgpt', () =>
     Effect.map(getCodexStatus(secrets), (status) => status.signedIn),
   );
-  setXaiSignedInProbe(() =>
+  setSignedInProbe('grok', () =>
     Effect.map(getXaiStatus(secrets), (status) => status.signedIn),
   );
 }

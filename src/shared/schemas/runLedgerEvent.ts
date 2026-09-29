@@ -27,13 +27,13 @@ import {
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
+import { Sha256Schema } from './offeredTools';
 import { RunOutcomeSchema } from './run';
 import {
   ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
-  ReflectionSnapshotStateSchema,
   ToolUseSnapshotStateSchema,
-} from './runFlowState';
+} from './runSnapshotState';
 import {
   ErrorToolResultSchema,
   ExecutedToolResultSchema,
@@ -43,7 +43,7 @@ import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
 
-const RunFamilySchema = z.enum(['toolUse', 'reflection']);
+const RunFamilySchema = z.enum(['toolUse']);
 export type RunFamily = z.infer<typeof RunFamilySchema>;
 
 /**
@@ -68,45 +68,35 @@ export type InvocationRef = z.infer<typeof InvocationRefSchema>;
  *  completed turn cannot carry a call without an identity. */
 const CallIdSchema = z.string().min(1);
 
-/* ------------------------------------------------------------- flow.step */
+/* ---------------------------------------------------------- run.position */
 
-const FlowStepSchema = z.enum([
-  'round.begin',
-  'round.end',
+const PositionAtSchema = z.enum([
   'turn.ready',
   'turn.begin',
   'turn.end',
   'response.ready',
-  'response.processed',
   'results.ready',
-  'output.ready',
   'waiting',
   'halted',
 ]);
-export type FlowStep = z.infer<typeof FlowStepSchema>;
+export type PositionAt = z.infer<typeof PositionAtSchema>;
 
-/** The loop's coordinates: the step and where it sits. What `RunView.flow`
- *  carries, so a renderer paints the position without the halt's outcome. */
-export const RunFlowSchema = z.strictObject({
-  family: RunFamilySchema,
-  step: FlowStepSchema,
-  round: z.int().nonnegative().nullish(),
-  turn: z.int().nonnegative().nullish(),
-  /** Reflection's within-round response-cycle index. Not `continuation`:
-   *  the package's `Continuation` anchor lives in the same `RunState`, and
-   *  two fields one word apart is a live foot-gun. */
-  continuationIndex: z.int().nonnegative().nullish(),
-});
-export type RunFlow = z.infer<typeof RunFlowSchema>;
-
-export const FlowStepPayloadSchema = RunFlowSchema.extend({
-  /** The loop's own terminal word. The canonical terminal fact stays
-   *  `run.end`, which also covers failures before the runtime starts. */
-  outcome: RunOutcomeSchema.nullish(),
-}).refine(
-  (p) => (p.step === 'halted') === (p.outcome != null),
-  'Only a halted step carries an outcome, and it always carries one.',
-);
+/** Where the loop stands (`at`, not "step": a step is one model call) and
+ *  the turn it stands in: the one record of the loop's position, which the
+ *  fold projects to `RunState.phase` and `RunView.position`. */
+export const RunPositionPayloadSchema = z
+  .strictObject({
+    family: RunFamilySchema,
+    at: PositionAtSchema,
+    turn: z.int().nonnegative().nullish(),
+    /** The loop's own terminal word. The canonical terminal fact stays
+     *  `run.end`, which also covers failures before the runtime starts. */
+    outcome: RunOutcomeSchema.nullish(),
+  })
+  .refine(
+    (p) => (p.at === 'halted') === (p.outcome != null),
+    'Only a halted position carries an outcome, and it always carries one.',
+  );
 
 /* ---------------------------------------------------------- model.message */
 
@@ -136,12 +126,13 @@ export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;
 export const ModelMessagePayloadSchema = z
   .discriminatedUnion('kind', [
     /**
-     * A billed request is about to leave the process. Carries no history:
-     * the history is whatever the rows below this commit say.
+     * A billed request is about to leave the process. Carries no history,
+     * only the address of the rest it sends (`requestContext.ts`).
      */
     z.strictObject({
       kind: z.literal('attempt'),
       invocation: InvocationRefSchema,
+      request: Sha256Schema,
       origin: ModelOriginSchema,
       delivery: z.enum(['stream', 'blocking', 'background']),
     }),
@@ -190,9 +181,8 @@ export const ModelMessagePayloadSchema = z
       usage: NormalizedUsageSchema.nullable(),
     }),
     /**
-     * Canonical messages appended to history, verbatim.
-     *
-     * When `sourceResponse` is set the row carries ONLY the settlement group
+     * Canonical messages appended to history, verbatim. When
+     * `sourceResponse` is set the row carries ONLY the settlement group
      * (and any accompanying user message). The assistant message is derived
      * by the fold from the pending response's own row, so the paid turn is
      * stored once on an aggregate that never rewrites and never deletes, and
@@ -271,27 +261,22 @@ export const ModelMessagePayloadSchema = z
 /* ------------------------------------------------------- model.compaction */
 
 /**
- * The only row that shortens history. `keepPrefix` exists so a reflection
- * round-open does not re-store the entire conversation, media inlined as
- * base64, once per round. Nothing here checks that the resulting history is
- * preparable: that check is the ledger's, at the write boundary and on cold
- * load (D11), because a payload cannot see the prefix it keeps.
+ * The only row that shortens history; `usage` is its summary call's priced
+ * usage, folded as a response's (`null`: a switch calls no model). `keepPrefix`
+ * spares a compaction that keeps the head (a switch keeps all of it) storing
+ * the conversation again. Whether the result is preparable is the ledger's
+ * check (D11), at write and cold load: a payload cannot see its prefix.
  */
 export const ModelCompactionPayloadSchema = z
   .strictObject({
     keepPrefix: z.int().nonnegative(),
     messages: z.array(MessageSchema).readonly(),
-    cause: z.enum([
-      'handler-replacement',
-      'round-open',
-      'context-limit',
-      'context-window',
-      'model-switch',
-    ]),
+    cause: z.enum(['context-limit', 'context-window', 'model-switch']),
     continuation: ContinuationSchema.nullable(),
     continuationDropped: z
       .enum(['history-replaced', 'protocol-has-no-continuation'])
       .nullable(),
+    usage: NormalizedUsageSchema.nullable(),
   })
   .refine(
     (p) => p.continuation === null || p.continuationDropped === null,
@@ -379,35 +364,24 @@ const SettledToolResultSchema = z.discriminatedUnion('status', [
 ]);
 
 /**
- * Per-call state operations over the run's mutable slices, never a whole-state
- * copy that could overwrite a concurrent call. `add` is not optional
- * generality: `recordSubagentCost` adds raw USD into the run's usage totals
- * from inside a tool call, and an enumerated slice list cannot express it.
- * Folding a result applies its mutation exactly once.
- *
- * Under `usage`, `add` is the ONLY operation. The run's accounting is derived
- * from the priced usage of every response row plus additive tool costs (D12);
- * a `set` rewriting `totalCost` would make a resumed run's cost a number no
- * row accounts for, and `applyMutations` cannot tell the difference because
- * the rewritten totals still parse.
+ * Per-call state operations over the run's mutable `state` slice, never a
+ * whole-state copy that could overwrite a concurrent call. Folding a result
+ * applies its mutation exactly once. The run's `usage` is not a slice a call
+ * can touch: it is derived from the priced usage of the run's own response
+ * rows (D12) and nothing else, so a child's spend stays on the child's run and
+ * a parent's or session's total is the sum over the run tree.
  */
-const StateOperationSchema = z
-  .discriminatedUnion('op', [
-    z.strictObject({
-      op: z.literal('set'),
-      path: z.array(z.string().min(1)).min(1),
-      value: JsonValueSchema,
-    }),
-    z.strictObject({
-      op: z.literal('add'),
-      path: z.array(z.string().min(1)).min(1),
-      amount: z.number().finite(),
-    }),
-  ])
-  .refine(
-    (op) => op.op === 'add' || op.path[0] !== 'usage',
-    'The run usage totals are derived: a tool result only adds to them.',
-  );
+const StateOperationSchema = z.strictObject({
+  op: z.literal('set'),
+  path: z
+    .array(z.string().min(1))
+    .min(1)
+    .refine(
+      (path) => path[0] === 'state',
+      'A tool result sets only the run state slice; the usage totals are derived.',
+    ),
+  value: JsonValueSchema,
+});
 export type StateOperation = z.infer<typeof StateOperationSchema>;
 
 export const ToolResultPayloadSchema = z
@@ -466,21 +440,6 @@ export const ToolResultPayloadSchema = z
   });
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
-/* ----------------------------------------------------------- flow.snapshot */
-
-/** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). */
-const RunLoopPhaseSchema = z.enum([
-  'initial',
-  'round.ready',
-  'model.ready',
-  'model.submitted',
-  'results.ready',
-  'output.pending',
-  'waiting',
-  'halted',
-]);
-export type RunLoopPhase = z.infer<typeof RunLoopPhaseSchema>;
-
 /* ------------------------------------------------------------ model.retry */
 
 const PendingRetrySchema = z.strictObject({
@@ -488,8 +447,7 @@ const PendingRetrySchema = z.strictObject({
   invocation: InvocationRefSchema,
   failedModelId: z.string().min(1),
   failedCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
-  /** Route requirements without secrets: a credential scope, never a
-   *  credential. */
+  /** Route requirements without secrets: a scope, never a credential. */
   credentialScope: z.string().min(1),
   /** No default and no `.catch`. A spent permit that reads as an unused one
    *  silently buys a second billed attempt: `waiting` = a decision is
@@ -505,12 +463,15 @@ export const ModelRetryPayloadSchema = z.strictObject({
   permit: PendingRetrySchema.nullable(),
 });
 
-/** Coordinates and runtime-owned failure state, which no row carries. */
+/* ----------------------------------------------------------- run.snapshot */
+
+/**
+ * What the loop runs on, apart from where it stands: `run.position` is the
+ * one record of the loop's position and coordinates, so a snapshot never
+ * restates them and is written only when one of these, or the loop state
+ * beside them, changes.
+ */
 const SnapshotRuntimeSchema = z.strictObject({
-  phase: RunLoopPhaseSchema,
-  round: z.int().nonnegative(),
-  turn: z.int().nonnegative(),
-  continuationIndex: z.int().nonnegative(),
   modelId: z.string().min(1),
   modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /**
@@ -532,22 +493,9 @@ export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 /** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
  *  pending response, its intents and their approval bindings are folded from
  *  `model.message`, `tool.intent` and `tool.binding`. */
-const SnapshotArmFields = {
+export const RunSnapshotPayloadSchema = z.strictObject({
+  family: RunFamilySchema,
   runtime: SnapshotRuntimeSchema,
-};
-
-export const FlowSnapshotPayloadSchema = z.discriminatedUnion('family', [
-  z.strictObject({
-    family: z.literal('toolUse'),
-    ...SnapshotArmFields,
-    /** The non-message fields of `ToolUseRunSharedSchema`. */
-    state: ToolUseSnapshotStateSchema,
-  }),
-  z.strictObject({
-    family: z.literal('reflection'),
-    ...SnapshotArmFields,
-    /** The non-message fields of `ReflectionFlowStateSchema`. */
-    state: ReflectionSnapshotStateSchema,
-  }),
-]);
-export type FlowSnapshotPayload = z.infer<typeof FlowSnapshotPayloadSchema>;
+  state: ToolUseSnapshotStateSchema,
+});
+export type RunSnapshotPayload = z.infer<typeof RunSnapshotPayloadSchema>;

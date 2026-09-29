@@ -7,6 +7,7 @@
  */
 
 import { Cause, Effect, Exit } from 'effect';
+import stableStringify from 'safe-stable-stringify';
 
 import {
   isAgentRunRecord,
@@ -16,7 +17,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   AgentCategory,
+  RunRecordFieldsSchema,
   aggregateId,
+  storedRunOutput,
+  type ApprovalPolicySnapshot,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
@@ -28,6 +32,7 @@ import {
   type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunRecords, runEndFromEvents } from './runRecords';
 
@@ -42,6 +47,82 @@ function pinRunWorkingDirectory(
   );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
+
+/**
+ * The `run.config` row an activation owes, or null when the run's newest
+ * row already says it. A run's configuration is written with its
+ * registration and afterwards only when it changes, so the newest row is the
+ * configuration and no activation restates it. Its model stays the one the
+ * run was launched with: the model the run is on is its snapshot's, which a
+ * resume's configuration carries and this row never restates. Its caller
+ * holds the run's claim, so no other writer can move the row between the
+ * read and the write.
+ */
+export const configChange = Effect.fn('configChange')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  config: RunRecord,
+) {
+  const stored = yield* getRunRecords(session, runId).readRunRecord();
+  const next = RunRecordFieldsSchema.parse(
+    pinRunWorkingDirectory(
+      stored?.model === undefined ? config : { ...config, model: stored.model },
+      session.roots.workspace,
+    ),
+  );
+  if (stored !== null && stableStringify(stored) === stableStringify(next))
+    return null;
+  return {
+    type: 'run.config',
+    aggregateId: aggregateId('run', runId),
+    config: next,
+  } satisfies SessionEventDraft;
+});
+
+/**
+ * The approval snapshot a run's re-activation stamps. Enforcement is the
+ * session's in-memory state, so a process holding none of the run's grants
+ * (a resume in a new process) first rebuilds them from the run's last
+ * durable snapshot (`SessionApprovals.restoreRun`) rather than stamping an
+ * empty snapshot over them. The durable snapshot is the run's own record,
+ * the newer of its `approval.policy` and the one its `run.start` carried.
+ */
+const reactivatedApprovalPolicy = (
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<ApprovalPolicySnapshot, DatabaseReadFailed> =>
+  session.readRunRecords(runId).pipe(
+    Effect.map((rows) => {
+      const latest = rows.findLast(
+        (row) => row.type === 'approval.policy' || row.type === 'run.start',
+      );
+      const durable =
+        latest?.type === 'approval.policy'
+          ? latest.snapshot
+          : latest?.approvalPolicy;
+      if (durable) session.approvals.restoreRun(runId, durable);
+      return session.approvalPolicySnapshotFor(runId);
+    }),
+  );
+
+/**
+ * A resume's activation: its `run.activate` with the approval snapshot
+ * enforcement holds, as one batch (no `run.start` re-stamps the snapshot).
+ */
+export const commitResumedActivation = (
+  session: SessionHandle,
+  runId: RunId,
+  category: AgentCategory,
+) =>
+  reactivatedApprovalPolicy(session, runId).pipe(
+    Effect.flatMap((snapshot) => {
+      const target = aggregateId('run', runId);
+      return session.commit([
+        { type: 'run.activate', aggregateId: target, category },
+        { type: 'approval.policy', aggregateId: target, snapshot },
+      ]);
+    }),
+  );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
@@ -71,132 +152,86 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
-  let releaseClaims: Effect.Effect<void, Error> = Effect.void;
-  const registration = yield* Effect.exit(
-    Effect.gen(function* () {
-      const records = getRunRecords(session, runId);
-      const prior = yield* records.exists();
-      if (prior)
-        releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
-      if (options.parentRunId !== undefined) {
-        // A record read goes straight to the database; it never queues behind
-        // the publisher. A parent whose `run.start` is queued but uncommitted
-        // therefore reads as absent here, and the refusal below would be about
-        // a parent that is on its way in. This empty batch is the barrier: the
-        // publisher is the one order, whether a fact was published detached or
-        // awaited, so a job enqueued here runs after every publication queued
-        // before it — while answering for none of them, which a settle could
-        // not do without failing this child over some other fact its parent
-        // lost.
-        yield* session.commit([]);
-        // The database refuses a parent that is closed or has no `run.start`;
-        // this read only words the refusal before the transaction opens.
-        if (!(yield* getRunRecords(session, options.parentRunId).exists()))
-          return yield* Effect.fail(
-            new Error(`Parent run ${options.parentRunId} is unavailable.`),
-          );
-      }
-      const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
-      const target = aggregateId('run', runId);
-      const category = isAgentRunRecord(pinned)
-        ? pinned.agentCategory
-        : (options.category ?? AgentCategory.ToolUse);
-      // The launch stamped the resolved source on the record; the registry is
-      // not consulted again.
-      const isRemote =
-        isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
-      const events: SessionEventDraft[] = [];
-      if (!prior) {
-        // The worktree the fold spells is the run's working directory as a
-        // bare path chip: the fold never shells out, so `branch`/`dirty`
-        // stay absent.
-        const worktreeCwd = pinned.workingDirectory?.trim();
-        events.push({
-          type: 'run.start',
-          aggregateId: target,
-          identity: options.identity,
-          userFollowUpSupport:
-            options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          category,
-          isRemote,
-          worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
-          parent:
-            options.parentRunId === undefined
-              ? null
-              : { id: options.parentRunId },
-          approvalPolicy: session.approvalPolicySnapshotFor(runId),
-          checkpointId: options.checkpointId,
-        });
-      }
-      events.push(
-        {
-          type: 'run.record',
-          aggregateId: target,
-          record: pinned,
-        },
-        {
-          type: 'run.activate',
-          aggregateId: target,
-          category,
-          ...(options.identity.kind === 'agent' &&
-          options.identity.tool === undefined
-            ? { isRemote }
-            : {}),
-        },
-      );
-      // Enforcement is the session's in-memory policy; the row is its
-      // projection. A re-registration writes no `run.start`, so the
-      // activation re-stamps the snapshot enforcement now holds.
-      if (prior)
-        events.push({
-          type: 'approval.policy',
-          aggregateId: target,
-          snapshot: session.approvalPolicySnapshotFor(runId),
-        });
-      if (options.description !== undefined)
-        events.push({
-          type: 'run.description',
-          aggregateId: target,
-          description: options.description,
-        });
-      yield* session.commitRegistration(events);
-    }),
-  );
-  if (Exit.isFailure(registration)) {
-    const cause = Cause.squash(registration.cause);
-    const claimRelease = yield* Effect.exit(releaseClaims);
-    const failures = [
-      cause,
-      ...(Exit.isFailure(claimRelease)
-        ? [Cause.squash(claimRelease.cause)]
-        : []),
-    ];
-    return yield* Effect.fail(
-      failures.length > 1
-        ? new AggregateError(
-            failures,
-            `Run registration and claim rollback failed for ${runId}`,
-          )
-        : ensureError(cause),
-    );
-  }
-});
-
-/** Admit a resumed turn and return rollback for only this admission's resources. */
-export const acquireResumedRunOwnership = Effect.fn(
-  'acquireResumedRunOwnership',
-)(function* (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const release = yield* session.acquireClaims(aggregateId('run', runId));
-  return release.pipe(
-    Effect.mapError(
-      (error) =>
-        new Error(`Run admission rollback failed for ${runId}`, {
-          cause: error,
-        }),
-    ),
+  return yield* Effect.gen(function* () {
+    // A re-registration writes into a run that already has rows; the
+    // registration takes the run's claim over as it commits.
+    const prior = yield* getRunRecords(session, runId).exists();
+    if (options.parentRunId !== undefined) {
+      // A record read goes straight to the database; it never queues behind
+      // the publisher. A parent whose `run.start` is queued but uncommitted
+      // therefore reads as absent here, and the refusal below would be about
+      // a parent that is on its way in. This empty batch is the barrier: the
+      // publisher is the one order, whether a fact was published detached or
+      // awaited, so a job enqueued here runs after every publication queued
+      // before it — while answering for none of them, which a settle could
+      // not do without failing this child over some other fact its parent
+      // lost.
+      yield* session.commit([]);
+      // The database refuses a parent that is closed or has no `run.start`;
+      // this read only words the refusal before the transaction opens.
+      if (!(yield* getRunRecords(session, options.parentRunId).exists()))
+        return yield* Effect.fail(
+          new Error(`Parent run ${options.parentRunId} is unavailable.`),
+        );
+    }
+    const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
+    const target = aggregateId('run', runId);
+    // A registration, first or again, opens the run with its configuration
+    // in the batch that takes the claim: nothing is compared before the
+    // claim is held, so a takeover never skips the row on a stale read.
+    const config = {
+      type: 'run.config',
+      aggregateId: target,
+      config: RunRecordFieldsSchema.parse(pinned),
+    } satisfies SessionEventDraft;
+    const category = isAgentRunRecord(pinned)
+      ? pinned.agentCategory
+      : (options.category ?? AgentCategory.ToolUse);
+    const events: SessionEventDraft[] = [];
+    if (!prior) {
+      // The worktree the fold spells is the run's working directory as a
+      // bare path chip: the fold never shells out, so `branch`/`dirty`
+      // stay absent.
+      const worktreeCwd = pinned.workingDirectory?.trim();
+      events.push({
+        type: 'run.start',
+        aggregateId: target,
+        identity: options.identity,
+        userFollowUpSupport:
+          options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        category,
+        worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
+        parent:
+          options.parentRunId === undefined
+            ? null
+            : { id: options.parentRunId },
+        approvalPolicy: session.approvalPolicySnapshotFor(runId),
+        checkpointId: options.checkpointId,
+      });
+    }
+    events.push(config);
+    events.push({ type: 'run.activate', aggregateId: target, category });
+    // Enforcement is the session's in-memory policy; the row is its
+    // projection. A re-registration writes no `run.start`, so the
+    // activation re-stamps the snapshot enforcement now holds, rebuilt from
+    // the durable one when this process holds none of the run's grants.
+    if (prior)
+      events.push({
+        type: 'approval.policy',
+        aggregateId: target,
+        snapshot: yield* reactivatedApprovalPolicy(session, runId),
+      });
+    if (options.description !== undefined)
+      events.push({
+        type: 'run.description',
+        aggregateId: target,
+        description: options.description,
+      });
+    yield* session.commitRegistration(events);
+  }).pipe(
+    // A registration that died wrote nothing, and the caller refuses the
+    // launch on it like any other refused registration.
+    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
   );
 });
 
@@ -263,22 +298,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
-  // The row's usage is the run's ledger totals, whichever path ends the run:
-  // `RunState.usage` folds from the priced `response` rows alone, so a run
-  // resumed in this process bills its earlier rounds even when it ends
-  // before a round here. Absent for a run with no ledger rows (an agent-CLI
-  // child, a launch that failed before its first batch). An unreadable
-  // ledger is logged and leaves the row without usage: it must not also
-  // cost the run its terminal fact.
-  const usage = yield* session.ledger.load(runId).pipe(
-    Effect.map((state) => state?.usage),
-    Effect.catch((cause) =>
-      Effect.logWarning('Failed to read the run usage from its ledger').pipe(
-        Effect.annotateLogs({ runId, error: toErrorMessage(cause) }),
-        Effect.as(undefined),
-      ),
-    ),
-  );
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
@@ -309,8 +328,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
               aggregateId: target,
               outcome: persisted,
               ...(input.error !== undefined ? { error: input.error } : {}),
-              ...(usage !== undefined ? { usage } : {}),
-              output: input.output ?? emptyRunEndOutput(start.category),
+              output: storedRunOutput(
+                input.output ?? emptyRunEndOutput(start.category),
+              ),
             },
           ],
           value: persisted,
@@ -330,10 +350,3 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   }
   return { ok: true, outcome: status.value };
 });
-
-/** Read the canonical run configuration from the owning database. */
-export const readPersistedRunRecord = (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.Effect<RunRecord | null, Error> =>
-  getRunRecords(session, runId).readRunRecord();

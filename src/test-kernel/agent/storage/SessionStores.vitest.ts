@@ -17,6 +17,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sweepLeftoverRuns } from '@controllers/session/sweepLeftoverRuns';
 import { aggregateId, type RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -36,7 +37,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     fn,
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 }
 
@@ -183,7 +184,6 @@ describe('indexed background-shell cleanup', () => {
               aggregateId: aggregateId('run', shell),
               identity: { kind: 'process', tool: 'bash' },
               category: 'toolUse',
-              isRemote: false,
               userFollowUpSupport: 'unsupported',
               parent: null,
             },
@@ -192,7 +192,6 @@ describe('indexed background-shell cleanup', () => {
               aggregateId: aggregateId('run', active),
               identity: { kind: 'process', tool: 'bash' },
               category: 'toolUse',
-              isRemote: false,
               userFollowUpSupport: 'unsupported',
               parent: null,
             },
@@ -201,7 +200,6 @@ describe('indexed background-shell cleanup', () => {
               aggregateId: aggregateId('run', notAShell),
               identity: { kind: 'agent', agent: 'assistant' },
               category: 'toolUse',
-              isRemote: false,
               userFollowUpSupport: 'unsupported',
               parent: null,
             },

@@ -21,7 +21,6 @@ import {
   type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import {
-  formatCliManualAuthUrlMessage,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
@@ -34,11 +33,11 @@ import type {
 } from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import {
   ACCOUNT_OUTCOME,
-  CHATGPT_AUTH,
-  GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,19 +53,6 @@ const CHAT_LOGIN_USAGE = [
   '       /login grok [--no-browser] [--device]',
   '       /login status',
 ].join('\n');
-
-/** Sign-in copy shared by the subscription auth objects. */
-interface SubscriptionAuthCopy {
-  readonly startingDevice: string;
-  readonly startingNoBrowser: string;
-  readonly startingBrowser: string;
-  readonly signedInEnabled: (accountLabel: string) => string;
-}
-
-const SUBSCRIPTION_AUTH_COPY: Record<
-  SubscriptionProviderId,
-  SubscriptionAuthCopy
-> = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
 
 function isSubscriptionLogin(
   args: CliLoginSlashArgs,
@@ -88,8 +74,8 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 }
 
 /**
- * Subscription sign-in from the chat TUI, mirroring `signOutSubscription`
- * below: sign in with a copyable progress writer, flip the subscription
+ * Subscription sign-in from the chat TUI, mirroring the sign-out in
+ * `logoutLines` below: sign in with a copyable progress writer, flip the subscription
  * preference, then report the outcome in this surface's copy.
  */
 const loginToSubscription = Effect.fn('loginToSubscription')(function* (
@@ -99,8 +85,7 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   output: SlashCommandOutput,
 ) {
   const account = yield* signInCliSubscription(providerId, args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
+    writeProgress: output.writeProgress,
   });
   yield* setCliSubscriptionPreference(stores, providerId, true);
   output.appendOutcome(
@@ -126,17 +111,10 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
       })
     : yield* signInCliSupabase(runtime, {
         provider: args.provider,
-        openBrowser: !args.noBrowser,
+        noBrowser: args.noBrowser,
         selectAccount: args.selectAccount,
         loginHint: args.loginHint,
-        manualBrowserHint: '/login --no-browser',
-        onAuthUrl: (url) => {
-          if (args.noBrowser) {
-            output.writeProgress(formatCliManualAuthUrlMessage(url), {
-              copyable: true,
-            });
-          }
-        },
+        writeProgress: output.writeProgress,
       });
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 });
@@ -205,11 +183,10 @@ const logoutLines = (
       );
     }
 
-    const signOutSubscription = (
-      providerId: SubscriptionProviderId,
-      label: string,
-    ): Effect.Effect<void, never, Secrets> =>
-      signOutCliSubscription(stores, providerId).pipe(
+    for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
+      if (target !== providerId && target !== 'all') continue;
+      const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
+      yield* signOutCliSubscription(stores, providerId).pipe(
         Effect.match({
           onFailure: (error) => {
             lines.push(
@@ -228,13 +205,6 @@ const logoutLines = (
           },
         }),
       );
-
-    if (target === 'chatgpt' || target === 'all') {
-      yield* signOutSubscription('chatgpt', CHATGPT_AUTH.label);
-    }
-
-    if (target === 'grok' || target === 'all') {
-      yield* signOutSubscription('grok', GROK_AUTH.label);
     }
 
     const overviewLines = yield* loadCliModelAccessOverview(

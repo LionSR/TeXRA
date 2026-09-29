@@ -244,7 +244,7 @@ function checkAuth(
         'auth',
         RESEARCHER_ACCESS.label,
         'Not signed in.',
-        'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
+        'Optional: no agent needs it. Add a provider API key with `texra setup` to run models.',
       );
     }),
     Effect.catch((error) =>
@@ -357,12 +357,16 @@ function checkConfig(
     // exactly the `skip` row below, and it is reported there.
     Effect.catch((_: PlatformError.PlatformError) => Effect.succeed(false)),
     Effect.map((readable) => {
-      if (context.configWarnings.length > 0) {
+      const warnings = [
+        ...context.configDegradations,
+        ...context.configWarnings,
+      ];
+      if (warnings.length > 0) {
         return warn(
           'config',
           'Config',
           `Workspace config has warnings: ${filePath}`,
-          context.configWarnings.join(' '),
+          warnings.join(' '),
         );
       }
       if (!readable) {

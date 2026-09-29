@@ -21,6 +21,7 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { runActions } from '@shared/session/runActions';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
@@ -51,8 +52,17 @@ type RunViewOverrides = Partial<Omit<RunView, 'category'>> & {
 };
 
 /** One stream as the fold would state it; every field explicit. The label,
- *  tone, and group follow the status the way the fold derives them. */
+ *  tone, and group follow the status the way the fold derives them, and the
+ *  actions follow the final fields through the fold's own rule. */
 export function makeRunView(over: RunViewOverrides): RunView {
+  const run = runViewFields(over);
+  // A case may blank the identity to stand for metadata not yet folded; the
+  // fold never states such a run, so it offers nothing.
+  const identity = run.identity as RunView['identity'] | undefined;
+  return { ...run, actions: identity ? runActions(run) : [] };
+}
+
+function runViewFields(over: RunViewOverrides): RunView {
   const id = over.id as RunId;
   const status = over.status ?? RUN_PHASE.RUNNING;
   const copy = runStatusCopy(status, {
@@ -61,7 +71,6 @@ export function makeRunView(over: RunViewOverrides): RunView {
   const common = {
     id,
     identity: { kind: 'agent' as const, agent: 'agent' },
-    isRemote: false,
     ownerId: null,
     ownedHere: false,
     label: over.id,
@@ -82,7 +91,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     runStartedAt: null,
     lastTimestamp: null,
     conversationProgress: { toolCallCount: 0 },
-    flow: null,
+    position: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     resumeEligible:
       (over.category ?? AgentCategory.ToolUse) === AgentCategory.ToolUse &&
@@ -94,6 +103,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
     readOnly: false,
+    actions: [],
     forceExpanded: false,
     group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
     usage: { inputTokens: 0, outputTokens: 0, cost: 0 },
@@ -124,7 +134,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     category: AgentCategory.ToolUse,
     todos: [],
     plan: null,
-    goal: { active: false },
+    facts: {},
     outputs: {},
     missingOutputs: {},
     compileFailures: {},
@@ -181,17 +191,16 @@ export function viewWith(
       if (!child) continue;
       const nested = rollupOf(child);
       rollup.total += 1 + nested.total;
+      const idle =
+        child.status === RUN_PHASE.WAITING && child.group === 'running';
       rollup.running +=
-        (isInFlightPhase(child.status) ? 1 : 0) + nested.running;
+        (isInFlightPhase(child.status) && !idle ? 1 : 0) + nested.running;
       rollup.finished +=
-        (isTerminalOutcomePhase(child.status) ? 1 : 0) + nested.finished;
+        (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
+        nested.finished;
     }
     return rollup;
   };
-  for (const stream of [...byId.values()]) {
-    if (stream.childIds.length === 0) continue;
-    byId.set(stream.id, { ...stream, rollup: rollupOf(stream) });
-  }
   // A held run with a request that parks its caller is waiting on it, as the
   // fold's aggregates derive it. Fixture runs model runs this process holds;
   // one built interrupted (unheld) or with its own approval keeps it.
@@ -205,6 +214,10 @@ export function viewWith(
     )
       continue;
     byId.set(run.id, { ...run, approval: 'own', group: 'waiting' });
+  }
+  for (const stream of [...byId.values()]) {
+    if (stream.childIds.length === 0) continue;
+    byId.set(stream.id, { ...stream, rollup: rollupOf(stream) });
   }
   return {
     ...emptySessionView('test'),

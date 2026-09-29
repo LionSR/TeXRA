@@ -1,27 +1,28 @@
 // Third-party imports
-import { Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
-  createAgentResponseTextConnector,
+  closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
 import { bootstrapHost } from '@controllers/hostBootstrap';
-import { openProjectStateStore } from '@controllers/session/appStateStore';
+import {
+  openProjectStateStore,
+  openRepoStateStore,
+} from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
+import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
-  Lifecycle,
-  type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
 import {
   withProcessServices,
@@ -35,8 +36,7 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -44,14 +44,14 @@ import {
   disposeCliProcessRuntime,
   installCliProcessRuntime,
 } from './cliProcessRuntime';
-import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
   flushTextStderr,
   writeTextStderr,
+  writeTextStderrAndWait,
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
-import { deferInterrupt, terminalForegroundHeld } from './foregroundCommand';
+import { terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
@@ -66,6 +66,16 @@ let shutdownHandlers: DisposableStore | undefined;
 // another root opened the process session before this init ran (a test
 // harness's fake host), in which case the session is that one.
 let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
+// The process's shutdown scope, made by the first init: its close is the
+// CLI's shutdown, run once whichever exit path asks first (`shutdown`).
+let shutdownScope: Scope.Closeable | undefined;
+let shutdown: Effect.Effect<void> | undefined;
+
+/** The CLI's shutdown: every session closes, then the project scope, then
+ *  the process runtime. Nothing to do before a platform came up. */
+export const cliPlatformShutdown: Effect.Effect<void> = Effect.suspend(
+  () => shutdown ?? Effect.void,
+);
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -77,6 +87,11 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
+  /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
+   *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
+   *  above its header. Otherwise this init prints it to stderr: the
+   *  platform's log sink is always silent. */
+  readonly presentsStoreMovedAside?: boolean;
 };
 
 /**
@@ -87,8 +102,9 @@ type CliPlatformInitOptions = Pick<
  * it hands them back instead of leaving each caller to look them up again.
  */
 export type CliPlatformServices = SettingsStores & {
-  /** The process runtime's `Lifecycle`: the host every exit path drains. */
-  readonly lifecycle: LifecycleHost;
+  /** The process's shutdown scope: a command that must act before the
+   *  sessions close registers there, in a child scope of its own. */
+  readonly shutdownScope: Scope.Scope;
   /**
    * The one Effect runtime of this process, built (or joined) by this root:
    * every entry point runs its programs on it and threads it to the modules
@@ -99,7 +115,7 @@ export type CliPlatformServices = SettingsStores & {
   readonly globalStorage: string;
   /**
    * The stores this root opened, handed over rather than read back. `config`,
-   * `workspaceState` and `globalState` are the three slots a catalog setting
+   * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
    * resolves against, so a read or write through `readSettingFrom` /
    * `writeSettingTo` answers for this process's project, from the record
    * the caller holds rather than any process-wide lookup.
@@ -139,24 +155,39 @@ export type CliPlatformServices = SettingsStores & {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
-export async function runCliPlatformShutdownSequence(
-  lifecycle: LifecycleHost | undefined,
-): Promise<void> {
+export async function runCliPlatformShutdownSequence(options: {
+  /** The user's own `--quiet`, never a command's silenced log sink. */
+  readonly quiet: boolean;
+}): Promise<void> {
+  // Each step is best effort, so a failure never stops termination, but it
+  // is said, on stderr: the process runtime is gone by the flushes, and the
+  // log sink is silent under the chat TUI (which has unmounted by now), so
+  // only an explicit `--quiet` keeps it unsaid.
+  const bestEffort = (step: string, effect: Effect.Effect<void>) =>
+    effect.pipe(
+      Effect.catchCause((cause) =>
+        options.quiet
+          ? Effect.void
+          : Effect.promise(() =>
+              writeTextStderrAndWait(
+                `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
+              ),
+            ),
+      ),
+    );
   await Effect.runPromise(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
-      yield* Effect.ignoreCause(lifecycle?.runShutdown ?? Effect.void);
+      yield* bestEffort('closing the platform', cliPlatformShutdown);
       // A closed stderr pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushTextStderr());
+      yield* bestEffort('flushing stderr', flushTextStderr());
       // A closed stdout pipe must not prevent signal-based termination.
-      yield* Effect.ignoreCause(flushNdjsonStdout());
+      yield* bestEffort('flushing stdout', flushNdjsonStdout());
     }),
   );
 }
 
-export function installCliShutdownSignalHandlers(
-  lifecycle: LifecycleHost,
-): void {
+export function installCliShutdownSignalHandlers(quiet: boolean): void {
   if (shutdownHandlers) return;
   const handlers = new DisposableStore();
   shutdownHandlers = handlers;
@@ -164,14 +195,14 @@ export function installCliShutdownSignalHandlers(
   const install = (signal: CliShutdownSignal, exitCode: number) => {
     const handler = async () => {
       // A foreground child (a pager, an installer) owns Ctrl-C while it
-      // runs; `runForegroundCommand` re-raises the interrupt if the child
-      // died of it. Re-arm so the next SIGINT reaches this handler again.
+      // runs; its own listener records the interrupt, and
+      // `runForegroundCommand` interrupts its command if the child died of
+      // it. Re-arm so the next SIGINT reaches this handler again.
       if (signal === 'SIGINT' && terminalForegroundHeld()) {
-        deferInterrupt();
         process.once(signal, handler);
         return;
       }
-      await runCliPlatformShutdownSequence(lifecycle);
+      await runCliPlatformShutdownSequence({ quiet });
       process.exit(exitCode);
     };
     process.once(signal, handler);
@@ -250,11 +281,10 @@ export function initCliPlatform(
     Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
-    // The terminal is the operator's own, so entries reach it unredacted — the
-    // contract `logSinks.ts` documents for CLI output.
-    setLogSink(context.quietLogs ? silentLogSink : consoleLogSink, {
-      trusted: true,
-    });
+    // Every command renders its own output, so the platform's log lines go
+    // nowhere; `quietLogs` is only the user's `--quiet`, which the shutdown
+    // handler below reads.
+    setLogSink(silentLogSink, { trusted: true });
 
     // The one Effect runtime of this process (PRD 7.7) comes first: the stores
     // below open as Effect programs, and the session graph and every
@@ -282,25 +312,23 @@ export function initCliPlatform(
     // the first call builds them below.
     //
     // A step that fails after the runtime exists (a store that will not open, a
-    // seed that will not write) must not leave the runtime installed with
-    // nothing registered to dispose it: the failure disposes it and is
-    // re-raised, so the caller reports the cause rather than a half-built
-    // platform. Keep the roots and lazy session private until the fallible
-    // setup has succeeded: their ports have no reset operation.
-    const { globalState, lifecycle, roots } = yield* withProcessServices(
+    // seed that will not write) registers nothing to dispose it; the failure
+    // is re-raised so the caller reports the cause, and the process entry
+    // (`bin/texra.ts`) disposes the still-installed runtime in its
+    // `Effect.ensuring`, never a fiber on that runtime. Keep the roots and
+    // lazy session private until the fallible setup has succeeded: their
+    // ports have no reset operation.
+    const { globalState, roots } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
-        // The process lifecycle is the value the runtime install built, so
-        // nothing here builds a second copy beside the runtime's.
-        const lifecycle = yield* Lifecycle;
         // The three setting slots this process answers a catalog row from:
         // the roots an earlier init built, or -- when another root opened the
         // process session before this init ran (a test harness's fake host)
         // -- the roots that session was opened over, which is where `session`
         // below already looks.
         const joined = installedRoots ?? tryDefaultSession()?.roots;
-        if (joined) return { globalState, lifecycle, roots: joined };
+        if (joined) return { globalState, roots: joined };
 
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
@@ -312,45 +340,40 @@ export function initCliPlatform(
           const workspaceState = yield* openProjectStateStore(storage).pipe(
             Scope.provide(projectScope),
           );
-          const cliSecrets = getCliSecrets(context.storageRoot);
+          const repoState = yield* openRepoStateStore(context.cwd, storage);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` layered over the user-level
           // `~/.texra/v1/global-storage/config.json`. One provider per process is
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
+            host: 'cli',
             workspacePath: context.cwd,
             storage,
             globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
+            repoState,
             globalState,
           });
           // The one open of the process session, over the roots published below,
           // memoized so the first entry point that needs a session opens it and
           // every later one gets the same handle; an entry that needs none never
-          // opens one. The latex text connector asks a helper model how to join
-          // two strings; that model is resolved against the stores this root
-          // opened.
+          // opens one.
           const openSession = yield* Effect.cached(
             Effect.acquireRelease(
               initializeDefaultSession({
                 roots,
-                responseTextProcessing: createTexraResponseTextProcessing(
-                  createAgentResponseTextConnector({
-                    ...roots,
-                    secrets: cliSecrets,
-                  }),
-                ),
+                responseTextProcessing: createTexraResponseTextProcessing(),
               }),
               () => teardownDefaultSession(),
             ).pipe(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const cleared = session.storeCleared;
-                  if (cleared) {
-                    writeTextStderr(sessionStoreClearedMessage(cleared));
+                  const moved = session.storeMovedAside;
+                  if (moved && context.presentsStoreMovedAside !== true) {
+                    writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
                 }),
               ),
@@ -363,62 +386,65 @@ export function initCliPlatform(
           // first-install tool seed) must fail while they are still private,
           // as the seed did when this body owned it.
           yield* bootstrapHost({
-            host: 'cli',
             roots,
-            secrets: cliSecrets,
             skills: {
               resourcesPath: context.resourcesPath,
               skillSourceOptions: context.skillSourceOptions,
             },
           });
 
-          // Kill agent-spawned OS children before the process dies, exactly as the
-          // extension and desktop hosts do. Background `bash` runs are spawned
-          // `detached` (their own process group, see execUtils) so they survive
-          // `texra` exiting and can never deliver their follow-up result — without
-          // this drain they are orphaned. The usage log is drained later still,
-          // by the runtime disposal these handlers end with.
-          registerRuntimeShutdownHandlers(lifecycle, {
-            // The session is opened lazily (`sessionOpen`); a process that never
-            // asked for one has nothing to flush.
-            flushArtifacts: Effect.suspend(() => {
-              const session = tryDefaultSession();
-              return session ? session.settlePublications() : Effect.void;
-            }),
-            releaseSessions: closeProject.pipe(
-              Effect.ensuring(flushNdjsonStdout()),
-            ),
-            disposeRuntime: disposeCliProcessRuntime,
-          });
+          // The shutdown is this scope's close, its finalizers run in the
+          // reverse of their registration: every session closes first (its
+          // runs stopped and settled, its artifacts flushed). That stops
+          // agent-spawned OS children before the process exits, as the
+          // extension and desktop hosts do: a background `bash` run is its own
+          // process group (see execUtils), which its lifeline kills only once
+          // `texra` is gone, and this close stops it first so its run settles.
+          // Then the project scope with a final NDJSON flush, and the runtime
+          // last, draining the usage log.
+          const scope = Scope.makeUnsafe();
+          yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
+          yield* Scope.addFinalizer(
+            scope,
+            closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
+          );
+          yield* Scope.addFinalizer(scope, closeAllSessions());
+          shutdownScope = scope;
+          shutdown = yield* Effect.cached(Scope.close(scope, Exit.void));
 
           installedRoots = roots;
           sessionOpen = openSession;
           if (context.installSignalHandlers !== false) {
-            installCliShutdownSignalHandlers(lifecycle);
+            installCliShutdownSignalHandlers(context.quietLogs);
           }
-          return { globalState, lifecycle, roots };
+          return { globalState, roots };
         }).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit) ? closeProject : Effect.void,
           ),
         );
       }),
-    ).pipe(Effect.onError(() => disposeCliProcessRuntime));
+    );
 
     // The stores this root opened, handed back rather than read off a
-    // process-wide singleton: the secret store is the same stateless view over
-    // this process's storage root the composition block installed, and the
-    // application state is the store that install opened before it.
+    // process-wide singleton: the secret store and the application state are
+    // the ones the process runtime serves.
+    const secrets = yield* withProcessServices(
+      runtime,
+      Effect.service(Secrets),
+    );
     const cliServices: CliPlatformServices = {
       runtime,
+      host: roots.host,
       config: roots.config,
       workspaceState: roots.workspaceState,
+      repoState: roots.repoState,
       // The pure path calculator over this process's storage root (no mkdir),
       // so every CLI entry, including the ones that find the roots already
       // installed, names one root without touching the filesystem again.
       globalStorage: resolveGlobalStoragePath(context.storageRoot),
       globalState,
-      secrets: getCliSecrets(context.storageRoot),
+      secrets,
       session:
         sessionOpen ??
         Effect.suspend(() => {
@@ -431,7 +457,9 @@ export function initCliPlatform(
                 ),
               );
         }),
-      lifecycle,
+      // A platform joined over another root's session (a test harness's fake
+      // host) has no CLI shutdown of its own to act before.
+      shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
       roots,
     };
 

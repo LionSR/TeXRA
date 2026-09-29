@@ -69,7 +69,7 @@ describe('subscription-section provider descriptors', () => {
 
     chatgpt.querySelector<HTMLElement>('wa-button')?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT],
+      [SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION, { provider: 'chatgpt' }],
     ]);
   });
 
@@ -87,7 +87,7 @@ describe('subscription-section provider descriptors', () => {
 
     grok.querySelector<HTMLElement>('wa-button')?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK],
+      [SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION, { provider: 'grok' }],
     ]);
   });
 });

@@ -177,8 +177,10 @@ const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
     >${waIcon(name)}</wa-button
   >`;
 
-/** The conversation pane as `main.ts` composes it: the desktop header row,
- *  then the one conversation shell's pieces for the selected run. */
+/** The conversation pane as `main.ts` composes it: the header row carries
+ *  the sidebar toggle, the Subagents button and the side-panel toggle (the
+ *  run's own stop and menu live in its run header), then the conversation
+ *  shell's pieces for the selected run. */
 const conversationPane = (
   projects: readonly RailProject[],
   active: RailProject,
@@ -194,7 +196,7 @@ const conversationPane = (
       ${
         options.chip === false ? nothing : subagentsButtonTemplate(active, noop)
       }
-      ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
+      ${iconBtn('picture-in-picture', 'Toggle Side Panel')}
     </header>
     <div class="shell-conversation-body">
       <section class="shell-conversation-pane" data-pane="conversation">
@@ -319,10 +321,10 @@ function sceneDesktopEmptyProject(): TemplateResult {
       projects,
       co,
       undefined,
-      html`<div class="h-hero">
-        <h1>What are you working on?</h1>
-        <p>${co.display.name} has no tasks yet.</p>
-      </div>`,
+      html`<new-task-hero
+        .projectName=${co.display.name}
+        .instruction=${''}
+      ></new-task-hero>`,
     ),
   );
 }

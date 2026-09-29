@@ -15,6 +15,7 @@ import '@test/support/defaultSessionTestSetup';
 import {
   Cause,
   Deferred,
+  Context,
   Exit,
   Effect,
   Fiber,
@@ -53,17 +54,16 @@ import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
-  familyState,
   rowAggregate,
   snapshotRow,
-  type ToolUseFlowState,
+  type ToolUseLoopState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
+import type { PluginServices } from '@platform/processRuntime';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -75,11 +75,11 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -91,7 +91,7 @@ import { recordSessionEvents } from './progressTestUtils';
 setupPlatform({ workspacePath: '/workspace' });
 
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'gpt-test',
   deployment: {
@@ -174,7 +174,6 @@ function boundModel(): BoundModel {
   const model: Model = {
     prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
     streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
-    generateTurn: () => Effect.die(new Error('dispatch issues no turn')),
   };
   return {
     modelId: 'gpt54',
@@ -182,6 +181,7 @@ function boundModel(): BoundModel {
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
@@ -191,6 +191,7 @@ function boundModel(): BoundModel {
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -201,15 +202,14 @@ const dispatchRunId = (): RunId =>
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
   commit: 0,
-  snapshotCommit: null,
-  rowsBeforeSnapshot: 0,
+  lastSnapshot: null,
+  ledgerRows: 0,
   family: 'toolUse',
-  step: null,
+  at: null,
   outcome: null,
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -223,9 +223,16 @@ const freshState = (): RunState => ({
   pendingIntents: {},
   requests: {},
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
+  loop: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
+  offeredTools: null,
+  offeredContinuation: null,
+  offeredSkills: [],
+  offeredSystem: null,
+  contents: {},
+  hookOutcomes: {},
+  offeredHooks: [],
 });
 
 const INVOCATION = {
@@ -238,7 +245,6 @@ function agentRun(
   runId: RunId,
   session: SessionHandle,
   logger: AgentTrace,
-  tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
   pendingSwitch: string | null = null,
@@ -263,28 +269,24 @@ function agentRun(
     // The launch stores a real run carries; no fixture reads through them.
     stores: hostStores(),
     toolPolicy: {},
-    userVarChannels: {},
+    opening: {
+      inputs: {},
+      activated: [],
+      attachedMemoryMisses: [],
+    },
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools,
+    ...testRunTools(hostStores()),
     finalToolName: null,
-    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
+    swapModel: (next) =>
+      SynchronizedRef.updateAndGetEffect(model, (current) =>
+        Effect.scoped(next(current)),
+      ),
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: pendingSwitch },
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        runStageId: undefined,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
     callbacks: {},
   };
 }
@@ -295,6 +297,8 @@ interface DispatchKit {
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
   readonly workspace: AgentWorkspaceState;
+  /** The tools the dispatch's step offers. */
+  readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
     AgentRun | RunLedger | Exclude<ToolServices, Scope.Scope>
   >;
@@ -307,7 +311,7 @@ interface HarnessOptions {
   readonly logger?: AgentTrace;
   /** Opened with the slices a real run carries, for the cases that read the
    *  workspace a settlement persisted. */
-  readonly stateSlices?: ToolUseFlowState['stateSlices'];
+  readonly stateSlices?: ToolUseLoopState['stateSlices'];
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
   /** A model switch waiting for the next boundary, for the upload gating. */
@@ -315,11 +319,10 @@ interface HarnessOptions {
 }
 
 /** The slices of a run that has yet to touch a file. */
-const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
+const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
-  userChannels: {},
 });
 
 /**
@@ -340,15 +343,9 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: options.stateSlices ?? null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: options.stateSlices ?? null,
       },
     }),
   ]);
@@ -359,6 +356,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       aggregateId: rowAggregate(runId),
       payload: {
         kind: 'attempt',
+        request: '0'.repeat(64),
         invocation: INVOCATION,
         origin: ORIGIN,
         delivery: 'stream',
@@ -386,7 +384,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         runId,
         session,
         logger,
-        tools,
         model,
         options.rootUserInstruction,
         options.pendingSwitch ?? null,
@@ -399,17 +396,22 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     workspace: AgentWorkspaceState.create(),
+    tools,
     layer,
   } satisfies DispatchKit;
 });
 
 /** Dispatch the pending response of an opened run. */
-const dispatch = (kit: DispatchKit, userInstruction?: string) =>
+const dispatch = (kit: DispatchKit) =>
   makeRunCell(kit.runId, kit.state).pipe(
     Effect.flatMap((cell) =>
-      dispatchPendingResponse(cell, {
-        workspace: kit.workspace,
-        userInstruction,
+      dispatchPendingResponse(cell, kit.workspace, {
+        definitions: [],
+        registry: kit.tools,
+        offered: [],
+        services: Context.empty() as Context.Context<PluginServices>,
+        stepRoots: [],
+        hooks: [],
       }),
     ),
     Effect.provide(kit.layer),
@@ -479,7 +481,7 @@ describe('tool-use dispatch', () => {
       const saved = yield* kit.session.ledger.load(kit.runId);
       expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -513,7 +515,7 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -546,7 +548,7 @@ describe('tool-use dispatch', () => {
       const [delivered] = deliveredResults(state);
       expect(delivered?.status).toBe('error');
       expect(delivered?.text).toMatch(/Invalid input/);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -577,70 +579,12 @@ describe('tool-use dispatch', () => {
         rootUserInstruction: 'Do not use files or external tools.',
       });
 
-      yield* dispatch(
-        kit,
-        'Wrapped child instruction with prior handoff boilerplate.',
-      );
+      yield* dispatch(kit);
 
       expect(observedInstruction).toBe('Do not use files or external tools.');
       expect(observedTrace).toBe(noopTrace);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
-  );
-
-  it.live(
-    'bills a child cost reported before the call settled, not after',
-    () =>
-      Effect.gen(function* () {
-        let report: ((costUsd: number) => void) | undefined;
-        const delegate: ITool = {
-          definition: {
-            name: 'delegate',
-            description: 'delegate',
-            parameters: {},
-          },
-          call: Effect.fn(function* (): Effect.fn.Return<
-            ToolResult,
-            never,
-            ToolCall
-          > {
-            const context = yield* ToolCall;
-            report = context?.hooks?.recordSubagentCost;
-            // An in-band one-shot child reports while its call is still open.
-            report?.(2);
-            return { status: 'executed', output: 'ok' };
-          }),
-        } as ITool;
-        const trace = new TraceEmitter();
-        const events: AgentEvent[] = [];
-        trace.subscribe((event) => events.push(event));
-        const kit = yield* openDispatch({
-          tools: { delegate },
-          calls: [makeCall('c1', 'delegate', {})],
-          logger: trace,
-        });
-
-        const { state } = yield* dispatch(kit);
-        // The latch must not close before the call returns: a one-shot
-        // delegation is not `slow`, so gating it on the streamed-output latch
-        // would drop every in-band cost.
-        expect(state.usage.totalCost).toBe(2);
-
-        // A detached child reports at its own run end, after the settlement
-        // read the total. The spend stays on the child's own run, and the
-        // report says so instead of incrementing a consumed local.
-        report?.(5);
-        expect(
-          events.filter(
-            (event) =>
-              event.type === 'log' &&
-              event.message.includes(
-                'reported its cost after the call settled',
-              ),
-          ),
-        ).toHaveLength(1);
-        yield* kit.session.dispose();
-      }),
   );
 
   it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
@@ -667,7 +611,7 @@ describe('tool-use dispatch', () => {
       expect(deliveredResults(state)[0]?.text).toContain(
         'grep:{"pattern":"a"}',
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -697,7 +641,7 @@ describe('tool-use dispatch', () => {
         'start read_file:{"n":3}',
         'end read_file:{"n":3}',
       ]);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -730,7 +674,7 @@ describe('tool-use dispatch', () => {
       expect(delivered[1]?.text).toContain(
         'an earlier tool call ended the turn',
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -754,7 +698,7 @@ describe('tool-use dispatch', () => {
         const delivered = deliveredResults(state);
         expect(delivered[1]?.status).toBe('success');
         expect(delivered[1]?.text).toBe(delivered[0]?.text);
-        yield* kit.session.dispose();
+        yield* closeSessionOf(kit.session);
       }),
   );
 
@@ -814,7 +758,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = familyState(folded!, 'toolUse')?.stateSlices;
+      const slices = folded!.loop?.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);
@@ -830,7 +774,7 @@ describe('tool-use dispatch', () => {
       );
       expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
       expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -884,7 +828,7 @@ describe('tool-use dispatch', () => {
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -910,7 +854,7 @@ describe('tool-use dispatch', () => {
       // model stale contents.
       expect(countStarts(probe, 'read_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -935,7 +879,7 @@ describe('tool-use dispatch', () => {
       // plausible restore — it must execute, not be swallowed as a glitch.
       expect(countStarts(probe, 'write_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -958,7 +902,7 @@ describe('tool-use dispatch', () => {
       // Accidental re-emissions get the primary's result, not an error.
       expect(delivered[1]?.status).toBe('success');
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -1024,7 +968,7 @@ describe('tool-use dispatch', () => {
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },
         ]);
-        yield* kit.session.dispose();
+        yield* closeSessionOf(kit.session);
       }),
   );
 
@@ -1082,7 +1026,7 @@ describe('tool-use dispatch', () => {
         expect.stringContaining('"a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"'),
       ]);
       expect(outcome.state.messages.at(-1)?.role).toBe('tool');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -1131,7 +1075,7 @@ describe('tool-use dispatch', () => {
       expect(group.results[0]?.content.slice(1)).toStrictEqual([
         { kind: 'document', mimeType: 'application/pdf', base64: pdf },
       ]);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 });

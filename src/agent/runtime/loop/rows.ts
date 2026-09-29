@@ -1,20 +1,21 @@
 /**
  * The loops' row constructors: every ledger draft a loop appends, built from
- * the folded `RunState` and nothing else. A `flow.snapshot` carries the
- * family state and the coordinates the loop owns; every fact a row already
+ * the folded `RunState` and nothing else. A `run.position` is the one record
+ * of where the loop stands; a `run.snapshot` carries the loop state and what
+ * the loop runs on (model, failure, declined routes); every fact a row already
  * carries (the pending response, its intents, their approval bindings, the
  * retry permit) is folded from that row and never restated here.
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 import {
   aggregateId as qualifyAggregateId,
-  type FlowStep,
-  type FlowSnapshotPayload,
+  type PositionAt,
+  type RunSnapshotPayload,
   type PendingRetry,
   type PermissionPayload,
-  type RunFamily,
   type RunId,
-  type RunLoopPhase,
   type RunOutcome,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -25,87 +26,53 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
-type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
-type ReflectionSnapshot = Extract<
-  FlowSnapshotPayload,
-  { family: 'reflection' }
->;
-export type ToolUseFlowState = ToolUseSnapshot['state'];
-export type ReflectionFlowState = ReflectionSnapshot['state'];
-
-/** The family state a snapshot carries, keyed by its family. */
-type FamilyState =
-  | { readonly family: 'toolUse'; readonly state: ToolUseFlowState }
-  | { readonly family: 'reflection'; readonly state: ReflectionFlowState };
-
-/** The family state of a folded run, or null before its opening. */
-export function familyState(
-  state: RunState,
-  family: 'toolUse',
-): ToolUseFlowState | null;
-export function familyState(
-  state: RunState,
-  family: 'reflection',
-): ReflectionFlowState | null;
-export function familyState(
-  state: RunState,
-  family: RunFamily,
-): ToolUseFlowState | ReflectionFlowState | null {
-  return state.flow?.family === family ? state.flow.state : null;
-}
+export type ToolUseLoopState = RunSnapshotPayload['state'];
 
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
-/** The coordinates a `flow.step` row is stamped with. */
-export type StepCoordinates = Pick<
-  RunState,
-  'family' | 'round' | 'turn' | 'continuationIndex'
->;
+/** The coordinates a `run.position` row is stamped with. */
+export type PositionCoordinates = Pick<RunState, 'family' | 'turn'>;
 
-/** A step never lands on an unopened run: the family is the state's. */
+/** A position never lands on an unopened run: the family is the state's. */
 function familyOf(
   state: Pick<RunState, 'family'>,
-): FlowSnapshotPayload['family'] {
+): RunSnapshotPayload['family'] {
   if (state.family === null) {
-    throw new Error('A flow.step presupposes an opened run with a family.');
+    throw new Error('A run.position presupposes an opened run with a family.');
   }
   return state.family;
 }
 
-export function stepRow(
+export function positionRow(
   runId: RunId,
-  state: StepCoordinates,
-  step: Exclude<FlowStep, 'halted'>,
+  state: PositionCoordinates,
+  at: Exclude<PositionAt, 'halted'>,
 ): RunLedgerDraft {
   return {
-    type: 'flow.step',
+    type: 'run.position',
     aggregateId: rowAggregate(runId),
     payload: {
       family: familyOf(state),
-      step,
-      round: state.round,
+      at,
       turn: state.turn,
-      continuationIndex: state.continuationIndex,
     },
   };
 }
 
-export function haltedStepRow(
+export function haltedPositionRow(
   runId: RunId,
-  state: StepCoordinates,
+  state: PositionCoordinates,
   outcome: RunOutcome,
 ): RunLedgerDraft {
   return {
-    type: 'flow.step',
+    type: 'run.position',
     aggregateId: rowAggregate(runId),
     payload: {
       family: familyOf(state),
-      step: 'halted',
-      round: state.round,
+      at: 'halted',
       turn: state.turn,
-      continuationIndex: state.continuationIndex,
       outcome,
     },
   };
@@ -124,42 +91,32 @@ export function appendRow(
 }
 
 export interface SnapshotPatch {
-  /** Defaults to the folded phase: the runtime-only case. */
-  readonly phase?: RunLoopPhase;
-  readonly round?: number;
-  readonly turn?: number;
-  readonly continuationIndex?: number;
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
       'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
     >
   >;
-  /** Defaults to the family state the run last wrote. */
-  readonly state?: FamilyState;
+  /** Defaults to the loop state the run last wrote. */
+  readonly state?: ToolUseLoopState;
 }
 
 /**
- * The one `flow.snapshot` constructor, for either family. Coordinates and
- * runtime fields come from the folded state unless the patch moves them; the
- * family state is the one the run last wrote unless the patch rewrites it.
+ * The one `run.snapshot` constructor. Runtime fields come from the folded
+ * state unless the patch moves them; the loop state is the one the run last
+ * wrote unless the patch rewrites it. A snapshot that would record exactly
+ * what the latest one written holds is not written: the answer is empty, and
+ * a caller spreads it into its batch. The comparison is against that row, not
+ * the folded loop state, which a `tool.result` has already moved.
  */
 export function snapshotRow(
   runId: RunId,
   state: RunState,
   patch: SnapshotPatch,
-): RunLedgerDraft {
-  if (
-    state.family !== null &&
-    patch.state !== undefined &&
-    state.family !== patch.state.family
-  ) {
-    throw new Error("A snapshot's family is the run's.");
-  }
-  const flow = patch.state ?? state.flow;
-  const phase = patch.phase ?? state.phase;
-  if (flow === null || phase === null) {
-    throw new Error('A flow.snapshot presupposes an opened run.');
+): readonly RunLedgerDraft[] {
+  const loop = patch.state ?? state.loop;
+  if (loop === null) {
+    throw new Error('A run.snapshot presupposes an opened run.');
   }
   // A snapshot's model id is a required durable fact (resume and every
   // listing read it back); no caller may reach here without one, so refuse
@@ -167,13 +124,9 @@ export function snapshotRow(
   // schema refinement far from whatever lost the binding.
   const modelId = patch.runtime?.modelId ?? state.modelId;
   if (modelId === undefined || modelId === null || modelId === '') {
-    throw new Error('A flow.snapshot presupposes a bound model id.');
+    throw new Error('A run.snapshot presupposes a bound model id.');
   }
   const runtime: SnapshotRuntime = {
-    phase,
-    round: patch.round ?? state.round,
-    turn: patch.turn ?? state.turn,
-    continuationIndex: patch.continuationIndex ?? state.continuationIndex,
     modelId,
     modelCompatibilityKey:
       patch.runtime !== undefined && 'modelCompatibilityKey' in patch.runtime
@@ -185,11 +138,13 @@ export function snapshotRow(
         : state.lastError,
     declinedRoutes: patch.runtime?.declinedRoutes ?? state.declinedRoutes,
   };
-  return {
-    type: 'flow.snapshot',
-    aggregateId: rowAggregate(runId),
-    payload: { ...flow, runtime },
+  const payload: RunSnapshotPayload = {
+    family: 'toolUse',
+    runtime,
+    state: loop,
   };
+  if (isDeepStrictEqual(payload, state.lastSnapshot)) return [];
+  return [{ type: 'run.snapshot', aggregateId: rowAggregate(runId), payload }];
 }
 
 /**
@@ -228,7 +183,7 @@ export function retryRows(
   permit: PendingRetry | null,
   runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
 ): readonly RunLedgerDraft[] {
-  return [retryRow(runId, permit), snapshotRow(runId, state, { runtime })];
+  return [retryRow(runId, permit), ...snapshotRow(runId, state, { runtime })];
 }
 
 /** Each arm of a draft union keeps its own required fields. */

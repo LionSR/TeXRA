@@ -1,9 +1,8 @@
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import { Effect, type FileSystem, Layer } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 
 const RUN = 'ab12cd' as RunId;
@@ -22,20 +21,12 @@ type RecordingDeps = ProgressWorkflowFileActionsControllerDeps & {
   host: RecordingHost;
 };
 
-/**
- * What both hosts' request dispatchers carry when they yield a file action.
- * No action in this suite reaches either service; they satisfy the action's
- * requirements so it runs here as it runs there.
- */
-const dispatcherServices = Layer.mergeAll(
-  NodeFileSystem.layer,
-  AgentResume.layer({ tryResumeRun: () => Effect.succeed(false) }),
-);
-
+/** The `FileSystem` both hosts' request dispatchers carry when they yield a
+ *  file action, so it runs here as it runs there. */
 const runAction = <A, E>(
-  action: Effect.Effect<A, E, FileSystem.FileSystem | AgentResume>,
+  action: Effect.Effect<A, E, FileSystem.FileSystem>,
 ): Promise<A> =>
-  Effect.runPromise(action.pipe(Effect.provide(dispatcherServices)));
+  Effect.runPromise(action.pipe(Effect.provide(NodeFileSystem.layer)));
 
 function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,

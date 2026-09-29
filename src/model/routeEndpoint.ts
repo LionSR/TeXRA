@@ -7,8 +7,8 @@ import { Effect } from 'effect';
  * per-model base URL, then the route's own (Kimi Code, OpenRouter), then a
  * per-provider dashboard endpoint, then the provider plugin's default
  * (`baseUrl` in `@shared/constants/modelProviderPlugins`), picked by region
- * when it has two. GLM takes its Coding Plan path when the route decided the
- * plan pays (`@model/modelRoute`).
+ * when it has two. A GLM Coding Plan key takes its region's Responses
+ * endpoint, the same one an API key does.
  */
 
 import type { StateReadFailed } from '@platform/interfaces';
@@ -19,7 +19,6 @@ import {
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
-import { tryParseUrl } from '@utils/core';
 import type { ModelConfig } from 'llm-zoo';
 
 import type { ModelRoute } from './modelRoute';
@@ -31,16 +30,10 @@ function normalizeProviderEndpoint(input: string): string {
   if (!input) return '';
 
   const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
+  const parsed = URL.parse(withProtocol);
   if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
-
-/** The GLM Coding Plan endpoint, by region. */
-const GLM_CODING_PLAN_BASE_URLS = {
-  china: 'https://open.bigmodel.cn/api/coding/paas/v4',
-  international: 'https://api.z.ai/api/coding/paas/v4',
-} as const;
 
 export function resolveRouteEndpoint(
   stores: SettingsStores,
@@ -56,16 +49,16 @@ export function resolveRouteEndpoint(
     if (customUrl) return `https://${normalizeProviderEndpoint(customUrl)}`;
     const baseUrl = findModelProviderPlugin(config.provider)?.baseUrl;
     if (baseUrl == null) {
-      throw new Error(
-        `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+      return yield* Effect.die(
+        new Error(
+          `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+        ),
       );
     }
     if (typeof baseUrl === 'string') return baseUrl;
     const region = (yield* useChinaRegion(stores, config.provider))
       ? 'china'
       : 'international';
-    return route.usageRoute === 'glm-coding-plan-subscription'
-      ? GLM_CODING_PLAN_BASE_URLS[region]
-      : baseUrl[region];
+    return baseUrl[region];
   });
 }

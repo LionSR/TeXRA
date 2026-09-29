@@ -7,9 +7,10 @@ import { Cause, Deferred, Effect, Exit, Fiber, Logger, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
-import type {
-  AnthropicMessagesConfiguration,
-  TurnRequest,
+import {
+  completedTurn,
+  type AnthropicMessagesConfiguration,
+  type TurnRequest,
 } from '@texra-ai/llm/turn';
 
 const CONFIG: AnthropicMessagesConfiguration = {
@@ -230,7 +231,7 @@ describe('canonical Anthropic Messages protocol', () => {
               messages: [{ role: 'user', content: [document] }],
             });
             assert(turn.mode === 'foreground');
-            yield* bound.generateTurn(turn);
+            yield* completedTurn(bound.streamTurn(turn));
             return JSON.parse(fetchModel.mock.calls.at(-1)![1]!.body as string)
               .messages[0].content[0].source;
           });
@@ -372,6 +373,56 @@ describe('canonical Anthropic Messages protocol', () => {
         ]);
       }).pipe(Effect.withLogger(capture));
     },
+  );
+
+  it.effect(
+    "sends no switched-from model's thinking and no empty assistant turn",
+    () =>
+      Effect.gen(function* () {
+        fetchModel.mockImplementation(async () => response(signedEvents()));
+        const bound = model();
+        // An earlier Claude model's turn that ended while thinking: once its
+        // thinking is left out, the turn has nothing left to send.
+        const turn = yield* bound.prepareTurn({
+          messages: [
+            { role: 'user', content: [{ kind: 'text', text: 'first' }] },
+            {
+              role: 'assistant',
+              origin: {
+                protocol: 'anthropic-messages',
+                codecVersion: 1,
+                requestedModel: 'earlier-claude',
+                deployment: CONFIG.deployment,
+              },
+              content: [
+                {
+                  kind: 'reasoning',
+                  summary: [],
+                  content: [{ kind: 'text', text: 'thinking' }],
+                  evidence: {
+                    kind: 'anthropic-thinking-signature',
+                    signature: 'sig',
+                  },
+                },
+              ],
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'second' }] },
+          ],
+        });
+        assert(turn.mode === 'foreground');
+        yield* completedTurn(bound.streamTurn(turn));
+        expect(
+          JSON.parse(fetchModel.mock.calls[0]![1]!.body as string).messages,
+        ).toEqual([
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'first' },
+              { type: 'text', text: 'second' },
+            ],
+          },
+        ]);
+      }),
   );
 
   it.effect.each([
@@ -865,7 +916,7 @@ describe('canonical Anthropic Messages protocol', () => {
         fetchModel.mockImplementationOnce(async () =>
           response([initial(), ...terminal()]),
         );
-        yield* configured.generateTurn(next);
+        yield* completedTurn(configured.streamTurn(next));
         const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
         expect(sent.system).toEqual(first.system);
         expect(sent.cache_control).toEqual(first.cache_control);
@@ -982,7 +1033,7 @@ describe('canonical Anthropic Messages protocol', () => {
         const configured = model();
         const turn = yield* configured.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
-        const result = yield* configured.generateTurn(turn);
+        const result = yield* completedTurn(configured.streamTurn(turn));
         assert(result.providerResponseId !== null);
         expect(result.finishReason).toBe(finishReason);
         expect(result.content).toEqual([]);
@@ -1132,7 +1183,9 @@ describe('canonical Anthropic Messages protocol', () => {
         const configured = model();
         const turn = yield* configured.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
-        const error = yield* Effect.flip(configured.generateTurn(turn));
+        const error = yield* Effect.flip(
+          completedTurn(configured.streamTurn(turn)),
+        );
         expect(error).toMatchObject({
           _tag: 'ModelError',
           responseId: 'msg_1',
@@ -1168,7 +1221,9 @@ describe('canonical Anthropic Messages protocol', () => {
         const configured = model();
         const turn = yield* configured.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
-        const error = yield* Effect.flip(configured.generateTurn(turn));
+        const error = yield* Effect.flip(
+          completedTurn(configured.streamTurn(turn)),
+        );
         expect(error).toMatchObject({
           _tag: 'ModelError',
           kind,
@@ -1271,7 +1326,9 @@ describe('canonical Anthropic Messages protocol', () => {
           Stream.filter((event) => event.kind === 'delta'),
         );
         if (phase === 'completed') {
-          expect(yield* configured.generateTurn(turn)).toMatchObject({
+          expect(
+            yield* completedTurn(configured.streamTurn(turn)),
+          ).toMatchObject({
             providerResponseId: 'msg_1',
             finishReason: 'stop',
           });

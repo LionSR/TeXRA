@@ -6,7 +6,7 @@
  * Failure policy: a file the model cannot take is skipped with a transcript
  * warning; a file that cannot be read or classified fails the read. The
  * caller decides what a failed read means for its message: the tool-use
- * loop fails the opening message loudly, the reflection loop warns and
+ * loop fails the opening message loudly, a workflow round warns and
  * continues, and a follow-up batch is restored to its queue with the failure
  * reported. Nothing drops an attachment silently.
  */

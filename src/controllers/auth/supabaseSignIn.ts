@@ -12,7 +12,6 @@
  */
 import { Deferred, Effect, Option, type Scope, Semaphore } from 'effect';
 
-import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
 import { callPort, SerializedWrites, settleFailure } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS, type OAuthProvider } from '@auth/config';
@@ -220,21 +219,19 @@ export class SupabaseSignInCoordinator {
   }
 
   /**
-   * Clear the stored session and refresh the local agent catalog. Answers
-   * whether a session was actually signed out; host UI is the caller's.
+   * Clear the stored session. Answers whether a session was actually signed
+   * out; host UI is the caller's.
    */
   signOut(): Effect.Effect<boolean, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       yield* this.cancel();
-      const signedIn = yield* this.commits.run(
+      return yield* this.commits.run(
         Effect.gen({ self: this }, function* () {
           const session = yield* this.session.loadSession();
           yield* this.session.clearSession();
           return session !== null;
         }),
       );
-      yield* invalidateRemoteAgentsAfterSignOut();
-      return signedIn;
     });
   }
 

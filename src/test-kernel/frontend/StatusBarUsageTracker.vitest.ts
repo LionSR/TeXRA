@@ -34,11 +34,12 @@ function runViewWith(
   runId: RunId,
   status: RunPhase,
   usage: TokenUsageStats,
+  tree: Pick<RunView, 'parentId' | 'childIds'>,
 ): RunView {
   const folded = FAN_OUT_VIEW.runs.get(CHILD);
   if (!folded) throw new Error('fan-out fixture has no child run');
   const group = isInFlightPhase(status) ? 'running' : 'recent';
-  return { ...folded, id: runId, status, group, usage };
+  return { ...folded, ...tree, id: runId, status, group, usage };
 }
 
 /**
@@ -47,7 +48,12 @@ function runViewWith(
  * metered total (`RunView.usage`).
  */
 function trackerOverSessionView(): {
-  setRun(runId: RunId, status: RunPhase, usage?: TokenUsageStats): void;
+  setRun(
+    runId: RunId,
+    status: RunPhase,
+    usage?: TokenUsageStats,
+    tree?: Pick<RunView, 'parentId' | 'childIds'>,
+  ): void;
   tracker: StatusBarUsageTracker;
 } {
   const view = Effect.runSync(
@@ -64,8 +70,15 @@ function trackerOverSessionView(): {
   };
   return {
     tracker: new StatusBarUsageTracker({ view }),
-    setRun(runId, status, usage = NO_USAGE) {
-      updateRuns((runs) => runs.set(runId, runViewWith(runId, status, usage)));
+    setRun(
+      runId,
+      status,
+      usage = NO_USAGE,
+      tree = { parentId: null, childIds: [] },
+    ) {
+      updateRuns((runs) =>
+        runs.set(runId, runViewWith(runId, status, usage, tree)),
+      );
     },
   };
 }
@@ -128,5 +141,33 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
     expect(tracker.totalUsage.outputTokens).toBe(20);
+  });
+
+  it("keeps a finished child's spend while its parent is in flight", () => {
+    const { setRun, tracker } = trackerOverSessionView();
+    setRun(
+      runA,
+      RUN_PHASE.RUNNING,
+      { cost: 0.01, inputTokens: 10, outputTokens: 20 },
+      { parentId: null, childIds: [runB] },
+    );
+    // A child's spend is on its own run only, never rolled into its parent.
+    setRun(
+      runB,
+      RUN_PHASE.COMPLETED,
+      { cost: 0.02, inputTokens: 5, outputTokens: 6 },
+      { parentId: runA, childIds: [] },
+    );
+
+    expect(tracker.totalUsage.cost).toBeCloseTo(0.03);
+    expect(tracker.totalUsage.inputTokens).toBe(15);
+
+    setRun(
+      runA,
+      RUN_PHASE.COMPLETED,
+      { cost: 0.01, inputTokens: 10, outputTokens: 20 },
+      { parentId: null, childIds: [runB] },
+    );
+    expect(tracker.totalUsage.cost).toBe(0);
   });
 });

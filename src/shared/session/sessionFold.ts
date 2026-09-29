@@ -41,6 +41,7 @@
  * Indexes are module-private, keyed by their transcript/view, and advance only
  * with the latest level: row/group positions, text and thinking state, claims,
  * listing commits, owners, ended/listed runs, snapshots, and shared-row slices.
+ * So `fold` refuses any view but the level it last returned.
  * Every container write must report changed so foldWith publishes its copy.
  */
 
@@ -110,10 +111,10 @@ import {
   lifecycleToTaskGroups,
   replaceTranscript,
   resetTranscriptOwnership,
-  type TranscriptContext,
 } from './transcriptState';
 
-import { emptySessionView, isLiveRun } from './sessionView';
+import { runActions } from './runActions';
+import { emptySessionView, isLiveRun, loopCoordinate } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -127,19 +128,27 @@ export function fold(
   view: SessionView,
   input: FoldInput | readonly FoldInput[],
 ): SessionView {
+  const indexes = sessionIndexesOf(view);
+  if (indexes.head !== null && indexes.head !== view) {
+    throw new Error('Fold onto a superseded or failed SessionView level');
+  }
+  indexes.head = FOLD_FAILED;
   // One call publishes one level: nothing this call did not copy is written.
   owned = new WeakSet();
   resetTranscriptOwnership();
-  if (!Array.isArray(input)) return foldWith(view, input as FoldInput, null);
-  const deferred = new Set<RunId>();
+  const frame = Array.isArray(input);
+  const deferred = frame ? new Set<RunId>() : null;
   let next = view;
-  for (const each of input as readonly FoldInput[]) {
-    next = foldWith(next, each, deferred);
+  for (const each of frame ? (input as readonly FoldInput[]) : [input]) {
+    next = foldWith(next, each as FoldInput, deferred);
   }
-  for (const runId of deferred) {
+  for (const runId of deferred ?? []) {
     const run = next.runs.get(runId);
     if (run) setRun(next, withRunModel(next, run));
   }
+  // A `debug` input starts fresh indexes; the ones it left name `next` too.
+  indexes.head = next;
+  sessionIndexesOf(next).head = next;
   return next;
 }
 
@@ -244,7 +253,7 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
+   *  `view.requests`, `view.queuedFollowUps`, `RunView.position` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
@@ -255,7 +264,12 @@ interface SessionIndexes {
   /** This process's local truth, the snapshot the next one diffs against:
    *  a fold input, never durable. */
   local: LocalRuntimeState;
+  /** The level these indexes describe: the view `fold` last returned, null
+   *  before the first, `FOLD_FAILED` during a fold and after one threw. */
+  head: SessionView | typeof FOLD_FAILED | null;
 }
+
+const FOLD_FAILED = Symbol('fold failed');
 
 /** Keyed by the run index; a copied index inherits its predecessor's
  *  entry, so every level of one session resolves the same indexes. */
@@ -272,6 +286,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       rows: new Map(),
       latest: new Map(),
       local: { self: [], dead: [], unreadable: [] },
+      head: null,
     };
     SESSION_INDEXES.set(view.runs, indexes);
   }
@@ -334,7 +349,6 @@ function createRun(
   const common = {
     id,
     identity,
-    isRemote: event.isRemote,
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
     label: runIdentityDisplayName(identity),
     description: null,
@@ -342,6 +356,7 @@ function createRun(
     modelLabel: null,
     command: null,
     inputFiles: [],
+    facts: {},
     worktree: event.worktree ?? null,
     status,
     substate: null,
@@ -353,7 +368,7 @@ function createRun(
     runStartedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
-    flow: null,
+    position: null,
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
@@ -366,6 +381,7 @@ function createRun(
     approval: 'none' as const,
     ownedHere: false,
     readOnly: false,
+    actions: [],
     forceExpanded: false,
     group: 'recent' as const,
     usage: emptyUsageStats(),
@@ -389,7 +405,6 @@ function createRun(
         category: AgentCategory.ToolUse,
         todos: [],
         plan: null,
-        goal: { active: false },
         outputs: NO_ROUNDS,
         missingOutputs: NO_ROUNDS,
         compileFailures: NO_ROUNDS,
@@ -408,9 +423,8 @@ function setRun(view: SessionView, run: RunView): void {
   if (previous?.ownerId !== run.ownerId) {
     reindexOwner(view, run.id, previous?.ownerId ?? null, run.ownerId);
   }
-  if (previous?.group !== run.group) {
+  if (previous?.group !== run.group)
     countGroups(view, previous?.group, run.group);
-  }
 }
 
 function dropRun(view: SessionView, run: RunView): void {
@@ -544,15 +558,13 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * `group`, `approval`, `readOnly`, `forceExpanded`, `rollup`,
- * `durableOutcome`, and the status copy from the run's own facts, the
- * local snapshot, and its children (5.2). Interrupted is owner loss: a
- * non-terminal run nobody holds, whether or not an approval is pending.
- * Somebody holds it when its owner is this process or a process whose lease
- * this one may not touch. Waiting needs a held owner and a request that parks
- * its tool: without an owner the same pending request reads as interrupted,
- * never waiting, because nothing is listening for the answer; the durable
- * phase and the listed request stay, so a resume can re-ask.
+ * `group`, `approval`, `readOnly`, `actions`, `forceExpanded`, `rollup`,
+ * `durableOutcome` and the status copy, from the run's facts, the local
+ * snapshot and its children (5.2). Interrupted is owner loss: a non-terminal
+ * run nobody holds (this process, or one whose lease this one may not
+ * touch), pending approval or not. Waiting needs a held owner and a request
+ * that parks its tool; unheld, that request reads as interrupted, since
+ * nothing listens for the answer, and stays listed so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -562,13 +574,13 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
+  const paused = run.substate === RUN_SUBSTATE.PAUSED;
   // Only a request that parks its tool is a wait: a dispatched inquiry left
-  // its run working, so it stays listed for the panel without moving the run
-  // out of Running.
+  // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
     (r) => r.runId === run.id && requestParksItsCaller(r.payload),
   );
-  const interrupted = !isTerminalOutcomePhase(run.status) && !held;
+  const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held;
   const durableOutcome =
     isTerminalOutcomePhase(run.status) &&
@@ -582,17 +594,24 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   for (const childId of run.childIds) {
     const child = view.runs.get(childId);
     if (!child) continue;
+    // A child parked between turns (held) or paused, nothing asked of the
+    // user, has delivered its turn: it counts as finished, not running.
+    const idle =
+      child.status === RUN_PHASE.WAITING &&
+      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
     rollup.total += 1 + child.rollup.total;
-    rollup.running += (isLiveRun(child) ? 1 : 0) + child.rollup.running;
+    rollup.running +=
+      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
     rollup.finished +=
-      (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
+      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
+      child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
     if (child.forceExpanded) descendantNeedsUser = true;
   }
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
-  else if (isInFlightPhase(run.status)) group = 'running';
+  else if (isInFlightPhase(run.status) && !paused) group = 'running';
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
@@ -601,17 +620,18 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     interrupted,
   });
   const readOnly = heldElsewhere || unreadable !== undefined;
+  const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   let statusDetail: string | null = unreadable?.detail ?? null;
-  if (statusDetail === null && interrupted) {
+  if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
-  } else if (statusDetail === null && heldBy !== null) {
+  else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
-  }
   if (
     run.group === group &&
     run.approval === approval &&
     run.readOnly === readOnly &&
+    run.actions.join() === actions.join() &&
     run.ownedHere === own &&
     run.forceExpanded === forceExpanded &&
     run.durableOutcome === durableOutcome &&
@@ -629,6 +649,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     group,
     approval,
     readOnly,
+    actions,
     ownedHere: own,
     forceExpanded,
     durableOutcome,
@@ -892,8 +913,8 @@ function wrongArm(run: RunView, name: string): never {
   );
 }
 
-/** A durable event `runRows.ts` does not own. */
-type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow>;
+/** A durable event `runRows.ts` does not own, bar a priced turn. */
+type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 
 /** The event's own arm applied to its run (topology, session slices and the
  *  transcript tier are the caller's). */
@@ -906,7 +927,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'tool.end':
     case 'workflow.plan':
     case 'workflow.call':
-    case 'skills.snapshot':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
@@ -915,14 +935,13 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'run.removed':
-      // Existence cannot become more true (5.2, "Duplicates"): a second
-      // start is a no-op. The rest move session slices alone.
+      // Existence cannot become more true (5.2); the rest move session slices.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running window
       // (one run model, 3.3); the tool-call count is the run's and carries
       // over. A first activation is starting and a later one resuming (A9-1);
-      // the first `flow.step` clears it.
+      // the first `run.position` clears it.
       let substate: RunView['substate'] = null;
       if (isPlainAgentIdentity(run.identity)) {
         substate =
@@ -935,35 +954,30 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         status: RUN_PHASE.RUNNING,
         substate,
         runStartedAt: event.at,
-        flow: null,
+        position: null,
       };
     }
     case 'run.config': {
-      // A background process has no model: its `run.config` is the
-      // fabricated `AgentConfig` that feeds the live wire, whose `model` is
-      // the schema's prefault. Every other identity carries the model its
-      // launch routed, so it is shown.
-      const model = run.identity.kind === 'process' ? null : event.config.model;
+      // A process has no model; any other run keeps a `run.model` it holds.
+      const { config } = event;
+      const kept = run.model ?? config.model ?? null;
+      const model = run.identity.kind === 'process' ? null : kept;
       return {
         ...run,
         model,
         modelLabel: model === null ? null : getModelLabel(model),
-        command:
-          run.identity.kind === 'process' ? event.config.instruction : null,
-        inputFiles: event.config.inputFiles,
+        command: run.identity.kind === 'process' ? config.instruction : null,
+        inputFiles: config.inputFiles ?? [],
       };
     }
+    case 'run.model':
+      return {
+        ...run,
+        model: event.model,
+        modelLabel: getModelLabel(event.model),
+      };
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
-    case 'usage':
-      // A latest-only listing key, so a cold read delivers one row per run,
-      // and that row is the run's cumulative total from its single reporter
-      // (`UsageMonitor`, or the agent-CLI loop for its own child run). The
-      // newest row replaces the total; summing would double-count every
-      // earlier round an aggregate replay brings on top of the listing row.
-      // The one-element sum normalizes the extended payload down to the
-      // view's `TokenUsageStats` shape.
-      return { ...run, usage: sumUsageStats([event.usage]) };
     case 'context.state':
       return {
         ...run,
@@ -977,9 +991,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         },
       };
     case 'run.fact': {
-      // Every family is a latest-only listing key of its own, so a cold
-      // read delivers one row per family and each row carries the run's
-      // whole value: the newest row replaces what the view holds.
+      // Each family (and `plugin.fact` kind) is its own latest-only key.
       const fact = event.fact;
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
@@ -987,17 +999,18 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         ? { ...run, todos: fact.todos }
         : { ...run, plan: fact.plan };
     }
-    case 'goalStateChanged':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, goal: event.state }
-        : wrongArm(run, 'goalStateChanged');
+    case 'plugin.fact':
+      return {
+        ...run,
+        facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
+      };
     case 'child.park':
-      // An agent-CLI child's park, on the row the child protocol owns.
-      // `flow` stays null: a run with no ledger has no position to paint.
-      return parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
+      // A loop-driven child's park or pause; no ledger, so `position` stays null.
+      return event.phase === 'paused'
+        ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
+        : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
     case 'run.detach':
-      // The edge severed: the child is top level from here (one run model,
-      // section 3.2). A run never acquires a new parent.
+      // The edge severed (one run model, 3.2); a run never gets a new parent.
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
       return { ...run, description: event.description };
@@ -1019,18 +1032,17 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, projected from the slice the rows folded
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
-  const { family, step, round, turn, continuationIndex } = rows;
-  if (family === null || step === null) return run;
-  const flow = { family, step, round, turn, continuationIndex };
+  if (rows.family === null || rows.at === null) return run;
+  const position = loopCoordinate(rows.turn, run.category);
   const phase = phaseMoveOf(row);
   return phase === null
-    ? { ...run, flow }
-    : parked({ ...run, flow }, phase === RUN_PHASE.WAITING, row.at);
+    ? { ...run, position }
+    : parked({ ...run, position }, phase === RUN_PHASE.WAITING, row.at);
 }
 
 /** The run window (3.3): a park closes it and settles the transcript, any
  *  other move opens it. The one phase writer for both rows that park, a
- *  loop's `flow.step waiting` and a child's `child.park`. */
+ *  loop's `run.position waiting` and a child's `child.park`. */
 function parked(run: RunView, atRest: boolean, at: number): RunView {
   const moved: RunView = {
     ...run,
@@ -1067,7 +1079,7 @@ function applySessionSlices(
         aggregateId: _aggregateId,
         seq: _seq,
         commit: _commit,
-        ownerId: _ownerId,
+        origin: _origin,
         at: _at,
         ...thread
       } = event;
@@ -1107,7 +1119,7 @@ function applyRowFacts(
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
-  const next = moved.step === undefined ? run : withPosition(run, after, event);
+  const next = moved.at === undefined ? run : withPosition(run, after, event);
   const rounds = moved.roundOutputs;
   if (rounds === undefined) return next;
   const byRound = <T>(pick: (round: RoundOutput) => T) =>
@@ -1200,13 +1212,6 @@ function relink(
   refreshAncestors(view, run.id);
 }
 
-/** The run a durable event names: its aggregate, bar an inquiry's thread. */
-function runOfEvent(event: DisplaySessionEvent): RunId | null {
-  return event.type === 'inquiryThreadUpdated'
-    ? null
-    : runIdOf(event.aggregateId);
-}
-
 /** Returns whether the event changed anything. */
 function foldDurable(
   view: SessionView,
@@ -1216,19 +1221,22 @@ function foldDurable(
 ): boolean {
   const traceChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
+    (isTranscriptEvent(event) ||
+      phaseMoveOf(event) !== null ||
+      ['run.config', 'run.model'].includes(event.type))
       ? foldTraceEvent(view, event, deferred)
       : false;
   const listingType = listingKeyOf(event);
   if (listingType === null) return traceChanged;
-  // Listing facts are ordered by commit per (aggregate, listing type),
-  // whichever read delivered them (5.2, "Duplicates").
+  // Ordered by commit per (aggregate, listing type), whatever the read (5.2).
   const listingKey = `${event.aggregateId}/${listingType}`;
   const { latest } = sessionIndexesOf(view);
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;
 
-  const runId = runOfEvent(event);
+  // The run the event names: its aggregate, bar an inquiry's thread.
+  const runId =
+    event.type === 'inquiryThreadUpdated' ? null : runIdOf(event.aggregateId);
   if (runId === null) {
     latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
@@ -1240,9 +1248,8 @@ function foldDurable(
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'run.removed') {
+  if (event.type === 'run.removed')
     return foldRunRemoved(view, runId, deferred);
-  }
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
@@ -1251,6 +1258,17 @@ function foldDurable(
   let own: RunView;
   if (isSharedRunRow(event)) {
     own = applyRowFacts(view, before, event);
+  } else if (event.type === 'usage') {
+    // The listing's row is the run's spend through its commit; every other
+    // read's row is one priced turn. `latest` above is the run's high-water
+    // commit, so a turn one read already counted never counts twice.
+    own = {
+      ...before,
+      usage:
+        read === 'listing'
+          ? event.usage
+          : sumUsageStats([before.usage, event.usage]),
+    };
   } else {
     applySessionSlices(view, runId, event);
     own = applyOwnArm(before, event);
@@ -1262,22 +1280,16 @@ function foldDurable(
     clearLiveText(own.transcript);
   }
   // A fresh incarnation can end again.
-  if (event.type === 'run.activate') {
-    sessionIndexesOf(view).ended.delete(runId);
-  }
-  let next: RunView = {
-    ...own,
-    lastTimestamp: event.at,
-  };
+  if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
+  let next: RunView = { ...own, lastTimestamp: event.at };
   setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
     relink(view, next, created ? null : before.parentId);
     if (!created) walkUp(view, before.parentId, before.parentId, deferred);
   }
-  if (next.label !== before.label) {
+  if (next.label !== before.label)
     for (const childId of next.childIds) refreshAncestors(view, childId);
-  }
   next = view.runs.get(next.id)!;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved
@@ -1304,18 +1316,6 @@ function foldDurable(
   return true;
 }
 
-/** The transcript context a run folds under. */
-function transcriptContextOf(
-  view: SessionView,
-  run: RunView,
-): TranscriptContext {
-  return {
-    debug: view.debug,
-    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
-    runLabels: view.runs,
-  };
-}
-
 /** One trace or lifecycle row onto a resident run's transcript. */
 function foldTraceEvent(
   view: SessionView,
@@ -1327,11 +1327,14 @@ function foldTraceEvent(
   const runId = runIdOf(event.aggregateId);
   const run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
-  const transcript = foldTranscriptEvent(
-    run.transcript,
-    event,
-    transcriptContextOf(view, run),
-  );
+  const transcript = foldTranscriptEvent(run.transcript, event, {
+    debug: view.debug,
+    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    runLabels: view.runs,
+    ...(run.category === AgentCategory.Workflow
+      ? { statistics: { model: run.model } }
+      : {}),
+  });
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.

@@ -92,7 +92,6 @@ describe('sessionFold', () => {
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const stage = log.emit(CHILD, 1010, {
@@ -188,8 +187,14 @@ describe('sessionFold', () => {
     });
     // The same rows on a quiet view: the debug row is dropped, its cursor
     // still advances.
-    const filtered = fold({ ...live, debug: false }, tail(hidden));
-    expect(filtered.runs).toBe(live.runs);
+    const quiet = foldAll(
+      log.events
+        .filter((event) => event !== hidden)
+        .map((event) => ({ _tag: 'event', read: 'aggregate', event })),
+      foldAll([subscribe(CHILD), alive], emptySessionView('paper', 0, false)),
+    );
+    const filtered = fold(quiet, tail(hidden));
+    expect(filtered.runs).toBe(quiet.runs);
     expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
@@ -469,7 +474,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -477,7 +481,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
       userFollowUpSupport: 'unsupported',
     });
@@ -549,7 +552,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -608,7 +610,6 @@ describe('sessionFold', () => {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       category: AgentCategory.ToolUse,
-      isRemote: false,
       userFollowUpSupport: 'unsupported',
       parent: null,
     });
@@ -673,7 +674,7 @@ describe('sessionFold', () => {
         chunk('response-1', 5, 7, '!!'),
         chunk('response-2', 0, 4, 'Late'),
       ],
-      view,
+      buffered,
     );
     const rows = runView(settled, CHILD).transcript.rows;
     expect(rows[0].kind === 'assistant' && rows[0].text.full).toBe(
@@ -733,46 +734,47 @@ describe('sessionFold', () => {
     expect(listed.runs.has(ROOT)).toBe(true);
   });
 
-  it('takes the run total from the newest cumulative usage row, on a cold read and on replay', () => {
-    // `usage` is a latest-only listing key, so a cold read hands the fold one
-    // row per run. Each row therefore carries the run's cumulative totals,
-    // and the fold replaces rather than accumulates.
+  it("sums a run's priced turns once each, on a cold read and on replay", () => {
+    // Each `usage` row a replay reads is one priced turn; the listing reads
+    // the run's total, on its newest priced row. A turn the run's high-water
+    // commit already covers counts nothing.
     const log = new Log();
     const start = log.emit(CHILD, 2000, {
       type: 'run.start',
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const rounds = [
-      { inputTokens: 100, outputTokens: 10, cost: 0.01 },
-      { inputTokens: 300, outputTokens: 25, cost: 0.03 },
-      { inputTokens: 600, outputTokens: 45, cost: 0.06 },
+      { inputTokens: 100, outputTokens: 10, cost: 0.25 },
+      { inputTokens: 300, outputTokens: 25, cost: 0.5 },
+      { inputTokens: 600, outputTokens: 45, cost: 1 },
     ].map((usage, index) =>
-      log.emit(CHILD, 2010 + index, { type: 'usage', runId: CHILD, usage }),
+      log.emit(CHILD, 2010 + index, { type: 'usage', usage }),
     );
     const total = {
-      inputTokens: 600,
-      outputTokens: 45,
-      cost: 0.06,
+      inputTokens: 1000,
+      outputTokens: 80,
+      cost: 1.75,
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
       reasoningTokens: 0,
     };
 
-    // The cold listing read: start plus the newest usage row.
+    // The cold listing read: start plus the run's total.
     const listing = foldAll([
       { _tag: 'event', read: 'listing', event: start },
-      { _tag: 'event', read: 'listing', event: rounds[2] },
+      {
+        _tag: 'event',
+        read: 'listing',
+        event: { ...rounds[2]!, usage: total } as DisplaySessionEvent,
+      },
     ]);
     expect(runView(listing, CHILD).usage).toStrictEqual(total);
 
-    // The aggregate replay then brings all three rows back. The total is the
-    // newest row: not 1000 (the three rows summed onto the listing row), and
-    // not 300 (the row a delta-shaped publisher would have left last).
+    // The aggregate replay then brings all three rows back: each counts once.
     const replayed = foldAll(
       rounds.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
       listing,
@@ -801,7 +803,6 @@ describe('sessionFold', () => {
       identity: CHILD_IDENTITY,
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const outputOf = (round: number): OutputFileInfo => ({
@@ -934,7 +935,6 @@ describe('sessionFold', () => {
       identity: { kind: 'process', tool: 'bash' },
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
-      isRemote: false,
       parent: null,
     });
     const row = early.emit(PROCESS, 5010, {
@@ -1028,14 +1028,21 @@ describe('sessionFold', () => {
         aggregateId,
         seq: ++seq,
         commit,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 5000,
       } as DisplaySessionEvent);
     const queued = (commit: number, followUpId: string, text: string) =>
       row(commit, {
         type: 'followup.queued',
         followUpId,
-        content: { text, origin: 'subagent_result' },
+        content: {
+          text,
+          from: {
+            kind: 'run' as const,
+            runId: 'c41dc41dc41d' as RunId,
+            relation: 'child' as const,
+          },
+        },
       });
     const view = foldAll(
       [
@@ -1056,7 +1063,7 @@ describe('sessionFold', () => {
   it('mints a run from run.start alone', () => {
     const ghost = 'eeeeeeeeeeee' as RunId;
     const settled = foldAll(scenario.events);
-    const stamp = { seq: 1, commit: 99, ownerId: OWNER, at: 4000 };
+    const stamp = { seq: 1, commit: 99, origin: OWNER, at: 4000 };
     const facts: FoldInput[] = [
       tail({
         ...stamp,
@@ -1091,6 +1098,26 @@ describe('sessionFold', () => {
     expect(detached.order).toStrictEqual([PROCESS, CHILD, ROOT]);
   });
 
+  it('refuses a level it has already folded past', () => {
+    // The indexes advance in place: a second branch off one level would see
+    // the first branch's open card and paint a tool it never started.
+    const { log, pending } = buildScenario();
+    const base = foldAll(pending);
+    const toolStart = (logId: string): FoldInput =>
+      tail(
+        log.emit(CHILD, T.childDone, {
+          type: 'tool.start',
+          logId,
+          toolName: 'bash',
+          input: {},
+        }),
+      );
+    const started = fold(base, toolStart('first'));
+    expect(() => fold(base, toolStart('second'))).toThrow('superseded');
+    // The level it returned folds on.
+    expect(() => fold(started, alive)).not.toThrow();
+  });
+
   it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {
     const before = foldAll(scenario.events);
     const childBefore = runView(before, CHILD);
@@ -1105,17 +1132,16 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 1,
         commit: 199,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 3900,
         type: 'run.activate',
         category: AgentCategory.ToolUse,
-        isRemote: false,
       }),
       tail({
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 2,
         commit: 200,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 4000,
         type: 'stream.start',
         id: 'late',
@@ -1164,7 +1190,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 3,
         commit: 201,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 4100,
         type: 'log',
         level: 'info',
@@ -1185,18 +1211,17 @@ describe('sessionFold', () => {
 // continues from. Rows are built through `SessionEventSchema`, the boundary
 // that runs in production; nothing here reaches an arm schema directly.
 //
-// Measured serialized size of the two snapshot drafts below (aggregate id
+// Measured serialized size of the snapshot draft below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
 // writes on (before the offered toolset joined the tool-use state): tool-use
-// with `stateSlices: null` was 362 bytes; reflection with
-// an empty workspace and no round outputs is 741 bytes. Both grow with the
-// family state they carry, never with the conversation, which the rows carry.
+// with `stateSlices: null` was 362 bytes. It grows with the flow state it
+// carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
 const LEDGER_RUN = RunIdSchema.parse('ab12cd');
 const LEDGER_AGGREGATE = qualifyAggregateId('run', LEDGER_RUN);
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   requestedModel: 'gpt-test',
   deployment: {
     endpoint: 'https://api.example.test/v1',
@@ -1271,27 +1296,23 @@ const TURN_USAGE = {
   outputTokens: 5,
   cost: 0.25,
   responseTimeMs: 1200,
-  provider: 'openai-chat',
+  provider: 'openai-responses',
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
   serverToolRequests: 1,
 };
 const RUNTIME = {
-  phase: 'round.ready',
-  round: 0,
-  turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt-test',
   modelCompatibilityKey: null,
   lastError: null,
   declinedRoutes: [],
 };
 const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
-  type: 'flow.snapshot',
+  type: 'run.snapshot',
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   },
 });
 
@@ -1300,23 +1321,6 @@ const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
   payload: { callId, attempt, requestId },
 });
-const reflectionSnapshot = {
-  type: 'flow.snapshot',
-  payload: {
-    family: 'reflection',
-    runtime: RUNTIME,
-    state: {
-      totalRounds: 1,
-      workspaceSnapshot: {
-        assembly: {},
-        media: {},
-        reasoning: {},
-        interactions: {},
-        workPlan: {},
-      },
-    },
-  },
-};
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
   payload,
@@ -1364,7 +1368,7 @@ const ledgerRow = (
     ...draft,
     seq: commit,
     commit,
-    ownerId: null,
+    origin: null,
     at: 0,
   });
 
@@ -1375,7 +1379,7 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
     ...draft,
     seq: 1,
     commit: 1,
-    ownerId: null,
+    origin: null,
     at: 0,
   }).success;
 
@@ -1389,6 +1393,7 @@ const TURN_ROWS: readonly SessionEvent[] = [
   toolUseSnapshot(),
   message({
     kind: 'attempt',
+    request: '0'.repeat(64),
     invocation: INVOCATION,
     origin: ORIGIN,
     delivery: 'stream',
@@ -1411,19 +1416,17 @@ const TURN_ROWS: readonly SessionEvent[] = [
     type: 'tool.intent',
     payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
   },
-  settlement('call-a', {
-    stateMutation: [{ op: 'add', path: ['usage', 'totalCost'], amount: 0.5 }],
-  }),
+  settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
   message({
     kind: 'append',
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot({ phase: 'results.ready' }),
+  toolUseSnapshot(),
   {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
   },
 ].map((draft, index) => ledgerRow(index + 1, draft));
 
@@ -1563,16 +1566,17 @@ describe('foldRunState', () => {
                 cause,
                 continuation: null,
                 continuationDropped: null,
+                usage: null,
               },
             }),
           );
         const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
         // Only an overflow compaction spends the round's one overflow retry.
-        expect(state?.overflowRecoveredAtRound).toBeNull();
+        expect(state?.overflowRecoveredAtTurn).toBeNull();
         const overflow = compacted('context-window');
-        expect(overflow?.round).toBeTypeOf('number');
-        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
+        expect(overflow?.turn).toBeTypeOf('number');
+        expect(overflow?.overflowRecoveredAtTurn).toBe(overflow?.turn);
       },
     ],
     [
@@ -1607,6 +1611,7 @@ describe('foldRunState', () => {
             cause: 'context-limit',
             continuation: null,
             continuationDropped,
+            usage: null,
           },
         });
         // C6: the response row is the production source of the anchor, so the
@@ -1618,6 +1623,7 @@ describe('foldRunState', () => {
               3,
               message({
                 kind: 'attempt',
+                request: '0'.repeat(64),
                 invocation: INVOCATION,
                 origin: continuationOrigin,
                 delivery: 'stream',
@@ -1660,79 +1666,17 @@ describe('foldRunState', () => {
       () => {
         const state = stateOf(
           through(11, {
-            type: 'flow.step',
+            type: 'run.position',
             payload: {
               family: 'toolUse',
-              step: 'halted',
+              at: 'halted',
               outcome: 'completed',
             },
           }),
         );
         expect(state?.outcome).toBe('completed');
-        expect(state?.flow?.family).toBe('toolUse');
-        expect(state?.snapshotCommit).toBe(10);
-      },
-    ],
-    [
-      'a reflection snapshot: its family state restored, its usage derived',
-      () => {
-        const state = stateOf(
-          foldRunState(null, [
-            ledgerRow(
-              1,
-              message({
-                kind: 'append',
-                messages: [USER('draft the introduction')],
-                sourceResponse: null,
-              }),
-            ),
-            ledgerRow(2, reflectionSnapshot),
-          ]),
-        );
-        const flow = state?.flow;
-        expect(flow?.family).toBe('reflection');
-        // D12: no snapshot payload carries usage; it is derived from the rows.
-        expect(flow?.state).not.toHaveProperty('runStateSnapshot');
-        expect(state?.snapshotCommit).toBe(2);
-      },
-    ],
-    [
-      'a length continuation in a non-final reflection round: the next round opens at continuation 0',
-      () => {
-        const step = (
-          name: string,
-          round: number,
-          continuationIndex: number,
-        ) => ({
-          type: 'flow.step',
-          payload: {
-            family: 'reflection',
-            step: name,
-            round,
-            continuationIndex,
-          },
-        });
-        const rows = [
-          message({
-            kind: 'append',
-            messages: [USER('draft the introduction')],
-            sourceResponse: null,
-          }),
-          reflectionSnapshot,
-          step('round.begin', 0, 0),
-          step('round.end', 0, 1),
-          step('round.begin', 1, 0),
-          step('round.end', 1, 1),
-        ].map((draft, index) => ledgerRow(index + 1, draft));
-        const state = stateOf(foldRunState(null, rows));
-        expect(state?.round).toBe(1);
-        expect(state?.continuationIndex).toBe(1);
-        // Within one round the index still never goes back.
-        expect(
-          reasonOf(
-            foldRunState(state, [ledgerRow(7, step('round.end', 1, 0))]),
-          ),
-        ).toBe('out-of-order');
+        expect(state?.family).toBe('toolUse');
+        expect(state?.lastSnapshot).not.toBeNull();
       },
     ],
     [
@@ -1747,6 +1691,7 @@ describe('foldRunState', () => {
             11,
             message({
               kind: 'attempt',
+              request: '0'.repeat(64),
               invocation: second,
               origin: ORIGIN,
               delivery: 'stream',
@@ -1779,8 +1724,8 @@ describe('foldRunState', () => {
             }),
           ),
         );
-        // 0.25 stamped + 0.5 added by the settlement + 0.25 stamped.
-        expect(state?.usage.totalCost).toBe(1);
+        // Each priced response's stamp, and nothing else.
+        expect(state?.usage.totalCost).toBe(0.5);
         expect(state?.usage.totalCacheMissInputTokens).toBe(9);
         expect(state?.usage.totalServerToolRequests).toBe(3);
         expect(state?.usage.firstInputTokens).toBe(10);
@@ -1838,13 +1783,11 @@ describe('foldRunState', () => {
                 identity: { kind: 'agent', agent: 'chat' },
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
                 parent: null,
               }),
               ledgerRow(2, {
                 type: 'run.activate',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
               }),
             ]),
           ),
@@ -1864,9 +1807,9 @@ describe('foldRunState', () => {
     expect(state?.pendingIntents).toEqual({});
     expect(state?.usage.totalInputTokens).toBe(10);
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
-    // The turn's stamped price plus the settlement's `add` operation.
-    expect(state?.usage.totalCost).toBe(0.75);
-    expect(state?.step).toBe('turn.end');
+    // The turn's stamped price: a settlement adds nothing to it.
+    expect(state?.usage.totalCost).toBe(0.25);
+    expect(state?.at).toBe('turn.end');
     expect(state?.turn).toBe(1);
     // Incremental and cold folds are the same computation.
     const half = stateOf(foldRunState(null, TURN_ROWS.slice(0, 6)));
@@ -1904,7 +1847,7 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
-  it('keeps the private ledger types out of the listing and off the transport, and lists flow.step', () => {
+  it('keeps the private ledger types out of the listing and off the transport, and lists run.position', () => {
     const ledgerTypes = [
       'model.message',
       'model.compaction',
@@ -1912,14 +1855,14 @@ describe('foldRunState', () => {
       'tool.binding',
       'tool.result',
       'model.retry',
-      'flow.snapshot',
+      'run.snapshot',
     ] as const;
     for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();
     // The one ledger row the listing keys: a cold hydrate that dropped it
     // would paint every parked run as ready (ruling A9-5).
-    expect(listingTypeOf({ type: 'flow.step' })).toBe('flow.step');
+    expect(listingTypeOf({ type: 'run.position' })).toBe('run.position');
     for (const row of TURN_ROWS) {
-      expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
+      expect(isDisplaySessionEvent(row)).toBe(row.type === 'run.position');
     }
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
@@ -1945,17 +1888,8 @@ describe('foldRunState', () => {
     expect(
       rowAccepted(response([{ ...CALLS[0], toolName: 'rm' }, CALLS[1]])),
     ).toBe(false);
-    // The run's usage totals are derived from priced responses and additive
-    // tool costs (D12): a settlement adds to them and never rewrites them.
-    expect(
-      rowAccepted(
-        settlement('call-a', {
-          stateMutation: [
-            { op: 'add', path: ['usage', 'totalCost'], amount: 1 },
-          ],
-        }),
-      ),
-    ).toBe(true);
+    // The run's usage totals are derived from its priced responses alone
+    // (D12): a settlement never touches them.
     expect(
       rowAccepted(
         settlement('call-a', {

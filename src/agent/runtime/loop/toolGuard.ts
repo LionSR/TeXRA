@@ -25,6 +25,9 @@ import type { RuntimeTool, ToolServices } from '../ToolServices';
 
 const JSON_OBJECT_ARGUMENTS = z.record(z.string(), z.unknown());
 
+/** The tool whose calls the run's command bypass answers. */
+const SHELL_TOOL = 'bash';
+
 /**
  * Apply the tool's declared guard, answering the result that replaces the
  * call when the guard refuses it and `undefined` when the body may run.
@@ -34,11 +37,14 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   rawInput: unknown,
 ): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
   const guard = tool.guard;
-  if (!guard) return undefined;
+  // A tool that requires approval is asked about here unless its body opens
+  // its own request: `requiresApproval: true` cannot leave a call unasked.
+  const asks = guard?.bash !== undefined || tool.requiresApproval === true;
+  if (!guard?.writes && !asks) return undefined;
   // The guard reads the call's own validated arguments, from the same schema
   // `call` validates with; a tool whose parameters are a pass-through JSON
   // Schema (an MCP server's) takes a JSON object, as its `call` checks. A tool
-  // that declares a guard but no schema would have the guard quietly stop
+  // that is guarded but has no schema would have the guard quietly stop
   // gating it, so it is a defect, not a skip.
   const schema =
     tool.definition.zodSchema ??
@@ -46,7 +52,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   if (!schema)
     return yield* Effect.die(
       new Error(
-        `Tool ${tool.definition.name} declares a guard but no schema: the guard has no arguments to read.`,
+        `Tool ${tool.definition.name} is guarded but declares no schema: the guard has no arguments to read.`,
       ),
     );
   // An input that schema refuses reaches no prompt and no path: the `call`
@@ -60,7 +66,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // the dispatcher reports to the model, so they stay a failure rather than
   // becoming a defect.
   const targets = yield* Effect.try({
-    try: () => guard.writes?.(input) ?? [],
+    try: () => guard?.writes?.(input) ?? [],
     catch: ensureError,
   });
   for (const target of targets) {
@@ -71,33 +77,49 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     });
   }
 
-  if (!guard.bash) return undefined;
-  const command = yield* guard.bash(input);
+  if (!asks) return undefined;
+  // The call as the prompt shows it: the guard's spelling, else the tool's
+  // name and the arguments it was called with.
+  const command = guard?.bash
+    ? yield* guard.bash(input)
+    : `${tool.definition.name} ${JSON.stringify(input)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather
   // than a directory the approved command may not run in, and the call's own
-  // directory is not read at all. `'workspace'`: the executor runs there
-  // whatever working directory the call was given. Otherwise the call's
-  // working directory when it named one and the workspace otherwise, which is
-  // what a shell-shaped tool runs in.
+  // directory is not read at all; a call with no command spelling runs in no
+  // directory either. `'workspace'`: the executor runs there whatever working
+  // directory the call was given. Otherwise the call's working directory when
+  // it named one and the workspace otherwise, which is what a shell-shaped
+  // tool runs in.
   let cwd: string | undefined;
-  if (guard.cwd === 'workspace') cwd = call.roots.workspace;
-  else if (guard.cwd !== 'unknown')
+  if (guard?.cwd === 'workspace') cwd = call.roots.workspace;
+  else if (guard?.bash && guard.cwd !== 'unknown')
     cwd = call.workingDirectory ?? call.roots.workspace;
 
-  const decision = yield* requestBashApproval({ command, cwd });
+  // Only the shell's own commands take the run's command grant; every other
+  // tool is asked per call, so approving one for the session cannot become
+  // blanket shell approval, and a shell grant does not approve it.
+  const decision = yield* requestBashApproval({
+    command,
+    cwd,
+    grant: tool.definition.name === SHELL_TOOL ? 'shell' : 'call',
+  });
   return decision.action === 'approve'
     ? undefined
     : buildBashApprovalRejectedResult(command, decision);
 });
 
-/** One call, guard first: the declared guard's refusal, else the tool's body. */
+/** One call, guard first: the declared guard's refusal, else the tool's
+ *  body, which `bodyStarts` announces once the guard has let it run. */
 export const guardedToolCall = (
   tool: RuntimeTool,
   rawInput: unknown,
+  bodyStarts: Effect.Effect<void> = Effect.void,
 ): ReturnType<RuntimeTool['call']> =>
   guardRefusal(tool, rawInput).pipe(
     Effect.flatMap((refusal) =>
-      refusal ? Effect.succeed(refusal) : tool.call(rawInput),
+      refusal
+        ? Effect.succeed(refusal)
+        : Effect.andThen(bodyStarts, tool.call(rawInput)),
     ),
   );

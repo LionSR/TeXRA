@@ -5,13 +5,16 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
-import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeProcessServices,
   setupPlatform,
@@ -20,7 +23,6 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
@@ -35,8 +37,8 @@ const settle = Effect.promise(
  * it on the default runtime rather than a process runtime, so the services it
  * requires are provided here.
  */
-function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
-  return runFlowWithLifecycle(...args).pipe(
+function runLifecycle(...args: Parameters<typeof runWithLifecycle<never>>) {
+  return runWithLifecycle(...args).pipe(
     Effect.provide(fakeProcessServices()),
     Effect.provideService(Runs, args[0].session.runs),
   );
@@ -48,19 +50,29 @@ function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
  * finalizer writes is the run's one terminal fact, and `onResult` is how the
  * runtime hands it to in-process consumers.
  */
-function setupResultCase(session?: SessionHandle): {
+function setupResultCase(owner?: {
+  session: SessionHandle;
+  parentRunId: RunId;
+}): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
 } {
-  const logger = new TraceEmitter();
   const n = counter++;
   const runId = `e${n.toString(16).padStart(5, '0')}` as RunId;
+  // A caller-owned session gets the run's existence fact with the parent
+  // edge it is exercising, then hears the run's trace, as a launched run's
+  // session does.
+  const session = owner?.session;
+  if (owner) {
+    publishTestRunStart(owner.session, runId, { parent: owner.parentRunId });
+  }
+  const logger = owner
+    ? new TraceEmitter((event) => owner.session.publishRunEvent(runId, event))
+    : new TraceEmitter();
   const ctx = createTestLaunchContext({ runId, logger, session });
   const runSession = ctx.session;
-  // A caller that owns the session publishes the existence fact itself, with
-  // the parent edge it is exercising.
-  if (!session) publishTestRunStart(runSession, runId);
+  if (!owner) publishTestRunStart(runSession, runId);
   const results: ResultEvent[] = [];
   runSession.onResult((event) =>
     Effect.sync(() => {
@@ -71,7 +83,7 @@ function setupResultCase(session?: SessionHandle): {
 }
 
 /** The completed tool-use result a flow returns for the given run. */
-function completedRun(ctx: AgentLaunchContext): AgentFlowResult {
+function completedRun(ctx: AgentLaunchContext): RunEndResult {
   return {
     outcome: RUN_OUTCOME.COMPLETED,
     runId: ctx.runId,
@@ -106,7 +118,7 @@ describe('terminal result event', () => {
   it.effect('emits exactly one completed result on a successful run', () =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)));
+      yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
       expectSingleResult(results, ctx, {
         outcome: 'completed',
         output: { category: 'toolUse' },
@@ -129,7 +141,7 @@ describe('terminal result event', () => {
   ])('keeps running when onRun $name', ({ onRun }) =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      const result = yield* runFlow(
+      const result = yield* runLifecycle(
         ctx,
         () => Effect.succeed(completedRun(ctx)),
         { onRun },
@@ -141,21 +153,32 @@ describe('terminal result event', () => {
     }),
   );
 
-  it.effect(
-    'keeps the failed subagent result when the onError delivery hook throws',
-    () =>
-      Effect.gen(function* () {
-        const { ctx, results } = setupResultCase();
-        const result = yield* runFlow(ctx, explodedRun, {
-          parentRunId: generateRunId(),
-          onError: () => {
-            throw new Error('delivery hook boom');
-          },
-        });
-        expect(result).toMatchObject({ outcome: RUN_OUTCOME.FAILED });
-
-        expectSingleResult(results, ctx, { outcome: 'failed' });
-      }),
+  // The launch-time approval choice rides on onRun: it must be in force
+  // before the run's first step, or an approval could open ahead of it.
+  it.effect('an Auto-approve launch is bypassed before the run starts', () =>
+    Effect.gen(function* () {
+      const { ctx } = setupResultCase();
+      const { approvals } = ctx.session;
+      const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
+      let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
+      yield* runLifecycle(
+        ctx,
+        () =>
+          Effect.sync(() => {
+            atFirstStep = approvals.bypassesFor(ctx.runId);
+            return completedRun(ctx);
+          }),
+        launchApprovalOptions(
+          { kind: 'launch', launch, instruction: '' },
+          approvals,
+        ),
+      );
+      expect(atFirstStep).toEqual({
+        bash: true,
+        toolEdit: true,
+        superYolo: true,
+      });
+    }),
   );
 
   it.effect(
@@ -167,7 +190,7 @@ describe('terminal result event', () => {
           throw new Error('stage listener boom');
         });
 
-        const error = yield* Effect.flip(runFlow(ctx, explodedRun));
+        const error = yield* Effect.flip(runLifecycle(ctx, explodedRun));
         expect(error.message).toContain('model exploded');
 
         expectSingleResult(results, ctx, { outcome: 'failed' });
@@ -179,7 +202,7 @@ describe('terminal result event', () => {
     () =>
       Effect.gen(function* () {
         const { ctx, results } = setupResultCase();
-        yield* runFlow(ctx, () =>
+        yield* runLifecycle(ctx, () =>
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
             runId: ctx.runId,
@@ -193,7 +216,7 @@ describe('terminal result event', () => {
   it.effect('emits a cancelled result with kind=abort on a thrown abort', () =>
     Effect.gen(function* () {
       const { ctx, results } = setupResultCase();
-      yield* runFlow(ctx, () =>
+      yield* runLifecycle(ctx, () =>
         Effect.fail(new DOMException('Request aborted', 'AbortError')),
       );
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
@@ -205,15 +228,11 @@ describe('terminal result event', () => {
     Effect.gen(function* () {
       const session = createTestSession();
       const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-      const { logger, ctx } = setupResultCase(session);
       const parentRunId = publishTestRunStart(session);
-      publishTestRunStart(session, ctx.runId, {
-        parent: parentRunId,
-      });
-      const detach = session.attachRunTrace(logger, ctx.runId);
+      const { logger, ctx } = setupResultCase({ session, parentRunId });
       session.onResult(onResult);
       try {
-        yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
+        yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)), {
           parentRunId,
         });
         yield* session.settlePublications();
@@ -224,8 +243,8 @@ describe('terminal result event', () => {
           outcome: 'completed',
         });
       } finally {
-        detach();
-        yield* session.dispose();
+        logger.close();
+        yield* closeSessionOf(session);
       }
     }),
   );

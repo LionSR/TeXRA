@@ -1,72 +1,33 @@
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Stream } from 'effect';
 
 // Local imports
-import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME } from '@shared/schemas';
-import type {
-  RunId,
-  RunIdentity,
-  RunOutcome,
-  UserFollowUpSupport,
+import {
+  aggregateId,
+  aggregateTarget,
+  RUN_OUTCOME,
+  RUN_SUBSTATE,
 } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { escapeText } from '@shared/utils/xmlEscape';
+import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { generateRunId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildRunOptions {
   /** What owns this run — the launch site declares the truth once. */
   run: RunIdentity;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  userFollowUpSupport: UserFollowUpSupport;
-  description: string;
-  config: AgentConfig;
-  /** A workflow-script run's resume anchor, stamped on `run.start`
-   *  (decision 9): the checkpoint it journals into. */
-  checkpointId?: string;
-}
-
-interface FinalizeChildRunOptions {
-  /**
-   * The child's report of its own exit. A report, not a verdict: the run
-   * phase owns the terminal outcome, so an explicit stop/kill that already
-   * landed CANCELLED outranks a FAILED this reports.
-   */
-  outcome: RunOutcome;
-  /** Cause behind a FAILED outcome, for diagnosis. */
-  error?: unknown;
-  /**
-   * The loop's own stop observation: a stop that reached the child before
-   * this finalize outranks the outcome report above — `finalizeRunTerminal`
-   * resolves the row and the stage to CANCELLED and drops the error facts
-   * the outranked failure classified.
-   */
-  stopped?: boolean;
-  /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
-  stage?: Pick<StageHandle, 'end'>;
-}
-
-export interface ChildRun {
-  childRunId: RunId;
-  logger: AgentTrace;
-  /** Track the run's handle; the child loop calls it once its activation
-   *  reserves the stop target (`startChildRunLoop`). */
-  track: () => void;
-  /**
-   * Complete the child run lifecycle through the owning run handle.
-   * Resolves once the shared terminal finalizer has persisted, settled, and
-   * untracked — callers that must not exit before the terminal status lands
-   * (headless CLI session loops) await it.
-   */
-  finalize: (
-    options: FinalizeChildRunOptions,
-  ) => Effect.Effect<void, Error, Runs>;
+  category: AgentCategory;
 }
 
 /**
@@ -77,118 +38,61 @@ export function childRunDescription(raw: string): string {
   return truncateWithEllipsis(raw, 80);
 }
 
-/** Create a child run's presentation and handle for a background child task. */
+/**
+ * Create a child run's presentation and handle for a background child task.
+ * Every launch site calls this inside `startDetachedChildRunLoop`, whose
+ * owned-run launch guard owns a failed launch's compensation.
+ */
 export const createChildRun = Effect.fn('createChildRun')(function* (
   session: SessionHandle,
   runId: RunId,
   parentRunId: RunId,
   options: CreateChildRunOptions,
-): Effect.fn.Return<ChildRun, Error, Runs> {
+): Effect.fn.Return<ChildRunPort, never, Runs> {
   // No barrier here: registration committed the launch and its activation
   // awaited (`registerRun`), and every write below is either awaited or this
   // run's own queued fact, which its own drain answers for. A session-wide
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
   const runs = yield* Runs;
-  const trace = new TraceEmitter();
+  // The run's canonical event publication, from its first event: the trace
+  // is built with the session as its sink, and closed with the run.
+  const trace = new TraceEmitter((event) =>
+    session.publishRunEvent(runId, event),
+  );
   const handle = new RunHandle(
     {
       runId,
       identity: options.run,
-      category: options.config.agentCategory,
+      category: options.category,
     },
     parentRunId,
     trace,
   );
-  let detachSessionTrace: (() => void) | undefined;
-  let started = false;
-  const setup = yield* Effect.exit(
-    Effect.sync(() => {
-      // Registration already committed the launch and activation together.
-      started = true;
-      // Attach the run's canonical event publication before activation. The
-      // handle is tracked by the loop (`track`) once its stop target exists,
-      // so a stop never finds this handle with nothing to interrupt.
-      detachSessionTrace = session.attachRunTrace(trace, runId);
-      const disposeTrace = () => detachSessionTrace?.();
-      trace.emit({
-        type: 'run.config',
-        runId,
-        config: options.config,
-      });
-
-      return {
-        childRunId: runId,
+  // Registration already committed the launch, its configuration and its
+  // activation together. The handle is tracked by the loop (`track`) once
+  // its stop target exists, so a stop never finds this handle with nothing
+  // to interrupt.
+  return {
+    logger: trace,
+    track: () => runs.track(handle),
+    finalize: (finalizeOptions) =>
+      finalizeChildRun({
+        handle,
+        session,
         logger: trace,
-        track: () => runs.track(handle),
-        finalize: (finalizeOptions) =>
-          finalizeChildRun({
-            handle,
-            session,
-            logger: trace,
-            disposeTrace,
-            options: finalizeOptions,
-          }),
-      } satisfies ChildRun;
-    }),
-  );
-  if (Exit.isFailure(setup)) {
-    const error = Cause.squash(setup.cause);
-    // Roll back every fallible setup step in reverse-ish order; a cleanup
-    // failure must neither mask the original error nor skip later steps. A
-    // run that already published its `run.start` exists for every fold,
-    // so it ends with its `run.end` row instead of lingering as a
-    // started-but-never-run ghost — written by the one terminal writer, whose
-    // commit is awaited, so no barrier stands behind it.
-    const failures: unknown[] = [error];
-    const cleanups: Effect.Effect<unknown, Error>[] = [
-      Effect.suspend(() =>
-        started
-          ? finalizeRun(session, {
-              runId,
-              outcome: RUN_OUTCOME.FAILED,
-              error: {
-                kind: classifyAgentError(error),
-                message: `Child run setup failed: ${toErrorMessage(error)}`,
-              },
-            }).pipe(
-              Effect.flatMap((finalization) =>
-                finalization.ok
-                  ? Effect.void
-                  : Effect.fail(
-                      new Error('Failed to persist the child run failure', {
-                        cause: finalization.error,
-                      }),
-                    ),
-              ),
-            )
-          : Effect.void,
-      ),
-      Effect.sync(() => {
-        runs.untrackIfCurrent(handle);
+        closeTrace: () => trace.close(),
+        options: finalizeOptions,
       }),
-      Effect.sync(() => detachSessionTrace?.()),
-    ];
-    for (const cleanup of cleanups) {
-      const cleaned = yield* Effect.exit(cleanup);
-      if (Exit.isFailure(cleaned)) failures.push(Cause.squash(cleaned.cause));
-    }
-    if (failures.length > 1) {
-      return yield* Effect.fail(
-        new AggregateError(failures, 'Child run setup and cleanup failed'),
-      );
-    }
-    return yield* Effect.fail(ensureError(error));
-  }
-  return setup.value;
-}, Effect.uninterruptible);
+  } satisfies ChildRunPort;
+});
 
 interface FinalizeChildRunArgs {
   handle: RunHandle;
   session: SessionHandle;
   logger: AgentTrace;
-  disposeTrace: () => void;
-  options: FinalizeChildRunOptions;
+  closeTrace: () => void;
+  options: Parameters<ChildRunPort['finalize']>[0];
 }
 
 /**
@@ -205,58 +109,59 @@ interface FinalizeChildRunArgs {
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
-  const { handle, session, logger, disposeTrace, options } = args;
+  const { handle, session, logger, closeTrace, options } = args;
+  // Only a child a parent can continue pauses: a detached one (no parent)
+  // has nobody to call it again, so its stop cancels it.
+  const parentRunId = handle.parentState.current;
+  const pause =
+    options.outcome === RUN_OUTCOME.CANCELLED && parentRunId !== null
+      ? options.pauseNotice?.()
+      : undefined;
+  if (pause !== undefined && parentRunId !== null)
+    return yield* pauseChildRun(args, pause, parentRunId);
 
-  // The failure prologue (error formatting, logging, classification) is
-  // fallible. It must never prevent `finalizeRunTerminal` below from running:
-  // a throw here would otherwise strand the handle in the registry forever
-  // with no untrack and the run with no `run.end` row.
-  let outcome: RunOutcome = options.outcome;
-  let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
-  const prologue = yield* Effect.exit(
+  // Describing the failure is fallible: `error` is `unknown`, and formatting
+  // a foreign value can throw (a throwing `message` getter or `toString`).
+  // That must never keep `finalizeRunTerminal` below from running, or the
+  // handle stays tracked and the run never gets its `run.end` row.
+  const described = yield* Effect.exit(
     Effect.sync(() => {
-      const failed = options.outcome === RUN_OUTCOME.FAILED;
-      const errorMessage =
-        failed && options.error != null
-          ? toErrorMessage(options.error)
-          : undefined;
-
-      if (errorMessage) {
-        logger.error(errorMessage);
-      }
-      // What the child saw, in the shared vocabulary. Which of this and an
-      // already-landed stop is the run's terminal fact is decided upstream:
-      // the loop derives the outcome from its own interrupted signal, and
-      // `finalizeRunTerminal` applies that stop precedence.
-      outcome = options.outcome;
-      error = failed
-        ? {
-            kind: classifyAgentError(options.error),
-            message: errorMessage ?? 'Child run failed',
-          }
-        : undefined;
+      if (options.outcome !== RUN_OUTCOME.FAILED) return undefined;
+      const message =
+        options.error != null ? toErrorMessage(options.error) : undefined;
+      if (message) logger.error(message);
+      return {
+        kind: classifyAgentError(options.error),
+        message: message ?? 'Child run failed',
+      };
     }),
   );
-  if (Exit.isFailure(prologue)) {
+  if (Exit.isFailure(described)) {
     logger.error('Child run finalize prologue failed', {
-      data: { error: Cause.squash(prologue.cause) },
+      data: { error: Cause.squash(described.cause) },
     });
-    outcome = RUN_OUTCOME.FAILED;
-    error = {
-      kind: 'unexpected',
-      message: 'Child run finalize prologue failed',
-    };
   }
 
+  // What the child saw, in the shared vocabulary. Which of this and an
+  // already-landed stop is the run's terminal fact is decided upstream: the
+  // loop derives the outcome from its own interrupted signal, and
+  // `finalizeRunTerminal` applies that stop precedence.
   const finalized = yield* finalizeRunTerminal({
     session,
     handle,
-    outcome,
-    error,
+    ...(Exit.isSuccess(described)
+      ? { outcome: options.outcome, error: described.value }
+      : {
+          outcome: RUN_OUTCOME.FAILED,
+          error: {
+            kind: 'unexpected' as const,
+            message: 'Child run finalize prologue failed',
+          },
+        }),
     stage: options.stage,
     stopped: options.stopped,
   });
-  disposeTrace();
+  closeTrace();
 
   // The port's contract is "resolves once the terminal finalizer has
   // persisted": a `run.end` row that never wrote is this finalize's failure,
@@ -270,3 +175,104 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     );
   }
 }, Effect.uninterruptible);
+
+/**
+ * Rest a stopped child that its parent's model can continue, instead of
+ * ending it: one batch commits the notice as its report with the `child.park`
+ * `paused` row carrying the resume id (not `run.end`), so the pause is
+ * durable before anything tells the parent; only then is the notice queued
+ * for the parent's next input, waking nobody. Calling the child again activates it
+ * once more. The handle is untracked and the trace closed whatever the writes
+ * did, so the registry never keeps a finished generation live.
+ */
+const pauseChildRun = (
+  { handle, session, logger, closeTrace, options }: FinalizeChildRunArgs,
+  { text: notice, resumeId }: ChildRunPause,
+  parentRunId: RunId,
+) =>
+  Effect.gen(function* () {
+    const runId = handle.runId;
+    const text = formatDelivery({
+      tag: DELIVERY_TAG.childPaused,
+      runId,
+      lines: [escapeText(notice)],
+    });
+    options.stage?.end(RUN_OUTCOME.CANCELLED);
+    const target = aggregateId('run', runId);
+    yield* session.commit([
+      { type: 'run.report', aggregateId: target, report: text },
+      { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
+    ]);
+    const from = { kind: 'run', runId } as const;
+    // Read with the parent's next input and offered to nobody: a pause
+    // starts no model turn, parked or busy, and leaves no recovery lease.
+    // The pause is durable by now: a failed admission loses only the
+    // notice, which the report keeps, so it is warned about, never raised.
+    const submitted = yield* session.followUps
+      .submit(parentRunId, { text, from }, 'recoverable', { liveOffer: 'none' })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Paused child ${runId}: its notice could not be queued for parent run ${parentRunId}; it remains in this run's report.`,
+              { data: error },
+            );
+            return { kind: 'failed' } as const;
+          }),
+        ),
+      );
+    if (submitted.kind === 'queued' && submitted.lease)
+      session.followUps.release(submitted.lease, 'recoverable');
+    if (submitted.kind === 'refused')
+      logger.warn(
+        `The pause notice was not queued for parent run ${parentRunId}; it remains in this run's report.`,
+      );
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        (yield* Runs).untrackIfCurrent(handle);
+        closeTrace();
+      }),
+    ),
+    Effect.withSpan('pauseChildRun'),
+  );
+
+/**
+ * The run an agent-CLI launch registers: the paused child of `parentRunId`
+ * whose pause kept `resumeId`, reactivated rather than left paused beside a
+ * new run, else a fresh id. Read from the rows (each run's latest
+ * `child.park`, and the fold's paused reading), not from a live registry, so
+ * it holds across a restart.
+ */
+export const agentCliChildRunId = Effect.fn('agentCliChildRunId')(function* ({
+  session,
+  parentRunId,
+  resumeId,
+}: {
+  readonly session: SessionHandle;
+  readonly parentRunId: RunId;
+  readonly resumeId?: string;
+}) {
+  if (resumeId === undefined) return generateRunId();
+  // Only the pauses that kept `resumeId` are collected, not the session.
+  const [view, parks] = yield* Effect.all([
+    session.readView([]),
+    Stream.runCollect(
+      session.events
+        .listing()
+        .pipe(
+          Stream.filter(
+            (row) => row.type === 'child.park' && row.resumeId === resumeId,
+          ),
+        ),
+    ),
+  ]).pipe(Effect.mapError((e) => new ToolError(toErrorMessage(e))));
+  for (const row of parks) {
+    const target = aggregateTarget(row.aggregateId);
+    if (target.kind !== 'run') continue;
+    const run = view.runs.get(target.id);
+    if (run?.substate === RUN_SUBSTATE.PAUSED && run.parentId === parentRunId)
+      return target.id;
+  }
+  return generateRunId();
+});

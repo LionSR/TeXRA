@@ -15,15 +15,11 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 /** The opening snapshot a run writes before its first external activity. */
 function openingSnapshot(runId: RunId): RunLedgerDraft {
   return {
-    type: 'flow.snapshot',
+    type: 'run.snapshot',
     aggregateId: aggregateId('run', runId),
     payload: {
       family: 'toolUse',
       runtime: {
-        phase: 'initial',
-        round: 0,
-        turn: 0,
-        continuationIndex: 0,
         modelId: 'test-model',
         modelCompatibilityKey: null,
         lastError: null,
@@ -31,8 +27,6 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
       },
       state: {
         stateSlices: null,
-        offeredTools: [],
-        toolsetHash: '0'.repeat(64),
       },
     },
   };

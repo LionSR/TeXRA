@@ -8,17 +8,20 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { buildSubagentResult } from '@agent/runtime/subagentResults';
 import { type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { buildSubagentResult } from '@tools/delegation/subagentResults';
+import {
+  approvedWriteConflict,
+  writeApprovedContent,
+} from '@tools/approval/approvedWrite';
 import {
   computeLineChangeSummary,
   firstChangedLine,
-  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -140,6 +143,127 @@ describe('shared text-diff caller fixtures', () => {
             readFile(fakePath('workspace/paper.tex'), 'utf-8'),
           ),
         ).toBe('alpha\nBETA\nomega\nlocal\n');
+
+        // A concurrent change to the approved hunk is a conflict, never an
+        // overwrite of that change with the approved content.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': 'rewritten\nby another\nwriter\n',
+          }),
+        );
+        const conflict = yield* approvedWriteConflict(
+          'paper.tex',
+          original,
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(conflict?.message).toContain('changed on disk');
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('rewritten\nby another\nwriter\n');
+
+        // A concurrent edit of the same line is a conflict even where the
+        // approved change could still be placed fuzzily around it.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': 'title\nmode=green\nend\n',
+          }),
+        );
+        const overlapping = yield* approvedWriteConflict(
+          'paper.tex',
+          'title\nmode=red\nend\n',
+          'title\nmode=blue\nend\n',
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(overlapping).toBeDefined();
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('title\nmode=green\nend\n');
+
+        // A concurrent change to the edited copy of a duplicated block is a
+        // conflict; the edit never moves onto the untouched duplicate.
+        const block = 'a\nb\nc\nx\nd\ne\nf\n';
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': `a\nb\nc\ny\nd\ne\nf\n${block}`,
+          }),
+        );
+        const duplicated = yield* approvedWriteConflict(
+          'paper.tex',
+          `${block}${block}`,
+          `a\nb\nc\nX\nd\ne\nf\n${block}`,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(duplicated).toBeDefined();
+
+        // An insertion among equal lines has no one position, so a
+        // concurrent change among them is a conflict, not a guess.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({ '/workspace/paper.tex': 'a\nX\na\n' }),
+        );
+        const ambiguous = yield* approvedWriteConflict(
+          'paper.tex',
+          'a\na\n',
+          'a\na\na\n',
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(ambiguous).toBeDefined();
+
+        // So is a deletion, even of a file that was empty when proposed: the
+        // approved content does not recreate it.
+        yield* Effect.tryPromise(() => installFakePlatform({}));
+        const deleted = yield* approvedWriteConflict(
+          'paper.tex',
+          '',
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(deleted).toBeDefined();
+        expect(
+          yield* Effect.exit(
+            Effect.tryPromise(() => readFile(fakePath('workspace/paper.tex'))),
+          ),
+        ).toMatchObject({ _tag: 'Failure' });
+
+        // And a file created meanwhile at a path that was absent is not
+        // merged into.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({ '/workspace/paper.tex': 'theirs\n' }),
+        );
+        const created = yield* approvedWriteConflict(
+          'paper.tex',
+          null,
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(created).toBeDefined();
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('theirs\n');
       }),
   );
 });

@@ -96,67 +96,38 @@ it the assert is knowingly wrong for `LogList`.
 
 <a id="modelcell"></a>
 
-## ModelCell — current ownership ruling supersedes only the retired prohibition
+## ModelCell — the run's binding and its lifetime
 
-**Question.** Does the retired runtime gold-standard PRD's statement that
-`ModelCell` “must not be implemented from this record” still prohibit the
-`ModelCell` ownership primitive now present on `main`?
+**Question.** Who owns a run's model binding, and when is a replaced binding
+released? (Rewritten 2026-09-27 for move 8 of the session-core plan: the
+`ModelCell` class and the files the earlier ruling cited, merged in
+[#9547](https://github.com/LionSR/TeXRA/pull/9547), are deleted.)
 
-**Ruling.** No. The implementation merged in
-[#9547](https://github.com/LionSR/TeXRA/pull/9547) is authoritative for the
-narrow ownership and lifecycle guarantees below. It supersedes the retired
-PRD's top-level [historical-status clause](../../rejected/architecture/2026-06-29-prd-runtime-gold-standard.md),
-which says the listed designs “must not be implemented from this record,” and
-its [§2 ModelCell text](../../rejected/architecture/2026-06-29-prd-runtime-gold-standard.md#2-modelcell-the-one-mutable-seam)
-only where those passages deny that this primitive exists on `main`.
+**Ruling.** The run's `AgentRun` service owns the binding, in `run.model`,
+and `run.swapModel` is its one writer:
 
-**Current guarantees.** The code, rather than the retired design, defines the
-accepted shape:
+- Each binding is bound into its own scope, forked from the run's scope.
+  A swap binds the replacement into a fresh fork and closes the retired
+  binding's scope at once, which releases its WebSocket and ping fiber, an
+  editor model, and its uploaded files. A failed or interrupted bind closes
+  its fork and leaves the binding in force. Nothing retired waits for the
+  run to end.
+- A host-admitted model switch commits its rows (the `model-switch`
+  compaction and the snapshot naming the new model) inside the swap, so the
+  new binding is in force only once its rows are. A manual retry's rebind
+  and the reacquisition of a failed WebSocket binding go through the same
+  swap.
+- The run's model is its latest snapshot's `modelId`. The switch does not
+  restate it in `run.config`, which keeps the launch model; display reads
+  project the change as `run.model` rows (`MODEL_ROWS`).
 
-- `AgentLaunchContext` constructs one `ModelCell` for the run from its launch
-  handler and model id. Flow services and the tool-facing run context share that
-  cell instead of copying a live handler/client pair.
-- `ModelCell.swap` synchronously adopts the replacement handler and model id,
-  clears the cached client, and disposes the distinct handler it retires. A
-  lazily built client is reused until `rebind` or `swap`; build and rebind
-  completion guards prevent a client produced for a retired handler from being
-  published as current.
-- A tool-use model switch persists `shared.modelId` and the run config before
-  the live swap, then updates the launch-context mirrors through
-  `onModelChanged`. Resume reconstructs the handler from that persisted model
-  identity.
-- The run lifecycle calls `ModelCell.dispose()` in its `finally` path. Thus the
-  cell disposes handlers retired by successful swaps and the handler still live
-  when the run ends. In the tool-use switch path, the runtime explicitly
-  disposes a replacement candidate before ownership transfer only when the
-  conversation-format check rejects it or either persistence write fails. This
-  is not a blanket guarantee for exceptions from compatibility inspection,
-  `setAgentCategory`, or `setLogger`. On success, `ModelCell.swap` adopts the
-  replacement before disposing the distinct handler it retires.
+**Scope of supersession.** This ruling does **not** revive the retired
+runtime gold-standard PRD as a plan; its other passages remain historical.
 
-**Scope of supersession.** This ruling does **not** revive the retired PRD as a
-plan, make its unmerged `RunDescriptor` injection program authoritative, or
-approve its `PendingRequests`, `RetryPolicy`, `RetryGate`, `HostUiBus`, stage
-sequence, or concept-count claims. Those passages remain historical.
-
-**Implementation evidence.** The accepted behavior is defined by
-`src/agent/runtime/ModelCell.ts`,
-`src/agent/runtime/AgentLaunchContext.ts`,
-`src/agent/runtime/AgentRunLifecycle.ts`,
-`src/agent/runtime/SessionResumeRetrieval.ts`,
-`src/agent/runtime/executeAgent.ts`, and the model-switch path in
-`src/agent/implementations/flows/tooluse/runToolUseFlow.ts`.
-
-**Test evidence.** The focused coverage is in
-`src/test-kernel/agent/runtime/ModelCell.vitest.ts`,
-`src/test-kernel/agent/runtime/AgentRunLifecycle.vitest.ts`,
-`src/test-kernel/agent/SessionResumeRetrieval.vitest.ts`,
-`src/test-kernel/agent/runtime/ResumeToolUseCancellation.vitest.ts`, and
-`src/test-kernel/agent/followUp/ModelSwitchState.vitest.ts`.
-
-Future changes to model ownership must be justified against that current
-implementation and test coverage, not by treating the retired gold-standard
-program as normative.
+**Implementation evidence.** `src/agent/runtime/run/AgentRun.ts`
+(`swapModel`), `src/agent/runtime/loop/modelSwitch.ts`,
+`src/agent/runtime/ModelInvoker.ts` (`rebind`) and
+`src/controllers/session/displayProjection.ts` (`MODEL_ROWS`).
 
 ## R-1 / Q1 — the filesystem: Effect's own `FileSystem`/`Path` (ruled 2026-09-13; supersedes the 2026-09-11 deferral)
 
@@ -309,9 +280,13 @@ cancellation:
 
 - `src/tools/claudeAgent.ts` — the Claude Agent SDK takes a controller, not a
   signal.
-- `src/platform/defaults/lifecycleHost.ts` — the shutdown phase deadline,
+- ~~`src/platform/defaults/lifecycleHost.ts` — the shutdown phase deadline,
   which fires after the runtime's own fibers are gone, so there is no fiber
-  left to interrupt.
+  left to interrupt.~~ Retired 2026-09-26: shutdown became a scope's close
+  (`closeAllSessions` as its first finalizer, bounded by
+  `SESSION_CLOSE_DEADLINE_MS` through `Effect.timeoutOption`), the lifecycle
+  host was deleted with it, and the row fell to three files. The ruling
+  stands for the three.
 - `src/agent/runtime/childRunLoop.ts` — the one signal every child-run turn
   runs under, handed straight to `execa`'s `cancelSignal`, the Codex SDK and
   the Claude Agent SDK. The loop's stop must not interrupt its fiber: the

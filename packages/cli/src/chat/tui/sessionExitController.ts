@@ -20,7 +20,6 @@ import {
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
 import { DisposableStore } from '@platform/disposable';
-import type { LifecycleHost } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
@@ -60,12 +59,6 @@ interface SessionExitControllerContext {
   readonly ink: InkInstance;
   /** Mutable run-state record shared with the rest of the session. */
   readonly session: TuiSession;
-  /**
-   * The platform lifecycle host `runChat` received from the CLI composition
-   * root; these exit paths call `process.exit()` directly, so they run the
-   * shutdown sequence themselves rather than leaving it to `bin/texra.ts`.
-   */
-  readonly lifecycle: LifecycleHost;
   /** `context.commandName` — names the resume command in the exit hint. */
   readonly commandName: string;
   /** `context.cwd` — the launch directory shown in the resume hint. */
@@ -85,8 +78,10 @@ interface SessionExitControllerContext {
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
-  /** Stop the active run (writes a `halted` `flow.step`). */
+  /** Stop the active run (writes a `halted` `run.position`). */
   readonly interruptActive: () => void;
+  /** The user's own `--quiet`: the TUI silences the log sink regardless. */
+  readonly quiet: boolean;
 }
 
 /** The exit-subsystem handles `runChat` wires into Ink props and its `finally`. */
@@ -153,7 +148,7 @@ export function createSessionExitController(
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence(ctx.lifecycle);
+    runCliPlatformShutdownSequence({ quiet: ctx.quiet });
   // Drain artifact writes and canonical event publication before shutdown.
   // Platform shutdown then settles executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves. Every
@@ -185,12 +180,13 @@ export function createSessionExitController(
       ctx.interruptActive();
       armExit();
     } else if (session.isResumableIdle()) {
-      // Exit WITHOUT interrupting. The suspended tool-use run keeps its latest
-      // `flow.snapshot` on the run aggregate, so `texra resume` can continue
+      // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
+      // `run.snapshot` on the run aggregate, so `texra resume` can continue
       // it. Preserve the session's current terminal status too; an
       // intentional idle exit after a successful turn should not report
-      // SIGINT/130. Signal teardown calls process.exit, appending no `halted`
-      // step.
+      // SIGINT/130. The platform shutdown's session close still ends the
+      // generation with its cancelled `run.end` (see
+      // `TuiSession.isResumableIdle`).
       void teardown({ kind: 'signal', exitCode: session.runExitCode });
     } else {
       ctx.interruptActive();
@@ -198,7 +194,7 @@ export function createSessionExitController(
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its `flow.snapshot` stays resumable (see handleSigint).
+  // suspended so its `run.snapshot` stays resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
     if (session.canStopVisibleRun()) {
       ctx.interruptActive();
@@ -265,19 +261,21 @@ export function createSessionExitController(
       ctx.terminal.release();
       printResumeHintOnExit(resumeHint);
       // `runCliPlatformShutdownSequence` catches its own failures and never
-      // rejects, so there is no rejection arm to write here.
-      return ctx.runtime
-        .runPromise(persistSession)
-        .then(runPlatformShutdown)
-        .finally(() => process.exit(cause.exitCode));
+      // rejects, so there is no catch arm to write here.
+      try {
+        await ctx.runtime.runPromise(persistSession);
+        await runPlatformShutdown();
+      } finally {
+        process.exit(cause.exitCode);
+      }
+      return;
     }
 
-    // A suspended (idle/WAITING) root session is resumable, so it is left
-    // uninterrupted: the checkpoint survives either way since #11304/#11315,
-    // but interrupting would persist a CANCELLED outcome, clear approvals and
-    // sweep active children. See TuiSession.isResumableIdle for the live-flow
-    // check that distinguishes this state from a resume slot that is still
-    // rehydrating.
+    // A suspended (idle/WAITING) root session is resumable, so it takes no
+    // user stop: the checkpoint survives either way since #11304/#11315, and
+    // the session's close ends the generation on its own. See
+    // TuiSession.isResumableIdle for the live-flow check that distinguishes
+    // this state from a resume slot that is still rehydrating.
     //
     // Scope: this owns the policy for the GRACEFUL path only — `/exit` and
     // Ctrl-C's `clean-exit`, both via `requestInputExit`. Signal quits
@@ -289,7 +287,7 @@ export function createSessionExitController(
     // `interruptActive()` itself before `requestInputExit()`, outside this
     // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
     // skips the interrupt while `clean-exit` still runs one — and
-    // `stopAgentRun`'s child sweep fires even with no root handle. So Ctrl-C
+    // `RunRegistry.stop`'s child sweep fires even with no root handle. So Ctrl-C
     // on a finished turn still detaches background children where `/exit` does
     // not. Converging that means changing Ctrl-C, which is outside the `/exit`
     // ruling this comment implements.

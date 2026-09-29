@@ -56,9 +56,8 @@ TeXRA panel offers the main access choices:
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip Signing in to TeXRA
-**TeXRA: Sign In to TeXRA Account (Remote Agents)** is separate from model access: your TeXRA account unlocks the hosted
-research-agent catalog (remote workflow agents such as `generic` and `devise`), and those agents still run on the credential
-you configured above. Read the [Remote agents guide](./remote-agents.md).
+**TeXRA: Sign In to TeXRA Account** is optional and separate from model access. Every agent, including the
+research-writing agents such as `generic` and `devise`, ships bundled and runs on the credential you configured above.
 :::
 
 Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
@@ -67,7 +66,8 @@ Once a credential is in place, the setup assistant takes it from here: one conve
 The terminal uses the same paths: provider env vars for your own keys,
 `texra auth chatgpt login` for a ChatGPT subscription, `texra auth grok login`
 for a Grok (xAI) subscription, or `/login` in a chat to pick among connected
-subscriptions. `texra setup` is the terminal counterpart of the setup
+subscriptions. Running `texra` without any of these opens the chat with a
+**Connect a model** panel instead of an error. `texra setup` is the terminal counterpart of the setup
 assistant: it walks you through sign-in, ChatGPT, or an API key, then your
 environment, agent roster, and first task. Read the
 [Authentication section](./texra-cli.md#authentication) of the CLI guide.

@@ -1,11 +1,9 @@
 /**
- * The run programs' shared scaffolding: the one state cell every run writes
- * through, the entry both loops take, and the exit protocol every run
- * settles. One mechanism with two call sites (`toolUse.ts`,
- * `reflection.ts`); what the families do inside their loops stays in their
- * own files. There is no family parameter and no hook record: the shared
- * surface is values and total functions, and each loop writes its own
- * three-argument `Effect.acquireUseRelease` (the run-loop design,
+ * The run program's scaffolding: the one state cell every run writes
+ * through, the run's entry, and the exit protocol every run settles. What
+ * the loop does between them stays in `toolUse.ts`. There is no hook
+ * record: the surface is values and total functions, and the loop writes its
+ * own three-argument `Effect.acquireUseRelease` (the run-loop design,
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
@@ -14,8 +12,6 @@ import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   RUN_OUTCOME,
-  type NormalizedUsage,
-  type RunFamily,
   type RunId,
   type RunOutcome,
   type SessionEvent,
@@ -30,9 +26,9 @@ import {
 } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { AgentRun, type AgentRunShape } from '../run/AgentRun';
+import { AgentRun } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
-import { haltedStepRow } from './rows';
+import { haltedPositionRow } from './rows';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -118,25 +114,6 @@ export const makeRunCell = (
     } satisfies RunCell;
   });
 
-/**
- * Record one round's usage against the binding that served it. A manual retry
- * may have rebound the model inside the invoker, so the price is charged
- * against `run.model`'s current value rather than whatever the round started
- * with. The totals are the ledger's folded ones, response time included.
- * Both loops call this after a successful round.
- */
-export const recordServedUsage = (
-  run: Pick<AgentRunShape, 'model' | 'usageMonitor'>,
-  state: RunState,
-  latestUsage: NormalizedUsage | null,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const served = yield* SynchronizedRef.get(run.model);
-    yield* Effect.sync(() =>
-      run.usageMonitor.recordUsage(state.usage, latestUsage, served),
-    );
-  });
-
 /** Why a run the ledger holds no rows for cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
   'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
@@ -150,30 +127,23 @@ export type RunEntry =
  * The run's entry, as data. Takes the claim when resuming, loads the
  * aggregate, and raises both refusals once — a resume with nothing to resume,
  * and a fresh launch onto an aggregate that already holds ledger state
- * (#11313). The family check both families need lives here too: a run resumed
- * under the wrong family fails loudly instead of continuing against an empty
- * workspace. The caller branches on the tag.
+ * (#11313). The caller branches on the tag.
  */
 export const loadRun = (
   runId: RunId,
-  family: RunFamily,
   resume: boolean,
 ): Effect.Effect<RunEntry, Error, RunLedger | AgentRun> =>
   Effect.gen(function* () {
     const ledger = yield* RunLedger;
-    if (resume) yield* ledger.acquire(runId);
-    const loaded = yield* ledger.load(runId);
+    const loaded = resume
+      ? yield* ledger.acquire(runId)
+      : yield* ledger.load(runId);
     if (loaded !== null && loaded.phase !== null) {
       if (!resume) {
         return yield* Effect.fail(
           new Error(
             `Run ${runId} already has ledger state; resume it instead.`,
           ),
-        );
-      }
-      if (loaded.family !== family) {
-        return yield* Effect.fail(
-          new Error(`Run ${runId} is not a ${family} run; resume it as one.`),
         );
       }
       return { _tag: 'restored', loaded } satisfies RunEntry;
@@ -187,7 +157,7 @@ export const loadRun = (
       _tag: 'fresh',
       opening: {
         ...freshRunState(0),
-        family,
+        family: 'toolUse',
         modelId: bound.modelId,
         modelCompatibilityKey: bound.compatibilityKey,
         // The launch's own-API-key choice enters the ledger with the opening
@@ -197,31 +167,23 @@ export const loadRun = (
     } satisfies RunEntry;
   });
 
-/**
- * What a run program returns. `outcome: null` is a park: the launch ended
- * without ending the run, so no `halted` step is written.
- */
+/** What a run program, and each of its turns, returns. */
 export type RunExit = {
   readonly state: RunState;
-  readonly outcome: RunOutcome | null;
+  readonly outcome: RunOutcome;
 };
 
 /**
- * The one verdict: the body's own value when it returned. Any interrupt in
- * a failure cause is a stop, even when a finalizer then failed
- * (`Interrupt` + `Die`): the run lifecycle already reports that run
- * `CANCELLED`, so the halt row agrees.
+ * The one verdict of a failure cause. Any interrupt in it is a stop, even
+ * when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
+ * already reports that run `CANCELLED`, so every terminal row agrees.
  */
-const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
-  Exit.match(exit, {
-    onSuccess: (value) => value.outcome,
-    onFailure: (cause) =>
-      Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
-  });
+const failureOutcome = (cause: Cause.Cause<unknown>): RunOutcome =>
+  Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease: the
- * halt row and, where a family holds one, the input lease. A refused halt
+ * halt row and, where the run holds one, the input lease. A refused halt
  * write warns; a database write failure reaches the caller. The lease hangs
  * off that write's own exit: a failed halt still frees it, as `recoverable`,
  * because no terminal row landed.
@@ -230,31 +192,29 @@ export const settleRun =
   (
     cell: RunCell,
     logger: AgentTrace,
-    /** The family's input lease, or null. Typed data, not a service lookup:
-     *  a missing FollowUps must not leak a lease with nothing saying so. */
-    lease: FollowUps['Service'] | null,
+    /** The run's own input lease, or null for a run that takes no input. */
+    lease: FollowUps | null,
   ) =>
   (
     exit: Exit.Exit<RunExit, Error>,
   ): Effect.Effect<void, DatabaseWriteFailed, Runs> => {
-    const outcome = runVerdict(exit);
-    const halt =
-      outcome === null
-        ? Effect.void
-        : Effect.gen(function* () {
-            const state = yield* cell.current;
-            yield* cell
-              .append([haltedStepRow(cell.runId, state, outcome)])
-              .pipe(
-                Effect.catchTag('RunLedgerRefused', (error) =>
-                  Effect.sync(() =>
-                    logger.warn('Failed to record the run halt', {
-                      data: error,
-                    }),
-                  ),
-                ),
-              );
-          });
+    // The body's own value when it returned.
+    const outcome = Exit.match(exit, {
+      onSuccess: (value) => value.outcome,
+      onFailure: failureOutcome,
+    });
+    const halt = Effect.gen(function* () {
+      const state = yield* cell.current;
+      yield* cell.append([haltedPositionRow(cell.runId, state, outcome)]).pipe(
+        Effect.catchTag('RunLedgerRefused', (error) =>
+          Effect.sync(() =>
+            logger.warn('Failed to record the run halt', {
+              data: error,
+            }),
+          ),
+        ),
+      );
+    });
     return halt.pipe(
       Effect.onExit((halted) =>
         lease === null
@@ -303,10 +263,7 @@ export const stagedBy =
           stage.end(
             Exit.match(exit, {
               onSuccess: outcomeOf,
-              onFailure: (cause) =>
-                Cause.hasInterrupts(cause)
-                  ? RUN_OUTCOME.CANCELLED
-                  : RUN_OUTCOME.FAILED,
+              onFailure: failureOutcome,
             }),
           ),
         ),

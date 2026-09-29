@@ -81,11 +81,11 @@ describe('setup credential reporting', () => {
           installPlatform(
             {
               env: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
+              host: 'cli',
             },
             { setup: createFakeSetupPlatform() },
           ),
         );
-
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
           Effect.provide(nativeToolTestLayer()),
         );

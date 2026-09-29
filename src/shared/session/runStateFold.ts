@@ -17,17 +17,18 @@ import {
 import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
-  FlowSnapshotPayloadSchema,
-  RunUsageTotalsSchema,
+  RunSnapshotPayloadSchema,
   requestParksItsCaller,
   type CommitOrdinal,
-  type FlowSnapshotPayload,
   type DispatchFacts,
+  type HookOutcomes,
   type InvocationRef,
+  type JsonValue,
   type ModelCompatibilityKey,
+  type OfferedTool,
   type PendingRetry,
+  type RunSnapshotPayload,
   type RetryErrorInfo,
-  type RunLoopPhase,
   type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
@@ -39,12 +40,18 @@ import { isObject } from '@utils/core';
 import {
   applyRunRow,
   byId,
+  copyById,
   freshRunPosition,
   isFollowUpRow,
   isSharedRunRow,
+  phaseAfter,
+  type RunLoopPhase,
+  type FoldPass,
   type RunPosition,
   type SharedRunRow,
+  writable,
 } from './runRows';
+import { mutate } from './stateOperation';
 import type { z } from 'zod';
 
 /**
@@ -54,8 +61,8 @@ import type { z } from 'zod';
  * opened, both card rows for a fast tool whose card opens and closes in that
  * batch); an approval's recovery binding is the `tool.binding` committed in
  * the same batch; a streaming row open when the loop parks closes with the
- * `waiting` step; a model switch's `run.record` and `run.config` restate the
- * snapshot's model id. Publishing those companions separately is the crash
+ * `waiting` step; a model switch's `run.config` restates the snapshot's
+ * model id. Publishing those companions separately is the crash
  * window where a settled tool keeps an active card, or a terminal card claims
  * a result no row holds, or an approval survives with nothing to recover it
  * by, or a listing names a model the ledger does not. An explicit list
@@ -65,23 +72,24 @@ export type RunLedgerDraft = Extract<
   SessionEventDraft,
   {
     type:
-      | 'flow.step'
+      | 'run.position'
       | 'model.message'
       | 'model.compaction'
       | 'tool.intent'
       | 'tool.binding'
       | 'tool.result'
       | 'model.retry'
-      | 'flow.snapshot'
+      | 'run.snapshot'
+      | 'tools.offered'
+      | 'context.blob'
+      | 'hook.outcome'
       | 'output.produced'
       | 'tool.start'
       | 'tool.end'
       | 'stream.end'
       | 'request.opened'
       | 'request.decided'
-      | 'followup.consumed'
-      | 'run.record'
-      | 'run.config';
+      | 'followup.consumed';
   }
 >;
 
@@ -98,27 +106,14 @@ export class RunLedgerInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The family state a `flow.snapshot` restores, keyed by its family. */
-const FlowStateSchema = FlowSnapshotPayloadSchema.options.map((arm) =>
-  arm.pick({ family: true, state: true }),
-);
-type FlowState = z.output<(typeof FlowStateSchema)[number]>;
+/** The loop state a `run.snapshot` restores. */
+const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
+type LoopState = z.output<typeof LoopStateSchema>;
 type Message = z.output<typeof MessageSchema>;
-
-/**
- * The family state of a snapshot, keeping the family/state correlation. The
- * two arms are spelled out deliberately, though the text is the same: the
- * test narrows the discriminated payload so that `state` keeps the arm its
- * `family` names. Collapsing them widens the pair to a shape `FlowState`
- * does not accept, so the identical arms are load-bearing, not a leftover.
- */
-const flowOf = (p: FlowSnapshotPayload): FlowState =>
-  p.family === 'toolUse'
-    ? { family: p.family, state: p.state }
-    : { family: p.family, state: p.state };
 
 type OpenAttempt = {
   readonly invocation: InvocationRef;
+  readonly request: string; // its recorded request's address
   readonly origin: ModelOrigin;
   readonly delivery: 'stream' | 'blocking' | 'background';
   readonly providerResponseId: string | null;
@@ -157,14 +152,18 @@ type PendingIntent = {
  * from the row that produced it.
  */
 export type RunState = RunPosition & {
+  /** Model calls: a new invocation's `attempt` row counts one, a retry none. */
+  readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
-  readonly snapshotCommit: CommitOrdinal | null;
-  /** Ledger rows folded into this state: zero means nothing but queued
-   *  input has folded, which is what tells an unopened run from a broken one. */
-  readonly rowsBeforeSnapshot: number;
-  /** `null` until the opening `flow.snapshot`: no row that presupposes an
-   *  opened run folds before it. */
+  /** The latest `run.snapshot` as written: the loop state beside it moves
+   *  with each `tool.result` mutation, this does not. */
+  readonly lastSnapshot: RunSnapshotPayload | null;
+  /** Ledger rows folded into this state, before and after any snapshot:
+   *  zero means only queued input has folded (an unopened, not broken, run). */
+  readonly ledgerRows: number;
+  /** `null` until the opening `run.snapshot` (then `initial`, moved by
+   *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
@@ -185,18 +184,28 @@ export type RunState = RunPosition & {
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
-  /** Derived (D12): the priced usage stamped on every `response` row plus
-   *  `tool.result` `add` operations. No snapshot carries it. */
+  /** Derived (D12): the priced usage on every `response` and `model.compaction`
+   *  row plus `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** The round of the last `context-window` compaction: a turn that
-   *  overflowed the window is retried once per round against it. */
-  readonly overflowRecoveredAtRound: number | null;
-  readonly flow: FlowState | null;
+  /** The turn the last `context-window` compaction (one per round) hit. */
+  readonly overflowRecoveredAtTurn: number | null;
+  readonly loop: LoopState | null;
+  /** The latest `tools.offered` row's set; `null` before the first. */
+  readonly offeredTools: readonly OfferedTool[] | null;
+  /** The plugin whose continuation the latest `tools.offered` row pinned. */
+  readonly offeredContinuation: string | null;
+  /** The names of the skills it listed. */
+  readonly offeredSkills: readonly string[];
+  readonly offeredSystem: string | null; // its system text's address
+  readonly offeredHooks: readonly string[]; // the hooks it pinned
+  /** The run's `context.blob` rows: model-facing content by address. */
+  readonly contents: Readonly<Record<string, JsonValue>>;
+  /** The `hook.outcome` rows by point: a recorded point never runs again. */
+  readonly hookOutcomes: HookOutcomes;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
-type CardRowType =
-  'tool.start' | 'tool.end' | 'stream.end' | 'run.record' | 'run.config';
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
@@ -217,6 +226,7 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.start': true,
   'run.activate': true,
   'run.config': true,
+  'run.model': true,
   'run.detach': true,
   'run.end': true,
   'run.removed': true,
@@ -224,7 +234,7 @@ const IGNORED_ROW_TYPES: Readonly<
   'conversation.progress': true,
   'run.fact': true,
   'child.park': true,
-  goalStateChanged: true,
+  'plugin.fact': true,
   inquiryThreadUpdated: true,
   'approval.policy': true,
   log: true,
@@ -232,33 +242,31 @@ const IGNORED_ROW_TYPES: Readonly<
   'stage.end': true,
   'workflow.plan': true,
   'workflow.call': true,
-  'skills.snapshot': true,
   usage: true,
   'context.state': true,
   'stream.start': true,
   'response.finalized': true,
   domain: true,
-  'run.record': true,
   'run.report': true,
   'run.result': true,
-  'run.workspaceFiles': true,
+  'followup.closed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
   // Checkpoint-aggregate rows never reach a run fold; total-record members.
   'workflow.script': true,
   'workflow.journal': true,
   'workflow.attempt': true,
-  'state.value.set': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
 /** The state a run starts from: every field at its zero, no family bound
- *  yet. Both run programs open from this and stamp their own family. */
+ *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
+  round: 0,
   commit,
-  snapshotCommit: null,
-  rowsBeforeSnapshot: 0,
+  lastSnapshot: null,
+  ledgerRows: 0,
   phase: null,
   modelId: null,
   modelCompatibilityKey: null,
@@ -272,8 +280,15 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
-  overflowRecoveredAtRound: null,
+  loop: null,
+  overflowRecoveredAtTurn: null,
+  offeredTools: null,
+  offeredContinuation: null,
+  offeredSkills: [],
+  offeredSystem: null,
+  offeredHooks: [],
+  contents: {},
+  hookOutcomes: {},
 });
 
 /**
@@ -315,43 +330,10 @@ const refuse = (
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
 
-/** One state operation over a JSON document, immutably. */
-function mutate(
-  node: unknown,
-  path: readonly string[],
-  op: StateOperation,
-): Result.Result<unknown, string> {
-  if (!isObject(node)) {
-    return Result.fail(`path ${op.path.join('.')} crosses a non-object`);
-  }
-  const [key, ...rest] = path;
-  if (key === undefined) return Result.fail('empty path');
-  if (rest.length > 0) {
-    if (!Object.hasOwn(node, key)) {
-      return Result.fail(`path ${op.path.join('.')} names no ${key}`);
-    }
-    return Result.map(mutate(node[key], rest, op), (child) => ({
-      ...node,
-      [key]: child,
-    }));
-  }
-  switch (op.op) {
-    case 'set':
-      return Result.succeed({ ...node, [key]: op.value });
-    case 'add': {
-      const current = node[key];
-      if (typeof current !== 'number') {
-        return Result.fail(`add targets a non-number ${op.path.join('.')}`);
-      }
-      return Result.succeed({ ...node, [key]: current + op.amount });
-    }
-  }
-}
-
 /**
- * Apply a settlement's operations over the run's mutable slices, `usage` and
- * the family `state`, and re-validate both through their schemas so the
- * state stays typed without a cast.
+ * Apply a settlement's operations over the loop `state` (the only slice a
+ * call may set; `StateOperationSchema` refuses any other path), and
+ * re-validate it through its schema so the state stays typed without a cast.
  */
 function applyMutations(
   state: RunState,
@@ -359,10 +341,7 @@ function applyMutations(
   commit: CommitOrdinal,
 ): Fold {
   if (ops.length === 0) return Result.succeed(state);
-  let document: unknown = {
-    usage: state.usage,
-    state: state.flow === null ? null : state.flow.state,
-  };
+  let document: unknown = { state: state.loop };
   for (const op of ops) {
     const next = mutate(document, op.path, op);
     if (Result.isFailure(next)) {
@@ -373,53 +352,47 @@ function applyMutations(
   if (!isObject(document)) {
     return refuse('invalid-mutation', 'the slices are not an object', commit);
   }
-  const usage = RunUsageTotalsSchema.safeParse(document.usage);
-  if (!usage.success) {
-    return refuse('invalid-mutation', usage.error.message, commit);
+  if (state.loop === null) {
+    return document.state === null
+      ? Result.succeed(state)
+      : refuse('invalid-mutation', 'no loop state to mutate', commit);
   }
-  if (state.flow === null) {
-    if (document.state !== null) {
-      return refuse('invalid-mutation', 'no family state to mutate', commit);
-    }
-    return Result.succeed({ ...state, usage: usage.data });
+  const loop = LoopStateSchema.safeParse(document.state);
+  if (!loop.success) {
+    return refuse('invalid-mutation', loop.error.message, commit);
   }
-  const arm = FlowStateSchema.find(
-    (candidate) => candidate.shape.family.value === state.flow?.family,
-  );
-  const flow = arm?.safeParse({
-    family: state.flow.family,
-    state: document.state,
-  });
-  if (flow === undefined || !flow.success) {
-    return refuse(
-      'invalid-mutation',
-      flow === undefined ? 'unknown family' : flow.error.message,
-      commit,
-    );
-  }
-  return Result.succeed({ ...state, usage: usage.data, flow: flow.data });
+  return Result.succeed({ ...state, loop: loop.data });
 }
 
 const opened = (state: RunState | null): state is RunState =>
   state !== null && state.phase !== null;
 
-function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
+function foldRow(
+  current: RunState | null,
+  row: SessionEvent,
+  pass: FoldPass,
+): Fold | null {
   const commit = row.commit;
+  /** `messages` with `added` appended: the pass's own array, written once
+   *  copied, so a batch of rows appends without re-copying the history. */
+  const appended = (state: RunState, ...added: readonly Message[]) => {
+    const messages = writable(pass, state.messages, (m) => [...m]);
+    for (const message of added) messages.push(message);
+    return messages;
+  };
+  /** A row out of the order the ledger writes. */
+  const outOfOrder = (detail: string) => refuse('out-of-order', detail, commit);
   if (current !== null && commit <= current.commit) {
-    return refuse(
-      'out-of-order',
-      `commit ${commit} is not above ${current.commit}`,
-      commit,
-    );
+    return outOfOrder(`commit ${commit} is not above ${current.commit}`);
   }
   /** A row that presupposes the opening snapshot, folded before it. */
   const beforeOpening = (what: string) =>
-    refuse('out-of-order', `${what} before the opening flow.snapshot`, commit);
+    outOfOrder(`${what} before the opening run.snapshot`);
   /** The state with this ledger row counted in. */
   const advance = (state: RunState): RunState => ({
     ...state,
     commit,
-    rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+    ledgerRows: state.ledgerRows + 1,
   });
   // Pending input is the publisher's: a queued row only opens an empty run.
   if (isFollowUpRow(row))
@@ -431,47 +404,42 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     // `unresolved` is a malformed aggregate here: this fold reads a run's
     // whole history, so a decision always follows the opening it answers.
     if (row.type === 'output.produced' && !opened(current)) {
-      return refuse('out-of-order', 'output before opening snapshot', commit);
+      return outOfOrder('output before opening snapshot');
     }
-    const verdict = applyRunRow(current, row);
+    const verdict = applyRunRow(current, row, pass);
     if (verdict.kind === 'unchanged') return null;
     if (verdict.kind === 'unresolved') {
-      return refuse(
-        'out-of-order',
-        `decision names no request ${verdict.requestId}`,
-        commit,
-      );
+      return outOfOrder(`decision names no request ${verdict.requestId}`);
     }
     if (verdict.kind === 'contradiction') {
-      return refuse('out-of-order', verdict.detail, commit);
+      return outOfOrder(verdict.detail);
     }
     const state = current ?? freshRunState(commit);
+    const at = verdict.rows.at;
     return Result.succeed({
       ...state,
       commit,
-      // Only the loop's own step is a ledger row; queued input, output and
-      // the requests a session opens do not open a run.
-      rowsBeforeSnapshot:
-        state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
+      // Only the loop's own position is a ledger row; queued input, output
+      // and the requests a session opens do not open a run.
+      ledgerRows: state.ledgerRows + (at === undefined ? 0 : 1),
       ...verdict.rows,
+      phase: phaseAfter(state.phase, at),
     });
   }
   switch (row.type) {
-    case 'flow.snapshot': {
-      // Family state and the coordinates the loop owns, and nothing else: no
-      // reference set to reconcile, so there is no way for a snapshot to
+    case 'run.snapshot': {
+      // The loop state and what the loop runs on, and nothing else: no
+      // position and no reference set, so there is no way for a snapshot to
       // disagree with the rows below it (single-owner note, section 3.3).
       const p = row.payload;
       const state = current ?? freshRunState(commit);
-      if (state.family !== null && state.family !== p.family) {
-        return refuse('out-of-order', 'a snapshot of another family', commit);
-      }
       return Result.succeed({
         ...advance(state),
-        snapshotCommit: commit,
+        lastSnapshot: p,
+        phase: state.phase ?? 'initial',
         family: p.family,
         ...p.runtime,
-        flow: flowOf(p),
+        loop: p.state,
       });
     }
     case 'model.message': {
@@ -480,7 +448,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         const state = current ?? freshRunState(commit);
         return Result.succeed({
           ...advance(state),
-          messages: [...state.messages, ...p.messages],
+          messages: appended(state, ...p.messages),
         });
       }
       if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
@@ -493,17 +461,17 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             open.invocation.invocationId === p.invocation.invocationId &&
             p.invocation.attempt <= open.invocation.attempt
           ) {
-            return refuse(
-              'out-of-order',
+            return outOfOrder(
               `attempt ${p.invocation.attempt} does not follow ${open.invocation.attempt}`,
-              commit,
             );
           }
           return Result.succeed({
             ...state,
             phase: 'model.submitted',
+            round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
             openAttempt: {
               invocation: p.invocation,
+              request: p.request,
               origin: p.origin,
               delivery: p.delivery,
               providerResponseId: null,
@@ -517,11 +485,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         case 'response': {
           const open = state.openAttempt;
           if (open === null || !sameInvocation(open.invocation, p.invocation)) {
-            return refuse(
-              'out-of-order',
-              `${p.kind} names no open attempt`,
-              commit,
-            );
+            return outOfOrder(`${p.kind} names no open attempt`);
           }
           if (p.kind === 'identified') {
             return Result.succeed({
@@ -546,10 +510,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             });
           }
           if (state.pendingResponse !== null) {
-            return refuse(
-              'out-of-order',
+            return outOfOrder(
               `response ${p.responseId} while ${state.pendingResponse.responseId} is undelivered`,
-              commit,
             );
           }
           const settled: RunState = {
@@ -564,10 +526,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           if (p.calls.length === 0) {
             return Result.succeed({
               ...settled,
-              messages: [
-                ...settled.messages,
-                assistantMessageFromResult(p.turn),
-              ],
+              messages: appended(settled, assistantMessageFromResult(p.turn)),
             });
           }
           return Result.succeed({
@@ -600,19 +559,21 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
               commit,
             );
           }
+          const pendingIntents = byId(
+            Object.entries(state.pendingIntents).filter(
+              ([, intent]) => intent.responseId !== pending.responseId,
+            ),
+          );
+          pass.add(pendingIntents);
           return Result.succeed({
             ...state,
-            messages: [
-              ...state.messages,
+            messages: appended(
+              state,
               assistantMessageFromResult(pending.turn),
               ...p.messages,
-            ],
-            pendingResponse: null,
-            pendingIntents: byId(
-              Object.entries(state.pendingIntents).filter(
-                ([, intent]) => intent.responseId !== pending.responseId,
-              ),
             ),
+            pendingResponse: null,
+            pendingIntents,
           });
         }
       }
@@ -623,12 +584,18 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     case 'model.compaction': {
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
+      const messages = [
+        ...current.messages.slice(0, p.keepPrefix),
+        ...p.messages,
+      ];
+      pass.add(messages);
       return Result.succeed({
         ...advance(current),
-        messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
+        messages,
         continuation: p.continuation,
+        usage: addTurnUsage(current.usage, p.usage),
         ...(p.cause === 'context-window'
-          ? { overflowRecoveredAtRound: current.round }
+          ? { overflowRecoveredAtTurn: current.turn }
           : {}),
       });
     }
@@ -637,28 +604,22 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       const p = row.payload;
       const pending = current.pendingResponse;
       if (pending === null || pending.responseId !== p.responseId) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `intent names response ${p.responseId}, pending is ${pending?.responseId ?? 'none'}`,
-          commit,
         );
       }
-      const pendingIntents = byId(Object.entries(current.pendingIntents));
+      const pendingIntents = writable(pass, current.pendingIntents, copyById);
       for (const callId of p.callIds) {
         const call = pending.calls.find((fact) => fact.callId === callId);
         if (call === undefined || call.parallelSafe) {
-          return refuse(
-            'out-of-order',
+          return outOfOrder(
             `intent names ${callId}, which is not a barrier call of ${p.responseId}`,
-            commit,
           );
         }
         const known = pendingIntents[callId];
         if (known !== undefined && p.attempt < known.attempt) {
-          return refuse(
-            'out-of-order',
+          return outOfOrder(
             `intent attempt ${p.attempt} is below ${known.attempt} for ${callId}`,
-            commit,
           );
         }
         pendingIntents[callId] = {
@@ -683,26 +644,45 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       const p = row.payload;
       const intent = current.pendingIntents[p.callId];
       if (intent === undefined || intent.attempt !== p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `binding ${p.requestId} names no pending intent for ${p.callId} at attempt ${p.attempt}`,
-          commit,
         );
       }
+      const pendingIntents = writable(pass, current.pendingIntents, copyById);
+      pendingIntents[p.callId] = { ...intent, approvalRequestId: p.requestId };
+      return Result.succeed({ ...advance(current), pendingIntents });
+    }
+    case 'tools.offered': // a fresh run's comes in its opening batch
       return Result.succeed({
-        ...advance(current),
-        pendingIntents: byId([
-          ...Object.entries(current.pendingIntents),
-          [p.callId, { ...intent, approvalRequestId: p.requestId }],
-        ]),
+        ...advance(current ?? freshRunState(commit)),
+        offeredTools: row.payload.tools,
+        offeredContinuation: row.payload.continuation,
+        offeredSkills: row.payload.skills,
+        offeredSystem: row.payload.system,
+        offeredHooks: row.payload.hooks,
       });
+    case 'context.blob': {
+      const { digest, value } = row.payload;
+      const state = advance(current ?? freshRunState(commit));
+      // A digest is 64 hex characters, never `__proto__`: plain assignment.
+      const contents = writable(pass, state.contents, (c) => ({ ...c }));
+      contents[digest] = value;
+      return Result.succeed({ ...state, contents });
+    }
+    case 'hook.outcome': {
+      // An opening batch carries its opening hooks: no opened run needed.
+      const p = row.payload;
+      const state = advance(current ?? freshRunState(commit));
+      const byPoint = writable(pass, state.hookOutcomes, (h) => ({ ...h }));
+      byPoint[p.point] = [...(byPoint[p.point] ?? []), p];
+      return Result.succeed({ ...state, hookOutcomes: byPoint });
     }
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;
       // A permit presupposes the request.opened it names.
       if (permit !== null && current.requests[permit.requestId] === undefined) {
-        return refuse('out-of-order', `dangling ${permit.requestId}`, commit);
+        return outOfOrder(`dangling ${permit.requestId}`);
       }
       // The retry owner's durable gate, its one carrier: `null` retires it.
       return Result.succeed({
@@ -734,10 +714,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         );
       }
       if (previous !== undefined && previous.attempt > p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `${p.callId} attempt ${p.attempt} is below ${previous.attempt}`,
-          commit,
         );
       }
       // A pending intent is this call's outcome-unknown barrier, and only the
@@ -747,39 +725,28 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       // with no re-run decision anywhere in the rows.
       const intent = current.pendingIntents[p.callId];
       if (intent !== undefined && intent.attempt !== p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `${p.callId} settles attempt ${p.attempt} while its intent admitted attempt ${intent.attempt}`,
-          commit,
         );
       }
-      const pendingIntents =
-        intent === undefined
-          ? current.pendingIntents
-          : byId(
-              Object.entries(current.pendingIntents).filter(
-                ([callId]) => callId !== p.callId,
-              ),
-            );
+      let pendingIntents = current.pendingIntents;
+      if (intent !== undefined) {
+        const remaining = writable(pass, pendingIntents, copyById);
+        delete remaining[p.callId];
+        pendingIntents = remaining;
+      }
+      const settled = writable(pass, pending.settled, copyById);
+      settled[p.callId] = {
+        attempt: p.attempt,
+        disposition: p.disposition,
+        duplicateOf: p.duplicateOf,
+        result: p.result,
+        attachments: p.attachments,
+      };
       return applyMutations(
         {
           ...advance(current),
-          pendingResponse: {
-            ...pending,
-            settled: byId([
-              ...Object.entries(pending.settled),
-              [
-                p.callId,
-                {
-                  attempt: p.attempt,
-                  disposition: p.disposition,
-                  duplicateOf: p.duplicateOf,
-                  result: p.result,
-                  attachments: p.attachments,
-                },
-              ],
-            ]),
-          },
+          pendingResponse: { ...pending, settled },
           pendingIntents,
         },
         p.stateMutation,
@@ -807,8 +774,9 @@ export function foldRunState(
   rows: readonly SessionEvent[],
 ): Result.Result<RunState | null, RunLedgerInconsistent> {
   let current = state;
+  const pass: FoldPass = new WeakSet();
   for (const row of rows) {
-    const next = foldRow(current, row);
+    const next = foldRow(current, row, pass);
     if (next === null) continue;
     if (Result.isFailure(next)) return next;
     current = next.success;

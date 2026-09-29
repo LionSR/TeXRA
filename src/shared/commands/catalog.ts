@@ -131,13 +131,6 @@ export const commandCatalog = [
     },
   },
   {
-    id: 'texra.createAgentWithAI',
-    extensionRegistry: true,
-    title: 'Create AI Agent',
-    category: 'TeXRA',
-    icon: '$(sparkle)',
-  },
-  {
     id: 'texra.setApiKey',
     extensionRegistry: true,
     title: 'Set API Key',
@@ -152,7 +145,7 @@ export const commandCatalog = [
   {
     id: 'texra.auth.signIn',
     extensionRegistry: true,
-    title: 'Sign In to TeXRA Account (Remote Agents)',
+    title: 'Sign In to TeXRA Account',
     category: 'TeXRA',
     icon: '$(sign-in)',
   },
@@ -309,7 +302,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.toggleBottomBar',
     host: 'desktop',
-    title: 'Toggle Bottom Bar',
+    title: 'Toggle Bottom Panel',
     category: 'View',
     keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
   },
@@ -337,7 +330,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.showFirstRunWalkthrough',
     host: 'desktop',
-    title: 'Show Startup Team Chooser',
+    title: 'Choose Agent Team',
     category: 'Help',
   },
   {

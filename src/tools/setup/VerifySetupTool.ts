@@ -12,6 +12,7 @@ import { ToolError } from '@shared/schemas';
 
 // Local file imports
 import { executed } from '@tools/core/result';
+import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { defineTool } from '../core/define';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
@@ -33,6 +34,9 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
   const { roots } = yield* ToolCall;
+  // Verification follows an install, so a tool looked up and missed a moment
+  // ago is searched for again rather than answered from the miss cache.
+  yield* Effect.sync(forgetToolMisses);
 
   if (input.tool != null) {
     const name = input.tool.trim();

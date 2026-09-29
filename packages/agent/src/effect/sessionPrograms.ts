@@ -42,7 +42,7 @@ import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
@@ -175,7 +175,7 @@ function admitInput(
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
     yield* admitTools(tools);
-    yield* loadAgents({ includeRemote: false }).pipe(
+    yield* loadAgents().pipe(
       Effect.mapError((cause) => {
         // The agent scan reads the configured directories through the
         // platform, so it can fail on the environment. That is a failure of
@@ -239,18 +239,17 @@ function start(
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();
-    let detach: (() => void) | undefined;
+    let tapping = true;
     let reading = false;
     let buffered = 0;
-    /** Detach the trace, once: the reader's close does it while the run
-     *  continues, and the run's settlement does it for a reader that never
-     *  came. */
+    /** Stop taking the run's trace events: the reader's close does it while
+     *  the run continues, and the run's settlement does it for a reader that
+     *  never came. */
     const release = (): void => {
-      detach?.();
-      detach = undefined;
+      tapping = false;
     };
     const settle = (
-      exit: Exit.Exit<AgentFlowResult, RunFailure>,
+      exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         release();
@@ -289,17 +288,19 @@ function start(
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           runValidatedAgent(
-            { kind: 'fresh', config, runId },
+            { config, runId },
             {
-              approvalPromptsUnavailable: true,
-              onRunResolved: (_, runTrace) => {
-                detach = runTrace.subscribe((event) => {
-                  if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                    release(); // `settle` logs it: no fiber here to log from.
-                    return;
-                  }
-                  Queue.offerUnsafe(trace, event);
-                });
+              // The run's trace is built with this tap, so it hears the run
+              // from its first event.
+              onTraceEvent: (event) => {
+                if (!tapping) return;
+                if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
+                  release(); // `settle` logs it: no fiber here to log from.
+                  return;
+                }
+                Queue.offerUnsafe(trace, event);
+              },
+              onRunResolved: () => {
                 Deferred.doneUnsafe(admitted, Effect.void);
               },
               session,
@@ -443,6 +444,9 @@ export function makeSessions(
         );
         const handle = yield* openSessionEffect({
           roots: resolved,
+          // No surface here can answer an approval prompt: every run of this
+          // session, launched or resumed, is offered no approval-gated tool.
+          interactions: { approvalPromptsUnavailable: true },
           transcriptMode: {
             kind: 'ephemeral',
             reason: 'npm package consumer',

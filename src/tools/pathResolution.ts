@@ -13,6 +13,7 @@ import {
   canonicalizePath,
   findExternalRoot,
   type MatchedExternalRoot,
+  type StepRoot,
 } from '@utils/files/externalRoots';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import {
@@ -41,7 +42,7 @@ export interface WorkspacePathResolution {
 interface OutsideRootCandidate {
   readonly kind: 'outside-root';
   readonly absolutePath: string;
-  readonly match: MatchedExternalRoot | null | undefined;
+  readonly match: MatchedExternalRoot | null;
   readonly outsideMessage: string;
 }
 
@@ -60,14 +61,17 @@ export function parseWorkingDirectory(
 
 /**
  * The call fields a tool path resolves against: the session's roots (its
- * workspace folder and the setting slots containment policy is read from) and
- * the run's working directory. A tool's `ToolCall` satisfies it structurally.
+ * workspace folder and the setting slots containment policy is read from),
+ * the run's working directory, and the read-only roots the call's step
+ * admits (the skills it lists or its user activated; none outside a run).
+ * A tool's `ToolCall` satisfies it structurally.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`assembleAgentLaunchContext`).
  */
 export interface ToolPathCall {
   readonly roots: { readonly workspace: string | undefined } & SettingsStores;
   readonly workingDirectory?: string;
+  readonly stepRoots?: readonly StepRoot[];
 }
 
 /** A resolved tool path plus the POSIX form a tool shows for it. */
@@ -114,7 +118,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
             return {
               kind: 'outside-root',
               absolutePath: input,
-              match: findExternalRoot(input),
+              match: findExternalRoot(input, call.stepRoots),
               outsideMessage: 'Workspace path is not available.',
             };
           }
@@ -123,12 +127,10 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
 
         const resolved = locateInWorkspace(root, input);
         if (resolved.kind === 'external') {
-          // `locateInWorkspace` already consulted the external-root registry,
-          // so its match is reused rather than looked up again.
           return {
             kind: 'outside-root',
             absolutePath: resolved.absolutePath,
-            match: resolved.allowed,
+            match: findExternalRoot(resolved.absolutePath, call.stepRoots),
             outsideMessage: `Path must stay within the ${scope}.`,
           };
         }
@@ -144,15 +146,18 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
           return {
             kind: 'outside-root',
             absolutePath: physical,
-            match: findExternalRoot(physical),
+            match: findExternalRoot(physical, call.stepRoots),
             outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
           };
         }
-        return annotateExternalPermission({
-          relative,
-          absolute: resolved.absolutePath,
-          fsPath: call.workingDirectory ? resolved.absolutePath : relative,
-        });
+        return annotateExternalPermission(
+          {
+            relative,
+            absolute: resolved.absolutePath,
+            fsPath: call.workingDirectory ? resolved.absolutePath : relative,
+          },
+          call.stepRoots,
+        );
       },
       catch: ensureError,
     });
@@ -180,7 +185,8 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
       relative,
       absolute: resolution.absolutePath,
       fsPath: resolution.absolutePath,
-      display: toPosixPath(relative),
+      // Already forward-slashed; `toPosixPath` would drop the leading `/`.
+      display: relative,
       ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
     };
   });
@@ -216,9 +222,10 @@ function externalInfo(
  */
 function annotateExternalPermission(
   resolution: WorkspacePathResolution,
+  stepRoots: readonly StepRoot[] | undefined,
 ): WorkspacePathResolution {
   if (resolution.external) return resolution;
-  const match = findExternalRoot(resolution.absolute);
+  const match = findExternalRoot(resolution.absolute, stepRoots);
   if (!match) return resolution;
   return { ...resolution, external: externalInfo(match) };
 }

@@ -347,7 +347,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+        '<subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -357,11 +357,7 @@ const SCENARIOS = [
       '1. ✓ reviewer completed All good <ok>',
       'Queued follow-ups (1)',
     ],
-    unexpect: [
-      '(empty follow-up)',
-      '<orchestrator-followup>',
-      '<subagent-result',
-    ],
+    unexpect: ['(empty follow-up)', '<subagent-result'],
   },
   {
     name: 'queued-subagent-followup-status-preview',
@@ -369,7 +365,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>',
+        '<subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
@@ -379,7 +375,7 @@ const SCENARIOS = [
       'queued 1',
       '⟳ review · todos · 6 done, 0 active, 0 pending',
     ],
-    unexpect: ['<orchestrator-followup>', '<subagent-progress'],
+    unexpect: ['<subagent-progress'],
   },
   {
     name: 'compact-queued-followups',
@@ -565,7 +561,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 8 more',
+      '… 10 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -588,8 +584,9 @@ const SCENARIOS = [
       'Prefer ChatGPT subscrip',
       'Prefer Grok subscription',
       'Otherwise: Your own API keys',
+      'Add a provider API key',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
     maxBlankLinesBetween: [
@@ -623,7 +620,7 @@ const SCENARIOS = [
       'Workflows',
       'correct',
       'polish',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
     ],
     unexpect: [
       '//agent',
@@ -691,7 +688,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -729,7 +726,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -1031,13 +1028,13 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_WORKFLOW_SCRIPT_DISABLED: '1',
     },
-    keys: [...CONFIG_TOOLS_FORM_KEYS, '4'],
+    keys: [...CONFIG_TOOLS_FORM_KEYS, '5'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Tools',
       'Multi-Agent Workflow — enabled · detected · Ready',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
     ],
   },
   {
@@ -1144,7 +1141,7 @@ const SCENARIOS = [
       'Account & access',
       'Prefer ChatGPT subscrip',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
   },
@@ -1271,9 +1268,9 @@ const SCENARIOS = [
     expect: [
       '/config · Tools',
       'Toggle external integrations',
-      '+1 earlier, +5 more',
+      'Goal Mode — +7 more',
       '↑/↓ navigate',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
       'Esc close',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
@@ -1797,7 +1794,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Agent asks:',
+      'Direction',
       'previous rows',
       'Which proof direction',
       '+2 more',
@@ -1818,30 +1815,9 @@ const SCENARIOS = [
   {
     name: 'plan-approval',
     frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-    ],
-    unexpect: [
-      'r run as goal',
-      'Runs until done; only Bash is automatic',
-      '/model models',
-    ],
-    maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: 'Approve plan?', max: 3 },
-    ],
-  },
-  {
-    name: 'plan-approval-goal',
-    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     expect: [
@@ -1863,7 +1839,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
       HARNESS_PLAN_APPROVAL_OBJECTIVE: [
         '  CLI Dogfood Friction Report',
         '**Objective:** During the course of this CLI dogfood session, observe and document any friction, rough edges, or UX issues in the CLI/TUI interaction',
@@ -1904,7 +1879,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
       HARNESS_PLAN_APPROVAL_OBJECTIVE: [
         '## Objective',
         'Prove that $\\sqrt{2} + \\sqrt{3}$ is irrational.',
@@ -1937,26 +1911,9 @@ const SCENARIOS = [
     frame: 'scrollback',
     rows: 10,
     cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-      'Esc reject',
-    ],
-    unexpect: ['Runs until done; only Bash is automatic', '/model models'],
-  },
-  {
-    name: 'compact-plan-approval-goal',
-    frame: 'scrollback',
-    rows: 10,
-    cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     expect: [
@@ -1976,7 +1933,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     keys: ['r', '/status', '\r'],
@@ -1996,7 +1952,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     keys: [DC2],
@@ -2136,7 +2091,9 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
     },
     keys: ['\t'],
-    expect: ['[4 total · 4 running · 0 finished]'],
+    // leanSolver sits idle between turns: it has delivered, so it counts
+    // as finished, not running.
+    expect: ['[4 total · 3 running · 1 finished]'],
     unexpect: ['● localChecker', '● strategy', '● reviewer'],
   },
   {

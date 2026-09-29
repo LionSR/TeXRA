@@ -26,6 +26,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import { InstalledPluginSchema } from '@shared/schemas';
+
 /**
  * The two keys every line carries beyond the record a command builds: `ts`,
  * appended by `emitCliResult` unless the record set its own, and `contract`,
@@ -49,6 +51,28 @@ export const CLI_NDJSON_CONTRACT =
 
 /** A payload field carried verbatim from the command (already shaped upstream). */
 const payload = z.unknown();
+
+/**
+ * An installed plugin as a run result names it: where it came from and, for
+ * a fetched plugin, the commit it is pinned to.
+ */
+const CliPluginPinSchema = InstalledPluginSchema.pick({
+  name: true,
+  source: true,
+  ref: true,
+  commit: true,
+});
+export type CliPluginPin = z.infer<typeof CliPluginPinSchema>;
+
+/**
+ * The provenance an agent run's result carries beside its own fields: the
+ * plugins installed when it started or resumed. Absent on a result that is
+ * not a run's; the tools each step offered are the run's `tools.offered`
+ * rows.
+ */
+const runResultPayload = z.looseObject({
+  plugins: z.array(CliPluginPinSchema).readonly().optional(),
+});
 
 const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('agent'), agent: payload }),
@@ -80,8 +104,11 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
     kind: z.literal('multi-agent-preset-inspection'),
     plan: payload,
   }),
-  z.looseObject({ kind: z.literal('agent-result'), result: payload }),
-  z.looseObject({ kind: z.literal('result'), result: payload }),
+  z.looseObject({
+    kind: z.literal('agent-result'),
+    result: runResultPayload,
+  }),
+  z.looseObject({ kind: z.literal('result'), result: runResultPayload }),
   z.looseObject({ kind: z.literal('skill'), skill: payload }),
   z.looseObject({ kind: z.literal('skill-issue'), issue: payload }),
   z.looseObject({ kind: z.literal('plugin'), plugin: payload }),

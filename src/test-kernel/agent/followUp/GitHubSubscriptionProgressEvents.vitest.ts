@@ -22,14 +22,10 @@ import {
 } from '@eventBus/AppSignals';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { AgentResume, Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
-import {
-  fakeHostAgentResume,
-  fakeHostLifecycle,
-  fakeHostSecrets,
-} from '@test/support/setupPlatform';
+import { closeSessionOf } from '@test/support/sessionEnd';
+import { fakeHostSecrets } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
@@ -161,6 +157,10 @@ class RegistryTestSource {
     return [...this.keys];
   }
 
+  has(key: string): boolean {
+    return this.keys.has(key);
+  }
+
   keyListenerCount(): number {
     return this.keyListeners.size;
   }
@@ -254,15 +254,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
       const source = new RegistryTestSource();
       const session = createTestSession();
       const registry = createTestRegistry(source);
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', session)
-        .pipe(
-          Effect.provideService(Secrets, fakeHostSecrets),
-          Effect.provideService(AgentResume, fakeHostAgentResume),
-          Effect.provideService(Lifecycle, fakeHostLifecycle),
-        );
+        .pipe(Effect.provideService(Secrets, fakeHostSecrets));
       expect(source.keyListenerCount()).toBe(1);
 
       registry.dispose();
@@ -282,17 +278,13 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
         const session = createTestSession();
-        session.followUps.claimLive(runId, 'flow');
+        session.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
 
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -300,7 +292,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         expect(submitFollowUpMock).toHaveBeenCalledWith(
           runId,
-          'new github event',
+          {
+            text: 'new github event',
+            from: { kind: 'notification', source: 'github' },
+          },
           { session, mode: 'live_notification' },
         );
       }),
@@ -313,27 +308,19 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
         const firstSession = createTestSession();
-        firstSession.followUps.claimLive(runId, 'flow');
+        firstSession.followUps.claimLive(runId, 'loop');
         const secondSession = createTestSession();
-        secondSession.followUps.claimLive(runId, 'flow');
+        secondSession.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => secondSession.dispose());
-        yield* Effect.addFinalizer(() => firstSession.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
+        yield* Effect.addFinalizer(() => closeSessionOf(firstSession));
 
         yield* registry
           .bind(runId, 'owner/repo', firstSession)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -341,7 +328,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         expect(submitFollowUpMock).toHaveBeenCalledWith(
           runId,
-          'new github event',
+          {
+            text: 'new github event',
+            from: { kind: 'notification', source: 'github' },
+          },
           { session: secondSession, mode: 'live_notification' },
         );
       }),
@@ -360,7 +350,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         submitFollowUpMock.mockReturnValueOnce(
           Effect.fail(new Error('delivery failed')),
         );
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             process.off('unhandledRejection', unhandledRejection),
@@ -370,11 +360,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         process.once('unhandledRejection', unhandledRejection);
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(
-            Effect.provideService(Secrets, fakeHostSecrets),
-            Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
-          );
+          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
 
         // emit() awaits the delivery program, so the recovery has run by the
         // time it resolves — no settle-and-hope.

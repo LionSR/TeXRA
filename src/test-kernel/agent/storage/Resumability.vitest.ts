@@ -8,7 +8,7 @@ import {
   aggregateId,
   AgentCategory,
   emptyRunEndOutput,
-  type FlowSnapshotPayload,
+  type RunSnapshotPayload,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -21,19 +21,15 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
-const OPENING_SNAPSHOT: FlowSnapshotPayload = {
+const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
-    phase: 'initial',
-    round: 0,
-    turn: 0,
-    continuationIndex: 0,
     modelId: 'test-model',
     modelCompatibilityKey: null,
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+  state: { stateSlices: null },
 };
 
 describe('deriveResumability', () => {
@@ -51,7 +47,7 @@ describe('deriveResumability', () => {
     await Effect.runPromise(
       session.ledger.appendBatch(runId, null, [
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),
           payload: OPENING_SNAPSHOT,
         },
@@ -139,6 +135,14 @@ describe('deriveResumability', () => {
         yield* Effect.promise(() => writeMeta(runId, {}));
         yield* Effect.promise(() => writeSnapshot(runId));
         vi.spyOn(session, 'readRunRecords').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'session.db',
+              cause: new Error('corrupt run metadata'),
+            }),
+          ),
+        );
+        vi.spyOn(session, 'readAggregate').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'session.db',

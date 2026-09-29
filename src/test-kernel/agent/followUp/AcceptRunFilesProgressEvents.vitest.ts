@@ -132,6 +132,7 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
           workspaceWrites(target, Buffer.from(content).toString('utf-8'));
           return Effect.void;
         },
+        makeDirectory: () => Effect.void,
         remove: () => Effect.void,
       }),
       Effect.provideService(FileSystem.FileSystem, {
@@ -436,6 +437,10 @@ describe('accept_run_files progress events', () => {
           'original',
           'paper.tex',
         );
+        // The workspace copy moved on since the snapshot, far from the line
+        // the run changed, so the approved change merges onto it cleanly.
+        const body = 'a\nb\nc\nd\ne\n';
+        const snapshot = `original project\n${body}tail\n`;
         let approvalOriginal = '';
         let approvalProposed = '';
         const { written, delivered } = yield* recordWrittenFiles();
@@ -447,13 +452,13 @@ describe('accept_run_files progress events', () => {
         });
         workspaceReads.set('paper.tex', {
           exists: true,
-          content: 'current project',
+          content: `original project\n${body}tail (edited)\n`,
         });
         absoluteFilePaths.add(snapshotPath);
-        absoluteContents.set(snapshotPath, 'original project');
+        absoluteContents.set(snapshotPath, snapshot);
         absoluteContents.set(
           path.join(projectRoots.workspace, 'draft.tex'),
-          'proposed project',
+          `proposed project\n${body}tail\n`,
         );
         absoluteContentFallback = 'wrong project';
         decideToolEdits((request) => {
@@ -481,8 +486,8 @@ describe('accept_run_files progress events', () => {
         // Delivery runs on the recorder's own fiber, a turn after the publish.
         yield* delivered;
         expect({ approvalOriginal, approvalProposed, written }).toEqual({
-          approvalOriginal: 'original project',
-          approvalProposed: 'proposed project',
+          approvalOriginal: snapshot,
+          approvalProposed: `proposed project\n${body}tail\n`,
           written: [[path.join(projectRoots.workspace, 'paper.tex')]],
         });
       }).pipe(Effect.provide(nativeToolTestLayer())),

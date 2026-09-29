@@ -4,15 +4,15 @@ import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { UsageLog } from '@shared/usageLog';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { initTestProcessRuntime } from './testProcessRuntime';
+import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentDirectories,
-  fakeHostAgentResume,
   fakeHostAppState,
   fakeHostAuth,
   fakeHostLanguageModel,
-  fakeHostLifecycle,
   fakeHostSecrets,
   fakeSetupPlatform,
 } from './setupPlatform';
@@ -55,16 +55,17 @@ const runtime = installProcessRuntime({
     return 'vitest';
   }),
   globalStorage,
+  // Under the fake global root, never the developer's `~/.texra/mcp.json`.
+  mcpConfigPath: mcpConfigPathOf(globalStorage),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   // Suites swap the account plane with their host; the default host's
   // answers signed-out.
   auth: fakeHostAuth,
   languageModel: fakeHostLanguageModel,
-  agentResume: fakeHostAgentResume,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-  lifecycle: fakeHostLifecycle,
   setup: fakeSetupPlatform,
+  toolAvailability: unprobedToolAvailability,
   // The harness reports no usage; the telemetry suite starts its own.
   usageLog: UsageLog.disabled,
   globalDatabase: globalDatabaseLayer(globalStorage),

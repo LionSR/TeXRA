@@ -413,7 +413,7 @@ attempt, or refuses to guess. Do not test record names from an unimplemented
 proposal as though they were the durable contract.
 
 One concrete design difference needs resolution. The reflection loop commits
-a `flow.snapshot` whose phase is `output.pending` before any output file is
+a `run.snapshot` whose phase is `output.pending` before any output file is
 touched (`reflection.ts:816`), then resumes by running `produceOutput`
 (:1150). Its raw-output writer — an Effect over the context filesystem since
 #12619 — uses `rawOutputBytes` and file length to avoid a repeated append or

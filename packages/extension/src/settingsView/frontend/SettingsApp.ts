@@ -21,6 +21,7 @@ import {
 } from '@shared/settingsView/settingsViewMessages';
 import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
+import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
@@ -191,13 +192,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
     const current = tabs.indexOf(event.target as HTMLElement);
     if (current < 0) return;
-    const last = tabs.length - 1;
-    const next = {
-      ArrowRight: current === last ? 0 : current + 1,
-      ArrowLeft: current === 0 ? last : current - 1,
-      Home: 0,
-      End: last,
-    }[event.key];
+    const next = nextTablistIndex(event.key, current, tabs.length);
     if (next === undefined) return;
     event.preventDefault();
     tabs[next].click();

@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRoster } from '@agent/runtime/runRoster';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
@@ -25,14 +25,13 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import {
-  emptyPinnedComposition,
-  testModelCell,
-} from '@test/support/nativeToolTestLayer';
+import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { testRunFork } from '@test/support/runHandleFixtures';
+import { pinNoPlugins } from '@test/support/testPluginServices';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
@@ -129,7 +128,7 @@ const mocks = vi.hoisted(() => ({
   executeSubagentInBand: vi.fn(),
   acquireClaims: vi.fn(),
   getRunRecords: vi.fn(),
-  resolveRunLiveness: vi.fn(),
+  claimOwner: vi.fn(),
   readChildTurnState: vi.fn(),
   readWorkflowCallAttempt: vi.fn(),
   recordWorkflowCallAttempt: vi.fn(),
@@ -169,10 +168,6 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
-vi.mock('@tools/executions/runLiveness', () => ({
-  resolveRunLiveness: mocks.resolveRunLiveness,
-}));
-
 // The parent's attempt mark lives on the checkpoint aggregate; this suite's
 // session is a stub, so the journal is faked at its two entry points.
 vi.mock('@agent/workflowScript/checkpoint', () => ({
@@ -180,9 +175,10 @@ vi.mock('@agent/workflowScript/checkpoint', () => ({
   recordWorkflowCallAttempt: mocks.recordWorkflowCallAttempt,
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
   getRunRecords: mocks.getRunRecords,
+  deliveredOutput: (await import('@agent/storage/resultMeta')).deliveredOutput,
 }));
 
 // The child's own turn rows live on the same stubbed session, so the one read
@@ -260,12 +256,25 @@ const structuredResult: RunEnd = {
 // claim, which the stub session answers. One registry stub for every stub
 // session, so sessions compare equal.
 const fenceRoster = () =>
-  new RunRoster(createSessionApprovals(), (runId) =>
-    mocks.acquireClaims(aggregateId('run', runId)),
-  );
+  new RunRegistry({
+    runView: () => undefined,
+    commit: () => Effect.void,
+    approvals: createSessionApprovals(),
+    finalizeRun: () => Effect.die('finalizeRun is not reached by the fence'),
+    holdRunClaim: () => Effect.die('holdRunClaim is not reached by the fence'),
+    borrowRunClaim: (runId: RunId) =>
+      Effect.asVoid(
+        Effect.acquireRelease(
+          mocks.acquireClaims(aggregateId('run', runId)),
+          (release: Effect.Effect<void>) => release,
+        ),
+      ),
+    fork: testRunFork,
+    pinPlugins: pinNoPlugins,
+  });
 let lanes = fenceRoster();
 const runs = {
-  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
+  holdInactiveRun: (runId: RunId) => lanes.holdInactiveRun(runId),
 };
 // The roots the stub session resolves workflow files against; a case may
 // point them at a real temporary tree.
@@ -280,6 +289,7 @@ function parentContext(): DelegationParent {
   const session = {
     id: 'session',
     acquireClaims: mocks.acquireClaims,
+    claimOwner: mocks.claimOwner,
     runs,
     roots: sessionRoots,
   } as never;
@@ -290,6 +300,7 @@ function parentContext(): DelegationParent {
     run: {
       runId: parentRunId,
       session,
+      steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
@@ -304,7 +315,6 @@ function parentContext(): DelegationParent {
       toolPolicy: {
         approvalPromptsUnavailable: true,
       },
-      composition: emptyPinnedComposition,
     },
   };
 }
@@ -435,8 +445,8 @@ describe('createWorkflowScriptAgentRunner', () => {
     probeAnswers();
     // Nothing alive owns a probed run unless a case says so: the claim is the
     // liveness authority, and a dead owner is what lets the probe advance.
-    mocks.resolveRunLiveness.mockReturnValue(
-      Effect.succeed({ kind: 'interrupted' }),
+    mocks.claimOwner.mockReturnValue(
+      Effect.succeed({ ownerId: null, liveness: null }),
     );
     // Nothing holds a probed run's claim unless a case says so: the fence
     // hands back the release the call's scope runs.
@@ -657,9 +667,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'correct',
           parentRunId: runId,
-          approvalPromptsUnavailable: true,
           configPayload: expect.objectContaining({
             agent: 'correct',
             agentSource: 'builtInWorkflow',
@@ -827,7 +835,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.exists).toHaveBeenCalledWith(workspacePath('notes.tex'));
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'merge',
           configPayload: expect.objectContaining({
             inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
           }),
@@ -1008,9 +1015,8 @@ describe('createWorkflowScriptAgentRunner', () => {
         const report = reportSpy();
         mocks.executeSubagentInBand.mockImplementationOnce((options) =>
           Effect.gen(function* () {
-            const prepared = yield* options.prepare();
-            prepared.onCost?.(0.25);
-            return launched(options.runId, result);
+            yield* options.prepare();
+            return launched(options.runId, { ...result, usage: spent(0.25) });
           }),
         );
         const runner = defaultRunner({ onCost });
@@ -1018,10 +1024,8 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         yield* runner(call);
 
-        expect(onCost).toHaveBeenCalledWith(call, 0.25);
-        // Progressive onCost stamps the live snapshot attempt (not only success),
-        // and the terminal result cost is stamped after it (same value here).
-        expect(reported(report, 'costUsd')).toEqual([0.25, 0]);
+        expect(onCost).toHaveBeenCalledExactlyOnceWith(call, 0.25);
+        expect(reported(report, 'costUsd')).toEqual([0.25]);
       }),
   );
 
@@ -1272,10 +1276,10 @@ describe('createWorkflowScriptAgentRunner', () => {
   it.effect('refuses to repeat a child a live owner still holds', () =>
     Effect.gen(function* () {
       probeAnswers({ exists: true });
-      mocks.resolveRunLiveness.mockReturnValueOnce(
+      mocks.claimOwner.mockReturnValueOnce(
         Effect.succeed({
-          kind: 'unsettled',
-          reason: 'held by another TeXRA process (pid 42 on studio)',
+          ownerId: JSON.stringify(['studio', 42, 'start-1']),
+          liveness: 'alive',
         }),
       );
 
@@ -1353,7 +1357,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         defaultRunner()({ ...invocation(), report }),
       );
 
-      expect(error.name).toBe('Error');
+      expect(error.name).not.toBe('WorkflowRunAbortError');
       expect(error.message).toMatch(/ended with failed outcome/);
       expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       // Nothing ran now, so the recovered child's id is attached and the
@@ -1414,16 +1418,15 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('refuses a cancelled child whose accepted turn never settled', () =>
+  it.effect('reruns a cancelled child whose accepted turn never settled', () =>
     Effect.gen(function* () {
-      // Acceptance commits immediately before the turn dispatches, so a stop
-      // that lands in that window leaves a CANCELLED row with no manifest
-      // over tool edits that already ran. The open turn is the evidence work
-      // began, so the attempt is refused rather than relaunched.
-      probeAnswers({
-        exists: true,
-        runEnd: { ...result, outcome: 'cancelled' },
-      });
+      // A stop that lands after acceptance leaves a CANCELLED row over an
+      // open turn. A stop pauses the workflow, and continuing it reruns what
+      // the stop cut short: the next attempt launches.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'cancelled' } },
+        { exists: false },
+      );
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: { key: 'a0', index: 1 },
@@ -1431,13 +1434,9 @@ describe('createWorkflowScriptAgentRunner', () => {
         }),
       );
 
-      const error = yield* Effect.flip(defaultRunner()(invocation()));
-
-      expect(error).toMatchObject({
-        name: 'WorkflowRunAbortError',
-        message: expect.stringContaining('accepted a turn it never settled'),
-      });
-      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(yield* defaultRunner()(invocation())).toBe(result);
+      expect(mocks.probedRunIds).toHaveLength(2);
+      expect(mocks.executeSubagentInBand).toHaveBeenCalledTimes(1);
     }),
   );
 
@@ -1673,7 +1672,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         const holding = yield* Deferred.make<void>();
         yield* Effect.forkScoped(
-          lanes.launch(
+          lanes.launchRun(
             resumed,
             Deferred.succeed(holding, undefined).pipe(
               Effect.andThen(Effect.never),
@@ -1724,7 +1723,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         expect(mocks.preparedOptions[0]).toEqual(
           expect.objectContaining({
-            agentName: 'assistant',
             configPayload: expect.objectContaining({
               agentCategory: 'toolUse',
               outputSchema: schema,
@@ -1778,7 +1776,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       const outcome = yield* runWorkflowScript({
         script: `export const meta = { name: 'staggered', description: 'fan out' }
-const found = await parallel(['fast', 'slow', 'fast again'].map((what, i) => () =>
+const found = yield* all(['fast', 'slow', 'fast again'].map((what, i) =>
   agent('Review ' + what, { id: 'call' + i, agentName: 'assistant', schema: { type: 'object' } })))
 return found.map((value) => value && value.outcome)`,
         runAgent: defaultRunner(),

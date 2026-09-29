@@ -45,6 +45,9 @@ import {
   closesRunWindow,
   foldRunRows,
   freshRunRows,
+  FOLLOW_UP_TYPES,
+  RUN_LIFECYCLE_TYPES,
+  lifecycleOf,
   isFollowUpRow,
   type RunRows,
 } from '@shared/session/runRows';
@@ -178,7 +181,29 @@ export const sessionEventsLayer = Layer.effect(
     // no other process commits to the run, so what it tracks stays whole.
     const followUps = new Map<AggregateId, RunRows>();
     const hydrated = new Set<AggregateId>();
+    // Each run's lifecycle standing (ended: what releases a `senderEnd`
+    // hold; closed: its input), one fold of its lifecycle rows by commit:
+    // this publisher's commits, reads where a claim moves here, and the
+    // fold-gated tail's rows from every process. A row at or below the
+    // commit already applied changes nothing, so a lagging source never
+    // rolls a newer standing back. A collected aggregate has no rows left.
+    const lifecycles = new Map<
+      AggregateId,
+      ReturnType<typeof lifecycleOf> & { readonly commit: CommitOrdinal }
+    >();
+    const collected = new Set<AggregateId>();
+    const foldLifecycle = (rows: readonly SessionEvent[]) => {
+      for (const row of rows) {
+        if (!(RUN_LIFECYCLE_TYPES as readonly string[]).includes(row.type))
+          continue;
+        const at = lifecycles.get(row.aggregateId);
+        if (at && row.commit <= at.commit) continue;
+        const next = lifecycleOf([row], at);
+        lifecycles.set(row.aggregateId, { ...next, commit: row.commit });
+      }
+    };
     const track = (rows: readonly SessionEvent[]) => {
+      foldLifecycle(rows);
       for (const row of rows) {
         if (row.type === 'run.removed') {
           open.delete(row.aggregateId);
@@ -273,6 +298,18 @@ export const sessionEventsLayer = Layer.effect(
     ) {
       return yield* exclusive((append) => append(events));
     });
+    const removeRun: SessionEventsShape['removeRun'] = Effect.fn(
+      'SessionEvents.removeRun',
+    )(function* (id, mode, expectedStartCommit) {
+      const removal = yield* log.prepareRunRemoval(
+        id,
+        mode,
+        expectedStartCommit,
+      );
+      return yield* exclusive(() =>
+        removal.pipe(Effect.tap((rows) => Effect.sync(() => track(rows)))),
+      );
+    });
     /** Detached jobs still running or queued: what `settle` waits for. Each
      *  completes with the last commit its job appended, so a settler waits
      *  for exactly its cohort. A job's own refusal is logged where it
@@ -338,10 +375,7 @@ export const sessionEventsLayer = Layer.effect(
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed> =>
       tailFrom(
-        (from) =>
-          Stream.fromIterableEffect(log.readAll(from)).pipe(
-            Stream.filter(isDisplaySessionEvent),
-          ),
+        (from) => Stream.fromIterableEffect(log.readDisplay(from)),
         {
           get: log.currentCommit,
           changes: SubscriptionRef.changes(log.level),
@@ -353,18 +387,28 @@ export const sessionEventsLayer = Layer.effect(
       publish,
       exclusive,
       detach,
+      removeRun,
       settle,
       openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
       pendingFollowUps: (aggregateId) =>
         followUps.get(aggregateId)?.followUps ?? [],
+      followUpNamed: (aggregateId, followUpId) =>
+        followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
+      runEnded: (aggregateId) =>
+        collected.has(aggregateId) ||
+        lifecycles.get(aggregateId)?.ended === true,
+      inputClosed: (aggregateId) =>
+        lifecycles.get(aggregateId)?.closed === true,
+      foldLifecycle: (row) => foldLifecycle([row]),
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
           if (!claimMoved && hydrated.has(aggregateId)) return;
           const read = foldRunRows(
-            (rows ?? (yield* log.readAggregate(aggregateId, 1))).filter(
-              isFollowUpRow,
-            ),
+            (
+              rows ??
+              (yield* log.readAggregate(aggregateId, 1, FOLLOW_UP_TYPES))
+            ).filter(isFollowUpRow),
           );
           const live = followUps.get(aggregateId) ?? freshRunRows();
           const livePending = new Set(live.followUps.map((f) => f.followUpId));
@@ -384,6 +428,32 @@ export const sessionEventsLayer = Layer.effect(
             ],
             followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
           });
+          // The run's own input standing, from its committed rows.
+          foldLifecycle(
+            yield* log.readAggregate(aggregateId, 1, [...RUN_LIFECYCLE_TYPES]),
+          );
+          // A held row's sender may have ended in an earlier process: its
+          // latest lifecycle decides. A sender whose deleted aggregate was
+          // collected has no rows left at all: it ended with its deletion.
+          const senders = new Set(
+            (followUps.get(aggregateId)?.followUps ?? []).flatMap(
+              ({ holdUntil, content: { from } }) =>
+                holdUntil === 'senderEnd' && from.kind === 'run'
+                  ? [qualifyAggregateId('run', from.runId)]
+                  : [],
+            ),
+          );
+          for (const sender of senders) {
+            const rows = yield* log.readAggregate(sender, 1, [
+              ...RUN_LIFECYCLE_TYPES,
+            ]);
+            foldLifecycle(rows);
+            if (
+              rows.length === 0 &&
+              (yield* log.aggregateState([sender])).length === 0
+            )
+              collected.add(sender);
+          }
           hydrated.add(aggregateId);
         }),
       listing: () =>
@@ -392,8 +462,8 @@ export const sessionEventsLayer = Layer.effect(
         ),
       all,
       aggregate: (aggregateId, fromSeq) =>
-        Stream.fromIterableEffect(log.readAggregate(aggregateId, fromSeq)).pipe(
-          Stream.filter(isDisplaySessionEvent),
+        Stream.fromIterableEffect(
+          log.readDisplayAggregate(aggregateId, fromSeq),
         ),
     };
   }),

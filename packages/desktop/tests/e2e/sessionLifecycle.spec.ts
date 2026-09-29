@@ -81,14 +81,12 @@ async function writeCanonicalRunFixtures(
             identity: { kind: 'agent', agent: runFixture.agent },
             category: 'toolUse',
             userFollowUpSupport: 'nativeInteractive',
-            isRemote: false,
             parent: null,
           },
           {
             type: 'run.activate',
             aggregateId: id,
             category: 'toolUse',
-            isRemote: false,
           },
           {
             type: 'stage.start',
@@ -103,9 +101,9 @@ async function writeCanonicalRunFixtures(
             text: `Saved history for ${runFixture.agent}.`,
           },
           {
-            type: 'flow.step',
+            type: 'run.position',
             aggregateId: id,
-            payload: { family: 'toolUse', step: runFixture.step },
+            payload: { family: 'toolUse', at: runFixture.step },
           },
         ]);
       }

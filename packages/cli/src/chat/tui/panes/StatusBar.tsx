@@ -34,6 +34,7 @@ import {
   runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
 import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
+import { modelConnectionNeeded as modelConnectionNeededSignal } from '../modelConnection';
 import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
@@ -124,6 +125,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const view = useSignal(sessionView());
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
+  const modelConnectionNeeded = useSignal(modelConnectionNeededSignal);
   const { columns } = useWindowSize();
   // The Ctrl-C stop/exit hint derives from the run-claim signal, never from
   // impure session closures: memoized renders cache a closure's result on the
@@ -242,7 +244,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       runningFrame:
         runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
     },
-    transientNotice,
+    // Until a model is connected, the notice slot keeps saying how to connect
+    // one; a real notice still wins while it shows.
+    transientNotice:
+      transientNotice ??
+      (modelConnectionNeeded
+        ? { kind: 'message', text: 'No model connected · /login' }
+        : undefined),
     commandName: props.commandName,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,

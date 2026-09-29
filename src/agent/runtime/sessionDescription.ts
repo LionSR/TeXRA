@@ -6,16 +6,22 @@
  * history view, and future agents can quickly understand each session.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
+import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+} from '@shared/schemas';
+import type { UsageLog } from '@shared/usageLog';
 import {
   isNonEmptyString,
   truncateWithEllipsis,
@@ -77,6 +83,9 @@ export function getDisplayedInstruction(
   );
 }
 
+/** How long a run's end may wait on its optional description. */
+const DESCRIPTION_DEADLINE = '20 seconds';
+
 /**
  * Generate and persist a session description from the user's instruction.
  *
@@ -105,15 +114,44 @@ export const generateSessionDescription = Effect.fn(
   agentDescription: string | undefined,
   session: SessionHandle,
   stores: ModelOptionStores,
-): Effect.fn.Return<void, never, LanguageModel | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  void,
+  never,
+  LanguageModel | HttpClient.HttpClient | UsageLog
+> {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
-    const bound = yield* helperModel(stores);
-    const text = yield* helperCompletion(bound, {
-      userPrompt: buildUserPrompt(config.agent, agentDescription, instruction),
-      systemPrompt: SYSTEM_PROMPT,
-    });
+    const text = yield* helperCall(
+      session,
+      stores.secrets,
+      {
+        userPrompt: buildUserPrompt(
+          config.agent,
+          agentDescription,
+          instruction,
+        ),
+        systemPrompt: SYSTEM_PROMPT,
+      },
+      {
+        agentName: config.agent,
+        agentCategory: config.agentCategory,
+        runId,
+      },
+      // No automatic retry and a short deadline: the run's end joins this
+      // fiber, and a label is not worth holding it through route backoff.
+      0,
+    ).pipe(
+      Effect.timeoutOrElse({
+        duration: DESCRIPTION_DEADLINE,
+        orElse: () =>
+          Effect.fail(
+            new Error(
+              `The helper model did not answer within ${DESCRIPTION_DEADLINE}.`,
+            ),
+          ),
+      }),
+    );
     if (!isNonEmptyString(text)) return;
     const description = cleanSessionDescription(text);
     if (!description) return;
@@ -136,11 +174,31 @@ export const generateSessionDescription = Effect.fn(
       withLogChannel(CHANNEL),
     );
   }).pipe(
-    Effect.scoped,
     Effect.catch((error) => warnFailure(error)),
     Effect.catchDefect((defect) => warnFailure(defect)),
   );
 });
+
+/**
+ * Settle the description fiber as the run's flow exits, before the lifecycle
+ * writes `run.end`: interrupt it after a stop, whose label is not worth
+ * waiting for, and join it otherwise, so its row lands first. A description
+ * committed after `run.end` reads as a fact of a run that has already ended.
+ */
+export const settleDescriptionOnExit =
+  (description: Fiber.Fiber<void>) =>
+  <A extends { readonly outcome: RunOutcome }, E, R>(
+    flow: Effect.Effect<A, E, R>,
+  ) =>
+    Effect.onExit(flow, (exit) =>
+      (
+        Exit.isSuccess(exit)
+          ? exit.value.outcome === RUN_OUTCOME.CANCELLED
+          : Cause.hasInterrupts(exit.cause)
+      )
+        ? Fiber.interrupt(description)
+        : Fiber.join(description),
+    );
 
 function warnFailure(cause: unknown): Effect.Effect<void> {
   return Effect.logWarning(

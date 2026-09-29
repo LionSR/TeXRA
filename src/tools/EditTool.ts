@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
@@ -42,7 +43,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | FileSystem.FileSystem | WorkspaceFs
+  ToolCall | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path, {
@@ -58,7 +59,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
-  const { path, displayPath, originalContent } = prepared.target;
+  const { path, displayPath, exists, originalContent } = prepared.target;
 
   // A missing or ambiguous match is the model's error to correct, so it stays
   // a failure the tool runner reports rather than a defect.
@@ -87,6 +88,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   return yield* applyApprovedFileEdit({
     path,
     displayPath,
+    exists,
     originalContent,
     proposedContent: replacement.content,
     sourceTool: 'edit_file',
@@ -99,7 +101,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 
 export const EditFileTool = defineTool({
   name: 'edit_file',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description:
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,

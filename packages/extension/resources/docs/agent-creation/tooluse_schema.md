@@ -40,7 +40,9 @@ prompts:
   `ALL_CONTEXTS`, `INPUT_FILES`, `OUTPUT_FILES`).
 - `{% if IS_ANTHROPIC_MODEL %}...{% endif %}` works for model-specific
   instructions. It is the only model gate: there is no variable for any other
-  provider, and an invented one renders as false.
+  provider, and an invented one renders as false. It is rendered once, for
+  the model the chat starts on; TeXRA's own model-specific guidance follows
+  a model switch on its own, so an agent rarely needs it.
 - Agent names: lowercase with underscores or dashes.
 
 ## Choosing tools

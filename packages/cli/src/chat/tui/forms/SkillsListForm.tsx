@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -110,13 +111,15 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
+          const disabled = yield* readDisabledSkills(props.stores);
           const result = yield* loadEnabledRuntimeSkills(
             props.workspaceRoot,
-            props.stores,
+            yield* readInstalledPluginLoad(props.stores),
+            disabled,
           );
           return {
             ...result,
-            disabled: yield* readDisabledSkills(props.stores),
+            disabled,
             offHint: yield* readCliSkillsOffNotice(props.stores, '/config'),
           };
         })

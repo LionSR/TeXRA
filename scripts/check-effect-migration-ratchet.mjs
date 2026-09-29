@@ -387,9 +387,15 @@ const ROW_RUN_BOUNDARY = 'Effect.run*';
 const ROWS = [
   // The files it carries are adapters, and the counts are their allowlist — a
   // new file fails as new debt. claudeAgent.ts: the Claude Agent SDK's query()
-  // options take a controller, not a signal. childRunLoop.ts: the one signal
-  // every child-run turn runs under, handed straight to executeCommand's abort
-  // waiter, the Codex SDK and the Claude Agent SDK.
+  // options take a controller, not a signal, and Effect never hands out the
+  // controller behind its own `({ signal })`; `Query.close()` takes the same
+  // stdin-EOF shutdown but ends the drain quietly instead of rejecting with
+  // the SDK's abort error, so a stopped turn would read as a finished one.
+  // childRunLoop.ts: the one signal every
+  // child-run turn runs under, handed straight to executeCommand's abort
+  // waiter, the Codex SDK and the Claude Agent SDK; it is not fiber
+  // interruption because a stopped turn still settles, delivers to its parent
+  // (bash's `deliverAfterInterrupt`) and finalizes on the loop's fiber.
   {
     id: ROW_ABORT_CONTROLLER,
     rule: `${PRD} R5: interruption replaces internal abort choreography; an AbortController is adapted only where an external SDK or host API requires a signal`,

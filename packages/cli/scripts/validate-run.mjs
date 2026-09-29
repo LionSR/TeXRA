@@ -37,6 +37,7 @@ const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = validationFlagContent.trim();
 const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
+const ETX = String.fromCharCode(3); // Ctrl-C
 const validationProviderApiKeyEnv = [
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
@@ -81,6 +82,8 @@ function run(command, args, options = {}) {
     Object.assign(env, validationModelProviderEnv);
     env[validationEnv] = '1';
     env[validationFlagEnv] = options.validationFlagPath;
+    // Every request the model sees must rebuild from the rows (#13394).
+    env.TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT = '1';
   }
 
   const result = spawnSync(command, args, {
@@ -481,6 +484,7 @@ function createInteractivePtyEnv(overrides = {}) {
     TERM: 'xterm-256color',
     FORCE_COLOR: '3',
     TEXRA_NO_UPDATE_CHECK: '1',
+    TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT: '1',
     ...overrides,
   };
   // Exercise the same interactive path a real terminal uses. CI markers make
@@ -596,42 +600,47 @@ async function validateChatOnboardingPicker(options) {
   const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
   try {
     const home = path.join(root, 'home');
-    let exitSent = false;
-    let welcomeExitTimer;
-    const sendEsc = (pty) => {
-      if (exitSent) return;
-      exitSent = true;
-      pty.write(ESC);
+    let exitScheduled = false;
+    // With no credential the chat still opens, the "Connect a model" panel on
+    // top: Esc closes the panel into the chat, and Ctrl-C then exits the idle
+    // chat. The second Ctrl-C covers a first one landing before the panel's
+    // close repaints.
+    const scheduleExit = (pty) => {
+      exitScheduled = true;
+      pty.setTimer(() => pty.write(ESC), 200);
+      pty.setTimer(() => pty.write(ETX), 1_200);
+      pty.setTimer(() => pty.write(ETX), 2_500);
     };
 
     const result = await runTexraPty(options.args, {
       label: options.label,
       cwd: repoRoot,
+      timeoutMs: 30_000,
       env: {
         ...isolatedCliHomeEnv(home),
         ...options.env,
       },
       onData: (_data, pty) => {
         if (
-          !exitSent &&
-          welcomeExitTimer == null &&
-          pty.output.includes('Welcome to TeXRA')
+          !exitScheduled &&
+          pty.output.includes('Connect a model') &&
+          pty.output.includes('No model connected')
         ) {
-          welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
+          scheduleExit(pty);
         }
       },
     });
 
     assert(
       result.exit.exitCode === 0 && !result.exit.signal,
-      `${options.label} should exit cleanly after Esc (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
+      `${options.label} should exit cleanly after Esc and Ctrl-C (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
     );
     assert(
-      result.output.includes('Welcome to TeXRA'),
-      `${options.label} should show onboarding`,
+      result.output.includes('Connect a model'),
+      `${options.label} should open the chat with the connect-a-model panel`,
     );
     assert(
-      !result.output.includes('Model "deepseekT" is not available'),
+      !result.output.includes('is not available (missing api key)'),
       `${options.label} should not fall through to model resolution`,
     );
     for (const text of options.expected) {
@@ -652,15 +661,12 @@ async function validateChatOnboardingPicker(options) {
 }
 
 async function validateChatOnboardingPickers() {
-  const oldTruncatedLabels = [
+  const truncatedOnboardingLabels = [
     'Sign in for included re…',
     'Use my own provider API…',
-  ];
-  const truncatedOnboardingLabels = [
-    ...oldTruncatedLabels,
     'Sign in — free for acad…',
     'Use ChatGPT subscription…',
-    'Use your own provider A…',
+    'Add a provider API key…',
   ];
 
   // Both the explicit subcommand and the bare command, because the bare form is
@@ -668,8 +674,8 @@ async function validateChatOnboardingPickers() {
   // dispatch. Only the process boundary can catch the route regressing to help,
   // to a removed subcommand, or to a model-resolution failure.
   const onboardingCases = [
-    { label: 'texra chat first-run onboarding', args: ['chat'] },
-    { label: 'bare texra first-run onboarding', args: [] },
+    { label: 'texra chat first-run connect panel', args: ['chat'] },
+    { label: 'bare texra first-run connect panel', args: [] },
   ];
 
   for (const { label, args } of onboardingCases) {
@@ -679,8 +685,8 @@ async function validateChatOnboardingPickers() {
       env: {},
       expected: [
         'Use ChatGPT subscription',
-        'Use your own API keys',
-        'Skip for now',
+        'Add a provider API key',
+        'No model connected',
       ],
       forbidden: truncatedOnboardingLabels,
     });
@@ -842,6 +848,92 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
+/**
+ * The executions `query` action end to end: a tool-use agent whose (canned)
+ * model asks the run history one SQL question through the real tool schema,
+ * the real session, and the history store's own process, spawned from this
+ * binary. The NDJSON the run printed is kept as the artifact.
+ */
+function validateHistoryQueryRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-history-query-'));
+  try {
+    const home = path.join(cwd, 'home');
+    const customAgents = path.join(
+      home,
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
+    mkdirSync(customAgents, { recursive: true });
+    writeFileSync(
+      path.join(customAgents, 'history-query-validation.yaml'),
+      `name: history_query_validation
+description: Ask the run history one SQL question from the headless CLI.
+
+settings:
+  agentCategory: toolUse
+  tools:
+    - executions
+
+prompts:
+  systemPrompt: |
+    Query the run history once, then report what it returned.
+  userRequest: |
+    {{ INSTRUCTION }}
+`,
+    );
+    writeFileSync(validationFlagPath, validationFlagContent);
+
+    const result = run(
+      process.execPath,
+      [
+        binaryPath,
+        'run',
+        'history_query_validation',
+        '--model',
+        'gpt56',
+        '--instruction',
+        'List the runs in this project.',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'ndjson',
+        '--print',
+      ],
+      {
+        cwd: repoRoot,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, {
+          TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY: '1',
+        }),
+      },
+    );
+    const artifactDir = path.join(validationRoot, 'artifacts');
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactPath = path.join(artifactDir, 'history-query-run.ndjson');
+    writeFileSync(artifactPath, result.stdout);
+    assertSuccess(result, 'texra run history query NDJSON');
+
+    const records = parseNdjson(result.stdout, 'history query run NDJSON');
+    const agentResult = records.find(
+      (record) => record.kind === 'agent-result',
+    );
+    const response = String(agentResult?.result?.output?.response ?? '');
+    assert(
+      response.includes('name | kind | lifecycle') &&
+        response.includes('history_query_validation | agent | activated'),
+      `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 function validateWorkflowScriptAgentRunCommand() {
   const cwd = mkdtempSync(
     path.join(tmpdir(), 'texra-cli-workflow-script-run-'),
@@ -897,8 +989,11 @@ prompts:
         'Solve the validation problems through workflow-script dispatch.',
         '--cwd',
         cwd,
+        // A workflow-script proposal is an approval request, and `never`
+        // denies it like every other kind (#13376); `yolo` is the explicit
+        // grant a headless run needs to dispatch the script at all.
         '--approval-policy',
-        'never',
+        'yolo',
         '--output-format',
         'ndjson',
         '--print',
@@ -991,8 +1086,7 @@ prompts:
 
 function validateMultiAgentRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
-  // This preset has a local built-in delegating root; remote-catalog teams such as
-  // mathematician are unavailable in signed-out validation environments.
+  // A preset whose members are all tool-use agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
     const inputPath = path.join(cwd, 'math-problem.md');
@@ -1113,6 +1207,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateChatOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
+  validateHistoryQueryRunCommand();
   validateWorkflowScriptAgentRunCommand();
   validateMultiAgentRunCommand();
   console.log('CLI run validation passed');

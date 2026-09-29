@@ -8,7 +8,15 @@
  * the frames to the view the runtime holds.
  */
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Fiber,
+  Layer,
+  Logger,
+  Queue,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
@@ -52,6 +60,7 @@ import type {
   Subscribe,
 } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
   FakeConfigProvider,
@@ -85,22 +94,21 @@ const runStart: SessionEventDraft = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
-  isRemote: false,
   parent: null,
 };
 
 /** The loop parked on a request: the fold reads the phase off this row. */
 const waiting: SessionEventDraft = {
-  type: 'flow.step',
+  type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', step: 'waiting' },
+  payload: { family: 'toolUse', at: 'waiting' },
 };
 
 /** The loop moving again, which is what makes the run running. */
 const running: SessionEventDraft = {
-  type: 'flow.step',
+  type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
+  payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
 };
 
 /** A running model reply with no text of its own: the row the live text for
@@ -221,7 +229,7 @@ describe('session framer', () => {
         aggregateId: qualifyAggregateId('inquiry', 'ei_012345abcdef'),
         seq: 1,
         commit: 1,
-        ownerId: SELF,
+        origin: SELF,
         at: 0,
       },
     };
@@ -239,7 +247,7 @@ describe('session framer', () => {
       const session = createTestSession();
       // Registered first, so it runs last: the bridge's ports release their
       // transcript sets through the session before it goes.
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const bridge = yield* SessionBridge.make({
         session,
@@ -270,7 +278,7 @@ describe('session framer', () => {
   it.live('holds host actions until the port first subscribes', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const bridge = yield* SessionBridge.make({
         session,
         onPortClosed: () => {},
@@ -302,10 +310,38 @@ describe('session framer', () => {
       expect(actions()).toEqual(['selectNew', 'showSessions', 'submit']);
     }).pipe(Effect.provide(fakeProcessServices())),
   );
+  it.live('logs a replay read failure instead of stopping silently', () => {
+    const errors: unknown[] = [];
+    const capture = Logger.make((options) => {
+      if (options.logLevel === 'Error') errors.push(options.message);
+    });
+    return Effect.gen(function* () {
+      const session = createTestSession();
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
+      vi.spyOn(session, 'inputs').mockReturnValue(
+        Stream.die(new Error('replay read failed')),
+      );
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed: () => {},
+        handleHostRequest: () =>
+          Effect.die(new Error('No host request is expected.')),
+      });
+      const port = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* port.receive({ ...subscribe, session: session.roots.storage });
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(String(errors.flat()[0])).toContain(
+            `Transcript frames for port ${PORT} stopped`,
+          );
+        }),
+      );
+    }).pipe(Effect.provide(fakeProcessServices()), Effect.withLogger(capture));
+  });
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({
@@ -383,9 +419,9 @@ describe('session framer', () => {
           ),
         ).toEqual([
           ['listing', 'run.start'],
-          ['listing', 'flow.step'],
+          ['listing', 'run.position'],
           ['aggregate', 'run.start'],
-          ['aggregate', 'flow.step'],
+          ['aggregate', 'run.position'],
         ]);
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and
@@ -476,7 +512,7 @@ describe('session framer', () => {
                 aggregateId: qualifyAggregateId('run', RUN),
                 seq: 9,
                 commit: 99,
-                ownerId: SELF,
+                origin: SELF,
                 at: 0,
               },
             },
@@ -640,7 +676,7 @@ describe('session framer', () => {
                 ...waiting,
                 seq: 10,
                 commit: 10,
-                ownerId: SELF,
+                origin: SELF,
                 at: 0,
               },
             },

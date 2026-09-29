@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 
@@ -21,6 +21,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@model/copilotRouting', async (original) => ({
   ...(await original<typeof import('@model/copilotRouting')>()),
   setCopilotRoutePreference: mocks.setCopilotRoutePreference,
+}));
+
+// The Models-page repaint discovers the Copilot routes itself; these cases
+// count the discovery the access request makes, so the repaint is inert.
+vi.mock('@controllers/settingsView/SettingsModelSelectionController', () => ({
+  SettingsModelSelectionController: class {
+    buildModelSelectionMessage() {
+      return Effect.succeed({ command: 'updateModelSelection' });
+    }
+  },
 }));
 
 vi.mock('@frontend/system/commandUtils', async (original) => ({
@@ -76,7 +86,6 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
-import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -110,10 +119,6 @@ async function installModels(...models: readonly LanguageModelInfo[]) {
   return port;
 }
 
-type RefreshSurface = {
-  sendModelSelectionData(webview: vscode.Webview): Effect.Effect<void>;
-};
-
 const subscriptions: vscode.Disposable[] = [];
 
 function createHandler(): SettingsViewMessageHandler {
@@ -133,13 +138,8 @@ function createHandler(): SettingsViewMessageHandler {
     {
       refreshCatalogs: mocks.refreshCatalogs,
       refreshApiKeyStatus: Effect.void,
-      refreshOnboardingFunnel: () => Effect.void,
     },
   );
-  vi.spyOn(
-    handler as unknown as RefreshSurface,
-    'sendModelSelectionData',
-  ).mockReturnValue(Effect.void);
   return handler;
 }
 
@@ -153,10 +153,7 @@ function createWebviewView(): vscode.WebviewView {
 
 async function requestModelAccess(handler = createHandler()): Promise<void> {
   const refreshed = createDeferred<void>();
-  vi.spyOn(
-    handler as unknown as RefreshSurface,
-    'sendModelSelectionData',
-  ).mockImplementation(() =>
+  mocks.refreshCatalogs.mockImplementation(() =>
     Effect.sync(() => {
       refreshed.resolve();
     }),

@@ -23,8 +23,6 @@ import {
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;
-/** The run a usage report is keyed by: a child's spend on its parent's map. */
-const usageRunId = 'a00101' as RunId;
 const runAggregate = qualifyAggregateId('run', runId);
 const childAggregate = qualifyAggregateId('run', childRunId);
 
@@ -57,34 +55,32 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
         type: 'run.activate',
         aggregateId: runAggregate,
         category: AgentCategory.Workflow,
-        isRemote: false,
       },
     },
     event: 'run.activate',
     payload: {
       aggregateId: runAggregate,
       category: AgentCategory.Workflow,
-      isRemote: false,
     },
   },
   {
     source: {
       draft: {
-        type: 'flow.step',
+        type: 'run.position',
         aggregateId: runAggregate,
-        payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 2 },
+        payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
       },
     },
-    event: 'flow.step',
+    event: 'run.position',
     payload: {
       aggregateId: runAggregate,
-      payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 2 },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
     },
   },
   {
-    source: { run: { type: 'usage', runId: usageRunId, usage } },
+    source: { run: { type: 'usage', usage } },
     event: 'usage',
-    payload: { aggregateId: runAggregate, runId: usageRunId, usage },
+    payload: { aggregateId: runAggregate, usage },
   },
   {
     source: {
@@ -160,13 +156,13 @@ function rowFields(record: CliNdjsonRecord): {
 } {
   expect(record.kind).toBe('progress');
   expect(record.ts).toEqual(expect.any(String));
-  const { seq, commit, ownerId, at, ...fields } = record.payload as Record<
+  const { seq, commit, origin, at, ...fields } = record.payload as Record<
     string,
     unknown
   >;
   expect(seq).toEqual(expect.any(Number));
   expect(commit).toEqual(expect.any(Number));
-  expect(ownerId === null || typeof ownerId === 'string').toBe(true);
+  expect(origin === null || typeof origin === 'string').toBe(true);
   expect(at).toEqual(expect.any(Number));
   return { event: record.event, fields };
 }
@@ -232,7 +228,6 @@ describe('attachCliSessionProgressProjection', () => {
               aggregateId: childAggregate,
               identity: { kind: 'process', tool: 'bash' },
               category: AgentCategory.ToolUse,
-              isRemote: false,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId },
             },
@@ -281,7 +276,6 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: runAggregate,
             identity: { kind: 'agent', agent: 'polish' },
             category: AgentCategory.ToolUse,
-            isRemote: false,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             parent: null,
           },
@@ -289,7 +283,6 @@ describe('attachCliSessionProgressProjection', () => {
             type: 'run.activate',
             aggregateId: runAggregate,
             category: AgentCategory.ToolUse,
-            isRemote: false,
           },
           {
             type: 'run.description',
@@ -303,7 +296,6 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: childAggregate,
             identity: { kind: 'agent', agent: 'review' },
             category: AgentCategory.ToolUse,
-            isRemote: false,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             parent: { id: runId },
           },
@@ -325,7 +317,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.activate',
               aggregateId: runAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           }),
         );
@@ -337,7 +328,6 @@ describe('attachCliSessionProgressProjection', () => {
             fields: {
               aggregateId: runAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           },
         ]);
@@ -361,7 +351,6 @@ describe('attachCliSessionProgressProjection', () => {
               aggregateId: childAggregate,
               identity: { kind: 'agent', agent: 'review' },
               category: AgentCategory.ToolUse,
-              isRemote: false,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
               parent: { id: runId },
             },
@@ -395,7 +384,6 @@ describe('attachCliSessionProgressProjection', () => {
               type: 'run.activate',
               aggregateId: childAggregate,
               category: AgentCategory.ToolUse,
-              isRemote: false,
             },
           }),
         );

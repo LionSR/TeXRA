@@ -21,17 +21,15 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
-import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
+import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
@@ -41,10 +39,9 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -67,7 +64,7 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // ---------------------------------------------------------------------------
 
 const ORIGIN = {
-  protocol: 'deepseek-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',
   deployment: {
@@ -95,6 +92,7 @@ function testBoundModel(): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,
@@ -104,6 +102,7 @@ function testBoundModel(): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -149,6 +148,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -168,6 +168,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',
@@ -183,14 +184,14 @@ function invokerLayer(turns: readonly TurnResult[]) {
                   turn,
                   calls: dispatchFactsFor(
                     turn,
-                    run.tools,
+                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
                   ),
                   usage: null,
                 },
               },
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             return {
               kind: 'response' as const,
@@ -241,28 +242,24 @@ function agentRunTestLayer(init: HarnessInit) {
         // The launch stores a real run carries; no fixture reads through them.
         stores: hostStores(),
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        userVarChannels: {},
+        opening: {
+          inputs: {},
+          activated: [],
+          attachedMemoryMisses: [],
+        },
         initialUserMessageForTranscript: 'Run the tools.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry(init.tools),
+        ...testRunTools(hostStores(), init.tools),
         finalToolName: null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            runStageId: undefined,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
-        ),
         callbacks: {},
       } satisfies AgentRunShape;
     }),
@@ -270,11 +267,7 @@ function agentRunTestLayer(init: HarnessInit) {
 }
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(
-    invokerLayer(init.turns),
-    followUpsLayer,
-    nativeToolTestLayer(),
-  ).pipe(
+  return Layer.mergeAll(invokerLayer(init.turns), nativeToolTestLayer()).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
     Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
   );
@@ -486,6 +479,72 @@ describe('tool dispatch interrupted mid-turn', () => {
       expect(group?.role === 'tool' ? group.results[0]?.status : null).toBe(
         'error',
       );
+    }),
+  );
+
+  /**
+   * A user's follow-up to a stopped response joins that response's delivery:
+   * the one request after the resume carries the skipped call's result and
+   * then the follow-up, so the model reads the new instruction before it
+   * decides whether to run anything again.
+   */
+  it.effect('delivers a follow-up to a stopped response with its results', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions({ emit: () => {} });
+      const runId = generateRunId();
+      publishTestRunStart(session, runId);
+      askedQuestions(session, () => ({ action: 'deny', reason: 'yolo' }));
+      const toolB = blockingTool('toolB');
+      const tools = { toolB: toolB.tool };
+      const fiber = yield* Effect.forkDetach(
+        runToolUse({ resume: false }).pipe(
+          Effect.provide(
+            loopLayer({
+              runId,
+              session,
+              tools,
+              turns: [toolCallTurn([{ id: 'call-b', name: 'toolB' }])],
+              stopAfterCycle: true,
+            }),
+          ),
+        ),
+      );
+      yield* toolB.started;
+      yield* Fiber.interrupt(fiber);
+      // The halt row the resume's join reads is the stopped fiber's exit.
+      yield* Fiber.await(fiber);
+      yield* session.settlePublications();
+      yield* session.followUps.submit(
+        runId,
+        { text: 'What is 2+2?', from: { kind: 'user' } },
+        'recoverable',
+      );
+
+      // One model turn: a second request would run out of scripted turns.
+      const resumed = yield* runToolUse({ resume: true }).pipe(
+        Effect.provide(
+          loopLayer({
+            runId,
+            session,
+            tools,
+            turns: [textTurn('4')],
+            stopAfterCycle: true,
+          }),
+        ),
+      );
+      expect(resumed.outcome).toBe('completed');
+      expect(toolB.call).toHaveBeenCalledTimes(1);
+      const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      expect(state?.messages.map((message) => message.role)).toEqual([
+        'user',
+        'assistant',
+        'tool',
+        'user',
+        'assistant',
+      ]);
+      expect(state?.messages[3]).toMatchObject({
+        content: [{ kind: 'text', text: 'What is 2+2?' }],
+      });
     }),
   );
 

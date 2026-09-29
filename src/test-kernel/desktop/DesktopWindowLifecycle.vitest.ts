@@ -83,7 +83,7 @@ describe('desktop window lifecycle', () => {
       sequence.push('shutdown');
       shutdownRan.resolve();
     });
-    const runShutdown = Effect.sync(ranShutdown);
+    const shutdown = Effect.sync(ranShutdown);
     let continueQuit: (() => void) | undefined;
     const continueAfterWindowClose = vi.fn((continuation: () => void) => {
       continueQuit = continuation;
@@ -91,7 +91,7 @@ describe('desktop window lifecycle', () => {
     installDesktopBeforeQuitWiring({
       app,
       getMainWindow: () => window,
-      lifecycle: { runShutdown },
+      shutdown,
       continueAfterWindowClose,
     });
     const first = { preventDefault: vi.fn() };

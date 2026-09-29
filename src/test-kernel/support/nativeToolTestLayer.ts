@@ -1,18 +1,21 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Context, Layer, Scope, SynchronizedRef } from 'effect';
+import { Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import type { AgentRunShape } from '@agent/runtime/run/AgentRun';
+import type { OpenStep } from '@agent/runtime/loop/step';
+import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
-import { toolTable } from '@tools/toolTable';
-import { CompositionKey, type PinnedComposition } from '@tools/compositions';
+import { testCallPluginServices } from '@test/support/testPluginServices';
 
 type CallRun = NonNullable<ToolCallShape['run']>;
 
@@ -25,21 +28,28 @@ type TestCallRun = Pick<CallRun, 'session' | 'runId' | 'toolPolicy'> &
 export const testModelCell = (modelId: string) =>
   SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
 
-/** A pinned composition with no plugins, for a run fixture offered none. */
-export const emptyPinnedComposition: PinnedComposition = {
-  key: new CompositionKey('0'.repeat(64), {
-    plugins: [],
-    disabled: [],
-    loaded: [],
-    host: null,
-    approvalPromptsUnavailable: false,
+/** A run that has opened no step yet. */
+export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
+
+/** A run fixture's step fields: no step opened yet, and every step offers
+ *  exactly `tools`, as the run's own tools over an empty catalog. */
+export const testRunTools = (
+  stores: ModelOptionStores,
+  tools: Readonly<Record<string, RuntimeTool>> = {},
+): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
+  toolInputs: {
     tools: [],
-    injected: [],
-  }),
-  table: toolTable({}),
-  failures: new Map(),
-  services: Context.empty(),
-};
+    approvalPromptsUnavailable: false,
+    host: stores.host,
+    runTools: Object.values(tools),
+    injectTools: false,
+    injectInstalled: false,
+    stores,
+    workspaceRoot: undefined,
+    held: { warnings: [], loaded: new Map() },
+  },
+  steps: noStep(),
+});
 
 /** Each invocation owns its tracker; tests may supply a run and the roots it
  *  answers for. The call's `Runs` are its run's session's; a call outside any
@@ -64,12 +74,18 @@ export function nativeToolTestLayer(
         config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
         model: testModelCell('test-model'),
         logger: noopTrace,
-        composition: emptyPinnedComposition,
+        steps: noStep(),
         scope: Scope.makeUnsafe(),
         ...run,
       },
       ...call,
     })),
-    Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
+    // The session's plugin services, over the same `Runs`, as a step pins
+    // them for the call.
+    testCallPluginServices.pipe(
+      Layer.provideMerge(
+        Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
+      ),
+    ),
   );
 }

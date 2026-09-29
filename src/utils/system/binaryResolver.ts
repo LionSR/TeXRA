@@ -22,6 +22,19 @@ const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
   'latexmk',
 ]);
 
+/**
+ * The TeX Live Perl scripts that live under `texmf-dist/scripts`: the only
+ * tools the TeX database can locate. Every other name (`lake`, `codex`, `gs`,
+ * a binary the setup assistant asks about) never reaches `kpsewhich`.
+ */
+const TEXMF_SCRIPTS = new Set([
+  ...WINDOWS_EXTENSIONLESS_PERL_TOOLS,
+  'texcount',
+]);
+
+/** A `kpsewhich` lookup over the ls-R database answers in milliseconds. */
+const KPSEWHICH_TIMEOUT_MS = 3_000;
+
 export interface ResolvedBinaryCommand {
   command: string;
   args: string[];
@@ -35,11 +48,27 @@ interface ResolveCommandOptions {
   isWindows?: boolean;
 }
 
-// Resolved tool paths, bounded so a long-lived session that probes many
-// distinct tool names can't grow this unbounded. Only hits are cached; misses
-// are always re-checked so tools installed mid-session are picked up without
-// a reload.
-const findToolCache = new LRUCache<string, string>({ max: 64 });
+/** How long a miss is remembered before the tool is looked up again. */
+const MISS_TTL_MS = 60_000;
+
+// Lookups by tool name, bounded so a long-lived session that probes many
+// distinct names can't grow this unbounded. A hit is kept for the session; a
+// miss expires after MISS_TTL_MS, so repeated session opens do not repeat the
+// search and a tool installed mid-session is still picked up.
+const findToolCache = new LRUCache<string, { readonly path: string | null }>({
+  max: 64,
+});
+
+/**
+ * Drop every remembered miss, so the next lookup of a tool the user may have
+ * just installed searches again. Found paths are kept.
+ */
+export function forgetToolMisses(): void {
+  const misses = [...findToolCache.entries()].filter(
+    ([, entry]) => entry.path === null,
+  );
+  for (const [tool] of misses) findToolCache.delete(tool);
+}
 
 function toolCandidates(tool: string): string[] {
   const candidates = [tool];
@@ -69,14 +98,21 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
       if (existsAtAbsolute(candidate)) return candidate;
     }
   }
-  // kpsewhich resolves files through the TeX database rather than PATH, so it
-  // stays a subprocess. npm `which` only searches PATH.
-  for (const name of candidates) {
-    const result = yield* executeCommand(['kpsewhich', name], {
-      cwd: process.cwd(),
-      settings: undefined,
-      quiet: true,
-    });
+  // A TeX Live script is found through the TeX database's scripts tree rather
+  // than PATH, so it stays a subprocess. A plain `kpsewhich <name>` searches
+  // TEXINPUTS for a `.tex` file instead: it never finds a script, and a
+  // recursive `//` entry there can walk a large tree for minutes.
+  const script = path.basename(tool, '.pl');
+  if (TEXMF_SCRIPTS.has(script)) {
+    const result = yield* executeCommand(
+      ['kpsewhich', '-format=texmfscripts', `${script}.pl`],
+      {
+        cwd: process.cwd(),
+        settings: undefined,
+        timeout: KPSEWHICH_TIMEOUT_MS,
+        quiet: true,
+      },
+    );
     if (result.exitCode === 0 && result.stdout) return result.stdout;
   }
   for (const name of candidates) {
@@ -87,19 +123,23 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
 });
 
 /**
- * Locate a tool in the common directories, the TeX database, then PATH.
- * Unsafe tool names are rejected. Found paths are cached for the session;
- * misses are always re-checked so that tools installed mid-session are
- * picked up without a reload.
+ * Locate a tool in the common directories, the TeX database (TeX Live
+ * scripts only), then PATH. Unsafe tool names are rejected. Found paths are
+ * cached for the session; a miss is remembered for a minute, so a tool
+ * installed mid-session is picked up after that without a reload.
  */
 export const findToolInCommonPaths = Effect.fn('findToolInCommonPaths')(
   function* (
     tool: string,
   ): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
     const cached = findToolCache.get(tool);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) return cached.path;
     const result = yield* findToolUncached(tool);
-    if (result !== null) findToolCache.set(tool, result);
+    findToolCache.set(
+      tool,
+      { path: result },
+      result === null ? { ttl: MISS_TTL_MS } : undefined,
+    );
     return result;
   },
 );

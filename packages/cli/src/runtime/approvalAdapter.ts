@@ -9,7 +9,7 @@
  * mirrors bypass state, and holds a tool edit's preview so the diff can be
  * printed.
  */
-import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
+import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
@@ -26,6 +26,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
+  cliApprovalPromptsUnavailable,
   settleExecutable,
   settleHumanInputDenial,
   settleRetry,
@@ -239,10 +240,6 @@ export function createHeadlessCliHostInteractions(
         // The pre-prompt hook fires here and again inside `askApproval`; that
         // double call is pre-existing retry behavior, not a bug to "fix".
         hooks.beforePrompt?.();
-        // The prompt surface owns the retry hint: the operator must see the
-        // own-key / coding-plan switch guidance in the prompt they
-        // actually answer, not only in the pre-prompt stderr line.
-        // `formatRetryRequestMessage` is the single retry formatter.
         const summary = formatRetryRequestMessage(payload.data);
         writeTextStderr(summary);
         const decision = yield* ask({ summary });
@@ -315,12 +312,14 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(session.view), take),
-  );
+  const fiber = runtime.runFork(Stream.runForEach(session.viewChanges, take));
 
   return {
     emit: hooks.emit,
+    // What the session withholds on every run it launches or resumes.
+    get approvalPromptsUnavailable() {
+      return cliApprovalPromptsUnavailable(session, context);
+    },
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },

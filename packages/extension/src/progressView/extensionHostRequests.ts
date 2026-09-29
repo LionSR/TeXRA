@@ -21,13 +21,15 @@ import {
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
   attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
@@ -54,12 +56,9 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
@@ -67,10 +66,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
+import {
+  AgentDirectories,
+  type StateStore,
+  type StateReadFailed,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -203,30 +203,22 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Launch a validated request directly, as the desktop's `runValidated`
-   * does: the surface's launch and the shared run actions both reach
-   * `runAgent` here. The launch program takes its process services from this
-   * runtime's context on the fiber that runs it, as the resume port's program
-   * does.
+   * Launch a validated fresh request directly, as the desktop's
+   * `runValidated` does: the surface's launch and the shared run actions
+   * both reach `runAgent` here. The launch program takes its process services from this
+   * runtime's context on the fiber that runs it.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
-    { config, runId },
+    request,
     runOptions = {},
   ) => {
-    const launch = runAgent(
-      runId === undefined
-        ? { kind: 'fresh', config }
-        : { kind: 'resume', config, runId },
-      {
-        session,
-        openWorkflowOutput: (result) =>
-          openFinalOutputIfAvailable(session.roots, result),
-        preferHelperModel: runOptions.preferHelperModel ?? false,
-        ownApiKeyFallback: runOptions.ownApiKeyFallback,
-        onRun: runOptions.onRun,
-        onRunResolved: presentLaunchedProgressRun,
-      },
-    ).pipe(Effect.asVoid);
+    const launch = runAgent(request, {
+      session,
+      preferHelperModel: runOptions.preferHelperModel ?? false,
+      ownApiKeyFallback: runOptions.ownApiKeyFallback,
+      onRun: runOptions.onRun,
+      onRunResolved: presentLaunchedProgressRun,
+    }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };
 
@@ -234,6 +226,11 @@ export function createExtensionHostRequests(
     createHostRunActions({
       session,
       runValidated,
+      openWorkflowOutput: (result) =>
+        withProcessServices(
+          runtime,
+          openFinalOutputIfAvailable(session.roots)(result),
+        ),
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -284,7 +281,7 @@ export function createExtensionHostRequests(
       mergeFile: (baseFile, editedFile) =>
         runCommand('texra.merge', baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        runCommand('texra.latexdiff', baseFile, editedFile),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -407,23 +404,13 @@ export function createExtensionHostRequests(
       }
       const prepared = yield* prepareSurfaceLaunch(
         request,
-        {
-          showInfoMessage: (message) => vscodeUi.showInfoMessage(message),
-          // A dismissed launch notification is a cancellation here; the
-          // settings view keeps `undefined` as "ask again".
-          chooseTeamAvailability: (unavailableNames) =>
-            chooseTeamAvailabilityViaDialog(
-              teamAvailabilityPrompt(unavailableNames),
-              { modal: false },
-            ).pipe(Effect.map((choice) => choice ?? 'cancel')),
-          signInForRemoteAgentCatalog: runSignInCommand,
-        },
-        session.roots.workspaceState,
+        session.roots.repoState,
         session.roots.storage,
       );
-      yield* runValidated(prepared).pipe(
-        Effect.mapError((cause) => hostFailure('runValidated', cause)),
-      );
+      yield* runValidated(
+        prepared,
+        launchApprovalOptions(request, session.approvals),
+      ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
     });
   }
 
@@ -585,9 +572,7 @@ export function createExtensionHostRequests(
     openPath: (file, line) => commandVerb('texra.openFile', file, line),
     openLabel: (label) =>
       Effect.map(
-        runCommand<boolean>('texra.openLabel', label, {
-          notifyNotFound: false,
-        }),
+        runCommand<boolean>('texra.openLabel', label),
         (opened) => opened === true,
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
@@ -597,19 +582,7 @@ export function createExtensionHostRequests(
     runWorkflowFileOperation: (operation, request) =>
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      action === 'latexdiffvc'
-        ? commandVerb('texra.latexdiffvc', undefined, baseFile, commit)
-        : commandVerb(
-            `texra.${action}`,
-            undefined,
-            baseFile,
-            commit,
-            action === 'cleanLatexdiffvc',
-          ),
-    mergeFiles: (baseFile, editedFile) =>
-      commandVerb('texra.merge', baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
+      commandVerb(`texra.${action}`, baseFile, commit),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');
@@ -635,7 +608,7 @@ export function createExtensionHostRequests(
         sessionType === 'toolUse' ? 'toolUse' : undefined,
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const dir = yield* agentDirectories.custom();
+      const dir = yield* (yield* AgentDirectories).custom();
       if (dir) {
         yield* fromHost('revealFileInOS', () =>
           vscode.commands.executeCommand(

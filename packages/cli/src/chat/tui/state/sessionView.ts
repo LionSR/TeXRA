@@ -23,10 +23,7 @@ import type {
   SessionView,
   RunView,
 } from '@shared/session/sessionView';
-import {
-  flowPosition,
-  formatFlowPositionLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 /** The bound bridge, itself a signal so a computed over the view (the
@@ -100,18 +97,19 @@ export function runViewOf(
   return runId === undefined ? undefined : view.runs.get(runId);
 }
 
-/** The run to stop when a child is still running or waiting. */
+/** The child run a kill targets, while its `actions` offers a stop. */
 export function killableRunId(run: RunView | undefined): RunId | undefined {
-  return run &&
-    run.parentId !== null &&
-    (run.group === 'running' || run.group === 'waiting')
+  return run && run.parentId !== null && run.actions.includes('stop')
     ? run.id
     : undefined;
 }
 
-/** The run to resume when it was interrupted and can pick up again. */
+/** The interrupted run a native resume picks up, while its `actions` offers
+ *  one (the TUI resumes tool-use agents: `resumeEligible`). */
 export function resumableRunId(run: RunView | undefined): RunId | undefined {
-  return run?.group === 'interrupted' && run.resumeEligible
+  return run?.group === 'interrupted' &&
+    run.resumeEligible &&
+    run.actions.includes('resume')
     ? run.id
     : undefined;
 }
@@ -136,9 +134,9 @@ export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
 
 /**
  * The direct children in the RUNNING phase. The fold's `rollup.running`
- * counts in-flight runs (running or idle-waiting); the TUI's "active"
- * excludes a child parked between turns, so it reads each child's status
- * fact rather than the rollup.
+ * counts every descendant still working a turn, a child waiting on the user
+ * included; the TUI's "active" is direct children in the RUNNING phase, so
+ * it reads each child's status fact rather than the rollup.
  */
 export function runningChildCount(
   view: SessionView,
@@ -150,10 +148,14 @@ export function runningChildCount(
 }
 
 /**
- * The nearest ancestor's position, for a child's location: the loop's own
- * coordinate off `RunView.flow`, and the open phase for a workflow-script
- * ancestor, which drives no loop of its own — its child loop is terminal on
- * the first turn, so it never writes a `flow.step` and its `flow` stays null.
+ * The nearest ancestor's position, for a child's location: a workflow
+ * ancestor's round off `RunView.position`, and the open phase for a
+ * workflow-script ancestor, which drives no loop of its own — its child loop
+ * is terminal on the first turn, so it never writes a `run.position` and its
+ * `position` stays null. A tool-use ancestor's turn is no position of the child:
+ * it keeps counting after the child started, and the child's row already
+ * shows its own turn, so the header and the status bar would name a third
+ * `tN` that disagrees with both.
  */
 export function ancestorPositionLabel(
   view: SessionView,
@@ -165,8 +167,9 @@ export function ancestorPositionLabel(
     const run = runViewOf(view, ancestor.id);
     if (run === undefined) continue;
     const label =
-      formatFlowPositionLabel(flowPosition(run.flow)) ??
-      openWorkflowPhaseLabel(run);
+      (run.position?.kind === 'round'
+        ? formatLoopPositionLabel(run.position)
+        : undefined) ?? openWorkflowPhaseLabel(run);
     if (label !== undefined) return label;
   }
   return undefined;

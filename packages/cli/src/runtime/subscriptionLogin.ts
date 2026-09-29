@@ -17,7 +17,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { tryOpenBrowser } from './browser';
+import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { isLikelyRemoteSession } from './remoteSession';
 import { interactiveTerminalFailure } from './terminalRequirements';
 import type { CliContext } from './cliContext';
@@ -29,7 +29,7 @@ export interface CliSubscriptionLoginTransportInit {
 
 /** Progress sink shared by every provider login. */
 export interface CliSubscriptionLoginOptions {
-  readonly writeProgress: (message: string) => void;
+  readonly writeProgress: CliSignInProgress;
 }
 
 /**
@@ -49,36 +49,6 @@ export function shouldUseSubscriptionDeviceCode(
     interactiveTerminalFailure(context) !== undefined ||
     isLikelyRemoteSession()
   );
-}
-
-/**
- * Publish the loopback sign-in URL before awaiting the browser process.
- * Some launchers remain open until the browser exits; the sign-in panel must
- * not hide the only manual route behind that wait. Print the URL once — later
- * status lines must not re-emit it (progress sinks append, not replace).
- */
-function writeCliLoopbackSignInProgress(options: {
-  readonly writeProgress: (message: string) => void;
-  readonly displayName: string;
-  readonly url: string;
-  readonly noBrowser: boolean;
-}): Effect.Effect<void, never, ChildProcessSpawner> {
-  const { writeProgress, displayName, url, noBrowser } = options;
-  return Effect.gen(function* () {
-    writeProgress(`${displayName} sign-in URL:\n${url}`);
-    if (noBrowser) return;
-
-    writeProgress('Browser launch in progress...');
-    // Infallible by construction: `tryOpenBrowser` answers false rather than
-    // failing, so the launch outcome is a value, not a failure.
-    if (yield* tryOpenBrowser(url)) {
-      writeProgress('Browser opened; the same URL works in another browser.');
-      return;
-    }
-    writeProgress(
-      'Automatic browser launch failed; open the sign-in URL above.',
-    );
-  });
 }
 
 /** A sign-out whose preference write failed carries the reason. */
@@ -114,10 +84,11 @@ export const signInCliSubscription = Effect.fn(
       const openUrl = verificationUrlComplete ?? verificationUrl;
       options.writeProgress(
         `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
+        { copyable: true },
       );
     },
     presentSignInUrl: (url) =>
-      writeCliLoopbackSignInProgress({
+      presentCliSignInUrl({
         writeProgress: options.writeProgress,
         displayName,
         url,

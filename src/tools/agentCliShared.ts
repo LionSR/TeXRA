@@ -2,15 +2,16 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect, type Context } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import type { Runs } from '@agent/runtime/runRegistry';
 import type {
+  ChildRunPort,
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -20,11 +21,9 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume } from '@platform/interfaces';
+import { senderOf } from '@agent/followUp/followUpSender';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  emptyUsageStats,
-  sumUsageStats,
   ToolError,
   type FollowUpContent,
   type RunId,
@@ -34,14 +33,13 @@ import {
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
-import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import {
+  agentCliChildRunId,
   childRunDescription,
   createChildRun,
-  type ChildRun,
 } from './delegation/childRun';
 import {
   startDetachedChildRunLoop,
@@ -51,49 +49,6 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-
-/** Registry accessor keyed by the session's runs
- * (`codexThreadsFor`/`claudeAgentSessionsFor`); dispatch and loop resolve it
- * once against the `Runs` they take from context. */
-type AgentCliSessionStoreAccessor = (
-  runs: RunRegistry,
-) => AgentCliSessionRegistry;
-
-/**
- * A collaborator of the dispatch/launch chain (bash approval, follow-up
- * submission, thread/session setup, the owned-run launch guard) failed.
- * `cause` is what it raised. The tools' `execute()` edges re-raise the cause
- * itself, so the tool runner surfaces the same error instance the
- * collaborator raised, exactly as the previous `await` chain did.
- */
-class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/**
- * The one re-tagging of the agent-CLI chain's collaborators onto this
- * chain's error channel — the shared dispatch/launch steps and each provider
- * tool's own setup (SDK import, binary lookup, thread creation).
- */
-export const agentCliCall = <A, E, R>(
-  call: Effect.Effect<A, E, R>,
-): Effect.Effect<A, AgentCliCallFailed, R> =>
-  Effect.mapError(call, (cause) => new AgentCliCallFailed({ cause }));
-
-/** The failures the agent-CLI dispatch/launch chain can raise. */
-export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
-
-/**
- * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's native `execute()` edge so defineTool normalizes the original error
- * without hiding the collaborator's diagnostics.
- */
-export const reraiseAgentCliCallFailure = <A, R>(
-  effect: Effect.Effect<A, AgentCliToolFailure, R>,
-): Effect.Effect<A, ToolError, R> =>
-  effect.pipe(
-    Effect.catchTag('AgentCliCallFailed', (error) => Effect.die(error.cause)),
-  );
 
 interface AgentCliResumeLabels {
   notActiveLabel: string;
@@ -129,8 +84,8 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, AgentResume> {
-    const { id, prompt, callerRunId, labels } = params;
+  ): Effect.fn.Return<ToolResult, ToolError> {
+    const { id, prompt, callerRunId, labels, session } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
     // through to submitFollowUp's no-session outcome below.
@@ -141,9 +96,8 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       labels,
     );
 
-    const result = yield* submitFollowUp(stored.runId, prompt, {
-      session: params.session,
-    });
+    const followUp = { text: prompt, from: senderOf(callerRunId) };
+    const result = yield* submitFollowUp(stored.runId, followUp, { session });
     if (result.status === 'failed') {
       return yield* Effect.fail(
         new ToolError(
@@ -187,13 +141,9 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     labels: AgentCliResumeLabels;
     launch: (
       releaseClaim?: () => void,
-    ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
+    ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<
-  ToolResult,
-  AgentCliToolFailure,
-  R | ToolCall | AgentResume
-> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -223,6 +173,8 @@ interface AgentCliLaunchParams<TTurn> {
   session: SessionHandle;
   /** The launching run: the child's parent edge. */
   parentRunId: RunId;
+  /** The thread or session id this launch continues, if any. */
+  resumeId?: string;
   agentName: string;
   description: string;
   config: AgentConfig;
@@ -232,7 +184,7 @@ interface AgentCliLaunchParams<TTurn> {
    * child stream the launch guard created. See {@link buildAgentCliLaunch}.
    */
   buildLaunch: (ctx: {
-    childRun: ChildRun;
+    childRun: ChildRunPort;
     runId: RunId;
   }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error, Runs>;
   summary: string;
@@ -241,31 +193,23 @@ interface AgentCliLaunchParams<TTurn> {
 }
 
 /**
- * Register a fresh agent-CLI run, then run the shared detached-child launch
- * choreography over it: create the child stream tab inside the owned-run
- * launch guard, hand the provider's strategy to the child run loop, and return
+ * Register an agent-CLI run (fresh, or the paused one `resumeId` continues),
+ * then run the shared detached-child launch choreography over it and return
  * the "launched" ToolResult.
  *
- * `registerRun` stays here rather than moving to `registerChildRun`: an
- * agent-CLI run stamps `identity.tool`, TERMINAL_BACKED follow-up support and
- * a run description that the native registration does not.
- *
- * Failure channel: a setup failure propagates as the choreography raised it.
- * A typed failure is re-tagged onto this chain's `AgentCliCallFailed`; a
- * cause carrying an interrupt re-raises as an interrupt into the calling tool
- * fiber rather than being squashed into a failure. Under today's topology the
- * only reachable interrupt is the `restore` checkpoint below, before the child
- * stream exists (everything after it is uninterruptible), so this states the
- * primitive's semantics rather than a second live arm.
+ * Failure channel: a setup failure dies with the choreography's error
+ * (`Effect.orDie`); an interrupt re-raises as an interrupt into the calling
+ * tool fiber. The only reachable one is the `restore` checkpoint below, before
+ * the child stream exists.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* <TTurn>(
   params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs | AgentResume> {
+): Effect.fn.Return<ToolResult, ToolError, Runs> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const runId = generateRunId();
+      const runId = yield* agentCliChildRunId(params);
       // An external CLI drives this agent: the CLI is both the agent name and the
       // driving tool, and `identity.tool` is what gates native-only affordances
       // (resume/rerun) off for this cohort.
@@ -290,7 +234,7 @@ export const launchAgentCliSession = Effect.fn(
         ),
       );
 
-      const { childRunId } = yield* startDetachedChildRunLoop({
+      yield* startDetachedChildRunLoop({
         session: params.session,
         runId,
         parentRunId: params.parentRunId,
@@ -311,20 +255,18 @@ export const launchAgentCliSession = Effect.fn(
             Effect.andThen(
               createChildRun(params.session, runId, params.parentRunId, {
                 run: identity,
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-                description: params.description,
-                config: params.config,
+                category: params.config.agentCategory,
               }),
             ),
           ),
         buildLaunch: (childRun) => params.buildLaunch({ childRun, runId }),
-      }).pipe(Effect.mapError((cause) => new AgentCliCallFailed({ cause })));
+      }).pipe(Effect.orDie);
 
       return executed(
         [
           params.launchedLine,
           `Run ID: ${runId}`,
-          `Run: ${childRunId}`,
+          `Run: ${runId}`,
           params.followUpLine,
         ].join('\n'),
         params.summary,
@@ -354,8 +296,8 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 >(
   toolName: string,
   toolCall: ToolCallShape,
-  run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+  run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
+): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
   const activeRun = yield* requireToolRun(toolName, toolCall);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
@@ -388,7 +330,7 @@ export const agentCliApprovalCommand = (
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
-interface AgentCliLaunchContext {
+export interface AgentCliLaunchContext {
   /** The launching run's session: the child's registration and delivery target. */
   session: SessionHandle;
   parentRunId: RunId;
@@ -396,6 +338,8 @@ interface AgentCliLaunchContext {
   /** Release the disk-based fallback claim if the launch fails before promoting
    * it. Undefined for a fresh (non-resumed) launch. */
   releaseFallbackClaim: (() => void) | undefined;
+  /** The session's registry the step served the tool (`store`). */
+  registry: AgentCliSessionRegistry;
 }
 
 /**
@@ -410,12 +354,13 @@ interface AgentCliLaunchContext {
  * approved is the loop-side guard each declares, not a step in here.
  *
  * The returned Effect is the tool's whole dispatch: the tool's `execute()`
- * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
+ * runs it as is.
  */
-export function dispatchAgentCliTool<R = never>(params: {
+export function dispatchAgentCliTool<R = never, S = never>(params: {
   toolCall: ToolCallShape;
   agentName: string;
-  store: AgentCliSessionStoreAccessor;
+  /** The plugin's session registry, served by the step that pinned it. */
+  store: Context.Key<S, AgentCliSessionRegistry>;
   resumeId: string | undefined;
   /** Existing live session read by a fresh launch, such as a fork source. */
   sourceId?: string;
@@ -423,17 +368,13 @@ export function dispatchAgentCliTool<R = never>(params: {
   labels: AgentCliResumeLabels;
   launch: (
     context: AgentCliLaunchContext,
-  ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
-}): Effect.Effect<
-  ToolResult,
-  AgentCliToolFailure,
-  R | ToolCall | Runs | AgentResume
-> {
+  ) => Effect.Effect<ToolResult, ToolError, R>;
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolCall> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, params.toolCall, (run) =>
     Effect.gen(function* () {
-      const registry = store(yield* Runs);
+      const registry = yield* store;
       const callerRunId = run.runId;
       if (sourceId) {
         yield* requireCallerOwnership(
@@ -455,6 +396,7 @@ export function dispatchAgentCliTool<R = never>(params: {
             parentRunId: run.runId,
             parentWorkingDirectory: params.toolCall.workingDirectory,
             releaseFallbackClaim,
+            registry,
           }),
       });
     }),
@@ -466,13 +408,13 @@ export function dispatchAgentCliTool<R = never>(params: {
 // ============================================================================
 
 interface AgentCliLoopParams<TTurn> {
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
   initialPrompt: string;
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
-  store: AgentCliSessionStoreAccessor;
+  registry: AgentCliSessionRegistry;
   /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
@@ -506,6 +448,8 @@ interface AgentCliLoopParams<TTurn> {
   turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
+  /** The call continuing this session after a stop, and the id it resumed. */
+  continueWith: readonly [tool: string, idParam: string, id?: string];
 }
 
 /**
@@ -517,7 +461,8 @@ interface AgentCliLoopParams<TTurn> {
  * (codex, claudeAgent): a dedup'd session/thread registration closure, the
  * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
  * boilerplate-identical strategy fields (`isTerminal`, `getUsage`,
- * `onLoopStart`, `onTurnSuccess`, `publishUsage`, `releaseSessionOwnership`).
+ * `ownsBackgroundProcess`, `onTurnSuccess`, `publishUsage`,
+ * `releaseSessionOwnership`).
  * Callers supply only their provider-specific turn run, usage/delivery
  * formatting, and registry entry construction.
  */
@@ -530,7 +475,7 @@ export function buildAgentCliLaunch<TTurn>(
       runId,
       stageLabel,
       initialPrompt,
-      store,
+      registry,
       releaseFallbackClaim,
       runProviderTurn,
       resolveSessionIds,
@@ -542,16 +487,19 @@ export function buildAgentCliLaunch<TTurn>(
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
-    const registry = store(yield* Runs);
+    // Released with the child's aliases (`releaseSessionOwnership`).
+    yield* registry.holdWhileLive(runId);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.
     const target: AgentCliSessionEntry = { runId };
 
-    // Fresh and resumed session/thread ids are registered after the first
-    // successful turn is persisted, immediately before its result reaches the
-    // parent.
+    // Session/thread ids are registered after the first successful turn is
+    // persisted, just before its result reaches the parent.
+    const [continueTool, continueParam, resumedId] = params.continueWith;
+    let continueId = resumedId;
     const registerSessionId = (id: string): void => {
+      continueId = id;
       if (registry.lookup(id)) return;
       registry.register(id, target);
     };
@@ -560,8 +508,6 @@ export function buildAgentCliLaunch<TTurn>(
     // captured here (rather than threaded through the loop contract) since
     // `formatDelivery`/`formatError` run strictly after the turn that set it.
     let lastPrompt = initialPrompt;
-    /** The child run's spend across every turn this loop has run. */
-    let cumulativeUsage: TokenUsageStats = emptyUsageStats();
     const runTurn = (
       followUps: readonly FollowUpContent[],
       ports: ChildRunPorts,
@@ -574,16 +520,15 @@ export function buildAgentCliLaunch<TTurn>(
 
     const strategy: ChildRunStrategy<TTurn> = {
       stageLabel,
-      launch: (ports, signal) =>
-        runTurn([{ text: initialPrompt, origin: 'user' }], ports, signal),
+      launch: (ports, signal) => runProviderTurn(initialPrompt, ports, signal),
       runTurn,
       isTerminal: () => false,
       getUsage,
       isTurnError,
       turnErrorMessage,
-      onLoopStart: () => {
-        registry.trackInFlight(target);
-      },
+      // The provider's CLI process is this child's OS process: shutdown
+      // drain stops it through the run's one background-process slot.
+      ownsBackgroundProcess: true,
       onTurnSuccess: (turn) => {
         for (const id of resolveSessionIds(turn)) {
           if (id) registerSessionId(id);
@@ -592,14 +537,9 @@ export function buildAgentCliLaunch<TTurn>(
       publishUsage: (turn) => {
         const usage = getUsage(turn);
         if (!usage) return;
-        // Each provider reports only the turn it just ran, so the loop holds
-        // the child run's running total and publishes that. Not a transcript
-        // event: the session's `usage` row is a latest-only listing key.
-        cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
-        logger.usage(
-          { runId, usage: cumulativeUsage },
-          { recordTranscript: false },
-        );
+        // The child has no ledger, so its `usage` rows are its one record of
+        // spend: one per turn, which is what each provider reports.
+        logger.emit({ type: 'usage', usage });
       },
       formatDelivery: (turn, wallTimeMs) =>
         Effect.try({
@@ -607,6 +547,13 @@ export function buildAgentCliLaunch<TTurn>(
           catch: ensureError,
         }),
       formatError: (turn, err) => formatError(turn, err, lastPrompt),
+      pauseNotice: () =>
+        continueId === undefined
+          ? undefined
+          : {
+              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
+              resumeId: continueId,
+            },
       releaseSessionOwnership: () => {
         releaseFallbackClaim?.();
         registry.releaseByRunId(runId);

@@ -16,11 +16,7 @@ import {
 } from '@ui/copy/workflowScriptProposal';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
-import {
-  cliRetryActionHint,
-  cliRetryQuotaRoute,
-  type CliApprovalContent,
-} from './approvalPrompts';
+import { type CliApprovalContent } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -196,9 +192,7 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
-  const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const hint = cliRetryActionHint(cliRetryQuotaRoute(payload));
-  return hint ? [message, hint].join('\n') : message;
+  return `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
 }
 
 export function formatBashApprovalSummary(payload: BashPermission): string {

@@ -40,7 +40,8 @@ const isAbsent = (error: Error): boolean =>
 
 export class RunFileService {
   public readonly runDirectory: string;
-  private hasPreparedSnapshot = false;
+  /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
+  private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
 
   constructor(
@@ -65,15 +66,20 @@ export class RunFileService {
    * figures, etc.) are mirrored into the active run directory via symlinks so
    * tools operating inside run storage can resolve them using their
    * familiar workspace-relative paths.
+   *
+   * Answers each base file's pre-run location, in order: its snapshot when
+   * one exists, else the file itself. That list is what a diff compares
+   * against for the whole run; a resumed run re-prepares and gets the
+   * snapshots its first attempt captured.
    */
   public prepareRunWorkspace(
     baseFiles: FileLocation[],
     options: {
       linkFiles?: FileLocation[];
     } = {},
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      if (this.hasPreparedSnapshot) return;
+      if (this.preparedBaseFiles) return this.preparedBaseFiles;
 
       yield* ensureRunDirUnder(this.roots.storage, this.runId);
 
@@ -82,10 +88,10 @@ export class RunFileService {
         linkTargets.set(target.absolutePath, target);
       }
 
-      yield* Effect.forEach(
+      const prepared = yield* Effect.forEach(
         baseFiles,
         (target) => this.captureOriginalSnapshot(target),
-        { concurrency: 'unbounded', discard: true },
+        { concurrency: 'unbounded' },
       );
 
       yield* Effect.forEach(
@@ -101,41 +107,50 @@ export class RunFileService {
         { concurrency: 'unbounded', discard: true },
       );
 
-      this.hasPreparedSnapshot = true;
+      this.preparedBaseFiles = prepared;
+      return prepared;
     });
   }
 
   /**
-   * Copy a workspace file into `original/<relativePath>` if not already captured.
+   * Copy a workspace file into `original/<relativePath>` if not already
+   * captured, and answer where its pre-run content lives: the snapshot when
+   * one exists (captured now or by an earlier attempt of this run), else the
+   * target itself.
    * Round-dir symlinks point here rather than the live workspace so an agent
    * write at `r<N>/<relPath>` can never reach the user's working copy.
    * Idempotent; skips non-workspace, ignored-root, non-regular, and missing sources.
    */
   private captureOriginalSnapshot(
     target: FileLocation,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
+  ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      if (target.kind !== 'workspace') return;
-      if (shouldSkipRelocation(target.relativePath)) return;
-
-      const fs = yield* FileSystem.FileSystem;
-      const stats = yield* fs.stat(target.absolutePath);
-      if (stats.type !== 'File') return;
+      if (target.kind !== 'workspace') return target;
+      if (shouldSkipRelocation(target.relativePath)) return target;
 
       const snapshotAbsolute = originalSnapshotPathUnder(
         this.roots.storage,
         this.runId,
         target.relativePath,
       );
+      const snapshot = createRunStorageLocation(
+        snapshotAbsolute,
+        target.relativePath,
+        this.runId,
+      );
+      if (yield* snapshotExists(snapshotAbsolute)) return snapshot;
 
-      if (yield* snapshotExists(snapshotAbsolute)) return;
+      const fs = yield* FileSystem.FileSystem;
+      const stats = yield* fs.stat(target.absolutePath);
+      if (stats.type !== 'File') return target;
 
       yield* ensureParentDir(snapshotAbsolute);
       yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
+      return snapshot;
     }).pipe(
       Effect.catch((error) =>
         isAbsent(error)
-          ? Effect.void
+          ? Effect.succeed(target)
           : Effect.fail(
               new Error(
                 `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,

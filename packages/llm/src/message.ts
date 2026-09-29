@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   ModelOriginSchema,
   OriginSchema,
+  sameModelOrigin,
   type ModelOrigin,
 } from './protocol.js';
 
@@ -62,7 +63,6 @@ const OpenRouterReasoningSchema = z
         ]),
       )
       .readonly()
-      .nullable()
       .optional(),
   })
   .refine(
@@ -74,61 +74,6 @@ const OpenRouterReasoningSchema = z
     },
   )
   .readonly();
-export const OpenRouterFileAnnotationSchema = z
-  .strictObject({
-    kind: z.literal('file-annotation'),
-    hash: z.string(),
-    name: z.string().optional(),
-    content: z
-      .array(
-        z.discriminatedUnion('kind', [
-          TextPartSchema,
-          z
-            .strictObject({ kind: z.literal('image-url'), url: z.string() })
-            .readonly(),
-        ]),
-      )
-      .readonly()
-      .optional(),
-    evidence: z
-      .strictObject({ kind: z.literal('openrouter-file-annotation') })
-      .readonly(),
-  })
-  .readonly();
-const MiniMaxReasoningSchema = z
-  .strictObject({
-    kind: z.literal('minimax-reasoning'),
-    plain: z.string().optional(),
-    details: z
-      .array(
-        z
-          .strictObject({
-            type: z.string().optional(),
-            id: z.string().optional(),
-            format: z.string().optional(),
-            index: z.int().optional(),
-            text: z.string().optional(),
-          })
-          .readonly(),
-      )
-      .readonly()
-      .optional(),
-  })
-  .refine(
-    (evidence) =>
-      evidence.plain !== undefined || evidence.details !== undefined,
-    {
-      message: 'MiniMax reasoning preserves a reported plain or details field.',
-    },
-  )
-  .readonly();
-export const MiniMaxDetectionSchema = z.strictObject({
-  inputSensitive: z.boolean().optional(),
-  inputSensitiveType: z.int().optional(),
-  outputSensitive: z.boolean().optional(),
-  outputSensitiveType: z.int().optional(),
-  outputSensitiveInt: z.int().optional(),
-});
 const EvidenceStatusSchema = z.enum(['completed', 'incomplete']);
 const MessagePartSchema = z.strictObject({
   kind: z.literal('message'),
@@ -143,23 +88,13 @@ const MessagePartSchema = z.strictObject({
     )
     .readonly(),
   evidence: z
-    .discriminatedUnion('kind', [
-      z
-        .strictObject({
-          kind: z.literal('openai-responses-message'),
-          itemId: z.string().min(1),
-          status: EvidenceStatusSchema,
-          phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
-        })
-        .readonly(),
-      z
-        .strictObject({
-          kind: z.literal('minimax-message'),
-          name: z.string().optional(),
-          audioContent: z.literal('').optional(),
-        })
-        .readonly(),
-    ])
+    .strictObject({
+      kind: z.literal('openai-responses-message'),
+      itemId: z.string().min(1),
+      status: EvidenceStatusSchema,
+      phase: z.enum(['commentary', 'final_answer']).nullable().optional(),
+    })
+    .readonly()
     .optional(),
 });
 const LocalCallPartSchema = z.strictObject({
@@ -175,39 +110,16 @@ const LocalCallPartSchema = z.strictObject({
    */
   argumentsText: z.string(),
   evidence: z
-    .discriminatedUnion('kind', [
-      z
-        .strictObject({
-          kind: z.literal('openai-responses-function-call'),
-          itemId: z.string().min(1).optional(),
-          status: z.literal('completed').optional(),
-        })
-        .readonly(),
-      z
-        .strictObject({
-          kind: z.literal('minimax-function-call'),
-          index: z.int().optional(),
-        })
-        .readonly(),
-    ])
+    .strictObject({
+      kind: z.literal('openai-responses-function-call'),
+      itemId: z.string().min(1).optional(),
+      status: z.literal('completed').optional(),
+    })
+    .readonly()
     .optional(),
 });
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
-  OpenRouterFileAnnotationSchema,
-  z
-    .strictObject({
-      kind: z.literal('url-citation'),
-      url: z.string(),
-      title: z.string().optional(),
-      startIndex: z.number().optional(),
-      endIndex: z.number().optional(),
-      content: z.string().optional(),
-      evidence: z
-        .strictObject({ kind: z.literal('openrouter-url-citation') })
-        .readonly(),
-    })
-    .readonly(),
   MessagePartSchema.readonly(),
   z
     .strictObject({
@@ -217,10 +129,6 @@ const OutputPartSchema = z.discriminatedUnion('kind', [
       evidence: z
         .discriminatedUnion('kind', [
           OpenRouterReasoningSchema,
-          MiniMaxReasoningSchema,
-          z
-            .strictObject({ kind: z.literal('chat-reasoning-content') })
-            .readonly(),
           z
             .strictObject({
               kind: z.literal('google-interactions-thought-signature'),
@@ -274,16 +182,10 @@ export const EVIDENCE_PROTOCOL = {
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
   'openrouter-reasoning': 'openrouter-chat',
-  'openrouter-file-annotation': 'openrouter-chat',
-  'openrouter-url-citation': 'openrouter-chat',
-  'minimax-reasoning': 'minimax-chat',
-  'minimax-message': 'minimax-chat',
-  'minimax-function-call': 'minimax-chat',
   google: 'google-interactions',
   anthropic: 'anthropic-messages',
-  xai: 'xai-chat',
+  xai: 'openai-responses',
   openrouter: 'openrouter-chat',
-  minimax: 'minimax-chat',
   'google-interactions': 'google-interactions',
   'openai-responses': 'openai-responses',
 } as const;
@@ -299,15 +201,7 @@ export function validateAssistantContent(
     const evidence = part.evidence;
     if (
       evidence != null &&
-      (evidence.kind === 'chat-reasoning-content'
-        ? ![
-            'deepseek-chat',
-            'kimi-chat',
-            'glm-chat',
-            'xai-chat',
-            'dashscope-chat',
-          ].includes(origin.protocol)
-        : origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind])
+      origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind]
     ) {
       ctx.addIssue({
         code: 'custom',
@@ -318,19 +212,17 @@ export function validateAssistantContent(
     }
     if (
       part.kind === 'reasoning' &&
-      (((evidence?.kind === 'anthropic-thinking-signature' ||
-        evidence?.kind === 'chat-reasoning-content') &&
+      ((evidence?.kind === 'anthropic-thinking-signature' &&
         (part.summary.length !== 0 || part.content?.length !== 1)) ||
         ((evidence?.kind === 'anthropic-redacted-thinking' ||
-          evidence?.kind === 'openrouter-reasoning' ||
-          evidence?.kind === 'minimax-reasoning') &&
+          evidence?.kind === 'openrouter-reasoning') &&
           (part.summary.length !== 0 || part.content !== undefined)))
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['content', index],
         message:
-          'Signed or Chat thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
+          'Signed thinking preserves one exact returned text field; redacted and grouped reasoning keep their content in provider evidence.',
       });
     }
     if (
@@ -449,6 +341,65 @@ export const PreparedHistorySchema = z
     }
   })
   .readonly();
+
+type HistoryMessage = z.infer<typeof MessageSchema>;
+
+/**
+ * The history every codec lowers for a turn bound to `turn`: what another
+ * model of the turn's own protocol wrote (a mid-run model switch) replays as
+ * plain content, without that model's reasoning, item ids or refusal
+ * marking, none of which the new model can take. An assistant entry that
+ * leaves nothing is dropped, and the user entries it separated are joined.
+ * Another protocol's evidence passes through for the codec to refuse. Below
+ * the resolved turn, so the recorded request is not what changes.
+ */
+export function replayableHistory(
+  messages: readonly HistoryMessage[],
+  turn: ModelOrigin,
+): readonly HistoryMessage[] {
+  const out: HistoryMessage[] = [];
+  let dropped = false;
+  for (const message of messages) {
+    let next = message;
+    if (
+      message.role === 'assistant' &&
+      message.origin.protocol === turn.protocol &&
+      !sameModelOrigin(message.origin, turn)
+    ) {
+      const content = message.content.flatMap(
+        (part): (typeof message.content)[number][] => {
+          if (part.kind === 'reasoning') return [];
+          const { evidence: _, ...plain } = part;
+          if (plain.kind === 'local-call') return [plain];
+          return [
+            {
+              ...plain,
+              content: plain.content.map(({ text }) => ({
+                kind: 'text' as const,
+                text,
+              })),
+            },
+          ];
+        },
+      );
+      dropped = content.length === 0;
+      if (dropped) continue;
+      next = { ...message, content };
+    }
+    const previous = out.at(-1);
+    if (dropped && next.role === 'user' && previous?.role === 'user') {
+      dropped = false;
+      out[out.length - 1] = {
+        role: 'user',
+        content: [...previous.content, ...next.content],
+      };
+      continue;
+    }
+    dropped = false;
+    out.push(next);
+  }
+  return out;
+}
 
 const PrefixSchema = z.strictObject({
   coveredMessages: z.int().positive(),

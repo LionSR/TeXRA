@@ -2,9 +2,7 @@
 // Shared contracts and utilities
 import { z } from 'zod';
 
-import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
-import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
 import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
@@ -60,15 +58,18 @@ export const TranscriptEventSchemas = {
     logId: z.string(),
     call: WorkflowCallProgressSchema,
   }),
-  skills: trace('skills.snapshot', {
-    skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
-  }),
+  /**
+   * One priced model turn of the row's run: never a running total, so a
+   * run's usage is the sum of its rows. A run with a ledger stores none: the
+   * database projects one from each priced `model.message` response and
+   * `model.compaction` summary (`Database`'s display reads). A child's spend
+   * is on the child's own run, never on its parent's. An
+   * agent-CLI child, which has no ledger, stores one per turn. `elapsedTime`
+   * is the turn's response time in seconds; `percentageCached` is a
+   * statistics row's, never a turn's.
+   */
   usage: trace('usage', {
-    /** The run this spend is attributed to: the row's own run, or the
-     *  agent-CLI child a parent logs a turn for through its own trace. */
-    runId: RunIdSchema,
-    usage: ExtendedTokenUsageStatsSchema,
-    recordTranscript: z.boolean().optional(),
+    usage: ExtendedTokenUsageStatsSchema.omit({ percentageCached: true }),
   }),
   context: trace('context.state', {
     inputTokens: ContextStateDataSchema.shape.inputTokens,
@@ -79,6 +80,13 @@ export const TranscriptEventSchemas = {
     id: z.string(),
     finalText: z.string().optional(),
   }),
+  /** Authoritative final assistant text for the round that just ended the
+   *  turn, decided once at the flow boundary that sets
+   *  `assembly.lastResponse` (after replacement-rule cleanup) and carried as
+   *  data from there. Fires at every mid-run turn boundary, not only the
+   *  terminal round (#7086). The round's MODEL_RESPONSE stream carries raw
+   *  provider chunks, so subscribers reconcile that stream's entry to this
+   *  text rather than assume the two match. */
   response: trace('response.finalized', { text: z.string() }),
   domain: trace('domain', {
     key: z.string(),

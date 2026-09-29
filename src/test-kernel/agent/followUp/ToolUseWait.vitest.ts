@@ -23,29 +23,25 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import {
   appendRow,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
 } from '@agent/runtime/loop/rows';
-import {
-  runToolUse,
-  type ToolUseFlowContext,
-} from '@agent/runtime/loop/toolUse';
+import { runToolUse } from '@agent/runtime/loop/toolUse';
+import type { RunControls } from '@agent/runtime/RunHandle';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
+  emptyRunEndOutput,
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -58,17 +54,19 @@ import {
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
 import {
@@ -97,7 +95,7 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // ---------------------------------------------------------------------------
 
 const ORIGIN = {
-  protocol: 'deepseek-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',
   deployment: {
@@ -125,6 +123,7 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision,
@@ -134,6 +133,7 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -160,6 +160,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
       const run = yield* AgentRun;
       const aggregateId = rowAggregate(run.runId);
       return {
+        call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
@@ -174,7 +175,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
               const failed = yield* cell.append([
-                snapshotRow(run.runId, state, {
+                ...snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: scripted.failWith,
                     declinedRoutes: [],
@@ -196,6 +197,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',
@@ -211,14 +213,14 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   turn: scripted,
                   calls: dispatchFactsFor(
                     scripted,
-                    run.tools,
+                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
                   ),
                   usage: null,
                 },
               },
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             return {
               kind: 'response' as const,
@@ -252,8 +254,8 @@ interface LoopInit {
   readonly ledger?: RunLedger['Service'];
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
-    attach(context: ToolUseFlowContext): void;
-    detach(context: ToolUseFlowContext): void;
+    attach(controls: RunControls): void;
+    detach(controls: RunControls): void;
   };
 }
 
@@ -273,7 +275,7 @@ function agentRunTestLayer(init: LoopInit) {
       });
       init.session.runs.track(handle);
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => init.session.runs.untrack(handle.runId)),
+        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
       return {
         runId: init.runId,
@@ -292,28 +294,24 @@ function agentRunTestLayer(init: LoopInit) {
         // The launch stores a real run carries; no fixture reads through them.
         stores: hostStores(),
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        userVarChannels: {},
+        opening: {
+          inputs: {},
+          activated: [],
+          attachedMemoryMisses: [],
+        },
         initialUserMessageForTranscript: 'Do the thing.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry({}),
+        ...testRunTools(hostStores()),
         finalToolName: init.finalToolName ?? null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },
-        usageMonitor: new UsageMonitor(
-          {
-            logger,
-            runId: init.runId,
-            runStageId: undefined,
-            config: testWorkspaceRoots().config,
-            usageLog: { log: () => {} },
-          },
-          { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
-        ),
         callbacks: {
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
@@ -334,7 +332,6 @@ function loopProgram(
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
@@ -443,15 +440,14 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
       commit: 0,
-      snapshotCommit: null,
-      rowsBeforeSnapshot: 0,
+      lastSnapshot: null,
+      ledgerRows: 0,
       family: 'toolUse',
-      step: null,
+      at: null,
       outcome: null,
       phase: null,
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
       lastError: null,
@@ -465,26 +461,27 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       pendingIntents: {},
       requests: {},
       usage: EMPTY_RUN_USAGE_TOTALS,
-      flow: null,
+      loop: null,
       roundOutputs: [],
-      overflowRecoveredAtRound: null,
+      overflowRecoveredAtTurn: null,
+      offeredTools: null,
+      offeredContinuation: null,
+      offeredSkills: [],
+      offeredSystem: null,
+      contents: {},
+      hookOutcomes: {},
+      offeredHooks: [],
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
-      snapshotRow(runId, fresh, {
-        phase: 'model.ready',
-        turn: 1,
+      ...snapshotRow(runId, fresh, {
         state: {
-          family: 'toolUse',
-          state: {
-            stateSlices: null,
-            offeredTools: [],
-            toolsetHash: '0'.repeat(64),
-          },
+          stateSlices: null,
         },
       }),
+      positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
     return yield* ledger.appendBatch(runId, opened, [
@@ -493,6 +490,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         aggregateId: aggregate,
         payload: {
           kind: 'attempt',
+          request: '0'.repeat(64),
           invocation,
           origin: ORIGIN,
           delivery: 'stream',
@@ -510,7 +508,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
           usage: null,
         },
       },
-      stepRow(runId, opened, 'response.ready'),
+      positionRow(runId, opened, 'response.ready'),
     ]);
   },
 );
@@ -546,7 +544,9 @@ describe('a parked child run', () => {
         const session = quietSession();
         const runId = startedRun(session);
         if (queued) {
-          yield* enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
+          yield* enqueue(session, runId, [
+            { text: 'later', from: { kind: 'user' as const } },
+          ]);
         }
 
         const { fiber, park, requests } = yield* forkLoop({
@@ -585,7 +585,7 @@ describe('a parked child run', () => {
           type: 'followup.queued' as const,
           aggregateId: rowAggregate(runId),
           followUpId: 'follow-up-1',
-          content: { text: asked, origin: 'user' as const },
+          content: { text: asked, from: { kind: 'user' as const } },
         };
         session.publish([queued]);
         yield* session.settlePublications();
@@ -600,7 +600,9 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.ledger.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(session.pendingFollowUps(runId)).toEqual([]);
+        expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
+          [],
+        );
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
@@ -651,7 +653,7 @@ describe('a parked root run', () => {
         const runId = startedRun(session);
         const onIdle = vi.fn();
         yield* enqueue(session, runId, [
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -704,7 +706,7 @@ describe('a parked root run', () => {
           appendBatch: (id, state, drafts) =>
             drafts.some(
               (draft) =>
-                draft.type === 'flow.step' && draft.payload.step === 'halted',
+                draft.type === 'run.position' && draft.payload.at === 'halted',
             )
               ? Effect.fail(writeFailed)
               : session.ledger.appendBatch(id, state, drafts),
@@ -775,7 +777,9 @@ describe('a parked root run', () => {
         script: [textTurn('first'), textTurn('second')],
       });
       yield* park(0);
-      yield* enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
+      yield* enqueue(session, runId, [
+        { text: 'carry on', from: { kind: 'user' as const } },
+      ]);
       yield* park(1);
       yield* Fiber.interrupt(fiber);
 
@@ -783,13 +787,102 @@ describe('a parked root run', () => {
       // rail: the park, then the step that leaves it.
       const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'flow.step',
-      ).map((event) => event.payload.step);
+        'run.position',
+      ).map((event) => event.payload.at);
       const parked = steps.indexOf('waiting');
       expect(parked).toBeGreaterThanOrEqual(0);
       expect(steps.slice(parked + 1).some((step) => step !== 'waiting')).toBe(
         true,
       );
+    }),
+  );
+
+  it.effect('restores its park when a resume consumes only stale notices', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const first = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* first.park(0);
+      yield* Fiber.interrupt(first.fiber);
+
+      // Only an ended child's progress notice is queued: consuming it starts
+      // no turn, so the resume must still write the park it cleared.
+      const child = publishTestRunStart(session, generateRunId(), {
+        parent: runId,
+      });
+      session.publish([
+        {
+          type: 'run.end',
+          aggregateId: rowAggregate(child),
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: emptyRunEndOutput('toolUse'),
+        },
+      ]);
+      yield* enqueue(session, runId, [
+        {
+          text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+          from: { kind: 'run' as const, runId: child },
+        },
+      ]);
+      const recorded = recordSessionEvents(session);
+
+      const resumed = yield* forkLoop({
+        runId,
+        session,
+        resume: true,
+        script: [textTurn('never reached'), textTurn('never reached')],
+      });
+      yield* resumed.park(1);
+      yield* Fiber.interrupt(resumed.fiber);
+
+      const steps = eventsOfType(
+        yield* Effect.promise(() => recorded.read()),
+        'run.position',
+      ).map((event) => event.payload.at);
+      // The interrupt that ends the test writes its own halt last.
+      expect(steps.slice(0, -1)).toContain('waiting');
+      expect(resumed.requests).toHaveLength(0);
+    }),
+  );
+
+  it.effect('answers a follow-up consumed just before the loop exited', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const first = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* first.park(0);
+      yield* Fiber.interrupt(first.fiber);
+
+      // The rows `FollowUps.consume` commits, and then nothing: the process
+      // ended before the turn that answers them began.
+      const parked = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      if (parked === null) throw new Error('The run has no ledger.');
+      yield* session.ledger.appendBatch(runId, parked, [
+        appendRow(runId, [
+          { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
+        ]),
+        ...snapshotRow(runId, parked, { runtime: { lastError: null } }),
+        positionRow(runId, parked, 'turn.ready'),
+      ]);
+
+      const resumed = yield* forkLoop({
+        runId,
+        session,
+        resume: true,
+        script: [textTurn('answered')],
+      });
+      yield* resumed.park(0);
+      yield* Fiber.interrupt(resumed.fiber);
+
+      expect(resumed.requests).toHaveLength(1);
     }),
   );
 
@@ -814,8 +907,8 @@ describe('a parked root run', () => {
       // before it parks.
       const steps = eventsOfType(
         yield* Effect.promise(() => recorded.read()),
-        'flow.step',
-      ).map((event) => event.payload.step);
+        'run.position',
+      ).map((event) => event.payload.at);
       const parked = steps.indexOf('waiting');
       expect(parked).toBeGreaterThan(0);
       expect(steps.slice(0, parked).every((step) => step !== 'waiting')).toBe(
@@ -832,14 +925,37 @@ describe('the batch a parked run consumes', () => {
       Effect.gen(function* () {
         const session = quietSession();
         const runId = startedRun(session);
+        const reporter = publishTestRunStart(session, undefined, {
+          parent: runId,
+        });
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
+        // A progress notice whose child has since ended is consumed, never
+        // delivered: the model and the transcript see only live items.
+        const child = publishTestRunStart(session, generateRunId(), {
+          parent: runId,
+        });
+        session.publish([
+          {
+            type: 'run.end',
+            aggregateId: rowAggregate(child),
+            outcome: RUN_OUTCOME.CANCELLED,
+            output: emptyRunEndOutput('toolUse'),
+          },
+        ]);
         yield* enqueue(session, runId, [
           {
-            text: '<subagent-result>done</subagent-result>',
-            origin: 'subagent_result',
+            text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+            from: { kind: 'run' as const, runId: child },
           },
-          { text: 'please revise the theorem', origin: 'user' },
+          {
+            text: '<subagent-result>done</subagent-result>',
+            from: { kind: 'run' as const, runId: reporter },
+          },
+          {
+            text: 'please revise the theorem',
+            from: { kind: 'user' as const },
+          },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -873,6 +989,11 @@ describe('the batch a parked run consumes', () => {
         expect(info).toHaveBeenCalledWith('please revise the theorem', {
           messageType: MESSAGE_TYPES.USER_MESSAGE,
         });
+        expect(info).not.toHaveBeenCalledWith(
+          '⟳ coder · started',
+          expect.anything(),
+        );
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 
@@ -905,6 +1026,7 @@ describe('the batch a parked run consumes', () => {
       const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
       const session = quietSession();
       const runId = startedRun(session);
+      const child = publishTestRunStart(session, undefined, { parent: runId });
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
       yield* enqueue(session, runId, [
@@ -915,7 +1037,7 @@ describe('the batch a parked run consumes', () => {
             `<workflow-summary>${escaped}</workflow-summary>`,
             '</workflow-script-result>',
           ].join('\n'),
-          origin: 'subagent_result',
+          from: { kind: 'run' as const, runId: child },
         },
       ]);
 
@@ -948,7 +1070,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'please inspect this figure',
             mediaFiles: ['/tmp/texra-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -989,7 +1111,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'use this diagram',
             mediaFiles: ['/tmp/texra-unreadable-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -1009,7 +1131,9 @@ describe('the batch a parked run consumes', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
         expect(
-          session.pendingFollowUps(runId).map((f) => f.content.text),
+          session.events
+            .pendingFollowUps(rowAggregate(runId))
+            .map((f) => f.content.text),
         ).toEqual(['use this diagram']);
       }),
   );
@@ -1056,7 +1180,7 @@ describe('an active goal at the wait', () => {
       const runId = startedRun(session);
       yield* startGoal(session, runId, 'Keep going autonomously.');
       yield* enqueue(session, runId, [
-        { text: 'user correction', origin: 'user' },
+        { text: 'user correction', from: { kind: 'user' as const } },
       ]);
 
       try {
@@ -1082,7 +1206,7 @@ describe('an active goal at the wait', () => {
         const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
-        // The grant an approved plan makes; pausing revokes what it granted.
+        // The grant an approved plan makes; pausing ends it.
         setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
@@ -1144,7 +1268,7 @@ describe('an active goal at the wait', () => {
           });
           const recorded = recordSessionEvents(session);
           yield* enqueue(session, runId, [
-            { text: 'try the other lemma', origin: 'user' },
+            { text: 'try the other lemma', from: { kind: 'user' as const } },
           ]);
 
           const recovered = yield* forkLoop({
@@ -1189,7 +1313,7 @@ describe('the host wiring a run attaches', () => {
         const blockedFs = {
           ...processFs,
           exists: (target: string) =>
-            path.basename(target) === '.texrarules'
+            path.basename(target) === 'AGENTS.md'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>
@@ -1230,7 +1354,7 @@ describe('the host wiring a run attaches', () => {
         expect(detach).toHaveBeenCalledTimes(1);
         const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
         expect(state?.phase ?? null).toBeNull();
-        const lease = session.followUps.claimLive(runId, 'flow');
+        const lease = session.followUps.claimLive(runId, 'loop');
         expect(lease).not.toBeNull();
         if (lease) session.followUps.release(lease, 'recoverable');
       }).pipe(Effect.provide(NodeFileSystem.layer)),
@@ -1245,7 +1369,7 @@ describe('the host wiring a run attaches', () => {
       const session = quietSession();
       const runId = startedRun(session);
       const attachFailure = new Error('host wiring failed');
-      const detached: ToolUseFlowContext[] = [];
+      const detached: RunControls[] = [];
 
       const exit = yield* Effect.exit(
         loopProgram(
@@ -1257,8 +1381,8 @@ describe('the host wiring a run attaches', () => {
               attach: () => {
                 throw attachFailure;
               },
-              detach: (context) => {
-                detached.push(context);
+              detach: (controls) => {
+                detached.push(controls);
               },
             },
           },

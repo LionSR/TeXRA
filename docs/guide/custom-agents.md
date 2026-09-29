@@ -36,11 +36,11 @@ Custom agents live in a dedicated directory that TeXRA prepares for you.
 
 ### <wa-icon library="texra" name="wand"></wa-icon> Automatic creation
 
-To have TeXRA draft an agent for you, select **New Agent** (<wa-icon library="texra" name="add"></wa-icon>) in the **Agents** tab. The wizard asks for the agent name and a short description (tool-use agents additionally let you pick the tools to grant). TeXRA sends that information to your configured helper model, which returns the YAML enclosed in `<yaml>...</yaml>` tags. The extension extracts the content between those tags and saves it as a template in your custom agents folder (falling back to a built-in template if generation fails).
+To have TeXRA draft an agent for you, run the built-in [`creator`](./built-in-agents.md#creator) tool-use agent and describe the behavior you want. It studies the existing agents, writes the YAML into your custom agents folder (you approve the write like any other edit), and can test the new agent before handing it over.
 
 ### <wa-icon library="texra" name="file-add"></wa-icon> Step 2: create a new YAML file
 
-1. In the **Agents** tab, select **From template** (<wa-icon library="texra" name="file-circle-plus"></wa-icon>) to create a new agent YAML file in your custom agents directory.
+1. In the **Agents** tab, select **Create from template** (<wa-icon library="texra" name="file-circle-plus"></wa-icon>) to create a new agent YAML file in your custom agents directory.
 2. Alternatively, select the folder icon (<wa-icon library="texra" name="folder-open"></wa-icon>, **Open custom agents folder**) in the directory info bar to open the directory and create a `.yaml` file manually.
 3. Choose a descriptive name using underscores and ending with `.yaml` (for example `literature_review_generator.yaml`).
 

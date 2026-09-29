@@ -5,7 +5,7 @@
 // a single string and never trigger `onSubmit` on the first embedded `\n`.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Text, useInput, usePaste } from 'ink';
+import { Text, useInput, usePaste, type Key } from 'ink';
 import { Cause, Effect } from 'effect';
 
 import {
@@ -85,6 +85,7 @@ interface BaseTextInputProps {
     input: string,
     value: string,
     cursor: number,
+    key: Key,
   ) => boolean;
   /** Apply an edit on two entry points: when Escape is received before normal
    *  text handling, and when the `/` escape-slash sequence (palette
@@ -280,6 +281,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
           input,
           latestBeforeInput.value,
           latestBeforeInput.cursor,
+          key,
         ) === true
       ) {
         return;

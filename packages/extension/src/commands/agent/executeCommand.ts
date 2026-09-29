@@ -12,37 +12,29 @@ import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
-import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecuteCommand';
 
 /**
- * The "wrapped" launch shape — `{ config, runId?, ... }` — as opposed to
+ * The "wrapped" launch shape — `{ config, ... }` — as opposed to
  * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
  * comment). `config` is validated separately against `AgentConfigSchema`, so
  * it stays `z.unknown()` here.
  */
 const WrappedExecuteInputSchema = z.object({
   config: z.unknown(),
-  runId: RunIdSchema.optional(),
   preferHelperModel: z.boolean().optional(),
-  modelCompatibilityKey: ModelCompatibilityKeySchema.nullish(),
   ownApiKeyFallback: z.boolean().optional(),
 });
 
 /**
- * Execute an agent with the given configuration.
- *
- * Supports two modes:
- * - Fresh run: Pass raw config or { config } - creates new runId
- * - Resume workflow: Pass { config, runId } - reuses runId to resume
- *
- * Tool-use sessions resume through `tryResumeFromResumeData` instead.
+ * Execute a fresh run of an agent with the given configuration: a raw
+ * config or `{ config }`. A persisted run resumes through
+ * `resumeOnSession` instead.
  *
  * The launch is the Effect this returns: the extension's command surface
- * settles it on the host entry's runtime, and `tryResumeFromResumeData`
- * composes it into the resume program that already runs on one.
+ * settles it on the host entry's runtime.
  */
 export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
@@ -71,21 +63,27 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     ),
   );
 
-  const request = wrapped?.runId
-    ? ({ kind: 'resume', config, runId: wrapped.runId } as const)
-    : ({ kind: 'fresh', config } as const);
   // Post-start failures are already logged and surfaced by the run lifecycle,
   // so they travel the failure channel without a second (mislabeled) log entry.
-  yield* runAgent(request, {
-    session,
-    openWorkflowOutput: (result) =>
-      openFinalOutputIfAvailable(session.roots, result),
-    // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
-    // progress-view compile fixer); a direct main-view launch omits it and
-    // keeps the user's selected model.
-    preferHelperModel: wrapped?.preferHelperModel ?? false,
-    modelCompatibilityKey: wrapped?.modelCompatibilityKey,
-    ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-    onRunResolved: presentLaunchedProgressRun,
-  });
+  const result = yield* runAgent(
+    { config },
+    {
+      session,
+      // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
+      // progress-view compile fixer); a direct main-view launch omits it and
+      // keeps the user's selected model.
+      preferHelperModel: wrapped?.preferHelperModel ?? false,
+      ownApiKeyFallback: wrapped?.ownApiKeyFallback,
+      onRunResolved: presentLaunchedProgressRun,
+    },
+  );
+  // Presentation reacts to the committed outcome; it never runs inside the run,
+  // and its failure never fails the launch that produced the run.
+  yield* openFinalOutputIfAvailable(session.roots)(result).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning('Opening the final output failed', cause).pipe(
+        withLogChannel(CHANNEL),
+      ),
+    ),
+  );
 });

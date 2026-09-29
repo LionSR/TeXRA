@@ -5,14 +5,13 @@ import {
   RUN_SUBSTATE,
   type OwnerId,
   type RoundStage,
-  type RunFlow,
   type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
-import type { RunGroup } from '@shared/session/sessionView';
+import type { LoopCoordinate, RunGroup } from '@shared/session/sessionView';
 
-export type RunStatusDisplayKey =
+type RunStatusDisplayKey =
   | Exclude<RunLifecycleStatus, typeof RUN_LIFECYCLE_READY>
   | RunSubstate
   | 'ready';
@@ -31,7 +30,7 @@ type RunStatusCopyKey = RunStatusDisplayKey | typeof RUN_DISPLAY_INTERRUPTED;
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted run to).
  */
-export function runStatusDisplayKey(
+function runStatusDisplayKey(
   status: RunLifecycleStatus,
   substate?: RunSubstate,
 ): RunStatusDisplayKey {
@@ -54,6 +53,7 @@ const RUN_STATUS_LABELS: Record<RunStatusCopyKey, string> = {
   ready: 'Ready',
   [RUN_PHASE.WAITING]: 'Idle',
   [RUN_SUBSTATE.RESUMING]: 'Resuming',
+  [RUN_SUBSTATE.PAUSED]: 'Paused',
   [RUN_DISPLAY_INTERRUPTED]: 'Interrupted',
 };
 
@@ -81,6 +81,7 @@ const RUN_STATUS_TONES: Record<RunStatusCopyKey, RunStatusTone> = {
   ready: RUN_STATUS_TONE.NEUTRAL,
   [RUN_PHASE.WAITING]: RUN_STATUS_TONE.NEUTRAL,
   [RUN_SUBSTATE.RESUMING]: RUN_STATUS_TONE.RUNNING,
+  [RUN_SUBSTATE.PAUSED]: RUN_STATUS_TONE.WARNING,
   [RUN_DISPLAY_INTERRUPTED]: RUN_STATUS_TONE.WARNING,
 };
 
@@ -146,67 +147,29 @@ export function formatRunStatusLabel(status: RunLifecycleStatus): string {
 
 /** Compact round/turn progress label: `r2/3` when the planned total is known
  *  (workflow runs), else `r2`. Zero-based `index` renders one-based. */
-export function formatRoundStageLabel(stage: Readonly<RoundStage>): string;
-
-export function formatRoundStageLabel(
-  stage: Readonly<RoundStage> | undefined,
-): string | undefined;
-
-export function formatRoundStageLabel(
-  stage: Readonly<RoundStage> | undefined,
-): string | undefined {
-  if (stage === undefined) return undefined;
+export function formatRoundStageLabel(stage: Readonly<RoundStage>): string {
   const current = `r${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
-}
-
-/** Where a run's loop stands, in the coordinate its family counts in. */
-interface FlowPosition {
-  readonly kind: 'round' | 'turn';
-  readonly index: number;
-}
-
-/**
- * The coordinate a run's family counts its position in: a reflection run
- * advances `round`, a tool-use run advances `turn` and leaves `round` at the
- * zero it opened with. A renderer that reads `round` first therefore paints
- * `r1` over every tool-use run for its whole life, which is why this rule has
- * one home rather than one copy per surface. The two coordinates are not
- * counted alike on the row: `round` is zero-based (a reflection flow opens at
- * round 0), while `turn` is already one-based — the tool-use loop commits
- * `state.turn + 1` from a zero start and the child loop counts its first turn
- * as 1 — so only `round` gains one when it renders.
- */
-export function flowPosition(
-  flow: RunFlow | null | undefined,
-): FlowPosition | undefined {
-  if (flow == null) return undefined;
-  if (flow.family === 'reflection') {
-    return flow.round == null
-      ? undefined
-      : { kind: 'round', index: flow.round };
-  }
-  return flow.turn == null ? undefined : { kind: 'turn', index: flow.turn };
 }
 
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for
  *  a round, `t2` for the row's second turn. A total counts planned rounds, so
  *  a turn ignores it. */
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition>,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate>,
   total?: number,
 ): string;
 
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition> | undefined,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate> | null | undefined,
   total?: number,
 ): string | undefined;
 
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition> | undefined,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate> | null | undefined,
   total?: number,
 ): string | undefined {
-  if (position === undefined) return undefined;
+  if (position == null) return undefined;
   if (position.kind === 'turn') return `t${position.index}`;
   return formatRoundStageLabel({
     index: position.index,
@@ -214,14 +177,14 @@ export function formatFlowPositionLabel(
   });
 }
 
-/** Spelled-out counterpart of {@link formatFlowPositionLabel} on the same
- *  family-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
- *  word the position instead of abbreviating it. Only `round` gains one, for
- *  the reason {@link flowPosition} states. */
-export function formatFlowPositionTitle(
-  position: Readonly<FlowPosition> | undefined,
+/** Spelled-out counterpart of {@link formatLoopPositionLabel} on the same
+ *  coordinate — `Round 2`, `Turn 2` — for the surfaces that word the
+ *  position instead of abbreviating it. Only `round` gains one: its index is
+ *  zero-based, a turn's one-based. */
+export function formatLoopPositionTitle(
+  position: Readonly<LoopCoordinate> | null | undefined,
 ): string | undefined {
-  if (position === undefined) return undefined;
+  if (position == null) return undefined;
   return position.kind === 'round'
     ? `Round ${position.index + 1}`
     : `Turn ${position.index}`;

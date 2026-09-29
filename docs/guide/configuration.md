@@ -93,12 +93,24 @@ The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
 their provider rows with their usage meters. TeXRA account sign-in is on the
-**General** page. It unlocks the hosted research-agent catalog and does not
-supply model access.
+**General** page. It is optional: it supplies no model access, and every agent
+ships bundled.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
 are available to any TeXRA host launched with that environment.
+
+## Project instructions (AGENTS.md)
+
+Put standing instructions for a project, such as spelling conventions,
+notation, or how to build the paper, in an `AGENTS.md` file at the workspace
+root. Every agent adds it to its system prompt. When the workspace has no
+`AGENTS.md`, TeXRA uses `~/.texra/AGENTS.md` instead. It is the same file
+Codex and other coding agents read, so one file serves all of them. TeXRA
+reads no other instructions file name; an old `.texrarules` file is ignored,
+so rename it to `AGENTS.md`.
+
+The whole file goes into every prompt, so keep it short.
 
 ## Skills, tools, and privacy
 

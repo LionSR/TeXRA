@@ -142,8 +142,6 @@ export interface SharedHostRequestBindings {
     baseFile: string,
     commit: string,
   ): HostVerb<void>;
-  mergeFiles(baseFile: string, editedFile: string): HostVerb<void>;
-  latexdiffFiles(baseFile: string, editedFile: string): HostVerb<void>;
   /** Settings at a section, or where it was last left without one. The
    *  agents section goes through {@link openAgentSettings}. */
   openSettings(
@@ -248,10 +246,10 @@ export function handleSharedHostRequest(
           yield* ports.workflowFileActions.acceptFile(editedFile, baseFile);
           return;
         case 'merge':
-          yield* host.mergeFiles(baseFile, editedFile);
+          yield* ports.workflowFileActions.mergeFile(editedFile, baseFile);
           return;
         case 'latexdiff':
-          yield* host.latexdiffFiles(baseFile, editedFile);
+          yield* ports.workflowFileActions.latexdiffFile(editedFile, baseFile);
           return;
       }
     });
@@ -334,12 +332,11 @@ export function handleSharedHostRequest(
       }
       case 'pack':
       case 'clean': {
-        const operation = yield* ports.runActions.workflowFileOperationRequest(
+        yield* ports.runActions.workflowFileOperation(
           request.runId,
+          request.kind,
+          (operation) => host.runWorkflowFileOperation(request.kind, operation),
         );
-        if (operation) {
-          yield* host.runWorkflowFileOperation(request.kind, operation);
-        }
         return done;
       }
       case 'latexdiffs':

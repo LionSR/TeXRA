@@ -6,8 +6,8 @@
  * the compaction threshold setting measured against the bound model's
  * context window (a live input estimate where the provider offers one, a
  * text-length estimate otherwise), a `/compact` request, or an overflow; the
- * replacement is a summary the bound model itself produces through a
- * throwaway `generateTurn`, folded back as one user message. Every skip and
+ * replacement is a summary the bound model produces through the invoker's
+ * priced `call`, folded back as one user message. Every skip and
  * every failure is logged and shown as a compaction activity, never silent.
  *
  * The compaction prompts, the summary cap and the token heuristic live here
@@ -15,6 +15,7 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 
+import { sameModelOrigin, type TurnRequest } from '@texra-ai/llm/turn';
 import {
   logContextManagementEvent,
   startCompactionActivity,
@@ -36,7 +37,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { rowAggregate, type Message } from '../loop/rows';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
-import type { TurnRequest } from '@texra-ai/llm/turn';
+import type { ModelInvoker } from '../ModelInvoker';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
@@ -143,6 +144,8 @@ interface CompactionInput {
   readonly ledger: RunLedger['Service'];
   readonly logger: AgentTrace;
   readonly bound: BoundModel;
+  /** The run's invoker, which makes the summary call. */
+  readonly invoker: ModelInvoker['Service'];
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
   /** The system text and tools of the turn about to be issued: the input
@@ -210,10 +213,10 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
           ...(input.system !== undefined ? { system: input.system } : {}),
           messages: conversation,
           ...(input.tools !== undefined ? { tools: input.tools } : {}),
+          // The turn's own rule (`ModelInvoker`): a continuation from another
+          // deployment or codec is dropped, so the count leaves it out too.
           ...(state.continuation !== null &&
-          state.continuation.origin.protocol === bound.origin.protocol &&
-          state.continuation.origin.requestedModel ===
-            bound.origin.requestedModel
+          sameModelOrigin(state.continuation.origin, bound.origin)
             ? { continuation: state.continuation }
             : {}),
         }),
@@ -256,9 +259,11 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     },
   );
   const activity = startCompactionActivity(logger);
+  // The summary is a model call like any other: the invoker gates, prices
+  // and reports it, and its usage rides the row below.
   const summarized = yield* Effect.exit(
-    Effect.gen(function* () {
-      const prepared = yield* bound.model.prepareTurn({
+    input.invoker.call(
+      {
         mode: 'foreground',
         system: COMPACTION_SYSTEM_PROMPT,
         messages: [
@@ -270,14 +275,9 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
         ],
         tools: [],
         maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-      });
-      if (prepared.mode !== 'foreground') {
-        return yield* Effect.die(
-          new Error('A foreground compaction request resolved as background.'),
-        );
-      }
-      return yield* bound.model.generateTurn(prepared);
-    }),
+      },
+      state.declinedRoutes,
+    ),
   );
   if (Exit.isFailure(summarized)) {
     if (Cause.hasInterrupts(summarized.cause)) {
@@ -292,7 +292,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     return state;
   }
   // The summary turn's own text, trimmed: an empty summary is skipped.
-  const summary = turnText(summarized.value).trim();
+  const summary = turnText(summarized.value.turn).trim();
   if (!summary) {
     logger.warn('Compaction returned empty summary, skipping');
     activity.finish('skipped');
@@ -320,6 +320,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
         continuation: null,
         continuationDropped:
           state.continuation === null ? null : 'history-replaced',
+        usage: summarized.value.usage,
       },
     },
   ]);

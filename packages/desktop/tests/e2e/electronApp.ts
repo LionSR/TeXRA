@@ -254,7 +254,7 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
   );
 }
 
-type DesktopWorkbenchKind = 'settings' | 'logs';
+type DesktopWorkbenchKind = 'logs';
 
 export async function openWorkbench(
   launched: LaunchedApp,
@@ -287,7 +287,7 @@ export async function openWorkbench(
 }
 
 /**
- * Route to Settings and activate the tab named `tab` (its wire panel name,
+ * Open the Settings popup and activate the tab named `tab` (its wire panel name,
  * which is also the nav button's `data-panel` value), waiting until that page
  * button reports `data-active="true"` so callers never race the previous
  * tab's render.
@@ -296,7 +296,17 @@ export async function setSettingsTab(
   launched: LaunchedApp,
   tab: string,
 ): Promise<void> {
-  await openWorkbench(launched, 'settings');
+  await launched.page.evaluate(() => {
+    window.postMessage({ command: 'desktop:openSettings' }, '*');
+  });
+  await launched.page.waitForFunction(
+    () =>
+      document.querySelector(
+        'wa-dialog.desktop-settings-overlay settings-app',
+      ) != null,
+    undefined,
+    { timeout: 5000 },
+  );
   await launched.page.evaluate((panel) => {
     window.postMessage({ command: 'setTab', tab: panel }, '*');
   }, tab);

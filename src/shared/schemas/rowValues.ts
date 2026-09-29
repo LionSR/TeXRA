@@ -1,14 +1,13 @@
 /**
- * The values the discriminated row arms of `SessionEventDraftSchema` carry.
- * The sibling of `runLedgerEvent.ts`: shapes only, the arms themselves live
- * in `sessionEvent.ts`, which is the single vocabulary the publisher and
- * both folds switch over.
+ * The values stored rows carry. The sibling of `runLedgerEvent.ts`: shapes
+ * only. The event arms live in `sessionEvent.ts`, the single vocabulary the
+ * publisher and both folds switch over; the current values are the families
+ * of the `current_value` table.
  *
- * Two rows carry a discriminator rather than a type of their own, and each
- * one's discriminator is the whole of the tie: it names the family, selects
- * that family's value schema, and — for a stored value — names the aggregate
- * kind the value may live on. Corruption is refused where the bytes are read,
- * at the database's parse of `SessionEventSchema`.
+ * A run fact carries a discriminator rather than a type of its own, and the
+ * discriminator is the whole of the tie: it names the family and selects
+ * that family's value schema. Corruption is refused where the bytes are
+ * read, at the database's parse.
  */
 import { z } from 'zod';
 
@@ -30,8 +29,8 @@ export const RunFactSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
 ]);
 
-/** A stored value as the journal and the state store keep it: `undefined` is
- *  not JSON, so absence is an arm rather than a missing field. */
+/** A value as the workflow journal keeps it: `undefined` is not JSON, so
+ *  absence is an arm rather than a missing field. */
 export const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('undefined') }),
   z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
@@ -39,23 +38,32 @@ export const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
 export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
 
 /**
- * One stored value, by the family that owns it: every host or application
- * state key, the desktop profile's remembered projects, one global inquiry
- * thread, and the update check. `key` is the aggregate kind the value lives
- * on, so an inquiry record cannot be committed under the update-check
- * aggregate. `{ kind: 'undefined' }` on the `app-state` arm deletes the
- * value, so subsequent reads use the caller's default.
+ * The families of the current-value table: application state, not history.
+ * One row per family and key, replaced in place by each write and kept
+ * outside the event tables, so an event-format bump never clears it. Each
+ * family names the schema its value decodes with at the database boundary; a
+ * row that no longer decodes fails the read.
+ *
+ * `app-state` is the process's settings store and `repo-state` the settings
+ * shared by every checkout of one repository (keyed by repository root and
+ * key); a write of `undefined` deletes their row. The other families only
+ * ever replace a value.
  */
-export const StoredValueSchema = z.discriminatedUnion('key', [
-  z.object({ key: z.literal('app-state'), value: PersistedJsonValueSchema }),
-  z.object({
-    key: z.literal('desktop-projects'),
-    roots: z.array(z.string().min(1)),
+export const CURRENT_VALUE_SCHEMAS = {
+  'app-state': JsonValueSchema,
+  'repo-state': JsonValueSchema,
+  /** The desktop's remembered and recently closed projects, one value so
+   *  one write changes both lists. */
+  'desktop-projects': z.object({
+    remembered: z.array(z.string().min(1)),
+    recent: z.array(z.string().min(1)),
   }),
-  z.object({
-    key: z.literal('global-inquiry'),
-    record: InquiryThreadRecordSchema,
-  }),
-  z.object({ key: z.literal('update-check'), record: UpdateCheckRecordSchema }),
-]);
-export type StoredValue = z.infer<typeof StoredValueSchema>;
+  inquiry: InquiryThreadRecordSchema,
+  'update-check': UpdateCheckRecordSchema,
+};
+export type CurrentValueFamily = keyof typeof CURRENT_VALUE_SCHEMAS;
+export type CurrentValue<F extends CurrentValueFamily> = z.infer<
+  (typeof CURRENT_VALUE_SCHEMAS)[F]
+>;
+/** The families whose row a write may delete. */
+export type DeletableFamily = 'app-state' | 'repo-state';

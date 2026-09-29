@@ -86,9 +86,9 @@ export class AgentSelectionPanel extends LitElement {
 
   private static readonly SOURCE_ORDER = [
     AGENT_SOURCE.CUSTOM,
-    AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
     AGENT_SOURCE.BUILT_IN_TOOL_USE,
+    AGENT_SOURCE.PLUGIN,
   ];
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -317,21 +317,6 @@ export class AgentSelectionPanel extends LitElement {
         },
       },
       {
-        when: agent.source === AGENT_SOURCE.REMOTE && !agent.hasPath,
-        button: {
-          icon: 'file-lines',
-          text: 'View prompt',
-          label: "View the remote agent's prompt definition",
-          title: "View the remote agent's prompt definition (read-only)",
-          className: 'agent-action-btn',
-          kind: 'ghost',
-          onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT, {
-              agentName: agent.name,
-            }),
-        },
-      },
-      {
         when: agent.hasPath,
         button: {
           icon: 'folder-open',
@@ -347,7 +332,9 @@ export class AgentSelectionPanel extends LitElement {
         },
       },
       {
-        when: builtIn,
+        // A plugin agent is a Claude Code subagent file, not agent YAML: it
+        // has no editable copy to make.
+        when: builtIn && agent.source !== AGENT_SOURCE.PLUGIN,
         button: {
           icon: 'pencil',
           text: 'Customize',

@@ -9,19 +9,17 @@
  * host's `@agent/index` specifier to this single door.
  */
 
-export type { AgentSource } from '@shared/schemas';
-
 export {
   AgentDirectoryService,
   agentSourceDirectory,
 } from './AgentDirectoryService';
 
-export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
-
 export {
-  AgentRosterController,
-  InvalidAgentTeamError,
-} from '../roster/AgentRosterController';
+  BUNDLED_AGENT_DIRECTORY_NAMES,
+  builtInToolUseRoots,
+} from './BundledAgentDirectories';
+
+export { InvalidAgentTeamError } from '../roster/AgentRosterController';
 
 export type { AgentEntry } from './agentEntry';
 
@@ -33,7 +31,6 @@ export {
   getAgentsByCategory,
   getCustomAgentScanIssues,
   refresh,
-  invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
   // Visible agents (for dropdowns and tools)

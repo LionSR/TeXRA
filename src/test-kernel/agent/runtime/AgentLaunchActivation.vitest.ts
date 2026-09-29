@@ -4,12 +4,11 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
-  helperCompletion: vi.fn(),
-  helperModel: vi.fn(),
+  helperCall: vi.fn(),
   load: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   resolve: vi.fn(),
-  runFlowWithLifecycle: vi.fn(),
+  runWithLifecycle: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
@@ -18,33 +17,34 @@ vi.mock('@agent/index', () => ({
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
 }));
-vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
+vi.mock('@agent/prompt/templateInputs', () => ({
+  buildTemplateInputs: mocks.buildVars,
+}));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/helperModel')>()),
-  helperModel: mocks.helperModel,
-  helperCompletion: mocks.helperCompletion,
+  helperCall: mocks.helperCall,
 }));
-// Only the regression test below replaces `runFlowWithLifecycle`; every other
+// Only the regression test below replaces `runWithLifecycle`; every other
 // launch in this suite fails during launch-assembly, before the lifecycle, and
 // an unconsumed once-implementation falls back to the real one.
 vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
   const actual =
     await importActual<typeof import('@agent/runtime/AgentRunLifecycle')>();
-  mocks.runFlowWithLifecycle.mockImplementation(actual.runFlowWithLifecycle);
-  return { ...actual, runFlowWithLifecycle: mocks.runFlowWithLifecycle };
+  mocks.runWithLifecycle.mockImplementation(actual.runWithLifecycle);
+  return { ...actual, runWithLifecycle: mocks.runWithLifecycle };
 });
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
+import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -55,6 +55,7 @@ import {
   AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -78,7 +79,6 @@ function runOf(key: AggregateId): RunId {
 }
 
 const FRESH_RUN_ID = 'f1e501' as RunId;
-const MODEL_COMPATIBILITY_KEY = 'OpenAIResponse' as const;
 
 const config = AgentConfigSchema.parse({
   agent: 'chat',
@@ -175,7 +175,7 @@ const captureStartedLaunch = Effect.fn(function* (
           end: ends[0],
         } satisfies StartedLaunch;
       }),
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 });
 
@@ -194,7 +194,6 @@ function expectStartedThenFailed(
   expect(start).toMatchObject({
     identity: { kind: 'agent', agent: 'chat' },
     category: AgentCategory.ToolUse,
-    isRemote: false,
     // The parent edge is the whole of "is a child": the birth fact carries
     // it, and nothing else spells it.
     parent:
@@ -214,7 +213,6 @@ function expectStartedThenFailed(
 function expectActivatedThenFailed(launch: StartedLaunch): void {
   expect(launch.activate).toMatchObject({
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   expect(launch.end).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
@@ -243,16 +241,18 @@ describe('native agent launch activation', () => {
           (session) =>
             prepareAgentDefinition({ config, session }).pipe(
               Effect.flatMap((definition) =>
-                parentRunId
-                  ? executeAgent(definition, FRESH_RUN_ID, {
-                      session,
-                      parentRunId,
-                      modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
-                    })
-                  : executeAgent(definition, FRESH_RUN_ID, {
-                      session,
-                      modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
-                    }),
+                // The launch terminal `runAgent` runs a fresh run under.
+                runWithLaunchGuard(
+                  session,
+                  FRESH_RUN_ID,
+                  parentRunId
+                    ? executeAgent(definition, FRESH_RUN_ID, {
+                        session,
+                        parentRunId,
+                      })
+                    : executeAgent(definition, FRESH_RUN_ID, { session }),
+                  {},
+                ),
               ),
             ),
           { parentRunId },
@@ -274,7 +274,6 @@ describe('native agent launch activation', () => {
         const resume = createToolUseResumeData({
           runId,
           agentConfig: config,
-          modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
         });
         mocks.retrieveSessionResumeData.mockReturnValueOnce(
           Effect.succeed(resume),
@@ -305,17 +304,14 @@ describe('native agent launch activation', () => {
       Effect.gen(function* () {
         const gate = yield* Deferred.make<string>();
         const descriptionStarted = yield* Deferred.make<void>();
-        mocks.helperModel.mockImplementationOnce(() =>
-          Effect.succeed({} as BoundModel),
-        );
-        mocks.helperCompletion.mockImplementationOnce(() =>
+        mocks.helperCall.mockImplementationOnce(() =>
           Deferred.succeed(descriptionStarted, undefined).pipe(
             Effect.andThen(Deferred.await(gate)),
           ),
         );
         // Fail the run only once the description fiber is parked on its gate,
         // so both sides settle deterministically.
-        mocks.runFlowWithLifecycle.mockImplementationOnce(() =>
+        mocks.runWithLifecycle.mockImplementationOnce(() =>
           Deferred.await(descriptionStarted).pipe(
             Effect.andThen(Effect.fail(RUN_FAILURE)),
           ),
@@ -326,10 +322,17 @@ describe('native agent launch activation', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
+        mocks.buildVars.mockReturnValueOnce(
+          Effect.succeed({
+            inputs: {},
+            catalog: [],
+            activated: [],
+            attachedMemoryMisses: [],
+          }),
+        );
 
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         const described = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'gpt55',

@@ -13,7 +13,7 @@
 
 import { Cause, Clock, Effect } from 'effect';
 
-import type { Disposable, Lifecycle } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -45,7 +45,7 @@ import {
   GitHubRateLimitError,
 } from './githubClient';
 import {
-  SharedAnnotationFetchBudget,
+  AnnotationFetchBudget,
   AnnotationFetchBudgetExhaustedError,
 } from './annotationFetchBudget';
 import {
@@ -64,13 +64,12 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  DedupedResource,
-  MAX_SEEN_IDS,
   type PollEventListener,
   PollHookRejected,
   PollingSourceBase,
+  type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -86,11 +85,11 @@ import {
   type GhReviewComment,
 } from './prTypes';
 
-function createInitialState(pr: PRKey): PRSubscriptionState {
+function initialState(pr: PRKey, now: number): PRSubscriptionState {
   return {
     pr,
     slug: `${pr.owner}/${pr.repo}`,
-    ...createBasePollState(),
+    ...createBasePollState(now),
     initialized: false,
     issueComments: dedupeComments<GhIssueComment>(),
     reviewComments: dedupeComments<GhReviewComment>(),
@@ -201,29 +200,32 @@ export class PRPollingSource extends PollingSourceBase<
 > {
   private nextAnnotationDrainKey: string | undefined;
 
-  constructor() {
-    super({
-      name: 'PRPollingSource',
-      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
-      maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-      ...DEFAULT_POLLING_BACKOFF_CONFIG,
-    });
-  }
-
-  /** Reset the process-wide annotation budget between unit tests. */
-  static resetAnnotationFetchBudgetForTests(
-    remainingFetches?: number,
-    nowMs?: number,
-  ): Effect.Effect<void> {
-    return SharedAnnotationFetchBudget.resetForTests(remainingFetches, nowMs);
+  /**
+   * `annotationBudget` caps annotation-page requests across every PR this
+   * source polls; the process layer builds the source, so the budget is the
+   * process's.
+   */
+  constructor(
+    lifetime?: PollingLifetime,
+    private readonly annotationBudget = new AnnotationFetchBudget(),
+  ) {
+    super(
+      {
+        name: 'PRPollingSource',
+        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
+        maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+        ...DEFAULT_POLLING_BACKOFF_CONFIG,
+      },
+      lifetime,
+    );
   }
 
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = prKeyToString(input);
-    return this.register(key, () => createInitialState(input), onEvent).pipe(
+    return this.register(key, (now) => initialState(input, now), onEvent).pipe(
       Effect.map((disposable) => {
         this.setListenerAnnotationLevel(key, onEvent, input);
         return {
@@ -804,7 +806,7 @@ export class PRPollingSource extends PollingSourceBase<
       pr.owner,
       pr.repo,
       run.id,
-      SharedAnnotationFetchBudget,
+      this.annotationBudget,
       now,
     ).pipe(
       this.inLogChannel,
@@ -898,6 +900,3 @@ export class PRPollingSource extends PollingSourceBase<
     }
   });
 }
-
-/** Process-wide singleton. */
-export const SharedPRPollingSource = new PRPollingSource();

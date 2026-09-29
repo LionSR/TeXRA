@@ -27,6 +27,9 @@ liveProtocol({
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: [],
         instructions: { kind: 'optional' },
+        continuationInheritsInstructions: false,
+        supportsForcedToolChoice: true,
+        requestDialect: 'openai',
         defaults: {
           temperature: 0,
           maxOutputTokens: 2048,

@@ -45,6 +45,8 @@ setupPlatform({
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
   recordStores: new Map<string, ReturnType<typeof getRunRecords>>(),
+  /** Each fake store's `run.report` slot, which a suite seeds directly. */
+  reports: new Map<string, string | null>(),
   startChildRunLoop: vi.fn(),
   createChildRun: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
@@ -67,16 +69,11 @@ vi.mock('@agent/storage', async (importOriginal) => {
     getRunRecords: (_session: unknown, id: string) => {
       const existing = mocks.recordStores.get(id);
       if (existing) return existing;
-      let report: string | null = null;
       const records = createFakeRunRecords({
-        readReport: () => Effect.succeed(report),
-        writeReport: (value) =>
-          Effect.sync(() => {
-            report = value;
-          }),
+        readReport: () => Effect.sync(() => mocks.reports.get(id) ?? null),
         clearReport: () =>
           Effect.sync(() => {
-            report = null;
+            mocks.reports.set(id, null);
           }),
       });
       mocks.recordStores.set(id, records);
@@ -147,12 +144,11 @@ const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',
 }
-return await agent('saved call')`;
+return yield* agent('saved call')`;
 
 function toolLayer(stopAfterCycle = false) {
   return nativeToolTestLayer({
     toolCallId: 'tool-call',
-    hooks: { recordSubagentCost: vi.fn() },
     run: {
       runId: parentRunId,
       session: testDefaultSession(),
@@ -182,11 +178,16 @@ function runIdFor(name: string): RunId {
 }
 
 /** The exact durable run record a launch of `name` must preserve. */
-function registrationRecordFor(name: string, model = 'parent-model') {
+function registrationRecordFor(
+  name: string,
+  model = 'parent-model',
+  inputFiles: readonly string[] = [],
+) {
   return {
     name,
     instruction: `Workflow script '${name}'`,
     model,
+    inputFiles,
   };
 }
 
@@ -317,6 +318,7 @@ beforeEach(async () => {
   await Effect.runPromise(session.settlePublications());
   vi.clearAllMocks();
   mocks.recordStores.clear();
+  mocks.reports.clear();
   await mkdir(WORKSPACE_ROOT, { recursive: true });
   await writeFile(inWorkspace('paper.tex'), '\\documentclass{article}');
   await writeFile(inWorkspace('references.bib'), '@book{example}');
@@ -326,7 +328,7 @@ beforeEach(async () => {
     Effect.succeed('parent-model'),
   );
   mocks.requestDelegationProposal.mockReturnValue(
-    Effect.succeed({ result: { action: 'approve' }, autoApproved: false }),
+    Effect.succeed({ result: { action: 'approve' }, childApproval: 'inherit' }),
   );
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((_stores, name) => {
@@ -342,12 +344,11 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     });
   });
-  mocks.createChildRun.mockImplementation((_session: unknown, runId: RunId) =>
+  mocks.createChildRun.mockImplementation(() =>
     Effect.sync(() => {
       const logger = new TraceEmitter();
       vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
       return {
-        childRunId: runId,
         logger,
         waitForInput: vi.fn(),
         beginTurn: vi.fn(),
@@ -368,7 +369,7 @@ describe('WorkflowScriptTool', () => {
       const asked = yield* Deferred.make<void>();
       const decided = yield* Deferred.make<{
         result: { action: 'approve' };
-        autoApproved: boolean;
+        childApproval: 'inherit' | 'auto-approved';
       }>();
       mocks.requestDelegationProposal.mockReturnValueOnce(
         Deferred.succeed(asked, undefined).pipe(
@@ -384,7 +385,7 @@ describe('WorkflowScriptTool', () => {
 
       yield* Deferred.succeed(decided, {
         result: { action: 'approve' as const },
-        autoApproved: false,
+        childApproval: 'inherit' as const,
       });
       yield* Fiber.join(pending);
       expect(mocks.registerRun).toHaveBeenCalledOnce();
@@ -397,7 +398,10 @@ describe('WorkflowScriptTool', () => {
     () =>
       Effect.gen(function* () {
         mocks.requestDelegationProposal.mockReturnValueOnce(
-          Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
+          Effect.succeed({
+            result: { action: 'approve' },
+            childApproval: 'auto-approved',
+          }),
         );
 
         yield* callTool();
@@ -420,7 +424,7 @@ describe('WorkflowScriptTool', () => {
   ])('does not execute after $decision.action', ({ decision, status }) =>
     Effect.gen(function* () {
       mocks.requestDelegationProposal.mockReturnValueOnce(
-        Effect.succeed({ result: decision, autoApproved: false }),
+        Effect.succeed({ result: decision, childApproval: 'inherit' }),
       );
 
       const result = yield* callTool();
@@ -513,7 +517,6 @@ describe('WorkflowScriptTool', () => {
         // omits it — the native subagent strategy declares one unconditionally,
         // even for a workflow-category child).
         expect(loopParams.strategy.runTurn).toBeUndefined();
-        expect(loopParams.recordCost).toEqual(expect.any(Function));
 
         expect(result).toMatchObject({
           status: 'executed',
@@ -588,7 +591,7 @@ describe('WorkflowScriptTool', () => {
     'saves invalid submitted source and returns its editable draft path',
     () =>
       Effect.gen(function* () {
-        const invalidScript = 'return await agent("missing meta")';
+        const invalidScript = 'return yield* agent("missing meta")';
 
         const result = yield* callTool({ script: invalidScript });
 
@@ -713,7 +716,7 @@ describe('WorkflowScriptTool', () => {
         );
         const runId = runIdFor('interrupted-resume');
         const store = getRunRecords(testDefaultSession(), runId);
-        yield* store.writeReport('stale success from the prior attempt');
+        mocks.reports.set(runId, 'stale success from the prior attempt');
         vi.spyOn(store, 'readRunEnd').mockReturnValue(
           Effect.succeed({
             outcome: RUN_OUTCOME.FAILED,
@@ -795,19 +798,14 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ files });
 
       expect(result.status).toBe('executed');
-      // The durable record stays honest (no file lists); the binding rides the
-      // checkpoint and the live run config the agent steps consume.
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      // The durable record names the input files the run view lists; the
+      // full binding rides the checkpoint and the live run config the agent
+      // steps consume.
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('tool-test'),
-        expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
+        registrationRecordFor('tool-test', 'parent-model', ['paper.tex']),
+        registrationOptionsFor('tool-test'),
       );
     }),
   );
@@ -871,17 +869,11 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ script: resumeScript });
 
       expect(result.status).toBe('executed');
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('resume'),
+        expect.objectContaining({ inputFiles: ['paper.tex'] }),
         expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
       );
     }),
   );
@@ -921,7 +913,6 @@ describe('WorkflowScriptTool', () => {
             },
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
             category: AgentCategory.Workflow,
-            isRemote: false,
             parent: { id: parentRunId },
             checkpointId: checkpointIdFor('tool-test'),
           },
@@ -943,7 +934,6 @@ describe('WorkflowScriptTool', () => {
                 mocks.childLoggerError,
               );
               return {
-                childRunId,
                 logger,
                 waitForInput: vi.fn(),
                 beginTurn: vi.fn(),

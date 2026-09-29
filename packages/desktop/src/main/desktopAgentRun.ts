@@ -11,6 +11,7 @@
 import { Cause, Effect, Fiber, Stream } from 'effect';
 
 import {
+  type RunEndResult,
   type HostPresentation,
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
@@ -36,6 +37,7 @@ import {
 } from './desktopToolEditApproval.js';
 import {
   launchDesktopAgent,
+  presentDesktopFinalOutput,
   type DesktopAgentLaunchOptions as DesktopRunOptions,
 } from './desktopAgentLaunch.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -73,6 +75,9 @@ export interface DesktopAgentRun {
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,
   ): Effect.Effect<void, Error>;
+  /** Open a resumed workflow's final output, as a launch opens a fresh one's
+   *  (`HostRunActionPorts.openWorkflowOutput`). */
+  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
   /** The tool-edit approvals this window owns. A prompt's verbs act over its
    *  staged preview: the approval applies the proposed file as the user left
    *  it. The host arm calls `handleAction` directly, as the extension does. */
@@ -193,7 +198,7 @@ export function createDesktopAgentRun(
     runOptions: DesktopRunOptions = {},
   ): Effect.Effect<void, Error> {
     return launchDesktopAgent(
-      { kind: 'fresh', ...request },
+      request,
       { session, runtime },
       {
         onRunResolved: options.onLaunched,
@@ -204,6 +209,8 @@ export function createDesktopAgentRun(
 
   return {
     runValidated,
+    openWorkflowOutput: (result) =>
+      withProcessServices(runtime, presentDesktopFinalOutput(session)(result)),
     toolEditApprovals,
     dispose() {
       if (disposed) return;

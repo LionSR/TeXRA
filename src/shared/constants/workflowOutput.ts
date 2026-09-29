@@ -11,7 +11,7 @@
  */
 
 // Local imports
-import { getCleanAgentName } from '@shared/schemas';
+import { agentFileName } from '@shared/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
@@ -19,10 +19,18 @@ export const WORKFLOW_OUTPUT_BASENAME = 'output';
 /** The fixed extension for raw workflow round output. */
 export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
 
-/** Parse a directory name of the form `r{round}` into its round index. */
-export function parseWorkflowOutputRoundDir(dirName: string): number | null {
-  const match = /^r(\d+)$/.exec(dirName);
-  return match ? Number(match[1]) : null;
+/**
+ * Drop the leading `r{round}/` directory of a runDir-relative path; with
+ * `round`, only that round's. Any other path comes back unchanged.
+ */
+export function stripWorkflowRoundDir(
+  relativePath: string,
+  round?: number,
+): string {
+  const match = /^r(\d+)[/\\]/.exec(relativePath);
+  return match && (round === undefined || Number(match[1]) === round)
+    ? relativePath.slice(match[0].length)
+    : relativePath;
 }
 
 /** The runDir-relative `r{round}` directory segment for a workflow round. */
@@ -48,7 +56,7 @@ export function workflowOutputPath(params: {
 
 /** First-name chunk used in the "Save as copy" stem. */
 function getAgentFirstNameChunk(agent: string): string {
-  const cleanAgent = getCleanAgentName(agent);
+  const cleanAgent = agentFileName(agent);
   // A `write-` tool takes the chunk after that prefix; every other agent takes
   // its first word, delimited by `_` when the name uses that convention and by
   // `-` otherwise.

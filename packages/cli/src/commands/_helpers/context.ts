@@ -21,6 +21,8 @@ import { collectStringFlagValues } from './globalArgs';
 export function contextFromArgs(
   args: ParsedGlobalArgs,
   rawArgs: readonly string[] = [],
+  /** `texra doctor` reports the config warnings in its own Config row. */
+  options: { readonly printConfigWarnings?: boolean } = {},
 ): Promise<CliContext> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -31,14 +33,12 @@ export function contextFromArgs(
           skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
         }),
       });
-      for (const warning of context.configWarnings) {
-        // Degradation reaches stderr even under `--quiet` (#11080).
-        if (
-          !context.quietLogs ||
-          context.configDegradations.includes(warning)
-        ) {
-          writeTextStderr(`WARN ${warning}`);
-        }
+      // Degradation reaches stderr even under `--quiet` (#11080).
+      const printed = context.quietLogs
+        ? context.configDegradations
+        : [...context.configDegradations, ...context.configWarnings];
+      if (options.printConfigWarnings !== false) {
+        for (const warning of printed) writeTextStderr(`WARN ${warning}`);
       }
       return context;
     }).pipe(

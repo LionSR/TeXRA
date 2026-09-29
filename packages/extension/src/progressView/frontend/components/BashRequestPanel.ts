@@ -28,11 +28,15 @@ export class BashRequestPanel extends BaseRequestPanel<'bash'> {
     bashRequestPanelStyles,
   ];
 
-  protected override get grant(): RunGrant {
-    return {
-      label: RUN_GRANT_LABEL.bash,
-      decision: { action: APPROVE_SESSION_ACTION },
-    };
+  // A prompt for another tool's call offers no grant: the one a command
+  // prompt can turn on is the run's shell bypass.
+  protected override get grant(): RunGrant | null {
+    return this.permission.data.allowBypass
+      ? {
+          label: RUN_GRANT_LABEL.bash,
+          decision: { action: APPROVE_SESSION_ACTION },
+        }
+      : null;
   }
 
   protected override submitPrimary(): void {

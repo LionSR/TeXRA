@@ -1,8 +1,8 @@
-import { Effect, PubSub } from 'effect';
+import { Deferred, Effect, PubSub } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
- * tool availability, workspace-file writes). Not for run/session progress
+ * credentials, workspace-file writes). Not for run/session progress
  * events — those extend `AgentEvent` (`agent/trace/`) or `SessionFact`
  * (`SessionEvents` in `agent/runtime/`), per the VS Code-free-zone rule in
  * CLAUDE.md.
@@ -67,10 +67,10 @@ export interface AppSignalPayloads {
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
    * credential-dependent settings, launcher and model surfaces), the CLI chat
    * TUI (an `apiKey.*` change bumps the subscription-preference version its
-   * status bar reads), and `@tools/credentialReprobe` on every host (a key a
-   * plugin lists in `reprobeOnSecrets`, such as the GitHub token, re-probes
-   * tool availability for each held workspace, which the next run's tool list
-   * reads from cache).
+   * status bar reads), and the `ToolAvailability` process service on every
+   * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
+   * such as the GitHub token, re-probes each workspace it holds, which the
+   * next step's tool list reads).
    */
   credentialChanged: { key: string };
 
@@ -87,24 +87,15 @@ export interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * External tool availability was re-probed. Frontends refresh their
-   * dashboards from the updated cache.
-   *
-   * Consumed by: extension and desktop settings views — this is the sole
-   * repaint path for both Tools dashboards, so every re-probe reaches the UI
-   * regardless of which input changed. Not the CLI: it has no tools
-   * dashboard; availability is read per-run when a tool is invoked.
-   */
-  toolAvailabilityChanged: undefined;
-
-  /**
    * The workspace agent roster changed outside a settings round-trip. Keyless
    * on purpose: every listener re-reads the roster, so which team or agent
    * moved carries no information.
    *
    * Emitted by the in-process roster writers that bypass the settings
-   * round-trip: `apply_team`, which the setup agent runs mid-conversation,
-   * and the agent-creator prompt that adds a new agent to the dropdown.
+   * round-trip: `apply_team`, which the setup agent runs mid-conversation;
+   * and by the tool registry (`toolRegistryLayer`) once it has reloaded the agent
+   * catalog after a tool switch or the plugin install record changed, in
+   * this process or another.
    * Settings-originated changes repaint through their own handler and do not
    * emit.
    *
@@ -205,15 +196,19 @@ export function emitAppSignal<K extends AppSignal>(
  * Deliver `signal` to `listener` until the caller interrupts. The program a
  * host's run edge forks: its scope holds the subscription, so interrupting
  * the fiber unsubscribes, and the `warn` on a failing listener is this
- * module's, not the host's.
+ * module's, not the host's. `subscribed` completes once the subscription is
+ * live, for a caller that must not miss a signal published after it reads
+ * the state the signal announces.
  */
 export function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
+  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   return Effect.scoped(
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(yield* openHub);
+      if (subscribed) yield* Deferred.succeed(subscribed, undefined);
       while (true) {
         const event = yield* PubSub.take(subscription);
         if (event.signal !== signal) continue;

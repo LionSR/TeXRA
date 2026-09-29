@@ -95,13 +95,13 @@ const bundledAgentDirectories = () => ({
 beforeAll(async () => {
   customAgentsDir = await makeTempDir('texra-init-agents-', tempDirs);
   // Preload the catalog cache (module-level) so the command's own
-  // `loadAgents({ includeRemote: false })` is a silent cache hit: the one
+  // `loadAgents()` is a silent cache hit: the one
   // real scan logs an info line that the output-shape tests would otherwise
   // read as stderr noise.
   const { refresh } = await import('@agent/index/agentRegistry');
   const { AgentDirectories } = await import('@platform/interfaces');
   await testRuntime().runPromise(
-    refresh({ includeRemote: false }).pipe(
+    refresh().pipe(
       Effect.provideService(AgentDirectories, bundledAgentDirectories()),
     ),
   );
@@ -135,6 +135,7 @@ describe('CLI init command', () => {
         secrets: host.secrets,
         globalState: host.roots.globalState,
         workspaceState: host.roots.workspaceState,
+        repoState: host.roots.repoState,
         runtime: testRuntime(),
       }),
     );

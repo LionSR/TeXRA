@@ -37,7 +37,7 @@
 import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import type { Disposable, Lifecycle } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -54,11 +54,11 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
+  type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -154,27 +154,33 @@ interface SubscriptionState extends BasePollSubscriptionState {
   prMergeableByNumber: LRUCache<number, string>;
 }
 
-class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
-  constructor() {
-    super({
-      // Repo-scoped polling fans out to every active PR in the repo via three
-      // shared endpoints. With 5,000 req/hr per token and ~3 GETs per repo
-      // per tick (every 30s = 120 ticks/hr), one repo costs ~360 req/hr;
-      // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
-      // the limit even sharing with a couple of per-PR pollers.
-      name: 'RepoPollingSource',
-      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
-      maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-      ...DEFAULT_POLLING_BACKOFF_CONFIG,
-    });
+export class RepoPollingSource extends PollingSourceBase<
+  RepoKey,
+  SubscriptionState
+> {
+  constructor(lifetime?: PollingLifetime) {
+    super(
+      {
+        // Repo-scoped polling fans out to every active PR in the repo via three
+        // shared endpoints. With 5,000 req/hr per token and ~3 GETs per repo
+        // per tick (every 30s = 120 ticks/hr), one repo costs ~360 req/hr;
+        // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
+        // the limit even sharing with a couple of per-PR pollers.
+        name: 'RepoPollingSource',
+        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
+        maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
+        ...DEFAULT_POLLING_BACKOFF_CONFIG,
+      },
+      lifetime,
+    );
   }
 
   subscribe(
     input: RepoSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = repoKeyToString(input);
-    return this.register(key, () => createInitialState(input), onEvent);
+    return this.register(key, (now) => createInitialState(input, now), onEvent);
   }
 
   protected formatErrorEvent(state: SubscriptionState, detail: string): string {
@@ -191,8 +197,8 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
     function* (this: RepoPollingSource, state: SubscriptionState) {
       const { owner, repo } = state;
-      const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.issueComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
-      const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.reviewComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
+      const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}${state.issueComments.sinceCursor ? `&since=${encodeURIComponent(state.issueComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
+      const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}${state.reviewComments.sinceCursor ? `&since=${encodeURIComponent(state.reviewComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
       // The /pulls list endpoint does NOT support `since`; we get the top
       // 100 most-recently-updated PRs every tick. The `prStateByNumber`
       // transition tracker is what makes that safe.
@@ -463,8 +469,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   );
 }
 
-function createInitialState(input: RepoSubscribeInput): SubscriptionState {
-  const now = Date.now();
+function createInitialState(input: RepoSubscribeInput, now: number) {
   const seed = new Date(now - SEED_WINDOW_MS).toISOString();
   return {
     owner: input.owner,
@@ -478,7 +483,7 @@ function createInitialState(input: RepoSubscribeInput): SubscriptionState {
     prStateByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prUpdatedAtByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prMergeableByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
-  };
+  } satisfies SubscriptionState;
 }
 
 function classifyPRState(pr: GhPullsListEntry): 'open' | 'closed' | 'merged' {
@@ -543,6 +548,3 @@ const PR_NUMBER_RE = /\/pull\/(\d+)(?:[?#/]|$)/;
 function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
   return matchPositiveInt(PR_NUMBER_RE, url);
 }
-
-/** Process-wide singleton. */
-export const SharedRepoPollingSource = new RepoPollingSource();

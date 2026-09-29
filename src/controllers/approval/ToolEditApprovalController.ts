@@ -364,7 +364,7 @@ export class ToolEditApprovalController {
       .stagePreview(request, {
         requestId,
         relativePath,
-        isSettled: () => this.isSettled(requestId),
+        isSettled: () => !this.requests.has(requestId),
       })
       .pipe(
         Effect.flatMap((preview) => {
@@ -405,10 +405,6 @@ export class ToolEditApprovalController {
           return staged.preview.present();
         }),
       );
-  }
-
-  private isSettled(requestId: string): boolean {
-    return !this.requests.has(requestId);
   }
 
   /**
@@ -553,8 +549,9 @@ export class ToolEditApprovalController {
         concurrency: 'unbounded',
         discard: true,
       });
+      // closeDiff can reject at window teardown; the latexdiff files must still go.
       yield* entry.preview.dispose().pipe(
-        Effect.andThen(
+        Effect.ensuring(
           Effect.suspend(() =>
             Effect.forEach(
               entry.workspaceTempCleanup,

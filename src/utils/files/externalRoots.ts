@@ -12,8 +12,10 @@ import { isPathWithin } from '@utils/core/pathCore';
  * operate on absolute paths that fall inside it, while paths outside the
  * registry keep their current "stay within the workspace" rejection.
  *
- * Registration happens in the VS Code activation layer (see frontend/setup.ts);
- * the registry itself is platform-agnostic.
+ * The agent-catalog follower every host's process runtime builds
+ * (`@tools/agentCatalogFollower`) registers the agent directories. The
+ * registry itself is platform-agnostic. A run's step adds its own read-only
+ * roots to its calls' lookups (`StepRoot`), which nothing registers.
  *
  * Security notes
  * --------------
@@ -36,17 +38,20 @@ import { isPathWithin } from '@utils/core/pathCore';
  *   different kind (e.g. if a user points the custom agents dir at the
  *   built-in agents dir).
  * - The registry keys on `ExternalRootKind`, not on the path — each kind
- *   gets exactly one slot, except `skill`, which holds one read-only slot per
- *   skill directory (a run can import skills from several roots). Two different kinds may canonicalise to the
+ *   gets exactly one slot. Two different kinds may canonicalise to the
  *   same path (legitimate when a user overlays a custom dir on a built-in
  *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
  *   read-only one win for permission purposes.
+ * - A skill directory is never registered: the step that lists it, or whose
+ *   user activated it, holds it as a read-only `StepRoot` and hands it to
+ *   its own calls' lookups, so no other run reads it, and it is gone once no
+ *   step holds it.
  */
 
 /** Stable identifier for each registered root. Label strings are for display
  *  only and must not be used as keys. */
 export type ExternalRootKind =
-  'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'agentDocs' | 'skill';
+  'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'agentDocs';
 
 export interface ExternalRoot {
   /** Stable key, independent of UI text. */
@@ -59,13 +64,29 @@ export interface ExternalRoot {
   readonly label: string;
 }
 
-export interface MatchedExternalRoot extends ExternalRoot {
+interface ExternalRootOptions {
+  readonly kind: ExternalRootKind;
+  readonly writable: boolean;
+  readonly label: string;
+}
+
+/** A read-only directory one step admits for its own calls, beside the
+ *  registered roots: a skill it lists or its user activated, canonical as
+ *  its catalog entry records it (`canonicalizePath`). */
+export interface StepRoot {
+  readonly absolutePath: string;
+  readonly label: string;
+}
+
+export interface MatchedExternalRoot extends Omit<ExternalRoot, 'kind'> {
+  /** The registered root's kind; absent for a step root. */
+  readonly kind?: ExternalRootKind;
   /** Path component relative to `absolutePath` (POSIX separators, '' for the root itself). */
   readonly relative: string;
 }
 
-/** Keyed by kind; a `skill` root keys by its canonical path as well. */
-const roots = new Map<string, ExternalRoot>();
+/** Keyed by kind. */
+const roots = new Map<ExternalRootKind, ExternalRoot>();
 
 /**
  * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
@@ -129,12 +150,11 @@ function readLinkOrUndefined(entry: string): string | undefined {
 /**
  * Register or replace the external root for the given kind. Calling again
  * with the same kind (e.g. when the custom agents dir changes) replaces
- * the previous entry for that kind in place; a `skill` root replaces only the
- * entry for the same directory.
+ * the previous entry for that kind in place.
  */
 export function registerExternalRoot(
   absolutePath: string,
-  options: { kind: ExternalRootKind; writable: boolean; label: string },
+  options: ExternalRootOptions,
 ): void {
   if (!path.isAbsolute(absolutePath)) {
     throw new Error(
@@ -153,7 +173,7 @@ export function registerExternalRoot(
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.
   roots.set(
-    options.kind === 'skill' ? `skill:${canonicalPath}` : options.kind,
+    options.kind,
     Object.freeze({
       kind: options.kind,
       absolutePath: canonicalPath,
@@ -166,6 +186,8 @@ export function registerExternalRoot(
 /**
  * Return the registered root that contains `absolutePath`, or null when no
  * registered root matches or the path cannot be canonicalised (fail closed).
+ * `stepRoots` are the read-only roots the asking call's step admits; a call
+ * outside a run has none.
  * Uses `path.relative` for containment so filesystem-root registrations
  * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
  * registered root when multiple would match. Ties on path length prefer
@@ -174,12 +196,13 @@ export function registerExternalRoot(
  */
 export function findExternalRoot(
   absolutePath: string,
+  stepRoots: readonly StepRoot[] = [],
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
-  // Nothing registered means nothing can match. Checked before
-  // canonicalisation so hosts that register no roots do not pay a realpath
-  // syscall on every path a tool resolves.
-  if (roots.size === 0) return null;
+  // No registered root and no step root means nothing can match. Checked
+  // before canonicalisation so a lookup with nothing to match pays no
+  // realpath syscall.
+  if (roots.size === 0 && stepRoots.length === 0) return null;
 
   let resolved: string;
   try {
@@ -191,7 +214,10 @@ export function findExternalRoot(
   }
 
   let best: MatchedExternalRoot | null = null;
-  for (const root of roots.values()) {
+  for (const root of [
+    ...roots.values(),
+    ...stepRoots.map((root) => ({ ...root, writable: false })),
+  ]) {
     if (!isPathWithin(root.absolutePath, resolved)) continue;
 
     const candidate: MatchedExternalRoot = {

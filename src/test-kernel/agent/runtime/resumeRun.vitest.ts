@@ -2,7 +2,7 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
@@ -10,6 +10,7 @@ import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import {
   createTestSession,
@@ -58,7 +59,7 @@ vi.mock('@agent/runtime/runClassification', async (importActual) => ({
 }));
 
 const RUN = 'aabbcc' as RunId;
-const completed: ToolUseFlowResult = {
+const completed: ToolUseRunEndResult = {
   outcome: RUN_OUTCOME.COMPLETED,
   runId: RUN,
   output: { category: 'toolUse', response: 'done', files: [] },
@@ -72,9 +73,13 @@ const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
   session: ReturnType<typeof createTestSession>,
   ...texts: string[]
 ) {
-  const flow = session.followUps.claimLive(RUN, 'flow')!;
+  const flow = session.followUps.claimLive(RUN, 'loop')!;
   for (const text of texts) {
-    yield* session.followUps.submit(RUN, { text }, 'live_owner');
+    yield* session.followUps.submit(
+      RUN,
+      { from: { kind: 'user' as const }, text },
+      'live_owner',
+    );
   }
   session.followUps.release(flow, 'recoverable');
 });
@@ -113,7 +118,7 @@ const sessions: ReturnType<typeof createTestSession>[] = [];
 
 afterEach(async () => {
   for (const session of sessions.splice(0)) {
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   }
 });
 
@@ -138,10 +143,6 @@ function resumeOne(...args: Parameters<typeof resumeRun>) {
 function resumeClaimedOne(...args: Parameters<typeof resumeClaimedRun>) {
   return Effect.provide(resumeClaimedRun(...args), fakeProcessServices());
 }
-
-const executeWorkflow = vi.fn(() =>
-  Effect.fail(new Error('tool-use fixtures never launch a workflow')),
-);
 
 describe('resumeRun tool-use queue ownership', () => {
   beforeEach(() => {
@@ -174,9 +175,7 @@ describe('resumeRun tool-use queue ownership', () => {
           cause: new Error('Corrupt record'),
         });
         runExistsMock.mockReturnValueOnce(Effect.fail(failure));
-        expect(
-          yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })),
-        ).toBe(failure);
+        expect(yield* Effect.flip(resumeOne(RUN, { session }))).toBe(failure);
         expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
         expect(yield* queuedTexts(session)).toEqual(['Keep this input.']);
       }),
@@ -197,13 +196,13 @@ describe('resumeRun tool-use queue ownership', () => {
         );
 
         const resumed = yield* Effect.forkChild(
-          resumeClaimedOne(RUN, { session, executeWorkflow }),
+          resumeClaimedOne(RUN, { session }),
         );
         yield* Deferred.await(configRead);
         expect(
           yield* session.followUps.submit(
             RUN,
-            { text: 'raced' },
+            { from: { kind: 'user' as const }, text: 'raced' },
             'recoverable',
           ),
         ).toEqual({ kind: 'queued' });
@@ -230,11 +229,15 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       const resumed = yield* Effect.forkChild(
-        resumeClaimedOne(RUN, { session, executeWorkflow }),
+        resumeClaimedOne(RUN, { session }),
       );
       yield* Deferred.await(existsRead);
       expect(
-        yield* session.followUps.submit(RUN, { text: 'raced' }, 'recoverable'),
+        yield* session.followUps.submit(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'raced' },
+          'recoverable',
+        ),
       ).toEqual({ kind: 'queued' });
 
       yield* Deferred.succeed(exists, false);
@@ -253,13 +256,12 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(
           yield* resumeOne(RUN, {
             session,
-            executeWorkflow,
             onResumeResolved: () =>
               Effect.gen(function* () {
                 expect(
                   yield* session.followUps.submit(
                     RUN,
-                    { text: 'second' },
+                    { from: { kind: 'user' as const }, text: 'second' },
                     'recoverable',
                   ),
                 ).toEqual({ kind: 'queued' });
@@ -288,12 +290,10 @@ describe('resumeRun tool-use queue ownership', () => {
         ),
       );
 
-      const first = yield* Effect.forkChild(
-        resumeOne(RUN, { session, executeWorkflow }),
-      );
+      const first = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(entered);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
-      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
+      expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'not_resumable',
       });
       yield* Deferred.succeed(barrier, undefined);
@@ -307,7 +307,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = yield* createSession();
       const submission = yield* session.followUps.submit(
         RUN,
-        { text: 'stale' },
+        { from: { kind: 'user' as const }, text: 'stale' },
         'recoverable',
       );
       expect(submission).toMatchObject({ kind: 'queued' });
@@ -327,7 +327,6 @@ describe('resumeRun tool-use queue ownership', () => {
         resumeOne(RUN, {
           session,
           recovery: submission.lease,
-          executeWorkflow,
         }),
       );
       yield* Deferred.await(configRead);
@@ -348,8 +347,7 @@ describe('resumeRun tool-use queue ownership', () => {
       );
 
       expect(
-        (yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })))
-          .message,
+        (yield* Effect.flip(resumeOne(RUN, { session }))).message,
       ).toContain('failed');
       expect(yield* queuedTexts(session)).toEqual(['keep me']);
     }),
@@ -369,16 +367,17 @@ describe('resumeRun tool-use queue ownership', () => {
           ),
         );
 
-        const resuming = yield* Effect.forkChild(
-          resumeOne(RUN, { session, executeWorkflow }),
-        );
+        const resuming = yield* Effect.forkChild(resumeOne(RUN, { session }));
         yield* Deferred.await(entered);
         expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
 
         expect(
           yield* session.followUps.submit(
             RUN,
-            { text: 'completed child', origin: 'subagent_result' },
+            {
+              text: 'completed child',
+              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+            },
             'recoverable',
           ),
         ).toEqual({ kind: 'queued' });
@@ -399,7 +398,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = yield* createSession();
       const submission = yield* session.followUps.submit(
         RUN,
-        { text: 'claimed' },
+        { from: { kind: 'user' as const }, text: 'claimed' },
         'recoverable',
       );
       expect(submission).toMatchObject({ kind: 'queued' });
@@ -411,7 +410,6 @@ describe('resumeRun tool-use queue ownership', () => {
       const result = yield* resumeOne(RUN, {
         session,
         recovery,
-        executeWorkflow,
       });
       expect(result).toMatchObject({
         started: true,
@@ -432,7 +430,7 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = yield* createSession();
         const submission = yield* session.followUps.submit(
           RUN,
-          { text: 'workflow input' },
+          { from: { kind: 'user' as const }, text: 'workflow input' },
           'recoverable',
         );
         expect(submission).toMatchObject({ kind: 'queued' });
@@ -451,7 +449,6 @@ describe('resumeRun tool-use queue ownership', () => {
           yield* resumeOne(RUN, {
             session,
             recovery: submission.lease,
-            executeWorkflow,
           }),
         ).toEqual({ failed: 'finished' });
         expect(yield* queuedTexts(session)).toEqual(['workflow input']);
@@ -464,7 +461,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const markUnreadable = vi.spyOn(session, 'markUnreadable');
       retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
-      expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
+      expect(yield* resumeOne(RUN, { session })).toEqual({
         failed: 'finished',
       });
       expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
@@ -487,7 +484,7 @@ describe('resumeRun tool-use queue ownership', () => {
           owner: JSON.stringify(['other-host', 4321, null]),
         });
 
-        expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
+        expect(yield* resumeOne(RUN, { session })).toEqual({
           failed: 'owned_elsewhere',
         });
         expect(markUnreadable).toHaveBeenCalledWith(
@@ -518,7 +515,7 @@ describe('resumeRun tool-use queue ownership', () => {
           ),
         );
 
-        expect(yield* resumeOne(RUN, { session, executeWorkflow })).toEqual({
+        expect(yield* resumeOne(RUN, { session })).toEqual({
           failed: 'unusable_checkpoint',
         });
       }),
@@ -538,8 +535,7 @@ describe('resumeRun tool-use queue ownership', () => {
         );
 
         expect(
-          (yield* Effect.flip(resumeOne(RUN, { session, executeWorkflow })))
-            .message,
+          (yield* Effect.flip(resumeOne(RUN, { session }))).message,
         ).toContain('record read timeout');
       }),
   );
@@ -561,7 +557,6 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(
           yield* resumeOne(RUN, {
             session,
-            executeWorkflow,
             onResumeResolved,
           }),
         ).toEqual({ failed: 'owned_elsewhere' });

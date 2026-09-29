@@ -19,6 +19,8 @@ export {
   startToolUseCard,
   endToolUseCard,
   emitToolUseCard,
+  endOpenToolUseCards,
+  type OpenToolUseCard,
   type ToolUseCardRef,
 } from './toolUseHelpers';
 export {
@@ -30,7 +32,6 @@ export {
   logInternal,
   debugInternal,
   logContextManagementEvent,
-  logConversationProgress,
   logWebSearch,
   logFilesLoaded,
   logFileCategory,

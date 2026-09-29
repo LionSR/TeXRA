@@ -119,9 +119,9 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
   const session = testDefaultSession();
   session.publish([
     {
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: aggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'waiting' },
+      payload: { family: 'toolUse', at: 'waiting' },
     },
   ]);
   await vi.waitFor(() => {
@@ -525,7 +525,7 @@ describe('BashTool', () => {
         const parentRunId = startedParentRun();
         const parentLease = testDefaultSession().followUps.claimLive(
           parentRunId,
-          'flow',
+          'loop',
         )!;
 
         try {
@@ -582,22 +582,23 @@ describe('BashTool', () => {
         // with no wake step, so a parent suspended WAITING on the job never
         // resumed — every other child-run type routes through the shared
         // wake-aware submitFollowUp path. Prove the wake actually fires
-        // by asserting the host resume port gets invoked once the run completes.
+        // by asserting the session's resume gets invoked once the run completes.
         vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
           Effect.succeed(DONE_EXEC_RESULT),
         );
 
         const parentRunId = startedParentRun();
         const parentWoken = Deferred.makeUnsafe<void>();
-        const tryResumeRun = vi.fn().mockImplementation(() => {
-          Deferred.doneUnsafe(parentWoken, Effect.void);
-          return Promise.resolve(true);
-        });
-        yield* Effect.promise(() =>
-          installPlatform(BASH_PLATFORM_OPTIONS, {
-            agentResume: { tryResumeRun },
-          }),
-        );
+        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
+        // The resume a wake starts takes the wake's recovery first.
+        const followUps = testDefaultSession().followUps;
+        const useRecovery = followUps.useRecovery.bind(followUps);
+        const tryResumeRun = vi
+          .spyOn(followUps, 'useRecovery')
+          .mockImplementation((recovery) => {
+            Deferred.doneUnsafe(parentWoken, Effect.void);
+            return useRecovery(recovery);
+          });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
         const recorded = recordSessionEvents(testDefaultSession());
@@ -607,14 +608,14 @@ describe('BashTool', () => {
           assert.equal(launchResult.status, 'executed');
 
           // The background run's completion must queue the follow-up AND wake
-          // the WAITING parent through the host resume port — not just queue it
+          // the WAITING parent through the session's resume — not just queue it
           // for the parent to notice on its own.
           yield* Deferred.await(parentWoken);
           assert.ok(
             tryResumeRun.mock.calls.length > 0,
             'Background bash completion should wake the WAITING parent run',
           );
-          assert.equal(tryResumeRun.mock.calls[0]?.[0], parentRunId);
+          assert.equal(tryResumeRun.mock.calls[0]?.[0].runId, parentRunId);
         } finally {
           detachBackgroundRun(recorded, parentRunId);
         }
@@ -635,37 +636,34 @@ describe('BashTool', () => {
     '#8093 regression: finalizes the background run before its wake step resolves, so a resumed parent never self-stalls waiting on it',
     () =>
       Effect.gen(function* () {
-        // Regression: waking a WAITING parent (`agentResume.tryResumeRun`) can
+        // Regression: waking a WAITING parent (`resumeOnSession`) can
         // await the ENTIRE resumed parent turn. If that wake were awaited before
         // this run's own finalize (as it used to be, delivering via a
         // single wake-aware call before `finalizeBackground`), a resumed parent
         // that immediately calls `executions` with action=wait on this same
         // run could find it still RUNNING and block on itself for the
-        // whole wait budget. Prove the ordering: hold the host resume port open
-        // and confirm the run is already untracked (terminal) by the time
-        // that port is even invoked.
+        // whole wait budget. Prove the ordering: hold the resume open and
+        // confirm the run is already untracked (terminal) by the time the
+        // resume is even invoked.
         vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
           Effect.succeed(DONE_EXEC_RESULT),
         );
 
         const parentRunId = startedParentRun();
-        let releaseResume: (() => void) | undefined;
         let handleAtResumeTime: unknown;
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
-        const tryResumeRun = vi.fn().mockImplementation(async () => {
-          Deferred.doneUnsafe(wakeReached, Effect.void);
-          handleAtResumeTime = testDefaultSession().runs.getHandle(runId);
-          await new Promise<void>((resolve) => {
-            releaseResume = resolve;
+        yield* Effect.promise(() => installPlatform(BASH_PLATFORM_OPTIONS));
+        // The resume a wake starts takes the wake's recovery first.
+        const followUps = testDefaultSession().followUps;
+        const useRecovery = followUps.useRecovery.bind(followUps);
+        const tryResumeRun = vi
+          .spyOn(followUps, 'useRecovery')
+          .mockImplementation((recovery) => {
+            Deferred.doneUnsafe(wakeReached, Effect.void);
+            handleAtResumeTime ??= testDefaultSession().runs.getHandle(runId);
+            return useRecovery(recovery);
           });
-          return true;
-        });
-        yield* Effect.promise(() =>
-          installPlatform(BASH_PLATFORM_OPTIONS, {
-            agentResume: { tryResumeRun },
-          }),
-        );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
         const recorded = recordSessionEvents(testDefaultSession());
@@ -688,7 +686,6 @@ describe('BashTool', () => {
           assert.equal(handleAtResumeTime, undefined);
           assert.equal(testDefaultSession().runs.getHandle(runId), undefined);
         } finally {
-          releaseResume?.();
           detachBackgroundRun(recorded, parentRunId);
         }
       }).pipe(
@@ -815,7 +812,7 @@ describe('BashTool', () => {
 
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
-        const stopped = testDefaultSession().runs.kill(runId);
+        const stopped = testDefaultSession().runs.stop(runId);
         assert.equal(stopped.accepted(), true);
         const stopSettlement = yield* Effect.forkChild(stopped.settlement);
         resolveCommand({

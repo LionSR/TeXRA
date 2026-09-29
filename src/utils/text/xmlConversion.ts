@@ -41,7 +41,7 @@ function convertLatexToMarkdown(latex: string): string {
  * Turndown, a LaTeX one through {@link LATEX_REPLACEMENTS}, and Markdown —
  * what models write into the scratchpad in practice — is returned trimmed and
  * otherwise unchanged. Every machine renders the same text, with no external
- * converter to install and no `pandoc --version` probe per reflection round.
+ * converter to install and no `pandoc --version` probe per workflow round.
  *
  * @param content The raw content to format
  */

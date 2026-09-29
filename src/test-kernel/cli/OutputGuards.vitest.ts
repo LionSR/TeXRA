@@ -44,6 +44,7 @@ function probeLayer(
       stat: (target) =>
         Effect.fail(sysError('NotFound', 'stat', target, 'ENOENT')),
       makeDirectory,
+      access: () => Effect.void,
     }),
     NodePath.layerWin32,
   );
@@ -150,20 +151,16 @@ describe('probeOutputPath', () => {
       }),
   );
 
-  it.effect('reports a mkdir permission denial as a usage error', () =>
+  it.effect.each([
+    { tag: 'PermissionDenied' as const, code: 'EACCES' },
+    { tag: 'Unknown' as const, code: 'EPERM' },
+  ])('reports a mkdir $code as a usage error', ({ tag, code }) =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
         probeOutputPathForTests('/missing/output.tex', '--output').pipe(
           Effect.provide(
             probeLayer((candidate) =>
-              Effect.fail(
-                sysError(
-                  'PermissionDenied',
-                  'makeDirectory',
-                  candidate,
-                  'EACCES',
-                ),
-              ),
+              Effect.fail(sysError(tag, 'makeDirectory', candidate, code)),
             ),
           ),
         ),

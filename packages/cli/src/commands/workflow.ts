@@ -3,12 +3,7 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import {
-  AgentCategory,
-  isTerminalCompileRejection,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 
 import {
@@ -19,12 +14,13 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   advertisesInterruptedRun,
+  type CheckpointRefinement,
   formatInterruptedResumeHint,
-  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
 import { writeErrorStderr } from '../runtime/logSinks';
+import { isTerminalWorkflowCheckpoint } from '../runtime/toolUseResumeData';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -122,7 +118,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     );
   }
 
-  const services = yield* initCliPlatform({ ...context, quietLogs: true });
+  const services = yield* initCliPlatform(context);
   // Resolve once, before stdin is read or the runtime host starts; the run
   // pins the resolved source.
   const { category, source } = yield* resolveCliRunAgent(services, init.agent);
@@ -164,8 +160,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         const runContext = buildHeadlessRunContext(context);
         // Only the input-derived names are knowable here: the agent's declared
         // defaults live in a definition the launch below loads, and loading it
-        // twice would pay a second remote fetch and could observe a different
-        // revision than the run executes. They are applied at finalization.
+        // twice could observe a different revision than the run executes. They are applied at finalization.
         const expectedOutputFiles = init.outputDir
           ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
           : undefined;
@@ -205,7 +200,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
-          lifecycle: services.lifecycle,
+          shutdownScope: services.shutdownScope,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
       }),
@@ -270,7 +265,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
-          lifecycle: services.lifecycle,
+          shutdownScope: services.shutdownScope,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
@@ -307,10 +302,10 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
        *  callbacks on, from the same services. */
       readonly runtime: CliConfigExecuteOptions['runtime'];
       /** The host's shutdown registry, from the same services. */
-      readonly lifecycle: CliConfigExecuteOptions['lifecycle'];
+      readonly shutdownScope: CliConfigExecuteOptions['shutdownScope'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
-      readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
+      readonly agentRuns?: CliConfigExecuteOptions['agentRuns'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* options.session;
@@ -324,21 +319,19 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    const canAdvertiseInterruptedRun = (
-      resumability: ResumableCheckpoint,
-    ): boolean => {
-      // Only a reflection run reaches here — this is the workflow command.
-      // The two facts the hint turns on sit in different halves of the
-      // snapshot: the model failure is runtime-owned (`runtime.lastError`,
-      // the single durable location, written with the waiting/deny
-      // snapshots), the compile rejection is family state.
-      const { snapshot } = resumability;
-      if (snapshot.family !== 'reflection') return false;
-      return (
-        snapshot.runtime.lastError == null &&
-        !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
-      );
-    };
+    // Not a run a model failure stopped (`runtime.lastError`), nor one that
+    // only replays a terminal compile rejection: the history rule, read from
+    // the rows, so no verdict held in memory can be missed by an interrupt.
+    const canAdvertiseInterruptedRun: CheckpointRefinement = (
+      { snapshot },
+      runId,
+    ) =>
+      snapshot.runtime.lastError != null
+        ? Effect.succeed(false)
+        : Effect.map(
+            isTerminalWorkflowCheckpoint(runId, session),
+            (terminal) => !terminal,
+          );
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
@@ -359,23 +352,26 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         if (!run.ok || !run.outcomePersisted) return;
         const resumability = yield* deriveResumability(runId, session);
         if (
-          advertisesInterruptedRun(resumability, canAdvertiseInterruptedRun)
-        ) {
+          yield* advertisesInterruptedRun(
+            runId,
+            resumability,
+            canAdvertiseInterruptedRun,
+          )
+        )
           writeResumeHint(runId);
-        }
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
       runtime: options.runtime,
-      lifecycle: options.lifecycle,
+      shutdownScope: options.shutdownScope,
       runId: options.runId,
-      modelCompatibilityKey: options.modelCompatibilityKey,
+      agentRuns: options.agentRuns,
       onInterruptedRunFinalized: recoveryInputIsDurable
         ? (runId) => writeResumeHint(runId, true)
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      openWorkflowOutput: (
+      publishWorkflowOutput: (
         result,
         agentDefaultOutputFiles,
         tryCommitPublication,
@@ -383,8 +379,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         Effect.gen(function* () {
           // Handed over by the launch (the only load of this run's definition):
           // the defaults this run actually executed, not a reread of a catalog
-          // entry a nested refresh may have swapped for a remote listing that
-          // carries none. The input-derived `cli.expectedOutputFiles` the
+          // entry a nested refresh may have swapped since. The input-derived `cli.expectedOutputFiles` the
           // launch computed stand in when the agent declares none.
           const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
           const expectedOutputFiles = declaredOutputFiles.length
@@ -397,10 +392,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               tryCommitPublication,
             }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
-          let outcome = result.outcome;
           if (Result.isFailure(outputResult)) {
             workflowOutputError = outputResult.failure;
-            if (outcome !== RUN_OUTCOME.CANCELLED) outcome = RUN_OUTCOME.FAILED;
           } else {
             workflowResult = outputResult.success;
           }
@@ -414,7 +407,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               copiedOutputs: [...workflowResult.copiedOutputs],
             }),
           });
-          return outcome;
+          // The fact the run decides its verdict from; the run, not this
+          // host, commits the outcome.
+          return Result.isFailure(outputResult) ? 'failed' : 'published';
         }),
     });
     if (!run.ok) return run.exitCode;
@@ -429,15 +424,15 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       return CliExitCode.AgentError;
     }
     if (!workflowResult) {
-      throw new Error(
-        'Workflow output was not finalized before lease release.',
+      return yield* Effect.die(
+        new Error('Workflow output was not finalized before the run ended.'),
       );
     }
 
-    // Output copying occurs while the run is still interruptible. Rebuild its
-    // envelope from the lifecycle-resolved verdict so a signal that lands during
-    // the copy cannot leave a completed presentation beside a cancelled run.
-    workflowResult = { ...workflowResult, outcome: result.outcome };
+    // Copying runs while the run is interruptible, so the envelope takes the
+    // lifecycle-resolved verdict (a signal during the copy must not leave a
+    // completed presentation) and the invocation's own fields, its plugins.
+    workflowResult = { ...result, ...workflowResult, outcome: result.outcome };
 
     emitCliResult(runContext, {
       json: workflowResult,

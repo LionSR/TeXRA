@@ -76,7 +76,7 @@ function similarityBaseFiles(
 /**
  * Signal a missing/empty round to the UI, then persist the empty round summary.
  */
-const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
+const handleNoOutputs = Effect.fn('documents.handleNoOutputs')(function* (
   state: OutputState,
   deps: OutputDependencies,
   currRound: number,
@@ -126,7 +126,7 @@ const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
  * <documents><document name="..."> containers (N >= 1), so every agent
  * unpacks that container into per-document output files.
  */
-export const extractFilesFromXml = Effect.fn('reflection.extractFilesFromXml')(
+export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
   function* (
     state: OutputState,
     deps: OutputDependencies,

@@ -147,7 +147,7 @@ async function renderCliConfigForm(
   const { React } = await loadInk();
   return renderInkElement(
     React.createElement(CliConfigForm, {
-      stores: makeFakeSettingsStores().stores,
+      stores: makeFakeSettingsStores('cli').stores,
       secrets: formSecrets,
       runtime: testRuntime(),
       onClose: () => undefined,
@@ -197,7 +197,7 @@ async function renderConfigFormProps(): Promise<ConfigFormProps> {
 }
 
 async function openConfigFormProps(
-  stores = makeFakeSettingsStores().stores,
+  stores = makeFakeSettingsStores('cli').stores,
 ): Promise<ConfigFormProps> {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
@@ -439,10 +439,10 @@ describe('CliConfigForm API-key status lifecycle', () => {
 describe('/config slash command wiring', () => {
   it.live('wires the roster and reads through the injected CLI stores', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores();
-      // Seed the git-author config slot the CLI reads from. Awaited, so the
-      // read below cannot race the write.
-      yield* config.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
+      const { stores, repoState } = makeFakeSettingsStores('cli');
+      // Seed the repository slot the CLI reads the git settings from.
+      // Awaited, so the read below cannot race the write.
+      yield* repoState.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
       registerBuiltinSlashCommands({
         secrets: new FakeSecrets(),
@@ -471,7 +471,7 @@ describe('/config slash command wiring', () => {
     'applies an approval-policy write to the live session, not just the store',
     () =>
       Effect.gen(function* () {
-        const { stores, config } = makeFakeSettingsStores();
+        const { stores, config } = makeFakeSettingsStores('cli');
         const applied: TexraApprovalPolicy[] = [];
         registerBuiltinSlashCommands({
           secrets: new FakeSecrets(),
@@ -500,43 +500,48 @@ describe('/config slash command wiring', () => {
 
   it.live('persists writes through the accessor to the CLI store', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores();
+      const { stores, repoState } = makeFakeSettingsStores('cli');
       const props = yield* Effect.promise(() => openConfigFormProps(stores));
       const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* props.writeValue(markCommits, false);
 
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
-        true,
+      expect(
+        yield* isStored(repoState, WorkspaceStateKey.GIT_MARK_COMMITS),
+      ).toBe(true);
+      expect(yield* repoState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(
+        false,
       );
-      expect(config.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     }),
   );
 
   it.live('resets a git setting by deleting the stored key', () =>
     Effect.gen(function* () {
-      const { stores, config } = makeFakeSettingsStores();
+      const { stores, repoState } = makeFakeSettingsStores('cli');
       const props = yield* Effect.promise(() => openConfigFormProps(stores));
       const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
       yield* props.writeValue(authorName, 'someone-else');
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
-        true,
-      );
+      expect(
+        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
+      ).toBe(true);
 
       yield* props.resetValue(authorName);
       // The key is deleted, so reads fall back to the default identity.
-      expect(yield* isStored(config, WorkspaceStateKey.GIT_AUTHOR_NAME)).toBe(
-        false,
-      );
       expect(
-        config.get(WorkspaceStateKey.GIT_AUTHOR_NAME, DEFAULT_GIT_AUTHOR_NAME),
+        yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
+      ).toBe(false);
+      expect(
+        yield* repoState.get(
+          WorkspaceStateKey.GIT_AUTHOR_NAME,
+          DEFAULT_GIT_AUTHOR_NAME,
+        ),
       ).toBe(DEFAULT_GIT_AUTHOR_NAME);
     }),
   );
 
   it.live('turns OpenRouter off when Prefer Kimi Code is enabled', () =>
     Effect.gen(function* () {
-      const { stores, globalState } = makeFakeSettingsStores();
+      const { stores, globalState } = makeFakeSettingsStores('cli');
       yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
       const props = yield* Effect.promise(() => openConfigFormProps(stores));
       const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);

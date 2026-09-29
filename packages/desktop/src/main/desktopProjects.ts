@@ -5,7 +5,6 @@
 
 import {
   Context,
-  Data,
   Effect,
   Exit,
   FileSystem,
@@ -16,19 +15,20 @@ import {
 } from 'effect';
 
 import {
-  createAgentResponseTextConnector,
+  closeSession,
   openSessionEffect,
   type SessionHandle,
 } from '@agent/runtime';
-import { openProjectStateStore } from '@controllers/session/appStateStore';
+import {
+  openProjectStateStore,
+  openRepoStateStore,
+} from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
-import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
@@ -38,7 +38,10 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { ProjectDatabases } from '@shared/session/database';
+import {
+  GlobalDatabase,
+  type ProjectDatabases,
+} from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -92,11 +95,7 @@ interface DesktopProjectRegistryOptions {
    * another project changed until the next launch.
    */
   readonly globalConfigStore: ConfigStore;
-  /**
-   * The process secret store and global state the helper model behind the
-   * latex text-connector resolves against, threaded from the composition root
-   * that opened them.
-   */
+  /** The process stores; every project's roots share its global state. */
   readonly stores: ModelOptionStores;
 }
 
@@ -126,15 +125,14 @@ export interface DesktopProjectRegistry {
   activate(root: string | undefined): Effect.Effect<void, Error>;
   /**
    * Close an open project: forget it for the next launch (it joins the
-   * recent list), stop its runs and wait for them to settle, dispose its
-   * session in its own scope, and show the most recently shown remaining
+   * recent list), close its session in its own scope (its runs stopped and
+   * settled under the shutdown deadline), and show the most recently shown remaining
    * project if it was the active one. The other projects' runs are untouched.
    */
   close(root: string): Effect.Effect<void, Error>;
   /** Empty File > Open Recent. */
   clearRecent(): Effect.Effect<void, Error>;
-  flushArtifacts(): Effect.Effect<void, Error>;
-  /** Dispose every session, the most recently opened first, then the
+  /** Close every session, the most recently opened first, then the
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
 }
@@ -201,61 +199,26 @@ export const readRememberedDesktopProjects = Effect.fn(
 });
 
 /**
- * Stop every run the project still owns and wait for their drivers to settle
- * them (CANCELLED, flow record preserved for a later resume), so the session
- * is disposed with nothing executing under it: `RunRegistry.dispose`
- * clears its handles without interrupting them, and a run left driving after
- * that would continue with no presentation and no stop control. Only roots
- * are killed; the stop cascades into their children. Unbounded on purpose: a
- * tool that ignores its kill is the same problem the process exit drain has,
- * and the project stays open, stoppable and visible in the log, until it ends.
- */
-/**
- * Stopping a closing project's runs faulted. The stop is uninterruptible and
- * its failure leaves the project's owner with the host, so the close reports
- * this rather than dropping the project from the registry.
- */
-class ProjectRunsNotStopped extends Data.TaggedError('ProjectRunsNotStopped')<{
-  readonly root: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
-  session: SessionHandle,
-) {
-  const { runs } = session;
-  yield* runs.stopAll();
-  yield* runs.awaitDrained();
-});
-
-/**
  * Open one session over `roots`. Every fact this project's services answer
- * with comes from `roots` as data — the approval policy below, and the latex
- * text-join helper bound here against this project's roots, so a workspace
- * override in `.texra/config.json` is the same value a run in this session
- * would read.
+ * with comes from `roots` as data — the approval policy below — so a
+ * workspace override in `.texra/config.json` is the same value a run in this
+ * session would read.
  */
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  secrets: PlatformSecrets,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     const scope = yield* Scope.Scope;
     const session = yield* Effect.acquireRelease(
       openSessionEffect({
         roots,
-        responseTextProcessing: createTexraResponseTextProcessing(
-          // This project's own roots, plus the process secret store — not the
-          // process-level stores, which carry no workspace config layer and so
-          // answered every project with the global value (#12773). Taking
-          // `secrets` alone rather than a whole `ModelOptionStores` is what
-          // makes the wrong pair unrepresentable here.
-          createAgentResponseTextConnector({ ...roots, secrets }),
-        ),
+        responseTextProcessing: createTexraResponseTextProcessing(),
       }),
-      (session) => session.dispose(),
+      // The one close every session takes: its runs stopped under the
+      // shutdown deadline, the ones still live past it settled, its
+      // artifacts flushed, its entry released.
+      (session) => Effect.asVoid(closeSession(session.roots.storage)),
     );
     session.setApprovalPolicy(
       yield* readSettingFrom<TexraApprovalPolicy>(
@@ -280,17 +243,18 @@ function openProjectSession(
  */
 export function openDesktopProjectRegistry(
   options: DesktopProjectRegistryOptions,
-): Effect.Effect<DesktopProjectRegistry, Error, DesktopProjectRecords> {
+): Effect.Effect<
+  DesktopProjectRegistry,
+  Error,
+  DesktopProjectRecords | GlobalDatabase
+> {
   return Effect.gen(function* () {
     const records = yield* DesktopProjectRecords;
+    const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(
-        undefined,
-        options.processRoots,
-        options.stores.secrets,
-      ).pipe(
+      openProjectSession(undefined, options.processRoots).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
@@ -330,24 +294,21 @@ export function openDesktopProjectRegistry(
           const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const [workspaceState, workspaceConfig] = yield* Effect.all(
-              [
-                openProjectStateStore(storage).pipe(
-                  Effect.flatMap((projectState) =>
-                    openWorktreeStateStore(
-                      projectState,
-                      options.stores.globalState,
-                      root,
-                    ),
+            const [workspaceState, repoState, workspaceConfig] =
+              yield* Effect.all(
+                [
+                  openProjectStateStore(storage),
+                  openRepoStateStore(root, storage).pipe(
+                    Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
-                ),
-                openTexraWorkspaceConfigStore(storage, root, (message) =>
-                  console.warn(`[desktop] ${message}`),
-                ),
-              ],
-              { concurrency: 'unbounded' },
-            );
+                  openTexraWorkspaceConfigStore(storage, root, (message) =>
+                    console.warn(`[desktop] ${message}`),
+                  ),
+                ],
+                { concurrency: 'unbounded' },
+              );
             const roots = createNodeWorkspaceRoots({
+              host: 'desktop',
               workspacePath: root,
               storage,
               globalStorage: resolveGlobalStoragePath(options.dataRoot),
@@ -356,12 +317,13 @@ export function openDesktopProjectRegistry(
                 global: options.globalConfigStore,
               },
               workspaceState,
+              repoState,
               globalState: options.stores.globalState,
             });
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(root, roots, options.stores.secrets).pipe(
+              openProjectSession(root, roots).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {
                     const recent = yield* records.readRecent;
@@ -390,20 +352,11 @@ export function openDesktopProjectRegistry(
         return Effect.gen(function* () {
           const project = byRoot(root);
           if (!project) return;
-          // Stop while the registry still owns the project. A failed stop or
-          // persistence operation leaves that owner available to the host.
+          // A failed persistence operation leaves the project with the host;
+          // the session's own close, run by the project's scope, stops its
+          // runs.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* stopProjectRuns(project.session).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProjectRunsNotStopped({
-                      root,
-                      message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
-                      cause,
-                    }),
-                ),
-              );
               yield* Effect.gen(function* () {
                 const wasActive = active() === project;
                 const remembered = yield* records.read;
@@ -438,27 +391,6 @@ export function openDesktopProjectRegistry(
         records
           .replaceRecent([])
           .pipe(Effect.andThen(syncRecent), Effect.mapError(ensureError)),
-      flushArtifacts: () =>
-        Effect.gen(function* () {
-          const failures: string[] = [];
-          for (const project of [fallback, ...current().projects]) {
-            yield* project.session.settlePublications().pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  failures.push(
-                    `${project.root ?? 'no workspace'}: ${toErrorMessage(error)}`,
-                  );
-                }),
-              ),
-            );
-          }
-          if (failures.length > 0)
-            return yield* Effect.fail(
-              new Error(
-                `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
-              ),
-            );
-        }),
       dispose: () =>
         Effect.suspend(() =>
           current()

@@ -1,6 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Cause, Data, Effect } from 'effect';
+import { Clock, Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
@@ -26,10 +26,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
+import { untilFollowerLoaded } from './catalogReadiness';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
-import { loadRemoteAgents } from './remoteAgentMeta';
+import { scanPluginAgents } from './pluginAgents';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
@@ -43,31 +43,25 @@ export class AgentCatalogLoadError extends Data.TaggedError(
 }> {}
 
 /**
- * Source priority for lookups (higher priority first). Every source must be
- * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
- * source scores `-1`, ranking it first by accident instead of by decision.
- * Bundled outranks remote, so a stale hosted row never shadows a bundled name.
+ * Source priority for lookups, highest first. Every source is listed: an
+ * absent one scores `-1` in `deduplicateByName`'s `indexOf`, ranking first by
+ * accident.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
   'builtInWorkflow',
   'builtInToolUse',
-  'remote',
+  'plugin',
 ];
-
-// =============================================================================
-// STATE
-// =============================================================================
 
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
 
 /**
- * What the cache currently holds, or `undefined` before any load published one.
- * Only a load that reaches its publish barrier assigns it, so a failed load
- * leaves the previous catalog described exactly as it still is.
+ * Whether a load has published a catalog. Only a load that completes sets
+ * it, so a failed load leaves the previous catalog serving.
  */
-let catalog: { readonly includesRemote: boolean } | undefined;
+let published = false;
 
 /** Custom-directory YAML the last published load could not turn into an agent. */
 let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
@@ -82,128 +76,85 @@ let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
 const catalogLoadLanes = new Map<string, PerKeyLane>();
 const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
 
-/**
- * Advanced by {@link refresh} only. A load carries the epoch it was requested
- * at and publishes nothing once a refresh has moved past it, so a post-sign-in
- * rebuild can never be overwritten by the signed-out load it raced.
- */
-let epoch = 0;
-
-export interface LoadAgentsOptions {
-  /** Include remote agent metadata that requires auth/network access. */
-  includeRemote?: boolean;
-}
-
-/**
- * On {@link refresh}, `includeRemote: true` refetches remote metadata and
- * `false` drops it. Omitted, it rescans only the local directories and keeps
- * the remote entries the catalog already holds: a local edit costs no network.
- */
-type RemoteMode = boolean | undefined;
-
 // =============================================================================
 // CORE API
 // =============================================================================
 
 /**
- * Load all agents into cache. Call once at activation.
- * Concurrent calls join the in-flight load through the lane and re-check what
- * it published, so only one scan runs.
+ * Load all agents into cache, unless a load already published them. Where a
+ * catalog follower runs, its first reload is the initial load and this waits
+ * for it. Concurrent calls join the in-flight load through the lane and
+ * re-check what it published, so only one scan runs.
  */
-export function loadAgents(
-  options: LoadAgentsOptions = {},
-): Effect.Effect<
+export function loadAgents(): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > {
-  const includeRemote = options.includeRemote ?? true;
-  return onCatalogLoadLane(
-    Effect.suspend(() =>
-      catalog && (!includeRemote || catalog.includesRemote)
-        ? Effect.void
-        : queueLoad(includeRemote, epoch),
+  return Effect.andThen(
+    untilFollowerLoaded,
+    onCatalogLoadLane(
+      Effect.suspend(() => (published ? Effect.void : scanCatalog)),
     ),
   );
 }
 
 /**
- * Run one load, superseding checks included. The caller holds the lane, so a
- * stale-epoch load skips without publishing and a failed load fails only its
- * own caller — the lane hands the next entrant off regardless.
+ * Scan every agent source and publish the result. The caller holds the lane,
+ * and a failed scan fails only its own caller — the lane hands the next
+ * entrant off regardless, and the previous catalog keeps serving.
  */
-function queueLoad(
-  includeRemote: RemoteMode,
-  loadEpoch: number,
-): Effect.Effect<
+const scanCatalog: Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
-> {
-  return Effect.gen(function* () {
-    if (loadEpoch !== epoch) return;
-    const startTime = Date.now();
+> = Effect.gen(function* () {
+  const startTime = yield* Clock.currentTimeMillis;
 
-    const dirs = yield* AgentDirectories;
-    const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
-      [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
+  const dirs = yield* AgentDirectories;
+  const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
+    [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
+    { concurrency: 'unbounded' },
+  ).pipe(
+    // The port names its own failure; the catalog load is what the caller
+    // asked for, so it carries the reason and the original cause up.
+    Effect.mapError(
+      (failure) =>
+        new AgentCatalogLoadError({
+          message: failure.message,
+          cause: failure.cause,
+        }),
+    ),
+  );
+  const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
+  // Only custom-agent scan issues are a product surface; the rest go unused.
+  const [customScan, builtInScan, toolUseScan, pluginAgents] =
+    yield* Effect.all(
+      [
+        scanDirectory([customDir], 'custom'),
+        scanDirectory([builtInDir], 'builtInWorkflow'),
+        scanDirectory(toolUseRoots, 'builtInToolUse'),
+        scanPluginAgents,
+      ],
       { concurrency: 'unbounded' },
-    ).pipe(
-      // The port names its own failure; the catalog load is what the caller
-      // asked for, so it carries the reason and the original cause up.
-      Effect.mapError(
-        (failure) =>
-          new AgentCatalogLoadError({
-            message: failure.message,
-            cause: failure.cause,
-          }),
-      ),
     );
-    const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
-    const [customScan, builtInScan, toolUseScan, remoteEntries] =
-      yield* Effect.all(
-        [
-          scanDirectory([customDir], 'custom'),
-          scanDirectory([builtInDir], 'builtInWorkflow'),
-          scanDirectory(toolUseRoots, 'builtInToolUse'),
-          includeRemote
-            ? loadRemoteAgents()
-            : Effect.succeed([] as AgentEntry[]),
-        ],
-        { concurrency: 'unbounded' },
-      );
-    // Only custom-agent scan issues are a product surface; the rest go unused.
 
-    // Register all entries.
-    const allEntries = [
-      ...customScan.entries,
-      ...builtInScan.entries,
-      ...toolUseScan.entries,
-      ...remoteEntries,
-    ];
+  cache.clear();
+  customScanIssues = Object.freeze(customScan.issues);
+  for (const entry of [
+    ...customScan.entries,
+    ...builtInScan.entries,
+    ...toolUseScan.entries,
+    ...pluginAgents,
+  ]) {
+    cache.set(agentKeyOf(entry), entry);
+  }
+  published = true;
 
-    if (loadEpoch !== epoch) return;
-
-    // Carried-over remote entries are read at publish time, after every older
-    // load and any sign-out removal have settled.
-    const keptRemote =
-      includeRemote === undefined
-        ? [...cache.values()].filter((entry) => entry.source === 'remote')
-        : [];
-    cache.clear();
-    customScanIssues = Object.freeze(customScan.issues);
-    for (const entry of [...allEntries, ...keptRemote]) {
-      cache.set(agentKeyOf(entry), entry);
-    }
-    catalog = {
-      includesRemote: includeRemote ?? catalog?.includesRemote ?? false,
-    };
-
-    yield* Effect.logInfo(
-      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
-    ).pipe(withLogChannel(CHANNEL));
-  });
-}
+  yield* Effect.logInfo(
+    `Loaded ${cache.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
+  ).pipe(withLogChannel(CHANNEL));
+});
 
 /**
  * Category-blind catalog lookup by identifier: a "source:name" key hits its
@@ -239,75 +190,31 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
 }
 
 /**
- * Force a new load after every older one has settled, superseding any load
- * still queued from before. The cache keeps serving the catalog it already
- * published until the new one lands, including when the refresh fails. The
- * epoch advances only once the refresh actually starts, so constructing a
- * refresh without running it is inert. An omitted `includeRemote` means a
- * local rescan here, unlike {@link loadAgents} (see {@link RemoteMode}).
+ * Rescan after every older load has settled. The cache keeps serving the
+ * catalog it already published until the new one lands, including when the
+ * rescan fails.
  */
-export function refresh(
-  options: LoadAgentsOptions = {},
-): Effect.Effect<
+export function refresh(): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > {
-  return Effect.suspend(() => {
-    // A local rescan is weaker than the loads queued before it, so it takes
-    // the current epoch instead of superseding a pending remote refetch.
-    const loadEpoch = options.includeRemote === undefined ? epoch : ++epoch;
-    return onCatalogLoadLane(queueLoad(options.includeRemote, loadEpoch));
-  });
+  return onCatalogLoadLane(scanCatalog);
 }
-
-function removeRemoteEntries(): void {
-  for (const [key, entry] of cache) {
-    if (entry.source === 'remote') cache.delete(key);
-  }
-  // The cache no longer holds remote definitions, so the published description
-  // of it must not claim otherwise even if the rebuild below never lands.
-  if (catalog) catalog = { includesRemote: false };
-}
-
-/** Remove remote definitions immediately, then rebuild the local catalog. */
-export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
-  void,
-  never,
-  AgentCatalogServices
-> {
-  return Effect.suspend(() => {
-    removeRemoteEntries();
-    return refresh({ includeRemote: false });
-  }).pipe(
-    Effect.catchCause((cause) => {
-      // Best effort, defects included: a stale catalog never blocks sign-out.
-      // Re-remove: an older remote load may have settled before the rebuild.
-      removeRemoteEntries();
-      return Effect.logWarning(
-        `Local agent catalog rebuild failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(CHANNEL));
-    }),
-  );
-}
-
-// =============================================================================
-// KEY HELPERS
-// =============================================================================
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
 // =============================================================================
 
 /**
- * The two state slots the durable roster resolves against: the workspace's own
+ * The two state slots the durable roster resolves against: the repository's
  * selection and the cross-workspace defaults. Every roster read is answered for
  * the workspace whose slots the caller hands over, so a process holding several
  * sessions never answers one paper's question with another's roster.
  */
 export type AgentRosterStores = Pick<
   WorkspaceRoots,
-  'workspaceState' | 'globalState'
+  'repoState' | 'globalState'
 >;
 
 /**
@@ -321,13 +228,13 @@ export function createWorkspaceAgentRosterController(
   roots: AgentRosterStores,
   getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
 ): AgentRosterController<AgentEntry> {
-  const { workspaceState, globalState } = roots;
+  const { repoState, globalState } = roots;
   return new AgentRosterController({
-    workspaceState,
+    repoState,
     globalState,
     getAgents,
     getPresets: () =>
-      workspaceState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+      repoState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
     resolveAgent: getCategoryAgent,
   });
 }
@@ -350,9 +257,9 @@ export function getVisibleAgents(
  * Resolve delegation targets for a run: the scope's pinned keys when a
  * delegation scope is active, or the workspace-visible roster otherwise. The
  * single resolver behind both the "Available agents:" tool-description block
- * (`delegationAvailability.ts`) and the prompt-template agent lists
- * (`userVars.ts`), so a delegating agent's tool description and its own
- * prompt vars can never list a different roster for the same run.
+ * (`delegationAvailability.ts`) and the delegation tools' agent lookup
+ * (`proposalFlow.ts`), so a delegating agent's tool description can never
+ * list a different roster from the one its calls are resolved against.
  */
 export function resolveDelegationScopeAgents(
   stores: AgentRosterStores,
@@ -450,7 +357,7 @@ export function resolveAgentForLaunch(
 
 /**
  * Deduplicate agents by name, keeping only the highest-priority source
- * (custom > builtInWorkflow > builtInToolUse > remote) for the dropdown.
+ * (custom > builtInWorkflow > builtInToolUse > plugin) for the dropdown.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();

@@ -57,10 +57,7 @@ function listModels(context: CliContext, options: CliModelListOptions) {
     Effect.gen(function* () {
       const outcome = yield* Effect.exit(
         Effect.gen(function* () {
-          const services = yield* initCliPlatform({
-            ...context,
-            quietLogs: true,
-          });
+          const services = yield* initCliPlatform(context);
           return yield* getCliModelAccessList({
             stores: services,
             models:
@@ -102,10 +99,7 @@ function showModel(context: CliContext, id: string) {
     Effect.gen(function* () {
       const outcome = yield* Effect.exit(
         Effect.gen(function* () {
-          const services = yield* initCliPlatform({
-            ...context,
-            quietLogs: true,
-          });
+          const services = yield* initCliPlatform(context);
           return yield* loadCliModelAccessEntry(id, { stores: services });
         }),
       );
@@ -167,7 +161,7 @@ const modelsShowCommand = defineCliCommand({
 function initModelCommandPlatform(
   context: CliContext,
 ): Effect.Effect<CliPlatformServices | { readonly exitCode: number }> {
-  return initCliPlatform({ ...context, quietLogs: true }).pipe(
+  return initCliPlatform(context).pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => ({
         exitCode: reportModelPlatformFailure(Cause.squash(cause)),

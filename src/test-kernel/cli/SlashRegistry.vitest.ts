@@ -5,6 +5,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeAll, describe, expect } from 'vitest';
+import type { AgentPickerValue } from '@cli/chat/tui/forms/AgentListForm';
 
 import {
   findSlashCommand,
@@ -75,7 +76,7 @@ function registerBuiltins(
 ): void {
   registerBuiltinSlashCommands({
     secrets: new FakeSecrets(),
-    stores: makeFakeSettingsStores().stores,
+    stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     runtimeSession: testDefaultSession(),
     ...options,
@@ -169,9 +170,9 @@ describe('slashRegistry', () => {
     resetCliState(CHAT_SESSION);
     registerBuiltins();
     const agentNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AgentPickerValue) => void;
     }>('agent');
-    agentNode.props?.onSelect?.('review');
+    agentNode.props?.onSelect?.({ kind: 'agent', agent: 'review' });
     await settleFormSelection();
 
     expect(sessionMeta.get().agent).toBe('review');
@@ -197,9 +198,9 @@ describe('slashRegistry', () => {
       canSelectModel: () => false,
     });
     const agentNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AgentPickerValue) => void;
     }>('agent');
-    agentNode.props?.onSelect?.('review');
+    agentNode.props?.onSelect?.({ kind: 'agent', agent: 'review' });
     await settleFormSelection();
 
     expect(sessionMeta.get().agent).toBe('review');

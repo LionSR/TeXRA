@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
 import {
-  _ansiMarkdownStatsForTests,
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';

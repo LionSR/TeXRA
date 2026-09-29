@@ -16,7 +16,7 @@
 
 import { Effect } from 'effect';
 
-import type { Disposable, Lifecycle } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import {
   formatIssueClosed,
@@ -30,11 +30,11 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
+  type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -69,11 +69,11 @@ interface SubscriptionState extends BasePollSubscriptionState {
   etags: { issue?: string; comments?: string };
 }
 
-function createInitialState(issue: IssueKey): SubscriptionState {
+function createInitialState(issue: IssueKey, now: number): SubscriptionState {
   return {
     issue,
     slug: `${issue.owner}/${issue.repo}`,
-    ...createBasePollState(),
+    ...createBasePollState(now),
     initialized: false,
     commentsSeeded: false,
     state: undefined,
@@ -82,22 +82,28 @@ function createInitialState(issue: IssueKey): SubscriptionState {
   };
 }
 
-class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
-  constructor() {
-    super({
-      name: 'IssuePollingSource',
-      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
-      maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
-      ...DEFAULT_POLLING_BACKOFF_CONFIG,
-    });
+export class IssuePollingSource extends PollingSourceBase<
+  string,
+  SubscriptionState
+> {
+  constructor(lifetime?: PollingLifetime) {
+    super(
+      {
+        name: 'IssuePollingSource',
+        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
+        maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
+        ...DEFAULT_POLLING_BACKOFF_CONFIG,
+      },
+      lifetime,
+    );
   }
 
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = issueKeyToString(issue);
-    return this.register(key, () => createInitialState(issue), onEvent);
+    return this.register(key, (now) => createInitialState(issue, now), onEvent);
   }
 
   protected formatErrorEvent(state: SubscriptionState, detail: string): string {
@@ -208,5 +214,3 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     },
   );
 }
-
-export const SharedIssuePollingSource = new IssuePollingSource();

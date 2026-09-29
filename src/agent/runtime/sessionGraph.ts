@@ -24,7 +24,9 @@ import type {
   RunId,
   LocalRuntimeState,
   SessionCloseReport,
+  DisplaySessionEvent,
   SessionEvent,
+  SessionEventDraft,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type {
@@ -33,7 +35,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionOpenError,
-  SessionStoreCleared,
+  SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
@@ -54,7 +56,14 @@ export interface SessionGraph {
   /** Append one batch in publication order and return once the view has
    *  folded it: what a caller that reads the view next awaits. */
   readonly publish: SessionEventsShape['publish'];
-  readonly publishRegistration: SessionEventsShape['publish'];
+  /** `publish`, owning the claims of the runs it registers: a birth's as it
+   *  commits, a re-registration's taken over before it. */
+  readonly publishRegistration: (
+    events: readonly SessionEventDraft[],
+  ) => Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /** A read of committed rows and the append that depends on it, as one
    *  job of the publisher, settled like `publish`. */
   readonly exclusive: SessionEventsShape['exclusive'];
@@ -68,20 +77,17 @@ export interface SessionGraph {
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
-  /** One aggregate's claim, acquired before a resume reads or mutates a run
-   *  and before a relaunch appends to a workflow checkpoint. Private record
-   *  reads never enter display transport. */
+  /** A hold on one aggregate's claim, answered with its release. Holds are
+   *  counted: the last one to go returns the claim to how the first found
+   *  it, or releases it when any hold `ends` it — a run's driver, a
+   *  workflow checkpoint's invocation. */
   readonly acquireClaims: (
     id: AggregateId,
+    ends: boolean,
   ) => Effect.Effect<
-    Effect.Effect<void, DatabaseWriteFailed>,
+    Effect.Effect<void>,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
-  /** Drop this process's claim on one aggregate: a run's when its lease
-   *  ends, a workflow checkpoint's when its invocation does. */
-  readonly releaseClaims: (
-    id: AggregateId,
-  ) => Effect.Effect<void, DatabaseWriteFailed>;
   readonly runRecords: (
     id: RunId,
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
@@ -95,14 +101,17 @@ export interface SessionGraph {
   ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
   /** Every committed row of one aggregate, ledger-private rows included:
    *  the read behind the keyed private records and the checkpoint journal,
-   *  which fold over the whole aggregate rather than the latest of a type. */
+   *  which fold over the whole aggregate rather than the latest of a type.
+   *  With `types`, only those rows, through the type index. */
   readonly aggregateRows: (
     id: AggregateId,
+    types?: readonly SessionEvent['type'][],
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  readonly recordListing: () => Effect.Effect<
-    readonly SessionEvent[],
-    DatabaseReadFailed
-  >;
+  /** One aggregate's display rows, with the `usage` rows its priced
+   *  responses project: what a renderer or an export replays. */
+  readonly displayRows: (
+    id: AggregateId,
+  ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
     runId: RunId,
@@ -115,9 +124,9 @@ export interface SessionGraph {
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
    *  defect when the fold died, so a reader waiting on a view never hangs. */
   readonly viewChanges: Stream.Stream<SessionView>;
-  /** The store this graph opened held another build's rows and was
-   *  cleared (`Database.cleared`): the one fact a host tells the user. */
-  readonly storeCleared: SessionStoreCleared | null;
+  /** The store this graph opened held an older build's rows and moved them
+   *  aside (`Database.movedAside`): the one fact a host tells the user. */
+  readonly storeMovedAside: SessionStoreMovedAside | null;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
    *  and local reconciliation has completed, for a reader that queries the
@@ -146,12 +155,6 @@ export interface SessionGraph {
   /** The session's current commit ordinal: where a reader attaching now
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
-  /** Release the session from its owner: the owner unwinds the session (its
-   *  runs first, then the handle's owners) and frees the root's graph after
-   *  it. The unwind happens before this Effect's first yield; it settles
-   *  once the root's entry has unwound, on the caller's own fiber. A teardown
-   *  failure surfaces as a defect and still releases the entry. */
-  readonly close: () => Effect.Effect<void>;
 }
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
@@ -171,13 +174,12 @@ export interface SessionOwner {
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;
-  /** The owner's synchronous face on the same set as {@link current}: every
-   *  session whose handle exists and whose release has not begun. Builds
-   *  nothing and waits for nothing, so an entry still building is absent. */
-  held(): readonly SessionHandle[];
   /** Close the session of a storage root, settling what it owns inside the
    *  runtime's shutdown-phase budget. */
   close(root: string): Effect.Effect<SessionCloseReport>;
+  /** A process shutdown's close: stop the process's pollers and drain the
+   *  deliveries they admitted, then close every held session at once. */
+  closeAll(): Effect.Effect<readonly SessionCloseReport[]>;
 }
 
 let owner: SessionOwner | undefined;
@@ -242,16 +244,6 @@ export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
   return Effect.suspend(() => owner?.list() ?? Effect.succeed([]));
 }
 
-/**
- * Every session the process's owner holds right now, read synchronously: the
- * enumeration a process-shutdown sweep needs, which has no fiber to wait on a
- * build with. A process with no owner installed holds none. This is the one
- * list of live sessions — no module keeps a second one.
- */
-export function heldSessions(): readonly SessionHandle[] {
-  return owner?.held() ?? [];
-}
-
 function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
   // The owner keys and releases a session by this root, so a caller's mutable
   // or inherited root record may not change it later. Read the structural
@@ -260,11 +252,13 @@ function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
   return {
     ...init,
     roots: {
+      host: roots.host,
       workspace: roots.workspace,
       storage: roots.storage,
       globalStorage: roots.globalStorage,
       config: roots.config,
       workspaceState: roots.workspaceState,
+      repoState: roots.repoState,
       globalState: roots.globalState,
     },
   };
@@ -320,15 +314,25 @@ export function initializeDefaultSession(
   });
 }
 
-/** Dispose the process-default session during host teardown; nothing to
- *  do when none is open. */
+/** Close the process-default session during host teardown, through the one
+ *  close every session takes ({@link closeSession}); nothing to do when none
+ *  is open. */
 export function teardownDefaultSession(): Effect.Effect<void> {
   return Effect.suspend(() => {
-    const session = tryDefaultSession();
+    const root = defaultSessionRoot;
     defaultSessionRoot = undefined;
-    return session?.dispose() ?? Effect.void;
+    return root === undefined ? Effect.void : Effect.asVoid(closeSession(root));
   });
 }
+
+/**
+ * The budget one session close spends waiting for its runs to settle before
+ * it settles the ones still live itself ({@link closeSession}). A hung run
+ * must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ * stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ * together, so they settle under one deadline for the process, not one each.
+ */
+export const SESSION_CLOSE_DEADLINE_MS = 5_000;
 
 /**
  * Close the session of a storage root (PR #11893, agent SDK architecture
@@ -348,4 +352,16 @@ export function closeSession(root: string): Effect.Effect<SessionCloseReport> {
       ? owner.close(root)
       : Effect.succeed({ settled: true, abandoned: [] }),
   );
+}
+
+/**
+ * Close every session the process's owner holds, all at once: each close
+ * spends the shutdown deadline from the moment it starts, so starting them
+ * together settles the process under one deadline rather than one per
+ * session. What a host's shutdown and the agent package's last release run.
+ */
+export function closeAllSessions(): Effect.Effect<
+  readonly SessionCloseReport[]
+> {
+  return Effect.suspend(() => owner?.closeAll() ?? Effect.succeed([]));
 }

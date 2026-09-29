@@ -9,7 +9,6 @@ import {
   type AgentEntry,
   type AgentRosterStores,
 } from '@agent/index';
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { AGENT_CATEGORIES, agentKeyOf, AgentCategory } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -91,23 +90,6 @@ export function missingMultiAgentPresetMessage(name: string): string {
 }
 
 /**
- * Resolve an identifier the way launch resolves it, scoped to `category`: a
- * `source:name` identifier lands on its exact entry even when a higher-priority
- * source shadows the name. Returns undefined when the identifier resolves
- * outside `category`.
- */
-export function resolveCliAgentInCategory(
-  stores: AgentRosterStores,
-  identifier: string,
-  category: AgentCategory,
-) {
-  return Effect.gen(function* () {
-    const entry = yield* resolveAgentForLaunch(stores, category, identifier);
-    return entry?.category === category ? entry : undefined;
-  });
-}
-
-/**
  * Validate a resolved entry for a category-pinned launch. Reports the refusal
  * as the `CliUsageError` value it is rather than throwing one: the launch
  * resolver below fails its Effect with it, and the chat slash command reads
@@ -132,7 +114,7 @@ export function checkCliAgentLaunch(
         ? AgentCategory.Workflow
         : AgentCategory.ToolUse;
     const found =
-      agent ?? (yield* resolveCliAgentInCategory(stores, name, otherCategory));
+      agent ?? (yield* resolveAgentForLaunch(stores, otherCategory, name));
     return new CliUsageError(
       found ? target.mismatch(name, found.category) : target.missing(name),
     );
@@ -141,13 +123,6 @@ export function checkCliAgentLaunch(
 
 /**
  * Resolve a CLI-visible agent from the registry.
- *
- * CLI commands start with a local-only load so signed-out users avoid remote
- * auth/network work. Missing agents still get a remote-inclusive fallback, and
- * signed-in sessions reload bare names: bundled outranks remote in source
- * priority, but a workspace roster that selects a remote entry by key makes
- * the visible tier answer a bare name with it, which a local-only catalog
- * cannot see.
  *
  * A launch category resolves through the launch resolver, so validation lands
  * on the exact entry the launch will load; without one this is a display
@@ -163,21 +138,6 @@ export function resolveCliAgent(
   lookupCategory?: AgentCategory,
 ) {
   return Effect.gen(function* () {
-    yield* loadAgents({ includeRemote: false });
-    const agent = yield* lookupCliAgent(stores, name, lookupCategory);
-
-    // Keep the local hit only when a remote-inclusive reload could not change
-    // it: a source-qualified name already pins its tier, and a signed-out
-    // session has no remote catalog to prefer. Every other case (including a
-    // local miss) falls through to the full load below.
-    if (
-      agent &&
-      (name.includes(':') ||
-        !(yield* Effect.flatMap(SupabaseAuth, (auth) => auth.authenticated)))
-    ) {
-      return agent;
-    }
-
     yield* loadAgents();
     return yield* lookupCliAgent(stores, name, lookupCategory);
   });
@@ -189,7 +149,7 @@ function lookupCliAgent(
   category: AgentCategory | undefined,
 ) {
   return category
-    ? resolveCliAgentInCategory(stores, identifier, category)
+    ? resolveAgentForLaunch(stores, category, identifier)
     : Effect.succeed(getAgent(identifier));
 }
 
@@ -212,14 +172,11 @@ export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
       name,
       AgentCategory.Workflow,
     );
-    // The pass above already loaded the catalog this lookup reads: it returns
-    // before the remote-inclusive reload only for a source-qualified name (which
-    // pins one cache key, so it cannot also hit here) or a signed-out session
-    // (which has no remote catalog to add).
-    const toolUse = yield* resolveCliAgentInCategory(
+    // The pass above already loaded the catalog this lookup reads.
+    const toolUse = yield* resolveAgentForLaunch(
       stores,
-      name,
       AgentCategory.ToolUse,
+      name,
     );
     if (workflow && toolUse) {
       return yield* Effect.fail(
@@ -245,21 +202,21 @@ function ambiguousRunAgentMessage(
 }
 
 /**
- * Resolve and validate an agent for a category-pinned CLI launch.
+ * Resolve and validate the workflow agent a `texra resume` continues.
  */
-export function resolveCliLaunchAgent(
-  stores: AgentRosterStores,
-  name: string,
-  mode: CliAgentLaunchMode,
-) {
-  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
+export function resolveCliResumeAgent(stores: AgentRosterStores, name: string) {
   return Effect.gen(function* () {
     const resolved = yield* resolveCliAgent(
       stores,
       name,
-      target.requiredCategory,
+      CLI_AGENT_LAUNCH_TARGETS.workflowResume.requiredCategory,
     );
-    const agent = yield* checkCliAgentLaunch(stores, name, resolved, mode);
+    const agent = yield* checkCliAgentLaunch(
+      stores,
+      name,
+      resolved,
+      'workflowResume',
+    );
     return agent instanceof CliUsageError ? yield* Effect.fail(agent) : agent;
   });
 }
@@ -270,7 +227,7 @@ export function loadCliAgentList(
 ) {
   const includeHidden = options.includeHidden === true;
   return Effect.gen(function* () {
-    yield* loadAgents(includeHidden ? undefined : { includeRemote: false });
+    yield* loadAgents();
 
     const agents = yield* collectCliAgents(
       stores,

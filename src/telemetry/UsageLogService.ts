@@ -237,7 +237,7 @@ class UsageLogServiceImpl {
     if (!isTelemetryEnabledBySetting(config)) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      // `log` is synchronous (UsageMonitor): its lines go straight to the sink.
+      // `log` is synchronous (the invoker's usage report): its lines go straight to the sink.
       writeLogLine('WARN', CHANNEL, 'Queue full, dropping oldest entry');
       this.queue.shift();
     }

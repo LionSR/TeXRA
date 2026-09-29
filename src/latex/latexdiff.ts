@@ -9,16 +9,16 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { FileLocation } from '@shared/schemas';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { entryExists } from '@utils/files/fsEntryExists';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
-import {
-  buildBetweenRoundDiffSuffix,
-  generateDiffFileName,
-} from './latexdiff/diffFileNameManager';
+import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+
+/** `missing-document-environment` is an input with no `\begin{document}`,
+ *  which callers skip rather than report. */
+type LaTeXdiffFailureReason = 'missing-document-environment' | 'failed';
 
 export type LaTeXdiffResult =
   | {
@@ -35,12 +35,16 @@ export type LaTeXdiffResult =
     }
   | {
       success: false;
+      reason: LaTeXdiffFailureReason;
       message: string;
     };
 
 /** A failed diff, as the value every entry point resolves to. */
-function failed(message: string): LaTeXdiffResult {
-  return { success: false, message };
+function failed(
+  message: string,
+  reason: LaTeXdiffFailureReason = 'failed',
+): LaTeXdiffResult {
+  return { success: false, reason, message };
 }
 
 function succeeded(diffPath: string, message: string): LaTeXdiffResult {
@@ -152,9 +156,7 @@ export class LaTeXdiffService {
         return failed(message);
       }
 
-      // Direct callers use one read pass for both existence and document
-      // structure validation. Round-specific wrappers keep their earlier
-      // exists checks so they can report round-specific error messages.
+      // One read pass checks both existence and document structure.
       const contents = yield* this.readDiffInputs(
         inputLocation,
         editedLocation,
@@ -165,7 +167,10 @@ export class LaTeXdiffService {
         return failed(message);
       }
       if (!contents.every(hasDocumentEnvironment)) {
-        return failed('Files missing document environment');
+        return failed(
+          'Files missing document environment',
+          'missing-document-environment',
+        );
       }
 
       const diffFileName = generateDiffFileName(editedFile, suffix);
@@ -227,7 +232,7 @@ export class LaTeXdiffService {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
         yield* Effect.logError(message);
-        return failed(message);
+        return failed(message, 'missing-document-environment');
       }
 
       // latexdiff-vc --git runs `git show <commit>:<file>`, which expects
@@ -271,90 +276,6 @@ export class LaTeXdiffService {
       Effect.catch(this.failure('Error running LaTeX diff VC')),
       withLogChannel(this.channel),
     );
-  }
-
-  runDiffForRound(
-    baseLocation: FileLocation,
-    outputLocation: FileLocation,
-    round: number,
-    mathMarkup: LatexdiffMathMarkupValue | undefined,
-    options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<
-    LaTeXdiffResult,
-    never,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    return Effect.gen({ self: this }, function* () {
-      if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
-        const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
-        yield* Effect.logWarning(message);
-        return failed(message);
-      }
-
-      return yield* this.runDiff(
-        baseLocation,
-        outputLocation,
-        '_diff',
-        mathMarkup,
-        options,
-      );
-    }).pipe(
-      Effect.catch(this.failure('Error in runDiffForRound')),
-      withLogChannel(this.channel),
-    );
-  }
-
-  runDiffBetweenRounds(
-    firstLocation: FileLocation,
-    secondLocation: FileLocation,
-    fromRound: number,
-    toRound: number,
-    mathMarkup: LatexdiffMathMarkupValue | undefined,
-    options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<
-    LaTeXdiffResult,
-    never,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    return Effect.gen({ self: this }, function* () {
-      if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
-        const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
-        yield* Effect.logWarning(message);
-        return failed(message);
-      }
-
-      const diffSuffix = buildBetweenRoundDiffSuffix(toRound, fromRound);
-      return yield* this.runDiff(
-        firstLocation,
-        secondLocation,
-        diffSuffix,
-        mathMarkup,
-        options,
-      );
-    }).pipe(
-      Effect.catch(this.failure('Error in runDiffBetweenRounds')),
-      withLogChannel(this.channel),
-    );
-  }
-
-  private bothFilesExist(
-    first: FileLocation,
-    second: FileLocation,
-  ): Effect.Effect<
-    boolean,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  > {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      return yield* Effect.all(
-        [
-          entryExists(fs, first.absolutePath),
-          entryExists(fs, second.absolutePath),
-        ],
-        { concurrency: 2 },
-      ).pipe(Effect.map(([a, b]) => a && b));
-    });
   }
 
   private getGitRoot(

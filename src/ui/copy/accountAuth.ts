@@ -11,6 +11,8 @@
  * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
  */
 
+import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+
 import { RESEARCHER_ACCESS } from './onboarding';
 
 /** Shared device-code option description for any account picker. */
@@ -22,6 +24,7 @@ export const CHATGPT_AUTH = {
   label: 'ChatGPT',
   subscriptionLabel: 'ChatGPT subscription',
   signInLabel: 'Sign in with ChatGPT',
+  signInDescription: 'Use a ChatGPT subscription',
   signOutLabel: 'Sign out of ChatGPT',
   preferLabel: 'Prefer ChatGPT subscription',
   deviceCodeLabel: 'ChatGPT device code',
@@ -37,6 +40,7 @@ export const GROK_AUTH = {
   label: 'Grok',
   subscriptionLabel: 'Grok subscription',
   signInLabel: 'Sign in with Grok',
+  signInDescription: 'Use a Grok / SuperGrok subscription',
   signOutLabel: 'Sign out of Grok',
   preferLabel: 'Prefer Grok subscription',
   deviceCodeLabel: 'Grok device code',
@@ -46,6 +50,12 @@ export const GROK_AUTH = {
   signedInEnabled: (accountLabel: string): string =>
     `Signed in with Grok as ${accountLabel} (xAI models enabled).`,
 } as const;
+
+/** Each OAuth subscription's copy, keyed by the provider id it belongs to. */
+export const SUBSCRIPTION_AUTH_COPY = {
+  chatgpt: CHATGPT_AUTH,
+  grok: GROK_AUTH,
+} as const satisfies Record<SubscriptionAuthStatus['provider'], unknown>;
 
 /**
  * Sign-in / sign-out outcome sentences that read the same for any account,
@@ -81,7 +91,7 @@ export const RESEARCHER_ACCESS_AUTH = {
   signInExample: `sign in to your ${RESEARCHER_ACCESS.label}`,
   deviceSignInExample: `sign in to your ${RESEARCHER_ACCESS.label} over SSH`,
   credentialsOnlyExample: `sign in to your ${RESEARCHER_ACCESS.label} (credentials only)`,
-  loginDescription: `Remote agents through your ${RESEARCHER_ACCESS.label}`,
+  loginDescription: `Sign in to your ${RESEARCHER_ACCESS.label}`,
   deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
   signOutDescription: `Sign out of your ${RESEARCHER_ACCESS.label}`,
   statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,

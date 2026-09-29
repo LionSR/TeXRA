@@ -266,6 +266,59 @@ describe('child subagent stream approval inheritance', () => {
     );
   });
 
+  it("restores a resumed child's own values only, so its inheritance still follows the parent", () => {
+    // Failure modes: an inherited grant is pinned as the child's own, so a
+    // later revocation on the parent misses it; an explicit child `false` is
+    // dropped; an ancestry edge registered before the restore skips it; a
+    // goal-approved delegation's child grant comes back as a human's.
+    const approvals = createSessionApprovals();
+    const { parent, child } = runPair();
+    const goalChild = generateRunId();
+    approvals.bash.bypass.setBypass(parent, true);
+    approvals.toolEdit.bypass.setBypass(parent, true);
+    approvals.registerRunParent(child, parent);
+    approvals.toolEdit.bypass.setBypass(child, false);
+    approvals.registerRunParent(goalChild, parent);
+    configureDelegatedChildApprovals(
+      goalChild,
+      parent,
+      'goal-approved',
+      testDefaultSession(),
+    );
+    const snapshot = (runId: RunId) => ({
+      policy: 'ask' as const,
+      ...approvals.grantsFor(runId),
+    });
+    const durable = {
+      parent: snapshot(parent),
+      child: snapshot(child),
+      goalChild: {
+        policy: 'ask' as const,
+        ...testDefaultSession().approvals.grantsFor(goalChild),
+      },
+    };
+    expect(durable.child.own).toEqual({ toolEdit: 'off' });
+    expect(durable.goalChild.own).toEqual({});
+    expect(durable.goalChild.goal).toEqual(['toolEdit']);
+
+    // A new process: the edges come back before the restore runs.
+    approvals.clearAll();
+    approvals.registerRunParent(child, parent);
+    approvals.registerRunParent(goalChild, parent);
+    approvals.restoreRun(parent, durable.parent);
+    approvals.restoreRun(child, durable.child);
+    approvals.restoreRun(goalChild, durable.goalChild);
+
+    expect(approvals.bypassesFor(child)).toMatchObject({
+      bash: true,
+      toolEdit: false,
+    });
+    expect(approvals.bash.bypass.ownBypass(child)).toBeUndefined();
+    expect(approvals.toolEdit.bypass.ownBypass(goalChild)).toBeUndefined();
+    approvals.bash.bypass.setBypass(parent, false);
+    expect(approvals.bash.bypass.isBypassed(child)).toBe(false);
+  });
+
   it('pins edit approval for an auto-approved delegation', () => {
     const { parent, child } = runPair();
 

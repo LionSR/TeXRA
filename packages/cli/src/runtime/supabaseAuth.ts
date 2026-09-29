@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Local imports
-import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -18,16 +17,14 @@ import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
 } from '@controllers/auth/pendingOAuthStore';
-import type {
-  AgentCatalogServices,
-  ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
+import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { ensureError } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
-import { launchBrowser } from './browser';
+import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';
 import { loopbackCallbackTransport } from './supabaseAuthCallbackServer';
 import {
   pollForDeviceSession,
@@ -51,23 +48,11 @@ export interface CliAuthProfile {
 
 interface CliLoginOptions {
   provider?: OAuthProvider;
-  openBrowser?: boolean;
+  noBrowser: boolean;
   selectAccount?: boolean;
   loginHint?: string;
-  onAuthUrl?: (url: string) => void;
-  manualBrowserHint?: string;
-}
-
-const CLI_MANUAL_AUTH_URL_PROMPT =
-  'Open this URL in a browser that can reach this terminal session:';
-
-const CLI_MANUAL_AUTH_REMOTE_HINT =
-  'Remote SSH/container users may need to forward the callback port.';
-
-export function formatCliManualAuthUrlMessage(url: string): string {
-  return [CLI_MANUAL_AUTH_URL_PROMPT, url, CLI_MANUAL_AUTH_REMOTE_HINT].join(
-    '\n',
-  );
+  /** Where the sign-in URL and the launch status are shown. */
+  writeProgress: CliSignInProgress;
 }
 
 let auth: SupabaseAuthShape | undefined;
@@ -114,7 +99,7 @@ function cliSupabaseAuth(): SupabaseAuthShape {
  * succeeds, fails, or is cancelled.
  */
 export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
-  function* (runtime: ProcessRuntime, options: CliLoginOptions = {}) {
+  function* (runtime: ProcessRuntime, options: CliLoginOptions) {
     const auth = cliSupabaseAuth();
     const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
     // An account switch starts from no session at all, so the picker the
@@ -133,9 +118,12 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
       transport: loopbackCallbackTransport({
         runtime,
         openBrowser: (url) =>
-          presentCliSignInUrl(url, options).pipe(
-            Effect.provideService(ChildProcessSpawner, spawner),
-          ),
+          presentCliSignInUrl({
+            writeProgress: options.writeProgress,
+            displayName: RESEARCHER_ACCESS.label,
+            url,
+            noBrowser: options.noBrowser,
+          }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),
       }),
     });
     return yield* coordinator
@@ -146,31 +134,6 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
       .pipe(Effect.mapError(ensureError));
   },
 );
-
-/**
- * Show the consent URL: print it when the terminal asked for no browser, and
- * otherwise hand it to the platform launcher. The coordinator races this
- * against the callback, so a launcher that never returns cannot strand a
- * sign-in that already completed.
- */
-function presentCliSignInUrl(
-  url: string,
-  options: CliLoginOptions,
-): Effect.Effect<void, Error, ChildProcessSpawner> {
-  return Effect.suspend(() => {
-    options.onAuthUrl?.(url);
-    if (!(options.openBrowser ?? true)) return Effect.void;
-    const hint = options.manualBrowserHint ?? 'texra login --no-browser';
-    return launchBrowser(url).pipe(
-      Effect.mapError(
-        (error) =>
-          new Error(
-            `${error.message}. Run ${hint} to open the sign-in URL manually.`,
-          ),
-      ),
-    );
-  });
-}
 
 function buildOAuthQueryParams(
   provider: OAuthProvider,
@@ -214,15 +177,11 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 });
 
 /**
- * Sign out of the TeXRA account: clear the stored session, then refresh the
- * local agent catalog. A plane the composition root never built, and a
- * storage rejection, both fail as the error the caller reports.
+ * Sign out of the TeXRA account: clear the stored session. A plane the
+ * composition root never built, and a storage rejection, both fail as the
+ * error the caller reports.
  */
-export function signOutCliSupabase(): Effect.Effect<
-  void,
-  Error,
-  AgentCatalogServices
-> {
+export function signOutCliSupabase(): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({
       try: () => cliSupabaseAuth().coordinator,
@@ -231,7 +190,6 @@ export function signOutCliSupabase(): Effect.Effect<
     yield* authCoordinator
       .clearSession()
       .pipe(Effect.mapError(unwrapAuthPortCause));
-    yield* invalidateRemoteAgentsAfterSignOut();
   });
 }
 

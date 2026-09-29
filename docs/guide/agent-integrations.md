@@ -38,7 +38,7 @@ recheck.
 
 <p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>status</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
 
-Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → Tools → Approval**: an **Approval policy** select (Ask, Never, or Auto-approve; default Ask) plus two toggles, **Under Ask: require approval for file edits** and **Under Ask: require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
+Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → Tools → Approval**: an **Approval policy** select (Ask, Block, or Auto-approve; default Ask) plus two toggles shown under Ask, **Require approval for file edits** and **Require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -153,7 +153,7 @@ tools:
   server, the tool and its arguments. It follows **Settings → Tools →
   Approval** like a shell command does: no prompt under
   Auto-approve, or under Ask with **require approval for shell commands**
-  turned off, and every call refused under Never. A session where approval
+  turned off, and every call refused under Block. A session where approval
   prompts can't be shown (a headless run) is not offered MCP tools.
 - **The server runs only while a run uses it.** TeXRA starts it when the first
   run that names it begins and stops it when the last such run ends. Editing a

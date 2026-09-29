@@ -19,7 +19,6 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
-  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
@@ -27,12 +26,6 @@ interface CustomAgentDirectoryStore {
 }
 
 type AgentDirectoryDocsId = 'custom-agents';
-
-/** A local agent directory paired with the source it represents. */
-export interface AgentDirectoryEntry {
-  directory: string;
-  source: AgentSource;
-}
 
 interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
@@ -53,7 +46,12 @@ export interface AgentDirectoryServiceOptions {
 }
 
 export class AgentDirectoryService {
-  constructor(private readonly options: AgentDirectoryServiceOptions) {}
+  readonly resourcesRoot?: string;
+
+  constructor(private readonly options: AgentDirectoryServiceOptions) {
+    if (options.resourcesPath !== '')
+      this.resourcesRoot = options.resourcesPath;
+  }
 
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
     return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
@@ -91,29 +89,6 @@ export class AgentDirectoryService {
       ),
       Effect.map((resolved) => resolved != null),
     );
-  }
-
-  getAllLocal(): Effect.Effect<
-    AgentDirectoryEntry[],
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
-      const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
-        [this.custom(), this.builtIn(), this.builtInToolUse()],
-        { concurrency: 'unbounded' },
-      );
-
-      const entries: AgentDirectoryEntry[] = [
-        { directory: customDir, source: 'custom' },
-        { directory: builtInDir, source: 'builtInWorkflow' },
-        ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
-          directory,
-          source: 'builtInToolUse' as const,
-        })),
-      ];
-      return entries;
-    });
   }
 
   /** The custom directory setting, trimmed; empty when none is configured. */
@@ -273,7 +248,7 @@ export class AgentDirectoryService {
 /**
  * The one `AgentSource` to local-directory mapping. It reads the port, not the
  * service, so every holder of an `AgentDirectoriesPort` answers a source
- * through the same three readers and gives `remote` the same verdict, instead
+ * through the same three readers and gives `plugin` the same verdict, instead
  * of repeating the switch at its own composition root. For `builtInToolUse`
  * it is the core directory only: tool plugin agents sit in the further roots
  * `builtInToolUseRoots` adds, so a caller must not assume every entry of that
@@ -294,8 +269,8 @@ export function agentSourceDirectory(
       return directories.builtIn();
     case 'builtInToolUse':
       return directories.builtInToolUse();
-    // No local directory: a remote agent lives in Supabase.
-    case 'remote':
+    // No single directory: a plugin agent lives in its own plugin's.
+    case 'plugin':
       return Effect.succeed(undefined);
   }
 }

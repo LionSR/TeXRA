@@ -18,13 +18,8 @@
  */
 import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';
 
-import {
-  closeSession as closeOwnedSession,
-  installedProcessRuntime,
-  listSessions as listOwnedSessions,
-} from '@agent/runtime';
+import { closeAllSessions, installedProcessRuntime } from '@agent/runtime';
 import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
-import { SignInFailed } from '@common/errors/signInFailed';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -34,8 +29,6 @@ import {
   AppState,
   AgentDirectories,
   type AgentDirectoriesPort,
-  type AgentResumePort,
-  type LifecycleHost,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -47,6 +40,7 @@ import {
   SetupCommandFailed,
   type SetupPlatformShape,
 } from '@tools/setup/platform';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 import { PlatformConflict } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -58,8 +52,6 @@ import type { Sessions } from './sessions.js';
  * embedder supplying its own names its workspace roots beside them.
  */
 export interface AgentPlatform {
-  /** The shutdown lifecycle this process's `Lifecycle` service serves. */
-  readonly lifecycle: LifecycleHost;
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
   /** Surfaces a tool-missing error to the embedder, served as
@@ -69,23 +61,24 @@ export interface AgentPlatform {
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
-  /** The port this process's `AgentResume` service forwards to. */
-  readonly agentResume: AgentResumePort;
   /** The bridge its `LanguageModel` service serves; an embedder with no
    *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
   readonly languageModel: LanguageModelPort;
+  /** The MCP config file (`.mcp.json` shape) the process's tool registry
+   *  reads; `nodePlatform()` names the one under its `storageDir`. */
+  readonly mcpConfigPath: string;
 }
 
 /**
  * What the package answers a setup tool with: nothing, loudly. It is
- * embedded in someone else's process, so it is none of the three product
- * hosts `ToolHost` names and it has no sign-in flow of its own to start.
+ * embedded in someone else's process, so it is the `sdk` host, none of the
+ * three product hosts, and it has no sign-in flow of its own to start.
  * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
  * tools branch on a surface that is not there, and answering `signIn` with
  * `false` would report a sign-in that can never happen as one that merely
  * did not complete. Each member says so instead, the way the test kernel's
  * fake does — on read for the members a caller only ever calls, and as the
- * port's own typed failure for the sign-in and command surfaces.
+ * port's own typed failure for the command surface.
  * The same loud answer this package gave before it provided `SetupPlatform`
  * at all.
  */
@@ -93,10 +86,6 @@ const NO_SETUP_PLATFORM =
   'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
 
 const PACKAGE_SETUP: SetupPlatformShape = {
-  get host(): never {
-    throw new Error(NO_SETUP_PLATFORM);
-  },
-  signIn: () => Effect.fail(new SignInFailed({ message: NO_SETUP_PLATFORM })),
   // The one member read before it is called: `unset_api_key` asks for the
   // command surface to refresh the host's status views after a credential
   // it already removed. A throwing getter would make that read a defect
@@ -184,6 +173,17 @@ export const acquireProcess = (
             ? Effect.fail(thrown)
             : Effect.die(thrown),
         ),
+        // The first-install tool switches every host's bootstrap seeds, once
+        // the hold is taken: an acquisition refused as a conflict writes
+        // nothing to another embedder's store, and the opt-in plugins stay
+        // off until the embedder switches them on. A store that cannot be
+        // read or written is a platform defect; the hold it took is ended.
+        Effect.tap((hold) =>
+          seedDisabledToolDefaults(platform.roots.globalState).pipe(
+            Effect.orDie,
+            Effect.onError(() => hold.release),
+          ),
+        ),
       ),
     ),
     (hold) => processChanges.withPermit(hold.release),
@@ -221,9 +221,7 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     // signed-out, as the uninitialized facade did for an embedder.
     auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
-    agentResume: platform.agentResume,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
-    lifecycle: platform.lifecycle,
     toolMissingReporter: platform.toolMissingHandler,
     setup: PACKAGE_SETUP,
   };
@@ -236,6 +234,7 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: platform.roots.globalStorage,
+      mcpConfigPath: platform.mcpConfigPath,
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with, and no account plane to send them on.
@@ -264,28 +263,11 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       holds -= 1;
       if (holds > 0) return Effect.void;
       composedWith = undefined;
-      return closeOwnedSessions().pipe(
+      return Effect.asVoid(closeAllSessions()).pipe(
         // The runtime is this composition's own local, not a read of what is
         // installed now.
         Effect.ensuring(disposeProcessRuntime(heldRuntime)),
       );
     }),
   };
-}
-
-/** Every session the owner still holds, closed together: a root some
- *  composition opened of its own settles its runs and flushes its artifacts
- *  exactly as the runtime's own root does, rather than going down with the
- *  runtime unwritten. Each close is uninterruptible and spends the shutdown
- *  deadline from the moment it starts, so starting them all at once is what
- *  settles the process under one deadline (#12804); one at a time, N sessions
- *  would take N deadlines. */
-function closeOwnedSessions(): Effect.Effect<void> {
-  return Effect.flatMap(listOwnedSessions(), (open) =>
-    Effect.forEach(
-      open,
-      (session) => closeOwnedSession(session.roots.storage),
-      { concurrency: 'unbounded', discard: true },
-    ),
-  );
 }

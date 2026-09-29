@@ -5,13 +5,16 @@ import OpenAI from 'openai';
 // Local imports - canonical model contract
 import {
   ModelConfigurationSchema,
-  ResolvedTurnSchema,
   TurnResultSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnResult,
 } from './turn.js';
-import { ContinuationSchema, type Continuation } from './message.js';
+import {
+  ContinuationSchema,
+  replayableHistory,
+  type Continuation,
+} from './message.js';
 import { sameModelOrigin } from './protocol.js';
 import { ModelError } from './errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -85,7 +88,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
-  for (const message of messages) {
+  for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
         // A settlement that carries only text keeps the plain string output
@@ -126,12 +129,6 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
         });
       }
       switch (part.kind) {
-        case 'file-annotation':
-        case 'url-citation':
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'Responses cannot replay foreign provider annotations.',
-          });
         case 'message': {
           if (part.evidence) {
             if (part.evidence.kind !== 'openai-responses-message') {
@@ -269,21 +266,18 @@ export const openaiResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
   configuration: OpenAIResponsesConfiguration,
-  input: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   completed: TurnResult,
 ): Effect.fn.Return<Continuation | undefined, ModelError> {
   const parsedConfiguration = ModelConfigurationSchema.safeParse(configuration);
-  const parsedTurn = ResolvedTurnSchema.safeParse(input);
   const parsedResult = TurnResultSchema.safeParse(completed);
   if (
     !parsedConfiguration.success ||
     parsedConfiguration.data.protocol !== 'openai-responses' ||
-    !parsedTurn.success ||
-    parsedTurn.data.protocol !== 'openai-responses' ||
     !parsedResult.success ||
     parsedResult.data.providerResponseId === null ||
-    !sameModelOrigin(parsedTurn.data, parsedResult.data.requestedOrigin) ||
-    !sameModelOrigin(parsedTurn.data, {
+    !sameModelOrigin(turn, parsedResult.data.requestedOrigin) ||
+    !sameModelOrigin(turn, {
       ...parsedConfiguration.data,
       codecVersion: 1,
     })
@@ -293,7 +287,6 @@ export const openaiResponsesContinuation = Effect.fn(
       message:
         'Continuation requires the original admitted input and matching completed output.',
     });
-  const turn = parsedTurn.data;
   const result = parsedResult.data;
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state

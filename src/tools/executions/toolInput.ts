@@ -34,10 +34,10 @@ const ViewActionSchema = z.strictObject({
   // clean single-value `const` (not an `anyOf` with `null`) — required so
   // `convertToolSchema`'s `flattenTopLevelUnion`/`schemaLiteralValue` (which
   // only recognizes a bare `const`/one-item `enum` as a discriminator
-  // literal) still merges all three actions into one enum for the
+  // literal) still merges all four actions into one enum for the
   // OpenAI/Anthropic/Google-facing schema. `.nullish()` here produces an
   // `anyOf` that flattening can't read as a literal, silently dropping
-  // wait/kill from the advertised schema instead.
+  // wait/kill/send from the advertised schema instead.
   // The explicit-`null` case AGENTS.md's rule calls out (a structured-output
   // provider representing an omitted optional field as `null` rather than
   // absent) is handled separately below by ExecutionsToolInputSchema's
@@ -115,10 +115,43 @@ const KillActionSchema = z.strictObject({
     .describe('Terminate a live run by ID (use on /executions/{id}).'),
 });
 
+const SendActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('send')
+    .describe(
+      "Put a message on another run's input (use on /executions/{id}). It is read when that run finishes its current turn; a reply, if any, arrives as your own follow-up.",
+    ),
+  message: z.string().min(1).describe('The message for the run.'),
+});
+
+// `path` stays required here as on every arm: the provider-facing schema
+// flattens this union and keeps a field required only if every arm requires
+// it (`flattenTopLevelUnion`), so an optional one would loosen all four.
+const QueryActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('query')
+    .describe(
+      'Run one read-only SQL statement over the run-history views listed in the description (use on /executions).',
+    ),
+  sql: z
+    .string()
+    .min(1)
+    .describe(
+      'One SELECT, WITH, EXPLAIN or VALUES statement; bind values as ?.',
+    ),
+  params: nullishWithDefault(z.array(z.string()), []).describe(
+    'Values for the ? placeholders in sql, in order, bound as text.',
+  ),
+});
+
 const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
+  SendActionSchema,
+  QueryActionSchema,
 ]);
 
 // A structured-output provider represents an omitted optional field as an

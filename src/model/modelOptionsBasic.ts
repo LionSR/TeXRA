@@ -8,6 +8,7 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
+import { formatCostUsd } from '@utils/text/stringUtils';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
@@ -40,11 +41,9 @@ export const DEFAULT_MODELS: readonly string[] = [
 
   'deepseek41T',
   'deepseekproT',
-  'kimi26T',
   'kimi3',
   // Current non-retired GLM flagships.
   'glm53',
-  'glm53flash',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'grok47',
   'musespark13',
@@ -67,7 +66,7 @@ function formatCost(
   outputPrice: number | undefined,
 ): string | undefined {
   if (inputPrice === undefined || outputPrice === undefined) return undefined;
-  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
+  return `${formatCostUsd(inputPrice)}/${formatCostUsd(outputPrice)}`;
 }
 
 function prefixHint(prefix: string, base: string): string {

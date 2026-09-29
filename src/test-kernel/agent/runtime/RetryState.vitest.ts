@@ -45,19 +45,17 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
+import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
   modelInvokerLayer,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
@@ -76,10 +74,11 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { UsageLog } from '@shared/usageLog';
 import type { RunState } from '@shared/session/runStateFold';
-import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { closeSessionOf } from '@test/support/sessionEnd';
+import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -109,7 +108,7 @@ const pumpClock = Effect.forkChild(
 );
 
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'gpt-test',
   deployment: {
@@ -123,12 +122,15 @@ const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
   tools: [],
+  transport: { kind: 'http' },
   controls: {
     temperature: null,
     maxOutputTokens: 1024,
+    store: false,
     parallelToolCalls: false,
     toolChoice: 'auto',
-    effort: null,
+    reasoning: null,
+    serviceTier: null,
   },
 });
 
@@ -207,8 +209,6 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
           return Stream.fromIterable(events);
         }),
       ),
-    generateTurn: () =>
-      Effect.die(new Error('The run loops stream; they never generate.')),
   };
   return { model, attempts: () => served };
 }
@@ -223,6 +223,7 @@ function boundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
@@ -237,6 +238,7 @@ function boundModel(
       'gpt54',
     ]),
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -283,28 +285,24 @@ function agentRun(
     // The launch stores a real run carries; no fixture reads through them.
     stores: hostStores(),
     toolPolicy: {},
-    userVarChannels: {},
+    opening: {
+      inputs: {},
+      activated: [],
+      attachedMemoryMisses: [],
+    },
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools: new MapToolRegistry({}),
+    ...testRunTools(hostStores()),
     finalToolName: null,
-    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
+    swapModel: (next) =>
+      SynchronizedRef.updateAndGetEffect(model, (current) =>
+        Effect.scoped(next(current)),
+      ),
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: null },
-    usageMonitor: new UsageMonitor(
-      {
-        logger,
-        runId,
-        runStageId: undefined,
-        config: testWorkspaceRoots().config,
-        usageLog: { log: () => {} },
-      },
-      { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
-    ),
     callbacks: {},
   };
 }
@@ -312,15 +310,14 @@ function agentRun(
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
   commit: 0,
-  snapshotCommit: null,
-  rowsBeforeSnapshot: 0,
+  lastSnapshot: null,
+  ledgerRows: 0,
   family: 'toolUse',
-  step: null,
+  at: null,
   outcome: null,
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -334,9 +331,16 @@ const freshState = (): RunState => ({
   pendingIntents: {},
   requests: {},
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
+  loop: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
+  offeredTools: null,
+  offeredContinuation: null,
+  offeredSkills: [],
+  offeredSystem: null,
+  contents: {},
+  hookOutcomes: {},
+  offeredHooks: [],
 });
 
 interface InvokerKit {
@@ -368,22 +372,21 @@ const openRun = Effect.fn('openRun')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: null,
       },
     }),
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
-      Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+      Layer.mergeAll(
+        Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
+        UsageLog.disabled,
+        LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+        testHttpClientLayer,
+      ),
     ),
     Layer.merge(Layer.succeed(RunLedger, session.ledger)),
   );
@@ -689,7 +692,7 @@ describe('ModelInvoker retry', () => {
       expect((yield* session.ledger.load(child.runId))?.lastTurn).toEqual(
         completedTurn('child'),
       );
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -710,7 +713,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -733,7 +736,7 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain('Model response was empty');
       }
       denied.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -752,7 +755,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(requests.opened).toEqual([]);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -760,8 +763,7 @@ describe('ModelInvoker retry', () => {
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
-      const logger = new TraceEmitter();
-      logger.subscribe((event) => {
+      const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
           Deferred.doneUnsafe(backoffStarted, Effect.void);
         }
@@ -786,7 +788,7 @@ describe('ModelInvoker retry', () => {
 
       expect(Exit.hasInterrupts(exit)).toBe(true);
       expect(stub.attempts()).toBe(1);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -839,7 +841,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -858,11 +860,16 @@ describe('ModelInvoker retry', () => {
           credentials: 'personal',
         }));
         const stub = stubModel([
-          { fail: httpError('subscription quota exhausted', 429) },
+          {
+            fail: httpError('subscription quota exhausted', 429, {
+              error: { type: 'usage_limit_reached' },
+            }),
+          },
           { ok: completedTurn('recovered') },
         ]);
 
         const kit = yield* openRun(session, stub.model, {
+          route: { kind: 'chatgpt-subscription' },
           usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
@@ -879,7 +886,7 @@ describe('ModelInvoker retry', () => {
         }
         requests.detach();
         yield* Fiber.interrupt(pump);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -917,7 +924,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -943,7 +950,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -977,7 +984,91 @@ describe('ModelInvoker retry', () => {
       expect(requests.opened).toHaveLength(1);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
+  );
+
+  it.effect(
+    'retries a chained request once without its continuation when the stored response is gone',
+    () =>
+      Effect.gen(function* () {
+        const session = sessionWithInteractions(undefined);
+        const pump = yield* pumpClock;
+        const chained: boolean[] = [];
+        const model: Model = {
+          prepareTurn: (request) =>
+            Effect.succeed(
+              request.continuation === undefined
+                ? PREPARED
+                : ResolvedTurnSchema.parse({
+                    ...PREPARED,
+                    continuation: request.continuation,
+                  }),
+            ),
+          streamTurn: (turn) =>
+            Stream.unwrap(
+              Effect.sync(() => {
+                chained.push('continuation' in turn);
+                return 'continuation' in turn
+                  ? Stream.fail(
+                      new ModelError({
+                        kind: 'provider-rejection',
+                        status: 404,
+                        message: 'Previous response with id resp-1 not found.',
+                      }),
+                    )
+                  : Stream.fromIterable<TurnEvent>([
+                      {
+                        kind: 'identified',
+                        providerResponseId: PROVIDER_RESPONSE_ID,
+                        requestedOrigin: ORIGIN,
+                        returnedModel: null,
+                      },
+                      { kind: 'completed', result: completedTurn('full') },
+                    ]);
+              }),
+            ),
+        };
+        const kit = yield* openRun(session, model);
+        const state = yield* session.ledger.appendBatch(kit.runId, kit.state, [
+          {
+            type: 'model.compaction',
+            aggregateId: rowAggregate(kit.runId),
+            payload: {
+              keepPrefix: 1,
+              messages: [],
+              cause: 'model-switch',
+              continuation: {
+                origin: { ...ORIGIN, protocol: 'openai-responses' },
+                coveredMessages: 1,
+                prefixFingerprint: 'a'.repeat(64),
+                anchor: {
+                  kind: 'stored',
+                  responseId: 'resp-0',
+                  coveredItems: 1,
+                },
+              },
+              continuationDropped: null,
+              usage: null,
+            },
+          },
+        ]);
+
+        const outcome = yield* invokeOn({ ...kit, state });
+
+        expect(outcome.kind).toBe('response');
+        expect(chained).toEqual([true, false]);
+        const rows = yield* session.ledger.load(kit.runId);
+        expect(
+          Object.values(rows?.contents ?? {}).filter(
+            (value) =>
+              typeof value === 'object' &&
+              value !== null &&
+              'fullTranscript' in value,
+          ),
+        ).toHaveLength(1);
+        yield* Fiber.interrupt(pump);
+        yield* closeSessionOf(session);
+      }),
   );
 });

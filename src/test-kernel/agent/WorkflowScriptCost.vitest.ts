@@ -70,11 +70,6 @@ function toolUseResult(cost: number): unknown {
  * zero-cost attempt per entry makes `total` charge each entry's validated
  * final-result cost (`max(0, journalCost)`), i.e. the sum of journal costs.
  */
-/**
- * Settle a journal's completed cost through the public tracker surface: one
- * zero-cost attempt per entry makes `total` charge each entry's validated
- * final-result cost (`max(0, journalCost)`), i.e. the sum of journal costs.
- */
 function settleJournalCost(journal: readonly WorkflowJournalEntry[]): number {
   const tracker = createWorkflowAttemptCostTracker();
   for (const journalEntry of journal) tracker.record(journalEntry, 0);
@@ -92,7 +87,7 @@ describe('workflow attempt cost', () => {
         const started = yield* Deferred.make<void>();
         const run = runWorkflowScript({
           script: `${meta}
-return await agent('retry cost')`,
+return yield* agent('retry cost')`,
           onEvent: (event) => {
             if (event.type === 'call') lastCard = event.call;
           },
@@ -135,11 +130,10 @@ return await agent('retry cost')`,
     const completed = entry(0, workflowResult(0.5), 'completed');
     const tracker = createWorkflowAttemptCostTracker();
 
-    expect(tracker.record(completed, 0.1)).toBe(0.1);
-    // Production normalizes the final attempt's undefined callback to zero.
-    expect(tracker.record(completed, 0)).toBe(0.1);
-    expect(tracker.record({ index: 1, key: 'skipped' }, 0.2)).toBeCloseTo(0.3);
-    expect(tracker.record({ index: 2, key: 'failed' }, 0.15)).toBeCloseTo(0.45);
+    tracker.record(completed, 0.1);
+    tracker.record(completed, 0);
+    tracker.record({ index: 1, key: 'skipped' }, 0.2);
+    tracker.record({ index: 2, key: 'failed' }, 0.15);
     expect(tracker.total([completed])).toBeCloseTo(0.95);
   });
 
@@ -152,35 +146,14 @@ return await agent('retry cost')`,
     expect(tracker.total([completed])).toBeCloseTo(0.6);
   });
 
-  it('reports invocation-cumulative totals compatible with the loop max-latch', () => {
-    // ChildRunPorts contract: the loop retains max(best observation), which is
-    // only correct over cumulative observations — record() must return a
-    // running invocation total that never decreases, whatever the attempt
-    // interleaving.
-    const tracker = createWorkflowAttemptCostTracker();
-    const observations = [
-      tracker.record({ index: 0, key: 'a' }, 0.2),
-      tracker.record({ index: 1, key: 'b' }, 0.1),
-      tracker.record({ index: 0, key: 'a' }, 0),
-      tracker.record({ index: 2, key: 'c' }, 0.3),
-    ];
-    for (let i = 1; i < observations.length; i += 1) {
-      expect(observations[i]).toBeGreaterThanOrEqual(observations[i - 1] ?? 0);
-    }
-    expect(observations.at(-1)).toBeCloseTo(0.6);
-  });
-
   it('terminal settlement never undercuts the live-observed total', () => {
-    // The journal fallback only raises a completed key's final attempt, so
-    // total() >= the last live record(); under the loop's max-latch the
-    // committed value is therefore the terminal total, and a cheap journal
-    // can never shrink already-observed spend.
+    // The journal fallback only raises a completed key's final attempt, so a
+    // cheap journal can never shrink already-observed spend.
     const cheapJournal = entry(0, workflowResult(0.05), 'live');
     const tracker = createWorkflowAttemptCostTracker();
 
     tracker.record(cheapJournal, 0.1);
-    const live = tracker.record(cheapJournal, 0.4);
-    expect(tracker.total([cheapJournal])).toBeGreaterThanOrEqual(live);
+    tracker.record(cheapJournal, 0.4);
     expect(tracker.total([cheapJournal])).toBeCloseTo(0.5);
   });
 
@@ -207,10 +180,8 @@ return await agent('retry cost')`,
   it('retains live spend when the final journal is malformed', () => {
     const tracker = createWorkflowAttemptCostTracker();
 
-    expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
-    expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
-      /is not a run result/,
-    );
+    tracker.record({ index: 0, key: 'live' }, 0.2);
+    expect(tracker.total([entry(0, { cost: 1 }, 'live')])).toBe(0.2);
   });
 });
 
@@ -245,20 +216,15 @@ describe('workflow-script completed journal cost', () => {
   it.each([
     ['wrong result shape', entry(3, { cost: 1 })],
     ['negative cost', entry(7, workflowResult(-1))],
-  ])('rejects %s with the journal index', (_label, invalidEntry) => {
-    expect(() => settleJournalCost([invalidEntry])).toThrow(
-      /is not a run result/,
-    );
-    expect(() => settleJournalCost([invalidEntry])).toThrow(
-      new RegExp(`entry ${invalidEntry.index}`),
-    );
+  ])('counts %s as no spend', (_label, invalidEntry) => {
+    expect(settleJournalCost([invalidEntry])).toBe(0);
   });
 
   it.live('produces the same total after a checkpoint replay', () =>
     Effect.gen(function* () {
       const script = `${meta}
-await agent('first')
-return await agent('second')`;
+yield* agent('first')
+return yield* agent('second')`;
       const results = [workflowResult(0.4), toolUseResult(0.6)];
       const first = yield* runPersistedWorkflowScript({
         session,
@@ -288,7 +254,7 @@ return await agent('second')`;
   it.live('can settle completed entries retained after a script failure', () =>
     Effect.gen(function* () {
       const script = `${meta}
-await agent('completed')
+yield* agent('completed')
 throw new Error('later failure')`;
 
       expect(

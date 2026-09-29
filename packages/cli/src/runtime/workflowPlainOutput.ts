@@ -19,7 +19,7 @@ import { claimRootRun, followView } from './sessionViewFollow';
  *  prints, since transcript rows fold only for subscribed aggregates. */
 export type WorkflowPlainSession = Pick<
   SessionHandle,
-  'view' | 'setTranscriptSubscriptions'
+  'view' | 'viewChanges' | 'setTranscriptSubscriptions'
 >;
 
 interface WorkflowPlainOutputOptions {
@@ -47,12 +47,7 @@ function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
   for (const row of run.transcript.rows) {
     if (row.kind === 'workflowTask') {
       lines.set(row.id, row.line);
-    } else if (
-      row.kind === 'log' &&
-      row.level !== 'debug' &&
-      row.verbose !== false &&
-      row.text.full.trim().length > 0
-    ) {
+    } else if (row.kind === 'log' && row.text.full.trim().length > 0) {
       lines.set(row.id, row.text.full);
     }
   }

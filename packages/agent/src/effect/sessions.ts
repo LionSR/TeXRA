@@ -3,7 +3,7 @@ import { Context, Effect, Layer, type Stream, type Scope } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   RunId,
@@ -64,7 +64,7 @@ export interface Run {
    * The run's own outcome first: on failure the fold's fate never replaces
    * it; on success this waits for the level holding the durable outcome.
    */
-  readonly result: Effect.Effect<AgentFlowResult, RunFailure>;
+  readonly result: Effect.Effect<RunEndResult, RunFailure>;
   /**
    * The session's levels sliced to this run: from the first level holding
    * its stream through the first holding its durable outcome. Typed error

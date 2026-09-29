@@ -1,7 +1,4 @@
-/** True for a value that merges field by field: a plain object, not an array. */
-function isMergeableObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isObject } from '@utils/core';
 
 /** Merge inherited agent config blocks with child arrays replacing parent arrays. */
 export function mergeInheritedAgentObject<T extends object>(
@@ -14,7 +11,7 @@ export function mergeInheritedAgentObject<T extends object>(
   for (const [key, childValue] of Object.entries(child)) {
     const parentValue = merged[key];
     merged[key] =
-      isMergeableObject(parentValue) && isMergeableObject(childValue)
+      isObject(parentValue) && isObject(childValue)
         ? mergeInheritedAgentObject(parentValue, childValue)
         : childValue;
   }

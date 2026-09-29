@@ -22,7 +22,7 @@ interface ShortcutRegistryModule {
     document: Document;
     actions: {
       showLauncher(): void;
-      openWorkbench(kind: 'settings' | 'logs'): void;
+      openWorkbench(kind: 'logs'): void;
       showSettings(tab?: string): void;
       toggleSidePanel(): void;
     };

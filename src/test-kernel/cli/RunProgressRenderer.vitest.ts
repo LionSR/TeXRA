@@ -25,7 +25,6 @@ import {
   type RunIdentity,
   type RunPhase,
   AgentCategory,
-  emptyRunEndOutput,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -142,7 +141,10 @@ async function settle(): Promise<void> {
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
-  const detach = renderer.attach({ view: ref });
+  const detach = renderer.attach({
+    view: ref,
+    viewChanges: SubscriptionRef.changes(ref),
+  });
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
@@ -222,15 +224,15 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-/** The loop's round as `flow.step` states it. `RunView.flow` carries the
- *  coordinate alone: a planned total is the agent registry's fact. */
+/** A workflow run's round as the fold states it. `RunView.position` carries
+ *  the coordinate alone: a planned total is the agent registry's fact. */
 async function handleRound(
   renderer: TestRunProgressRenderer,
   runId: string,
   round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    flow: { family: 'reflection', step: 'round.begin', round },
+    position: { kind: 'round', index: round },
   });
 }
 async function handleConversationProgress(
@@ -303,7 +305,6 @@ function publishRun(
       identity: { kind: 'agent', agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
       category: overrides.agentCategory ?? AgentCategory.Workflow,
-      isRemote: false,
       worktree: null,
       parent: null,
       approvalPolicy: null,
@@ -339,14 +340,14 @@ function publishRun(
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
       category: overrides.agentCategory ?? AgentCategory.Workflow,
-      isRemote: false,
     },
     // The first step of the loop: what clears the activation's starting
-    // substate, so the live line reads the plain running phase.
+    // substate, so the live line reads the plain running phase. A workflow
+    // run's first turn is its first round.
     {
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'turn.begin' },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     },
   ]);
   return Effect.promise(() => settle());
@@ -844,7 +845,7 @@ describe('CLI run progress renderer', () => {
               type: 'run.end',
               aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
               outcome: 'completed',
-              output: emptyRunEndOutput(AgentCategory.Workflow),
+              output: { category: 'workflow' },
             },
           ]);
           yield* session.settlePublications();
@@ -856,7 +857,7 @@ describe('CLI run progress renderer', () => {
 
       expect(
         output.split('\n').filter((line) => line.includes('Completed')),
-      ).toEqual(['[t0] · polish paper.tex · Completed · 0s']);
+      ).toEqual(['[r1] · polish paper.tex · Completed · 0s']);
     }),
   );
 
@@ -883,7 +884,7 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      expect(output).toContain('\r\x1b[2K[t0] · polish paper.tex · 0s\n');
+      expect(output).toContain('\r\x1b[2K[r1] · polish paper.tex · 0s\n');
     }),
   );
 
@@ -1030,7 +1031,6 @@ describe('CLI run progress renderer', () => {
                 identity: { kind: 'agent', agent: 'review' },
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
-                isRemote: false,
                 parent: { id: parentRunId },
               },
             ]);

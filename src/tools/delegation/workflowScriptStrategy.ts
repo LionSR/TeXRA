@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
+import { Effect, Exit, FileSystem, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -27,6 +27,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   RunId,
@@ -36,12 +37,13 @@ import type {
 import { RunEndSchema, tallyWorkflowCalls } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { onAbort } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { formatDelivery } from './deliveryEnvelope';
 
 // Local file imports
 import {
@@ -122,6 +124,8 @@ export interface WorkflowScriptStrategyParams {
   readonly files?: WorkflowScriptFiles;
   /** Durable identity (`meta.name`) — used in the resume hint on failure. */
   readonly name: string;
+  /** The tool call's `agent`: with `name`, the journal a continuation finds. */
+  readonly agent: string;
   /**
    * Session-owned registry the strategy registers this run's skip/retry bridge
    * on while the run is in flight, so a host can target a focused grandchild.
@@ -131,13 +135,12 @@ export interface WorkflowScriptStrategyParams {
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
-   * supplied per-live-child cost hook so delta accounting stays local to this
-   * run.
+   * supplied per-attempt cost hook that feeds the delivery summary's cost.
    */
   readonly createRunAgent: (hooks: {
     readonly onCost: (
       invocation: WorkflowAgentInvocation,
-      costUsd: number | undefined,
+      costUsd: number,
     ) => void;
   }) => (
     invocation: WorkflowAgentInvocation,
@@ -146,9 +149,9 @@ export interface WorkflowScriptStrategyParams {
 
 /**
  * Create the terminal-only strategy that runs one durable workflow script as a
- * detached child. The run body — cost delta-accounting, run-log capture, and
- * progress projection onto the run's own stream — lives here; the tool only
- * launches it.
+ * detached child. The run body — the delivery summary's cost, run-log
+ * capture, and progress projection onto the run's own stream — lives here;
+ * the tool only launches it.
  */
 export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,
@@ -171,12 +174,24 @@ export function createWorkflowScriptStrategy(
   let board: ReturnType<WorkflowScriptProgressProjection<never>['tally']> = {
     phaseCount: 0,
     tally: tallyWorkflowCalls([], 0, true),
+    stopped: [],
   };
   let settledCostUsd = 0;
   // A delivered file reads as the workspace file it replaces, not the
-  // run-storage copy that carries it.
-  const workspacePath = (path: string): string =>
-    workspaceRelativePath(params.session.roots.workspace, path);
+  // run-storage copy that carries it. Its diff base can itself be run
+  // storage (the child's `original/` snapshot of the input), and then the
+  // output's round-relative name is the workspace path.
+  const deliveredPath = (output: {
+    readonly relativePath: string;
+    readonly originalPath: string | null;
+  }): string =>
+    output.originalPath === null ||
+    isPathWithin(params.session.roots.storage, output.originalPath)
+      ? stripWorkflowRoundDir(output.relativePath)
+      : workspaceRelativePath(
+          params.session.roots.workspace,
+          output.originalPath,
+        );
 
   const settleSummary = (
     run: {
@@ -191,13 +206,13 @@ export function createWorkflowScriptStrategy(
       for (const entry of run.journal) {
         const parsed = RunEndSchema.safeParse(entry.result);
         if (!parsed.success) {
-          // Presentation tolerates what accounting does not: the cost path
-          // (`workflowJournalEntryCost`) throws on this same corruption because
-          // a mis-billed run is a correctness fault, while a delivery line that
-          // omits one entry's files is merely incomplete. Loud either way — a
-          // silently short file list is how corruption goes unreported.
+          // The summary is display: every attempt's spend is on its own run.
+          // A corrupt entry never fails a finished run; it is reported here,
+          // once per settle, and the cost line counts it as 0
+          // (`workflowJournalEntryCost`). Loud, since a silently short
+          // summary is how corruption goes unreported.
           yield* Effect.logWarning(
-            `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+            `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files and cost are omitted from the summary: ${toErrorMessage(parsed.error)}`,
           ).pipe(
             Effect.annotateLogs({ data: parsed.error }),
             withLogChannel(SUMMARY_CHANNEL),
@@ -206,10 +221,7 @@ export function createWorkflowScriptStrategy(
         }
         if (parsed.data.output.category === 'workflow') {
           for (const output of parsed.data.output.outputs) {
-            const path =
-              output.originalPath === null
-                ? output.relativePath
-                : workspacePath(output.originalPath);
+            const path = deliveredPath(output);
             summaryFiles.set(path, {
               path,
               added: output.added,
@@ -246,7 +258,7 @@ export function createWorkflowScriptStrategy(
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
-    launch: (ports, signal) =>
+    launch: (_ports, signal) =>
       Effect.gen(function* () {
         startedAt = Date.now();
         // Physical-attempt callbacks are the current-invocation boundary: replay
@@ -259,7 +271,7 @@ export function createWorkflowScriptStrategy(
           );
         const runAgent = params.createRunAgent({
           onCost: (invocation, costUsd) => {
-            ports.recordCost(attemptCost.record(invocation, costUsd ?? 0));
+            attemptCost.record(invocation, costUsd);
           },
         });
 
@@ -328,19 +340,13 @@ export function createWorkflowScriptStrategy(
         // Settle only entries consumed by this invocation: the durable union may
         // hold superseded or malformed untouched recovery history, and baseline
         // history is irrelevant to this invocation's cost and delivered files.
-        const settleAttempt = Effect.try({
-          try: () => {
-            const journal = attemptJournal();
-            const costUsd = attemptCost.total(journal);
-            ports.recordCost(costUsd);
-            return { journal, board: projection.tally(), costUsd };
-          },
-          catch: ensureError,
-        }).pipe(
-          Effect.flatMap(({ journal, board, costUsd }) =>
-            settleSummary({ journal, board }, costUsd),
-          ),
-        );
+        const settleAttempt = Effect.suspend(() => {
+          const journal = attemptJournal();
+          return settleSummary(
+            { journal, board: projection.tally() },
+            attemptCost.total(journal),
+          );
+        });
         // The child-run loop cancels a turn through `signal` (it runs the
         // turn uninterruptibly); the engine cancels by interruption. This is
         // the one edge between them: the abort interrupts the run, which
@@ -372,14 +378,7 @@ export function createWorkflowScriptStrategy(
         );
         if (Exit.isFailure(result)) {
           // A failed run's delivery reports what it did too.
-          const settlement = yield* Effect.exit(settleAttempt);
-          if (Exit.isFailure(settlement)) {
-            const settlementError = Cause.squash(settlement.cause);
-            params.logger.warn(
-              `Workflow script '${params.name}' failed and its cost could not be settled from this attempt's journal: ${toErrorMessage(settlementError)}`,
-              { data: settlementError },
-            );
-          }
+          yield* settleAttempt;
           return yield* Effect.failCause(result.cause);
         }
         yield* settleAttempt;
@@ -387,6 +386,13 @@ export function createWorkflowScriptStrategy(
       }),
 
     isTerminal: () => true,
+
+    pauseNotice: () => ({
+      text: [
+        `Workflow script '${params.name}' is paused at ${board.tally.ok} of ${board.tally.total} calls${board.stopped.length > 0 ? `; it was running ${board.stopped.join(', ')}` : ''}.`,
+        `Nothing continues it on its own. To continue it, call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} again with scriptPath: '${params.scriptPath}' and agent: '${params.agent}': completed calls replay from its journal and only the rest run.`,
+      ].join('\n'),
+    }),
 
     // Wrap the free-form result in the shared child-run envelope so the async
     // follow-up carries the run's runId, like every other detached

@@ -8,7 +8,7 @@ import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getAgentsByCategory } from '@agent/index';
+import { getAgentsByCategory, resolveAgentForLaunch } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import {
   applyInitialCliAgentSelection,
@@ -18,7 +18,6 @@ import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   checkCliAgentLaunch,
   formatCliAgentList,
-  resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
@@ -105,7 +104,7 @@ describe('CLI agent validation with a shadowed name', () => {
     await Effect.runPromise(
       Effect.provide(
         Effect.provideService(
-          refresh({ includeRemote: false }),
+          refresh(),
           GlobalStorageFs,
           {} as RootedFileSystem,
         ).pipe(
@@ -125,10 +124,10 @@ describe('CLI agent validation with a shadowed name', () => {
     'validates the shadowed name against the tool-use entry launch will run',
     () =>
       Effect.gen(function* () {
-        const entry = yield* resolveCliAgentInCategory(
+        const entry = yield* resolveAgentForLaunch(
           hostStores(),
-          'assistant',
           AgentCategory.ToolUse,
+          'assistant',
         );
 
         expect(entry?.source).toBe('builtInToolUse');
@@ -147,10 +146,10 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          (yield* resolveCliAgentInCategory(
+          (yield* resolveAgentForLaunch(
             hostStores(),
-            'assistant',
             AgentCategory.Workflow,
+            'assistant',
           ))?.source,
         ).toBe('custom');
       }),
@@ -161,10 +160,10 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* resolveCliAgentInCategory(
+          yield* resolveAgentForLaunch(
             hostStores(),
-            'polish',
             AgentCategory.ToolUse,
+            'polish',
           ),
         ).toBeUndefined();
         expect(
@@ -224,18 +223,18 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          (yield* resolveCliAgentInCategory(
+          (yield* resolveAgentForLaunch(
             hostStores(),
-            'builtInToolUse:assistant',
             AgentCategory.ToolUse,
+            'builtInToolUse:assistant',
           ))?.source,
         ).toBe('builtInToolUse');
         // The workflow shadow's own key stays out of the tool-use category.
         expect(
-          yield* resolveCliAgentInCategory(
+          yield* resolveAgentForLaunch(
             hostStores(),
-            'custom:assistant',
             AgentCategory.ToolUse,
+            'custom:assistant',
           ),
         ).toBeUndefined();
       }),
@@ -259,7 +258,7 @@ describe('CLI agent validation with a shadowed name', () => {
         const context = {
           // The roster slots only gate visibility, which this registry leaves
           // unconfigured, so empty chat slots resolve the same names as the host.
-          stores: makeFakeSettingsStores().stores,
+          stores: makeFakeSettingsStores('cli').stores,
           session: {
             runSettled: undefined,
             runCompleted: false,
@@ -281,7 +280,7 @@ describe('CLI agent validation with a shadowed name', () => {
       Effect.gen(function* () {
         const entered = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
-        const { stores } = makeFakeSettingsStores();
+        const { stores } = makeFakeSettingsStores('cli');
         const delayedState = {
           ...stores.globalState,
           get: <T>(key: string, defaultValue?: T) =>

@@ -10,14 +10,15 @@
  * never selects the ephemeral mode.
  *
  * Before its write transaction, this layer validates and serializes the
- * complete batch (C6). It also owns the envelope C1 gives its own
- * columns: the writer (C5, from `ProcessIdentity`), the publish clock, and the
- * `seq` and `commit` ordinals, none of which a caller can supply.
+ * complete batch (C6). It also owns the envelope C1 gives its own columns: the
+ * writer (C5, from `ProcessIdentity`), the publish clock, and the `seq` and
+ * `commit` ordinals, none of which a caller can supply.
  *
  * The official Node SQLite driver owns the scoped connection. Effect SQL owns
  * statement run, connection reservation and transactions; this layer owns the
  * C1 schema, claims, validation and committed wake levels.
  */
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
@@ -44,6 +45,8 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
+  DISPLAY_EVENT_TYPES,
+  isDisplaySessionEvent,
   RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
@@ -52,14 +55,14 @@ import {
   ownerIdentity,
   aggregateTarget,
   aggregateId as qualifyAggregateId,
-  listingTypeOf,
   referencedAggregates,
   type AggregateId,
-  type JsonValue,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
-  type StoredValue,
+  CURRENT_VALUE_SCHEMAS,
+  type CurrentValue,
+  type CurrentValueFamily,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
@@ -76,120 +79,34 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  type SessionStoreCleared,
+  type CurrentValues,
 } from '@shared/session/database';
+import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { currentValueChangeFeed } from './appStateChanges';
 import { localDatabasePath } from './localDatabasePath';
+import {
+  EVENT_COLUMNS,
+  LISTING_GROUP,
+  LISTING_TYPES,
+  READ_LISTING,
+  PROJECTED_ROWS,
+  totalRunUsage,
+} from './displayProjection';
+import {
+  applySchema,
+  assertStoreFormat,
+  pragmaValue,
+  retireStore,
+} from './storeFormat';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
-/**
- * Event history and bounded current application records.
- *
- * `commit` is a SQLite keyword, so the column is quoted at every site (an
- * unquoted `commit INTEGER` is a syntax error on every host floor). Every
- * query below aliases the snake-case columns onto the unquoted vocabulary.
- *
- * `event_sequence` is declared first because `event` references it, and the
- * dependency edge (an inquiry thread under the run that asked it, a workflow
- * checkpoint under the run that invoked it) is self-referential, so both
- * cascades exist the moment the schema does. One run owns one row here: one
- * sequence counter and one ownership claim (one run model, section 3.1). `STRICT` makes a wrong-typed value an error at
- * insert instead of a surprise at read: on persisted data, a silent coercion
- * is the same defect as a `.catch()` default.
- *
- * The three `event` indexes are the ones the C7 reads need: latest-of-type
- * per aggregate (the listing tier), one aggregate from a commit (the bounded
- * cross-aggregate resume read), and one type across aggregates in commit
- * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
- * both the density guarantee and the index a single aggregate's history reads
- * from its seq.
- */
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS input_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  at INTEGER NOT NULL,
-  value TEXT NOT NULL
-) STRICT;
-
-CREATE TABLE IF NOT EXISTS event_sequence (
-  aggregate_id TEXT NOT NULL PRIMARY KEY,
-  seq          INTEGER NOT NULL,
-  owner_id     TEXT,
-  parent_id    TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
-  closed       INTEGER NOT NULL DEFAULT 0
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS event_sequence_parent
-  ON event_sequence(parent_id);
-
-CREATE TABLE IF NOT EXISTS event (
-  "commit"     INTEGER PRIMARY KEY AUTOINCREMENT,
-  aggregate_id TEXT NOT NULL
-               REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
-  seq          INTEGER NOT NULL,
-  type         TEXT NOT NULL,
-  owner_id     TEXT NOT NULL,
-  at           INTEGER NOT NULL,
-  data         TEXT NOT NULL,
-  UNIQUE (aggregate_id, seq)
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
-CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
-CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
-`;
-const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
-  e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
-/** Listing arms of the present vocabulary; pending requests and queued
- *  follow-ups are sets. */
-const LISTING_TYPES = SessionEventDraftSchema.options
-  .map((schema) => schema.shape.type.value)
-  .filter(
-    (type) =>
-      listingTypeOf({ type }) !== null &&
-      type !== 'request.opened' &&
-      type !== 'request.decided' &&
-      type !== 'followup.queued' &&
-      type !== 'followup.consumed',
-  )
-  .map((type) => `${type}.1`);
-/** Latest per aggregate and type, and per discriminator where the type
- *  carries one: `run.fact` holds five families on one row type, and the
- *  expression is `NULL` for every other type (`listingKeyOf`). */
-const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key')`;
-const READ_LISTING = `
-WITH latest AS (
-  SELECT aggregate_id, type, MAX(seq) AS seq FROM event
-  WHERE type IN (SELECT value FROM json_each(?))
-  GROUP BY ${LISTING_GROUP}
-), selected AS (
-  SELECT ${EVENT_COLUMNS} FROM latest
-  JOIN event e ON e.aggregate_id = latest.aggregate_id
-    AND e.type = latest.type AND e.seq = latest.seq
-  UNION ALL
-  SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'request.opened.1' AND NOT EXISTS (
-    SELECT 1 FROM event decided
-    WHERE decided.aggregate_id = e.aggregate_id
-      AND decided.type = 'request.decided.1'
-      AND json_extract(decided.data, '$.requestId') = json_extract(e.data, '$.requestId')
-  )
-  UNION ALL
-  SELECT ${EVENT_COLUMNS} FROM event e
-  WHERE e.type = 'followup.queued.1' AND NOT EXISTS (
-    SELECT 1 FROM event consumed
-    WHERE consumed.aggregate_id = e.aggregate_id
-      AND consumed.type = 'followup.consumed.1'
-      AND json_extract(consumed.data, '$.followUpId') = json_extract(e.data, '$.followUpId')
-  )
-)
-SELECT * FROM selected
-ORDER BY "commit"
-`;
+/** A row or draft that contradicts the store's own protocol: a defect. */
+const invariant = (message: string) => Effect.die(new Error(message));
 const READ_STATE = `
-SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
+SELECT s.aggregate_id AS aggregateId, s.uid, s.owner_id AS ownerId,
   s.closed, s.parent_id AS parentId,
   CASE WHEN json_extract(s.aggregate_id, '$[0]') = 'run'
     THEN (SELECT e."commit" FROM event e
@@ -216,32 +133,58 @@ function decodeEvent(row: Record<string, unknown>): SessionEvent {
     aggregateId: row.aggregateId,
     seq: row.seq,
     commit: row.commit,
-    ownerId: row.ownerId,
+    origin: row.origin,
     at: row.at,
     type,
   });
-  if (parsed.success) return parsed.data;
-  const issue = parsed.error.issues[0];
-  const at = issue?.path.join('.');
+  const event = parsed.success ? parsed.data : undefined;
+  // A plugin row's value is checked against its arm, if this build has one.
+  const arm = PLUGIN_ARMS.get(
+    event?.type === 'plugin.fact' ? `${event.plugin}/${event.kind}` : '',
+  );
+  const refused = arm?.schema.safeParse(payload.value).error;
+  if (event !== undefined && refused === undefined) return event;
+  const issue = (refused ?? parsed.error)?.issues[0];
+  const at = [...(refused ? ['value'] : []), ...(issue?.path ?? [])].join('.');
   const reason =
     at === 'type'
       ? `unknown event type "${type}"`
-      : `${type} at ${at || 'event'}: ${issue?.message ?? parsed.error.message}`;
+      : `${type} at ${at || 'event'}: ${issue?.message}`;
   throw new Error(
     `Stored row ${String(row.aggregateId)} seq ${String(row.seq)} does not match the current event format (${reason})`,
   );
 }
-/** First append claims the aggregate; later appends require that same claim. */
+/** First append claims the aggregate and mints its uid; later need the claim. */
 const NEXT_SEQ = `
-INSERT INTO event_sequence (aggregate_id, seq, owner_id)
-VALUES (?, 1, ?)
+INSERT INTO event_sequence (aggregate_id, uid, seq, owner_id)
+VALUES (?, ?, 1, ?)
 ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
+/** Replace one current value in place. */
+const UPSERT_VALUE = `
+INSERT INTO current_value (family, key, value, at) VALUES (?, ?, ?, ?)
+ON CONFLICT(family, key) DO UPDATE SET value = excluded.value, at = excluded.at
+`;
+/** One current value, decoded by its family's schema: a row that no longer
+ *  decodes fails the read naming itself. */
+function decodeValue<F extends CurrentValueFamily>(
+  family: F,
+  row: Readonly<Record<string, unknown>>,
+): CurrentValue<F> {
+  const parsed = parseJsonWith(
+    z.string().parse(row.value),
+    CURRENT_VALUE_SCHEMAS[family],
+  );
+  if (Result.isSuccess(parsed)) return parsed.success as CurrentValue<F>;
+  throw new Error(
+    `Stored ${family} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+  );
+}
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
-INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
+INSERT INTO event (aggregate_id, seq, type, origin, at, data)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
@@ -281,7 +224,7 @@ export const databaseLayer = (
         disableWAL: mode === 'ephemeral',
         busyTimeout: '5 seconds',
       }).pipe(mapDatabaseFailure(openFailed));
-      const cleared = yield* configure(sql, mode, path).pipe(
+      const movedAside = yield* configure(sql, mode, path, filename).pipe(
         mapDatabaseFailure(openFailed),
       );
       const level = yield* SubscriptionRef.make(0);
@@ -307,13 +250,31 @@ export const databaseLayer = (
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
+      // Plugin kinds this build lacks: kept as written, left out of reads.
+      const leftOut = new Set<string>();
       /** The rows a read statement returns, decoded as ledger events. */
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
+        prepare = (row: Record<string, unknown>) => row,
       ): Effect.Effect<SessionEvent[], SqlError> =>
         exec(statement, params).pipe(
-          Effect.map((rows) => rows.map(decodeEvent)),
+          Effect.map((rows) => rows.map(prepare)),
+          Effect.flatMap((rows) => {
+            const fresh: string[] = [];
+            const kept = rows.map(decodeEvent).filter((event) => {
+              if (event.type !== 'plugin.fact') return true;
+              const kind = `${event.plugin}/${event.kind}`;
+              if (PLUGIN_ARMS.has(kind)) return true;
+              if (!leftOut.has(kind)) fresh.push(kind);
+              return !leftOut.add(kind);
+            });
+            return fresh.length === 0
+              ? Effect.succeed(kept)
+              : Effect.logWarning(
+                  `${path} holds rows of plugin kinds this build does not have (${fresh.join(', ')}); they stay in the store and are left out of every read.`,
+                ).pipe(withLogChannel(CHANNEL), Effect.as(kept));
+          }),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -350,9 +311,19 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      // The latest listing row of each type on one open run: its creation,
-      // status and tombstone beside its private records, never a transcript
-      // row. A closed (tombstoned) run reads as absent.
+      // `readAll` narrowed by type, off `event_type_commit`, plus usage. The
+      // range sits on the outer select, which SQLite pushes into each arm, so
+      // it binds once: Node 22's `node:sqlite` cannot bind a numbered `?NNN`.
+      const display = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}) r
+        WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
+      const storedTypes = (types: readonly string[]) =>
+        JSON.stringify(types.map((type) => `${type}.1`));
+      const listingTypes = JSON.stringify(LISTING_TYPES);
+      const displayTypes = storedTypes(DISPLAY_EVENT_TYPES);
+      // Each type's latest listing row on one open run (creation, status and
+      // tombstone beside its private records; no transcript row); closed: absent.
       const runRecords = `
         WITH latest AS (
           SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -368,9 +339,21 @@ export const databaseLayer = (
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
-      // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
+      // Named: for an `IN` list the planner walks the aggregate's seq index.
+      const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
+        INDEXED BY event_agg_type_seq WHERE e.aggregate_id = ? AND e.seq >= ?
+          AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
+      // A tombstone closes its run and stays its last row until collected.
+      const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type = 'run.removed.1' ORDER BY e."commit"`;
+      // One aggregate's display rows, its projected `usage` rows among them.
+      const displayAggregate = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}) r
+        WHERE r.aggregateId = ? AND r.seq >= ? ORDER BY seq`;
+      // The latest `run.snapshot` of one open run, off `event_agg_type_seq`.
       const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id = ? AND e.type = 'flow.snapshot.1'
+        WHERE e.aggregate_id = ? AND e.type = 'run.snapshot.1'
           AND EXISTS (SELECT 1 FROM event_sequence s
                       WHERE s.aggregate_id = e.aggregate_id AND s.closed = 0)
         ORDER BY e.seq DESC LIMIT 1`;
@@ -380,18 +363,15 @@ export const databaseLayer = (
         'request.decided.1',
         'followup.queued.1',
         'followup.consumed.1',
+        'usage.1',
       ]);
-      const inputRows = `
-        SELECT ${EVENT_COLUMNS} FROM event e
+      const inputRows = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
-        UNION ALL
-        SELECT ${EVENT_COLUMNS} FROM event e
+        UNION ALL SELECT * FROM ${PROJECTED_ROWS}
+        UNION ALL SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
-          AND e.type NOT IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
-        ORDER BY "commit"
-      `;
+          AND e.type NOT IN (SELECT value FROM json_each(?))) r
+        WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
       const dataVersion = 'PRAGMA data_version';
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
@@ -558,7 +538,7 @@ export const databaseLayer = (
       const refuseWriter = (id: AggregateId, absent: string) =>
         Effect.gen(function* () {
           const held = (yield* readState([id]))[0];
-          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          if (held === undefined) return yield* invariant(`${absent}: ${id}`);
           const { ownerId, closed } = held;
           return yield* new DatabaseNotOwner({
             aggregateId: id,
@@ -612,15 +592,12 @@ export const databaseLayer = (
             }
           }
         });
-      const appendPrepared = (
+      const appendRows = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
       ) =>
         Effect.forEach(prepared, ({ draft, payload }) =>
           Effect.gen(function* () {
-            if (borrowsClaim(draft)) {
-              yield* exec(claim, [identity.ownerId, draft.aggregateId, null]);
-            }
             if (draft.type === 'inquiryThreadUpdated') {
               // Inquiry writes borrow their claim for this transaction only.
               yield* exec(claim, [identity.ownerId, draft.aggregateId, null]);
@@ -640,7 +617,7 @@ export const databaseLayer = (
                   parent.closed ||
                   parent.ownerId !== identity.ownerId
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Inquiry opening requires an owned open parent: ${draft.parentRunId}`,
                   );
                 }
@@ -648,6 +625,7 @@ export const databaseLayer = (
             }
             const seq = (yield* execOne(NEXT_SEQ, [
               draft.aggregateId,
+              randomUUID(),
               identity.ownerId,
             ]))?.seq;
             if (typeof seq !== 'number') {
@@ -663,7 +641,7 @@ export const databaseLayer = (
               target.kind === 'run' &&
               (seq === 1) !== (draft.type === 'run.start')
             ) {
-              throw new Error(
+              return yield* invariant(
                 `A run must begin with exactly one run.start: ${draft.aggregateId}`,
               );
             }
@@ -671,13 +649,12 @@ export const databaseLayer = (
               (draft.type === 'run.start' || draft.type === 'run.removed') &&
               target.kind !== 'run'
             ) {
-              throw new Error(
+              return yield* invariant(
                 `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
-            // Stamp the declared parent's creation commit in this same
-            // transaction. A reused logical id must not redirect the child to
-            // a later incarnation of its parent.
+            // Stamp the declared parent's incarnation in this transaction: a
+            // reused logical id must not redirect the child to a later one.
             let parent: RunParent | null = null;
             if (draft.type === 'run.start' && draft.parent !== null) {
               const parentState = (yield* readState([
@@ -688,18 +665,14 @@ export const databaseLayer = (
                 parentState.closed ||
                 parentState.startCommit === null
               ) {
-                throw new Error(
+                return yield* invariant(
                   `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
-              parent = {
-                id: draft.parent.id,
-                startCommit: parentState.startCommit,
-              };
+              parent = { id: draft.parent.id, uid: parentState.uid };
             }
-            // A tombstone names only run directories owned by this
-            // lifecycle. Derive the targets under the same write permit
-            // and transaction as closure; no caller chooses cleanup paths.
+            // A tombstone names only run directories this lifecycle owns,
+            // derived under the closure's permit and transaction, not a caller.
             const committedDraft = yield* Effect.gen(function* () {
               if (draft.type === 'run.removed') {
                 const owned = yield* exec(deletionRuns, [draft.aggregateId]);
@@ -721,22 +694,14 @@ export const databaseLayer = (
               at,
               committedPayload,
             ]))?.commit;
-            if (typeof commit !== 'number') {
-              throw new Error(
+            if (typeof commit !== 'number')
+              return yield* invariant(
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
-            }
-            if (borrowsClaim(draft)) {
-              yield* exec(release, [
-                JSON.stringify([draft.aggregateId]),
-                identity.ownerId,
-              ]);
-            }
             if (draft.type === 'workflow.script') {
-              // The checkpoint outlives the workflow run's attempts but not
-              // the run that invoked it: hang the aggregate under that run so
-              // its deletion closes and collects the journal with it, instead
-              // of stranding rows no id can reach.
+              // The checkpoint outlives the workflow run's attempts but not the
+              // run that invoked it: hang it under that run so its deletion
+              // collects the journal instead of stranding rows no id reaches.
               yield* exec(reparent, [
                 qualifyAggregateId('run', draft.parentRunId),
                 draft.aggregateId,
@@ -764,65 +729,110 @@ export const databaseLayer = (
                 draft.aggregateId,
                 identity.ownerId,
               ]);
-              if (unowned) {
-                throw new Error(
+              if (unowned)
+                return yield* invariant(
                   `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
                 );
-              }
               yield* exec(closeDependents, [draft.aggregateId]);
             }
             return {
               ...committedDraft,
               seq,
               commit,
-              ownerId: identity.ownerId,
+              origin: identity.ownerId,
               at,
             };
           }),
         );
-      /** One row's stored value, refused when the row is not that family's:
-       *  the schema ties each family to its aggregate kind. */
-      const storedValue = <K extends StoredValue['key']>(
-        row: Readonly<Record<string, unknown>>,
-        key: K,
-      ) => {
-        const event = decodeEvent(row);
-        if (event.type !== 'state.value.set' || event.state.key !== key)
-          throw new Error(`Stored row is not a ${key} value`);
-        return event as Extract<SessionEvent, { type: 'state.value.set' }> & {
-          state: Extract<StoredValue, { key: K }>;
-        };
-      };
-      const latestEventRow = (id: AggregateId) =>
+      // Every append checks the store's stamp first: a build that no longer
+      // matches it (another re-stamped it) fails instead of writing rows.
+      const appendPrepared = (
+        prepared: readonly ReturnType<typeof prepareEventDraft>[],
+        at: number,
+      ) =>
+        Effect.andThen(assertStoreFormat(sql, path), appendRows(prepared, at));
+      const valueRow = (family: CurrentValueFamily, key: string) =>
         execOne(
-          `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
-          [id],
+          'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
+          [family, key],
         );
-      const readAppStateKey = (key: string) =>
-        latestEventRow(qualifyAggregateId('app-state', key)).pipe(
-          Effect.map((row): JsonValue | undefined => {
-            if (!row) return undefined;
-            const { state } = storedValue(row, 'app-state');
-            return state.value.kind === 'undefined'
-              ? undefined
-              : state.value.value;
+      const readValue = <F extends CurrentValueFamily>(
+        family: F,
+        key: string,
+      ) =>
+        valueRow(family, key).pipe(
+          Effect.map((row) =>
+            row === undefined ? undefined : decodeValue(family, row),
+          ),
+        );
+      const modifyValue = <F extends CurrentValueFamily, A, E>(
+        family: F,
+        key: string,
+        change: (
+          current: CurrentValue<F> | undefined,
+        ) => Result.Result<
+          readonly [A] | readonly [A, CurrentValue<F> | undefined],
+          E
+        >,
+      ) =>
+        transact(
+          Effect.gen(function* () {
+            const row = yield* valueRow(family, key);
+            const result = change(
+              row === undefined ? undefined : decodeValue(family, row),
+            );
+            if (Result.isFailure(result) || result.success.length === 1)
+              return result;
+            const next = result.success[1];
+            if (next === undefined) {
+              yield* exec(
+                'DELETE FROM current_value WHERE family = ? AND key = ?',
+                [family, key],
+              );
+              return result;
+            }
+            const value = JSON.stringify(
+              CURRENT_VALUE_SCHEMAS[family].parse(next),
+            );
+            if (row?.value !== value) {
+              yield* exec(UPSERT_VALUE, [
+                family,
+                key,
+                value,
+                yield* Clock.currentTimeMillis,
+              ]);
+            }
+            return result;
           }),
-        );
-      const readUpdateCheck = (host: string) =>
-        latestEventRow(qualifyAggregateId('update-check', host)).pipe(
-          Effect.map((r) =>
-            r ? storedValue(r, 'update-check').state.record : null,
+        ).pipe(
+          Effect.flatMap((result) =>
+            Result.isSuccess(result)
+              ? Effect.succeed(result.success[0])
+              : Effect.fail(result.failure),
           ),
         );
-      const readInquiryRecord = (id: string) =>
-        latestEventRow(qualifyAggregateId('global-inquiry', id)).pipe(
-          Effect.map((r) =>
-            r ? storedValue(r, 'global-inquiry').state.record : null,
+      const values: CurrentValues = {
+        get: (family, key) => query(readValue(family, key)),
+        modify: modifyValue as CurrentValues['modify'],
+        list: (family) =>
+          query(
+            exec(
+              'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
+              [family],
+            ).pipe(
+              Effect.map((rows) =>
+                rows.map((row) => ({
+                  key: z.string().parse(row.key),
+                  value: decodeValue(family, row),
+                })),
+              ),
+            ),
           ),
-        );
+        changes: currentValueChangeFeed(level, execOne),
+      };
       return {
         observedCommit,
-        cleared,
+        movedAside,
         level,
         currentCommit: query(currentCommit),
         readAll: (fromCommit, throughCommit) =>
@@ -834,88 +844,34 @@ export const databaseLayer = (
               ]);
             }),
           ),
+        readDisplay: (fromCommit) =>
+          query(
+            Effect.gen(function* () {
+              const rows = yield* decodedRows(display, [
+                displayTypes,
+                fromCommit,
+                yield* currentCommit,
+              ]);
+              return rows.filter(isDisplaySessionEvent);
+            }),
+          ),
         readListing: () =>
-          query(decodedRows(READ_LISTING, [JSON.stringify(LISTING_TYPES)])),
+          query(decodedRows(READ_LISTING, [listingTypes], totalRunUsage)),
+        readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
-          query(decodedRows(runRecords, [id, JSON.stringify(LISTING_TYPES)])),
+          query(decodedRows(runRecords, [id, listingTypes])),
         readRunSnapshot: (id) =>
           query(
             Effect.gen(function* () {
               const row = yield* execOne(runSnapshot, [id]);
               if (row === undefined) return null;
               const event = decodeEvent(row);
-              if (event.type !== 'flow.snapshot')
-                throw new Error('Invalid run snapshot row');
+              if (event.type !== 'run.snapshot')
+                return yield* invariant('Invalid run snapshot row');
               return event;
             }),
           ),
-        readAppStateKey: (key) => query(readAppStateKey(key)),
-        readUpdateCheck: (host) => query(readUpdateCheck(host)),
-        recordUpdateCheck: (host, change) =>
-          transact(
-            Effect.gen(function* () {
-              const current = yield* readUpdateCheck(host);
-              const record = {
-                lastCheckedAt:
-                  change.type === 'checked'
-                    ? change.at
-                    : (current?.lastCheckedAt ?? null),
-                lastNotifiedVersion:
-                  change.type === 'notified'
-                    ? change.version
-                    : (current?.lastNotifiedVersion ?? null),
-              };
-              const at = yield* Clock.currentTimeMillis;
-              yield* appendPrepared(
-                [
-                  prepareEventDraft({
-                    type: 'state.value.set',
-                    aggregateId: qualifyAggregateId('update-check', host),
-                    state: { key: 'update-check', record },
-                  }),
-                ],
-                at,
-              );
-            }),
-          ),
-        readInquiryRecord: (id) => query(readInquiryRecord(id)),
-        listInquiryRecords: () =>
-          query(
-            Effect.gen(function* () {
-              const rows = yield* exec(
-                `SELECT ${EVENT_COLUMNS} FROM event e JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event WHERE type = 'state.value.set.1' AND json_extract(data, '$.state.key') = 'global-inquiry' GROUP BY aggregate_id) latest USING (aggregate_id, seq) ORDER BY e."commit"`,
-                [],
-              );
-              return rows.map(
-                (r) => storedValue(r, 'global-inquiry').state.record,
-              );
-            }),
-          ),
-        updateInquiryRecord: (id, change) =>
-          transact(
-            Effect.gen(function* () {
-              const current = yield* readInquiryRecord(id);
-              const result = change(current);
-              if (Result.isSuccess(result) && result.success !== null) {
-                if (result.success.threadId !== id)
-                  throw new Error(
-                    'An inquiry transition cannot change its thread identity.',
-                  );
-                const at = yield* Clock.currentTimeMillis;
-                yield* appendPrepared(
-                  [
-                    prepareEventDraft({
-                      type: 'state.value.set',
-                      aggregateId: qualifyAggregateId('global-inquiry', id),
-                      state: { key: 'global-inquiry', record: result.success },
-                    }),
-                  ],
-                  at,
-                );
-              }
-              return result;
-            }),
-          ),
+        values,
         readInputHistory: () => query(historyRows),
         appendInputHistory: ({ at, value }) =>
           transact(
@@ -935,21 +891,24 @@ export const databaseLayer = (
               }
             }),
           ),
-        readDesktopProjects: (id) =>
+        readAggregate: (id, fromSeq, types) =>
           query(
-            latestEventRow(id).pipe(
-              Effect.map((row) => (row ? decodeEvent(row) : undefined)),
+            types === undefined
+              ? decodedRows(aggregate, [id, fromSeq])
+              : decodedRows(typedRows, [id, fromSeq, storedTypes(types)]),
+          ),
+        readDisplayAggregate: (id, fromSeq) =>
+          query(
+            decodedRows(displayAggregate, [displayTypes, id, fromSeq]).pipe(
+              Effect.map((rows) => rows.filter(isDisplaySessionEvent)),
             ),
           ),
-        readAggregate: (id, fromSeq) =>
-          query(decodedRows(aggregate, [id, fromSeq])),
         aggregateState: (ids) => query(readState(ids)),
         claimOwner: (id) =>
           Effect.gen(function* () {
             const state = (yield* query(readState([id])))[0];
-            // A tombstoned row keeps the owner that closed it, and the
-            // aggregate it named is gone: nothing holds what no longer
-            // exists, so it reads unclaimed rather than held.
+            // A tombstoned row keeps the owner that closed it, but what it
+            // named is gone: nothing holds it, so it reads unclaimed.
             const owner =
               state?.closed === true ? null : (state?.ownerId ?? null);
             if (owner === null) return { ownerId: null, liveness: null };
@@ -967,8 +926,6 @@ export const databaseLayer = (
               const cursor = yield* currentCommit;
               const events = yield* decodedRows(inputRows, [
                 inputTypes,
-                fromCommit,
-                cursor,
                 JSON.stringify(ids),
                 inputTypes,
                 fromCommit,
@@ -1013,7 +970,7 @@ export const databaseLayer = (
               }),
             ).pipe(typedRefusal);
           }),
-        removeRun: (id, mode, expectedStartCommit) =>
+        prepareRunRemoval: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
             const deletionMode = yield* Effect.try({
               try: () => DeletionModeSchema.parse(mode),
@@ -1042,13 +999,14 @@ export const databaseLayer = (
               );
             }
             yield* proveReclaimable(observed, deletionMode);
-            const at = yield* Clock.currentTimeMillis;
             const removal = yield* Effect.try({
               try: () =>
                 prepareEventDraft({ type: 'run.removed', aggregateId: id }),
               catch: writeFailed,
             });
-            return yield* transact(
+            // The proofs above run off the publisher's fiber; this
+            // transaction is the job it runs, and it rechecks what they read.
+            return transact(
               Effect.gen(function* () {
                 const current = yield* readDependents(id);
                 const observedById = new Map(
@@ -1066,7 +1024,7 @@ export const databaseLayer = (
                     );
                   })
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion dependents changed before acquisition: ${id}`,
                   );
                 }
@@ -1074,7 +1032,10 @@ export const databaseLayer = (
                   observed,
                   'Deletion claim changed before acquisition',
                 );
-                return yield* appendPrepared([removal], at);
+                return yield* appendPrepared(
+                  [removal],
+                  yield* Clock.currentTimeMillis,
+                );
               }),
             );
           }),
@@ -1087,13 +1048,12 @@ export const databaseLayer = (
                   tombstoneCommit,
                 ]);
                 if (!row)
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion record is no longer current: ${id}`,
                   );
                 const tombstone = decodeEvent(row);
-                if (tombstone.type !== 'run.removed') {
-                  throw new Error(`Expected a deletion record: ${id}`);
-                }
+                if (tombstone.type !== 'run.removed')
+                  return yield* invariant(`Expected a deletion record: ${id}`);
                 return {
                   tombstone,
                   owner: OwnerIdSchema.nullable().parse(row.claimOwner),
@@ -1122,7 +1082,7 @@ export const databaseLayer = (
                       tombstoneCommit,
                     ])).length !== 1
                   ) {
-                    throw new Error(
+                    return yield* invariant(
                       `Deletion claim changed before cleanup: ${id}`,
                     );
                   }
@@ -1137,11 +1097,10 @@ export const databaseLayer = (
                   );
                   yield* transact(
                     Effect.gen(function* () {
-                      if (yield* execOne(openDependent, [id])) {
-                        throw new Error(
+                      if (yield* execOne(openDependent, [id]))
+                        return yield* invariant(
                           `Deletion has an open dependent: ${id}`,
                         );
-                      }
                       if (
                         (yield* exec(collectClosed, [
                           id,
@@ -1149,7 +1108,7 @@ export const databaseLayer = (
                           tombstoneCommit,
                         ])).length !== 1
                       ) {
-                        throw new Error(
+                        return yield* invariant(
                           `Deletion claim or tombstone changed during cleanup: ${id}`,
                         );
                       }
@@ -1188,15 +1147,9 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            // A write from a process whose build no longer matches the store's
-            // stamp (another build cleared and re-stamped it under this one)
-            // fails here instead of appending rows of a vocabulary the store
-            // no longer holds.
-            return yield* transact(
-              assertStoreFormat(sql, path).pipe(
-                Effect.andThen(appendPrepared(prepared, at)),
-              ),
-            ).pipe(typedRefusal);
+            return yield* transact(appendPrepared(prepared, at)).pipe(
+              typedRefusal,
+            );
           }),
       };
     }),
@@ -1205,10 +1158,9 @@ export const databaseLayer = (
 /**
  * The process's handle on the global storage root: one connection, schema and
  * `data_version` poll for every application record of that root, built with
- * the runtime the entry hands it to and closed with it. The root is a value
- * because the entry knows it before the runtime exists. Building it creates the
- * directory, the SQLite file and the poll fiber, so an entry that must create
- * none passes a refusing layer instead (`installProcessRuntime`'s option).
+ * the runtime the entry hands it to and closed with it. Building it creates
+ * the directory, the SQLite file and the poll fiber, so an entry that must
+ * create none passes a refusing layer (`installProcessRuntime`'s option).
  */
 export const globalDatabaseLayer = (
   storage: string,
@@ -1228,11 +1180,6 @@ export const globalDatabaseLayer = (
 function prepareEventDraft(input: SessionEventDraft) {
   const draft = SessionEventDraftSchema.parse(input);
   return { draft, payload: payloadOf(draft) };
-}
-/** A stored-value write holds its aggregate's claim only for the transaction
- *  that carries it; a run's claim, by contrast, its sequence row keeps. */
-function borrowsClaim(draft: SessionEventDraft): boolean {
-  return draft.type === 'state.value.set';
 }
 /**
  * Refuse an inquiry update its thread's latest row does not admit. Returns
@@ -1275,12 +1222,9 @@ function validateInquiryTransition(
   }
   return reopened;
 }
-/**
- * Serialize the validated draft before opening the transaction. Draft parsing
- * removes caller-supplied envelope fields; the type and aggregate key have
- * their own C1 columns. Child creation adds the database-owned parent commit
- * to this payload inside the creation transaction.
- */
+/** Serialize the validated draft before opening the transaction; the type
+ *  and aggregate key have their own C1 columns. Child creation adds the
+ *  parent's database-owned uid to this payload inside its transaction. */
 function payloadOf(draft: {
   readonly type: string;
   readonly aggregateId: AggregateId;
@@ -1313,6 +1257,7 @@ const configure = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
   path: string,
+  filename: string,
 ) {
   yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
   yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
@@ -1322,107 +1267,25 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot. One written
-  // under another version is unsupported (no legacy readers): its tables go
-  // here, before this build's schema touches them, and the stamp is read
-  // before the tables exist, so an unextendable layout is dropped rather than
-  // failing the open. resetStore owns the write lock and the stamp write.
-  const cleared =
+  // A store holds one vocabulary, stamped in SQLite's own slot and read before
+  // this build's schema touches it: another format is refused or moved aside.
+  const movedAside =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null
-      : yield* resetStore(sql, path);
-  yield* applySchema(sql);
-  if (cleared !== null) {
-    yield* Effect.logWarning(
-      `Session store ${path} held ${cleared.rows} rows of format ${cleared.storedFormat}; this build reads format ${SESSION_EVENT_FORMAT} and keeps no compatibility with earlier persisted data, so the store was cleared.`,
-    ).pipe(withLogChannel(CHANNEL));
-  }
-  return cleared;
-});
-
-/**
- * Clear a store stamped with another format, under the write lock and in
- * one transaction with the stamp: the stamp is re-read inside it, so of two
- * processes opening the same store only the first clears it, and the
- * second reads this build's stamp and keeps the tables. Returns what was
- * cleared, or null when the store held no rows (a new file) or was already
- * this build's by the time the lock was held.
- */
-const resetStore = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  path: string,
-) {
-  yield* sql.unsafe('BEGIN IMMEDIATE', []);
-  const cleared = yield* Effect.gen(function* () {
-    const stored = yield* pragmaValue(sql, 'user_version');
-    if (stored === SESSION_EVENT_FORMAT) return null;
-    const rows = yield* storedRows(sql);
-    yield* sql.unsafe('DROP TABLE IF EXISTS event', []);
-    yield* sql.unsafe('DROP TABLE IF EXISTS event_sequence', []);
-    yield* applySchema(sql);
-    yield* sql.unsafe(`PRAGMA user_version = ${SESSION_EVENT_FORMAT}`, []);
-    return rows > 0
-      ? ({
+      : yield* retireStore(
+          sql,
           path,
-          rows,
-          storedFormat: Number(stored),
-        } satisfies SessionStoreCleared)
-      : null;
-  }).pipe(Effect.onError(() => sql.unsafe('ROLLBACK', []).pipe(Effect.ignore)));
-  yield* sql.unsafe('COMMIT', []);
-  return cleared;
-});
-
-/** The event rows a store holds, or none when it has no event table yet. */
-const storedRows = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  const table = (yield* sql.unsafe<Record<string, unknown>>(
-    "SELECT count(*) AS present FROM sqlite_master WHERE type = 'table' AND name = 'event'",
-    [],
-  ))[0];
-  if (Number(table?.present ?? 0) === 0) return 0;
-  const counted = (yield* sql.unsafe<Record<string, unknown>>(
-    'SELECT count(*) AS rows FROM event',
-    [],
-  ))[0];
-  return Number(counted?.rows ?? 0);
-});
-
-/** Refuse a write once another build has re-stamped the store under this
- *  process; read inside the write transaction, so the check and the append
- *  see one stamp. */
-const assertStoreFormat = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  path: string,
-) {
-  const stored = yield* pragmaValue(sql, 'user_version');
-  if (stored !== SESSION_EVENT_FORMAT) {
-    return yield* Effect.fail(
-      new Error(
-        `Session store ${path} is stamped with event format ${String(stored)}; this process writes format ${SESSION_EVENT_FORMAT} and stops writing to it.`,
-      ),
-    );
-  }
-});
-
-const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  // The official driver prepares one statement at a time. This fixed schema
-  // contains only DDL statements, with no semicolons inside SQL literals.
-  for (const statement of SCHEMA.split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)) {
-    yield* sql.unsafe(statement, []);
-  }
-});
-
-const pragmaValue = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  pragma: string,
-) {
-  const row = (yield* sql.unsafe<Record<string, unknown>>(
-    `PRAGMA ${pragma}`,
-    [],
-  ))[0];
-  return row?.[pragma];
+          filename,
+          Effect.all(
+            [
+              sql.unsafe('DROP TABLE IF EXISTS event', []),
+              sql.unsafe('DROP TABLE IF EXISTS event_sequence', []),
+            ],
+            { discard: true },
+          ),
+        );
+  yield* applySchema(sql);
+  return movedAside;
 });
 
 const verifyPragma = Effect.fnUntraced(function* (

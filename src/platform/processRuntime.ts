@@ -29,27 +29,27 @@ import type {
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { UsageLog } from '@shared/usageLog';
+import type {
+  ClaudeAgentSessions,
+  CodexThreads,
+} from '@tools/agentCliSessionStores';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
-import type { Compositions } from '@tools/compositions';
+import type { LiveTools } from '@tools/liveTools';
+import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import type {
-  AgentDirectories,
-  AgentResume,
-  AppState,
-  Lifecycle,
-} from './interfaces';
+import type { AgentDirectories, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the account plane, the resume port, the
+ * cohort-A tags beside the records, the account plane, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
@@ -60,11 +60,10 @@ import type { Secrets } from './secrets';
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph,
- * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
- * the settings Git tab share, `ToolRegistry`, the plugin table every run's
- * offered tools are rebuilt from, and `Compositions`, the open compositions
- * the runs pin over it.
+ * connection between application state and a session graph, `ToolRegistry`,
+ * the plugin table every run's offered tools are rebuilt from,
+ * `LiveTools`, the live catalog each run's step pins a generation of, and
+ * `ToolAvailability`, each workspace's last dependency probe.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -80,30 +79,38 @@ export type ProcessServices =
   | Secrets
   | AppState
   | LanguageModel
-  | AgentResume
   | AgentDirectories
-  | Lifecycle
   | SetupPlatform
   | AgentEngine
   | LeanLanguageServices
-  | GitHubSubscriptions
   | UsageLog
   | SupabaseAuth
   | ToolRegistry
-  | Compositions;
+  | LiveTools
+  | ToolAvailability;
+
+/**
+ * The services plugin layers serve (`PLUGIN_PROCESS_LAYERS`,
+ * `PLUGIN_SESSION_LAYERS` in `@tools/registry`). None is a process service:
+ * a tool or continuation reaches one only through the step that pinned its
+ * plugin, which provides the pinned layers' services to the call.
+ */
+export type PluginServices =
+  GitHubSubscriptions | CodexThreads | ClaudeAgentSessions;
+
+/** No plugin service is a process service (compile-time guard). */
+type AssertNever<T extends never> = T;
+type _PluginServicesAreNotProcessServices = AssertNever<
+  Extract<ProcessServices, PluginServices>
+>;
 
 /**
  * The services an agent catalog load reads: the global and filesystem views
- * the local agent directories are scanned through, the app state the
- * disabled-plugin switch is read from, and the HTTP client the remote catalog
- * is listed with.
+ * the local agent directories are scanned through, and the app state the
+ * disabled-plugin switch is read from.
  */
 export type AgentCatalogServices =
-  | GlobalStorageFs
-  | FileSystem.FileSystem
-  | AgentDirectories
-  | AppState
-  | HttpClient.HttpClient;
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,

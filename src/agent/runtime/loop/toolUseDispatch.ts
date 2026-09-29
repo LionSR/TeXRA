@@ -21,6 +21,7 @@
  * a parallel-safe call without a result re-runs.
  */
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
+import { z } from 'zod';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -42,6 +43,7 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runLedger';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
   type RunLedgerDraft,
   type RunState,
@@ -54,23 +56,26 @@ import { entryExists } from '@utils/files/fsEntryExists';
 
 import { AgentRun } from '../run/AgentRun';
 import { inlineMediaPart, type InputPart } from '../run/mediaInput';
+import { stored } from '../run/requestContext';
 import { localCallsOf, parseCallArguments, type LocalCall } from '../run/tools';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
 import { guardedToolCall } from './toolGuard';
+import { callHookText, preToolUse } from './hooks';
 import {
   appendRow,
   bindingRow,
   displayRow,
-  familyState,
   redactedForFact,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
   type Message,
 } from './rows';
+import type { StepTools } from './step';
+import type { JoinedFollowUps } from '../FollowUps';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 import type { RunCell } from './runProgram';
@@ -93,11 +98,6 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
-
-export interface TurnContext {
-  readonly workspace: AgentWorkspaceState;
-  readonly userInstruction: string | undefined;
-}
 
 interface DispatchOutcome {
   readonly state: RunState;
@@ -244,10 +244,13 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Dispatch every unsettled call of the pending response, then deliver. */
+/** Dispatch the pending response's unsettled calls under `step`'s tools,
+ *  then deliver, with the `joined` rows and what they record. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
-  turn: TurnContext,
+  workspace: AgentWorkspaceState,
+  step: StepTools,
+  joined?: Pick<JoinedFollowUps, 'rows' | 'recorded'> | null,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -261,6 +264,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
   const calls = localCallsOf(pending.turn);
+  // The calls answer the instruction the committed state records.
+  const at = initial.loop?.instruction;
+  const userInstruction =
+    run.config.rootUserInstruction ??
+    (at ? stored(initial, at, z.string()) : run.config.instruction);
   // Concurrent settlements of one parallel partition serialize under the
   // cell's lock and each folds onto the latest state, so a settlement that
   // carries the workspace it mutated records it in the order batches commit.
@@ -279,13 +287,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    const flow = familyState(state, 'toolUse');
-    if (flow === null || flow.stateSlices === null) return [];
+    if (state.loop?.stateSlices == null) return [];
     return [
       {
         op: 'set',
         path: ['state', 'stateSlices', 'workspaceSnapshot'],
-        value: turn.workspace.toSnapshot({ excludeAssemblyStrings: true }),
+        value: workspace.toSnapshot({ excludeAssemblyStrings: true }),
       },
     ];
   };
@@ -341,7 +348,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     status: ToolCallStatus,
     result: unknown,
   ): RunLedgerDraft[] => [
-    ...(run.tools.get(fact.toolName)?.slow === true
+    ...(step.registry.get(fact.toolName)?.slow === true
       ? []
       : [cardStart(fact, input)]),
     displayRow(runId, {
@@ -357,7 +364,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
   ): RunLedgerDraft[] =>
-    run.tools.get(fact.toolName)?.slow === true
+    step.registry.get(fact.toolName)?.slow === true
       ? [cardStart(fact, parseCallArguments(call, logger))]
       : [];
 
@@ -381,7 +388,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
     const fs = yield* FileSystem.FileSystem;
-    const tool: ITool | undefined = run.tools.get(fact.toolName);
+    const tool: ITool | undefined = step.registry.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
     // A slow tool's card is open: `dispatchCall` committed its `tool.start`
@@ -405,59 +412,43 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...(stageId !== undefined ? { stageId } : {}),
       });
     };
-    // Child spend the settlement below carries, latched like the streamed
-    // output above: the settlement reads this total once, so a detached child
-    // run that rolls its cost in after the call returned would otherwise add
-    // to a dead local. Its spend stays on the child's own run instead, which
-    // the record says rather than leaving a silent increment behind.
-    let subagentCost = 0;
-    let billing = true;
-    const recordSubagentCost = (costUsd: number): void => {
-      if (costUsd <= 0) return;
-      if (!billing) {
-        logger.debug(
-          `${fact.toolName}: a child run reported its cost after the call settled; it stays on the child's own run.`,
-          { data: { costUsd } },
-        );
-        return;
-      }
-      subagentCost += costUsd;
-    };
-    turn.workspace.interactions.recordToolCall();
+    workspace.interactions.recordToolCall();
+    // Its step's PreToolUse hooks, recorded before the approval and the body.
+    const pre =
+      tool &&
+      (yield* preToolUse(run, cell, step, fact, responseId, parsedInput));
+    if (pre && pre.rows.length > 0) yield* append(pre.rows);
     let result: ToolResult;
-    if (!tool) {
-      // A name the run was not offered, or one it was offered that no longer
-      // resolves on resume: a model-visible error, and the turn continues.
+    if (pre && pre.denied !== null) {
+      result = pre.denied;
+    } else if (!tool) {
       result = {
         status: 'error',
         error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
         diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
       };
     } else {
-      // Guard first, in the same call context: a refused path or an
-      // unapproved command settles the call without the body running.
+      // Guard first, under the step's roots and plugin services: a refused
+      // path or unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          guardedToolCall(tool, parsedInput).pipe(
+          guardedToolCall(tool, parsedInput, pre?.bodyStarts).pipe(
             Effect.provideService(ToolCall, {
               roots: run.session.roots,
               run,
               workingDirectory: run.workingDirectory,
-              tracker: turn.workspace.interactions,
-              workPlanState: turn.workspace.workPlan,
-              userInstruction:
-                run.config.rootUserInstruction ?? turn.userInstruction,
+              stepRoots: step.stepRoots,
+              tracker: workspace.interactions,
+              workPlanState: workspace.workPlan,
+              userInstruction,
               toolCallId: fact.callId,
-              hooks: { onToolOutput, recordSubagentCost },
+              hooks: { onToolOutput },
             }),
-            // The services of the run's plugins' layers, from its pinned
-            // composition.
-            Effect.provide(run.composition.services),
+            Effect.provide(step.services),
           ),
         ),
       );
       accepting = false;
-      billing = false;
       if (Exit.isSuccess(invoked)) {
         result = invoked.value;
       } else if (Cause.hasInterrupts(invoked.cause)) {
@@ -502,7 +493,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         }),
       ),
     );
-    const trackedEdits = turn.workspace.interactions.recordEdits(
+    const trackedEdits = workspace.interactions.recordEdits(
       result.status === 'executed' ? result.edits : undefined,
     );
     const editedFiles = trackedEdits.map((path) => ({
@@ -534,7 +525,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         if (exists) validLocations.push(location);
       }
       if (validLocations.length) {
-        turn.workspace.media.addMediaFiles(validLocations);
+        workspace.media.addMediaFiles(validLocations);
       }
     }
     const attachments = yield* captureAttachments(
@@ -560,6 +551,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
     const cards = settledCards(fact, parsedInput, status, toolUseLog);
+    // An executed call's PostToolUse rows commit with its settlement.
+    const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     yield* settle(
       fact,
       attempt,
@@ -571,18 +564,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         duplicateOf: null,
         result: settledResult(extracted.sanitizedResult),
         attachments,
-        stateMutation:
-          subagentCost > 0
-            ? [
-                {
-                  op: 'add',
-                  path: ['usage', 'totalCost'],
-                  amount: subagentCost,
-                },
-              ]
-            : [],
+        stateMutation: [],
       },
-      cards,
+      [...cards, ...post],
       true,
     );
   });
@@ -591,6 +575,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
     fact: DispatchFacts,
     call: LocalCall,
+    input: unknown,
     intent: {
       readonly attempt: number;
       readonly approvalRequestId: string | null;
@@ -632,6 +617,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? intent.approvalRequestId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
+    const preview = deriveToolInputPreview(fact.toolName, input);
     const request = {
       requestId,
       allowBypass: false,
@@ -639,7 +625,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       questions: [
         {
           question,
-          header: 'Tool',
+          header: 'Tool outcome',
           options: [
             { label: rerunOption, description: 'Execute the call once more.' },
             {
@@ -649,7 +635,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ],
         },
       ],
-      context: call.argumentsText,
+      context: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
     };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
@@ -752,10 +738,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     const intent = current.pendingIntents[fact.callId];
     if (intent !== undefined) {
-      const decision = yield* decideOutcomeUnknown(fact, call, intent);
+      const input = parseCallArguments(call, logger);
+      const decision = yield* decideOutcomeUnknown(fact, call, input, intent);
       if (decision === 'skip') {
         // The skip closes the card the interrupted attempt opened.
-        const input = parseCallArguments(call, logger);
         yield* settle(
           fact,
           intent.attempt,
@@ -866,11 +852,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         settlement.result.status === 'executed'
           ? ('success' as const)
           : ('error' as const),
-      content: settlementContent(
-        { ...settlement, stateMutation: [] },
-        bound,
-        logger,
-      ),
+      content: [
+        ...settlementContent(
+          { ...settlement, stateMutation: [] },
+          bound,
+          logger,
+        ),
+        // What the call's hooks add, after its result.
+        ...callHookText(settledState, responseId, fact.callId),
+      ],
     };
   });
   // Offer each delivered document to the binding's upload cache, so the
@@ -943,26 +933,25 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = familyState(settledState, 'toolUse');
-  if (flow === null) {
+  const saved = settledState.loop;
+  if (saved === null)
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
-  }
   const stateSlices =
-    flow.stateSlices === null
+    saved.stateSlices === null
       ? null
       : {
-          ...flow.stateSlices,
-          workspaceSnapshot: turn.workspace.toSnapshot({
+          ...saved.stateSlices,
+          workspaceSnapshot: workspace.toSnapshot({
             excludeAssemblyStrings: true,
           }),
         };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
-    snapshotRow(runId, state, {
-      phase: 'results.ready',
-      state: { family: 'toolUse', state: { ...flow, stateSlices } },
+    ...(joined?.rows ?? []),
+    ...snapshotRow(runId, state, {
+      state: { ...saved, stateSlices, ...joined?.recorded },
     }),
-    stepRow(runId, state, 'results.ready'),
+    positionRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };
 });

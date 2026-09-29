@@ -24,6 +24,7 @@ import type {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  DeletionMode,
 } from './database';
 import type { QueuedFollowUp } from './runRows';
 
@@ -104,6 +105,18 @@ export class SessionEvents extends Context.Service<
      *  publication for its run's drain); a defect is logged as itself, and
      *  a job enqueued after the plane closed goes nowhere. */
     readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
+    /** Remove a run and its dependents (C9): the liveness proofs run on the
+     *  caller's fiber, then the tombstone's transaction runs as the next
+     *  job, so it commits in enqueue order and what this publisher tracks
+     *  forgets every run the tombstone names. */
+    readonly removeRun: (
+      id: AggregateId,
+      mode: DeletionMode,
+      expectedStartCommit: CommitOrdinal,
+    ) => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseReadFailed | DatabaseWriteFailed
+    >;
     /** Wait for every detached job enqueued before this call to run, and
      *  answer with the highest commit those jobs appended, or null when none
      *  appended. A barrier, never a reporter: a refused job is logged as
@@ -127,6 +140,25 @@ export class SessionEvents extends Context.Service<
     readonly pendingFollowUps: (
       aggregateId: AggregateId,
     ) => readonly QueuedFollowUp[];
+    /** Whether the run's latest lifecycle ended (`run.end` / `run.removed`
+     *  after its latest `run.activate`), or its deleted aggregate was
+     *  collected, as the rows known here say: this publisher's commits, a
+     *  read at {@link hydrateFollowUps} for the run and its held senders,
+     *  and {@link foldLifecycle}. A run with no such row known is not ended. */
+    readonly runEnded: (aggregateId: AggregateId) => boolean;
+    /** Whether the run's input is closed (`followup.closed` or `run.removed`
+     *  since its latest `run.activate`), known on the same terms. */
+    readonly inputClosed: (aggregateId: AggregateId) => boolean;
+    /** A row the fold-gated tail folded, from any process: its lifecycle
+     *  standing, applied only past the commit already known. */
+    readonly foldLifecycle: (row: SessionEvent) => void;
+    /** Whether a row of the aggregate named this follow-up id, queued or
+     *  consumed: the replay key, kept with {@link pendingFollowUps} and
+     *  whole on the same terms. */
+    readonly followUpNamed: (
+      aggregateId: AggregateId,
+      followUpId: string,
+    ) => boolean;
     /** Seed a run's `pendingFollowUps` from its committed rows, when the
      *  claim just moved here (`claimMoved`) or this publisher has not seeded
      *  it yet: `rows` when the caller just read them, else a read of its
@@ -176,5 +208,9 @@ export type SessionEventReads = Pick<
   | 'aggregate'
   | 'openWork'
   | 'pendingFollowUps'
+  | 'followUpNamed'
+  | 'runEnded'
+  | 'inputClosed'
+  | 'foldLifecycle'
   | 'hydrateFollowUps'
 >;

@@ -19,8 +19,12 @@ import { executionsAction } from './executionsDisplay';
 import { normalizeToolName } from './toolDisplayName';
 
 function executionsInputPreview(input: Record<string, unknown>): string {
+  const action = executionsAction(input);
+  if (action === 'query' && typeof input.sql === 'string') {
+    return `query: ${input.sql}`;
+  }
   const path = typeof input.path === 'string' ? input.path : '';
-  return `${executionsAction(input)} ${path}`.trim();
+  return `${action} ${path}`.trim();
 }
 
 /** Preview field for tools whose most useful "what is this call doing" text

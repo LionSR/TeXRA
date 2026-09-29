@@ -18,7 +18,7 @@ interface DesktopCommandPaletteModule {
     document: Document;
     actions: {
       showLauncher(): void;
-      openWorkbench(kind: 'settings' | 'logs'): void;
+      openWorkbench(kind: 'logs'): void;
       showSettings(tab?: string): void;
     };
     platform?: NodeJS.Platform;

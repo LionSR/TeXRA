@@ -9,7 +9,6 @@ import {
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { when } from 'lit/directives/when.js';
 
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
@@ -105,6 +104,8 @@ export class RunTab extends LitElement {
   @property({ type: Boolean }) expandable = false;
   /** Finished since the user last had it on screen. */
   @property({ type: Boolean }) unseen = false;
+  /** Messages queued on the run that it has not read yet. */
+  @property({ type: Number }) unread = 0;
 
   private decorator = getAgentCategoryDecorator('toolUse');
 
@@ -122,6 +123,7 @@ export class RunTab extends LitElement {
       ? 'Needs approval'
       : run.statusLabel;
     const runTitle = run.description || run.label;
+    const tooltip = buildTooltip(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,
       BACKGROUND_TASK.countNoun,
@@ -171,7 +173,8 @@ export class RunTab extends LitElement {
             class="tab focus-ring-inset"
             data-run=${run.id}
             data-action="select"
-            aria-label=${buildTooltip(run)}
+            aria-label=${tooltip}
+            title=${tooltip}
           >
             <div class="tab-header">
               ${
@@ -195,6 +198,13 @@ export class RunTab extends LitElement {
               ${
                 showRollup
                   ? html`<span class="tab-rollup">${rollupLabel(run)}</span>`
+                  : nothing
+              }
+              ${
+                this.unread > 0
+                  ? html`<span class="tab-rollup"
+                      >${formatResultCount(this.unread, 'unread message')}</span
+                    >`
                   : nothing
               }
               <span
@@ -239,12 +249,6 @@ export class RunTab extends LitElement {
                 }</span
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
-              ${when(
-                run.isRemote,
-                () => html`
-                  ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'run-tab-remote', className: 'remote-agent' })}
-                `,
-              )}
             </div>
             ${
               run.statusDetail
@@ -260,15 +264,9 @@ export class RunTab extends LitElement {
               ? `Category: ${this.decorator.label}`
               : this.decorator.label
           }</wa-tooltip
-        >${when(
-          run.isRemote,
-          () =>
-            html`<wa-tooltip for="run-tab-remote"
-              >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
-            >`,
-        )}
+        >
         ${
-          run.group === 'interrupted' && !run.readOnly
+          run.group === 'interrupted' && run.actions.includes('resume')
             ? html`<wa-button
                 id="run-tab-resume-button"
                 class="tab-resume"

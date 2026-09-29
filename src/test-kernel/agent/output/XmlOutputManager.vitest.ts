@@ -59,7 +59,6 @@ function createXmlManager(
         debug: vi.fn(),
         info: vi.fn(),
         warn: vi.fn(),
-        domain: vi.fn(),
         emit: vi.fn(),
       },
       { strict: true },
@@ -253,6 +252,29 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
       'appendix.tex': 'Appendix body.\n',
     },
     ['notes.tex'],
+  ],
+  [
+    'closes a document left open at </documents> and keeps beamer overlay specs as text',
+    [
+      '<documents>',
+      '<document name="slides.tex">',
+      '\\documentclass{beamer}',
+      '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+      '\\begin{document}',
+      '\\only<2->{Shown later.}',
+      '\\end{document}',
+      '</documents>',
+    ],
+    {
+      'slides.tex': [
+        '\\documentclass{beamer}',
+        '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+        '\\begin{document}',
+        '\\only<2->{Shown later.}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
   ],
   [
     'prefers percent filename headers over single-document input recovery',
@@ -1105,7 +1127,7 @@ Appendix.
   );
 
   // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
-  // accepting several attached input files. runReflectionFlow.ts then builds
+  // accepting several attached input files. documentRounds.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
   const singleArtifactOptions: XmlManagerOptions = {
@@ -1500,8 +1522,9 @@ Appendix.
         );
 
         expectSources(outputs, ['cost.tex']);
-        expect(logger.domain).toHaveBeenCalledWith(
+        expect(logger.emit).toHaveBeenCalledWith(
           expect.objectContaining({
+            type: 'domain',
             key: 'missingOutputs',
             data: expect.objectContaining({ missing: ['arch.tex'] }),
           }),
@@ -1530,8 +1553,9 @@ Appendix.
         );
 
         expectSources(outputs, ['main.tex']);
-        expect(logger.domain).toHaveBeenCalledWith(
+        expect(logger.emit).toHaveBeenCalledWith(
           expect.objectContaining({
+            type: 'domain',
             key: 'missingOutputs',
             data: expect.objectContaining({ missing: ['appendix.tex'] }),
           }),

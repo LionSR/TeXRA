@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 import { getAgent } from '@agent/index';
+import { readPluginAgent } from '@agent/index/pluginAgents';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   AgentPromptSchema,
@@ -13,55 +14,16 @@ import {
   type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
-import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
-import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
+import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import { agentKey, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 import { inertToolsWarning } from './agentSettingTools';
-import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
-
-/**
- * Parses YAML text and validates that it represents a full agent definition,
- * failing when it does not. Inheriting definitions stay partial: only a root
- * definition is held to the full settings/prompts schemas.
- */
-export const validateAgentYamlContent = Effect.fn(
-  'agentLoad.validateAgentYamlContent',
-)(function* (content: string): Effect.fn.Return<void, Error> {
-  const parsed = parseYamlWith(content, AgentDefinitionSchema);
-  if (Result.isFailure(parsed)) {
-    return yield* Effect.fail(
-      new Error(`Failed to parse agent YAML: ${parsed.failure.message}`, {
-        cause: parsed.failure,
-      }),
-    );
-  }
-  const data = parsed.success;
-  if (data.inherits) return;
-
-  const settings = yield* Effect.try({
-    try: () => {
-      const settings = AgentSettingSchema.parse(data.settings);
-      AgentPromptSchema.parse(data.prompts);
-      return settings;
-    },
-    catch: ensureError,
-  });
-  yield* logInertTools(settings);
-});
-
-/** Report the load-time warning {@link inertToolsWarning} returns. */
-function logInertTools(settings: AgentSetting): Effect.Effect<void> {
-  const warning = inertToolsWarning(settings);
-  return warning === undefined
-    ? Effect.void
-    : Effect.logWarning(warning).pipe(withLogChannel(CHANNEL));
-}
 
 /** Loads and parses a YAML file from an absolute path. */
 const loadYaml = Effect.fn('agentLoad.loadYaml')(function* (
@@ -91,18 +53,45 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   'agentLoad.loadAgentSettingAndPrompts',
 )(function* (
   entry: AgentEntry,
+  /** The installed plugins that load, as the launch reads them. */
+  installed: Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem>,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<
-  [AgentSetting, AgentPrompt],
-  Error,
-  FileSystem.FileSystem | HttpClient.HttpClient
-> {
-  // Handle remote agents
-  if (entry.source === 'remote') {
-    const remoteConfig = yield* loadRemoteAgent(entry.name);
-
-    // Remote agents are already fully processed (tools resolved, validated)
-    return [remoteConfig.settings, remoteConfig.prompts];
+): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
+  // A plugin agent is its subagent file, read again: it inherits nothing.
+  // The catalog that listed it may predate a change another host made, so
+  // its plugin must load now (enabled, and trusted as it is) or it does not
+  // run.
+  if (entry.source === 'plugin') {
+    const plugin = entry.name.slice(0, entry.name.indexOf(':'));
+    const load = yield* installed;
+    if (!load.loadable.some(({ record }) => record.name === plugin))
+      return yield* Effect.fail(
+        new Error(
+          `Agent ${entry.name} does not run: ${
+            load.withheld.find((reason) =>
+              reason.startsWith(`Plugin ${plugin} `),
+            ) ?? `plugin ${plugin} is not installed or not enabled.`
+          }`,
+        ),
+      );
+    const agent = yield* readPluginAgent(entry.path, plugin);
+    return yield* Effect.try({
+      try: () =>
+        [
+          AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            // None named: `AgentRun` gives it what it inherits.
+            tools: agent.tools ?? [],
+          }),
+          // The task arrives as the instruction, as a Claude Code subagent's
+          // does.
+          AgentPromptSchema.parse({
+            systemPrompt: agent.systemPrompt,
+            userRequest: '{{ INSTRUCTION }}',
+          }),
+        ] as [AgentSetting, AgentPrompt],
+      catch: ensureError,
+    });
   }
 
   // Mirrors the cycle guard in agentYamlScanner.ts's inheritedDefinitionBlock:
@@ -140,6 +129,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
     }
     const [parentSettings, parentPrompts] = yield* loadAgentSettingAndPrompts(
       parentEntry,
+      installed,
       nextSeen,
     );
 
@@ -166,6 +156,9 @@ export const loadAgentSettingAndPrompts = Effect.fn(
       ] as [AgentSetting, AgentPrompt],
     catch: ensureError,
   });
-  yield* logInertTools(parsed[0]);
+  const inertWarning = inertToolsWarning(parsed[0]);
+  if (inertWarning !== undefined) {
+    yield* Effect.logWarning(inertWarning).pipe(withLogChannel(CHANNEL));
+  }
   return parsed;
 });

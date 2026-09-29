@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 import {
   MODEL_CONFIGS,
   ModelProvider,
@@ -63,10 +63,6 @@ interface SettingsModelSelectionControllerDeps<R> {
     Error,
     R
   >;
-  getPreferredCopilotRouteModels?: () => Effect.Effect<
-    readonly string[],
-    StateReadFailed
-  >;
   /**
    * Resolve availability-decorated options for the given models, reading the
    * shared availability inputs and finishing them with `modelOptionsFrom` —
@@ -101,8 +97,7 @@ export class SettingsModelSelectionController<R = never> {
         ),
       );
       const preferredModels = new Set(
-        yield* this.deps.getPreferredCopilotRouteModels?.() ??
-          preferredCopilotRouteModels(this.deps.stores.globalState),
+        yield* preferredCopilotRouteModels(this.deps.stores.globalState),
       );
       const models = yield* this.buildSelectionItems(routes, preferredModels);
       return {
@@ -163,27 +158,25 @@ export class SettingsModelSelectionController<R = never> {
   setReasoningLevel(input: {
     modelName: string;
     level: ReasoningEffort | null;
-  }): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-    return Effect.gen({ self: this }, function* () {
-      // The stored override record as written, so a rewrite carries every entry
-      // back to storage. Reads that need the effort go through
-      // `reasoningEffortOverrides`.
-      const overrides = {
-        ...(yield* this.deps.stores.globalState.get<Record<string, string>>(
-          GlobalStateKey.REASONING_LEVELS,
-          {},
-        )),
-      };
-      if (input.level == null) {
-        delete overrides[input.modelName];
-      } else {
-        overrides[input.modelName] = input.level;
-      }
-      yield* this.deps.stores.globalState.update(
-        GlobalStateKey.REASONING_LEVELS,
-        overrides,
-      );
-    });
+  }): Effect.Effect<void, StateWriteFailed> {
+    // One read-modify-write at the store's authority: hosts in separate
+    // processes share the record, so a get-then-update would drop a
+    // concurrent write. The stored record is carried as written, so every
+    // entry goes back to storage; reads that need the effort go through
+    // `reasoningEffortOverrides`.
+    return this.deps.stores.globalState
+      .modify(GlobalStateKey.REASONING_LEVELS, (stored) => {
+        const overrides = {
+          ...(stored as Record<string, string> | undefined),
+        };
+        if (input.level == null) {
+          delete overrides[input.modelName];
+        } else {
+          overrides[input.modelName] = input.level;
+        }
+        return Result.succeed(overrides);
+      })
+      .pipe(Effect.asVoid);
   }
 
   private buildSelectionItems(

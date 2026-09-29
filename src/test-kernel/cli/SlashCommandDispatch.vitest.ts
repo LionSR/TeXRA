@@ -52,7 +52,7 @@ import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import * as codexSubscription from '@model/codex/codexSubscription';
+import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
@@ -160,7 +160,7 @@ function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
  */
 const services = {
   secrets: new FakeSecrets(),
-  stores: makeFakeSettingsStores().stores,
+  stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
   runtimeSession: testDefaultSession(),
 };
@@ -173,16 +173,22 @@ function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockReturnValue(
     Effect.succeed({
       access: {
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
+        subscriptions: {
+          chatgpt: {
+            provider: 'chatgpt',
+            signedIn: false,
+            preferSubscription: false,
+          },
+          grok: {
+            provider: 'grok',
+            signedIn: false,
+            preferSubscription: false,
+          },
         },
         codingPlans: {
           kimiCode: { preferred: false, keySet: false },
           glmCodingPlan: { preferred: false, keySet: false },
         },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
         texraSignedIn: false,
       },
       lines: ['model access: Your own API keys'],
@@ -559,7 +565,7 @@ describe('handleTuiSlashCommand', () => {
           label: 'person@example.com',
         }),
       );
-      vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
+      vi.spyOn(subscriptionAccess, 'setPreferSubscription').mockReturnValue(
         Effect.void,
       );
 

@@ -16,8 +16,7 @@ import { ANSI_BEL, osc } from '@cli/runtime/ansiEscapes';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 
-type NotificationKind =
-  'agentFinished' | 'approvalNeeded' | 'credentialSwitched';
+type NotificationKind = 'agentFinished' | 'approvalNeeded';
 
 /**
  * Write OSC sequences when capability discovery admitted OSC; the one gate
@@ -44,7 +43,5 @@ function defaultMessageFor(kind: NotificationKind): string {
       return 'TeXRA agent finished';
     case 'approvalNeeded':
       return 'TeXRA approval needed';
-    case 'credentialSwitched':
-      return 'TeXRA switched to your own API key';
   }
 }

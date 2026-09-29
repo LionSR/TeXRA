@@ -43,10 +43,6 @@ interface AgentFileHandlers {
   ): SettingsActionEffect<void>;
 }
 
-/** The four commands these handlers answer — the key each host reports a
- *  failure under. */
-export type AgentFileCommand = keyof AgentFileHandlers;
-
 interface SettingsAgentActionsOptions {
   readonly findAgent: (
     source: AgentSource,
@@ -72,6 +68,8 @@ interface SettingsAgentActionsOptions {
   readonly showInfoMessage: MessageHost['showInfoMessage'];
   readonly showErrorMessage: MessageHost['showErrorMessage'];
   readonly refreshAfterMutation: () => SettingsActionEffect<void>;
+  /** Drop a deleted custom agent's roster choices (its hidden key). */
+  readonly forgetDeletedAgent: (name: string) => SettingsActionEffect<void>;
 }
 
 /**
@@ -137,6 +135,12 @@ export function createSettingsAgentActions(
 
     customizeAgent: (message) =>
       Effect.gen(function* () {
+        if (message.agentSource === 'plugin') {
+          yield* options.showErrorMessage(
+            `${message.agentName} comes from an installed plugin and has no editable copy; edit the plugin's own agent file instead.`,
+          );
+          return;
+        }
         const entryPath = options.findAgent(
           message.agentSource,
           message.agentName,
@@ -230,6 +234,8 @@ export function createSettingsAgentActions(
           // `force` is the facade's delete: a path already gone is the
           // post-condition, not a failure.
           yield* fs.remove(entryPath, { force: true });
+          // The removal is real only here: the roster forgets its choice.
+          yield* options.forgetDeletedAgent(message.agentName);
           yield* options.showInfoMessage(
             `Deleted custom agent: ${message.agentName}`,
           );
@@ -242,12 +248,3 @@ export function createSettingsAgentActions(
       }),
   };
 }
-
-/** What each host reports when one of the four actions fails — kept beside
- *  the handlers so both hosts report the same sentence. */
-export const FAILURE_MESSAGES: Readonly<Record<AgentFileCommand, string>> = {
-  openAgentYaml: 'Failed to open agent YAML file',
-  customizeAgent: 'Failed to create custom agent copy',
-  deleteCustomAgent: 'Failed to delete custom agent',
-  revealAgentFile: 'Failed to reveal agent file',
-};

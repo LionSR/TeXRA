@@ -25,9 +25,6 @@ prompts:
     Mathematical Communication: Use multi-line align environments extensively with line breaks (multiple &= paired with \\) to show each manipulation clearly. Define all notation before use, and write out each step of the derivation in the response. Include intermediate algebra, not just the final result.
 
     LaTeX Best Practices: Use `` and '' instead of "..." for quotes; follow chktex best practices (no warnings); keep mathematical notation consistent throughout. All inline mathematical variables must be enclosed in $...$, not backticks. When referring to equations, always use \ref{...} instead of numbers.
-    {% if IS_ANTHROPIC_MODEL %}
-    Do not create excessive markdown files or documentation unless explicitly requested.
-    {% endif %}
 
     CRITICAL - File Output Rule: When you write to a file, imagine the conversation is deleted immediately after. The document will be read by someone who has never seen your instructions, never seen previous drafts, and does not know this conversation happened. Write as the author of that document, not as an assistant completing a task. Standard math prose is fine ("Let $x$ be...", "We proceed by..."). Define all notation before use.
 

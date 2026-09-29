@@ -4,7 +4,7 @@
  * (`runProgressRenderer.ts`) and the plain-text workflow output
  * (`workflowPlainOutput.ts`), which are otherwise separate renderers.
  */
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -12,7 +12,7 @@ import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 
 /** What a headless renderer reads of a session: its view. */
-export type RunProgressSession = Pick<SessionHandle, 'view'>;
+export type RunProgressSession = Pick<SessionHandle, 'view' | 'viewChanges'>;
 
 /**
  * The run a headless renderer describes: the run of the named run,
@@ -42,7 +42,7 @@ export function followView(
   onView: (view: SessionView) => void,
 ): () => void {
   const fiber = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(session.view), (view) =>
+    Stream.runForEach(session.viewChanges, (view) =>
       Effect.sync(() => onView(view)),
     ),
   );

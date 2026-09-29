@@ -105,7 +105,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const { auth, coreTools, missingCore, latexWorkshopInstalled } = core;
 
   const summary = {
-    host: platform.host,
+    host: roots.host,
     os: {
       platform: hostInfo.platform,
       arch: hostInfo.arch,

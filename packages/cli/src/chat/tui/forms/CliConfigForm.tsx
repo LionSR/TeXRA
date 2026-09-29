@@ -97,7 +97,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       Effect.map(
         Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
           Effect.map(
-            readSetting(entry, stores, 'cli'),
+            readSetting(entry, stores),
             (value) => [entry.key, value] as const,
           ),
         ),
@@ -249,10 +249,9 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         tools: (onBack) => (
           <ToolsListForm
             availableRows={props.availableRows}
-            state={stores.globalState}
+            stores={stores}
             runtime={props.runtime}
             workspaceRoot={props.workspaceRoot}
-            config={stores.config}
             onClose={onBack}
           />
         ),

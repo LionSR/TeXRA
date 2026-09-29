@@ -1,6 +1,10 @@
 import * as path from 'node:path';
 
-import type { ActiveSkillSourceScope, InstalledPlugin } from '@shared/schemas';
+import {
+  installedPluginId,
+  type LoadablePlugin,
+} from '@common/plugins/pluginTrust';
+import type { ActiveSkillSourceScope } from '@shared/schemas';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -20,17 +24,16 @@ export const INTEROP_SKILL_DIRS = [
  * The skill tiers in precedence order. A tier fixes the persisted scope its
  * sources carry, so a contribution never picks its own scope: a tool plugin
  * can only land in `bundled`, and the `ActiveSkillSourceScope` vocabulary in
- * `texra.skills.disabledSources` and the active-skills snapshot cannot drift.
+ * `texra.skills.disabledSources` cannot drift.
  * A `source` tier keeps its roots in registration order; the `name` tier
  * pools its roots and orders their skills by directory name, so bundled
  * skills read the same whether one directory or several ship them.
  *
  * Installed plugins sit right below the user's own skills and carry the
  * `user` scope: installing one is a per-user act like writing
- * `~/.texra/skills`, so the user source switch governs both, and a skill the
- * user writes by hand still shadows a plugin's. They rank above interop
- * imports and bundled skills because an explicit install is a stronger
- * choice than either.
+ * `~/.texra/skills`, so the user source switch governs both. Their skills
+ * and commands are named `<plugin>:<name>`, so they never shadow, or are
+ * shadowed by, a skill of another source.
  */
 const SKILL_TIERS = [
   { id: 'custom', scope: 'custom', order: 'source' },
@@ -54,22 +57,21 @@ interface SkillSourceCall {
   readonly home: string;
   readonly resourcesPath: string;
   readonly options: SkillSourceOptions;
-  /** The plugins `texra plugin install` recorded, read from settings. */
-  readonly plugins: readonly InstalledPlugin[];
-  /**
-   * The tool plugins the user switched off (`texra.tools.disabled`). A plugin
-   * is one on/off unit, so a switched-off plugin's skills are not scanned.
-   * Only the switch hides them, not a failed dependency probe: the probe
-   * answers per workspace and can be stale, and a plugin's skills are often
-   * what tells the user how to install the dependency it probes for.
-   */
-  readonly disabledPlugins: ReadonlySet<string>;
+  /** The installed plugins that load: enabled, and trusted as they are. */
+  readonly plugins: readonly LoadablePlugin[];
 }
 
 interface SkillRoot {
   readonly path: string;
   readonly label: string;
   readonly required?: true;
+  /** The plugin that ships these skills: a tool plugin's id, or an
+   *  installed plugin's (`plugin:<name>`). */
+  readonly plugin?: string;
+  /** The installed plugin whose name prefixes the skills' names. */
+  readonly namespace?: string;
+  /** `path` is one command file (`commands/<name>.md`), not a skill root. */
+  readonly command?: true;
 }
 
 /**
@@ -124,17 +126,28 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:plugins',
     tier: 'plugin',
-    // Required: a recorded root that has gone missing is reported, not
-    // skipped, until `texra plugin update` or `remove` resolves it. A
-    // disabled plugin (`texra plugin disable`) contributes nothing.
+    // Each skill root and command file the plugin declares, read when it
+    // loaded; a root that has gone missing since is reported, not skipped.
     roots: ({ plugins }) =>
-      plugins.flatMap((plugin) =>
-        (plugin.enabled ? plugin.skills : []).map((skillsPath) => ({
-          path: skillsPath,
-          label: `plugin ${plugin.name}`,
+      plugins.flatMap(({ record, plugin }) => {
+        const root = {
+          label: `plugin ${record.name}`,
           required: true as const,
-        })),
-      ),
+          plugin: installedPluginId(record.name),
+          namespace: record.name,
+        };
+        return [
+          ...plugin.skills.map((skills) => ({
+            ...root,
+            path: path.join(record.path, skills),
+          })),
+          ...plugin.commands.map((command) => ({
+            ...root,
+            path: path.join(record.path, command),
+            command: true as const,
+          })),
+        ];
+      }),
   },
   {
     id: 'core:interop-user',
@@ -152,22 +165,25 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
 ];
 
 /**
- * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`,
- * while the plugin is not switched off.
+ * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`
+ * and tagged with the plugin. A plugin is one on/off unit, so its switch
+ * (`texra.tools.disabled`) gates them (`readDisabledSkills`), and a run's
+ * step lists them while it pins the plugin. Only the switch hides them, not
+ * a failed dependency probe: the probe answers per workspace and can be
+ * stale, and a plugin's skills are often what tells the user how to install
+ * the dependency it probes for.
  */
 function pluginSkillContribution(pluginId: string): SkillSourceContribution {
   return {
     id: pluginId,
     tier: 'bundled',
-    roots: ({ resourcesPath, disabledPlugins }) =>
-      disabledPlugins.has(pluginId)
-        ? []
-        : [
-            {
-              path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
-              label: 'bundled',
-            },
-          ],
+    roots: ({ resourcesPath }) => [
+      {
+        path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
+        label: 'bundled',
+        plugin: pluginId,
+      },
+    ],
   };
 }
 
@@ -226,6 +242,11 @@ export function foldSkillSources(
             path: key,
             label: root.label,
             ...(root.required === true ? { required: true } : {}),
+            ...(root.plugin === undefined ? {} : { plugin: root.plugin }),
+            ...(root.namespace === undefined
+              ? {}
+              : { namespace: root.namespace }),
+            ...(root.command === undefined ? {} : { command: root.command }),
           },
         });
       }

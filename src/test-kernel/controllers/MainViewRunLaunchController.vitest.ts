@@ -43,12 +43,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@common/teams/TeamPlan', () => ({
-  formatPartialTeamLaunchMessage: (names: readonly string[]) =>
-    `Partial: ${names.join(', ')}`,
   formatTeamLaunchBlockedMessage: (teamId: string, reason: string) =>
     `Blocked ${teamId}: ${reason}`,
-  formatTeamUnavailableMessage: (teamId: string, names: readonly string[]) =>
-    `Unavailable ${teamId}: ${names.join(', ')}`,
   formatUnknownTeamMessage: (teamId: string) => `Unknown ${teamId}`,
   resolveTeamLaunch: mocks.resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE: 'Select a team',
@@ -59,14 +55,6 @@ vi.mock('@controllers/mainView/teamCatalogPorts', () => ({
 
 const { prepareSurfaceLaunch } =
   await import('@controllers/mainView/backend/MainViewRunLaunchController');
-
-function createHost() {
-  return {
-    showInfoMessage: vi.fn(() => Effect.void),
-    chooseTeamAvailability: vi.fn(() => Effect.succeed('continue' as const)),
-    signInForRemoteAgentCatalog: vi.fn(() => Effect.succeed(true)),
-  };
-}
 
 const workspaceState = new FakeStateStore();
 
@@ -93,7 +81,6 @@ describe('main-view run launch controller', () => {
       const { config } = yield* onGlobalStorage(
         prepareSurfaceLaunch(
           launchRequest({ agent: 'orchestrator' }),
-          createHost(),
           workspaceState,
           STORAGE_ROOT,
         ),
@@ -117,7 +104,6 @@ describe('main-view run launch controller', () => {
           onGlobalStorage(
             prepareSurfaceLaunch(
               launchRequest({ model: '' }),
-              createHost(),
               workspaceState,
               STORAGE_ROOT,
             ),
@@ -137,7 +123,6 @@ describe('main-view run launch controller', () => {
         onGlobalStorage(
           prepareSurfaceLaunch(
             launchRequest({ sessionType: 'workflow', agent: 'correct' }),
-            createHost(),
             workspaceState,
             STORAGE_ROOT,
           ),
@@ -154,7 +139,6 @@ describe('main-view run launch controller', () => {
 
   it.effect('builds the resolved team fields over the renderer agent', () =>
     Effect.gen(function* () {
-      const host = createHost();
       mocks.resolveTeamLaunch.mockReturnValue(
         Effect.succeed({
           status: 'ready',
@@ -166,7 +150,6 @@ describe('main-view run launch controller', () => {
             },
             cli: { multiAgentPresetId: 'custom-team' },
           },
-          partial: true,
           missingNames: ['writer'],
         }),
       );
@@ -179,7 +162,6 @@ describe('main-view run launch controller', () => {
             selectedTeamId: 'physicist',
             agent: 'stale-renderer-agent',
           }),
-          host,
           workspaceState,
           STORAGE_ROOT,
         ),

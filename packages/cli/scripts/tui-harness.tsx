@@ -27,6 +27,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   formatTexraApprovalPolicy,
@@ -38,7 +39,6 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   AgentConfigFieldsSchema,
-  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -60,6 +60,7 @@ import {
   type SessionEventDraft,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { goalStateOf } from '@shared/plugins/goal';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -131,7 +132,10 @@ import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
-import { initCliPlatform } from '../src/runtime/initPlatform';
+import {
+  cliPlatformShutdown,
+  initCliPlatform,
+} from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
@@ -162,7 +166,6 @@ const RETRY_APPROVAL_CHATGPT =
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
-const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const PLAN_APPROVAL_OBJECTIVE =
   process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
   [
@@ -231,7 +234,9 @@ const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
-const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
+const HARNESS_RESOURCES_PATH = await Effect.runPromise(
+  resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
+);
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -381,22 +386,19 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await harnessRuntime.runPromise(
-    harnessRoots.workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      {
-        kind: 'custom',
-        agentKeys: {
-          workflow:
-            process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-              ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-              : 'all',
-          toolUse:
-            process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-              ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-              : 'all',
-        },
+    harnessRoots.repoState.update(WorkspaceStateKey.AGENT_ROSTER_SELECTION, {
+      kind: 'custom',
+      agentKeys: {
+        workflow:
+          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+            : 'all',
+        toolUse:
+          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+            : 'all',
       },
-    ),
+    }),
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
@@ -409,7 +411,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
     }),
   );
 }
-await harnessRuntime.runPromise(loadAgents({ includeRemote: false }));
+await harnessRuntime.runPromise(loadAgents());
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact
@@ -510,7 +512,6 @@ function seedRun(
     aggregateId: qualifyAggregateId('run', runId),
     identity,
     category: options.category ?? AgentCategory.ToolUse,
-    isRemote: false,
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
@@ -531,7 +532,7 @@ function seedRun(
 
 /**
  * Place a run in a phase the way production does: `run.activate` opens the
- * running window and a `flow.step` parks it (one run model, 3.3). A terminal
+ * running window and a `run.position` parks it (one run model, 3.3). A terminal
  * phase is `run.end`, so a fixture that names one lands there instead.
  *
  * The run window opens at the activation row's publish clock, which the
@@ -551,20 +552,19 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
       type: 'run.activate',
       aggregateId: qualifyAggregateId('run', runId),
       category,
-      isRemote: false,
     });
   }
   if (phase === RUN_PHASE.WAITING) {
     publish({
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'waiting' },
+      payload: { family: 'toolUse', at: 'waiting' },
     });
   } else if (category === AgentCategory.ToolUse) {
     publish({
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     });
   }
 }
@@ -583,7 +583,10 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    output: emptyRunEndOutput(category),
+    output:
+      category === AgentCategory.Workflow
+        ? { category: 'workflow' }
+        : { category: 'toolUse', response: '', files: [] },
   });
 }
 
@@ -833,7 +836,7 @@ function seedSubagentFollowupTranscript(): void {
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text: `<orchestrator-followup>${text}</orchestrator-followup>`,
+      text,
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -936,6 +939,16 @@ function makeRetryApprovalPayload(): RetryPermission {
       provider: 'openai',
       statusCode: 429,
     },
+    // The invoker decides the offer (#13236); a subscription quota declines
+    // its route for the model's own key.
+    credentialSwitch: RETRY_APPROVAL_CHATGPT
+      ? {
+          kind: 'decline-route',
+          route: 'chatgpt-subscription',
+          provider: 'openai',
+          automatic: false,
+        }
+      : null,
   };
 }
 
@@ -943,7 +956,6 @@ function makePlanApprovalPayload(): PlanApprovalPermission {
   return {
     requestId: 'harness-plan-approval',
     runId: HARNESS_RUN_ID,
-    goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
       objective: PLAN_APPROVAL_OBJECTIVE,
     },
@@ -1133,7 +1145,7 @@ publish(
     type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     followUpId: `harness-follow-up-${index + 1}`,
-    content: { text, origin: 'user' as const },
+    content: { text, from: { kind: 'user' as const } },
   })),
 );
 const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();
@@ -1163,17 +1175,14 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const trace = new TraceEmitter();
-  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const trace = new TraceEmitter((event) =>
+    session().publishRunEvent(childRunId, event),
+  );
   const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
-    {
-      id: 'harness-workflow-running-run',
-      kind: 'run',
-    },
+    { kind: 'run' },
   );
   const phaseStage = trace.openStage('Proofread', {
-    id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
@@ -1215,7 +1224,7 @@ async function seedRunningWorkflow(): Promise<void> {
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
-    detachRunTrace();
+    trace.close();
   });
 }
 
@@ -1279,7 +1288,6 @@ if (SHOW_CHILDREN) {
       publish({
         type: 'usage',
         aggregateId: qualifyAggregateId('run', runId),
-        runId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
@@ -1577,10 +1585,9 @@ function appendHarnessStatus(): void {
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
-      goal:
-        run?.category === AgentCategory.ToolUse && run.goal.active
-          ? run.goal
-          : undefined,
+      goal: ((goal) => (goal?.active ? goal : undefined))(
+        run && goalStateOf(run),
+      ),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
@@ -1692,7 +1699,10 @@ registerBuiltinSlashCommands({
           HARNESS_PLATFORM_SERVICES,
           HARNESS_CLI_CONTEXT,
           selection,
-          { writeProgress: appendHarnessAssistantTranscript },
+          {
+            writeProgress: (message) =>
+              appendHarnessAssistantTranscript(message),
+          },
         ).pipe(
           Effect.map((access) => {
             appendHarnessAssistantTranscript(access.message);
@@ -1775,7 +1785,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   log.emit(PROCESS, 10_000_000, {
     type: 'run.activate',
     category: AgentCategory.ToolUse,
-    isRemote: false,
   });
   for (const [id, agent, owner, parentId] of [
     [waiting, 'waiting', OWNER, null],
@@ -1789,7 +1798,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         type: 'run.start',
         identity: { kind: 'agent', agent },
         category: AgentCategory.ToolUse,
-        isRemote: false,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         // The creation commit the database stamps, not a guess: `Log.parent`
         // refuses a parent that never started.
@@ -1803,7 +1811,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       {
         type: 'run.activate',
         category: AgentCategory.ToolUse,
-        isRemote: false,
       },
       owner,
     );
@@ -1910,7 +1917,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
+    await Effect.runPromise(cliPlatformShutdown);
   } finally {
     process.exit(exitCode);
   }

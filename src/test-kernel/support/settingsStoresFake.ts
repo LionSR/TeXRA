@@ -11,6 +11,7 @@ import type {
 } from '@platform/interfaces';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { SettingHost } from '@shared/state/stateSettings';
 
 import { FakeConfigProvider, FakeStateStore } from './FakePlatform';
 
@@ -18,17 +19,22 @@ export interface FakeSettingsStores {
   readonly stores: SettingsStores;
   readonly config: FakeConfigProvider;
   readonly workspaceState: FakeStateStore;
+  readonly repoState: FakeStateStore;
   readonly globalState: FakeStateStore;
 }
 
-export function makeFakeSettingsStores(): FakeSettingsStores {
+export function makeFakeSettingsStores(
+  host: SettingHost = 'vscode',
+): FakeSettingsStores {
   const config = new FakeConfigProvider();
   const workspaceState = new FakeStateStore();
+  const repoState = new FakeStateStore();
   const globalState = new FakeStateStore();
   return {
-    stores: { config, workspaceState, globalState },
+    stores: { host, config, workspaceState, repoState, globalState },
     config,
     workspaceState,
+    repoState,
     globalState,
   };
 }

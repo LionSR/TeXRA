@@ -2,8 +2,16 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `installProcessRuntime()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Effect, FileSystem, Layer } from 'effect';
-import type { AgentSource, RunId } from '@shared/schemas';
+import {
+  Context,
+  Data,
+  Effect,
+  FileSystem,
+  Layer,
+  Stream,
+  type Result,
+} from 'effect';
+import type { AgentSource } from '@shared/schemas';
 
 import type { GlobalStorageFs } from './rootedFs';
 
@@ -109,93 +117,52 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 
 /**
  * Application state read from its authority when the Effect executes.
- * Updates finish after commit. Separate reads and updates are not an atomic
- * read-modify-write operation; defaults apply only to absent keys.
+ * Updates finish after commit; defaults apply only to absent keys. A change
+ * that depends on the current value goes through `modify`, never a `get`
+ * then an `update`: the settings surfaces do not serialize their messages,
+ * and hosts in separate processes share one store.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
+  /**
+   * Read-modify-write of one key as one step at the store's authority:
+   * `change` sees the stored value (`undefined` when absent) and returns the
+   * next one, or refuses with its own error and nothing is written.
+   */
+  modify<T, E = never>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E | StateWriteFailed>;
+}
+
+/** The global state store, and what changes in it. */
+export interface AppStateStore extends StateStore {
+  /**
+   * Emits as subscribed, then whenever one of `keys` may have been written,
+   * by this process or by another sharing the store: a reader re-reads the
+   * keys on each. A store with no change feed emits only the first.
+   */
+  changes(keys: readonly string[]): Stream.Stream<void>;
 }
 
 /**
  * Global application state, provided by the process's composition layer.
- * Hosts supplying an existing store use `layer`; SQLite hosts acquire their
- * store in the runtime's scope, sharing the global database where appropriate.
+ * SQLite hosts acquire their store in the runtime's scope over the global
+ * database, whose change feed reaches every process sharing it. `layer`
+ * serves a store a caller supplies, which has none: a reader of it sees a
+ * change at its next read.
  */
-export class AppState extends Context.Service<AppState, StateStore>()(
+export class AppState extends Context.Service<AppState, AppStateStore>()(
   '@texra/platform/AppState',
 ) {
   static layer(store: StateStore): Layer.Layer<AppState> {
-    return Layer.succeed(AppState)(store);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
-/**
- * The drain's three phases, in order, each with its own deadline budget.
- * `RELEASE` follows every `ON` handler, whenever it was registered: it is
- * where the process's sessions and then its runtime are released, so no
- * handler can run on a runtime already gone.
- */
-export const SHUTDOWN_PHASE = {
-  BEFORE: 'beforeShutdown',
-  ON: 'onShutdown',
-  RELEASE: 'releaseProcess',
-} as const;
-
-export type ShutdownPhase =
-  (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
-
-/**
- * One registered shutdown handler: the program the drain runs at its phase,
- * not a callback it calls. A failure is reported to the drain's `onError`,
- * which is why the channel is any `Error` here: the drain is the boundary
- * that reports it, and no caller of `runShutdown` adopts it.
- */
-export type ShutdownHandler = Effect.Effect<void, Error>;
-
-export interface LifecycleHost {
-  /**
-   * Register a shutdown handler. The phase's join-with-deadline is fiber
-   * interruption: a handler still running at the deadline is interrupted and
-   * the drain advances past it, so a handler that can be safely cut short
-   * needs nothing of its own, and one whose work must outlast the deadline
-   * says so with `Effect.uninterruptible`.
-   */
-  onShutdown(phase: ShutdownPhase, handler: ShutdownHandler): Disposable;
-  /**
-   * Drain the phases, once: concurrent callers join the drain in flight
-   * rather than starting a second one.
-   */
-  readonly runShutdown: Effect.Effect<void>;
-  /**
-   * True from the moment `runShutdown` is first run. Each phase drains
-   * exactly once and the drain is cached, so a handler registered from here
-   * on is never run: a caller whose cleanup depends on this path must read
-   * this before taking a resource it would register here.
-   */
-  readonly shutdownRan: boolean;
-}
-
-/**
- * The process's shutdown lifecycle as an Effect service
- * (`@texra/platform/Lifecycle`), provided once by the composition root through
- * `installProcessRuntime`. The shape is the host itself: a program that
- * registers a shutdown handler or drains the phases yields this rather than
- * reading whichever lifecycle the process platform happens to hold.
- *
- * `layer` takes the host itself, for the same reason `Secrets.layer` does:
- * every root builds its lifecycle before it installs the runtime that serves
- * it, so the service is the value the root already holds.
- */
-export class Lifecycle extends Context.Service<Lifecycle, LifecycleHost>()(
-  '@texra/platform/Lifecycle',
-) {
-  static layer(lifecycle: LifecycleHost): Layer.Layer<Lifecycle> {
-    return Layer.succeed(Lifecycle)(lifecycle);
+    return Layer.succeed(AppState)({
+      get: (key, defaultValue) => store.get(key, defaultValue),
+      update: (key, value) => store.update(key, value),
+      modify: (key, change) => store.modify(key, change),
+      changes: () => Stream.succeed(undefined),
+    });
   }
 }
 
@@ -250,6 +217,12 @@ export interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
+  /**
+   * The packaged resources root a TeXRA host ships its bundled agents under,
+   * the tool plugins' agent directories among them. Absent where none ships:
+   * an embedder's own directories, or the CLI entries that load no agents.
+   */
+  readonly resourcesRoot?: string;
 }
 
 /**
@@ -271,73 +244,6 @@ export class AgentDirectories extends Context.Service<
     directories: AgentDirectoriesPort,
   ): Layer.Layer<AgentDirectories> {
     return Layer.succeed(AgentDirectories)(directories);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Agent resume
-// ---------------------------------------------------------------------------
-
-/**
- * Host capability for resuming an agent stream from its persisted snapshot.
- *
- * Implemented by the VS Code host (and any other host) so VS Code-free code
- * (e.g. the inquiry continuation injector) can trigger auto-resume without
- * importing the host-level command pipeline.
- */
-export interface RecoveryContinuation {
-  readonly runId: RunId;
-  readonly kind: 'recovery';
-}
-
-/**
- * A host's resume attempt faulted before it could answer. Distinct from the
- * `false` {@link AgentResumePort.tryResumeRun} answers: `false` is this
- * process declining a run it can classify, while this is the attempt itself
- * failing, which the caller cannot read off the boolean.
- */
-export class AgentResumeFailed extends Data.TaggedError('AgentResumeFailed')<{
-  readonly runId: RunId;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-export interface AgentResumePort {
-  /**
-   * Attempt to resume a WAITING / children-running stream from its
-   * persisted snapshot. Resolves true if the host accepted the request
-   * (i.e. the resume command dispatched successfully).
-   *
-   * Resolves false if the stream cannot be resumed (no snapshot found,
-   * already active/resuming, etc.) — callers should fall back to leaving
-   * the message queued for the next manual resume. The failure channel is
-   * reserved for the attempt faulting, so a caller that only wants the
-   * retry decision still learns when the decision itself could not be made.
-   */
-  tryResumeRun(
-    runId: RunId,
-    recovery?: RecoveryContinuation,
-  ): Effect.Effect<boolean, AgentResumeFailed>;
-}
-
-/**
- * The process's agent-resume port as an Effect service
- * (`@texra/platform/AgentResume`), provided once by the composition root
- * through `installProcessRuntime`. The shape is the port itself: a program
- * that resumes a persisted run yields the port's own Effect and matches
- * {@link AgentResumeFailed}.
- *
- * `layer` takes the port itself, for the same reason `Secrets.layer` does:
- * every root builds its resume port before it installs the runtime that
- * serves it, so the service is the value the root already holds, not a thunk
- * resolved per member call.
- */
-export class AgentResume extends Context.Service<
-  AgentResume,
-  AgentResumePort
->()('@texra/platform/AgentResume') {
-  static layer(port: AgentResumePort): Layer.Layer<AgentResume> {
-    return Layer.succeed(AgentResume)(port);
   }
 }
 

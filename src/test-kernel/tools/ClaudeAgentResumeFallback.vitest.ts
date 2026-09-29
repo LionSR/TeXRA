@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 // Launch and resume coverage for the claude_agent tool. The resume fallback
 // applies when a caller passes a session_id whose in-memory
 // ClaudeAgentSessions registry entry is gone (extension reload, host crash, or
@@ -18,7 +18,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { claudeAgentSessionsFor } from '@tools/agentCliSessionStores';
+import { noPluginHold } from '@test/support/testPluginServices';
+import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@tools/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
@@ -39,37 +41,48 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // The session-keyed registry resolves live handles through its session's
 // RunRegistry. Tests stage a handle here for the lookups they exercise;
 // unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown; interruptActive?: () => void } = {};
+const sessionHandles: { byRunId?: unknown } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
     getHandle: () => sessionHandles.byRunId,
-    // A stop by run id reaches whatever the case staged as the run's live
-    // target; an unstaged run has none.
-    interruptActive: () => {
-      if (sessionHandles.interruptActive === undefined) return false;
-      sessionHandles.interruptActive();
-      return true;
-    },
   },
 } as unknown as SessionHandle;
-const ClaudeAgentSessions = claudeAgentSessionsFor(testSession.runs);
+const ClaudeAgentSessions = new AgentCliSessionRegistry(
+  testSession.runs,
+  noPluginHold,
+);
+/** The tool's call layer, serving the suite's one registry as the step would. */
+const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
+  Layer.merge(
+    nativeToolTestLayer(...options),
+    Layer.succeed(ClaudeAgentSessionsService)(ClaudeAgentSessions),
+  );
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
 }));
 
-vi.mock('@tools/delegation/childRun', () => ({
-  createChildRun: mocks.createChildRun,
-  childRunDescription: (raw: string) => raw,
+vi.mock('@tools/delegation/childRun', async () => {
+  const { Effect } = await import('effect');
+  const { generateRunId } = await import('@utils/core');
+  return {
+    createChildRun: mocks.createChildRun,
+    childRunDescription: (raw: string) => raw,
+    // No paused child to reactivate here: every launch takes a fresh id.
+    agentCliChildRunId: () => Effect.sync(generateRunId),
+  };
+});
+
+vi.mock('@agent/runtime/runLaunchGuard', () => ({
+  runWithLaunchGuard: (
+    ...args: Parameters<
+      typeof import('@agent/runtime/runLaunchGuard').runWithLaunchGuard
+    >
+  ) => args[2],
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedRunLeaseLaunchGuard: (
-    ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
-    >
-  ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
@@ -100,7 +113,7 @@ function stubRuns(): any {
 }
 
 function fakePorts(): ChildRunPorts {
-  return { notify: () => {}, recordCost: () => {} };
+  return { notify: () => {} };
 }
 
 function captureStrategy(): { strategy?: ChildRunStrategy<unknown> } {
@@ -157,7 +170,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: {
               session: testSession,
               runId: parentRunId,
@@ -184,7 +197,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),
@@ -223,7 +236,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),
@@ -257,7 +270,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),
@@ -304,7 +317,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(callArgs.options.resume).toBe('stale-session');
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),
@@ -314,7 +327,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   it.live('preserves legacy usage when a result has no modelUsage', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
-      const publishUsage = vi.spyOn(childRun.logger, 'usage');
+      const publishUsage = vi.spyOn(childRun.logger, 'emit');
       mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
       mocks.query.mockReturnValue(
         (async function* () {
@@ -341,13 +354,13 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       expect(publishUsage).toHaveBeenCalledWith(
         expect.objectContaining({
+          type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
         }),
-        { recordTranscript: false },
       );
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),
@@ -427,7 +440,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
         expect(mocks.submitFollowUp).toHaveBeenCalledWith(
           launchedRunId,
-          'also update the tests',
+          expect.objectContaining({ text: 'also update the tests' }),
           expect.objectContaining({ session: expect.anything() }),
         );
 
@@ -442,38 +455,30 @@ describe('claude_agent tool launch and resume fallback', () => {
         claim.mockRestore();
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),
       ),
   );
 
-  it.live(
-    'exposes an in-flight initial turn to the shared shutdown drain',
-    () =>
-      Effect.gen(function* () {
-        const interrupt = vi.fn();
-        const captured = captureStrategy();
+  it.live('declares its CLI process to the shared shutdown drain', () =>
+    Effect.gen(function* () {
+      const captured = captureStrategy();
 
-        yield* ClaudeAgentTool.call({
-          prompt: 'start a long initial turn',
-        });
+      yield* ClaudeAgentTool.call({
+        prompt: 'start a long initial turn',
+      });
 
-        sessionHandles.interruptActive = interrupt;
-        captured.strategy?.onLoopStart?.(testSession);
-        ClaudeAgentSessions.interruptAll();
-
-        expect(interrupt).toHaveBeenCalledOnce();
-        captured.strategy?.releaseSessionOwnership?.();
-        delete sessionHandles.interruptActive;
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
-          }),
-        ),
+      expect(captured.strategy?.ownsBackgroundProcess).toBe(true);
+      captured.strategy?.releaseSessionOwnership?.();
+    }).pipe(
+      Effect.provide(
+        toolLayer({
+          run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+        }),
       ),
+    ),
   );
 
   it.live(
@@ -540,7 +545,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         claim.mockRestore();
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),
@@ -563,7 +568,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),
@@ -614,7 +619,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         } as any);
         assert.ok(captured.strategy?.runTurn);
         yield* captured.strategy.runTurn(
-          [{ text: 'continue the fork', origin: 'user' }],
+          [
+            {
+              text: 'continue the fork',
+              from: { kind: 'user' as const },
+            },
+          ],
           ports,
           new AbortController().signal,
         );
@@ -637,7 +647,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         ClaudeAgentSessions.release('forked-session');
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),
@@ -704,7 +714,12 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       assert.ok(captured.strategy?.runTurn);
       yield* captured.strategy.runTurn(
-        [{ text: 'must not resume the source', origin: 'user' }],
+        [
+          {
+            text: 'must not resume the source',
+            from: { kind: 'user' as const },
+          },
+        ],
         ports,
         new AbortController().signal,
       );
@@ -720,7 +735,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),
@@ -754,7 +769,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       delete sessionHandles.byRunId;
     }).pipe(
       Effect.provide(
-        nativeToolTestLayer({
+        toolLayer({
           run: { session: testSession, runId: parentRunId, toolPolicy: {} },
         }),
       ),

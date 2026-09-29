@@ -9,7 +9,9 @@ import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
 
-type ToolUseFlowOf = SessionHandle['runs']['getToolUseFlowContext'];
+type RunControlsOf = (
+  runId: RunId,
+) => NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['controls'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that
@@ -63,7 +65,7 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
  */
 export class TuiSession {
   /** A new session starts with no claim. */
-  constructor(private readonly toolUseFlowOf: ToolUseFlowOf) {
+  constructor(private readonly runControlsOf: RunControlsOf) {
     rootRunClaim.set(NO_CLAIM);
   }
 
@@ -128,10 +130,10 @@ export class TuiSession {
     return runStopFacts.get().status;
   }
 
-  /** The claimed run's live tool-use flow, if it has one. */
-  activeToolUseFlow(): ReturnType<ToolUseFlowOf> {
+  /** The claimed run's live controls, while its loop runs. */
+  activeRunControls(): ReturnType<RunControlsOf> {
     const { runId } = this;
-    return runId ? this.toolUseFlowOf(runId) : undefined;
+    return runId ? this.runControlsOf(runId) : undefined;
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */
@@ -139,7 +141,7 @@ export class TuiSession {
     return (
       chatTuiCanStartRootRun(this) ||
       (this.status() === RUN_PHASE.WAITING &&
-        this.activeToolUseFlow() !== undefined)
+        this.activeRunControls() !== undefined)
     );
   }
 
@@ -150,20 +152,20 @@ export class TuiSession {
 
   /**
    * On exit, a tool-use session suspended at a wait (idle/WAITING) with an
-   * active tool-use run is left uninterrupted. Resumability survives either
-   * way: a run's rows and its latest `flow.snapshot` stay until the run is
-   * explicitly deleted, so even a CANCELLED run remains resumable. What this
-   * preserves is the run's persisted status and its side effects: an idle exit
-   * leaves the run WAITING instead of recording a CANCELLED the user never
-   * asked for, and does not clear approvals or sweep active children through
-   * `detachSubagentsOnStop`.
+   * active tool-use run is not stopped the way a Ctrl-C stops a turn: the
+   * user's stop policy (`detachSubagentsOnStop`) does not apply, and the exit
+   * needs no second Ctrl-C. The session's close still ends the generation,
+   * which records its terminal `run.end` as cancelled ("Stopped"): every
+   * activation ends with one, and a run left without it would read as
+   * interrupted by a crash. Resumability survives either way: a run's rows
+   * and its latest `run.snapshot` stay until the run is explicitly deleted.
    */
   isResumableIdle(): boolean {
     return (
       this.runId !== undefined &&
       chatTuiRunPending(this) &&
       !this.canStopVisibleRun() &&
-      this.activeToolUseFlow() !== undefined
+      this.activeRunControls() !== undefined
     );
   }
 }

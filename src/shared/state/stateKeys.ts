@@ -17,6 +17,8 @@ export enum WorkspaceStateKey {
   /** Roster selection; the `custom` member carries a category-keyed record. */
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
+  /** Custom agents the user turned off; every other custom agent is shown. */
+  HIDDEN_CUSTOM_AGENTS = 'texra.hiddenCustomAgents',
 
   // Skill availability
   DISABLED_SKILLS = 'texra.skills.disabled',
@@ -106,7 +108,10 @@ export enum GlobalStateKey {
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
 
-  // Plugins recorded by `texra plugin install`
+  /** The per-install key MCP env values are digested under (`mcpConfig`). */
+  MCP_REVISION_KEY = 'texra.mcp.revisionKey',
+
+  // Installed Claude Code and Codex plugins, and the trust given to each
   INSTALLED_PLUGINS = 'texra.plugins.installed',
 
   // Experimental

@@ -33,8 +33,11 @@ const CHANNEL = 'settingsAccess';
  */
 
 export interface SettingsStores {
+  /** The host whose slot layout these stores follow (`WorkspaceRoots.host`). */
+  readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
+  readonly repoState: StateStore;
   readonly globalState: StateStore;
 }
 
@@ -78,9 +81,8 @@ export type StoredSetting<T = unknown> =
 export function readSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
-  host: SettingHost = 'vscode',
 ): Effect.Effect<unknown, StateReadFailed> {
-  return Effect.flatMap(inspectSetting(entry, stores, host), (stored) =>
+  return Effect.flatMap(inspectSetting(entry, stores), (stored) =>
     stored.kind === 'value'
       ? Effect.succeed(stored.value)
       : Effect.logWarning(invalidStoredMessage(entry, stored.cause)).pipe(
@@ -99,10 +101,9 @@ export function readSetting(
 export function inspectSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
-  host: SettingHost = 'vscode',
 ): Effect.Effect<StoredSetting, StateReadFailed> {
   return Effect.suspend(() => {
-    const slot = settingSlot(entry, host);
+    const slot = settingSlot(entry, stores.host);
     return slot === 'config'
       ? Effect.sync(() =>
           classifyStored(entry, rawConfigValue(entry, stores.config)),
@@ -183,10 +184,9 @@ function writeSlot(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
-  host: SettingHost,
   target: ConfigTarget | undefined,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  const slot = settingSlot(entry, host);
+  const slot = settingSlot(entry, stores.host);
   if (slot === 'config') {
     return stores.config.update(
       entry.key,
@@ -219,20 +219,21 @@ export function writeSetting(
   entry: StateSettingEntry,
   value: unknown,
   stores: SettingsStores,
-  host: SettingHost = 'vscode',
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   return Effect.gen(function* () {
-    yield* writeSlot(entry, entry.schema.parse(value), stores, host, target);
+    yield* writeSlot(entry, entry.schema.parse(value), stores, target);
     if (value !== true) return;
     for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
       const excluded = settingByKey(excludedKey);
       if (!excluded) {
-        throw new Error(
-          `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+        return yield* Effect.die(
+          new Error(
+            `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+          ),
         );
       }
-      yield* writeSlot(excluded, false, stores, host, target);
+      yield* writeSlot(excluded, false, stores, target);
     }
   });
 }
@@ -245,8 +246,7 @@ export function writeSetting(
 export function resetSetting(
   entry: StateSettingEntry,
   stores: SettingsStores,
-  host: SettingHost = 'vscode',
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  return writeSlot(entry, undefined, stores, host, target);
+  return writeSlot(entry, undefined, stores, target);
 }

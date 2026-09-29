@@ -16,18 +16,17 @@ import {
   ModelConfigurationSchema,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   TurnResultSchema,
   type AnthropicMessagesConfiguration,
   type Model,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { replayableHistory } from './message.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
-import { ModelError, enrichModelError } from './errors.js';
-import { sdkModelError } from './errors.js';
+import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
@@ -304,7 +303,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const messages: MessageParam[] = [];
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
-  for (const message of turn.messages) {
+  for (const message of replayableHistory(turn.messages, origin)) {
     if (message.role === 'user') {
       messages.push({
         role: 'user',
@@ -507,14 +506,10 @@ export function anthropicMessagesModel(
   const prepareTurn: Model['prepareTurn'] = Effect.fn(
     'llm.anthropic.prepareTurn',
   )(function* (request) {
-    const parsed = TurnRequestSchema.safeParse(request);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The canonical Anthropic input is invalid.',
-        cause: parsed.error,
-      });
-    const input = parsed.data;
+    const input = yield* decodeTurnRequest(
+      request,
+      'The canonical Anthropic input is invalid.',
+    );
     if (
       input.mode === 'background' ||
       input.continuation !== undefined ||
@@ -588,19 +583,7 @@ export function anthropicMessagesModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const prepared = ResolvedTurnSchema.safeParse(input);
-          if (!prepared.success)
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message: 'The prepared Anthropic invocation is invalid.',
-              cause: prepared.error,
-            });
-          const body = yield* invocationBody(
-            prepared.data,
-            origin,
-            config,
-            uploads,
-          );
+          const body = yield* invocationBody(input, origin, config, uploads);
           const signal = yield* Effect.abortSignal;
           const source = yield* Effect.tryPromise({
             try: () => client.messages.create(body, { signal }),
@@ -979,25 +962,15 @@ export function anthropicMessagesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.anthropic.estimateInputTokens')(function* (input) {
-      const parsed = ResolvedTurnSchema.safeParse(input);
-      if (!parsed.success || parsed.data.protocol !== 'anthropic-messages')
+    Effect.fn('llm.anthropic.estimateInputTokens')(function* (turn) {
+      if (turn.protocol !== 'anthropic-messages')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'The prepared Anthropic count invocation is unsupported.',
         });
-      const turn = parsed.data;
       const body = yield* invocationBody(turn, origin, config, uploads);
-      const message = turn.messages[0];
-      if (
-        turn.tools.length !== 0 ||
-        turn.messages.length !== 1 ||
-        message?.role !== 'user' ||
-        !message.content.every((part) => part.kind === 'text')
-      )
+      if (initialTextInput(turn) === undefined)
         return yield* new ModelError({
           kind: 'unsupported',
           message:
@@ -1057,7 +1030,6 @@ export function anthropicMessagesModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     uploadFile: uploads.uploadFile,
     releaseUploads: uploads.releaseUploads,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),

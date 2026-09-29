@@ -1,6 +1,6 @@
 /** Run history derived from committed session events. */
 
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -18,6 +18,7 @@ import {
   type SessionEvent,
   type RunId,
   type RunIdentity,
+  RUN_SUBSTATE,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -38,10 +39,15 @@ interface RunListingBase {
   /** The run's folded status; a terminal outcome phase is its durable
    *  outcome. */
   status: RunLifecycleStatus;
+  /** A stop rested the run (the fold's paused substate), a status of its own. */
+  paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
+  /** The model the run is on, as the view folds it: its latest snapshot's
+   *  (`run.model`), else the one it was launched with. */
+  model?: string;
   /**
-   * Whether a `flow.snapshot` row exists on the run aggregate — one indexed
+   * Whether a `run.snapshot` row exists on the run aggregate — one indexed
    * read per row, never a fold. This is what a listing needs to advertise
    * "this run can be continued"; loadability is decided by `RunLedger.load`,
    * which folds the one run asked for and refuses loudly.
@@ -98,16 +104,16 @@ export function isUserVisibleRun(
   return isAgentRunEntry(entry) && entry.parentRunId === undefined;
 }
 
-/** The latest `run.record` row of each run in one committed listing. */
+/** The latest `run.config` row of each run in one committed listing. */
 function recordRows(
   rows: readonly SessionEvent[],
-): Map<RunId, Extract<SessionEvent, { type: 'run.record' }>> {
+): Map<RunId, Extract<SessionEvent, { type: 'run.config' }>> {
   const records = new Map<
     RunId,
-    Extract<SessionEvent, { type: 'run.record' }>
+    Extract<SessionEvent, { type: 'run.config' }>
   >();
   for (const row of rows) {
-    if (row.type !== 'run.record') continue;
+    if (row.type !== 'run.config') continue;
     const target = aggregateTarget(row.aggregateId);
     if (target.kind === 'run') records.set(target.id, row);
   }
@@ -117,14 +123,14 @@ function recordRows(
 /**
  * Every run the session's fold lists, with its private record: the view
  * folded cold from the log (one run model, R1) beside the same listing's
- * `run.record` rows, which never enter the display fold.
+ * `run.config` rows, parsed into the runtime's record.
  */
 export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<RunListingEntry[], Error> {
   const [view, listing] = yield* Effect.all([
     session.readView([]),
-    session.readRecordListing(),
+    Stream.runCollect(session.events.listing()),
   ]);
   const records = recordRows(listing);
   const results = yield* Effect.forEach(
@@ -135,7 +141,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
         const record = yield* Effect.try({
           try: () => {
             const row = records.get(id);
-            return row === undefined ? null : RunRecordSchema.parse(row.record);
+            return row === undefined ? null : RunRecordSchema.parse(row.config);
           },
           catch: ensureError,
         });
@@ -146,7 +152,9 @@ export const listRuns = Effect.fn('listRuns')(function* (
           timestamp: new Date(run.launchedAt).toISOString(),
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
+          ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
+          ...(run.model === null ? {} : { model: run.model }),
           checkpointPresent,
         };
         const identity = run.identity;

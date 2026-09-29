@@ -25,7 +25,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUse } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
-  summarizeFollowupMessage,
+  summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 import {
   formatWorkflowCallLine,
@@ -322,7 +322,7 @@ export function logPayloadRow(
         ...base,
         kind: 'user',
         text: measured,
-        summary: transcriptText(summarizeFollowupMessage(measured.full)),
+        summary: transcriptText(summarizeSubagentFollowup(measured.full)),
         ...(payload.data?.workflowSummary
           ? { workflowSummary: payload.data.workflowSummary }
           : {}),
@@ -458,14 +458,9 @@ export function logPayloadRow(
     // ── No row ──────────────────────────────────────────────────────────
     // A compaction lifecycle row is not a row of its own: the correlated
     // block the fold projects from several of them is, via
-    // `compactionActivityRow`. `activeSkills` is a per-run snapshot read on
-    // demand from the log (the CLI's `/status`), not a transcript row, and
-    // `internal` is a durable marker nothing renders. Context utilization is
-    // a status surface on both hosts, read off `RunView.context`, so it has
-    // no transcript row either.
+    // `compactionActivityRow`. `internal` is a durable marker nothing
+    // renders.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
-    case MESSAGE_TYPES.ACTIVE_SKILLS:
-    case MESSAGE_TYPES.CONTEXT_STATE:
     case MESSAGE_TYPES.INTERNAL:
       return undefined;
 

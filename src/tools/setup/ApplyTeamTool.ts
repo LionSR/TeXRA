@@ -7,9 +7,8 @@
  * UI is never built — the setup agent asks in conversation and calls this.
  *
  * The roster write goes through the same shared application path
- * (`applyTeamRosterWithPreflight`) as the Settings "apply team" action, so the
- * two can't drift. Account-served members (remote workflow agents) that aren't in the
- * registry yet (signed out) are reported as "after sign-in" rather than
+ * (`applyTeamRoster`) as the Settings "apply team" action, so the two can't
+ * drift. Members that aren't in the registry yet are reported rather than
  * silently dropped.
  */
 
@@ -20,22 +19,20 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import {
   createWorkspaceAgentRosterController,
   loadAgents,
-  refresh,
 } from '@agent/index/agentRegistry';
-import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
+import { missingMemberNames, planTeamRun } from '@common/teams/TeamPlan';
 import {
-  resolveTeamRoster,
+  TeamCatalogPortFailed,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
-import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
+import { applyTeamRoster } from '@common/teams/TeamRosterApplication';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { defineTool } from '../core/define';
-import { getSetupAuthStatus, SetupPlatform } from './platform';
 
 /**
  * The shared catalog's built-in teams (the setup starter included), so the
@@ -57,12 +54,6 @@ const ApplyTeamInputSchema = z.strictObject({
       message: `Expected one of: ${TEAM_IDS.join(', ')}`,
     })
     .describe(`Team to apply. One of:\n${describeTeams()}`),
-  unavailableAction: z
-    .enum(['sign-in', 'continue', 'cancel'])
-    .nullish()
-    .describe(
-      'Explicit response when TeXRA-hosted members are unavailable. Omit on the first call; after asking the user, pass sign-in, continue, or cancel.',
-    ),
 });
 
 type ApplyTeamInput = z.infer<typeof ApplyTeamInputSchema>;
@@ -72,8 +63,6 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
 ) {
   const call = yield* ToolCall;
   const roster = createWorkspaceAgentRosterController(call.roots);
-  const { signIn } = yield* SetupPlatform;
-  const authStatus = yield* getSetupAuthStatus();
 
   // Applying the roster and recording it as the default team both go
   // through this tool's adapter — the Settings "apply team" action commits
@@ -86,7 +75,10 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
         return {
           ok: true,
           preset,
-          resolution: resolveTeamRoster(roster, preset),
+          resolution: planTeamRun(preset, {
+            resolveAgent: (category, identifier) =>
+              roster.resolveAgent(category, identifier),
+          }),
         };
       }),
     commitPreset: (preset) =>
@@ -97,12 +89,11 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
         // view is showing a roster this call just replaced.
         emitAppSignal('agentRosterChanged', undefined);
       }).pipe(
-        // The roster writes are the port's own failure: the preflight reads
-        // this channel, and the two stores' tags would not name the port.
+        // The roster writes are the port's own failure: the two stores' tags
+        // would not name the port.
         Effect.mapError(
           (cause) =>
             new TeamCatalogPortFailed({
-              member: 'commitPreset',
               message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
               cause,
             }),
@@ -110,14 +101,9 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       ),
   };
 
-  const result = yield* applyTeamRosterWithPreflight(input.teamId, {
+  const result = yield* applyTeamRoster(input.teamId, {
     catalog,
-    loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-    canAccessRemoteCatalog: () => Effect.succeed(authStatus.authenticated),
-    providedChoice: input.unavailableAction ?? undefined,
-    choose: () => Effect.succeed(undefined),
-    signIn,
-    forceRefreshRemoteCatalog: () => refresh({ includeRemote: true }),
+    loadCatalog: () => loadAgents(),
   });
 
   if (result.status === 'unknown') {
@@ -130,52 +116,15 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
     );
   }
 
-  if (result.status === 'choice-required') {
-    const names = result.unavailableNames.join(', ');
-    return executed(
-      `The ${result.preset.name} team has unavailable TeXRA-hosted members: ${names}. Ask the user to choose one action: Sign in to TeXRA, Continue with available members, or Cancel. Then call apply_team again with unavailableAction set to "sign-in", "continue", or "cancel". No roster or default-team state was written.`,
-      `Team not applied; TeXRA-hosted members are unavailable: ${names}.`,
-    );
-  }
-
-  if (result.status === 'cancelled') {
-    return executed(
-      'Cancelled. No roster or default-team state was written.',
-      `Cancelled ${result.preset.name} team application.`,
-    );
-  }
-  if (result.status === 'unavailable') {
-    return yield* Effect.fail(
-      new ToolError(
-        `The ${result.preset.name} team is still unavailable after refreshing the TeXRA agent catalog: ${result.unavailableNames.join(', ')}.`,
-      ),
-    );
-  }
-
   const { preset } = result;
-  const { keys, unresolvedNames } = result.resolution;
-  const texraHostedNames = new Set(preset.texraHostedAgents);
-
-  // `keys` holds only the agent keys that resolved in the registry. Names
+  const { workflow: activeWorkflow, toolUse: activeToolUse } =
+    result.resolution.agentKeys;
+  // `agentKeys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the roster stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
-  // activates the moment it appears. `unresolvedNames` is preflight
-  // evidence, not stored state. Account-served members are absent until
-  // sign-in — say so instead of letting it read as a silent failure; check
-  // registry resolution, never auth.
-  const activeWorkflow = keys.workflow;
-  const activeToolUse = keys.toolUse;
-  const pendingRemoteMembers = unresolvedNames.filter((name) =>
-    texraHostedNames.has(name),
-  );
-  const pendingOther = unresolvedNames.filter(
-    (name) => !texraHostedNames.has(name),
-  );
-
-  const signInNote =
-    pendingRemoteMembers.length > 0
-      ? `TeXRA-hosted members join the roster automatically after sign-in: ${pendingRemoteMembers.join(', ')}.`
-      : undefined;
+  // activates the moment it appears. Say so instead of letting it read as a
+  // silent failure.
+  const unresolvedNames = missingMemberNames(result.resolution);
 
   const lines = [
     `Applied the ${preset.name} roster to this workspace.`,
@@ -187,19 +136,16 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
     }`,
     `Saved "${preset.id}" as the default team: fresh workspaces start with this roster.`,
   ];
-  if (signInNote) lines.push(signInNote);
-  if (pendingOther.length > 0) {
+  if (unresolvedNames.length > 0) {
     lines.push(
-      `Not installed yet (kept in the roster, activates when available): ${pendingOther.join(', ')}.`,
+      `Not installed yet (kept in the roster, activates when available): ${unresolvedNames.join(', ')}.`,
     );
   }
 
-  const summary = [
+  return executed(
+    lines.join('\n'),
     `Applied the ${preset.name} roster: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
-    ...(signInNote ? [signInNote] : []),
-  ].join(' ');
-
-  return executed(lines.join('\n'), summary);
+  );
 });
 
 export const ApplyTeamTool = defineTool({

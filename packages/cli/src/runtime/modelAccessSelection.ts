@@ -4,6 +4,7 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
+import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import { hasUsableApiKey } from '@model/apiProviders';
 import {
   codingPlanSubscriptionRuntimes,
@@ -12,6 +13,7 @@ import {
 import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -55,10 +57,17 @@ class ModelAccessPreferenceFailed extends Data.TaggedError(
 export const readCliModelAccessStatus = Effect.fn(
   'modelAccessSelection.readCliModelAccessStatus',
 )(function* (stores: SettingsStores, secrets: PlatformSecrets) {
-  const [chatGpt, grok, codingPlanEntries] = yield* Effect.all(
+  const [subscriptionEntries, codingPlanEntries] = yield* Effect.all(
     [
-      subscriptionProvider('chatgpt').getStatus(secrets),
-      subscriptionProvider('grok').getStatus(secrets),
+      Effect.forEach(
+        SUBSCRIPTION_AUTH_PROVIDERS,
+        (provider) =>
+          Effect.map(
+            subscriptionAuthStatus(provider, stores, secrets),
+            (status) => [provider, status] as const,
+          ),
+        { concurrency: 'unbounded' },
+      ),
       Effect.forEach(
         codingPlanSubscriptionRuntimes,
         (runtime) =>
@@ -75,24 +84,13 @@ export const readCliModelAccessStatus = Effect.fn(
     ] as const,
     { concurrency: 'unbounded' },
   );
-  const codingPlans = Object.fromEntries(
-    codingPlanEntries,
-  ) as CliModelAccessStatus['codingPlans'];
-  const preferences = {
-    chatGpt: subscriptionProvider('chatgpt').isPreferSubscription(stores)
-      ? 'on'
-      : 'off',
-    grok: subscriptionProvider('grok').isPreferSubscription(stores)
-      ? 'on'
-      : 'off',
-  } as const;
   return {
-    preferences,
-    chatGptSignedIn: chatGpt.signedIn,
-    chatGptAccountLabel: chatGpt.email ?? chatGpt.accountId,
-    grokSignedIn: grok.signedIn,
-    grokAccountLabel: grok.email,
-    codingPlans,
+    subscriptions: Object.fromEntries(
+      subscriptionEntries,
+    ) as CliModelAccessStatus['subscriptions'],
+    codingPlans: Object.fromEntries(
+      codingPlanEntries,
+    ) as CliModelAccessStatus['codingPlans'],
   } satisfies CliModelAccessStatus;
 });
 

@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   expectRealCoverage,
+  parseSourceFile,
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
@@ -35,6 +37,11 @@ import {
 const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
 
 const DATABASE_MODULE = 'src/controllers/session/Database.ts';
+/** The history query store's process opens SQLite on its own `:memory:`
+ *  database and never on the session file. It assigns no seq or commit and
+ *  claims nothing, so it is not a second owner of the ordinals this ratchet
+ *  guards; it stays under the write scan like every other file. */
+const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/childSource.ts';
 
 /** Both the official SQLite driver and raw SQLite imports create storage
  * authority. Imports, requires, and dynamic imports obey the same boundary. */
@@ -51,9 +58,56 @@ const SQLITE_IMPORT =
 const EVENT_TABLE_WRITE =
   /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
 
-function offenders(pattern: RegExp): string[] {
+/** The session publisher: per (process, root), every durable append is a
+ *  job on its one inbox, so commit order is enqueue order (core concepts,
+ *  invariant 1). */
+const PUBLISHER_MODULE = 'src/agent/runtime/SessionEvents.ts';
+
+/** A call of the database's append, or of the run removal whose transaction
+ *  appends the tombstone; never a declaration or a `Pick` key. */
+const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
+
+/**
+ * The files that still append without the publisher, each with the reason it
+ * may. Shrink only: an entry whose file stops appending fails below, and a new
+ * appender is refused. Nothing is added here to make a change pass.
+ */
+const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
+  [DATABASE_MODULE]:
+    'defines appendAll and appendPrepared; the run-removal transaction it prepares runs as a publisher job',
+};
+
+/** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape
+ *  (`\x1b[?25h`) is the one non-SQL `?<digit>` a literal carries, so a `?`
+ *  after `[` is not one. */
+const NUMBERED_SQL_PARAMETER = /(?<!\[)\?\d/;
+
+/** Every string and template-literal piece in one file that holds a
+ *  numbered SQL parameter, as `file:line`. */
+function numberedParameterSites(file: string): string[] {
+  const text = readFileSync(resolve(REPO_ROOT, file), 'utf8');
+  if (!NUMBERED_SQL_PARAMETER.test(text)) return [];
+  const source = parseSourceFile(file, { text, setParentNodes: false });
+  const sites: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) &&
+      NUMBERED_SQL_PARAMETER.test(node.text)
+    ) {
+      const { line } = source.getLineAndCharacterOfPosition(
+        node.getStart(source),
+      );
+      sites.push(`${file}:${line + 1}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return sites;
+}
+
+function offenders(pattern: RegExp, allowed: readonly string[]): string[] {
   return PRODUCTION_ROOTS.flatMap(productionFilesUnder)
-    .filter((file) => file !== DATABASE_MODULE)
+    .filter((file) => !allowed.includes(file))
     .filter((file) =>
       pattern.test(
         stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
@@ -71,7 +125,10 @@ describe('persistence write boundary', () => {
   });
 
   it('opens the substrate in the Database layer and nowhere else', () => {
-    const found = offenders(SQLITE_IMPORT);
+    const found = offenders(SQLITE_IMPORT, [
+      DATABASE_MODULE,
+      HISTORY_QUERY_STORE,
+    ]);
 
     expect(
       found,
@@ -82,7 +139,7 @@ describe('persistence write boundary', () => {
   });
 
   it('writes the C1 tables in the Database layer and nowhere else', () => {
-    const found = offenders(EVENT_TABLE_WRITE);
+    const found = offenders(EVENT_TABLE_WRITE, [DATABASE_MODULE]);
 
     expect(
       found,
@@ -90,6 +147,45 @@ describe('persistence write boundary', () => {
         ? undefined
         : `Append through Database.appendAll (${DATABASE_MODULE}); it is the only assigner of seq and commit (contract C6).`,
     ).toEqual([]);
+  });
+
+  it('appends through the session publisher and nowhere else', () => {
+    const allowed = [
+      PUBLISHER_MODULE,
+      ...Object.keys(APPENDS_OUTSIDE_PUBLISHER),
+    ];
+    const found = offenders(APPEND_CALL, allowed);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : `Append as a job on the session publisher (${PUBLISHER_MODULE}: publish, exclusive, detach); a direct append commits around its inbox and its tracking.`,
+    ).toEqual([]);
+    // Shrink only: an allowance whose file no longer appends goes.
+    const stale = allowed.filter(
+      (file) =>
+        !APPEND_CALL.test(
+          stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+        ),
+    );
+    expect(stale).toEqual([]);
+  });
+
+  it('binds SQL with anonymous parameters only', () => {
+    const found = PRODUCTION_ROOTS.flatMap(productionFilesUnder)
+      .flatMap(numberedParameterSites)
+      .toSorted();
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Use anonymous `?` parameters, repeating a value in the argument list where the statement uses it twice. Node 22's `node:sqlite` (the CLI supports ^22.19) treats a numbered `?NNN` as named and skips it when binding a positional list, so the statement fails there with `column index out of range`; only the nightly CLI validator runs Node 22 (#13395).",
+    ).toEqual([]);
+    // Not vacuous: the pattern flags the shape #13386 shipped.
+    expect(NUMBERED_SQL_PARAMETER.test('json_each(?1)')).toBe(true);
+    expect(NUMBERED_SQL_PARAMETER.test('\x1b[?2004h')).toBe(false);
   });
 
   it('keeps the Database layer itself the writer the ratchet names', () => {
@@ -102,5 +198,12 @@ describe('persistence write boundary', () => {
     // file that no longer writes anything.
     expect(SQLITE_IMPORT.test(source)).toBe(true);
     expect(EVENT_TABLE_WRITE.test(source)).toBe(true);
+    expect(
+      SQLITE_IMPORT.test(
+        stripComments(
+          readFileSync(resolve(REPO_ROOT, HISTORY_QUERY_STORE), 'utf8'),
+        ),
+      ),
+    ).toBe(true);
   });
 });

@@ -3,8 +3,8 @@
  * order, plus the run's persisted record for the caller's filename.
  *
  * Four facts are authored rather than copied, because an exported file has no
- * producer, no siblings and no writable host: `ownerId` is null on every row
- * (which is also PII removal — the owner id names the writing process), and
+ * producer, no siblings and no writable host: `origin` is null on every row
+ * (which is also PII removal — the origin names the writing process), and
  * the creation row carries no parent, no checkpoint and no follow-up support
  * (a visible composer would be a dead control against a read-only bridge).
  *
@@ -13,7 +13,7 @@
  */
 import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import { readPersistedRunRecord } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
@@ -75,7 +75,10 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [record, events] = yield* Effect.all(
-    [readPersistedRunRecord(runId, session), session.readRunEvents(runId)],
+    [
+      getRunRecords(session, runId).readRunRecord(),
+      session.readRunEvents(runId),
+    ],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };
@@ -94,7 +97,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
         if (event.type === 'run.start')
           return {
             ...event,
-            ownerId: null,
+            origin: null,
             parent: null,
             checkpointId: null,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -102,10 +105,10 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
         if (event.type === 'request.decided')
           return {
             ...event,
-            ownerId: null,
+            origin: null,
             decision: decisionAction(event.decision),
           };
-        return { ...event, ownerId: null };
+        return { ...event, origin: null };
       }),
     },
   };

@@ -16,15 +16,14 @@ import {
   ObservationPolicySchema,
   ModelConfigurationSchema,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -572,7 +571,7 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
   configuration: GoogleInteractionsConfiguration,
-  transport: { readonly apiKey: string },
+  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
   if (config.protocol !== 'google-interactions' || !transport.apiKey) {
@@ -590,51 +589,50 @@ export function googleInteractionsModel(
     enterprise: false,
     apiKey: transport.apiKey,
     apiVersion: 'v1beta',
-    httpOptions: { baseUrl: config.deployment.endpoint },
+    httpOptions: {
+      baseUrl: config.deployment.endpoint,
+      fetch: transport.fetch,
+    },
   });
 
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
     function* (request) {
-      const parsed = TurnRequestSchema.safeParse(request);
-      if (!parsed.success) {
-        return yield* new ModelError({
-          kind: 'invalid-request',
-          message: 'The canonical Google input is invalid.',
-          cause: parsed.error,
-        });
-      }
-      if (parsed.data.temperature !== undefined) {
+      const authored = yield* decodeTurnRequest(
+        request,
+        'The canonical Google input is invalid.',
+      );
+      if (authored.temperature !== undefined) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google Interactions does not support temperature.',
         });
       }
-      if (parsed.data.parallelToolCalls !== undefined) {
+      if (authored.parallelToolCalls !== undefined) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google parallel-call control is not implemented.',
         });
       }
       if (
-        parsed.data.reasoning !== undefined ||
-        parsed.data.serviceTier !== undefined ||
-        parsed.data.thinking !== undefined ||
-        parsed.data.effort !== undefined ||
-        parsed.data.cache !== undefined ||
-        parsed.data.stopSequences !== undefined ||
-        (parsed.data.continuation !== undefined &&
-          parsed.data.continuation.origin.protocol !== 'google-interactions')
+        authored.reasoning !== undefined ||
+        authored.serviceTier !== undefined ||
+        authored.thinking !== undefined ||
+        authored.effort !== undefined ||
+        authored.cache !== undefined ||
+        authored.stopSequences !== undefined ||
+        (authored.continuation !== undefined &&
+          authored.continuation.origin.protocol !== 'google-interactions')
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google does not support the supplied protocol controls.',
         });
       }
-      const mode = parsed.data.mode ?? 'foreground';
+      const mode = authored.mode ?? 'foreground';
       if (
         mode === 'background' &&
         (config.background !== 'supported' ||
-          !(parsed.data.store ?? config.defaults.store))
+          !(authored.store ?? config.defaults.store))
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -645,17 +643,17 @@ export function googleInteractionsModel(
       const turn = ResolvedTurnSchema.parse({
         ...origin,
         mode,
-        system: parsed.data.system,
-        messages: parsed.data.messages,
-        tools: parsed.data.tools ?? [],
-        continuation: parsed.data.continuation,
+        system: authored.system,
+        messages: authored.messages,
+        tools: authored.tools ?? [],
+        continuation: authored.continuation,
         controls: {
-          toolChoice: parsed.data.toolChoice ?? 'auto',
+          toolChoice: authored.toolChoice ?? 'auto',
           maxOutputTokens:
-            parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens,
-          store: parsed.data.store ?? config.defaults.store,
+            authored.maxOutputTokens ?? config.defaults.maxOutputTokens,
+          store: authored.store ?? config.defaults.store,
           thinkingLevel:
-            parsed.data.thinkingLevel ?? config.defaults.thinkingLevel,
+            authored.thinkingLevel ?? config.defaults.thinkingLevel,
         },
       });
       yield* invocationInput(turn, origin);
@@ -663,7 +661,7 @@ export function googleInteractionsModel(
     },
   );
 
-  const streamTurn: Model['streamTurn'] = (input) =>
+  const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
       let returnedModel: string | null = null;
@@ -674,18 +672,15 @@ export function googleInteractionsModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const parsed = ResolvedTurnSchema.safeParse(input);
           if (
-            !parsed.success ||
-            parsed.data.protocol !== 'google-interactions' ||
-            parsed.data.mode !== 'foreground'
+            turn.protocol !== 'google-interactions' ||
+            turn.mode !== 'foreground'
           ) {
             return yield* new ModelError({
               kind: 'unsupported',
               message: 'The prepared Google invocation is unsupported.',
             });
           }
-          const turn = parsed.data;
           const inputSteps = yield* invocationInput(turn, origin);
 
           let reader: ReadableStreamDefaultReader<unknown> | undefined =
@@ -998,8 +993,6 @@ export function googleInteractionsModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const snapshot = Effect.fn('llm.google.snapshot')(function* (
     raw: unknown,
     operation: RemoteOperation,
@@ -1058,16 +1051,14 @@ export function googleInteractionsModel(
     });
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.google.submit',
-  )(function* (input) {
+  )(function* (turn) {
     let operation: RemoteOperation | undefined;
     return yield* Effect.gen(function* () {
-      const parsed = ResolvedTurnSchema.safeParse(input);
       if (
-        !parsed.success ||
-        parsed.data.protocol !== 'google-interactions' ||
-        parsed.data.mode !== 'background' ||
+        turn.protocol !== 'google-interactions' ||
+        turn.mode !== 'background' ||
         config.background !== 'supported' ||
-        !parsed.data.controls.store
+        !turn.controls.store
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -1075,7 +1066,6 @@ export function googleInteractionsModel(
             'Google background execution requires an enabled route and store:true.',
         });
       }
-      const turn = parsed.data;
       const inputSteps = yield* invocationInput(turn, origin);
       const raw = yield* ownedAbortSafeRequest(
         (signal) =>
@@ -1130,19 +1120,17 @@ export function googleInteractionsModel(
     );
   });
   const observe: NonNullable<Model['background']>['observe'] = (
-    admitted,
+    turn,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input, origin);
-        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
         if (
-          !parsedTurn.success ||
-          parsedTurn.data.protocol !== 'google-interactions' ||
-          parsedTurn.data.mode !== 'background' ||
-          !sameModelOrigin(parsedTurn.data, operation.origin)
+          turn.protocol !== 'google-interactions' ||
+          turn.mode !== 'background' ||
+          !sameModelOrigin(turn, operation.origin)
         ) {
           return yield* new ModelError({
             kind: 'unsupported',
@@ -1150,7 +1138,6 @@ export function googleInteractionsModel(
             operation,
           });
         }
-        const turn = parsedTurn.data;
         const chain = yield* canChain(GOOGLE_PREFIX_DOMAIN, turn, operation);
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
@@ -1287,33 +1274,21 @@ export function googleInteractionsModel(
   });
 
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.google.estimateInputTokens')(function* (input) {
-      const parsed = ResolvedTurnSchema.safeParse(input);
-      if (
-        !parsed.success ||
-        parsed.data.protocol !== 'google-interactions' ||
-        parsed.data.mode !== 'foreground'
-      )
+    Effect.fn('llm.google.estimateInputTokens')(function* (turn) {
+      if (turn.protocol !== 'google-interactions' || turn.mode !== 'foreground')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'The prepared Google count invocation is unsupported.',
         });
-      const turn = parsed.data;
       yield* invocationInput(turn, origin);
-      const message = turn.messages[0];
-      if (
-        turn.continuation !== undefined ||
-        turn.tools.length !== 0 ||
-        turn.messages.length !== 1 ||
-        message?.role !== 'user' ||
-        !message.content.every((part) => part.kind === 'text')
-      )
+      const text = initialTextInput(turn);
+      if (text === undefined)
         return yield* new ModelError({
           kind: 'unsupported',
           message:
             'Google counting supports one initial text-only user message and optional system text.',
         });
-      const parts = message.content.map((part) => ({ text: part.text }));
+      const parts = text.map((part) => ({ text: part.text }));
       const response = yield* ownedAbortSafeRequest(
         (signal) =>
           client.models.countTokens({
@@ -1351,7 +1326,6 @@ export function googleInteractionsModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(config.background === 'supported'
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),

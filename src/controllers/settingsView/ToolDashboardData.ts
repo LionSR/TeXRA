@@ -10,20 +10,25 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { AppState } from '@platform/interfaces';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
-import { TOOL_PLUGINS, findToolPlugin, type ToolPlugin } from '@tools/plugins';
+import {
+  TOOL_PLUGINS,
+  findToolPlugin,
+  readDisabledTools,
+  type ToolPlugin,
+  type ToolPluginSetup,
+} from '@tools/plugins';
 import { isToolUnavailableOnHost } from '@tools/registry';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
-  runExternalToolChecks,
+  ToolAvailability,
   type ExternalToolCheckResult,
-} from '@tools/toolAvailability';
-import { getDisabledToolIds } from '@utils/config/constants';
+} from '@tools/toolAvailabilityService';
 
 // ============================================================
 // Tool terminal actions
@@ -55,7 +60,9 @@ export function planToolTerminalAction(input: {
   if (!def?.availability) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
-    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+    input.commandKind === 'install'
+      ? def.setup?.installCommand
+      : def.setup?.authCommand;
   if (!command) return { kind: 'none', reason: 'missingCommand' };
 
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
@@ -73,19 +80,22 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
 // ============================================================
 
 /**
- * Whether a plugin belongs on `host`'s dashboard. A hidden plugin, or one
- * whose every tool declares itself unavailable on the asking host, is not
+ * Whether a plugin belongs on `host`'s dashboard. A hidden plugin, one that
+ * names the host in its `unavailableHosts`, or one whose every tool declares
+ * itself unavailable on the asking host, is not
  * shown there and cannot be installed, authed or toggled from it: host
  * exclusion removes those tools from the resolved roster, so they can never
  * be called there.
  */
 export function isToolPluginVisible(
   plugin: ToolPlugin,
-  host: ToolHost,
+  host: SettingHost,
 ): boolean {
   return (
     plugin.hidden !== true &&
-    !plugin.toolNames.every((name) => isToolUnavailableOnHost(name, host))
+    plugin.unavailableHosts?.includes(host) !== true &&
+    (plugin.toolNames.length === 0 ||
+      plugin.toolNames.some((name) => !isToolUnavailableOnHost(name, host)))
   );
 }
 
@@ -95,8 +105,8 @@ export function isToolPluginVisible(
  * Built-in plugins come first, in manifest order, then the probed plugins in
  * the order their results arrive.
  *
- * @param host - the product host asking; see {@link isToolPluginVisible}.
- * @param probeInputs - the asking host's workspace folder and configuration,
+ * @param probeInputs - the asking host (see {@link isToolPluginVisible}), its
+ *   workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
  *   whether the folder is a git repository, the Zotero group reads its port).
  *   Ignored when `cachedResults` skips the probes.
@@ -106,10 +116,10 @@ export function isToolPluginVisible(
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    host: ToolHost,
     probeInputs: ToolProbeInputs,
-    cachedResults?: ExternalToolCheckResult[],
+    cachedResults?: readonly ExternalToolCheckResult[],
   ) {
+    const { host } = probeInputs;
     const builtinItems: ToolDashboardItem[] = TOOL_PLUGINS.filter(
       (plugin) =>
         plugin.availability === undefined && isToolPluginVisible(plugin, host),
@@ -126,13 +136,22 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     }));
 
     const results =
-      cachedResults ?? (yield* runExternalToolChecks(probeInputs));
+      cachedResults ?? (yield* (yield* ToolAvailability).refresh(probeInputs));
 
-    const disabledIds = yield* getDisabledToolIds(yield* AppState);
+    const disabledIds = yield* readDisabledTools(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findToolPlugin(id);
       if (!def || !isToolPluginVisible(def, host)) continue;
+      const {
+        installGuide,
+        installCommand,
+        authCommand,
+        installExtensionId,
+        installUrl,
+        configNotes,
+        authNote,
+      }: ToolPluginSetup = def.setup ?? {};
       externalItems.push({
         id: def.id,
         name: def.name,
@@ -143,30 +162,31 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         statusLabel,
         requiresSetup: true,
         installActions: [
-          ...(def.installGuide
-            ? [{ kind: 'guide' as const, text: def.installGuide }]
+          ...(installGuide
+            ? [{ kind: 'guide' as const, text: installGuide }]
             : []),
-          ...(def.installCommand
-            ? [{ kind: 'command' as const, command: def.installCommand }]
+          ...(installCommand
+            ? [{ kind: 'command' as const, command: installCommand }]
             : []),
-          ...(def.authCommand
-            ? [{ kind: 'auth' as const, command: def.authCommand }]
+          ...(authCommand
+            ? [{ kind: 'auth' as const, command: authCommand }]
             : []),
-          ...(def.installExtensionId
+          // The desktop app cannot host VS Code extensions, so it gets no
+          // "Install Extension" button; the install guide and URL still
+          // describe the standalone path (Lean 4's `lake` build, for one).
+          ...(installExtensionId && host !== 'desktop'
             ? [
                 {
                   kind: 'extension' as const,
-                  extensionId: def.installExtensionId,
+                  extensionId: installExtensionId,
                 },
               ]
             : []),
-          ...(def.installUrl
-            ? [{ kind: 'url' as const, url: def.installUrl }]
-            : []),
+          ...(installUrl ? [{ kind: 'url' as const, url: installUrl }] : []),
         ],
-        configNotes: def.configNotes,
+        configNotes,
         statusDetail,
-        authNote: def.authNote,
+        authNote,
         toggleable: def.toggleable,
         enabled: !disabledIds.has(def.id),
         ...settingRows(def),

@@ -5,6 +5,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -33,7 +34,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolCall | FileSystem.FileSystem | WorkspaceFs
+  ToolCall | FileSystem.FileSystem | WorkspaceFs | AgentCatalogServices
 > {
   const call = yield* ToolCall;
   const prepared = yield* resolveWritableTarget(input.path, {
@@ -57,6 +58,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   return yield* applyApprovedFileEdit({
     path,
     displayPath,
+    exists,
     originalContent,
     proposedContent,
     sourceTool: 'write_file',
@@ -78,7 +80,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 
 export const WriteFileTool = defineTool({
   name: 'write_file',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description:
     'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
   schema: WriteInputSchema,

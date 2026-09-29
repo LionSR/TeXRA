@@ -16,6 +16,8 @@ export const NonAgentRunRecordSchema = z.strictObject({
   instruction: z.string(),
   workingDirectory: z.string().optional(),
   model: z.string().optional(),
+  /** A workflow script's input files, which its run view lists. */
+  inputFiles: z.array(z.string()).optional(),
 });
 
 /** Inputs have already passed launch validation; persisted records are canonical. */
@@ -56,9 +58,11 @@ const RunEndErrorSchema = z
   .readonly();
 
 /**
- * What a run produced, by category (one run model, section 3.4). The one
- * declaration every result type derives from: the `run.end` row carries it,
- * the flow hands it to the lifecycle, and a producer record embeds it.
+ * What a run produced, by category (one run model, section 3.4): the value
+ * the flow hands its lifecycle and every result reader returns. It is read,
+ * not stored whole: a workflow run's files are its newest `output.produced`
+ * row, its diffs the `run.result` of the delivery that computed them, and a
+ * tool-use run's reply the `run.end` row ({@link RunEndRowSchema}).
  */
 export const WorkflowRunEndOutputSchema = z.strictObject({
   category: z.literal('workflow'),
@@ -89,9 +93,11 @@ export function emptyRunEndOutput(category: AgentCategory): RunEndOutput {
 }
 
 /**
- * The terminal fact, written once as the `run.end` row. `error` is present
- * only on a failed outcome; `usage` once a round recorded usage, including on
- * failures. Cost is `usage.totalCost` and nothing else.
+ * A run's terminal result as every reader sees it. `error` is present only
+ * on a failed outcome; `usage` once a round recorded usage, including on
+ * failures. Cost is `usage.totalCost` and nothing else. Derived on read
+ * (`readRunEnd`): the usage is the run ledger's fold of its priced response
+ * rows, the output as {@link RunEndOutputSchema} says.
  */
 export const RunEndSchema = z.strictObject({
   outcome: RunOutcomeSchema,
@@ -102,11 +108,47 @@ export const RunEndSchema = z.strictObject({
 export type RunEnd = z.infer<typeof RunEndSchema>;
 
 /**
+ * The part of a run's output a row stores: a tool-use run's reply, which no
+ * other row holds. A workflow run's files are its `output.produced` rows, so
+ * a stored workflow output names only its category.
+ */
+const StoredRunOutputSchema = z.discriminatedUnion('category', [
+  WorkflowRunEndOutputSchema.pick({ category: true }),
+  ToolUseRunEndOutputSchema,
+]);
+
+export function storedRunOutput(
+  output: RunEndOutput,
+): z.infer<typeof StoredRunOutputSchema> {
+  return output.category === 'workflow'
+    ? { category: output.category }
+    : output;
+}
+
+/**
+ * The terminal fact, written once per lifecycle as the `run.end` row: the
+ * outcome, the classified error and the stored output. Every run's usage is
+ * its priced response rows'.
+ */
+export const RunEndRowSchema = RunEndSchema.omit({
+  usage: true,
+  output: true,
+}).extend({ output: StoredRunOutputSchema });
+
+/** The part of a result's diffs a delivery computes after the run ended. */
+const DeliveredDiffsSchema = WorkflowRunEndOutputSchema.pick({
+  diffs: true,
+  diffsUnavailable: true,
+});
+
+/**
  * What a producer recorded beside a run's terminal fact, written as the
- * `run.result` row. It carries only what the `run.end` row does not: the
- * producer's own context and the output as the delivery enriched it (workflow
- * diffs are computed after the flow reported). Outcome, error and usage are
- * the terminal fact's alone — never copied here (one run model, section 3.3).
+ * `run.result` row. It carries only what no other row does: the producer's
+ * own context, the diffs the delivery computed after the flow reported, and
+ * a subagent's delivered reply (a child loop's `run.end` carries none, by
+ * rule, and a child waiting for its next turn has none yet). Outcome, error,
+ * usage and a workflow's files are read from their own rows — never copied
+ * here (one run model, section 3.3).
  */
 export const ResultMetaSchema = z.discriminatedUnion('producer', [
   z.strictObject({
@@ -117,20 +159,52 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
     timedOut: z.boolean().optional(),
     command: z.string(),
   }),
-  z.strictObject({
+  DeliveredDiffsSchema.extend({
     producer: z.literal('cliWorkflow'),
-    output: WorkflowRunEndOutputSchema,
     copiedOutput: z.string().optional(),
     copiedOutputs: z.array(z.string()).optional(),
   }),
-  z.strictObject({
+  DeliveredDiffsSchema.extend({
     producer: z.literal('subagent'),
     agentName: z.string(),
     wallTimeMs: z.number().nonnegative(),
-    output: RunEndOutputSchema,
+    output: StoredRunOutputSchema,
   }),
 ]);
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
+
+/**
+ * A producer's record as its delivery holds it in memory: its whole output.
+ * {@link storedResultMeta} keeps of it what no other row holds.
+ */
+export type DeliveredResult =
+  | Extract<ResultMeta, { producer: 'backgroundBash' }>
+  | (Omit<
+      Extract<ResultMeta, { producer: 'cliWorkflow' }>,
+      'diffs' | 'diffsUnavailable'
+    > & { readonly output: z.infer<typeof WorkflowRunEndOutputSchema> })
+  | (Omit<
+      Extract<ResultMeta, { producer: 'subagent' }>,
+      'diffs' | 'diffsUnavailable' | 'output'
+    > & { readonly output: RunEndOutput });
+
+/** The `run.result` row of a delivered record. */
+export function storedResultMeta(result: DeliveredResult): ResultMeta {
+  if (result.producer === 'backgroundBash') return result;
+  const { output, ...context } = result;
+  const diffs =
+    output.category === 'workflow'
+      ? {
+          diffs: output.diffs,
+          ...(output.diffsUnavailable !== undefined
+            ? { diffsUnavailable: output.diffsUnavailable }
+            : {}),
+        }
+      : { diffs: [] };
+  return context.producer === 'subagent'
+    ? { ...context, ...diffs, output: storedRunOutput(output) }
+    : { ...context, ...diffs };
+}
 
 /** Canonical workspace paths at the record boundary. */
 export const RunWorkspaceFilesSchema = z

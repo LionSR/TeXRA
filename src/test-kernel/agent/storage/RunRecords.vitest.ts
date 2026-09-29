@@ -11,6 +11,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
@@ -27,7 +28,6 @@ beforeEach(async () => {
         aggregateId: aggregateId('run', runId),
         identity: { kind: 'agent', agent: 'worker' },
         userFollowUpSupport: 'unsupported',
-        isRemote: false,
         category: 'toolUse',
         parent: null,
       },
@@ -43,12 +43,17 @@ describe('canonical run records', () => {
       agentCategory: 'toolUse',
       instruction: 'private instruction',
     });
-    await run(records.writeRunRecord(config));
-    await run(records.writeReport('private report'));
+    await run(seedRunRecord(session, runId, config));
+    await run(seedReport(session, runId, 'private report'));
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
     const visible = await run(Stream.runCollect(session.events.listing()));
-    expect(visible.map((event) => event.type)).toEqual(['run.start']);
+    // The configuration is the run's one `run.config` display row; the
+    // report stays private.
+    expect(visible.map((event) => event.type)).toEqual([
+      'run.start',
+      'run.config',
+    ]);
     expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
   });
 
@@ -57,23 +62,20 @@ describe('canonical run records', () => {
     () =>
       Effect.gen(function* () {
         const records = getRunRecords(session, runId);
-        yield* records.writeRunRecord(
+        yield* seedRunRecord(
+          session,
+          runId,
           AgentConfigFieldsSchema.parse({
             agent: 'worker',
             agentCategory: 'toolUse',
           }),
         );
-        yield* records.writeReport('retained report bytes');
-        yield* records.writeWorkspaceFiles(['output.tex']);
+        yield* seedReport(session, runId, 'retained report bytes');
         yield* records.writeResultMeta({
           producer: 'subagent',
           agentName: 'worker',
           wallTimeMs: 1,
-          output: {
-            category: 'toolUse',
-            response: 'answer',
-            files: [],
-          },
+          output: { category: 'toolUse', response: 'done', files: [] },
         });
         yield* session.commit([
           {
@@ -84,6 +86,12 @@ describe('canonical run records', () => {
           },
         ]);
         expect(yield* records.readReport()).toBe('retained report bytes');
+        // The result joins the terminal fact to the reply the delivery
+        // recorded, and drops the producer's own context.
+        expect(yield* records.readResult()).toEqual({
+          outcome: 'completed',
+          output: { category: 'toolUse', response: 'done', files: [] },
+        });
         yield* session.commit([
           {
             type: 'run.removed',
@@ -108,10 +116,14 @@ describe('canonical run records', () => {
 
   it('resets a prior report explicitly without replacing another metadata value', async () => {
     const records = getRunRecords(session, runId);
-    await run(records.writeReport('old report'));
-    await run(records.writeWorkspaceFiles([' a.tex ', 'a.tex', 'b.tex']));
+    await run(seedReport(session, runId, 'old report'));
+    const config = AgentConfigFieldsSchema.parse({
+      agent: 'worker',
+      agentCategory: 'toolUse',
+    });
+    await run(seedRunRecord(session, runId, config));
     await run(records.clearReport());
     expect(await run(records.readReport())).toBeNull();
-    expect(await run(records.readWorkspaceFiles())).toEqual(['a.tex', 'b.tex']);
+    expect(await run(records.readConfig())).toEqual(config);
   });
 });

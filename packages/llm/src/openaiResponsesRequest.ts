@@ -10,11 +10,11 @@ import { z } from 'zod';
 import {
   InputTokenEstimateSchema,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
 import { ownedAbortSafeRequest } from './transport.js';
@@ -38,14 +38,10 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
     request: TurnRequest,
     uploads: UploadCache | null,
   ) {
-    const parsed = TurnRequestSchema.safeParse(request);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The model input is invalid.',
-        cause: parsed.error,
-      });
-    const author = parsed.data;
+    const author = yield* decodeTurnRequest(
+      request,
+      'The model input is invalid.',
+    );
     if (
       author.thinkingLevel !== undefined ||
       author.thinking !== undefined ||
@@ -121,17 +117,15 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     config: OpenAIResponsesConfiguration,
     origin: ResponseOrigin,
     transport: ResponsesTransport,
-    input: ResolvedTurn,
+    turn: ResolvedTurn,
     mode: 'foreground' | 'background',
     uploads: UploadCache | null,
   ) {
-    const parsed = ResolvedTurnSchema.safeParse(input);
     if (
-      !parsed.success ||
-      parsed.data.protocol !== 'openai-responses' ||
-      parsed.data.mode !== mode ||
-      !isDeepStrictEqual(parsed.data.transport, transport) ||
-      !sameModelOrigin(parsed.data, origin) ||
+      turn.protocol !== 'openai-responses' ||
+      turn.mode !== mode ||
+      !isDeepStrictEqual(turn.transport, transport) ||
+      !sameModelOrigin(turn, origin) ||
       (mode === 'background' && config.background !== 'supported')
     ) {
       return yield* new ModelError({
@@ -140,7 +134,6 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
           'The prepared invocation belongs to another model, protocol or execution mode.',
       });
     }
-    const turn = parsed.data;
     if (
       (!config.supportsTemperature && turn.controls.temperature !== null) ||
       (!config.supportsMaxOutputTokens &&
@@ -151,7 +144,8 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
         )) ||
-      (turn.continuation !== undefined && !config.supportsResponseChaining)
+      (turn.continuation !== undefined && !config.supportsResponseChaining) ||
+      (turn.controls.toolChoice !== 'auto' && !config.supportsForcedToolChoice)
     )
       return yield* new ModelError({
         kind: 'unsupported',
@@ -159,15 +153,30 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       });
     const wireInput = yield* responseInput(turn, config, uploads);
     const reasoning = turn.controls.reasoning;
+    // A compatible route sends `store` only to ask for storage it defaults off.
+    let storage: Pick<ResponseCreateParamsBase, 'store' | 'include'> = {};
+    if (config.requestDialect === 'openai') {
+      storage = {
+        store: turn.controls.store,
+        include: ['reasoning.encrypted_content'],
+      };
+    } else if (turn.controls.store) {
+      storage = { store: true };
+    }
     const parameters: ResponseCreateParamsBase = {
       model: turn.requestedModel,
       ...wireInput,
-      ...(turn.system !== undefined ? { instructions: turn.system } : {}),
+      ...(turn.system !== undefined &&
+      !(
+        config.continuationInheritsInstructions &&
+        wireInput.previous_response_id !== undefined
+      )
+        ? { instructions: turn.system }
+        : {}),
       ...(turn.controls.maxOutputTokens !== null
         ? { max_output_tokens: turn.controls.maxOutputTokens }
         : {}),
-      store: turn.controls.store,
-      include: ['reasoning.encrypted_content'],
+      ...storage,
       ...(turn.controls.temperature !== null
         ? { temperature: turn.controls.temperature }
         : {}),
@@ -189,11 +198,16 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.tools.length > 0
         ? {
-            tools: turn.tools.map((tool) => ({
-              type: 'function' as const,
-              ...tool,
-              strict: false,
-            })),
+            tools: turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
+              config.requestDialect === 'openai'
+                ? { type: 'function', ...tool, strict: false }
+                : // The vendor endpoints take no `strict`, which the
+                  // OpenAI typings require.
+                  ({
+                    type: 'function',
+                    ...tool,
+                  } as OpenAI.Responses.FunctionTool),
+            ),
             parallel_tool_calls: turn.controls.parallelToolCalls,
             tool_choice:
               turn.controls.toolChoice === 'auto'
@@ -236,13 +250,7 @@ export const estimateResponseInput = Effect.fn(
     'foreground',
     null,
   );
-  if (
-    turn.continuation !== undefined ||
-    turn.tools.length !== 0 ||
-    turn.messages.length !== 1 ||
-    turn.messages[0]?.role !== 'user' ||
-    turn.messages[0].content.some((part) => part.kind !== 'text')
-  )
+  if (initialTextInput(turn) === undefined)
     return yield* new ModelError({
       kind: 'unsupported',
       message:

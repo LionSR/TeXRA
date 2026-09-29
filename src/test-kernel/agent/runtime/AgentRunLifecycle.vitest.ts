@@ -9,9 +9,9 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
-  runFlowWithLifecycle,
+  runWithLifecycle,
 } from '@agent/runtime/AgentRunLifecycle';
-import { type ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
+import { type ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -25,6 +25,7 @@ import {
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { untrackRun } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -95,10 +96,11 @@ function lifecycleFixture(
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  return {
-    runId,
-    ctx: createTestLaunchContext({ runId, agent, category }),
-  };
+  const ctx = createTestLaunchContext({ runId, agent, category });
+  // A run is registered before its lifecycle runs: an activation commits
+  // onto the run's rows.
+  publishTestRunStart(ctx.session, runId);
+  return { runId, ctx };
 }
 
 /** The launching run a subagent fixture names as its parent edge. */
@@ -111,7 +113,7 @@ const EMPTY_TOOL_USE_OUTPUT = {
   files: [],
 } as const;
 
-function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseFlowResult {
+function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseRunEndResult {
   return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
 }
 
@@ -133,14 +135,14 @@ const parkNextFinalize = Effect.gen(function* () {
  * it on the default runtime rather than a process runtime, so the services it
  * requires are provided here.
  */
-function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
-  return runFlowWithLifecycle(...args).pipe(
+function runLifecycle(...args: Parameters<typeof runWithLifecycle<never>>) {
+  return runWithLifecycle(...args).pipe(
     Effect.provide(fakeProcessServices()),
     Effect.provideService(Runs, args[0].session.runs),
   );
 }
 
-describe('runFlowWithLifecycle', () => {
+describe('runWithLifecycle', () => {
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
   const onboardingCases = [
@@ -165,7 +167,7 @@ describe('runFlowWithLifecycle', () => {
         );
         const { runId, ctx } = lifecycleFixture(agent);
 
-        yield* runFlow(ctx, () =>
+        yield* runLifecycle(ctx, () =>
           Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
         );
 
@@ -176,53 +178,26 @@ describe('runFlowWithLifecycle', () => {
     );
   }
 
-  it.effect('delivers subagent aborts through the terminal callback', () =>
+  it.effect('carries a subagent abort on its terminal result', () =>
     Effect.gen(function* () {
       const { ctx } = lifecycleFixture();
       ctx.attachedMemoryMisses.push({
         path: '/memories/missing.md',
         reason: 'not found',
       });
-      const onError = vi.fn();
 
-      const result = yield* runFlow(
+      const result = yield* runLifecycle(
         ctx,
         () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        { parentRunId: PARENT_RUN_ID, onError },
+        { parentRunId: PARENT_RUN_ID },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
-      expect(onError).toHaveBeenCalledOnce();
-      expect(onError.mock.calls[0][1]).toEqual(result);
+      expect(result.error).toMatchObject({
+        message: expect.stringContaining('aborted'),
+      });
     }),
-  );
-
-  it.effect(
-    'keeps subagent errors registered until terminal delivery runs',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
-        );
-        const onError = vi.fn(() => {
-          expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
-        });
-
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.fail(new Error('subagent failed')),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
-        );
-
-        expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-        expect(onError).toHaveBeenCalledOnce();
-        expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-      }),
   );
 
   it.effect(
@@ -239,7 +214,7 @@ describe('runFlowWithLifecycle', () => {
 
         try {
           const running = yield* Effect.forkChild(
-            runFlow(
+            runLifecycle(
               ctx,
               () => Effect.succeed(toolUseResult(runId, RUN_OUTCOME.COMPLETED)),
               { parentRunId: PARENT_RUN_ID },
@@ -250,7 +225,7 @@ describe('runFlowWithLifecycle', () => {
           yield* Deferred.await(parked.started);
           expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
-          const stop = testDefaultSession().runs.kill(runId);
+          const stop = testDefaultSession().runs.stop(runId);
 
           expect(stop.accepted()).toBe(false);
 
@@ -261,7 +236,7 @@ describe('runFlowWithLifecycle', () => {
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
           expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );
@@ -275,7 +250,7 @@ describe('runFlowWithLifecycle', () => {
       // the run has got to — here, parked before its first turn — and the
       // run's only fact is the cancelled terminal row.
       const runnerParked = yield* Deferred.make<void>();
-      const flow = runFlow(ctx, () =>
+      const flow = runLifecycle(ctx, () =>
         Deferred.succeed(runnerParked, undefined).pipe(
           Effect.andThen(Effect.never),
         ),
@@ -307,12 +282,11 @@ describe('runFlowWithLifecycle', () => {
     () =>
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
-        publishTestRunStart(ctx.session, runId);
         const recorded = recordSessionEvents(ctx.session, {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
-        const result = yield* runFlow(ctx, () =>
+        const result = yield* runLifecycle(ctx, () =>
           Effect.fail(new DOMException('Request aborted', 'AbortError')),
         );
 
@@ -323,7 +297,7 @@ describe('runFlowWithLifecycle', () => {
         expect(
           eventsOfType(
             yield* Effect.promise(() => recorded.read()),
-            'flow.step',
+            'run.position',
           ),
         ).toEqual([]);
         expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
@@ -362,7 +336,7 @@ describe('runFlowWithLifecycle', () => {
           const { runId, ctx } = lifecycleFixture();
           const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-          const result = yield* runFlow(ctx, () =>
+          const result = yield* runLifecycle(ctx, () =>
             Effect.succeed(toolUseResult(runId, outcome)),
           );
 
@@ -386,19 +360,15 @@ describe('runFlowWithLifecycle', () => {
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
+          Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
         );
         const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-        const onError = vi.fn();
 
         const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
-        const result = yield* runFlow(
+        const result = yield* runLifecycle(
           ctx,
           () => Effect.succeed(carriedResult),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
+          { parentRunId: PARENT_RUN_ID },
         );
 
         expect(result).toEqual(carriedResult);
@@ -414,7 +384,6 @@ describe('runFlowWithLifecycle', () => {
           },
         );
         expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-        expect(onError).not.toHaveBeenCalled();
       }),
   );
 
@@ -425,7 +394,7 @@ describe('runFlowWithLifecycle', () => {
         const { runId, ctx } = lifecycleFixture();
         const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
-        const result = yield* runFlow(ctx, () =>
+        const result = yield* runLifecycle(ctx, () =>
           Effect.fail(new DOMException('Request aborted', 'AbortError')),
         );
 
@@ -453,7 +422,7 @@ describe('runFlowWithLifecycle', () => {
       const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
       const error = yield* Effect.flip(
-        runFlow(ctx, () => Effect.fail(new Error('model exploded'))),
+        runLifecycle(ctx, () => Effect.fail(new Error('model exploded'))),
       );
       expect(error.message).toContain('model exploded');
 
@@ -486,7 +455,9 @@ describe('runFlowWithLifecycle', () => {
       });
       const frozen = Object.freeze(new Error('flow failed', { cause }));
 
-      const error = yield* Effect.flip(runFlow(ctx, () => Effect.fail(frozen)));
+      const error = yield* Effect.flip(
+        runLifecycle(ctx, () => Effect.fail(frozen)),
+      );
       expect(error.message).toContain('flow failed');
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
         testDefaultSession(),
@@ -509,7 +480,9 @@ describe('runFlowWithLifecycle', () => {
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
 
-      const exit = yield* Effect.exit(runFlow(ctx, () => Effect.interrupt));
+      const exit = yield* Effect.exit(
+        runLifecycle(ctx, () => Effect.interrupt),
+      );
 
       expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
         true,
@@ -533,7 +506,7 @@ describe('runFlowWithLifecycle', () => {
           ).pipe(Effect.andThen(Effect.interrupt)),
         );
 
-      yield* Effect.exit(runFlow(ctx, runner));
+      yield* Effect.exit(runLifecycle(ctx, runner));
 
       expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
         testDefaultSession(),
@@ -548,37 +521,29 @@ describe('runFlowWithLifecycle', () => {
     }),
   );
 
-  it.effect(
-    'passes flow-carried terminal results to subagent error delivery',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
-        );
-        const carriedResult = {
-          outcome: RUN_OUTCOME.FAILED,
-          runId,
-          output: { category: 'toolUse' as const, response: '', files: [] },
-          error: { message: 'subagent failed', userRetryable: false },
-        };
-        const onError = vi.fn();
+  it.effect('returns a flow-carried subagent failure with its error', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
+      );
+      const carriedResult = {
+        outcome: RUN_OUTCOME.FAILED,
+        runId,
+        output: { category: 'toolUse' as const, response: '', files: [] },
+        error: { message: 'subagent failed', userRetryable: false },
+      };
 
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.succeed(carriedResult),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
-        );
+      const result = yield* runLifecycle(
+        ctx,
+        () => Effect.succeed(carriedResult),
+        {
+          parentRunId: PARENT_RUN_ID,
+        },
+      );
 
-        expect(result).toEqual(carriedResult);
-        expect(onError).toHaveBeenCalledWith(
-          expect.objectContaining({ message: 'subagent failed' }),
-          carriedResult,
-        );
-      }),
+      expect(result).toEqual(carriedResult);
+    }),
   );
 
   it.effect(
@@ -590,7 +555,7 @@ describe('runFlowWithLifecycle', () => {
 
         try {
           const error = yield* Effect.flip(
-            runFlow(ctx, () =>
+            runLifecycle(ctx, () =>
               Effect.succeed({
                 outcome: RUN_OUTCOME.FAILED,
                 runId,
@@ -626,7 +591,7 @@ describe('runFlowWithLifecycle', () => {
           );
           expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );
@@ -639,7 +604,7 @@ describe('runFlowWithLifecycle', () => {
 
         try {
           const error = yield* Effect.flip(
-            runFlow(ctx, () =>
+            runLifecycle(ctx, () =>
               Effect.succeed({
                 outcome: RUN_OUTCOME.FAILED,
                 runId,
@@ -668,7 +633,7 @@ describe('runFlowWithLifecycle', () => {
             }),
           );
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );

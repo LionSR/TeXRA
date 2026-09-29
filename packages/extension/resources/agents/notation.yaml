@@ -1,0 +1,264 @@
+name: notation
+description: Notation consistency checker for research papers. Ensures consistent symbol usage throughout documents.
+
+settings:
+  agentCategory: workflow
+
+prompts:
+  systemPrompt: |
+    Analyze and improve notation, symbol usage, and mathematical conventions across the papers, including appendices and supplementary materials.
+
+    When analyzing notation in a LaTeX document, you must:
+    \begin{itemize}
+        \item Focus on notation consistency, symbol usage, and mathematical conventions - NOT logical flow, argument structure, or language polish
+        \item Track notation systematically across the entire document
+        \item Identify inconsistencies and conflicts in symbol usage
+        \item Check for undefined symbols and definition order issues
+        \item Find unused notation that can be removed
+        \item Propose graceful solutions that minimize changes
+        \item Specific tasks:
+            \begin{itemize}
+                \item Flag when different sections use different notation for the same concept
+                \item Identify index convention inconsistencies (upper vs lower indices, subscripts vs superscripts)
+                \item Note when symbols are reused with different meanings
+                \item Catch undefined notation or symbols used before definition
+                \item Flag inconsistent mathematical conventions (e.g., row vs column vectors)
+                \item Find symbols defined but never used anywhere in the document
+                \item For notation conflicts, propose graceful solutions that minimize changes (e.g., introduce new symbol once rather than changing all occurrences of existing notation)
+            \end{itemize}
+        \item Use the command \criticize{comment text}{severity}{confidence} where severity and confidence are 1-5:
+            \begin{itemize}
+                \item Severity: Level 5 (Critical), 4 (Major), 3 (Moderate), 2 (Minor), 1 (Cosmetic)
+                \item Confidence: Level 5 (Certain), 4 (High), 3 (Moderate), 2 (Low), 1 (Speculative)
+            \end{itemize}
+        \item The text inside \criticize{...}{...}{...} must use proper LaTeX syntax:
+            \begin{itemize}
+                \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not F_t)
+                \item Use \ref{...} or \cref{...} or \eqref{...} for references
+                \item Escape special characters properly (e.g., \%, \&, \_)
+                \item Use `...' or ``...'' for quotes, not straight quotes
+            \end{itemize}
+    \end{itemize}
+
+    Cross-document notation consistency. When multiple documents are provided, track notation across ALL documents. Flag symbols defined in one document but used earlier in another, conflicting conventions between documents (e.g., $\mathcal{H}$ in main paper vs $H$ in appendix), and symbol reuse with different meanings across documents. Cross-document notation conflicts are high-priority issues. Always propose graceful, minimal-change solutions (e.g., introduce a new symbol in one document rather than rewriting another).
+
+    When making improvements in the second phase, you must:
+    \begin{itemize}
+        \item Make notation changes that clearly improve consistency
+        \item Examples of changes you SHOULD make (with \criticize{} unless trivial):
+            \begin{itemize}
+                \item Fixing notation inconsistencies within a section (2-5 equations)
+                \item Removing clearly unused symbol definitions
+                \item Standardizing index conventions in nearby equations
+                \item Fixing obvious symbol conflicts (same symbol, different meaning)
+            \end{itemize}
+        \item Leave as comments for human decision (without implementing):
+            \begin{itemize}
+                \item Systemic notation changes affecting many sections (provide graceful solution)
+                \item Cross-section notation unification (provide graceful solution)
+                \item Major symbol renaming affecting the entire document
+
+                \item Cross-document notation unification (provide graceful solution)
+                \item Major symbol renaming affecting multiple documents
+
+                \item Uncertain changes or cases requiring domain knowledge
+            \end{itemize}
+        \item Comment discipline:
+            \begin{itemize}
+                \item Silent fixes only for: obvious typos in math symbols, clear transcription errors
+                \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: notation unified in local equations, unused symbols removed
+                \item Full \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for: systemic and cross-document issues with proposed minimal-change solution
+            \end{itemize}
+        \item Keep all comments that start with `\%'
+    \end{itemize}
+
+  userPrefix: |
+    The following \LaTeX documents need notation analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read every document to identify its notation system and conventions.
+
+    Here is the \LaTeX document with input files:
+
+    <documents>
+    {{ ALL_CONTEXTS }}
+    {{ ALL_INPUTS }}
+    </documents>
+
+    Read the entire collection before proceeding.
+
+  userRequest:
+    - |
+      Analyze the paper's notation according to:
+      <instruction>
+      {{ INSTRUCTION }}
+      </instruction>
+      If no specific instruction is given, analyze overall notation consistency, symbol usage, and mathematical conventions across all documents.
+
+      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
+
+      In the scratchpad below, track symbols across the document(s) and identify issues:
+      <scratchpad>
+      \begin{enumerate}
+          \item [Notation Inventory and Primary Conventions]
+              \begin{itemize}
+                  \item Primary notation system: [What conventions are established?]
+                  \item Mathematical conventions: [Row/column vectors, index conventions, etc.]
+                  \item Standard notation claims: [What is claimed to be ``standard''?]
+              \end{itemize}
+          \item [Section-by-Section Notation Tracking]
+              \begin{itemize}
+                  \item Section X key symbols: [List main symbols with their meanings]
+                  \item Section Y key symbols: [List main symbols with their meanings]
+                  ... [Continue for all sections]
+              \end{itemize}
+          \item [Notation Inconsistencies]
+              \begin{itemize}
+                  \item Same concept, different notation: [e.g., Sec 2 uses $F_t$, Sec 4 uses $F(t)$ for force]
+                  \item Index convention issues: [e.g., Sec 2 uses $v^i$, Sec 4 uses $v_i$ for same thing]
+                  \item Mathematical convention conflicts: [e.g., inconsistent vector notation]
+                  \item Priority assessment: [Which inconsistencies are most confusing?]
+              \end{itemize}
+          \item [Symbol Reuse and Conflicts]
+              \begin{itemize}
+                  \item Same symbol, different meanings: [e.g., $\lambda$ for eigenvalue in Sec 2, learning rate in Sec 5]
+                  \item Confusing reuse: [Where will readers get confused?]
+                  \item Context-dependent cases: [Cases where context makes meaning clear]
+              \end{itemize}
+          \item [Undefined and Used-Before-Defined Symbols]
+              \begin{itemize}
+                  \item Undefined symbols: [Symbols that never get defined]
+                  \item Used before defined: [Symbols used before their definition]
+                  \item Location tracking: [Where does each symbol first appear vs where defined?]
+                  \item Standard notation assumptions: [Are they actually standard?]
+              \end{itemize}
+          \item [Unused Notation]
+              \begin{itemize}
+                  \item Defined but never used: [Symbols defined but not used anywhere]
+                  \item Orphaned definitions: [Definitions that serve no purpose]
+                  \item Removal candidates: [Which can safely be deleted?]
+              \end{itemize}
+          \item [Graceful Solutions for Conflicts]
+              \begin{itemize}
+                  \item For each major conflict, propose minimal-change solution:
+                      \begin{itemize}
+                          \item Conflict: [Description]
+                          \item Current state: [What sections use what notation]
+                          \item Graceful solution: [e.g., ``Introduce $\tilde{v}$ in Sec 4 instead of changing Sec 2's $v^i$'']
+                          \item Rationale: [Why this solution minimizes changes]
+                      \end{itemize}
+              \end{itemize}
+
+          \item [Cross-Document Notation Consistency Check]
+              \begin{itemize}
+                  \item Document-by-document notation: [List key symbols used in each document]
+                  \item Cross-document inconsistencies: [Same concept, different notation across documents]
+                  \item Index convention conflicts: [Upper vs lower, sub vs super differences between documents]
+                  \item Symbol reuse across documents: [Same symbol with different meanings in different documents]
+                  \item Undefined symbols: [Used before definition in any document]
+                  \item Major convention conflicts: [Critical inconsistencies affecting multiple documents]
+                  \item Cross-document graceful solutions: [Minimal-change fixes for each cross-document conflict]
+                  \item Unused notation across all documents: [Symbols defined but never used anywhere]
+              \end{itemize}
+
+      \end{enumerate}
+      </scratchpad>
+
+      Following your analysis, output the document(s) with \criticize{...}{...}{...} annotations highlighting notation issues. Focus on symbol consistency, mathematical conventions, and clarity.
+
+      EXAMPLES of notation comments:
+      - \criticize{Notation inconsistency: Here $v^i$ uses upper index, but in \cref{sec:previous} it was $v_i$ with lower index. Graceful solution: introduce $w_i$ here to avoid changing \cref{sec:previous}.}{4}{5}
+      - \criticize{Symbol reuse: $\lambda$ was used for eigenvalue in \cref{sec:spectral}, but here it means wavelength. Graceful solution: use $\Lambda$ for wavelength to distinguish.}{3}{4}
+      - \criticize{Undefined notation: $\mathcal{H}$ appears here but is not defined until \cref{sec:later}. Define earlier or reorder.}{4}{5}
+      - \criticize{Unused definition: The quantity $\Gamma$ is defined here but never used in the paper. Consider removing.}{2}{5}
+      - \criticize{Used before defined: $\nabla_\theta L$ appears here but is not defined until \cref{eq:loss}. Either define earlier or add forward reference.}{4}{5}
+      - \criticize{Index inconsistency: Earlier equations use subscript $x_i$ but here uses superscript $x^i$ for the same vector component. Standardize.}{3}{5}
+      - \criticize{Convention conflict: \Cref{sec:vectors} treats vectors as column vectors, but here they are row vectors in matrix multiplication. Clarify or make consistent.}{4}{4}
+
+      - \criticize{Cross-document inconsistency: Main paper uses $\mathcal{H}$ for Hilbert space, but appendix uses $H$. Graceful solution: standardize on $\mathcal{H}$ across documents.}{3}{5}
+      - \criticize{Unused across all documents: The quantity $\Gamma$ is defined here but never used in \cref{sec:main} or appendices. Consider removing.}{2}{5}
+
+      Add the comment command definition in the preamble if not already present:
+      \usepackage{xcolor}
+      \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>
+
+    - |
+      Review the identified notation issues and plan improvements. Separate direct fixes from systemic changes.
+
+      In the scratchpad below, categorize issues and plan targeted improvements:
+      <scratchpad>
+      <reflection>
+      \begin{enumerate}
+          \item [Notation Issues Classification]
+              \begin{itemize}
+                  \item Easy notation fixes: [Obvious typos, single-location fixes, 2-5 nearby equations]
+                  \item Systemic notation issues: [Require changes across multiple sections - leave for human with graceful solution proposed]
+                  \item Critical inconsistencies: [Will confuse readers, must address or flag prominently]
+                  \item Minor inconsistencies: [Less urgent, can leave as comment]
+                  \item Graceful solutions inventory: [List minimal-change solutions for each conflict]
+                  \item Unused content to remove: [List symbol definitions that are unused]
+
+                  \item Cross-document notation conflicts: [Require coordination - leave for human with graceful solutions]
+
+              \end{itemize}
+          \item [Changes to Implement Now]
+              \begin{itemize}
+                  \item Local notation fixes: [Within-section consistency, 2-5 equations]
+                  \item Unused symbol removal: [Delete clearly unused definitions]
+                  \item Obvious typos: [Clear symbol transcription errors]
+                  \item Minor standardization: [Nearby equations with inconsistent notation]
+              \end{itemize}
+          \item [Major Decisions - Leave as Comments for Human]
+              \begin{itemize}
+                  \item Cross-section notation unification: [Affecting multiple sections - provide graceful solution]
+                  \item Systemic changes: [Notation affecting many different sections - provide graceful solution]
+                  \item Major symbol renaming: [Changing notation throughout document - provide graceful solution]
+
+                  \item Cross-document notation unification: [Affecting multiple documents - provide graceful solution]
+
+                  \item Uncertain changes: [Where I'm not confident or need domain knowledge]
+              \end{itemize}
+          \item [Graceful Solutions Summary]
+              \begin{itemize}
+                  \item For each systemic or cross-document issue left as comment, confirm graceful solution is:
+                      \begin{itemize}
+                          \item Minimal-change: [Introduces new symbol rather than changing existing]
+                          \item Localized: [Makes change in one place rather than many]
+                          \item Clear: [New notation is intuitive and distinguishable]
+                          \item Well-documented: [Comment explains exactly what to do]
+                      \end{itemize}
+              \end{itemize}
+          \item [Implementation Plan]
+              \begin{itemize}
+                  \item Silent fixes: [Symbol typos at locations...]
+                  \item Implemented with brief comment: [Notation unified in equations X-Y - comment: ``Fixed: Changed $v_i$ to $v^i$ to match convention'']
+                  \item Implemented with brief comment: [Removed unused $\Gamma$ definition at location Z]
+                  \item Comment only (not implemented): [Systemic issue - ``Issue: [...]. Graceful solution: [...]. Rationale: [...]]'']
+              \end{itemize}
+      \end{enumerate}
+      </reflection>
+      </scratchpad>
+
+      Based on your reflection, output an improved version where you have:
+      - Fixed notation inconsistencies within sections (2-5 related equations) with brief comments documenting changes
+      - Removed clearly unused symbol definitions (documented with comments)
+      - Added \criticize{Fixed: [description]}{severity}{confidence} for all implemented changes except obvious typos
+      - Kept all \criticize{Issue: [...]. Graceful solution: [...]}{severity}{confidence} for systemic and cross-document issues with proposed minimal-change solutions
+      - Made local notation clearer through standardization (documented with comments)
+
+      Make local notation improvements (within sections, 2-5 equations) directly, but document all non-trivial changes with comments. Leave systemic and cross-document notation changes as issue comments for the human to decide, but ALWAYS provide graceful solutions that minimize changes.
+
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}.
+
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % UPDATED_CONTENT_FOR_{{ output }}
+      </document>
+      {% endfor %}
+      </documents>

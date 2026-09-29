@@ -330,7 +330,7 @@ export function buildDesktopSettingsTabMessage(
 }
 
 /**
- * Opens the Settings workbench before selecting an optional settings tab.
+ * Opens the Settings dialog before selecting an optional settings tab.
  * Main-process navigation has two consumers, so this helper keeps their
  * message ordering identical.
  */
@@ -340,8 +340,7 @@ export function postDesktopSettingsView(
   agentSubTab?: AgentCategory,
 ): void {
   postToRenderer({
-    command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
-    kind: 'settings',
+    command: DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS,
   });
   if (tab == null) return;
   postToRenderer(buildDesktopSettingsTabMessage(tab, agentSubTab));

@@ -74,17 +74,9 @@ function setupMonacoWorkers(workers: MonacoWorkerConstructors): void {
  * actually opened.
  */
 export async function loadMonaco(): Promise<MonacoModule> {
-  monacoLoad ??= Promise.all([
-    import('monaco-editor/editor/editor.api.js'),
-    import('monaco-editor/languages/register.all.js'),
-    import('monaco-editor/editor/editor.worker?worker'),
-    import('monaco-editor/language/json/json.worker?worker'),
-    import('monaco-editor/language/css/css.worker?worker'),
-    import('monaco-editor/language/html/html.worker?worker'),
-    import('monaco-editor/language/typescript/ts.worker?worker'),
-  ])
-    .then(
-      ([
+  monacoLoad ??= (async () => {
+    try {
+      const [
         monaco,
         ,
         editorWorker,
@@ -92,22 +84,29 @@ export async function loadMonaco(): Promise<MonacoModule> {
         cssWorker,
         htmlWorker,
         tsWorker,
-      ]) => {
-        setupMonacoWorkers({
-          editor: (editorWorker as MonacoWorkerModule).default,
-          json: (jsonWorker as MonacoWorkerModule).default,
-          css: (cssWorker as MonacoWorkerModule).default,
-          html: (htmlWorker as MonacoWorkerModule).default,
-          ts: (tsWorker as MonacoWorkerModule).default,
-        });
-        registerTexLanguages(monaco);
-        return monaco;
-      },
-    )
-    .catch((error: unknown) => {
+      ] = await Promise.all([
+        import('monaco-editor/editor/editor.api.js'),
+        import('monaco-editor/languages/register.all.js'),
+        import('monaco-editor/editor/editor.worker?worker'),
+        import('monaco-editor/language/json/json.worker?worker'),
+        import('monaco-editor/language/css/css.worker?worker'),
+        import('monaco-editor/language/html/html.worker?worker'),
+        import('monaco-editor/language/typescript/ts.worker?worker'),
+      ]);
+      setupMonacoWorkers({
+        editor: (editorWorker as MonacoWorkerModule).default,
+        json: (jsonWorker as MonacoWorkerModule).default,
+        css: (cssWorker as MonacoWorkerModule).default,
+        html: (htmlWorker as MonacoWorkerModule).default,
+        ts: (tsWorker as MonacoWorkerModule).default,
+      });
+      registerTexLanguages(monaco);
+      return monaco;
+    } catch (error) {
       monacoLoad = undefined;
       throw error;
-    });
+    }
+  })();
   return monacoLoad;
 }
 

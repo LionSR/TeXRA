@@ -118,12 +118,12 @@ bindings are values, 39 are types.
 Those 4 names in full, since each is a cross-entry commitment that has to be
 changed in every entry at once:
 
-| Name                 | Declared from    |
-| -------------------- | ---------------- |
-| `AgentFlowResult`    | root, `/schemas` |
-| `ToolUseFlowResult`  | root, `/schemas` |
-| `WorkflowFlowResult` | root, `/schemas` |
-| `RunId`              | root, `/schemas` |
+| Name                   | Declared from    |
+| ---------------------- | ---------------- |
+| `RunEndResult`         | root, `/schemas` |
+| `ToolUseRunEndResult`  | root, `/schemas` |
+| `WorkflowRunEndResult` | root, `/schemas` |
+| `RunId`                | root, `/schemas` |
 
 ### 3.1 `@texra-ai/agent` — 34 (10 values, 24 types)
 
@@ -149,9 +149,9 @@ changed in every entry at once:
 | `LaunchError`            | type  | `./effect/errors.js`                  |
 | `SessionOpenError`       | type  | `@shared/session/database`            |
 | `AgentEvent`             | type  | `@agent/trace`                        |
-| `AgentFlowResult`        | type  | `@agent/runtime/AgentFlowResult`      |
-| `ToolUseFlowResult`      | type  | `@agent/runtime/AgentFlowResult`      |
-| `WorkflowFlowResult`     | type  | `@agent/runtime/AgentFlowResult`      |
+| `RunEndResult`           | type  | `@agent/runtime/RunEndResult`         |
+| `ToolUseRunEndResult`    | type  | `@agent/runtime/RunEndResult`         |
+| `WorkflowRunEndResult`   | type  | `@agent/runtime/RunEndResult`         |
 | `ITool`                  | type  | `@agent/core/tools/ToolTypes`         |
 | `IToolRegistry`          | type  | `@agent/core/tools/ToolTypes`         |
 | `ToolHost`               | type  | `@agent/core/tools/ToolTypes`         |
@@ -176,8 +176,8 @@ changed in every entry at once:
 | `AgentSettingSchema`         | value | `@agent/core/definition/AgentDataclass` |
 | `AgentToolUseSettingSchema`  | value | `@agent/core/definition/AgentDataclass` |
 | `AgentWorkflowSettingSchema` | value | `@agent/core/definition/AgentDataclass` |
-| `ToolUseFlowResultSchema`    | value | `@agent/runtime/AgentFlowResult`        |
-| `WorkflowFlowResultSchema`   | value | `@agent/runtime/AgentFlowResult`        |
+| `ToolUseRunEndResultSchema`  | value | `@agent/runtime/RunEndResult`           |
+| `WorkflowRunEndResultSchema` | value | `@agent/runtime/RunEndResult`           |
 | `AgentCategory`              | value | `@shared/schemas` → `agent.ts`          |
 | `AgentCategorySchema`        | value | `@shared/schemas` → `agent.ts`          |
 | `AgentNameSchema`            | value | `@shared/schemas` → `agent.ts`          |
@@ -192,9 +192,9 @@ changed in every entry at once:
 | `AgentSetting`               | type  | `@agent/core/definition/AgentDataclass` |
 | `AgentToolUseSetting`        | type  | `@agent/core/definition/AgentDataclass` |
 | `AgentWorkflowSetting`       | type  | `@agent/core/definition/AgentDataclass` |
-| `AgentFlowResult`            | type  | `@agent/runtime/AgentFlowResult`        |
-| `ToolUseFlowResult`          | type  | `@agent/runtime/AgentFlowResult`        |
-| `WorkflowFlowResult`         | type  | `@agent/runtime/AgentFlowResult`        |
+| `RunEndResult`               | type  | `@agent/runtime/RunEndResult`           |
+| `ToolUseRunEndResult`        | type  | `@agent/runtime/RunEndResult`           |
+| `WorkflowRunEndResult`       | type  | `@agent/runtime/RunEndResult`           |
 | `AgentConfigInput`           | type  | `@shared/schemas` → `agentConfig.ts`    |
 | `AgentSource`                | type  | `@shared/schemas` → `agent.ts`          |
 | `RunId`                      | type  | `@shared/schemas` → `identifiers.ts`    |
@@ -238,7 +238,7 @@ manifest, "not another lint rule":
   `@google/genai`, `@openrouter/sdk`, or `openai` — "an entry whose declaration
   graph reaches a provider SDK puts that provider's types back on the declared
   surface however narrow the entry looks." This is why `index.ts` sources
-  `AgentFlowResult` from its own module rather than the `@agent/runtime`
+  `RunEndResult` from its own module rather than the `@agent/runtime`
   barrel.
 - **No `vscode`, no extension-host paths** in any declaration.
 - **No unresolved internal path alias** leaking into declarations.
@@ -248,7 +248,7 @@ manifest, "not another lint rule":
 `host-agent-import-baseline.json`'s `agent` row (7 specifiers:
 `@agent/core/definition/AgentConfig`, `@agent/core/definition/AgentDataclass`,
 `@agent/core/tools/ToolTypes`, `@agent/index`, `@agent/runtime`,
-`@agent/runtime/AgentFlowResult`, `@agent/trace`) is, by that file's own
+`@agent/runtime/RunEndResult`, `@agent/trace`) is, by that file's own
 semantics, "exactly the internal-coupling width a Tier-1 barrel must re-export
 or seal." Those seven are the modules §3 draws from.
 
@@ -269,11 +269,11 @@ the commit message marking `agent-sdk-readiness:S6` complete. The
 correctly no longer carries it.
 
 The first enumeration re-verified at `cf88d2d` that `packages/agent/README.md`
-§"Run results" documented exactly one result shape, `AgentFlowResult`, with
+§"Run results" documented exactly one result shape, `RunEndResult`, with
 `run.result` terminal-only and the non-terminal `WAITING` state deliberately
 not exported. That core still holds at `697663eff1` — the waiting shape is
-`WaitingToolUseFlowResult`/`AgentRuntimeFlowResult`
-(`src/agent/runtime/AgentFlowResult.ts:50-61`), exported from its module but
+`WaitingToolUseRunEndResult`/`AgentRuntimeFlowResult`
+(`src/agent/runtime/RunEndResult.ts:50-61`), exported from its module but
 not from any package entry. The details have moved, though: the README now
 discriminates on `output.category` rather than `category`, states cost as
 `usage.totalCost` rather than `totalCostUsd`, and puts the per-file `diffs` on
@@ -301,7 +301,7 @@ The live open items:
    attaches a fixed headless host and refuses approval-requiring tools; this is
    also what keeps the `agentCreator` subagent boundary correctly open.
 2. **The result-shape contract as the README now writes it** (§6). The
-   declared `AgentFlowResult` gained `usage.totalCost` and the workflow
+   declared `RunEndResult` gained `usage.totalCost` and the workflow
    output's per-file `diffs` since the `-09-04` closure, and the discrimination
    moved to `output.category`. The surface changed without this manifest's
    intent being re-stated; ratification should confirm or trim it.

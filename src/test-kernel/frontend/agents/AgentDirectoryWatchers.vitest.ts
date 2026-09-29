@@ -2,13 +2,11 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { installPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
-  getAllLocal: vi.fn<() => Promise<unknown[]>>(),
-  selectFolder: vi.fn(() => Effect.succeed<string | null>(null)),
   liveWatchers: new Set<string>(),
 }));
 
@@ -34,37 +32,6 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@agent/index/AgentDirectoryService', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@agent/index/AgentDirectoryService')
-  >()),
-  // The service's readers, `Effect`s like the ones `AgentDirectoryService`
-  // answers with: the rebuild under test composes them.
-  AgentDirectoryService: class {
-    constructor(
-      private readonly options: {
-        customDirectoryStore: { get(): Effect.Effect<string | undefined> };
-      },
-    ) {}
-    builtIn = () => Effect.succeed('/agents/builtin');
-    builtInToolUse = () => Effect.succeed('/agents/toolUse');
-    custom = () =>
-      this.options.customDirectoryStore
-        .get()
-        .pipe(Effect.map((value) => value || '/agents/custom'));
-    getDirectory = () => Effect.succeed(undefined);
-    getAllLocal = () => Effect.promise(() => mocks.getAllLocal());
-  },
-}));
-
-vi.mock('@frontend/ui/errorHandlingUtils', () => ({
-  showLoggedMessageWithDocs: vi.fn(() => Effect.void),
-}));
-
-vi.mock('@frontend/ui/dialogs', () => ({
-  selectFolder: mocks.selectFolder,
-}));
-
 const { agentDirectories } =
   await import('@frontend/agents/AgentDirectoryManager');
 
@@ -76,22 +43,28 @@ async function settle(): Promise<void> {
 describe('agent directory watchers', () => {
   beforeEach(() => {
     mocks.liveWatchers.clear();
-    mocks.getAllLocal.mockReset();
-    mocks.selectFolder.mockReturnValue(Effect.succeed(null));
-    agentDirectories.initialize(
-      new FakeStateStore(),
-      '/resources',
-      testRuntime(),
-    );
   });
 
   it('builds no watcher once the last subscription is removed mid-rebuild', async () => {
-    const listing = createDeferred<unknown[]>();
-    mocks.getAllLocal.mockReturnValueOnce(listing.promise);
+    const custom = createDeferred<string>();
+    await installPlatform(
+      {},
+      {
+        agentDirectories: {
+          custom: () => Effect.promise(() => custom.promise),
+          customConfigured: () => Effect.succeed(false),
+          builtIn: () => Effect.succeed('/agents/builtin'),
+          builtInToolUse: () => Effect.succeed('/agents/toolUse'),
+        },
+      },
+    );
 
-    const handle = agentDirectories.watchAgentDirectories(() => {});
+    const handle = agentDirectories.watchAgentDirectories(
+      testRuntime(),
+      () => {},
+    );
     handle.dispose();
-    listing.resolve([{ directory: '/agents/custom', source: 'custom' }]);
+    custom.resolve('/agents/custom');
     await settle();
 
     expect(mocks.liveWatchers.size).toBe(0);

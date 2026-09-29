@@ -4,38 +4,46 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
-import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { Runs } from '@agent/runtime/runRegistry';
+import { freshRunState } from '@shared/session/runStateFold';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { testPluginServicesLayer } from '@test/support/testPluginServices';
 import { goalOf, pauseGoal, startGoal } from '@tools/goal';
+import { goalContinuation } from '@tools/goal/goalContinuation';
 import { generateRunId } from '@utils/core';
 
 const RUN_ID = generateRunId();
 
-async function installPlatformWithConfig(
-  config: Record<string, unknown>,
-): Promise<void> {
-  await installFakePlatform({ config });
-}
+const atIdle = (session: SessionHandle) =>
+  goalContinuation
+    .atIdle({
+      session,
+      runId: RUN_ID,
+      state: freshRunState(0),
+      canContinue: true,
+    })
+    .pipe(
+      Effect.provide(testPluginServicesLayer),
+      Effect.provideService(Runs, session.runs),
+    );
 
-describe('maybeBuildGoalContinuation', () => {
+describe('goalContinuation', () => {
   let session: SessionHandle;
 
   beforeEach(async () => {
-    await installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: true });
+    await installFakePlatform();
     session = createTestSession();
     publishTestRunStart(session, RUN_ID);
   });
 
   afterEach(async () => {
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   });
 
   it.effect(
@@ -48,23 +56,8 @@ describe('maybeBuildGoalContinuation', () => {
         const objective =
           'Finish {% for x in y %}{{ 1 + 1 }}{# comment #}{% endfor %} the "quoted" \\task\\.';
         yield* startGoal(session, RUN_ID, objective);
-        const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
+        const out = yield* atIdle(session);
         expect(out).toContain(objective);
-      }),
-  );
-
-  it.effect(
-    'returns null when the feature flag is off (with an active goal present)',
-    () =>
-      Effect.gen(function* () {
-        yield* startGoal(session, RUN_ID, 'objective');
-        // Flip just the flag — the goal row is untouched, so the test does not
-        // pass trivially.
-        (testWorkspaceRoots().config as FakeConfigProvider).set(
-          GOAL_FEATURE_FLAG_KEY,
-          false,
-        );
-        expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
       }),
   );
 
@@ -73,14 +66,14 @@ describe('maybeBuildGoalContinuation', () => {
       yield* startGoal(session, RUN_ID, 'objective');
       yield* pauseGoal(session, RUN_ID);
 
-      expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
+      expect(yield* atIdle(session)).toBeNull();
     }),
   );
 
   it.effect('is a pure read — leaves the goal untouched', () =>
     Effect.gen(function* () {
       const before = yield* startGoal(session, RUN_ID, 'objective');
-      yield* maybeBuildGoalContinuation(session, RUN_ID);
+      yield* atIdle(session);
       yield* session.settlePublications();
       // No counter, no audit log: the helper only reads. The loop runs until
       // the model completes or the user stops it.

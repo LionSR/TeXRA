@@ -219,16 +219,15 @@ export const buttonStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  /* Pressed and toggled-on are the shared overlays, like every state. */
   .icon-button::part(base):active,
-  .action-icon-button::part(base):active,
+  .action-icon-button::part(base):active {
+    background: var(--surface-active);
+  }
+
   .icon-button[aria-pressed='true']::part(base),
   .action-icon-button[aria-pressed='true']::part(base) {
-    border-color: color-mix(
-      in srgb,
-      var(--wa-color-focus) 34%,
-      var(--border-hairline)
-    );
-    background: var(--wa-color-brand-fill-quiet);
+    background: var(--surface-selected);
     color: var(--wa-color-text-normal);
   }
 
@@ -328,6 +327,7 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
+    font-weight: var(--wa-font-weight-normal);
     /* Used inline in prose sentences, so underline at rest like a real link
        (hue alone is not a reliable 3:1 cue across host themes). */
     text-decoration: underline;
@@ -363,27 +363,25 @@ export const buttonStyles: CSSResult = css`
     margin-inline-start: auto;
   }
 
+  /* Send is the view's primary action, so it wears the one accent fill that
+     .btn-primary wears (the editor's button color in VS Code). */
   .action-icon-button.composer-primary-action::part(base) {
     border-radius: var(--wa-border-radius-circle);
-    background: var(--wa-color-text-normal);
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-brand-fill-loud);
+    color: var(--wa-color-brand-on-loud);
   }
 
   .action-icon-button.composer-primary-action::part(base):hover {
-    background: color-mix(
-      in srgb,
-      var(--wa-color-text-normal) 86%,
-      var(--wa-color-surface-default)
-    );
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-button-hover, var(--wa-color-brand-fill-loud));
+    color: var(--wa-color-brand-on-loud);
   }
 
   .action-icon-button.composer-primary-action[disabled]::part(base):is(
       :hover,
       :active
     ) {
-    background: var(--wa-color-text-normal);
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-brand-fill-loud);
+    color: var(--wa-color-brand-on-loud);
   }
 
   @media (prefers-reduced-motion: reduce) {

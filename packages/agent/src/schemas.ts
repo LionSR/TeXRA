@@ -22,14 +22,14 @@ export type {
   AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
 export {
-  ToolUseFlowResultSchema,
-  WorkflowFlowResultSchema,
-} from '@agent/runtime/AgentFlowResult';
+  ToolUseRunEndResultSchema,
+  WorkflowRunEndResultSchema,
+} from '@agent/runtime/RunEndResult';
 export type {
-  AgentFlowResult,
-  ToolUseFlowResult,
-  WorkflowFlowResult,
-} from '@agent/runtime/AgentFlowResult';
+  RunEndResult,
+  ToolUseRunEndResult,
+  WorkflowRunEndResult,
+} from '@agent/runtime/RunEndResult';
 export {
   AgentCategory,
   AgentCategorySchema,

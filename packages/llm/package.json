@@ -7,7 +7,6 @@
   "exports": {
     "./openrouter-chat": "./src/openrouterChat.ts",
     "./turn": "./src/turn.ts",
-    "./openai-chat": "./src/openaiChat.ts",
     "./openai-responses": "./src/openaiResponses.ts",
     "./anthropic-messages": "./src/anthropicMessages.ts",
     "./google-interactions": "./src/googleInteractions.ts",
@@ -17,8 +16,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.127.0",
+    "@anthropic-ai/sdk": "0.128.0",
     "@google/genai": "2.24.0",
+    "@openrouter/sdk": "1.3.28",
     "openai": "7.20.0",
     "ws": "8.21.3"
   },

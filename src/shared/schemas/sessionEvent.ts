@@ -6,10 +6,10 @@
  * carry a seq.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
- * per-aggregate `seq`, the session-wide `commit` ordinal, the process identity
- * of the writer, and the publish clock. The arms mirror the trace
- * (`AgentEvent`) shapes field for field where the fold reads them, so a
- * publisher translates by naming fields, never by re-encoding.
+ * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
+ * and the publish clock; its durable identity is its aggregate's `uid` and
+ * its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
+ * where the fold reads them, so a publisher translates by naming fields.
  *
  * One run owns one aggregate, `('run', runId)` (one run model, section 3.1):
  * display rows and the run's private records land on the same aggregate, and
@@ -25,31 +25,27 @@ import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
-import { AgentConfigFieldsSchema } from './agentConfig';
 import { RoundOutputSchema } from './output';
-import { GoalStateSchema } from './goal';
+import { JsonValueSchema } from './jsonValue';
 import {
-  RunEndSchema,
+  RunEndRowSchema,
   RunRecordFieldsSchema,
-  RunWorkspaceFilesSchema,
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
+import { FollowUpContentSchema } from './followUp';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
-import {
-  PersistedJsonValueSchema,
-  RunFactSchema,
-  StoredValueSchema,
-} from './rowValues';
+import { PersistedJsonValueSchema, RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
-  FlowSnapshotPayloadSchema,
-  FlowStepPayloadSchema,
+  RunSnapshotPayloadSchema,
+  RunPositionPayloadSchema,
   ModelCompactionPayloadSchema,
   ModelMessagePayloadSchema,
   ModelRetryPayloadSchema,
@@ -57,25 +53,11 @@ import {
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
+import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
+import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
-
-/**
- * One follow-up as it is queued, taken, and shown. `origin` keeps the
- * provenance a consumer reads: a user's text becomes the run's instruction,
- * a child's delivery envelope is summarized for the transcript. A loop's own
- * maintenance wake is never a follow-up row.
- */
-const FollowUpContentSchema = z.object({
-  text: z.string(),
-  /** What the transcript and the queued list show instead of `text`. */
-  displayText: z.string().nullish(),
-  /** Media file paths (e.g. pasted images) attached to a user follow-up. */
-  mediaFiles: z.array(z.string()).nullish(),
-  origin: z.enum(['user', 'subagent_result']),
-});
-export type FollowUpContent = z.infer<typeof FollowUpContentSchema>;
 
 /** C5's complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
@@ -125,20 +107,9 @@ export function ownerPid(ownerId: OwnerId): number {
  */
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
-/**
- * C2 separates independent lifecycles even when their logical ids coincide.
- * `run` is keyed by the run id; every other kind by its own logical id.
- */
-const AggregateKindSchema = z.enum([
-  'run',
-  'workflow-checkpoint',
-  'inquiry',
-  'session',
-  'desktop-projects',
-  'global-inquiry',
-  'update-check',
-  'app-state',
-]);
+/** C2 separates independent lifecycles even when their logical ids coincide:
+ *  `run` is keyed by the run id, every other kind by its own logical id. */
+const AggregateKindSchema = z.enum(['run', 'workflow-checkpoint', 'inquiry']);
 type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
   .tuple([AggregateKindSchema, z.string().min(1)])
@@ -198,18 +169,27 @@ export function aggregateTarget(key: AggregateId): AggregateTarget {
 const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
- *  first commit", the cursor an empty view starts from. */
+ *  first commit", the cursor an empty view starts from. Local: no row
+ *  stores one. */
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
-/**
- * The full approval-policy snapshot after a change, emitted by the single
- * policy authority (`src/shared/approvalPolicy.ts`). Never a toggle delta:
- * the fold keeps the latest snapshot per run.
- */
+/** The full approval-policy snapshot after a change, from the single policy
+ *  authority (`src/shared/approvalPolicy.ts`); the fold keeps the latest. */
 export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
+  /** Each kind's effective value, own or inherited: what surfaces show. */
   bypasses: ApprovalBypassesSchema,
+  /**
+   * The run's own human value per kind, where it has one (absent: it defers
+   * to its ancestry): `on` granted, `off` an explicit override. A resume in
+   * a new process restores exactly these.
+   */
+  own: z.partialRecord(z.enum(APPROVAL_BYPASS_KINDS), z.enum(['on', 'off'])),
+  /** The kinds the run's autonomous goal grants it, over its own values
+   *  until the goal ends or a human decides that kind. Never restored: a
+   *  resume leaves them off until a human re-arms the goal. */
+  goal: z.array(z.enum(APPROVAL_BYPASS_KINDS)),
 });
 export type ApprovalPolicySnapshot = z.infer<
   typeof ApprovalPolicySnapshotSchema
@@ -225,9 +205,9 @@ export type ApprovalPolicySnapshot = z.infer<
 const envelope = {
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
-  /** Owner of the process that appended the event; null for the trace
-   *  viewer's reconstruction, which has no owning process. */
-  ownerId: OwnerIdSchema.nullable(),
+  /** The process that appended the row (not the aggregate's claim holder);
+   *  null for the trace viewer's reconstruction, which has no writer. */
+  origin: OwnerIdSchema.nullable(),
   /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
    *  column of a `STRICT` table, so the vocabulary states that rule here and
    *  the substrate restates it nowhere. */
@@ -252,15 +232,15 @@ function durable<T extends string, S extends z.ZodRawShape>(
 
 /**
  * The parent edge (one run model, section 3.2): the whole of it. `id` is the
- * launching run; `startCommit` is that run's creation commit, stamped by the
- * database inside the child's creation transaction so a logical id a
- * workflow-script retry reuses can never redirect the child to a later
- * incarnation of its parent. Any other spelling of the edge is
- * `parent !== null`, computed from the fold or the handle.
+ * launching run; `uid` is that run's incarnation, stamped by the database
+ * inside the child's creation transaction so a logical id a workflow-script
+ * retry reuses can never redirect the child to a later incarnation of its
+ * parent. Any other spelling of the edge is `parent !== null`, computed from
+ * the fold or the handle.
  */
 const RunParentSchema = z.object({
   id: RunIdSchema,
-  startCommit: z.int().positive(),
+  uid: z.uuid(),
 });
 export type RunParent = z.infer<typeof RunParentSchema>;
 
@@ -269,8 +249,8 @@ export type RunParent = z.infer<typeof RunParentSchema>;
  * exists, once per incarnation, seq 1 of its aggregate (decision 9); the
  * aggregate's logical id is the run id, so the row carries no second copy of
  * it. `worktree` is absent for a run that executes in the workspace itself
- * rather than in a dedicated worktree. `category`,
- * `isRemote`, and `userFollowUpSupport` are explicit on every run: the
+ * rather than in a dedicated worktree. `category`
+ * and `userFollowUpSupport` are explicit on every run: the
  * launcher knows them for an agent, a process, and a workflow script alike,
  * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
  * initial approval-policy snapshot rides here rather than as its own event
@@ -285,8 +265,6 @@ const RunStartEventSchema = durable('run.start', {
   /** The `RunView` discriminant: `toolUse` for an agent in tool-use mode
    *  and for a process run, `workflow` for a workflow agent or script. */
   category: AgentCategorySchema,
-  /** Agent-registry remoteness; false for a run with no registry entry. */
-  isRemote: z.boolean(),
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
   parent: RunParentSchema.nullable(),
@@ -323,17 +301,11 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * item 8); the CLI projection writes it verbatim as a `run.activate`
    * progress record. `run.start` is the creation fact and happens once.
    */
-  durable('run.activate', {
-    category: AgentCategorySchema,
-    /** Agent-registry remoteness, carried only by a run with a registry
-     *  entry: the frozen wire line omits it for a process, agent-CLI, or
-     *  workflow-script child (PRD 10.3), and a fold reads `run.start`. */
-    isRemote: z.boolean().nullish(),
-  }),
-  durable('run.config', {
-    /** The canonical configuration, validated before it becomes durable. */
-    config: AgentConfigFieldsSchema,
-  }),
+  durable('run.activate', { category: AgentCategorySchema }),
+  /** What the run runs with, written at registration and then only when it
+   *  changes: the newest row is the configuration every reader reads. */
+  durable('run.config', { config: RunRecordFieldsSchema }),
+  durable('run.model', { model: z.string().min(1) }), // projected (`MODEL_ROWS`), never stored
   /**
    * The parent edge severed: a child promoted to the top level by a stop
    * that detaches its children. The only fact after `run.start` that moves
@@ -342,37 +314,38 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.detach', {}),
   /**
    * The terminal fact (one run model, section 3.3): outcome, the classified
-   * error behind a failure, the usage totals, and what the run produced.
-   * Written once, by the storage finalizer, after the run's last transcript
-   * row; the fold derives the terminal phase from it and from nothing else.
+   * error behind a failure, and a tool-use run's reply (usage and workflow
+   * files have their own rows). Written once per lifecycle, by the storage
+   * finalizer, after the run's last transcript row; the fold derives the
+   * terminal phase from it and from nothing else.
    */
-  durable('run.end', RunEndSchema.shape),
+  durable('run.end', RunEndRowSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
-   * An agent-CLI child's park across its turns (one run model, 3.3):
-   * `parked` before the loop blocks on its queue, `resumed` when the taken
-   * batch starts the next turn. Its own row, because a run this loop is the
-   * only driver of has no ledger, no family and no rounds: borrowing
-   * `flow.step` meant inventing a `toolUse` family and a round that never
-   * existed. The phase is the whole of it — the fold parks the run on
-   * `parked` and runs it on `resumed`, which is what
-   * `getToolUseFollowUpTarget` reads to admit the next turn. A listing key
-   * of its own (`listingTypeOf`'s default), for the same reason `flow.step`
-   * is one: a cold listing that dropped it would paint every parked child
-   * as busy.
+   * A child driven by the child loop, which has no ledger or rounds, parks
+   * on its own row (one run model, 3.3): `parked` before the loop blocks on
+   * its queue, `resumed` when a batch starts the next turn (what
+   * `getToolUseFollowUpTarget` reads to admit a turn), `paused` when a stop
+   * rests it with no `run.end`, keeping the `resumeId` a tool call continues
+   * it by. A listing key of its own (`listingTypeOf`'s default): a cold
+   * listing that dropped it would paint every parked child as busy.
    */
-  durable('child.park', { phase: z.enum(['parked', 'resumed']) }),
+  durable('child.park', {
+    phase: z.enum(['parked', 'resumed', 'paused']),
+    resumeId: z.string().optional(),
+  }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
-  /** Goal is per run, and this row is the goal: it carries the whole
-   *  pursuit, so the fold's `RunView.goal` is what every reader reads and
-   *  no store holds a second copy. A listing key (`listingTypeOf`'s
-   *  default), so a cold read hydrates each run's goal without replaying
-   *  the run. */
-  durable('goalStateChanged', { state: GoalStateSchema }),
+  /** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
+   *  latest per (plugin, kind) and never reads it; the plugin decodes it. */
+  durable('plugin.fact', {
+    plugin: z.string().min(1),
+    kind: z.string().min(1),
+    value: JsonValueSchema,
+  }),
   /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
   durable(
     'inquiryThreadUpdated',
@@ -390,6 +363,8 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.queued', {
     followUpId: z.string().min(1),
     content: FollowUpContentSchema,
+    /** Held until the sender's terminal row (#8093) or an instruction. */
+    holdUntil: z.enum(['senderEnd', 'instruction']).optional(),
   }),
   /**
    * The follow-up became the message a turn carries (C3): committed in the
@@ -421,12 +396,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
-   * The loop's position: family, step, and the coordinates it carries. The
-   * one run-ledger row renderers read: the fold derives the live phase from
-   * it (`waiting` parks the run, any other step is running) and `RunView.flow`
+   * The loop's position: family, `at`, and coordinates. The one run-ledger
+   * row renderers read: the fold derives the live phase from it (`waiting`
+   * parks the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are ledger-private.
    */
-  durable('flow.step', { payload: FlowStepPayloadSchema }),
+  durable('run.position', { payload: RunPositionPayloadSchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
       aggregateId: AggregateIdSchema.refine(
@@ -436,41 +411,40 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     }),
   ),
 ]);
-/** The run's private records: on the same aggregate as its display rows,
- *  read by the runtime's typed accessors and never by a renderer
- *  (`isDisplaySessionEvent` keeps them out of the transport by type). */
+/** The run's private records, read by the runtime and never by a renderer
+ *  (`isDisplaySessionEvent`). `followup.closed`: its input is closed until a
+ *  claim reopens it or it activates again. */
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
-  durable('run.record', { record: RunRecordFieldsSchema }),
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
-  durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
+  durable('followup.closed', {}),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
- * the byte-exact conversation and the loop's durable state, on the run's
- * aggregate beside its display rows, read only by `foldRunState` through
- * `RunLedger`. Never redacted, never on a renderer's transport
- * (`isDisplaySessionEvent`), never in the cold listing (`listingTypeOf`).
+ * the byte-exact conversation and the loop's durable state (its hooks'
+ * outcomes included), read only by `foldRunState` through `RunLedger`. Never
+ * redacted, on a renderer's transport or in the cold listing.
  */
 const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
-  /** The approval that guards one outcome-unknown call, committed in the
-   *  batch that opens the request it names. */
+  /** Guards one outcome-unknown call; commits with the request it names. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
   /** The human retry permit, written by the one retry owner
    *  (`ModelInvoker`): the gate a restart reads back. */
   durable('model.retry', { payload: ModelRetryPayloadSchema }),
-  durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
+  durable('run.snapshot', { payload: RunSnapshotPayloadSchema }),
+  durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
+  durable('context.blob', { payload: ContextBlobSchema }),
+  durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
   /**
-   * One child turn's identity and fate: the child loop's own bookkeeping,
-   * never a renderer's. The key is structural, (run, attempt, turn index),
-   * so the same accepted turn always folds to the same identity and a
-   * later attempt that reuses the run id never collides with it. Pending
-   * is the fold: `accepted` without `settled` is the active turn; the
-   * latest `settled` is the last turn whose delivery ran.
+   * One child turn's identity and fate, the child loop's own bookkeeping.
+   * The key is structural, (run, attempt, turn index), so an accepted turn
+   * always folds to one identity and a later attempt reusing the run id
+   * never collides with it. `accepted` without `settled` is the active
+   * turn; the latest `settled` is the last turn whose delivery ran.
    */
   durable('child.turn', {
     attemptId: z.string().min(1),
@@ -538,30 +512,11 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
     'workflow-checkpoint',
   ),
 ]);
-/**
- * The latest value of one stored key: one aggregate per value, so
- * latest-per-key is latest-per-aggregate and no listing needs to group by
- * anything but the aggregate.
- */
-const StateValueSetDraftSchema = z
-  .object({
-    aggregateId: AggregateIdSchema,
-    stageId: z.string().optional(),
-    type: z.literal('state.value.set'),
-    state: StoredValueSchema,
-  })
-  .refine((row) => aggregateTarget(row.aggregateId).kind === row.state.key, {
-    error: 'A stored value lives on the aggregate kind its key names',
-    // A cross-field rule reads both fields, so it applies only once both
-    // parsed: a corrupt `state` is already refused on its own terms.
-    when: (payload) => payload.issues.length === 0,
-  });
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
   ...WorkflowCheckpointDraftSchema.options,
-  StateValueSetDraftSchema,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -588,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 15;
+export const SESSION_EVENT_FORMAT = 44;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -597,14 +552,13 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...WorkflowCheckpointDraftSchema.options.map((schema) =>
     schema.extend(envelope),
   ),
-  StateValueSetDraftSchema.extend(envelope),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
  * it lives on (contract C2). The publisher stamps the rest of the envelope
- * (`seq`, `commit`, `ownerId`, `at`) under its permit; no caller passes them.
+ * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
 export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
@@ -629,16 +583,15 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read (5.2, "Existence"). `flow.step` is a
+ * tombstone final under every read (5.2, "Existence"). `run.position` is a
  * listing key of its own: the phase is folded from it, so a cold listing
  * that dropped it would paint every parked run as ready. `stage.start` is
  * transcript tier alone: its display arm is a no-op and only the transcript
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
  *
- * A listing key is "latest per aggregate and type", so `run.fact`, which
- * holds two families on one type, is read grouped by its `key` as well
- * ({@link listingKeyOf} and `Database`'s listing queries).
+ * `run.fact` and `plugin.fact` hold several families on one type, so they
+ * are read grouped by family as well (`listingKeyOf`, `Database`).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -651,29 +604,29 @@ export function listingTypeOf(
     case 'tool.end':
     case 'workflow.plan':
     case 'workflow.call':
-    case 'skills.snapshot':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
+    case 'usage':
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
     case 'tool.binding':
     case 'tool.result':
     case 'model.retry':
-    case 'flow.snapshot':
+    case 'run.snapshot':
+    case 'tools.offered':
+    case 'context.blob':
+    case 'hook.outcome':
     case 'child.turn':
     case 'workflow.script':
     case 'workflow.journal':
     case 'workflow.attempt':
-      // The run ledger's private rows stay out of the listing: a cold hydrate
-      // must never pull a run's latest `flow.snapshot` into every renderer.
-      // `flow.step` and `output.produced` are listing rows (their own keys, the
-      // `default` below). The keyed private records and the checkpoint
-      // journal are folded by their readers over the whole aggregate, so
-      // "latest of type" is not a fact about them. Not compiler-enforced
-      // (the switch ends in `default`); the fold suite pins it.
+      // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
+      // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
+      // renderer (`run.position`, `output.produced` are listing rows). Keyed
+      // records and the journal fold whole; the fold suite pins this list.
       return null;
     case 'request.opened':
     case 'request.decided':
@@ -697,8 +650,13 @@ export function listingTypeOf(
  * never suppresses another's.
  */
 export function listingKeyOf(event: SessionEvent): string | null {
+  // A run's spend: the listing returns its total at its newest priced row,
+  // so one key per run orders every read's turns by commit.
+  if (event.type === 'usage') return 'usage';
   const type = listingTypeOf(event);
   if (type === null) return null;
+  if (event.type === 'plugin.fact')
+    return `${type}/${event.plugin}/${event.kind}`;
   return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
 }
 
@@ -794,7 +752,7 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;
 
-const DISPLAY_EVENT_TYPES = new Set<string>(
+export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.options.map(
     (schema) => schema.shape.type.value,
   ),
@@ -804,5 +762,5 @@ const DISPLAY_EVENT_TYPES = new Set<string>(
 export function isDisplaySessionEvent(
   event: SessionEvent,
 ): event is DisplaySessionEvent {
-  return DISPLAY_EVENT_TYPES.has(event.type);
+  return DISPLAY_EVENT_TYPES.includes(event.type);
 }

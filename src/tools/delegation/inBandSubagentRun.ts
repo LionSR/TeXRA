@@ -17,12 +17,13 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
-import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
+import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -32,29 +33,28 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
+import {
+  createNativeSubagentStrategy,
+  type ChildRunLaunchOptions,
+} from '@agent/runtime/nativeSubagentStrategy';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
+  type OfferedTool,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
-  registerChildRun,
   startDetachedChildRunLoop,
   type DetachedChildRunInput,
 } from './detachedChildRun';
-import {
-  createNativeSubagentStrategy,
-  type ChildRunLaunchOptions,
-} from './nativeSubagentStrategy';
 
 const CHANNEL = 'inBandSubagentRun';
 
@@ -74,10 +74,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
-  /** The parent's composition, which the child joins. */
-  readonly composition: CompositionKey;
-  /** Synchronous by contract; forwarded as the loop's `recordCost`. */
-  readonly onCost?: (costUsd: number | undefined) => void;
+  /** What the parent's step offered, which the child can only narrow. */
+  readonly parentOffered: readonly OfferedTool[];
   /**
    * Live progress sink for the in-band child. An in-band parent is mid-cycle,
    * so follow-up delivery cannot reach it; each caller degrades deliberately:
@@ -103,9 +101,6 @@ export interface InBandSubagentLaunchOptions {
   >;
 }
 
-/** Options for the XML-delivery API. */
-type InBandSubagentDeliveryOptions = InBandSubagentRunBaseOptions;
-
 interface InBandSubagentRunResult {
   readonly runId: RunId;
   readonly result: RunEnd;
@@ -123,7 +118,7 @@ type SettledInBandTurn = Parameters<
 
 /** Resolve the definition once before either in-band launch path registers it. */
 const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
-  options: InBandSubagentDeliveryOptions,
+  options: InBandSubagentRunBaseOptions,
 ) {
   return yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(options.configPayload),
@@ -155,7 +150,7 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  *
  * A loop failure after the turn settled does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
- * claim or lease-file release that threw afterwards leaves them whole. A
+ * claim release or ending that threw afterwards leaves them whole. A
  * failed artifact drain is the exception: it rolled back facts the run had
  * queued, so a required-result caller must not journal the call as answered.
  * It is read from either place it can be seen — the loop's own
@@ -164,7 +159,7 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
-    options: InBandSubagentDeliveryOptions,
+    options: InBandSubagentRunBaseOptions,
     definition: PreparedAgentDefinition,
     mode: PersistenceMode,
     runId: RunId,
@@ -172,18 +167,17 @@ const executeInBand = Effect.fn('executeInBand')(
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    // A child that needs a plugin its parent's composition lacks is an
-    // ordinary failed call, refused before any row records it.
-    const refusal = childCompositionRefusal(
-      options.composition.composition,
+    // A child that needs a plugin its parent's step lacks is an ordinary
+    // failed call, refused before any row records it.
+    const refusal = childToolRefusal(
+      options.parentOffered,
       definition.setting.tools,
-      options.agentName,
+      config.agent,
     );
     if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
 
-    yield* registerChildRun(options.session, {
-      runId,
-      config,
+    yield* registerRun(options.session, runId, config, {
+      identity: { kind: 'agent', agent: config.agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentRunId: options.parentRunId,
     }).pipe(
@@ -202,8 +196,7 @@ const executeInBand = Effect.fn('executeInBand')(
         session: options.session,
         runId,
         parentRunId: options.parentRunId,
-        agentName: options.agentName,
-        recordCost: options.onCost,
+        agentName: config.agent,
         // The parent is blocked awaiting this child, so it rides the parent's
         // budget slot (child-run budget design note).
         budgeted: false,
@@ -211,8 +204,8 @@ const executeInBand = Effect.fn('executeInBand')(
         onTurnSettled: (settled) => {
           settledTurn = settled;
         },
-        // Built inside the loop's lease launch guard, like every
-        // attempt-scoped setup: a throw here releases the owned-run lease.
+        // Built inside the loop's launch guard, like every attempt-scoped
+        // setup: a throw here ends the run and releases its claim.
         buildLaunch: () =>
           Effect.succeed({
             strategy: createNativeSubagentStrategy({
@@ -239,9 +232,11 @@ const executeInBand = Effect.fn('executeInBand')(
       // before terminal persistence.
       const resultMeta = settledTurn?.resultMeta;
       if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
-          loopFailure !== undefined ? { cause: loopFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
+            loopFailure !== undefined ? { cause: loopFailure } : undefined,
+          ),
         );
       }
 
@@ -302,21 +297,25 @@ const executeInBand = Effect.fn('executeInBand')(
         if (persisted === null) {
           if (childFailed) {
             const error = childError();
-            throw new SubagentDurabilityError(
-              `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-              {
-                cause: new AggregateError(
-                  readFailure === undefined ? [error] : [error, readFailure],
-                  `Subagent ${runId} run and persistence both failed.`,
-                ),
-              },
+            return yield* Effect.fail(
+              new SubagentDurabilityError(
+                `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+                {
+                  cause: new AggregateError(
+                    readFailure === undefined ? [error] : [error, readFailure],
+                    `Subagent ${runId} run and persistence both failed.`,
+                  ),
+                },
+              ),
             );
           }
-          throw new SubagentDurabilityError(
-            readFailure === undefined
-              ? `Failed to persist result for subagent ${runId}.`
-              : `Failed to verify the persisted result for subagent ${runId}.`,
-            readFailure !== undefined ? { cause: readFailure } : undefined,
+          return yield* Effect.fail(
+            new SubagentDurabilityError(
+              readFailure === undefined
+                ? `Failed to persist result for subagent ${runId}.`
+                : `Failed to verify the persisted result for subagent ${runId}.`,
+              readFailure !== undefined ? { cause: readFailure } : undefined,
+            ),
           );
         }
       }
@@ -328,7 +327,7 @@ const executeInBand = Effect.fn('executeInBand')(
       // fact). Two drains can lose it, and only one of them reaches here as an
       // error: the pre-terminal drain the run's own lifecycle ran is only
       // legible on the row it marked (a publication that fails once is settled
-      // and gone by the time the lease-release drain runs), while the release
+      // and gone by the time the ending's drain runs), while the ending's
       // drain fails this loop, alone or wrapped with its other cleanup
       // failures.
       if (
@@ -340,21 +339,25 @@ const executeInBand = Effect.fn('executeInBand')(
               (error: unknown) => error instanceof RunArtifactDrainError,
             )))
       ) {
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} failed to commit its final artifacts.`,
-          loopFailure !== undefined ? { cause: loopFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} failed to commit its final artifacts.`,
+            loopFailure !== undefined ? { cause: loopFailure } : undefined,
+          ),
         );
       }
 
-      if (childFailed) throw childError();
+      if (childFailed) return yield* Effect.fail(ensureError(childError()));
 
       if (!runEnd) {
         // The child did not fail, so the missing terminal row is an
         // infrastructure gap: the run's lifecycle never committed it, or the
         // read of it failed.
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} ended without a terminal record.`,
-          endFailure !== undefined ? { cause: endFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} ended without a terminal record.`,
+            endFailure !== undefined ? { cause: endFailure } : undefined,
+          ),
         );
       }
 
@@ -366,7 +369,7 @@ const executeInBand = Effect.fn('executeInBand')(
     });
 
     // A caller stop landing here interrupts the join, not the child: the
-    // child's rows were committed inside its own lease boundary and the
+    // child's rows were committed under its own claim and the
     // detached loop owns its terminal record.
     return completed;
   },
@@ -433,7 +436,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
     ) {
       return yield* Effect.fail(
         new WorkflowRunAbortError(
-          `Workflow agent '${prepared.agentName}' edits files: pass options.inputFiles ` +
+          `Workflow agent '${definition.config.agent}' edits files: pass options.inputFiles ` +
             `with files that still exist (its result carries output files and ` +
             `diffs, not response text).`,
         ),
@@ -458,7 +461,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
 export const executeSubagentForDeliveryInBand = Effect.fn(
   'executeSubagentForDeliveryInBand',
 )(function* (
-  options: InBandSubagentDeliveryOptions,
+  options: InBandSubagentRunBaseOptions,
 ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(

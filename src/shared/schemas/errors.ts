@@ -5,7 +5,7 @@ import { z } from 'zod';
  *  error is classified as exactly one — which is why this is a discriminant
  *  rather than independent booleans. `isCredentialExhausted` below answers the
  *  combined "exhausted for any reason" question. */
-export const ExhaustionReasonSchema = z.enum([
+const ExhaustionReasonSchema = z.enum([
   /** The upstream provider account itself is out of credit/quota — the key
    *  the user has IS the broken one, so a new key is required. */
   'upstream-credit',

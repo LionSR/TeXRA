@@ -1,22 +1,49 @@
 // Third-party imports
-import { FileSystem, Layer } from 'effect';
+import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
 
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { revisionKey } from '@common/plugins/mcpServers';
+import {
+  installedPluginId,
+  readInstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
+import { AppState } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
-import { toolTableLayer } from '@tools/compositions';
-import { mcpPluginLoader, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import type {
-  PluginToolName,
-  ToolPluginEntry,
-  ToolPluginId,
+import { LiveTools, toolTableLayer } from '@tools/liveTools';
+import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
+import {
+  readDisabledTools,
+  switchedOffPlugins,
+  TOOL_PLUGINS,
+  type PluginToolName,
+  type ToolPluginEntry,
+  type ToolPluginId,
 } from '@tools/plugins';
-import { toolTable, type PluginLayer } from '@tools/toolTable';
+import {
+  claudeAgentSessionsLayer,
+  codexThreadsLayer,
+} from '@tools/agentCliSessionStores';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
+import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
+import { goalContinuation } from '@tools/goal/goalContinuation';
+import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
+import { sha256 } from '@tools/catalogEntries';
+import {
+  toolTable,
+  type Continuation,
+  type InstalledToolReader,
+  type ProcessPluginLayer,
+  type PromptSection,
+  type SessionPluginLayer,
+} from '@tools/toolTable';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -132,12 +159,12 @@ const PLUGIN_TOOLS = {
   'memory-workflow': {
     memory: MemoryTool,
     todo_write: TodoWriteTool,
-    plan: PlanTool,
     delegate_workflow: WorkflowAgentTool,
     delegate_agent: DelegateAgentTool,
     executions: ExecutionsTool,
     accept_run_files: AcceptRunFilesTool,
   },
+  goal: { plan: PlanTool },
   texcount: { texcount: TexcountTool },
   wolfram: { wolfram: WolframTool },
   zotero: {
@@ -157,6 +184,7 @@ const PLUGIN_TOOLS = {
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },
   'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
+  copilot: {},
   core: {
     inline_comment: InlineCommentTool,
     open_pdf: OpenPdfTool,
@@ -181,16 +209,51 @@ const PLUGIN_TOOLS = {
   };
 };
 
-/**
- * The layer of each plugin that owns resources, keyed by plugin id: exactly
- * the plugins whose manifest entry declares `layer`. Each is one object for
- * the life of the process, so the compositions that include its plugin
- * share one build of it.
- */
-const PLUGIN_LAYERS = {} as const satisfies {
+/** The continuation of each plugin whose manifest entry declares one. */
+const PLUGIN_CONTINUATIONS = {
+  goal: goalContinuation,
+} as const satisfies {
   readonly [
-    Id in Extract<ToolPluginEntry, { readonly layer: true }>['id']
-  ]: PluginLayer;
+    Id in Extract<ToolPluginEntry, { readonly continuation: true }>['id']
+  ]: Continuation;
+};
+
+/** The prompt section of each plugin whose manifest entry declares one. */
+const PLUGIN_PROMPT_SECTIONS: Readonly<Record<string, PromptSection>> = {
+  'memory-workflow': memoryPromptSection,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly promptSection: true }>['id']
+  ]: PromptSection;
+};
+
+// ------------------------------------------------------------ plugin layers
+
+/**
+ * The process services of each plugin whose manifest entry declares
+ * `processLayer`, up while the plugin is on or pinned (`@tools/liveTools`).
+ * GitHub's delivery drain is its step of the core shutdown protocol.
+ */
+const PLUGIN_PROCESS_LAYERS = {
+  'github-pr-subscription': {
+    layer: gitHubSubscriptionsLayer,
+    drain: Effect.flatMap(GitHubSubscriptions, (s) => s.drainDeliveries),
+  },
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly processLayer: true }>['id']
+  ]: ProcessPluginLayer;
+};
+
+/** The session services of each plugin whose manifest entry declares
+ *  `sessionLayer`: one build per open session. */
+const PLUGIN_SESSION_LAYERS = {
+  codex: codexThreadsLayer,
+  'claude-agent': claudeAgentSessionsLayer,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly sessionLayer: true }>['id']
+  ]: SessionPluginLayer;
 };
 
 type PluginTools = typeof PLUGIN_TOOLS;
@@ -215,26 +278,161 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 >;
 
 /**
- * Every plugin's tools, for readers outside a run (the Tools dashboard, the
- * VS Code language-model tools); a run reads the same table as the
- * `ToolRegistry` service. Flattening cannot overwrite a tool: the manifest
- * rules out a name two plugins share.
+ * Every plugin's tools, continuation and prompt contribution, which the
+ * process serves as the `ToolRegistry` service. Flattening cannot overwrite
+ * a tool: the manifest rules out a name two plugins share.
  */
-export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
-
-/**
- * The process's `ToolRegistry` and the `Compositions` built over it and the
- * MCP servers of the user's `~/.texra/mcp.json`, which
- * `installProcessRuntime` provides. The layer takes the process
- * `FileSystem` that `installProcessRuntime` serves, to read that file.
- */
-export const toolRegistryLayer = Layer.unwrap(
-  FileSystem.FileSystem.useSync((fs) =>
-    toolTableLayer(TOOL_TABLE, mcpPluginLoader(fs, USER_MCP_CONFIG_PATH)),
+const TOOL_TABLE = toolTable(
+  PLUGIN_TOOLS,
+  PLUGIN_CONTINUATIONS,
+  // Each plugin's section, and whether it ships skills for the catalog.
+  Object.fromEntries(
+    TOOL_PLUGINS.flatMap(({ id, skills }) => {
+      const section = PLUGIN_PROMPT_SECTIONS[id] ?? null;
+      return section !== null || skills
+        ? [[id, { section, skills: skills === true }]]
+        : [];
+    }),
   ),
+  PLUGIN_PROCESS_LAYERS,
+  PLUGIN_SESSION_LAYERS,
 );
 
+/** A switch apply's backoff: 200 ms doubling, over six retries. */
+const SWITCH_READ = Schedule.exponential('200 millis');
+
+/** The process layers a host supplies, for the plugins whose manifest
+ *  entry declares `hostLayer` (the VS Code host's Copilot tools). */
+export type HostPluginLayers = {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly hostLayer: true }>['id']
+  ]?: ProcessPluginLayer;
+};
+
+/**
+ * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it,
+ * the process layers `hostLayers` adds, and the MCP servers of
+ * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`), which
+ * `installProcessRuntime` provides. The layer takes the process `FileSystem`
+ * that `installProcessRuntime` serves, to read that file, and its
+ * `AppState`, which holds the key MCP env values are digested under, the
+ * switches and the plugin install record. A switch flipped or a plugin
+ * disabled in any process sharing that state reaches the catalog at once
+ * (`AppState.changes`), not only at a run's next step, so what follows the
+ * catalog outside a run (a host layer's lifetime, its Copilot tools, an
+ * installed plugin's server) follows the switch.
+ */
+export const toolRegistryLayer = (
+  mcpConfigPath: string,
+  hostLayers: HostPluginLayers = {},
+) =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const appState = yield* AppState;
+      // Resolved once per process, on the first run that declares an MCP tool.
+      const envKey = yield* Effect.cached(revisionKey(appState));
+      // The installed plugins a step loads: the enabled, trusted ones, each
+      // keyed by what it would start, and why each other enabled one loads
+      // nothing. One that ships only skills loads with no servers.
+      const installed: InstalledToolReader = Effect.gen(function* () {
+        const load = yield* readInstalledPluginLoad({
+          globalState: appState,
+        }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+        const withServers = load.loadable.filter(
+          ({ plugin }) => plugin.mcpServers.length > 0,
+        );
+        const warnings = [
+          ...load.withheld,
+          ...withServers.flatMap(({ plugin }) => plugin.warnings),
+        ];
+        const key =
+          withServers.length === 0 ? undefined : yield* Effect.result(envKey);
+        if (key?._tag === 'Failure')
+          warnings.push(
+            `No installed plugin's MCP servers start: ${key.failure.message}`,
+          );
+        return {
+          plugins: load.loadable.map((source) => {
+            const { record, plugin, trust } = source;
+            const id = installedPluginId(record.name);
+            const servers =
+              key?._tag === 'Success'
+                ? plugin.mcpServers.map((server) =>
+                    mcpPlugin(server, key.success, id),
+                  )
+                : [];
+            return {
+              id,
+              key: sha256({
+                trust,
+                servers: servers.map(({ spec, revision }) => [spec, revision]),
+              }),
+              servers,
+              source,
+            };
+          }),
+          warnings,
+        };
+      });
+      const catalog = toolTableLayer(
+        {
+          ...TOOL_TABLE,
+          processLayers: new Map([
+            ...TOOL_TABLE.processLayers,
+            ...Object.entries(hostLayers),
+          ]),
+        },
+        mcpPluginLoader(fs, mcpConfigPath, envKey),
+        // Fail closed: every plugin with a switch stays off until the
+        // switches are read, so an unreadable store never enables one.
+        switchedOffPlugins(new Set(TOOL_PLUGINS.map(({ id }) => id))),
+        installed,
+      );
+      const followSwitches = Layer.effectDiscard(
+        Effect.gen(function* () {
+          const live = yield* LiveTools;
+          const off = Effect.map(
+            readDisabledTools(appState),
+            switchedOffPlugins,
+          );
+          // Nothing stays pinned: a pin here only applies the switches and
+          // withdraws the installed plugins no longer enabled; it starts
+          // none. A failed apply changes nothing, so what is off stays off;
+          // it is tried again with a bounded backoff, the catalog's lock
+          // released between tries, and a change it still misses is logged.
+          const apply = Effect.scoped(
+            live.pinSwitched(off, { installed: 'withdraw' }),
+          ).pipe(
+            Effect.retry({ schedule: SWITCH_READ, times: 6 }),
+            Effect.catchCause((cause) =>
+              Effect.logError(
+                `Tool switches were not applied to the catalog after seven tries; the plugins they switch stay as they were (off, before the first read) until the switches or the install record change again: ${toErrorMessage(Cause.squash(cause))}`,
+              ),
+            ),
+          );
+          // The switches as they stand, then again on each change to them
+          // or to the install record, written here or by another process,
+          // off the build: a store not readable yet fails no process.
+          yield* appState
+            .changes([
+              GlobalStateKey.DISABLED_TOOLS,
+              GlobalStateKey.INSTALLED_PLUGINS,
+            ])
+            .pipe(
+              Stream.runForEach(() => apply),
+              Effect.forkScoped,
+            );
+        }),
+      );
+      return Layer.provideMerge(followSwitches, catalog);
+    }),
+  );
+
 /** Whether a registered tool declares itself unavailable on a product host. */
-export function isToolUnavailableOnHost(name: string, host: ToolHost): boolean {
+export function isToolUnavailableOnHost(
+  name: string,
+  host: SettingHost,
+): boolean {
   return TOOL_TABLE.get(name)?.unavailableHosts?.includes(host) === true;
 }

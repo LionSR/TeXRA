@@ -19,6 +19,7 @@ import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import {
@@ -140,21 +141,20 @@ function projectSection(
         aria-current=${active ? 'true' : nothing}
         @click=${() => callbacks.onSelectProject(key)}
       >
-        <span class="shell-project-mark icon-surface is-size-m"
+        <span class="shell-project-mark icon-surface is-size-s"
           >${initials}</span
         >
-        <span class="shell-project-copy">
-          <strong>${name}</strong>
-          ${status ? html`<small>${status.label}</small>` : nothing}
-        </span>
+        <span class="shell-project-name">${name}</span>
       </wa-button>
       ${
+        // The dot is the row's whole status line; its words are the tooltip.
         status
           ? html`<span
               class="shell-project-status"
               data-tone=${status.tone}
               role="img"
               aria-label=${status.label}
+              title=${status.label}
             ></span>`
           : nothing
       }
@@ -200,7 +200,7 @@ export function shellSidebarTemplate(
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <header class="shell-sidebar-brand">
-        <div class="shell-sidebar-logo" aria-hidden="true">T</div>
+        <div class="shell-sidebar-logo" aria-hidden="true"></div>
         <span class="shell-sidebar-product">TeXRA</span>
       </header>
 
@@ -283,7 +283,7 @@ export function subagentsButtonTemplate(
       class="shell-subagents-open btn-secondary"
       appearance="outlined"
       size="s"
-      title="Open the ${label} tab on this conversation's tree"
+      title="Show this task's subagents"
       @click=${onOpen}
     >
       ${waIcon(icon, { slot: 'start' })}
@@ -350,23 +350,8 @@ function handleTablistKeydown(
     0,
     tabs.findIndex((tab) => tab.id === activeTabId),
   );
-  let nextIndex: number;
-  switch (event.key) {
-    case 'ArrowRight':
-      nextIndex = (currentIndex + 1) % tabs.length;
-      break;
-    case 'ArrowLeft':
-      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-      break;
-    case 'Home':
-      nextIndex = 0;
-      break;
-    case 'End':
-      nextIndex = tabs.length - 1;
-      break;
-    default:
-      return;
-  }
+  const nextIndex = nextTablistIndex(event.key, currentIndex, tabs.length);
+  if (nextIndex === undefined) return;
   event.preventDefault();
   const next = tabs[nextIndex];
   if (!next) return;
@@ -426,7 +411,7 @@ export function workbenchTabsTemplate(
     <div
       class="shell-workbench-tabs"
       role="tablist"
-      aria-label=${`${placement} workbench tabs`}
+      aria-label=${`${placement === 'right' ? 'Side' : 'Bottom'} panel tabs`}
       @keydown=${(event: KeyboardEvent) =>
         handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
@@ -556,8 +541,8 @@ export function workbenchTabsTemplate(
       ${renderIconActionButton({
         id: `${workbenchPanelDomId(placement, session)}-hide`,
         icon: hideDirection,
-        label: `Hide ${placement} panel`,
-        tooltip: `Hide ${placement} panel`,
+        label: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
+        tooltip: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
         className: 'shell-workbench-close icon-button focus-ring-inset',
         size: 'm',
         onClick: callbacks.onHide,

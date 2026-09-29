@@ -9,7 +9,6 @@ export * from './agentCliSettings';
 export * from './fileFields';
 export * from './fileTypes';
 export * from './lineChanges';
-export * from './goal';
 export * from './proposalFields';
 export * from './toolConfig';
 export * from './errors';
@@ -44,11 +43,16 @@ export * from './workflowScriptDelivery';
 export {
   emptyRunEndOutput,
   NonAgentRunRecordSchema,
+  RunRecordFieldsSchema,
   ResultMetaSchema,
   RunEndSchema,
+  RunWorkspaceFilesSchema,
+  storedResultMeta,
+  storedRunOutput,
   ToolUseRunEndOutputSchema,
   WorkflowRunEndOutputSchema,
   type ResultDiffSummary,
+  type DeliveredResult,
   type ResultMeta,
   type RunEnd,
   type RunEndOutput,
@@ -81,9 +85,12 @@ export * from './subscriptionUsage';
 
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './runState';
-export * from './runFlowState';
+export * from './runSnapshotState';
 export * from './rowValues';
 export * from './runLedgerEvent';
+export * from './offeredTools';
+export * from './hookOutcome';
+export * from './followUp';
 export * from './sessionEvent';
 export * from './traceEvent';
 

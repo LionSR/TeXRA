@@ -38,11 +38,10 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Stream } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';
-import { SignInFailed } from '@common/errors/signInFailed';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
@@ -56,23 +55,19 @@ import {
   StateWriteFailed,
   type StateStore,
 } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-} from '@platform/processRuntime';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 import { readCliVersion } from './cliContext';
-import { getCliSecrets } from './cliSecrets';
-import { setCliLogRuntime, writeTextStderr } from './logSinks';
-import { cliAgentResume } from './cliAgentResume';
-import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
+import { CliSecrets, cliSecretsPath } from './cliSecrets';
+import { setCliLogRuntime } from './logSinks';
+import { ensureCliSupabaseAuth } from './supabaseAuth';
 
 let pending: Promise<ProcessRuntime> | null = null;
 
@@ -88,17 +83,19 @@ const NO_PLATFORM_APP_STATE =
  * answered with the caller's fallback would read as absent state rather than
  * as no store at all.
  */
+const refuseWrite = (key: string) =>
+  Effect.fail(
+    new StateWriteFailed({
+      key,
+      message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
+      cause: undefined,
+    }),
+  );
 const refusingStateStore: StateStore = Object.freeze({
   get: (key: string) =>
     Effect.die(new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`)),
-  update: (key: string) =>
-    Effect.fail(
-      new StateWriteFailed({
-        key,
-        message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
-        cause: undefined,
-      }),
-    ),
+  update: refuseWrite,
+  modify: refuseWrite,
 });
 
 const NO_PLATFORM_GLOBAL_ROOT =
@@ -123,16 +120,14 @@ const refuseGlobalRecord = (operation: string) =>
 const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
   GlobalDatabase,
 )({
-  appendAll: () => refuseGlobalRecord('appendAll'),
-  readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
+  values: {
+    get: () => refuseGlobalRecord('values.get'),
+    modify: () => refuseGlobalRecord('values.modify'),
+    list: () => refuseGlobalRecord('values.list'),
+    changes: () => Stream.fromEffect(refuseGlobalRecord('values.changes')),
+  },
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
-  readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
-  readUpdateCheck: () => refuseGlobalRecord('readUpdateCheck'),
-  recordUpdateCheck: () => refuseGlobalRecord('recordUpdateCheck'),
-  readInquiryRecord: () => refuseGlobalRecord('readInquiryRecord'),
-  listInquiryRecords: () => refuseGlobalRecord('listInquiryRecords'),
-  updateInquiryRecord: () => refuseGlobalRecord('updateInquiryRecord'),
 });
 
 /**
@@ -211,74 +206,50 @@ export function installCliProcessRuntime(
     // and which runs no records operation — must not create it at all.
     const globalStoragePath = resolveGlobalStoragePath(storageRoot);
     const version = await readCliVersion();
-    const secrets = getCliSecrets(storageRoot);
+    const secrets = new CliSecrets(cliSecretsPath(storageRoot));
     // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
-    // The process lifecycle and agent directories are process services the
-    // runtime serves, so both are built here, before the install, rather than
-    // in the platform init that may join an already-installed runtime. The
-    // built-in agent directories read straight out of the CLI package's
-    // `dist/resources`; the platform-less entries pass no resources root and
-    // load no agents.
-    const lifecycle = createLifecycleHost({
-      onError: (phase, error) => {
-        writeTextStderr(
-          `[error] [cli.lifecycle] Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-        );
-      },
-    });
-    const agentDirectories = new AgentDirectoryService({
-      channel: 'cli',
-      resourcesPath: options?.resourcesPath ?? '',
-      customDirectoryStore: { get: () => Effect.succeed(undefined) },
-    });
+    // The agent directories are a process service the runtime serves, so
+    // they are built here, before the install, rather than in the platform
+    // init that may join an already-installed runtime. The built-in agent
+    // directories read straight out of the CLI package's `dist/resources`;
+    // the platform-less entries pass no resources root and load no agents.
+    // The custom directory is the one the other hosts read, from the shared
+    // application state this runtime serves.
+    const agentDirectoriesLayer = Layer.effect(
+      AgentDirectories,
+      Effect.map(
+        AppState,
+        (state) =>
+          new AgentDirectoryService({
+            channel: 'cli',
+            resourcesPath: options?.resourcesPath ?? '',
+            customDirectoryStore: {
+              get: () =>
+                state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
+            },
+          }),
+      ),
+    );
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: globalStoragePath,
+      mcpConfigPath: USER_MCP_CONFIG_PATH,
       secrets,
       appState: options?.appState
         ? AppState.layer(options.appState)
         : Layer.effect(
             AppState,
             Effect.map(GlobalDatabase, (database) =>
-              appStateStoreFromDatabase(globalStoragePath, database),
+              appStateStoreFromDatabase(globalStoragePath, database.values),
             ),
           ),
       auth,
       // A terminal has no editor language models; the CLI's platform installs
       // the same port.
       languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-      // The one resume port, shared with the platform `initCliPlatform`
-      // wires: it forwards to the chat TUI's handler whenever one is
-      // mounted, whichever entry installed this runtime.
-      agentResume: cliAgentResume,
-      agentDirectories: AgentDirectories.layer(agentDirectories),
-      lifecycle,
-      setup: {
-        host: 'cli',
-        // The one closure left over the runtime being installed, and a real
-        // one: signing in runs a program on it, long after this returns. The
-        // account plane it reports on is the one built above, which is also
-        // the plane this runtime serves as `SupabaseAuth`.
-        // The shared sign-in coordinator runs on the process services this
-        // install builds, and the setup port hands back a service-free
-        // program, so the services are provided from the runtime itself.
-        signIn: () =>
-          withProcessServices(
-            runtime,
-            signInCliSupabase(runtime, { openBrowser: true }).pipe(
-              Effect.andThen(auth.authenticated),
-            ),
-          ).pipe(
-            Effect.mapError(
-              (cause) =>
-                new SignInFailed({
-                  message: `The CLI sign-in could not run: ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            ),
-          ),
-      },
+      agentDirectories: agentDirectoriesLayer,
+      setup: {},
       // CLI model traffic goes to the same Supabase usage log the extension
       // writes to, tagged with editorType 'cli' and the CLI version. The
       // runtime's disposal drains the queue, and that disposal is the last
@@ -307,9 +278,11 @@ export function installCliProcessRuntime(
  * after the disposal settles, so a write racing the teardown still reaches
  * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
- * Registered by `initCliPlatform` as the last shutdown step and called
- * directly by the same root when a failed init must not leave the runtime
- * installed with nothing to dispose it.
+ * Registered by `initCliPlatform` as the last shutdown step, and run by the
+ * process entry (`bin/texra.ts`) for whatever runtime is still installed —
+ * which is how a failed init's runtime goes. Never from a fiber on the
+ * runtime being disposed: that disposal waits for the fiber asking for it,
+ * and the process exits with its top-level await unsettled.
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {

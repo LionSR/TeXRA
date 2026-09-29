@@ -10,10 +10,6 @@ import {
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import {
-  isAgentCatalogAuthRefreshDeferred,
-  runAfterAgentCatalogAuthRefresh,
-} from '@frontend/auth/agentCatalogRefreshScope';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -77,23 +73,7 @@ export class SettingsViewProvider {
     // Listen for auth state changes to refresh all data
     onTexraAuthSessionsChanged(context, () => {
       if (this._view) {
-        if (isAgentCatalogAuthRefreshDeferred()) {
-          // The panel this repaint belongs to is whichever one is open when
-          // the preflight releases it, not the one open when auth changed: a
-          // dispose and reopen inside that window must not repaint the dead
-          // webview and leave the live one stale.
-          runAfterAgentCatalogAuthRefresh(this.runtime, [
-            Effect.suspend(() =>
-              this._view
-                ? this.messageHandler.sendAllData(this._view.webview)
-                : Effect.void,
-            ),
-          ]);
-          return;
-        }
-        this.runtime.runFork(
-          this.messageHandler.sendAllData(this._view.webview),
-        );
+        this.runtime.runFork(this.messageHandler.refreshAfterAuthChange());
       }
     });
   }
@@ -101,17 +81,6 @@ export class SettingsViewProvider {
   /** Sign in to a subscription provider from a command, not the webview. */
   public signInSubscription(providerId: SubscriptionProviderId) {
     return this.messageHandler.signInSubscription(providerId);
-  }
-
-  /**
-   * Refresh every credential-dependent surface after any API-key mutation.
-   * The program, not its settlement: the caller that owns the key write runs
-   * it as part of that write's own action.
-   */
-  public refreshAfterProviderKeyChange(
-    provider: string,
-  ): Effect.Effect<void, Error, ProcessServices> {
-    return this.messageHandler.refreshAfterProviderKeyChange(provider);
   }
 
   /**
@@ -127,7 +96,7 @@ export class SettingsViewProvider {
       if (this._view) {
         const panel = this._view;
         panel.reveal(vscode.ViewColumn.One);
-        yield* this.messageHandler.sendAllData(panel.webview);
+        yield* this.messageHandler.sendAllData();
       } else {
         const panel = vscode.window.createWebviewPanel(
           SettingsViewProvider.viewType,

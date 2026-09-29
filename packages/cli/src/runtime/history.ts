@@ -8,8 +8,8 @@ import {
   isUserVisibleRun,
   listRuns,
   listRunWorkspaceFiles,
-  unwrapResultMeta,
   type AgentRunListingEntry,
+  type RunResult,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
@@ -19,6 +19,7 @@ import {
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
+  RUN_SUBSTATE,
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
@@ -40,7 +41,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
-import { cliRunStanding, readCliResumedModel } from './toolUseResumeData';
+import { cliRunStanding } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -75,9 +76,8 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /**
-   * Whether the durable facts say this run can be continued: a checkpoint
-   * file exists and the row carries the stream id stamped at registration.
-   * Ownership and loadability are settled when the run is opened, not per
+   * Whether the durable facts say this run can be continued: its run
+   * aggregate carries a `run.snapshot` ({@link cliRunStanding}). Ownership and loadability are settled when the run is opened, not per
    * listed row, so a run live in another process — or one whose checkpoint
    * turns out to be unloadable — still lists here and is refused, in its own
    * words, on open. Independent of `status`, which stays a frozen contract: a
@@ -97,13 +97,14 @@ interface CliHistoryDetails {
   /** The run's launch facts as the session's fold holds them. */
   readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
   readonly config: AgentConfig | null;
-  readonly result: ReturnType<typeof unwrapResultMeta> | null;
+  readonly result: RunResult | null;
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether a checkpoint file exists for this run. */
-  readonly hasFlowRecord: boolean;
+  /** Whether the run aggregate carries a `run.snapshot`. */
+  readonly checkpointPresent: boolean;
+  /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;
 }
 
@@ -161,10 +162,10 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
-    // A row's resumability comes from the checkpoint `stat` the listing already
+    // A row's resumability comes from the snapshot probe the listing already
     // did; only a failed workflow row still reads its persisted state. That
     // read is bounded here so a history full of failed workflow runs cannot
-    // open one file handle burst per run. `Effect.forEach` preserves input
+    // fold every run's ledger at once. `Effect.forEach` preserves input
     // order.
     const opened = yield* session;
     const entries = yield* listRuns(opened);
@@ -187,8 +188,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const [
       run,
       config,
-      resultMeta,
-      runEnd,
+      result,
       report,
       conversationResult,
       persistedWorkspaceFilePaths,
@@ -198,19 +198,17 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       [
         session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
         store.readConfig(),
-        store.readResultMeta(),
-        store.readRunEnd(),
+        store.readResult(),
         store.readReport(),
         readCompletedRunConversation(id, session),
         store.readWorkspaceFiles(),
         listRunGeneratedFiles(id, session),
         checkpointExists(id, session),
       ],
-      { concurrency: 9 },
+      { concurrency: 8 },
     );
-    const currentModel = config
-      ? yield* readCliResumedModel(session, id, config)
-      : undefined;
+    // The model the run is on, as the view folds it for the listing too.
+    const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
     // `history list` for the run in the row the caller just read.
@@ -220,6 +218,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         checkpointPresent,
         agentCategory: config === null ? null : config.agentCategory,
         phase: run?.status,
+        paused: run?.substate === RUN_SUBSTATE.PAUSED,
       },
       session,
     );
@@ -264,14 +263,14 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
           }
         : null,
       config,
-      result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
+      result,
       report,
       conversationPreview,
       ...(options.includeFullConversation
         ? { conversation: fullConversation }
         : {}),
       files,
-      hasFlowRecord: checkpointPresent,
+      checkpointPresent,
       currentModel,
     } satisfies CliHistoryDetails;
   },
@@ -463,12 +462,12 @@ export function formatInvalidExportFormatText(raw: string): string {
 /**
  * The one rename the NDJSON history records keep: a terminal outcome is
  * spelled as `CliRunStatus` ('completed' | 'interrupted' | 'error'), the
- * word the CLI contract promises, while 'resumable'/'unknown' pass through
- * unchanged. Internal and human-readable output keeps `HistoryRunStatus`.
+ * word the CLI contract promises; every other status passes through.
  */
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
+    status === HISTORY_RUN_STATUS.PAUSED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -543,7 +542,7 @@ export function formatCliHistoryDetailsText(
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));
-  if (details.hasFlowRecord) lines.push('', 'Flow record: present');
+  if (details.checkpointPresent) lines.push('', 'Checkpoint: present');
   return lines.join('\n');
 }
 
@@ -560,6 +559,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
       checkpointPresent: entry.checkpointPresent,
       agentCategory: config.agentCategory,
       phase: entry.status,
+      paused: entry.paused,
     },
     session,
   );
@@ -567,10 +567,9 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    // The model the run is on: a model switch rewrites the record in the
-    // ledger batch that commits the new model, so the record and the
-    // checkpoint `history show` reads name the same model.
-    model: config.model,
+    // The model the run is on, as the listing folds it from the run's
+    // snapshots; the record keeps the model it was launched with.
+    model: entry.model ?? config.model,
     status,
     resumable,
     inputBasename,

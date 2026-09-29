@@ -1,9 +1,12 @@
 import type { HostRequest } from '@shared/session/hostRequest';
+import type { RunAction } from '@shared/schemas';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {
   id: string;
+  /** The run action it performs: shown only while `RunView.actions` holds it. */
+  action: RunAction;
   icon: TeXRAIconName;
   label: string;
   /**
@@ -34,7 +37,6 @@ export const ELEMENT_IDS = {
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
-  BYPASS_CHIP: 'bypassChip',
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
@@ -57,6 +59,7 @@ export const GROUP_DOM_IDS = Object.freeze({
 
 const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
+  action: 'openRunStorage',
   arm: 'openRunStorage',
   icon: 'folder-open',
   label: 'Open run folder',
@@ -64,6 +67,7 @@ const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
 
 const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
+  action: 'export',
   arm: 'exportTranscript',
   icon: 'file-export',
   label: 'Export conversation…',
@@ -72,12 +76,14 @@ const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
 const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
+    action: 'runNew',
     arm: 'runNew',
     icon: 'play',
     label: 'Run again from scratch',
   },
   {
     id: ELEMENT_IDS.RESUME_BTN,
+    action: 'resume',
     arm: 'resume',
     icon: 'forward-step',
     label: 'Resume from saved outputs',
@@ -87,23 +93,27 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
     icon: 'copy',
+    action: 'copy',
     arm: 'copyRunContext',
     label: 'Copy run context',
   },
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
+    action: 'diff',
     arm: 'latexdiff',
     icon: 'code-compare',
     label: 'Run latexdiff on the outputs',
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
+    action: 'pack',
     arm: 'pack',
     icon: 'box-archive',
     label: 'Archive outputs to History',
   },
   {
     id: ELEMENT_IDS.CLEAN_STREAM_BTN,
+    action: 'clean',
     arm: 'clean',
     icon: 'trash',
     label: 'Delete output files',
@@ -113,6 +123,7 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
 const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
+    action: 'compact',
     arm: 'run.compact',
     icon: 'compress',
     label: 'Compact conversation',

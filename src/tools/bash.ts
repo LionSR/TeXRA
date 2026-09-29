@@ -33,7 +33,6 @@ import {
   type BashDeliveryStreamExcerpt,
 } from '@tools/delegation/bashDelivery';
 import { executed } from '@tools/core/result';
-import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { formatDuration, previewLabel } from '@utils/text/stringUtils';
@@ -477,14 +476,8 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
       const runId = generateRunId();
       const preview = previewLabel(command);
 
-      const syntheticConfig = buildSyntheticToolUseConfig({
-        agent: 'bash',
-        instruction: command,
-      });
-
       // The durable record states only what a shell command has: no run
-      // mode, no model. The synthetic AgentConfig above feeds the ephemeral
-      // live wire only.
+      // mode, no model.
       yield* registerRun(
         session,
         runId,
@@ -511,9 +504,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
             Effect.andThen(
               createChildRun(session, runId, parentRunId, {
                 run: { kind: 'process', tool: 'bash' },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                description: command,
-                config: syntheticConfig,
+                category: AgentCategory.ToolUse,
               }),
             ),
           ),

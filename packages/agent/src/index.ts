@@ -53,7 +53,7 @@ export type { SessionOpenError } from '@shared/session/database';
 export { aggregateId } from '@shared/schemas';
 export type { AgentEvent } from '@agent/trace';
 
-// `AgentFlowResult` is deliberately sourced from its own module rather than
+// `RunEndResult` is deliberately sourced from its own module rather than
 // from the `@agent/runtime` barrel. It appears in this package's PUBLIC
 // declarations, and declaration emit follows whichever module a public type
 // comes from: taking it from the barrel pulls the barrel's whole `.d.ts`
@@ -61,16 +61,16 @@ export type { AgentEvent } from '@agent/trace';
 // trips the provider-type leak check in `scripts/validate-artifacts.mjs`
 // (`@anthropic-ai/sdk`).
 export type {
-  AgentFlowResult,
-  ToolUseFlowResult,
-  WorkflowFlowResult,
-} from '@agent/runtime/AgentFlowResult';
+  RunEndResult,
+  ToolUseRunEndResult,
+  WorkflowRunEndResult,
+} from '@agent/runtime/RunEndResult';
 export type {
   ITool,
   IToolRegistry,
   ToolGuard,
-  ToolHost,
 } from '@agent/core/tools/ToolTypes';
+export type { SettingHost } from '@shared/state/stateSettings';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';

@@ -111,6 +111,7 @@ function withStubbedEditFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
           workspaceWrites(target, Buffer.from(content).toString('utf-8'));
           return Effect.void;
         },
+        makeDirectory: () => Effect.void,
       }),
       Effect.provideService(FileSystem.FileSystem, {
         ...processFs,
@@ -118,6 +119,7 @@ function withStubbedEditFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
           workspaceWrites(target, Buffer.from(content).toString('utf-8'));
           return Effect.void;
         },
+        makeDirectory: () => Effect.void,
       }),
     );
   });
@@ -245,8 +247,9 @@ describe('Tool edit approval gating', () => {
       });
       const projectPath = project.roots.workspace!;
       const filePath = path.join(projectPath, 'scoped.txt');
-      tracker.recordRead('scoped.txt');
-      relativeFiles.set('scoped.txt', { exists: true, content: 'old content' });
+      // A new file: absent in both views the flow reads, since a path that
+      // appears between the proposal and the write is a conflict.
+      relativeFiles.set('scoped.txt', { exists: false, content: '' });
       const write = workspaceWrites;
 
       const result = yield* withStubbedEditFiles(

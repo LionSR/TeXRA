@@ -10,10 +10,7 @@ import { Effect } from 'effect';
  * nothing left of its own to say.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  settingsViewSnapshotEntries,
-  type SettingHost,
-} from '@shared/state/stateSettings';
+import { settingsViewSnapshotEntries } from '@shared/state/stateSettings';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import {
   readSetting,
@@ -24,7 +21,6 @@ import {
 export function buildSettingsSnapshotMessage(
   snapshot: DerivedSettingsSnapshot,
   stores: SettingsStores,
-  host: SettingHost,
 ) {
   return Effect.gen(function* () {
     return {
@@ -32,7 +28,7 @@ export function buildSettingsSnapshotMessage(
       snapshot,
       values: Object.fromEntries(
         yield* Effect.forEach(settingsViewSnapshotEntries(snapshot), (entry) =>
-          readSetting(entry, stores, host).pipe(
+          readSetting(entry, stores).pipe(
             Effect.map((value) => [entry.key, value] as const),
           ),
         ),

@@ -49,11 +49,12 @@ vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
 });
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
-  getCliSecrets: () => ({
-    get: mocks.getSecret,
-    delete: mocks.deleteSecret,
-    set: mocks.setSecret,
-  }),
+  CliSecrets: class {
+    get = mocks.getSecret;
+    delete = mocks.deleteSecret;
+    set = mocks.setSecret;
+  },
+  cliSecretsPath: (storageRoot: string) => storageRoot,
 }));
 
 vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
@@ -87,8 +88,9 @@ function cloneCalls(): ChildProcess.StandardCommand[] {
 }
 
 /**
- * The clone ran against the tokenless remote with the token only in the
- * helper's environment, then offered it to the user's credential helper.
+ * The clone ran in the C locale against the tokenless remote with the token
+ * only in the helper's environment, then offered it to the user's credential
+ * helper.
  */
 function expectClonedInto(cwd: string): void {
   const clone = overleafGitClone(
@@ -99,7 +101,7 @@ function expectClonedInto(cwd: string): void {
   expect(command?.args).toEqual(clone.args);
   expect(command?.options).toMatchObject({
     cwd,
-    env: { ...makeMachineGitEnv(), ...clone.env },
+    env: { ...makeMachineGitEnv(), ...clone.env, LC_ALL: 'C', LANGUAGE: 'C' },
     extendEnv: false,
   });
   const approve = spawn.calls.find((call) => call.args[0] === 'credential');

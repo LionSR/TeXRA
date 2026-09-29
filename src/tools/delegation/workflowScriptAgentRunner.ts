@@ -2,7 +2,7 @@
 import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { deliveredOutput, getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import {
   readWorkflowCallAttempt,
@@ -12,8 +12,8 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import { Runs } from '@agent/runtime/runRegistry';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive, Runs } from '@agent/runtime/runRegistry';
+import { offeredBy } from '@agent/runtime/loop/step';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import type { AppState } from '@platform/interfaces';
@@ -21,16 +21,14 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
+import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import {
+  claimStanding,
   DatabaseClaimRefused,
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import {
-  resolveRunLiveness,
-  type RunLiveness,
-} from '@tools/executions/runLiveness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -46,6 +44,11 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
+import { WorkflowSubagentUnsuccessful } from './workflowScriptRun';
+
+/** Fail the workflow run: the engine reports this call and ends the run. */
+const abortWorkflow = (message: string) =>
+  Effect.fail(new WorkflowRunAbortError(message));
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -67,7 +70,7 @@ function workflowScriptModelSelection(
   }).pipe(
     Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
-      // disappear as a nullable call inside parallel(). When the
+      // become a call failure a script's attempt() absorbs. When the
       // script omits the field, preserve the established delegation failure
       // semantics; per-call model routing must not broaden that behavior.
       if (requestedModel === undefined) return ensureError(error);
@@ -104,7 +107,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     defaultAgent: AgentEntry,
     runId: RunId,
   ): Effect.fn.Return<
-    { configPayload: AgentConfigPayload; agentName: string },
+    AgentConfigPayload,
     Error,
     Secrets | AppState | FileSystem.FileSystem | LanguageModel
   > {
@@ -121,7 +124,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     if (call.options.schema !== undefined) {
       const requestedAgentName = call.options.agentName;
       if (requestedAgentName === undefined) {
-        throw new WorkflowRunAbortError(
+        return yield* abortWorkflow(
           'A structured workflow call must name a tool-use agent.',
         );
       }
@@ -137,15 +140,12 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         parentModel,
       );
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          agentCategory: AgentCategory.ToolUse,
-          outputSchema: call.options.schema,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        agentCategory: AgentCategory.ToolUse,
+        outputSchema: call.options.schema,
       };
     } else {
       const requestedAgentName = call.options.agentName;
@@ -159,7 +159,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
               parent.run.delegationAgentScope ?? undefined,
             );
       if (agent.category !== AgentCategory.Workflow) {
-        throw new WorkflowRunAbortError(
+        return yield* abortWorkflow(
           `Agent '${agent.name}' is a ${agent.category} agent but was ` +
             `launched as workflow. Use delegate_agent instead.`,
         );
@@ -199,20 +199,17 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         contextFiles,
       ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) {
-        throw new WorkflowRunAbortError(oversizedBibRejection.error);
+        return yield* abortWorkflow(oversizedBibRejection.error);
       }
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          inputFiles,
-          contextFiles,
-          mediaFiles,
-          agentCategory: AgentCategory.Workflow,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        inputFiles,
+        contextFiles,
+        mediaFiles,
+        agentCategory: AgentCategory.Workflow,
       };
     }
   },
@@ -246,21 +243,9 @@ function workflowCallRunId(call: {
   });
 }
 
-/** Why a started child may not have its attempt number advanced. */
-function livenessClause(liveness: RunLiveness): string {
-  switch (liveness.kind) {
-    case 'unsettled':
-      return liveness.reason;
-    case 'live':
-      return 'still running in this process';
-    case 'interrupted':
-      return 'interrupted';
-  }
-}
-
 /**
  * A storage fault while inspecting a child is not this call's own failure: the
- * engine turns a failed call into a `null` the script can swallow, so an
+ * engine turns a failed call into a failure the script can catch, so an
  * unreadable child aggregate has to abort the run rather than read as a child
  * that answered nothing.
  */
@@ -320,7 +305,7 @@ function probeJournal<A>(
  *
  * `holdInactiveRun` answers this one. The run lane is the single in-process
  * authority for "a generation of this run is live here" — the one a resume's
- * own launch is refused on (`RunRoster.isLive`) — so a resume already under
+ * own launch is refused on (`RunRegistry.isLive`) — so a resume already under
  * way holds it and this hold is refused, and a resume that starts after it
  * finds the run held and refuses in its turn.
  *
@@ -333,7 +318,7 @@ function probeJournal<A>(
  * for as long as its replacement is live, and the attempt whose result the
  * parent journals — recovered, or launched by this call and returned once its
  * loop released both — stays fenced until that result is durable. A claim
- * release that fails is a defect (`RunRoster.holdInactive` releases through
+ * release that fails is a defect (`RunRegistry.holdInactiveRun` releases through
  * `Effect.orDie`): the claim would stay behind with nothing left to release it.
  * A claim acquisition that fails for any reason but a concurrent holder
  * surfaces as its own error, not as a refusal.
@@ -342,7 +327,7 @@ const fenceSupersededRun = (
   runId: RunId,
 ): Effect.Effect<void, Error, Runs | Scope.Scope> =>
   // One hold fences both: the in-process owner and the run's DB claim ride
-  // the same hold fiber's lifetime (`RunRoster.holdInactive`), so the two
+  // the same hold fiber's lifetime (`RunRegistry.holdInactiveRun`), so the two
   // can never disagree about whether this run is fenced.
   Effect.flatMap(Runs, (runs) => runs.holdInactiveRun(runId)).pipe(
     Effect.mapError((cause) => {
@@ -377,6 +362,10 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
   readonly key: string;
   /** Fires with the run id of the attempt about to run; recovery never fires. */
   readonly onLaunch: (runId: RunId) => void;
+  /** Fires once per launched attempt with the cost its own run's rows add up
+   *  to, as soon as the attempt returns and before any fence can refuse its
+   *  result; recovery never fires. */
+  readonly onSpent: (costUsd: number) => void;
 };
 
 /**
@@ -430,10 +419,10 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * turn's settle, so a settled turn is where the delivery that records them
  * ended. Those two facts decide every existing id, in this order:
  *
- * - An active turn refuses. Its tools may already have edited files and
- *   nothing recorded what they did — the shape a stop leaves, a CANCELLED row
- *   with no manifest — so no attempt with one advances, with an outcome or
- *   without one, unless a user's retry superseded it above.
+ * - An active turn under a CANCELLED row advances: a stop pauses the workflow,
+ *   and continuing it reruns what the stop cut short. Any other refuses — its
+ *   tools may have edited files nothing recorded — unless a retry superseded
+ *   it above.
  * - A settled turn with no manifest refuses, whether or not the run recorded
  *   an outcome. The delivery can roll back after the model and the tools have
  *   finished: the turn still settles, the loop still records a FAILED — or, a
@@ -514,10 +503,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // could duplicate model work and file edits.
         if (journaled.attempt !== null && attempt <= journaled.attempt) {
           if (journaled.superseded.includes(runId)) continue;
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} was marked as launched but no longer exists; refusing to repeat it.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} was marked as launched but no longer exists; refusing to repeat it.`,
           );
         }
         // `exists()` is false for an id that never started AND for one the
@@ -547,6 +534,11 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           parentRunId: call.parentRunId,
           prepare: call.prepare,
         });
+        // `RunEnd.usage` is the run ledger's folded totals, absent only for
+        // a run that never opened a ledger: absence is the recorded fact "no
+        // spend". Reported before the fence below, whose refusal would
+        // otherwise leave this attempt's spend off the invocation.
+        call.onSpent(result.usage?.totalCost ?? 0);
         // The child's loop released its claim and its run lane as it ended, so
         // from this return until the engine journals the call's value the id
         // it answered on is resumable: a host that takes it appends
@@ -573,10 +565,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           records.countActivations(),
         );
         if (activations !== 1 || launched?.outcome !== result.outcome) {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
           );
         }
         return { runId, result, recovered: false };
@@ -586,17 +576,22 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // copy therefore decides nothing; it only says whether the attempt owes
       // a liveness proof before the claim below is taken.
       if ((yield* probeChild(runId, records.readRunEnd())) === null) {
-        // The claim is the liveness authority: only a run nobody alive owns
-        // may have its attempt number advanced. An unreadable claim reports
-        // unsettled, so this refuses rather than repeating the work. It is
-        // asked before the fence, because the claim the fence takes reads back
-        // as an owner of this run's own.
-        const liveness = yield* resolveRunLiveness(runId, session);
-        if (liveness.kind !== 'interrupted') {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
-            ),
+        // The claim is the liveness authority (R6): only a run nobody alive
+        // owns may have its attempt number advanced; a live handle here holds
+        // this process's claim. An unreadable claim aborts, so this refuses
+        // rather than repeating the work. It is asked before the fence,
+        // because the claim the fence takes reads back as an owner of this
+        // run's own.
+        const standing = claimStanding(
+          yield* probeChild(runId, session.claimOwner(runId)),
+        );
+        if (standing.kind !== 'free') {
+          const holder =
+            standing.kind === 'held'
+              ? runHeldClause(standing.owner)
+              : "held by this process's claim";
+          return yield* abortWorkflow(
+            `Workflow child ${runId} recorded no outcome and is ${holder}; refusing to repeat it.`,
           );
         }
       }
@@ -628,7 +623,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // it — a stop that reached the run reports CANCELLED over the same
         // lost drain — which is the verdict the in-band caller reaches on the
         // same marker, and the outer boundary turns it into the abort that
-        // keeps it out of the engine's nullable call result.
+        // keeps it out of the call failures a script can catch.
         return yield* Effect.fail(
           new SubagentDurabilityError(
             `Workflow child ${runId} failed to commit its final artifacts.`,
@@ -649,15 +644,13 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       const meta = yield* probeChild(runId, records.readResultMeta());
       const delivered = meta?.producer === 'subagent';
       if (turns.active !== null) {
-        // A turn accepted and never settled: the acceptance row commits
-        // immediately before the turn dispatches, so its tools may already
-        // have edited files, and a stop that landed in that window leaves
-        // exactly this shape — a CANCELLED row with no manifest. Work that
-        // began is not repeated, whatever the row beside it says.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
-          ),
+        // A turn accepted and never settled may have edited files. A stop's
+        // CANCELLED row authorizes the rerun, as a retry does: the stop paused
+        // the workflow and continuing it reruns what the stop cut short. With
+        // no such row the owner was lost mid-turn, and that is not repeated.
+        if (end?.outcome === RUN_OUTCOME.CANCELLED) continue;
+        return yield* abortWorkflow(
+          `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
         );
       }
       if (turns.lastCompleted !== null) {
@@ -670,10 +663,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // FAILED, and an outcome lost under a manifest says as little the
         // other way round — and ambiguous work is never repeated.
         if (!delivered || end === null) {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
           );
         }
         if (end.outcome === RUN_OUTCOME.COMPLETED) {
@@ -694,15 +685,13 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             records.countActivations(),
           );
           if (activations !== 1) {
-            return yield* Effect.fail(
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
-              ),
+            return yield* abortWorkflow(
+              `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
             );
           }
           return {
             runId,
-            result: { ...end, output: meta.output },
+            result: { ...end, output: deliveredOutput(meta, end.output) },
             recovered: true,
           };
         }
@@ -721,20 +710,16 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // never ran, so what the outcome describes is the bookkeeping rather
         // than the work, and no fact here says the child stopped where the
         // row claims.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
-          ),
+        return yield* abortWorkflow(
+          `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
         );
       }
       if (end?.outcome === RUN_OUTCOME.COMPLETED) {
         // A completed row is the post-drain fact, so it cannot outlive the
         // manifest its own delivery committed: without one, the row describes
         // a completion nothing recorded.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
-          ),
+        return yield* abortWorkflow(
+          `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
         );
       }
       // No turn and no manifest: the attempt opened nothing side-effectful,
@@ -742,10 +727,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // outcome at all (a dead lease) or ended FAILED or CANCELLED before it
       // reached a turn.
     }
-    return yield* Effect.fail(
-      new WorkflowRunAbortError(
-        `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
-      ),
+    return yield* abortWorkflow(
+      `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
     );
   },
 );
@@ -777,10 +760,11 @@ export function createWorkflowScriptAgentRunner(
   checkpointId: string,
   run: WorkflowRunIdentity,
   hooks?: {
-    /** Fires per live child on success and failure with its total cost. */
+    /** Fires once per live child attempt, whatever its outcome, with the
+     *  cost its own run's rows add up to. */
     readonly onCost?: (
       invocation: WorkflowAgentInvocation,
-      costUsd: number | undefined,
+      costUsd: number,
     ) => void;
   },
 ): (
@@ -800,30 +784,32 @@ export function createWorkflowScriptAgentRunner(
         onLaunch: (childRunId) => {
           invocation.report({ childRunId });
         },
+        // Every launched attempt charges its terminal cost once, whatever
+        // its outcome and whether a fence then refuses its result.
+        onSpent: (costUsd) => {
+          hooks?.onCost?.(invocation, costUsd);
+          invocation.report({ costUsd });
+        },
         prepare: () =>
           Effect.gen(function* () {
-            const { configPayload, agentName } =
-              yield* resolveWorkflowCallConfig(
-                invocation,
-                parent,
-                parentModel,
-                defaultAgent,
-                run.runId,
-              );
+            const configPayload = yield* resolveWorkflowCallConfig(
+              invocation,
+              parent,
+              parentModel,
+              defaultAgent,
+              run.runId,
+            );
             // Surface the resolved child model so the engine can attach it to
             // this call's `agent:end` progress event.
             invocation.report({
               model: configPayload.model,
-              agent: agentName,
+              agent: configPayload.agent,
             });
             return {
               configPayload,
-              agentName,
               parentRunId: run.runId,
               session,
-              approvalPromptsUnavailable:
-                parent.run.toolPolicy.approvalPromptsUnavailable,
-              composition: parent.run.composition.key,
+              parentOffered: yield* offeredBy(parent.run),
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own
@@ -837,15 +823,6 @@ export function createWorkflowScriptAgentRunner(
                   session,
                 );
               },
-              onCost: (costUsd) => {
-                hooks?.onCost?.(invocation, costUsd);
-                // Stamp progressive spend onto the live attempt so a
-                // failed/cancelled/retried attempt still shows what it consumed
-                // even when run never reaches the success path below.
-                if (costUsd !== undefined) {
-                  invocation.report({ costUsd });
-                }
-              },
             };
           }),
       });
@@ -856,34 +833,21 @@ export function createWorkflowScriptAgentRunner(
         // result. The recovered marker keeps the id out of the engine's
         // skip/retry map; a recovered result is authoritative and must stay
         // uncontrollable.
-        invocation.report({
-          childRunId: child.runId,
-          recovered: true,
-        });
-      }
-      // Live physical attempts always charge the terminal result cost (covers
-      // failed/cancelled outcomes and empty-output validation throws that
-      // never reach a success-only callback). Recovered durable results must
-      // not charge the synthetic resume attempt; the prior attempt's card
-      // already carried that cost.
-      if (!recovered) {
-        // `RunEnd.usage` is the run ledger's folded totals, absent only for
-        // a run that never opened a ledger, so absence is the recorded fact
-        // "no spend" rather than an unknown defaulted here.
-        invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
+        invocation.report({ childRunId: child.runId, recovered: true });
       }
       if (result.outcome !== 'completed') {
-        throw new Error(
-          `Workflow subagent ended with ${result.outcome} outcome.`,
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message: `Workflow subagent ended with ${result.outcome} outcome.`,
+        });
       }
       if (
         result.output.category === 'workflow' &&
         result.output.outputs.length === 0
       ) {
-        throw new Error(
-          'Workflow subagent completed without producing any output files.',
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message:
+            'Workflow subagent completed without producing any output files.',
+        });
       }
       return result;
     },

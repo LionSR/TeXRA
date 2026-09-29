@@ -72,6 +72,9 @@ export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
 export const RUN_SUBSTATE = {
   STARTING: 'starting',
   RESUMING: 'resuming',
+  /** Rested by a stop (`child.park` `paused`): not ended, continued by
+   *  calling the child again. */
+  PAUSED: 'paused',
 } as const;
 
 export const RunSubstateSchema = z.enum(RUN_SUBSTATE);
@@ -95,3 +98,35 @@ export const WorktreeInfoSchema = z.object({
   dirty: z.boolean().optional(),
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
+
+/**
+ * The actions a host can offer on a run. The fold computes each run's set
+ * from its state ({@link runActions}); every host renders from that set and
+ * every handler refuses an action the set no longer holds.
+ */
+const RUN_ACTIONS = [
+  /** Stop a live run. */
+  'stop',
+  /** Grant the run an approval bypass while it works (a live tool-use agent). */
+  'grant',
+  /** Compact a live tool-use run's conversation. */
+  'compact',
+  /** Continue the run where it stopped. */
+  'resume',
+  /** Launch the run's saved setup again from scratch. */
+  'runNew',
+  /** Put the run's saved setup back into the launcher. */
+  'restore',
+  /** A finished workflow run's latexdiff, archive, and output removal. */
+  'diff',
+  'pack',
+  'clean',
+  /** Remove the run and its folder from history. */
+  'delete',
+  /** Read-only: open its folder, export or copy its conversation. */
+  'openRunStorage',
+  'export',
+  'copy',
+] as const;
+export const RunActionSchema = z.enum(RUN_ACTIONS);
+export type RunAction = z.infer<typeof RunActionSchema>;

@@ -3,6 +3,15 @@
  * Model Tool API (`vscode.lm.registerTool`), so they can be referenced in
  * Copilot Chat (e.g. `#texra_arxiv_search`) and invoked by agent mode.
  *
+ * This is the `copilot` plugin's process layer (`hostLayer` in
+ * `@tools/pluginManifest`), which this host supplies to
+ * `installProcessRuntime`: it is up while the plugin is on, and closing it
+ * disposes every registration. While up, Copilot sees each of these tools
+ * the live catalog's current generation (`@tools/liveTools`) holds, and it
+ * re-reads on each generation the catalog publishes. The process applies a
+ * switch flipped here to the catalog at once (`toolRegistryLayer`), so a
+ * switched-off plugin's tool leaves the generation, and Copilot, with it.
+ *
  * Only context-free, read-only research tools are surfaced — they need no
  * agent runtime state and are safe to call from an arbitrary chat session.
  * Registration is guarded at this multi-host boundary because compatible
@@ -10,23 +19,30 @@
  */
 
 import * as vscode from 'vscode';
-import { Effect, Fiber } from 'effect';
+import {
+  Context,
+  Effect,
+  Fiber,
+  Layer,
+  Option,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
-import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { PluginServices, ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import { TOOL_TABLE } from '@tools/registry';
+import type { ToolEntry } from '@tools/catalogEntries';
+import { LiveTools } from '@tools/liveTools';
+import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local imports - language model tools
 import {
   buildLanguageModelToolInvocationMessage,
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
-
-const CHANNEL = 'LanguageModelTools';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {
@@ -44,28 +60,36 @@ function toResultText(result: ToolResult): string {
 }
 
 /**
- * Register the curated TeXRA tools with the VS Code Language Model Tool API,
- * invoked on `session`: its roots and its runs.
+ * The `copilot` plugin's process layer: the curated TeXRA tools registered
+ * with the VS Code Language Model Tool API while the live catalog offers
+ * them, for as long as the layer is up. A call runs on the process runtime
+ * and the workspace's default session, read when the call arrives.
  */
-export const registerLanguageModelTools = Effect.fn(
-  'registerLanguageModelTools',
-)(function* (
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: SessionHandle,
+export const copilotToolsLayer = (
+  runtime: () => ProcessRuntime,
+  session: () => SessionHandle | undefined,
+): ProcessPluginLayer => ({
+  layer: Layer.effectDiscard(copilotTools(runtime, session)),
+});
+
+const copilotTools = Effect.fnUntraced(function* (
+  processRuntime: () => ProcessRuntime,
+  defaultSession: () => SessionHandle | undefined,
 ) {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
-
-  for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-    const tool = TOOL_TABLE.get(toolName);
-    if (!tool) {
-      yield* Effect.logWarning(
-        `Tool "${toolName}" missing from registry; skipping LM registration for "${lmName}".`,
-      ).pipe(withLogChannel(CHANNEL));
-      continue;
-    }
-    const disposable = lm.registerTool(lmName, {
+  const registerTool = lm.registerTool.bind(lm);
+  const live = yield* LiveTools;
+  const registered = new Map<string, vscode.Disposable>();
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => registered.forEach((disposable) => disposable.dispose())),
+  );
+  const register = (
+    lmName: string,
+    toolName: LanguageModelResearchToolName,
+    { tool, plugin }: ToolEntry,
+  ) =>
+    registerTool(lmName, {
       prepareInvocation(
         options: vscode.LanguageModelToolInvocationPrepareOptions<unknown>,
       ) {
@@ -90,6 +114,14 @@ export const registerLanguageModelTools = Effect.fn(
                 command: 'search',
               }
             : options.input;
+        const runtime = processRuntime();
+        const session = defaultSession();
+        if (session === undefined)
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(
+              'TeXRA has no workspace session to run this tool in.',
+            ),
+          ]);
         // Run the invocation directly on the process runtime rather than
         // forking and joining it: the effect's failure is delivered to the
         // awaited `runPromise` caller only, never to the fork-failure
@@ -108,7 +140,16 @@ export const registerLanguageModelTools = Effect.fn(
                 (subscription) => Effect.sync(() => subscription.dispose()),
               );
               if (token.isCancellationRequested) return yield* Effect.interrupt;
+              // Its plugin's process services, as a step would serve them
+              // (the research tools' plugins own none).
+              const services = yield* live.processServices(plugin);
               return yield* tool.call(input).pipe(
+                Effect.provide(
+                  Option.getOrElse(
+                    services,
+                    () => Context.empty() as Context.Context<PluginServices>,
+                  ),
+                ),
                 Effect.provideService(ToolCall, {
                   roots: session.roots,
                   run: undefined,
@@ -127,6 +168,22 @@ export const registerLanguageModelTools = Effect.fn(
         ]);
       },
     });
-    context.subscriptions.push(disposable);
-  }
+  // The current generation first, then each one the catalog publishes.
+  yield* SubscriptionRef.changes(live.registry.current).pipe(
+    Stream.runForEach(({ entries }) =>
+      Effect.sync(() => {
+        for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
+          const entry = entries.get(toolName);
+          const held = registered.get(lmName);
+          if (entry !== undefined && held === undefined) {
+            registered.set(lmName, register(lmName, toolName, entry));
+          } else if (entry === undefined && held !== undefined) {
+            held.dispose();
+            registered.delete(lmName);
+          }
+        }
+      }),
+    ),
+    Effect.forkScoped,
+  );
 });

@@ -28,12 +28,7 @@ import {
 } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { ProcessServices } from '@platform/processRuntime';
-import type {
-  AgentDirectoriesPort,
-  AgentResumePort,
-  LifecycleHost,
-  StateStore,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -46,19 +41,20 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   GlobalDatabase,
   ProjectDatabases,
+  type CurrentValues,
   type Database,
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { UsageLog } from '@shared/usageLog';
-import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { toolTableLayer } from '@tools/compositions';
+import { goalContinuation } from '@tools/goal/goalContinuation';
+import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
@@ -81,9 +77,8 @@ export interface FakeHost {
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
-  /** The two ports a real root hands `installProcessRuntime`, held here as
-   *  its own locals. */
-  readonly agentResume: AgentResumePort;
+  /** The language-model port a real root hands `installProcessRuntime`,
+   *  held here as its own local. */
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
   /** The host's account plane; absent hosts answer signed-out. */
@@ -93,28 +88,6 @@ export interface FakeHost {
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
-
-/**
- * The bare runtime's subscription tables. A registry is a live ownership
- * table over a polling source, so the harness serves none: a suite that
- * exercises one provides `gitHubSubscriptionsLayer` innermost, and a read
- * here is a test wiring error rather than an empty answer. Reaching for the
- * real layer instead would load the follow-up module in this setup file,
- * ahead of the suites that mock it.
- */
-const unreadGitHubSubscriptions = new Proxy(
-  {} as GitHubSubscriptions['Service'],
-  {
-    get: (target, member) => {
-      if (member === 'pr' || member === 'repo' || member === 'issue') {
-        throw new Error(
-          `No GitHub subscriptions in this test: provide gitHubSubscriptionsLayer to read '${member}'.`,
-        );
-      }
-      return Reflect.get(target, member);
-    },
-  },
-);
 
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
   listServers: () => [],
@@ -156,7 +129,6 @@ export function createFakeHost(
     workspaceState,
     globalState,
     secrets,
-    agentResume,
     languageModel,
     setup,
     auth,
@@ -171,7 +143,6 @@ export function createFakeHost(
     }),
     secrets: secrets ?? new FakeSecrets(options.secrets),
     env: options.env ?? {},
-    agentResume: agentResume ?? { tryResumeRun: () => Effect.succeed(false) },
     languageModel: languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...(setup ? { setup } : {}),
     ...(auth ? { auth } : {}),
@@ -227,10 +198,6 @@ function installedSetup(): SetupPlatformShape {
  * swaps setup platforms with them.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
-  get host() {
-    return installedSetup().host;
-  },
-  signIn: () => installedSetup().signIn(),
   get commands() {
     return installedSetup().commands;
   },
@@ -263,6 +230,8 @@ export const fakeHostAppState: StateStore = {
       installedHost().roots.globalState.get<T>(key, defaultValue),
     ),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
+  modify: (key, change) =>
+    Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),
 };
 
 /**
@@ -321,16 +290,6 @@ export const fakeHostLanguageModel: LanguageModelPort = {
     installedHost().languageModel.onDidChange(listener),
 };
 
-/** The `AgentResume` service of every test runtime, delegating per call for
- *  the same reason `fakeHostSecrets` does: hosts change per test, the
- *  runtime does not. */
-export const fakeHostAgentResume: AgentResumePort = {
-  tryResumeRun: (runId, recovery) =>
-    Effect.suspend(() =>
-      installedHost().agentResume.tryResumeRun(runId, recovery),
-    ),
-};
-
 /** The `AgentDirectories` service of every test runtime, delegating per call
  *  for the same reason `fakeHostSecrets` does: hosts change per test, the
  *  runtime does not. */
@@ -341,20 +300,6 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
   builtInToolUse: () =>
     installedHost().platform.agentDirectories.builtInToolUse(),
-};
-
-/** The `Lifecycle` service of every test runtime, delegating per call for the
- *  same reason `fakeHostSecrets` does: hosts change per test, the runtime
- *  does not. */
-export const fakeHostLifecycle: LifecycleHost = {
-  onShutdown: (phase, handler) =>
-    installedHost().platform.lifecycle.onShutdown(phase, handler),
-  get runShutdown() {
-    return installedHost().platform.lifecycle.runShutdown;
-  },
-  get shutdownRan() {
-    return installedHost().platform.lifecycle.shutdownRan;
-  },
 };
 
 /** The process services a fake host provides to a program. */
@@ -402,10 +347,11 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AgentDirectories, AgentResume, AppState, Lifecycle },
+    { AgentDirectories, AppState },
     { LanguageModel },
     { SetupPlatform },
     { SupabaseAuth },
+    { unprobedToolAvailability },
   ] = await Promise.all([
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
@@ -416,6 +362,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/languageModel'),
     import('@tools/setup/platform'),
     import('@auth/SupabaseAuth'),
+    import('./toolAvailabilityTestLayer'),
   ]);
   current = host;
   for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
@@ -438,14 +385,24 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // the developer's shell.
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     Layer.mock(UpdateCheckRecords, {}),
-    Layer.mock(AgentEngine, {}),
-    // An empty tool table (the real one loads every tool): a suite that
-    // resolves a run's tools runs on the session graph's runtime or provides
-    // `toolRegistryLayer`.
-    toolTableLayer(toolTable({})),
+    // A wake resumes as in production. The module is read per call, so a
+    // suite's own mock or spy of it is the resume the wake reaches.
+    Layer.mock(AgentEngine, {
+      resumeClaimedRun: (runId, options) =>
+        Effect.flatMap(
+          Effect.promise(() => import('@agent/runtime/resumeRun')),
+          (resume) => resume.resumeClaimedRun(runId, options),
+        ),
+    }),
+    // An empty tool table (the real one loads every tool), with goal mode's
+    // continuation: a suite that resolves a run's tools runs on the session
+    // graph's runtime or provides `toolRegistryLayer`.
+    toolTableLayer(toolTable({}, { goal: goalContinuation })),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
-    Layer.mock(GlobalDatabase, {}),
+    Layer.mock(GlobalDatabase, {
+      values: {} as CurrentValues,
+    }),
     Layer.effect(
       ProjectDatabases,
       RcMap.make({
@@ -464,15 +421,13 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),
     LanguageModel.layer(fakeHostLanguageModel),
-    AgentResume.layer(fakeHostAgentResume),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
+    unprobedToolAvailability,
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly
     // provides its own view innermost.

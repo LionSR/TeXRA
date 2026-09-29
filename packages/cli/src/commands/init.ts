@@ -150,7 +150,7 @@ const runInit = Effect.fn('runInit')(function* (
 ) {
   // The init call hands back the stores it just wired, so the model list is
   // computed from the same pair the rest of this command writes through.
-  const services = yield* initCliPlatform({ ...context, quietLogs: true });
+  const services = yield* initCliPlatform(context);
 
   const filePath = workspaceTexraConfigPath(context.cwd);
   if (
@@ -163,7 +163,7 @@ const runInit = Effect.fn('runInit')(function* (
     return CliExitCode.Usage;
   }
 
-  yield* loadAgents({ includeRemote: false });
+  yield* loadAgents();
   const agents = implicitDefaultToolUseAgents(
     yield* getVisibleAgents(services, AgentCategory.ToolUse),
   );

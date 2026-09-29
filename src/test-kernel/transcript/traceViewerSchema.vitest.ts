@@ -2,7 +2,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -16,6 +15,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -25,6 +25,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedRunRecord } from '@test/support/runRecordSeeds';
 import { assembleTrace } from '@transcript';
 import { TraceDocumentSchema } from '@transcript/traceDocumentSchema';
 import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
@@ -53,7 +54,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
       const session = createTestSession();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      yield* getRunRecords(session, runId).writeRunRecord(runConfigRecord);
+      yield* seedRunRecord(session, runId, runConfigRecord);
       session.publish([
         {
           type: 'log',
@@ -71,7 +72,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
       ]);
       yield* session.settlePublications();
       const result = yield* assembleTrace(runId, session);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
       expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
 
@@ -84,7 +85,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
         true,
       );
       // An export has no producer, so no row names one.
-      expect(parsed.data.events.every((event) => event.ownerId === null)).toBe(
+      expect(parsed.data.events.every((event) => event.origin === null)).toBe(
         true,
       );
 

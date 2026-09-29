@@ -88,15 +88,16 @@ export class RunLedger extends Context.Service<
   {
     /**
      * The claim gate, called before any resume side effect: resume acquires
-     * the run aggregate's current claim first, then calls `load`. Without it
-     * a second process can fold a run's state, re-dispatch a barrier tool,
-     * and learn only at its first append that the claim never moved, after
-     * the side effect.
+     * the run aggregate's current claim first, and continues from the state
+     * it answers, `load`'s answer from the same read. Without it a second
+     * process can fold a run's state, re-dispatch a barrier tool, and learn
+     * only at its first append that the claim never moved, after the side
+     * effect.
      */
     readonly acquire: (
       run: RunId,
     ) => Effect.Effect<
-      void,
+      RunState | null,
       RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
     >;
     /**
@@ -105,10 +106,10 @@ export class RunLedger extends Context.Service<
      * run ledger, the honest answer, distinct from "checkpoint corrupt".
      * Queued follow-ups alone still return that unopened state (`phase` is
      * null) so the caller can deliver them; they do not open the run. Ledger
-     * rows without an opening `flow.snapshot` are not that case: they are a
+     * rows without an opening `run.snapshot` are not that case: they are a
      * malformed aggregate and fail `inconsistent`, because folding an
      * `attempt` or a `response` into a fresh run is how a paid invocation
-     * gets issued twice. Reads the run aggregate in full: a `flow.snapshot`
+     * gets issued twice. Reads the run aggregate in full: a `run.snapshot`
      * carries no reference to the message history below it (D5 dropped
      * `messageBaseCommit`), so a fold anchored at the latest snapshot would
      * restore a run with no conversation and no error to say so.
@@ -117,16 +118,17 @@ export class RunLedger extends Context.Service<
       run: RunId,
     ) => Effect.Effect<RunState | null, RunLedgerRefused | DatabaseReadFailed>;
     /**
-     * The latest `flow.snapshot` on the run aggregate, one indexed row read
+     * The latest `run.snapshot` on the run aggregate, one indexed row read
      * and no fold: what every reader of the retired `flow_<id>.json` becomes.
      * `null` when the run has never written one, or is closed. Existence,
-     * `payload.family`, and `payload.runtime` (phase, coordinates, model id,
-     * compatibility key) are the facts it answers; a run's state is `load`.
+     * `payload.family`, and `payload.runtime` (model id, compatibility key,
+     * last error, declined routes) are the facts it answers; a run's
+     * position and state are `load`.
      */
     readonly latestSnapshot: (
       run: RunId,
     ) => Effect.Effect<
-      Extract<SessionEvent, { type: 'flow.snapshot' }> | null,
+      Extract<SessionEvent, { type: 'run.snapshot' }> | null,
       DatabaseReadFailed
     >;
     /**
@@ -135,8 +137,8 @@ export class RunLedger extends Context.Service<
      * actually committed. Failure of any member commits none.
      *
      * Preconditions, checked before publish; a violation is a defect:
-     * - a `flow.snapshot` is the last ledger row of its batch, except when a
-     *   `flow.step`, a companion `tool.end`, a `request.decided`, or the
+     * - a `run.snapshot` is the last ledger row of its batch, except when a
+     *   `run.position`, a companion `tool.end`, a `request.decided`, or the
      *   stream.end` closing the row a `waiting` step parks beside follows
      *   it. A `request.opened` PRECEDES the `tool.binding` or `model.retry`
      *   that binds it, so the fold resolves the binding against a request

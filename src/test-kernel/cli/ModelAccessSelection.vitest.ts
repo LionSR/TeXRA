@@ -47,7 +47,7 @@ class ObservedStateStore extends FakeStateStore {
 }
 
 const secrets = new FakeSecrets();
-const stores = makeFakeSettingsStores().stores;
+const stores = makeFakeSettingsStores('cli').stores;
 const appState = new ObservedStateStore();
 
 /**
@@ -74,14 +74,19 @@ vi.mock('@auth/xai', () => ({
     account?.email ?? 'your Grok account',
 }));
 
-vi.mock('@model/codex/codexSubscription', () => ({
-  isPreferCodexSubscription: mocks.isPreferCodexSubscription,
-  setPreferCodexSubscription: mocks.setPreferCodexSubscription,
-}));
-
-vi.mock('@model/xai/xaiSubscription', () => ({
-  isPreferXaiSubscription: mocks.isPreferXaiSubscription,
-  setPreferXaiSubscription: mocks.setPreferXaiSubscription,
+vi.mock('@model/subscriptionAccess', () => ({
+  isPreferSubscription: (provider: string, stores: unknown) =>
+    provider === 'chatgpt'
+      ? mocks.isPreferCodexSubscription(stores)
+      : mocks.isPreferXaiSubscription(stores),
+  setPreferSubscription: (
+    provider: string,
+    stores: unknown,
+    enabled: boolean,
+  ) =>
+    provider === 'chatgpt'
+      ? mocks.setPreferCodexSubscription(stores, enabled)
+      : mocks.setPreferXaiSubscription(stores, enabled),
 }));
 
 vi.mock('@model/apiProviders', () => {
@@ -146,34 +151,19 @@ function subscriptionPreference(
   return { kind: 'subscription-preference', provider, state } as const;
 }
 
-function expectedAccessStatus(
-  overrides: Record<string, unknown>,
-  plans: {
-    kimiPreferred?: boolean;
-    kimiKeySet?: boolean;
-    glmPreferred?: boolean;
-    glmKeySet?: boolean;
-  } = {},
-) {
+function expectedAccessStatus(chatgpt: {
+  readonly signedIn: boolean;
+  readonly email?: string;
+  readonly preferSubscription: boolean;
+}) {
   return {
-    preferences: {
-      chatGpt: 'off',
-      grok: 'off',
+    subscriptions: {
+      chatgpt: { provider: 'chatgpt', ...chatgpt },
+      grok: { provider: 'grok', signedIn: false, preferSubscription: false },
     },
-    chatGptSignedIn: false,
-    chatGptAccountLabel: undefined,
-    grokSignedIn: false,
-    grokAccountLabel: undefined,
-    ...overrides,
     codingPlans: {
-      glmCodingPlan: {
-        preferred: plans.glmPreferred ?? false,
-        keySet: plans.glmKeySet ?? false,
-      },
-      kimiCode: {
-        preferred: plans.kimiPreferred ?? false,
-        keySet: plans.kimiKeySet ?? false,
-      },
+      glmCodingPlan: { preferred: false, keySet: false },
+      kimiCode: { preferred: false, keySet: false },
     },
   };
 }
@@ -208,23 +198,15 @@ describe('CLI model access routes', () => {
 
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
         expectedAccessStatus({
-          preferences: {
-            chatGpt: 'on',
-            grok: 'off',
-          },
-          chatGptSignedIn: true,
-          chatGptAccountLabel: 'user@example.com',
+          signedIn: true,
+          email: 'user@example.com',
+          preferSubscription: true,
         }),
       );
 
       mocks.getCodexStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
-        expectedAccessStatus({
-          preferences: {
-            chatGpt: 'on',
-            grok: 'off',
-          },
-        }),
+        expectedAccessStatus({ signedIn: false, preferSubscription: true }),
       );
     }),
   );
@@ -350,10 +332,8 @@ describe('CLI model access routes', () => {
         mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
         const status = yield* readCliModelAccessStatus(stores, secrets);
-        expect(status.preferences).toEqual({
-          chatGpt: 'on',
-          grok: 'off',
-        });
+        expect(status.subscriptions.chatgpt.preferSubscription).toBe(true);
+        expect(status.subscriptions.grok.preferSubscription).toBe(false);
         const descriptions = Object.fromEntries(
           buildCliModelAccessItems({ kind: 'loaded', access: status })
             .filter((item) => item.value.kind === 'subscription-preference')

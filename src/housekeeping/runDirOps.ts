@@ -8,10 +8,7 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
-import {
-  getCleanAgentName,
-  mergeRunDirAndWorkspaceResult,
-} from '@shared/schemas';
+import { agentFileName, mergeRunDirAndWorkspaceResult } from '@shared/schemas';
 import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -68,7 +65,7 @@ const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
     }
 
     const baseName = inputFile ? path.parse(inputFile).name : 'run';
-    const cleanAgent = getCleanAgentName(agent);
+    const cleanAgent = agentFileName(agent);
     // Include a runId fragment in the destination folder so two packs of
     // the same input+agent+model within the same second (the timestamp's
     // granularity) don't collide and silently merge.
@@ -150,3 +147,37 @@ export const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(
     );
   },
 );
+
+/** What a host tells the user after a pack or clean, at which severity.
+ *  Both hosts read it from here, so the wording cannot drift between them
+ *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
+export function fileOpResultMessage(
+  operation: 'pack' | 'clean',
+  result: FileOpResult,
+  inputFile: string,
+): { readonly level: 'info' | 'error'; readonly text: string } {
+  const gerund = operation === 'pack' ? 'packing' : 'cleaning';
+  switch (result.status) {
+    case 'success':
+      if (operation === 'clean')
+        return { level: 'info', text: `Cleanup complete for ${inputFile}` };
+      return {
+        level: 'info',
+        text: result.outputFolder
+          ? `Files packed into ${result.outputFolder}`
+          : 'Files packed.',
+      };
+    case 'noFiles':
+      return {
+        level: 'info',
+        text: `No files found to ${operation} for ${inputFile}`,
+      };
+    case 'missingParams':
+      return { level: 'error', text: `Select an input file before ${gerund}.` };
+    case 'error':
+      return {
+        level: 'error',
+        text: `Error during ${gerund}: ${result.error}`,
+      };
+  }
+}

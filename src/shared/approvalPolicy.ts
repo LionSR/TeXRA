@@ -37,15 +37,15 @@ const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
 const TEXRA_APPROVAL_POLICY_COPY = {
   ask: {
     label: 'Ask',
-    description: 'Ask before commands and edits.',
+    description: 'Ask before shell commands and file edits.',
   },
   never: {
-    label: 'Never',
-    description: 'Deny Bash commands and tool edits.',
+    label: 'Block',
+    description: 'Block shell commands and file edits.',
   },
   yolo: {
     label: 'Auto-approve',
-    description: 'Allow Bash commands and tool edits without approval.',
+    description: 'Allow shell commands and file edits without asking.',
   },
 } as const satisfies Record<
   TexraApprovalPolicy,
@@ -111,6 +111,34 @@ export function decideTexraApproval(input: {
     return 'allow';
   }
   return input.canPresent ? 'present' : 'deny-unpresentable';
+}
+
+/**
+ * What an approval-policy denial closed, as a run reports it to its host: a
+ * command or edit, a delegation proposal, or the approval-gated tools
+ * withheld from the model when the run resolved its tools.
+ */
+export type ApprovalPolicyDenial =
+  | { readonly kind: 'executable' }
+  | { readonly kind: 'proposal' }
+  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] };
+
+/**
+ * Decide one delegation proposal. `never` denies it as it denies every other
+ * request kind. Otherwise a scoped proposal bypass approves it, and a run that
+ * cannot present one proceeds `unattended`: such a run withholds
+ * `requiresApproval` delegation tools up front, so one that still executes
+ * was offered for unattended use, and the proposal is a review surface rather
+ * than the security gate (the child's bash and edits still gate).
+ */
+export function decideProposalApproval(input: {
+  readonly policy: TexraApprovalPolicy;
+  readonly scopedBypass: boolean;
+  readonly canPresent: boolean;
+}): 'bypass' | 'unattended' | 'present' | 'deny-policy' {
+  if (input.policy === 'never') return 'deny-policy';
+  if (input.scopedBypass) return 'bypass';
+  return input.canPresent ? 'present' : 'unattended';
 }
 
 const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =

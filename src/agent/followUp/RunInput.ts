@@ -3,7 +3,7 @@
  * follow-ups the run's rows still queue. The rows are the authority; this
  * holds no copy of them.
  */
-import { Effect, Latch } from 'effect';
+import { Data, Effect, Latch } from 'effect';
 
 import type { QueuedFollowUp } from '@shared/session/runRows';
 
@@ -15,6 +15,11 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 export type FollowUpBatch =
   | { readonly synthetic: false; readonly followUps: readonly QueuedFollowUp[] }
   | { readonly synthetic: true; readonly text: string };
+
+/** A live consumer claim refused: another consumer already holds the run's input. */
+export class FollowUpContinuationOwned extends Data.TaggedError(
+  'FollowUpContinuationOwned',
+)<{ readonly message: string }> {}
 
 /**
  * One owner generation's input. A take reads what is pending from `pending`

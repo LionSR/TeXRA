@@ -10,27 +10,27 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result, Scope, Stream } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentDirectoriesPort,
-  type AgentResumePort,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
   ConfigWriteFailed,
-  type LifecycleHost,
-  type StateStore,
+  type AppStateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { getCoreSettingDefault } from '@shared/state/stateSettings';
+import {
+  getCoreSettingDefault,
+  type SettingHost,
+} from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
 /**
@@ -241,13 +241,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     target: ConfigTarget | undefined;
   }> = [];
 
-  /**
-   * When set, `update()` calls targeting this scope throw instead of
-   * applying -- simulates a persistence failure (e.g. VS Code rejecting the
-   * write) so tests can assert on partial-migration recovery behavior.
-   */
-  failUpdatesForTarget?: ConfigTarget;
-
   get<T>(key: string, defaultValue?: T): T {
     if (this.workspaceFolderValues.has(key))
       return this.workspaceFolderValues.get(key) as T;
@@ -263,17 +256,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     value: T,
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed> {
-    if (target !== undefined && target === this.failUpdatesForTarget) {
-      const message = `simulated ${target}-scope update failure for ${key}`;
-      return Effect.fail(
-        new ConfigWriteFailed({
-          key,
-          target,
-          message,
-          cause: new Error(message),
-        }),
-      );
-    }
     return Effect.sync(() => {
       this.updateCalls.push({ key, value, target });
       if (target === undefined) {
@@ -329,8 +311,13 @@ export class FakeScopedConfigProvider implements ConfigProvider {
   }
 }
 
-export class FakeStateStore implements StateStore {
+export class FakeStateStore implements AppStateStore {
   private readonly values = new Map<string, unknown>();
+
+  /** No change feed: a reader sees a write at its next read. */
+  changes(): Stream.Stream<void> {
+    return Stream.succeed(undefined);
+  }
 
   constructor(values: Record<string, unknown> = {}) {
     for (const [key, value] of Object.entries(values)) {
@@ -360,6 +347,19 @@ export class FakeStateStore implements StateStore {
       } else {
         this.values.set(key, value);
       }
+    });
+  }
+
+  modify<T, E>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E> {
+    return Effect.suspend(() => {
+      const result = change(this.values.get(key));
+      if (Result.isFailure(result)) return Effect.fail(result.failure);
+      if (result.success === undefined) this.values.delete(key);
+      else this.values.set(key, result.success);
+      return Effect.succeed(result.success);
     });
   }
 }
@@ -400,9 +400,11 @@ export class FakeSecrets implements PlatformSecrets {
  */
 export function fakeStores(): ModelOptionStores {
   return {
+    host: 'vscode',
     secrets: new FakeSecrets(),
     config: new FakeConfigProvider(),
     workspaceState: new FakeStateStore(),
+    repoState: new FakeStateStore(),
     globalState: new FakeStateStore(),
   };
 }
@@ -434,12 +436,16 @@ export interface FakePlatformOptions {
   storagePath?: string;
   /** The global-storage root, as a real path. Worker-shared by default. */
   globalStoragePath?: string;
+  /** The product host the roots name; the extension's by default. */
+  host?: SettingHost;
 }
 
-/** The two process ports a fake host serves as `Lifecycle` and
+/** A fake host's shutdown scope and the port it serves as
  *  `AgentDirectories`, held per host because hosts change per test. */
 export interface FakeProcessPorts {
-  readonly lifecycle: LifecycleHost;
+  /** The host's shutdown: a command that must act before its sessions close
+   *  registers in a child scope of this; closing it is the shutdown. */
+  readonly shutdownScope: Scope.Closeable;
   readonly agentDirectories: AgentDirectoriesPort;
 }
 
@@ -454,8 +460,7 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
-    /** The two process ports, as `FakeHost` holds them. */
-    readonly agentResume?: AgentResumePort;
+    /** The language-model port, as `FakeHost` holds it. */
     readonly languageModel?: LanguageModelPort;
     readonly setup?: SetupPlatformShape;
     /** The account plane the host's `SupabaseAuth` service reads. Absent hosts
@@ -467,10 +472,14 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
 export function createFakeWorkspaceRoots(
   options: FakePlatformOptions = {},
   overrides: Partial<
-    Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>
+    Pick<
+      WorkspaceRoots,
+      'config' | 'workspaceState' | 'repoState' | 'globalState'
+    >
   > = {},
 ): WorkspaceRoots {
   return {
+    host: options.host ?? 'vscode',
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
       : fakePath('workspace'),
@@ -479,6 +488,7 @@ export function createFakeWorkspaceRoots(
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
+    repoState: overrides.repoState ?? new FakeStateStore(),
     globalState:
       overrides.globalState ?? new FakeStateStore(options.globalState),
   };
@@ -498,7 +508,7 @@ export function createFakePlatform(
 ): FakeProcessPorts {
   seedFakeRoot(options.files ?? {});
   return {
-    lifecycle: createLifecycleHost(),
+    shutdownScope: Scope.makeUnsafe(),
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     ...overrides,
   };

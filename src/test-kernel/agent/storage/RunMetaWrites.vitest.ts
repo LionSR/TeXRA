@@ -76,7 +76,7 @@ describe('run metadata updates', () => {
           attempt: 1,
         } as const;
         const origin = {
-          protocol: 'openai-chat',
+          protocol: 'openai-responses',
           codecVersion: 1,
           requestedModel: 'gpt-test',
           deployment: {
@@ -95,15 +95,9 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
-          snapshotRow(id, opening, {
-            phase: 'initial',
+          ...snapshotRow(id, opening, {
             state: {
-              family: 'toolUse',
-              state: {
-                stateSlices: null,
-                offeredTools: [],
-                toolsetHash: '0'.repeat(64),
-              },
+              stateSlices: null,
             },
           }),
         ]);
@@ -113,6 +107,7 @@ describe('run metadata updates', () => {
             aggregateId: rowAggregate(id),
             payload: {
               kind: 'attempt',
+              request: '0'.repeat(64),
               invocation,
               origin,
               delivery: 'stream',
@@ -143,7 +138,7 @@ describe('run metadata updates', () => {
                 outputTokens: 30,
                 cost: 0.25,
                 responseTimeMs: 40,
-                provider: 'openai-chat',
+                provider: 'openai-responses',
               },
             },
           },

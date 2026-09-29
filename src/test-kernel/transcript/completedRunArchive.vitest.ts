@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
-  buildVars: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
 }));
@@ -17,12 +16,7 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
   loadAgentSettingAndPrompts: launchMocks.loadAgent,
 }));
-vi.mock('@agent/prompt/userVars', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/prompt/userVars')>()),
-  buildUserVars: launchMocks.buildVars,
-}));
 
-import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -38,7 +32,7 @@ import {
   MESSAGE_TYPES,
   AgentCategory,
   aggregateId,
-  FlowSnapshotPayloadSchema,
+  RunSnapshotPayloadSchema,
 } from '@shared/schemas';
 import type { LogLevel, RunId, TodoItem } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -55,6 +49,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
+import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   hasCompletedRunConversationEvidence,
@@ -209,7 +204,7 @@ describe('completedRunArchive facade', () => {
 
   // it.live: the release at the end of this test closes both sessions through
   // `closeSession`, whose settlement budget is
-  // `Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS)`. With no active runs that arm
+  // `Effect.sleep(SESSION_CLOSE_DEADLINE_MS)`. With no active runs that arm
   // is never awaited today, so the happy path would also pass on the test
   // clock. The live clock is kept for the regression case: under TestClock
   // nothing advances that sleep, so a session that stopped settling could
@@ -241,7 +236,7 @@ describe('completedRunArchive facade', () => {
             Effect.gen(function* () {
               publishTestRunStart(session, runId);
               yield* session.settlePublications();
-              yield* getRunRecords(session, runId).writeRunRecord({
+              yield* seedRunRecord(session, runId, {
                 ...runConfig(label),
                 instruction: label,
               });
@@ -294,7 +289,7 @@ describe('completedRunArchive facade', () => {
         const runId = 'abc123abc123' as RunId;
         yield* Effect.promise(() => writeArchiveFixture(runId));
 
-        yield* getRunRecords(taskSession, runId).writeRunRecord({
+        yield* seedRunRecord(taskSession, runId, {
           ...runConfig('orchestrator'),
           instruction: 'Fix the lemma.',
         });
@@ -360,7 +355,7 @@ describe('completedRunArchive facade', () => {
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        yield* getRunRecords(session, runId).writeRunRecord(config);
+        yield* seedRunRecord(session, runId, config);
         session.publish([
           {
             type: 'log',
@@ -377,9 +372,6 @@ describe('completedRunArchive facade', () => {
         ]);
         yield* session.settlePublications();
 
-        const launchFailure = new Error(
-          'stop after resumed writer acquisition',
-        );
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
@@ -388,21 +380,16 @@ describe('completedRunArchive facade', () => {
         launchMocks.loadAgent.mockReturnValue(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        launchMocks.buildVars.mockReturnValueOnce(Effect.fail(launchFailure));
 
         // The one fact a resume reads: the run aggregate's latest
-        // `flow.snapshot`, committed here as this run's opening row.
+        // `run.snapshot`, committed here as this run's opening row.
         yield* session.commit([
           {
-            type: 'flow.snapshot',
+            type: 'run.snapshot',
             aggregateId: aggregateId('run', runId),
-            payload: FlowSnapshotPayloadSchema.parse({
+            payload: RunSnapshotPayloadSchema.parse({
               family: 'toolUse',
               runtime: {
-                phase: 'waiting',
-                round: 0,
-                turn: 0,
-                continuationIndex: 0,
                 modelId: config.model,
                 modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,
@@ -410,18 +397,18 @@ describe('completedRunArchive facade', () => {
               },
               state: {
                 stateSlices: null,
-                offeredTools: [],
-                toolsetHash: '0'.repeat(64),
               },
             }),
           },
         ]);
 
-        const attachRunTrace = session.attachRunTrace.bind(session);
+        // The resumed run's trace writes its first event through the reopened
+        // writer; the second turn lands beside it.
+        const publishRunEvent = session.publishRunEvent.bind(session);
         const resumedWriter = vi
-          .spyOn(session, 'attachRunTrace')
-          .mockImplementationOnce((trace, requestedRunId) => {
-            const detach = attachRunTrace(trace, requestedRunId);
+          .spyOn(session, 'publishRunEvent')
+          .mockImplementationOnce((requestedRunId, event) => {
+            publishRunEvent(requestedRunId, event);
             session.publish([
               {
                 type: 'log',
@@ -436,21 +423,17 @@ describe('completedRunArchive facade', () => {
                 text: 'Second proof.',
               },
             ]);
-            return detach;
           });
 
+        // The resumed launch stops once its writer is open: the run's rows
+        // hold its opening, and no provider key binds its model.
         expect(
-          yield* Effect.flip(
-            resumeRun(runId, {
-              session,
-              executeWorkflow: vi.fn(() => Effect.void),
-            }),
-          ),
-        ).toBe(launchFailure);
+          (yield* Effect.flip(resumeRun(runId, { session }))).message,
+        ).toContain('Missing API key');
 
-        expect(resumedWriter).toHaveBeenCalledWith(expect.anything(), runId);
+        expect(resumedWriter).toHaveBeenCalledWith(runId, expect.anything());
         const released = yield* Effect.result(
-          getRunRecords(session, runId).writeReport('late write'),
+          seedReport(session, runId, 'late write'),
         );
         expect(released._tag).toBe('Failure');
         expect(

@@ -6,7 +6,6 @@ import {
   JsonObjectSchema,
   ModelConfigurationSchema,
   ModelError,
-  ResolvedTurnSchema,
   TurnRequestSchema,
   TurnResultSchema,
   sameModelOrigin,
@@ -16,7 +15,6 @@ import {
   type TurnEvent,
   type TurnResult,
   type VscodeLanguageModelConfiguration,
-  completedTurn,
 } from '@texra-ai/llm/turn';
 import { Cause, Effect, Exit, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
@@ -340,16 +338,14 @@ export const acquireVscodeLanguageModel = Effect.fn(
       return turn;
     });
 
-  const streamTurn: Model['streamTurn'] = (input) =>
+  const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const parsedTurn = ResolvedTurnSchema.safeParse(input);
         if (
-          !parsedTurn.success ||
-          parsedTurn.data.protocol !== 'vscode-lm' ||
+          turn.protocol !== 'vscode-lm' ||
           retired ||
-          parsedTurn.data.acquisitionId !== acquisitionId ||
-          !sameModelOrigin(parsedTurn.data, origin)
+          turn.acquisitionId !== acquisitionId ||
+          !sameModelOrigin(turn, origin)
         ) {
           return yield* new ModelError({
             kind: 'unsupported',
@@ -357,7 +353,6 @@ export const acquireVscodeLanguageModel = Effect.fn(
               'The prepared turn belongs to another or retired editor acquisition.',
           });
         }
-        const turn = parsedTurn.data;
         const messages = yield* lowerMessages(turn, config);
         const cancellation = new vscode.CancellationTokenSource();
         let request: Promise<vscode.LanguageModelChatResponse> | undefined;
@@ -581,7 +576,5 @@ export const acquireVscodeLanguageModel = Effect.fn(
         );
       }),
     );
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  return Object.freeze({ prepareTurn, streamTurn });
 });

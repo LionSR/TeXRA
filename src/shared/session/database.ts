@@ -6,23 +6,23 @@ import {
   type SubscriptionRef,
   type Result,
   type RcMap,
+  type Stream,
 } from 'effect';
+import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
-  JsonValue,
   CommitOrdinal,
+  CurrentValue,
+  CurrentValueFamily,
+  DeletableFamily,
+  DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
-  InquiryThreadRecord,
-  InquiryThreadId,
-  UpdateCheckHost,
-  UpdateCheckRecord,
-  UpdateCheckChange,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -42,6 +42,8 @@ export type DeletionMode = z.infer<typeof DeletionModeSchema>;
 /** C7's current claim and existence, independent of historical event writers. */
 export const AggregateStateSchema = z.object({
   aggregateId: AggregateIdSchema,
+  /** The incarnation's durable identity, minted with its first row. */
+  uid: z.uuid(),
   ownerId: OwnerIdSchema.nullable(),
   closed: z
     .union([z.literal(0), z.literal(1)])
@@ -82,11 +84,24 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
   return { kind: 'free' };
 }
 
+/**
+ * A store failure's text. A `SqlError`'s own message is the driver's generic
+ * `Failed to execute statement`; the SQLite error that says why (`column
+ * index out of range`, `database is locked`) is its reason's cause, so the
+ * message carries both.
+ */
+const storeFailureMessage = (cause: unknown): string =>
+  isSqlError(cause) && cause.reason.cause != null
+    ? `${cause.message}: ${toErrorMessage(cause.reason.cause)}`
+    : toErrorMessage(cause);
+
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = storeFailureMessage(this.cause);
+}
 
 /**
  * A batch was rejected. C6 is all-or-nothing: the transaction rolled back, so
@@ -97,7 +112,9 @@ export class DatabaseWriteFailed extends Data.TaggedError(
 )<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = storeFailureMessage(this.cause);
+}
 
 /**
  * C5: a batch member targets an aggregate this process does not hold open,
@@ -122,35 +139,111 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   readonly verdict: 'alive' | 'unprovable';
 }> {}
 
+/**
+ * The owner the database names as holding an aggregate this caller was
+ * refused (not proven alive: a claim verdict may be `unprovable`), or null
+ * when the refusal names none: the claim verdict (carried as the write
+ * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
+ * aggregate. A closed aggregate is finished and an ownerless one is free, so
+ * neither is held elsewhere.
+ */
+export const heldElsewhereBy = (error: unknown): OwnerId | null => {
+  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
+  if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
+  return refusal instanceof DatabaseNotOwner && !refusal.closed
+    ? refusal.ownerId
+    : null;
+};
+
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly path: string;
   readonly cause: unknown;
 }> {
-  override readonly message = toErrorMessage(this.cause);
+  override readonly message = storeFailureMessage(this.cause);
+}
+
+/**
+ * What opening a store of an older event format moved aside: the store, the
+ * rows it held, the format they were written under, and the file they were
+ * moved to. Null when the store was this build's or empty. The one fact a
+ * host presents about it; this build never reads the moved rows.
+ */
+export interface SessionStoreMovedAside {
+  readonly path: string;
+  readonly aside: string;
+  readonly rows: number;
+  readonly storedFormat: number;
+}
+
+type RetainedFamily = Exclude<CurrentValueFamily, DeletableFamily>;
+
+/**
+ * A root's current values (`current_value`): one row per family and key,
+ * replaced in place, outside the event history, so an event-format bump
+ * leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
+ * a value decodes with its family's schema where it is read, and a row that
+ * no longer decodes fails that read.
+ */
+export interface CurrentValues {
+  readonly get: <F extends CurrentValueFamily>(
+    family: F,
+    key: string,
+  ) => Effect.Effect<CurrentValue<F> | undefined, DatabaseReadFailed>;
+  /**
+   * Change one value from the one read under the write lock: `change`
+   * answers with its result and the next value, with its result alone to
+   * write nothing, or refuses and nothing is written. Only a deletable
+   * family's change may answer `undefined`, which deletes the row; a caller
+   * holding a bare family matches neither overload and narrows first.
+   */
+  readonly modify: {
+    <F extends DeletableFamily, A, E = never>(
+      family: F,
+      key: string,
+      change: (
+        current: CurrentValue<F> | undefined,
+      ) => Result.Result<
+        readonly [A] | readonly [A, CurrentValue<F> | undefined],
+        E
+      >,
+    ): Effect.Effect<A, E | DatabaseWriteFailed>;
+    <F extends RetainedFamily, A, E = never>(
+      family: F,
+      key: string,
+      change: (
+        current: CurrentValue<F> | undefined,
+      ) => Result.Result<readonly [A] | readonly [A, CurrentValue<F>], E>,
+    ): Effect.Effect<A, E | DatabaseWriteFailed>;
+  };
+  /** Every row of a family, latest write first. */
+  readonly list: <F extends CurrentValueFamily>(
+    family: F,
+  ) => Effect.Effect<
+    readonly { readonly key: string; readonly value: CurrentValue<F> }[],
+    DatabaseReadFailed
+  >;
+  /**
+   * Emits as subscribed, then after each commit, by this process or
+   * another, that changed one of `keys`' values: the root's wake level
+   * narrowed inside the store to those rows. A read that fails is logged and
+   * retried, so no change is missed.
+   */
+  readonly changes: (
+    family: CurrentValueFamily,
+    keys: readonly string[],
+  ) => Stream.Stream<void>;
 }
 
 /** Why a session's root could not be opened: its database would not open,
  *  or the reads the session is built from failed. */
 export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
 
-/**
- * What opening a store of another event format left behind: the file, the
- * rows it held, and the format they were written under. Null when the store
- * was this build's or empty. The one fact a host presents about it; the
- * database keeps no other memory of the rows.
- */
-export interface SessionStoreCleared {
-  readonly path: string;
-  readonly rows: number;
-  readonly storedFormat: number;
-}
-
 export class Database extends Context.Service<
   Database,
   {
-    /** Set when this open cleared a store of another event format. */
-    readonly cleared: SessionStoreCleared | null;
+    /** Set when this open moved a store of an older event format aside. */
+    readonly movedAside: SessionStoreMovedAside | null;
     /**
      * C6: append an ordered batch, possibly across several aggregates, in one
      * `BEGIN IMMEDIATE` under the process's single permit. Each target's
@@ -180,6 +273,11 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** {@link readAll} filtered to display types in SQL: a tail never decodes
+     *  a run's private records only to drop them. */
+    readonly readDisplay: (
+      fromCommit: CommitOrdinal,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
@@ -189,14 +287,14 @@ export class Database extends Context.Service<
     readonly readRunRecords: (
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** The latest `flow.snapshot` on one open run, through the
+    /** The latest `run.snapshot` on one open run, through the
      *  `(aggregate_id, type, seq)` index: the run ledger's existence and
      *  coordinates read, never a fold. A closed (tombstoned) run reads as
      *  absent, as `readRunRecords` does. */
     readonly readRunSnapshot: (
       id: AggregateId,
     ) => Effect.Effect<
-      Extract<SessionEvent, { type: 'flow.snapshot' }> | null,
+      Extract<SessionEvent, { type: 'run.snapshot' }> | null,
       DatabaseReadFailed
     >;
     /** Bounded current CLI input rows, ordered oldest first. */
@@ -207,38 +305,21 @@ export class Database extends Context.Service<
     readonly appendInputHistory: (
       record: InputHistoryRecord,
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** Latest desktop profile record, selected directly by its aggregate index. */
-    readonly readDesktopProjects: (
-      id: AggregateId,
-    ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
-    /** Latest committed value of one key; a missing or deleted key is absent. */
-    readonly readAppStateKey: (
-      key: string,
-    ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
-    readonly readUpdateCheck: (
-      host: UpdateCheckHost,
-    ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
-    readonly recordUpdateCheck: (
-      host: UpdateCheckHost,
-      change: UpdateCheckChange,
-    ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** Canonical global inquiry content, never a project display projection. */
-    readonly readInquiryRecord: (
-      id: InquiryThreadId,
-    ) => Effect.Effect<InquiryThreadRecord | null, DatabaseReadFailed>;
-    readonly listInquiryRecords: () => Effect.Effect<
-      readonly InquiryThreadRecord[],
-      DatabaseReadFailed
-    >;
-    /** Validate and change a global thread while its SQL write transaction is held. */
-    readonly updateInquiryRecord: <A extends InquiryThreadRecord | null>(
-      id: InquiryThreadId,
-      change: (current: InquiryThreadRecord | null) => Result.Result<A, Error>,
-    ) => Effect.Effect<Result.Result<A, Error>, DatabaseWriteFailed>;
+    /** The root's current values: application state, not history. */
+    readonly values: CurrentValues;
+    /** One aggregate's rows from `fromSeq`, or only those of `types`
+     *  through the `(aggregate_id, type, seq)` index, in seq order. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
+      types?: readonly SessionEvent['type'][],
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** One aggregate's display rows in seq order, with the `usage` rows its
+     *  priced responses project: what a renderer replays. */
+    readonly readDisplayAggregate: (
+      id: AggregateId,
+      fromSeq: number,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     /** C5: who holds one aggregate right now, with its owner's liveness
      *  proved in this call. The one ownership read that is fresh by
      *  construction, so a cold run's long-dead owner is never reported held.
@@ -256,16 +337,24 @@ export class Database extends Context.Service<
       readonly AggregateId[],
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: recheck the owning tree, acquire its claims, append the tombstone
-     *  and close all dependents in one transaction after liveness proofs.
-     *  The recorded start identifies the lifetime admitted by the caller. */
-    readonly removeRun: (
+    /** C9: read the owning tree and prove its owners reclaimable, then
+     *  answer the one transaction that rechecks that tree, acquires its
+     *  claims, appends the tombstone and closes all dependents. The
+     *  transaction is a publisher job (`SessionEvents.removeRun`), never
+     *  run on its own. The recorded start identifies the lifetime admitted
+     *  by the caller. */
+    readonly prepareRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      readonly SessionEvent[],
+      Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
       DatabaseReadFailed | DatabaseWriteFailed
+    >;
+    /** C9: the `run.removed` tombstones cleanup has not collected. */
+    readonly readPendingDeletions: () => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseReadFailed
     >;
     /** C9: claim a closed root, clean its recorded runs, then cascade
      *  only if the same tombstone and claim still hold. Cleanup failure keeps
@@ -303,32 +392,24 @@ export class Database extends Context.Service<
  * The process's one handle on the global storage root, built beside
  * `GlobalStorageFs` by the entry that installs the process runtime and held
  * for that runtime's life. Every application record of that root — the
- * inquiry threads, the update check, the CLI's input history, the desktop's
- * remembered projects — reads and writes through it, so the root's
- * `data_version` poll is forked once per process instead of once per
- * operation, and the connection is neither opened nor torn down on a
- * single-row read. The per-workspace {@link Database} of a session's root is
- * unchanged and unrelated.
+ * settings, the repository settings, the inquiry threads, the update check,
+ * the CLI's input history, the desktop's remembered projects — reads and
+ * writes through it, so the root's `data_version` poll is forked once per
+ * process instead of once per operation, and the connection is neither
+ * opened nor torn down on a single-row read. The per-workspace
+ * {@link Database} of a session's root is unchanged and unrelated.
  *
- * The shape is that handle's application-record surface and nothing else:
- * the global root holds no session, so its reactive members (`level`,
- * `observedCommit`, `cleared`) and the run-ledger reads over them have no
- * reader here, and a tag that offered them would invite one.
+ * The shape is that handle's current values and input history, and nothing
+ * else: the global root holds no session and no event rows, so its event
+ * reads, claims and moved-aside report have no reader here. What does follow this root is a
+ * reader of named settings (the tool switches, the plugin install record),
+ * which `values.changes` serves already narrowed to them.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<
     Context.Service.Shape<typeof Database>,
-    | 'appendAll'
-    | 'readAppStateKey'
-    | 'readInputHistory'
-    | 'appendInputHistory'
-    | 'readDesktopProjects'
-    | 'readUpdateCheck'
-    | 'recordUpdateCheck'
-    | 'readInquiryRecord'
-    | 'listInquiryRecords'
-    | 'updateInquiryRecord'
+    'values' | 'readInputHistory' | 'appendInputHistory'
   >
 >()('@texra/session/GlobalDatabase') {}
 

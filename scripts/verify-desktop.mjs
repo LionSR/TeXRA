@@ -1581,7 +1581,7 @@ function sessionLog() {
     const seq = (seqs.get(aggregateId) ?? 0) + 1;
     seqs.set(aggregateId, seq);
     commit += 1;
-    events.push({ aggregateId, seq, commit, ownerId: OWNER, at, ...body });
+    events.push({ aggregateId, seq, commit, origin: OWNER, at, ...body });
   };
   const entry = (runId, at, fields) => {
     emit(runId, at, { type: 'log', level: 'info', ...fields });
@@ -1604,9 +1604,14 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     approvalPolicy: {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },
+      own: {},
+      goal: [],
     },
     parent: parentRunId
-      ? { id: parentRunId, startCommit: parentCreation.commit }
+      ? {
+          id: parentRunId,
+          uid: `00000000-0000-4000-8000-${String(parentCreation.commit).padStart(12, '0')}`,
+        }
       : null,
   });
   log.emit(runId, at, {
@@ -1624,8 +1629,8 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     },
   });
   log.emit(runId, at, {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.begin' },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.begin' },
   });
 }
 
