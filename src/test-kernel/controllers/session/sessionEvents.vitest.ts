@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -82,6 +83,7 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -193,7 +195,14 @@ const requested: SessionEventDraft = {
  *  bits: the log seeded with `history` before the plane reads its anchor
  *  (the pre-cutover importer's position), the plane, the fold, and the
  *  three local sources. */
-const graph = (history: readonly SessionEventDraft[]) => {
+const graph = (
+  history: readonly SessionEventDraft[],
+  store: Layer.Layer<
+    Database,
+    never,
+    ProcessIdentity | WorkspaceRoots | ProcessProbe
+  > = databaseLayer('ephemeral').pipe(Layer.orDie),
+) => {
   const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
@@ -205,11 +214,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(
       sessionEventsLayer.pipe(
-        Layer.provideMerge(
-          seeded.pipe(
-            Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
-          ),
-        ),
+        Layer.provideMerge(seeded.pipe(Layer.provideMerge(store))),
       ),
     ),
     Layer.provideMerge(
@@ -902,8 +907,9 @@ describe('Sessions owner', () => {
             expect(
               opened.mock.calls.filter(
                 ([options]) =>
+                  options.readonly !== true &&
                   options.filename ===
-                  join(realpathSync.native(storage), 'texra.db'),
+                    join(realpathSync.native(storage), 'texra.db'),
               ),
             ).toHaveLength(1);
             yield* closeSessionOf(session);
@@ -1297,11 +1303,31 @@ describe('the C1 event table and the C6 publisher', () => {
       ),
     );
 
+  /** A store as a pre-1.0 build left it: its `event` and `event_sequence`
+   *  keyed by `aggregate_id`, one event and one setting, stamped `format`. */
+  const legacyStore = (storage: string, format: number) =>
+    Effect.sync(() => {
+      const connection = reader(storage);
+      try {
+        connection.exec(`
+          CREATE TABLE event_sequence (aggregate_id TEXT PRIMARY KEY, seq INTEGER);
+          CREATE TABLE event ("commit" INTEGER PRIMARY KEY, aggregate_id TEXT, data TEXT);
+          CREATE TABLE current_value (family TEXT, key TEXT, value TEXT);
+          INSERT INTO event_sequence VALUES ('["run","ab12cd"]', 1);
+          INSERT INTO event VALUES (1, '["run","ab12cd"]', '{}');
+          INSERT INTO current_value VALUES ('setting', 'k', '1');
+          PRAGMA user_version = ${format};
+        `);
+      } finally {
+        connection.close();
+      }
+    });
+
   it.effect('retires a store written before 1.0 whole and starts clean', () => {
     const storage = workspace();
     const format = 44;
     return Effect.gen(function* () {
-      yield* storeOfFormat(storage, format);
+      yield* legacyStore(storage, format);
       const reopenedStore = yield* Database.pipe(
         Effect.flatMap((database) =>
           Effect.map(database.readListing(), (listing) => ({
@@ -1349,6 +1375,162 @@ describe('the C1 event table and the C6 publisher', () => {
       }
     });
   });
+
+  it.effect('never replaces an earlier backup when it retires a store', () => {
+    // A user restored another pre-1.0 store beside an earlier retirement's
+    // copy: a rename onto `.pre1` would delete that copy on most platforms.
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const earlier = join(storage, 'texra.db.pre1');
+      writeFileSync(earlier, 'the earlier backup');
+      yield* legacyStore(storage, 44);
+      const moved = yield* Database.pipe(
+        Effect.map((database) => database.movedAside),
+        Effect.provide(substrate(storage)),
+      );
+      expect(moved?.aside).toBe(
+        join(realpathSync.native(storage), 'texra.db.pre1.2'),
+      );
+      expect(readFileSync(earlier, 'utf8')).toBe('the earlier backup');
+    });
+  });
+
+  it.effect('refuses a foreign SQLite file and leaves it untouched', () => {
+    // Another tool's database at the store's path: no TeXRA stamp, no
+    // TeXRA tables. It is not a pre-1.0 store, so nothing retires it.
+    const storage = workspace();
+    return Effect.gen(function* () {
+      yield* Effect.sync(() => {
+        const connection = reader(storage);
+        try {
+          connection.exec(
+            "CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');",
+          );
+        } finally {
+          connection.close();
+        }
+      });
+      const before = readFileSync(join(storage, 'texra.db'));
+      const failure = yield* Effect.flip(
+        Database.pipe(Effect.provide(substrate(storage))),
+      );
+      expect(failure._tag).toBe('DatabaseOpenFailed');
+      expect(failure.message).toContain('not a TeXRA session store');
+      expect(readFileSync(join(storage, 'texra.db'))).toEqual(before);
+      expect(existsSync(join(storage, 'texra.db.pre1'))).toBe(false);
+      const stored = reader(storage);
+      try {
+        expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
+          { body: 'mine' },
+        ]);
+      } finally {
+        stored.close();
+      }
+    });
+  });
+
+  it.effect(
+    'marks a projection that skipped a newer row, so a build that reads it rebuilds',
+    () => {
+      // A newer build's run.config lands where this build catches the
+      // listing up: it cannot read the row, so the projection it builds
+      // lacks it. Checkpointed past it unmarked, a build that reads the row
+      // would trust that checkpoint and never list it.
+      const storage = workspace();
+      const bump = (version: number) =>
+        Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = ${version} WHERE type = 'run.config';
+              UPDATE stored_kind SET version = ${version} WHERE type = 'run.config';
+              DROP TABLE projection_state;`);
+          } finally {
+            raw.close();
+          }
+        });
+      const listing = Database.pipe(
+        Effect.flatMap((database) => database.readListing()),
+        Effect.map((rows) => rows.map((row) => row.type)),
+        Effect.provide(substrate(storage)),
+      );
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) =>
+            database.appendAll([
+              runStart,
+              {
+                type: 'run.config',
+                aggregateId: runStart.aggregateId,
+                config: AgentConfigFieldsSchema.parse({
+                  agentCategory: AgentCategory.ToolUse,
+                  model: 'test-model',
+                }),
+              },
+            ]),
+          ),
+          Effect.provide(substrate(storage)),
+        );
+        yield* bump(2);
+        expect(yield* listing).toEqual(['run.start']);
+        const marked = reader(storage);
+        try {
+          expect(
+            marked
+              .prepare(
+                "SELECT version FROM projection_state WHERE name = 'listing'",
+              )
+              .get(),
+          ).toEqual({ version: -1 });
+          // The row becomes one this build reads: as a newer build sees it.
+          marked.exec(`UPDATE event SET version = 1 WHERE type = 'run.config';
+            UPDATE stored_kind SET version = 1 WHERE type = 'run.config';`);
+        } finally {
+          marked.close();
+        }
+        expect(yield* listing).toEqual(['run.start', 'run.config']);
+      });
+    },
+  );
+
+  it.effect(
+    'lists a run whose own run.start a newer build wrote as blocked',
+    () => {
+      // The unreadable row is the one that creates the run: without it the
+      // run would vanish from every listing instead of reading as blocked.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) => database.appendAll([runStart, waiting])),
+          Effect.provide(substrate(storage)),
+        );
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.start';
+            UPDATE stored_kind SET version = 2 WHERE type = 'run.start';`);
+          } finally {
+            raw.close();
+          }
+        });
+        yield* Effect.gen(function* () {
+          const view = yield* SessionViewService;
+          yield* settle(view.ref, (v) => v.runs.has(RUN));
+          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
+          expect(run).toMatchObject({ blocked: 'newer', readOnly: true });
+          const refused = yield* Effect.flip(
+            (yield* Database).acquireClaims([runStart.aggregateId]),
+          );
+          expect(refused).toMatchObject({
+            _tag: 'DatabaseWriteFailed',
+            cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.start' },
+          });
+        }).pipe(
+          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
+          Effect.scoped,
+        );
+      });
+    },
+  );
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();

@@ -7,11 +7,13 @@
 import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
+import { AgentCategory } from './agent';
 import {
   AggregateIdSchema,
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
   OwnerIdSchema,
+  type DisplaySessionEvent,
 } from './sessionEvent';
 
 /**
@@ -93,11 +95,36 @@ export type ExistenceReconciliation = z.infer<
 export const BlockedAggregateSchema = z.object({
   _tag: z.literal('blocked'),
   aggregateId: AggregateIdSchema,
+  /** The incarnation the verdict is about. */
+  uid: z.string(),
   reason: z.enum(['newer', 'unknown', 'corrupt']),
   type: z.string(),
   version: z.int().nonnegative(),
+  /** The envelope of the row that blocked it: for a run whose `run.start`
+   *  is the unreadable row, its creation, which the fold lists it at. */
+  commit: CommitOrdinalSchema,
+  at: z.int(),
 });
 export type BlockedAggregate = z.infer<typeof BlockedAggregateSchema>;
+
+/** The `run.start` a blocked run whose own start row is unreadable stands
+ *  on: its envelope, and no identity but its id. */
+export function blockedRunStart(
+  input: BlockedAggregate,
+): Extract<DisplaySessionEvent, { type: 'run.start' }> {
+  return {
+    type: 'run.start',
+    aggregateId: input.aggregateId,
+    seq: 1,
+    commit: input.commit,
+    origin: null,
+    at: input.at,
+    identity: { kind: 'agent', agent: 'unknown' },
+    userFollowUpSupport: 'unsupported',
+    category: AgentCategory.ToolUse,
+    parent: null,
+  };
+}
 
 const FoldInputSchema = z.discriminatedUnion('_tag', [
   BlockedAggregateSchema,

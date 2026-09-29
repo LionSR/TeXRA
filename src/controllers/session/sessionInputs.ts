@@ -12,11 +12,13 @@ import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
+  blockedRunStart,
   DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
   RunIdSchema,
   type AggregateId,
+  type BlockedAggregate,
   type ExistenceReconciliation,
   type FoldInput,
   type TextChunk,
@@ -92,6 +94,7 @@ export const sessionInputsLayer = Layer.effect(
             );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
+            for (const { aggregateId } of blocked) checked.add(aggregateId);
             const replay: FoldInput[] = [
               {
                 _tag: 'debug',
@@ -102,7 +105,7 @@ export const sessionInputsLayer = Layer.effect(
                 read: 'listing' as const,
                 event,
               })),
-              ...blocked,
+              ...blockedInputs(blocked),
             ];
             replay.push({
               _tag: 'subscriptions',
@@ -186,8 +189,10 @@ export const sessionInputsLayer = Layer.effect(
                     checked = new Set(
                       existence.claims.map(({ aggregateId }) => aggregateId),
                     );
-                    const inputs: FoldInput[] = read.blocked.filter(
-                      ({ aggregateId }) => !previous.blocked.has(aggregateId),
+                    const inputs: FoldInput[] = blockedInputs(
+                      read.blocked.filter(
+                        ({ aggregateId }) => !previous.blocked.has(aggregateId),
+                      ),
                     );
                     for (const [key, value] of nextText) {
                       const held = previous.text.get(key);
@@ -257,6 +262,23 @@ export const sessionInputsLayer = Layer.effect(
     };
   }),
 );
+
+/**
+ * The fold inputs of blocked verdicts. A run whose own `run.start` is the
+ * unreadable row has no row that creates it: it is listed from its
+ * verdict's envelope (`blockedRunStart`), with nothing else known, so it
+ * shows as blocked instead of vanishing.
+ */
+function blockedInputs(verdicts: readonly BlockedAggregate[]): FoldInput[] {
+  return verdicts.flatMap((verdict): FoldInput[] =>
+    verdict.type === 'run.start'
+      ? [
+          { _tag: 'event', read: 'listing', event: blockedRunStart(verdict) },
+          verdict,
+        ]
+      : [verdict],
+  );
+}
 
 /** Closed sequence rows are no longer live, even while their tombstones remain stored. */
 function reconcileExistence(read: {

@@ -83,7 +83,8 @@ import {
   PROJECTION_INPUTS,
   PROJECTION_NAMES,
   PROJECTION_TABLE,
-  ProjectionStateSchema,
+  isOwn,
+  projectionStates as parseProjectionStates,
   isCurrent,
   PROJECTORS,
   READ_LISTING,
@@ -94,7 +95,6 @@ import {
   type ProjectionOp,
 } from './projections';
 import {
-  AGGREGATES_ABOVE,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
@@ -202,6 +202,7 @@ export const databaseLayer = (
           disableWAL: mode === 'ephemeral',
           busyTimeout: '5 seconds',
         }),
+        SqliteClient.make({ filename, readonly: true, disableWAL: true }),
         mode,
         path,
         filename,
@@ -233,30 +234,14 @@ export const databaseLayer = (
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
-      const verdicts = verdictBook(path);
-      const { blocked, block } = verdicts;
+      const verdicts = verdictBook(path, exec);
+      const { blocked } = verdicts;
       /** The rows a read statement returns, decoded (`verdictBook`). */
       const decodedRows = (statement: string, params: readonly unknown[]) =>
-        exec(statement, params).pipe(Effect.flatMap(verdicts.decode));
-      /** Name the aggregates holding a row of a kind this build lacks or of
-       *  a newer version: `stored_kind` says whether any exist, so the
-       *  normal store checks no row. */
-      const refreshBlocked = Effect.gen(function* () {
-        for (const kind of unreadableKinds(yield* exec(STORED_KINDS))) {
-          for (const row of yield* exec(AGGREGATES_ABOVE, [
-            kind.type,
-            kind.above,
-          ])) {
-            yield* block({
-              _tag: 'blocked',
-              aggregateId: aggregateOf(row.kind, row.logicalId),
-              reason: kind.reason,
-              type: kind.type,
-              version: z.int().parse(row.version),
-            });
-          }
-        }
-      });
+        exec(statement, params).pipe(
+          Effect.flatMap(verdicts.decodeAll),
+          Effect.map(({ events }) => events),
+        );
       /** A ledger read or claim of a blocked aggregate is refused whole. */
       const refuseBlocked = <E>(
         id: AggregateId,
@@ -274,7 +259,7 @@ export const databaseLayer = (
         observedCommit,
         yield* currentCommit.pipe(mapDatabaseFailure(openFailed)),
       );
-      yield* refreshBlocked.pipe(mapDatabaseFailure(openFailed));
+      yield* verdicts.refresh.pipe(mapDatabaseFailure(openFailed));
       const dependents = `WITH RECURSIVE dependents(id) AS (
         SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
         UNION ALL
@@ -368,7 +353,7 @@ export const databaseLayer = (
                 ?.data_version;
               if (next !== version) {
                 const commit = yield* query(currentCommit);
-                yield* query(refreshBlocked);
+                yield* query(verdicts.refresh);
                 version = next;
                 yield* observe(commit);
                 yield* SubscriptionRef.update(level, (wake) => wake + 1);
@@ -574,23 +559,31 @@ export const databaseLayer = (
         });
       const projectionStates = exec(
         'SELECT name, version, through_commit AS through FROM projection_state',
-      ).pipe(
-        Effect.map(
-          (rows) =>
-            new Map(
-              rows.map((row) => {
-                const state = ProjectionStateSchema.parse(row);
-                return [state.name, state] as const;
-              }),
-            ),
-        ),
+      ).pipe(Effect.map(parseProjectionStates));
+      /** Whether this build skips rows of this store: a kind it lacks, or a
+       *  newer version of one it has. */
+      const skipsRows = exec(STORED_KINDS).pipe(
+        Effect.map((rows) => unreadableKinds(rows).length > 0),
       );
-      const setProjectionState = (name: ProjectionName, through: number) =>
+      /** Every projection current in the caller's transaction. */
+      const projectionsCurrent = Effect.gen(function* () {
+        const states = yield* projectionStates;
+        const top = yield* currentCommit;
+        const skips = yield* skipsRows;
+        return PROJECTION_NAMES.every((name) =>
+          isCurrent(name, states.get(name), top, skips),
+        );
+      });
+      const setProjectionState = (
+        name: ProjectionName,
+        through: number,
+        skipped: boolean,
+      ) =>
         exec(
           `INSERT INTO projection_state (name, version, through_commit)
            VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET
            version = excluded.version, through_commit = excluded.through_commit`,
-          [name, PROJECTORS[name].version, through],
+          [name, (skipped ? -1 : 1) * PROJECTORS[name].version, through],
         );
       const applyOp = (op: ProjectionOp) => {
         switch (op.table) {
@@ -661,20 +654,7 @@ export const databaseLayer = (
        * catches up, 1,000 rows per transaction.
        */
       const ensureProjections = Effect.gen(function* () {
-        const states = yield* query(projectionStates);
-        const top = yield* query(currentCommit);
-        if (
-          PROJECTION_NAMES.every((name) =>
-            isCurrent(name, states.get(name), top),
-          )
-        )
-          return;
-        for (const [name, state] of states) {
-          if (state.version !== PROJECTORS[name].version)
-            yield* Effect.logInfo(
-              `Rebuilding the ${name} projection of ${path} (version ${state.version} → ${PROJECTORS[name].version}).`,
-            ).pipe(withLogChannel(CHANNEL));
-        }
+        if (yield* query(projectionsCurrent)) return;
         let done = false;
         while (!done) {
           done = yield* transaction(
@@ -682,19 +662,24 @@ export const databaseLayer = (
             Effect.gen(function* () {
               const current = yield* projectionStates;
               const top = yield* currentCommit;
+              const skips = yield* skipsRows;
               let all = true;
               for (const name of PROJECTION_NAMES) {
                 const state = current.get(name);
-                if (isCurrent(name, state, top)) continue;
-                let through = state?.through ?? 0;
-                if (state?.version !== PROJECTORS[name].version) {
+                if (isCurrent(name, state, top, skips)) continue;
+                const own = isOwn(name, state, skips);
+                if (state !== undefined && !own)
+                  yield* Effect.logInfo(
+                    `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
+                  ).pipe(withLogChannel(CHANNEL));
+                if (!own) {
                   yield* exec(`DELETE FROM ${PROJECTION_TABLE[name]}`);
                   yield* exec(
                     'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
                     [JSON.stringify(PROJECTORS[name].projects)],
                   );
-                  through = 0;
                 }
+                const through = own ? (state?.through ?? 0) : 0;
                 const rows =
                   through >= top
                     ? []
@@ -703,10 +688,17 @@ export const databaseLayer = (
                         through,
                         top,
                       ]);
-                yield* project(yield* verdicts.decode(rows), [name]);
+                // A row of a newer or unknown kind skipped here marks the
+                // projection, so a build that reads the row rebuilds it.
+                const { events, skipped } = yield* verdicts.decodeAll(rows);
+                yield* project(events, [name]);
                 const reached =
                   rows.length < 1000 ? top : z.int().parse(rows.at(-1)?.commit);
-                yield* setProjectionState(name, reached);
+                yield* setProjectionState(
+                  name,
+                  reached,
+                  skipped || (own && state !== undefined && state.version < 0),
+                );
                 all &&= reached >= top;
               }
               return all;
@@ -715,6 +707,24 @@ export const databaseLayer = (
           );
         }
       });
+      /** A read of the projections, in one read transaction with the check
+       *  that they are current: another build's rebuild between the two
+       *  would otherwise hand it a half-built projection. */
+      const projected = <A, E>(read: Effect.Effect<A, E>) =>
+        Effect.gen(function* () {
+          for (;;) {
+            yield* ensureProjections;
+            const result = yield* transaction(
+              'read',
+              Effect.gen(function* () {
+                if (!(yield* projectionsCurrent)) return null;
+                return { value: yield* read };
+              }),
+              readFailed,
+            );
+            if (result !== null) return result.value;
+          }
+        });
       const appendRows = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
@@ -729,18 +739,25 @@ export const databaseLayer = (
           );
           for (const [type, version] of kinds)
             yield* exec(UPSERT_KIND, [type, version]);
-          // A projection this build owns and that is current follows the
-          // batch; any other is left for its owner's next read to catch up.
+          // A projection of this build's version that has read every row
+          // before the batch follows it, keeping its skipping mark; any
+          // other is left for its owner's next read to catch up.
           const states = yield* projectionStates;
           const current = PROJECTION_NAMES.filter((name) => {
             const state = states.get(name);
-            return (
-              isCurrent(name, state, before) && (state?.through ?? 0) === before
-            );
+            return state === undefined
+              ? before === 0
+              : Math.abs(state.version) === PROJECTORS[name].version &&
+                  state.through === before;
           });
           yield* project(committed, current);
           const through = yield* currentCommit;
-          for (const name of current) yield* setProjectionState(name, through);
+          for (const name of current)
+            yield* setProjectionState(
+              name,
+              through,
+              (states.get(name)?.version ?? 0) < 0,
+            );
           return committed;
         });
       const appendRow = (
@@ -930,31 +947,21 @@ export const databaseLayer = (
             }),
           ),
         readDisplay: (fromCommit) =>
-          Effect.andThen(
-            ensureProjections,
-            query(
-              Effect.gen(function* () {
-                const rows = yield* decodedRows(display, [
-                  displayTypes,
-                  fromCommit,
-                  yield* currentCommit,
-                ]);
-                return rows.filter(isDisplaySessionEvent);
-              }),
-            ),
+          projected(
+            Effect.gen(function* () {
+              const rows = yield* decodedRows(display, [
+                displayTypes,
+                fromCommit,
+                yield* currentCommit,
+              ]);
+              return rows.filter(isDisplaySessionEvent);
+            }),
           ),
-        readListing: () =>
-          Effect.andThen(
-            ensureProjections,
-            query(decodedRows(READ_LISTING, [])),
-          ),
+        readListing: () => projected(decodedRows(READ_LISTING, [])),
         readBlocked: () => Effect.sync(() => [...blocked.values()]),
         readPendingDeletions: () => query(decodedRows(pendingDeletions, [])),
         readRunRecords: (id) =>
-          Effect.andThen(
-            ensureProjections,
-            query(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
-          ),
+          projected(decodedRows(READ_RUN_RECORDS, aggregateColumns(id))),
         readRunSnapshot: (id) =>
           Effect.gen(function* () {
             yield* refuseBlocked(id, readFailed);
@@ -985,15 +992,12 @@ export const databaseLayer = (
             return events;
           }),
         readDisplayAggregate: (id, fromSeq) =>
-          Effect.andThen(
-            ensureProjections,
-            query(
-              decodedRows(displayAggregate, [
-                displayTypes,
-                ...aggregateColumns(id),
-                fromSeq,
-              ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
-            ),
+          projected(
+            decodedRows(displayAggregate, [
+              displayTypes,
+              ...aggregateColumns(id),
+              fromSeq,
+            ]).pipe(Effect.map((rows) => rows.filter(isDisplaySessionEvent))),
           ),
         aggregateState: (ids) => query(readState(ids)),
         claimOwner: (id) =>
@@ -1012,34 +1016,29 @@ export const databaseLayer = (
             };
           }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
-          Effect.andThen(
-            ensureProjections,
-            transaction(
-              'read',
-              Effect.gen(function* () {
-                const cursor = yield* currentCommit;
-                const events = yield* decodedRows(inputRows, [
-                  inputTypes,
-                  ...aggregateLists(ids),
-                  inputTypes,
-                  fromCommit,
-                  cursor,
-                ]);
-                const checked = new Set(checkedIds);
-                for (const event of events) {
-                  for (const id of referencedAggregates(event)) checked.add(id);
-                }
-                const checkedAggregateIds = [...checked];
-                return {
-                  cursor,
-                  events,
-                  checkedAggregateIds,
-                  state: yield* readState(checkedAggregateIds),
-                  blocked: [...blocked.values()],
-                };
-              }),
-              readFailed,
-            ),
+          projected(
+            Effect.gen(function* () {
+              const cursor = yield* currentCommit;
+              const events = yield* decodedRows(inputRows, [
+                inputTypes,
+                ...aggregateLists(ids),
+                inputTypes,
+                fromCommit,
+                cursor,
+              ]);
+              const checked = new Set(checkedIds);
+              for (const event of events) {
+                for (const id of referencedAggregates(event)) checked.add(id);
+              }
+              const checkedAggregateIds = [...checked];
+              return {
+                cursor,
+                events,
+                checkedAggregateIds,
+                state: yield* readState(checkedAggregateIds),
+                blocked: [...blocked.values()],
+              };
+            }),
           ),
         acquireClaims: (ids) =>
           Effect.gen(function* () {
@@ -1221,6 +1220,7 @@ export const databaseLayer = (
                         yield* exec(collectBlobs, [JSON.stringify(digests)]);
                     }),
                   );
+                  yield* query(verdicts.retain);
                 }),
               (_, exit) =>
                 Exit.isFailure(exit)

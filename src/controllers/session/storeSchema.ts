@@ -130,12 +130,9 @@ const ADDITIVE = [
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
 ];
 
-/**
- * The forward-only steps from one `SCHEMA_VERSION` to the next: each runs
- * under the write lock, after a copy of the store is kept, and a step that
- * rebuilds a table sets `foreignKeysOff`. None exists yet: 100 is the first
- * version.
- */
+/** The forward-only steps between `SCHEMA_VERSION`s, each run under the
+ *  write lock after a copy is kept (`foreignKeysOff` for a table rebuild).
+ *  None yet: 100 is the first. */
 const STEPS: readonly {
   readonly from: number;
   readonly foreignKeysOff: boolean;
@@ -146,13 +143,10 @@ type Sql = SqlClient.SqlClient;
 
 const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
 
-const pragmaValue = Effect.fnUntraced(function* (sql: Sql, pragma: string) {
-  const row = (yield* sql.unsafe<Record<string, unknown>>(
-    `PRAGMA ${pragma}`,
-    [],
-  ))[0];
-  return row?.[pragma];
-});
+const pragmaValue = (sql: Sql, pragma: string) =>
+  sql
+    .unsafe<Record<string, unknown>>(`PRAGMA ${pragma}`, [])
+    .pipe(Effect.map((rows) => rows[0]?.[pragma]));
 
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
@@ -160,13 +154,10 @@ const verifyPragma = Effect.fnUntraced(function* (
   expected: string | number,
 ) {
   const value = yield* pragmaValue(sql, pragma);
-  if (value !== expected) {
+  if (value !== expected)
     return yield* Effect.fail(
-      new Error(
-        `PRAGMA ${pragma} is ${String(value)}, expected ${String(expected)}`,
-      ),
+      new Error(`PRAGMA ${pragma} is ${String(value)}, not ${expected}`),
     );
-  }
 });
 
 /** The user tables a file holds (none: a new file). */
@@ -178,6 +169,38 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
+/** The refusal of a file this build did not write: nothing in it is touched. */
+const foreignStore = (path: string, why: string) =>
+  Effect.fail(
+    new Error(
+      `${path} is not a TeXRA session store (${why}); nothing in it was changed. Move it away to let TeXRA create its store there.`,
+    ),
+  );
+
+/** Whether a file below schema 100 is a TeXRA store from before 1.0: its
+ *  `event` and `event_sequence`, each keyed by the `aggregate_id` column
+ *  every pre-1.0 format had. Any other file is foreign, never retired. */
+const PRE1_SIGNATURE = `SELECT
+  (SELECT count(*) FROM pragma_table_info('event') WHERE name = 'aggregate_id') +
+  (SELECT count(*) FROM pragma_table_info('event_sequence')
+    WHERE name = 'aggregate_id') AS keyed`;
+
+/**
+ * The first of `base`, `base.2`, `base.3`, … that names no file (with its
+ * `-wal` and `-shm` companions, for a whole database moved aside): an
+ * earlier copy is never replaced, on any platform's `rename`.
+ */
+const freeName = Effect.fnUntraced(function* (base: string) {
+  const fs = yield* FileSystem.FileSystem;
+  for (let n = 1; ; n += 1) {
+    const name = n === 1 ? base : `${base}.${n}`;
+    const taken = yield* Effect.forEach(['', '-wal', '-shm'], (suffix) =>
+      fs.exists(`${name}${suffix}`),
+    );
+    if (!taken.some(Boolean)) return name;
+  }
+});
+
 /** The refusal of a store a newer build wrote: nothing in it is touched. */
 const newerStore = (path: string, stored: number) =>
   Effect.fail(
@@ -187,22 +210,24 @@ const newerStore = (path: string, stored: number) =>
   );
 
 /**
- * Keep a copy of the store at `aside`, then run `body` under the write lock
- * only if nothing committed since the copy: `VACUUM INTO` cannot run inside
- * a transaction, so the transaction re-reads `user_version` and
- * `data_version` (which moves on every other connection's commit) and, if
- * either moved, discards the copy and answers false for the caller to start
- * over from what the store now is.
+ * Keep a copy of the store beside it, at the first free name from `base`
+ * ({@link freeName}), then run `body` under the write lock only if nothing
+ * committed since the copy: `VACUUM INTO` cannot run inside a transaction,
+ * so the transaction re-reads `user_version` and `data_version` (which moves
+ * on every other connection's commit) and, if either moved, discards the
+ * copy and answers null for the caller to start over from what the store
+ * now is. The name is chosen under the lock, so two processes retiring one
+ * store never pick the same one. Answers the copy's path.
  */
 const underCopy = Effect.fnUntraced(function* <E>(
   sql: Sql,
-  aside: string,
+  base: string,
   body: Effect.Effect<void, E>,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const stamp = yield* pragmaValue(sql, 'user_version');
   const version = yield* pragmaValue(sql, 'data_version');
-  const staged = `${aside}.${randomUUID()}.partial`;
+  const staged = `${base}.${randomUUID()}.partial`;
   yield* sql.unsafe('VACUUM INTO ?', [staged]);
   yield* run(sql, 'BEGIN IMMEDIATE');
   const moved = yield* Effect.gen(function* () {
@@ -210,11 +235,12 @@ const underCopy = Effect.fnUntraced(function* <E>(
       (yield* pragmaValue(sql, 'user_version')) !== stamp ||
       (yield* pragmaValue(sql, 'data_version')) !== version
     ) {
-      return false;
+      return null;
     }
+    const aside = yield* freeName(base);
     yield* fs.rename(staged, aside);
     yield* body;
-    return true;
+    return aside;
   }).pipe(
     Effect.onError(() =>
       Effect.all([
@@ -223,13 +249,13 @@ const underCopy = Effect.fnUntraced(function* <E>(
       ]),
     ),
   );
-  if (!moved) {
+  if (moved === null) {
     yield* run(sql, 'ROLLBACK');
     yield* fs.remove(staged, { force: true });
-    return false;
+    return null;
   }
   yield* run(sql, 'COMMIT');
-  return true;
+  return moved;
 });
 
 /** Give an empty file the 1.0 header: `auto_vacuum` is fixed when the first
@@ -241,23 +267,48 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
 });
 
 /**
+ * Refuse a file this build must not touch: another application's (its
+ * `application_id`, or tables below schema 100 that are no pre-1.0 TeXRA
+ * store's) or a newer TeXRA's. Run on a read-only connection before the
+ * store's own connection opens, which switches the file to WAL, and again
+ * under it, where another process may have changed the file since.
+ */
+const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
+  const application = Number(yield* pragmaValue(sql, 'application_id'));
+  if (application !== 0 && application !== APPLICATION_ID)
+    return yield* foreignStore(path, `application id ${application}`);
+  const stored = Number(yield* pragmaValue(sql, 'user_version'));
+  if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
+  const tables = yield* userTables(sql);
+  if (
+    stored < 100 &&
+    tables.length > 0 &&
+    (yield* sql.unsafe<{ keyed: number }>(PRE1_SIGNATURE, []))[0]?.keyed !== 2
+  )
+    return yield* foreignStore(
+      path,
+      `user_version ${stored}, tables ${tables.join(', ')}`,
+    );
+});
+
+/**
  * Bring an open connection to the store this build writes (§3's open
  * sequence, steps 2 to 6), answering what it moved aside.
  *
  * The driver sets `busy_timeout` before enabling WAL, and that order is
- * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero
- * a second process opening the same file lost appends to `SQLITE_BUSY`.
- * Once the store is ready the timeout drops to a 25 ms slice, and
- * `Database` retries a busy transaction on its own fiber schedule instead of
- * freezing the host thread in SQLite. `synchronous = NORMAL` is the WAL-safe
- * setting: `FULL` cost 1.4x to 1.8x, and `kill -9` mid-transaction lost
- * nothing at `NORMAL`.
+ * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero a
+ * second process opening the same file lost appends to `SQLITE_BUSY`. Once the
+ * store is ready the timeout drops to a 25 ms slice, and `Database` retries a
+ * busy transaction on its own fiber schedule instead of freezing the host
+ * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
+ * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
  *
  * - A foreign `application_id` or a newer `SCHEMA_VERSION` is refused
- *   untouched.
- * - A store written before 1.0 (a stamp from 1 to 99, or tables with no
- *   stamp) is copied whole to `<file>.pre1`, every table is dropped, and
- *   the file starts fresh: nothing in it is kept, current values included.
+ *   untouched, and so is any other file below 100 that is not a pre-1.0
+ *   TeXRA store by its own tables (`PRE1_SIGNATURE`).
+ * - A store written before 1.0 is copied whole to `<file>.pre1` (or the
+ *   first free `.pre1.<n>`), every table is dropped, and the file starts
+ *   fresh: nothing in it is kept, current values included.
  * - An empty file gets the schema, under the write lock; of two processes
  *   creating at once, the second finds it stamped and does nothing.
  * - An older 1.0 schema is copied to `<file>.schema<N>` and stepped forward.
@@ -276,19 +327,12 @@ const prepareStore = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  const application = Number(yield* pragmaValue(sql, 'application_id'));
-  if (application !== 0 && application !== APPLICATION_ID) {
-    return yield* Effect.fail(
-      new Error(
-        `${path} is not a TeXRA session store (application id ${application}); nothing in it was changed.`,
-      ),
-    );
-  }
   let movedAside: SessionStoreMovedAside | null = null;
   for (;;) {
     const stored = Number(yield* pragmaValue(sql, 'user_version'));
     if (stored === SCHEMA_VERSION) break;
-    if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
+    // An in-memory store is this process's own, never another's file.
+    if (mode === 'persistent') yield* refuseUnowned(sql, path);
     const tables = yield* userTables(sql);
     if (stored === 0 && tables.length === 0) {
       if (mode === 'persistent') yield* incrementalVacuum(sql);
@@ -304,13 +348,12 @@ const prepareStore = Effect.fnUntraced(function* (
       continue;
     }
     if (stored < 100) {
-      const aside = `${filename}.pre1`;
       // Off outside the transaction (a no-op inside one): a drop then
       // neither checks nor cascades a foreign key it removes anyway.
       yield* run(sql, 'PRAGMA foreign_keys = OFF');
-      const retired = yield* underCopy(
+      const aside = yield* underCopy(
         sql,
-        aside,
+        `${filename}.pre1`,
         Effect.gen(function* () {
           for (const table of yield* userTables(sql))
             yield* run(sql, `DROP TABLE "${table}"`);
@@ -321,7 +364,7 @@ const prepareStore = Effect.fnUntraced(function* (
           run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore),
         ),
       );
-      if (!retired) continue;
+      if (aside === null) continue;
       yield* incrementalVacuum(sql);
       yield* Effect.logWarning(
         `Session store ${path} was written before TeXRA 1.0 (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
@@ -374,11 +417,18 @@ const prepareStore = Effect.fnUntraced(function* (
  */
 export const openStore = Effect.fnUntraced(function* <E, R>(
   connect: Effect.Effect<Sql, E, R | Scope.Scope>,
+  /** A read-only connection that changes nothing in the file. */
+  probe: Effect.Effect<Sql, E, R | Scope.Scope>,
   mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  // A file the probe cannot open (none yet) is the store's open to create.
+  if (mode === 'persistent')
+    yield* Effect.scoped(
+      Effect.flatMap(probe, (sql) => refuseUnowned(sql, path)),
+    ).pipe(Effect.catchDefect(() => Effect.void));
   const outer = yield* Effect.scope;
   const first = yield* Scope.fork(outer, 'sequential');
   const attempt = yield* connect.pipe(
@@ -396,7 +446,9 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return yield* Effect.failCause(attempt.cause);
   }
   yield* Scope.close(first, Exit.void);
-  const aside = `${filename}.corrupt-${yield* Clock.currentTimeMillis}`;
+  const aside = yield* freeName(
+    `${filename}.corrupt-${yield* Clock.currentTimeMillis}`,
+  );
   for (const suffix of ['', '-wal', '-shm']) {
     if (yield* fs.exists(`${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);

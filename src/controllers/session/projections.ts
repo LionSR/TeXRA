@@ -241,23 +241,54 @@ export const PROJECTION_TABLE: Readonly<Record<ProjectionName, string>> = {
   usage: 'run_usage',
   model: 'run_model',
 };
-export const ProjectionStateSchema = z.object({
-  name: z.enum(PROJECTION_NAMES),
+/**
+ * One projection's checkpoint. `version` is the projector's version, negated
+ * when the build that projected it skipped rows it could not read (a newer
+ * or unknown kind): a build that reads every row then rebuilds it, and one
+ * that skips the same rows keeps it. A name this build does not know is a
+ * later build's projection and is left alone.
+ */
+const ProjectionStateSchema = z.object({
+  name: z.string(),
   version: z.int(),
   through: z.int().nonnegative(),
 });
+type ProjectionState = z.infer<typeof ProjectionStateSchema>;
+
+export function projectionStates(
+  rows: readonly Readonly<Record<string, unknown>>[],
+): ReadonlyMap<string, ProjectionState> {
+  return new Map(
+    rows.map((row) => {
+      const state = ProjectionStateSchema.parse(row);
+      return [state.name, state] as const;
+    }),
+  );
+}
+
+/** Whether `state` is this build's projection: its version, or the skipping
+ *  mark when this build skips rows too (`skips`). */
+export const isOwn = (
+  name: ProjectionName,
+  state: ProjectionState | undefined,
+  skips: boolean,
+) =>
+  state !== undefined &&
+  (state.version === PROJECTORS[name].version ||
+    (skips && state.version === -PROJECTORS[name].version));
 
 /** A projection this build owns and that has read every row through `top`;
  *  one with no state yet is current only on a store that never held a row,
  *  so a fresh store's first read writes nothing. */
 export const isCurrent = (
   name: ProjectionName,
-  state: z.infer<typeof ProjectionStateSchema> | undefined,
+  state: ProjectionState | undefined,
   top: number,
+  skips: boolean,
 ) =>
   state === undefined
     ? top === 0
-    : state.version === PROJECTORS[name].version && state.through >= top;
+    : isOwn(name, state, skips) && state.through >= top;
 
 const RunUsageSchema = z.object({ usage: TokenUsageStatsSchema });
 const RunModelSchema = z.object({
@@ -290,6 +321,7 @@ export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
   SELECT u."commit" AS "commit", s.kind AS kind, s.logical_id AS logicalId,
+    s.uid AS uid,
     e.seq AS seq, 'usage' AS type, NULL AS version, e.origin AS origin,
     e.at AS at, u.usage AS data, NULL AS blobValue
   FROM run_usage u

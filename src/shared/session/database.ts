@@ -177,6 +177,20 @@ export interface SessionStoreMovedAside {
 }
 
 /**
+ * A current value written at a newer version of its family than this build
+ * reads: its read and its change are refused, as the cause of the
+ * `DatabaseReadFailed` or `DatabaseWriteFailed`, and it is never decoded as
+ * the older shape or overwritten.
+ */
+export class CurrentValueNewer extends Data.TaggedError('CurrentValueNewer')<{
+  readonly family: CurrentValueFamily;
+  readonly key: string;
+  readonly version: number;
+}> {
+  override readonly message = `The ${this.family} value ${this.key} was written by a newer TeXRA (version ${this.version}); update TeXRA to read or change it.`;
+}
+
+/**
  * A ledger read or claim of an aggregate this build cannot read whole
  * (`BlockedAggregate`): a later build wrote a row of it, or a row is
  * corrupt. Nothing is read or claimed, so no run state is ever folded from

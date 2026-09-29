@@ -11,12 +11,14 @@
 import { Clock, Effect, Result, type SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { withLogChannel } from '@logger/effectLog';
 import {
   CURRENT_VALUE_SCHEMAS,
   type CurrentValue,
   type CurrentValueFamily,
 } from '@shared/schemas';
 import {
+  CurrentValueNewer,
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
   type CurrentValues,
@@ -29,13 +31,26 @@ import type { SqlError } from 'effect/unstable/sql/SqlError';
 
 type Rows = readonly Readonly<Record<string, unknown>>[];
 
-/** Replace one current value in place. Families are at version 1 until one
- *  gains an upcaster. */
+/** The version every family writes and reads, until one gains an upcaster. */
+const VALUE_VERSION = 1;
+
+/** Replace one current value in place. */
 const UPSERT_VALUE = `
-INSERT INTO current_value (family, key, version, value, at) VALUES (?, ?, 1, ?, ?)
+INSERT INTO current_value (family, key, version, value, at) VALUES (?, ?, ${VALUE_VERSION}, ?, ?)
 ON CONFLICT(family, key) DO UPDATE SET
   version = excluded.version, value = excluded.value, at = excluded.at
 `;
+
+/** A row a newer build wrote: never decoded as this build's shape. */
+const newerValue = (
+  family: CurrentValueFamily,
+  row: Readonly<Record<string, unknown>>,
+) => {
+  const version = z.int().parse(row.version);
+  return version > VALUE_VERSION
+    ? new CurrentValueNewer({ family, key: String(row.key), version })
+    : null;
+};
 
 /** One current value, decoded by its family's schema: a row that no longer
  *  decodes fails the read naming itself. */
@@ -74,10 +89,16 @@ export function currentValues(store: {
   'values' | 'readInputHistory' | 'appendInputHistory'
 > {
   const { exec, execOne, transact, query, level } = store;
+  /** One value's row; a newer one refuses the read or change. */
   const valueRow = (family: CurrentValueFamily, key: string) =>
     execOne(
-      'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
+      'SELECT key, version, value FROM current_value WHERE family = ? AND key = ?',
       [family, key],
+    ).pipe(
+      Effect.flatMap((row) => {
+        const newer = row === undefined ? null : newerValue(family, row);
+        return newer === null ? Effect.succeed(row) : Effect.fail(newer);
+      }),
     );
   const modifyValue = <F extends CurrentValueFamily, A, E>(
     family: F,
@@ -136,15 +157,26 @@ export function currentValues(store: {
     list: (family) =>
       query(
         exec(
-          'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
+          'SELECT key, version, value FROM current_value WHERE family = ? ORDER BY at DESC',
           [family],
         ).pipe(
-          Effect.map((rows) =>
-            rows.map((row) => ({
-              key: z.string().parse(row.key),
-              value: decodeValue(family, row),
-            })),
+          Effect.flatMap((rows) =>
+            Effect.forEach(rows, (row) => {
+              const newer = newerValue(family, row);
+              return newer === null
+                ? Effect.succeed([
+                    {
+                      key: z.string().parse(row.key),
+                      value: decodeValue(family, row),
+                    },
+                  ])
+                : Effect.logWarning(newer.message).pipe(
+                    withLogChannel('sessionDatabase'),
+                    Effect.as([]),
+                  );
+            }),
           ),
+          Effect.map((listed) => listed.flat()),
         ),
       ),
     changes: currentValueChangeFeed(level, exec),
