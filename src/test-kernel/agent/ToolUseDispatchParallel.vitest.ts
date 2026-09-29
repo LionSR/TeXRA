@@ -593,10 +593,30 @@ describe('tool-use dispatch', () => {
   it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
     Effect.gen(function* () {
       const probe = newProbe();
+      // Neither call completes until both have started: a fixed sleep raced
+      // the second call's intent append, which the 1.0 store made slower
+      // than the sleep. A serial dispatch never opens the latch, and the
+      // deadline only turns that deadlock into a legible failure.
+      const bothStarted = yield* Deferred.make<void>();
+      const awaitSibling = Effect.gen(function* () {
+        if (probe.inFlight === 2)
+          yield* Deferred.succeed(bothStarted, undefined);
+        yield* Deferred.await(bothStarted).pipe(
+          Effect.timeoutOrElse({
+            duration: '10 seconds',
+            orElse: () =>
+              Effect.die(
+                new Error('The parallel-safe calls did not run concurrently.'),
+              ),
+          }),
+        );
+      });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitSibling, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', awaitSibling, {
+            parallelSafe: true,
+          }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),
