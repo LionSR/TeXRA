@@ -36,10 +36,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { UsageLog } from '@shared/usageLog';
-import {
-  SetupCommandFailed,
-  type SetupPlatformShape,
-} from '@tools/setup/platform';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 import { PlatformConflict } from './errors.js';
@@ -68,46 +64,6 @@ export interface AgentPlatform {
    *  reads; `nodePlatform()` names the one under its `storageDir`. */
   readonly mcpConfigPath: string;
 }
-
-/**
- * What the package answers a setup tool with: nothing, loudly. It is
- * embedded in someone else's process, so it is the `sdk` host, none of the
- * three product hosts, and it has no sign-in flow of its own to start.
- * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
- * tools branch on a surface that is not there, and answering `signIn` with
- * `false` would report a sign-in that can never happen as one that merely
- * did not complete. Each member says so instead, the way the test kernel's
- * fake does — on read for the members a caller only ever calls, and as the
- * port's own typed failure for the command surface.
- * The same loud answer this package gave before it provided `SetupPlatform`
- * at all.
- */
-const NO_SETUP_PLATFORM =
-  'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
-
-const PACKAGE_SETUP: SetupPlatformShape = {
-  // The one member read before it is called: `unset_api_key` asks for the
-  // command surface to refresh the host's status views after a credential
-  // it already removed. A throwing getter would make that read a defect
-  // mid-tool, so the absence is the port's own typed failure instead, which
-  // the caller settles per command.
-  commands: {
-    invoke: (commandId) =>
-      Effect.fail(
-        new SetupCommandFailed({
-          reason: 'command-unavailable',
-          message: NO_SETUP_PLATFORM,
-          commandId,
-        }),
-      ),
-  },
-  // Optional on the shape: an embedder has no editor, so probes that read
-  // `extensions?.isInstalled` see the same absence a headless host reports.
-  extensions: undefined,
-  get terminal(): never {
-    throw new Error(NO_SETUP_PLATFORM);
-  },
-};
 
 /** One composition's hold on the composed process: what it reads, and the
  *  end of its claim on what it found or installed. */
@@ -223,7 +179,6 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     languageModel: platform.languageModel,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
     toolMissingReporter: platform.toolMissingHandler,
-    setup: PACKAGE_SETUP,
   };
   if (!processRuntime) {
     // The identity stays a pending read -- the package's composition root is

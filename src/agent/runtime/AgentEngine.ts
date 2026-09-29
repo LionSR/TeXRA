@@ -13,9 +13,9 @@ export class AgentEngine extends Context.Service<
   {
     readonly executeAgent: typeof executeAgent;
     readonly resumeToolUseFromResumeData: typeof resumeToolUseFromResumeData;
-    /** `resumeClaimedRun`, for the follow-up wake: a resumed run's own child
-     *  loop wakes its parent, so the wake must not import it either. */
-    readonly resumeClaimedRun: (
+    /** `resumeRun`, for the follow-up wake: a resumed run's own child loop
+     *  wakes its parent, so the wake must not import it either. */
+    readonly resumeRun: (
       runId: RunId,
       options: ResumeRunOptions,
     ) => Effect.Effect<ResumeRunResult, Error, ProcessServices>;

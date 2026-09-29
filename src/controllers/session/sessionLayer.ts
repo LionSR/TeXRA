@@ -43,7 +43,7 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import { resumeClaimedRun } from '@agent/runtime/resumeRun';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
@@ -1021,7 +1021,7 @@ interface ProcessRuntimeOptions {
    * discovery discovers nothing and binding an editor model fails.
    */
   readonly languageModel: LanguageModelPort;
-  readonly setup: SetupPlatformShape;
+  readonly setup?: SetupPlatformShape;
   /**
    * The host's inline-comment provider, for the one host with a Comments UI.
    * Absent elsewhere, where the tool is off the roster and a call that
@@ -1090,7 +1090,7 @@ export function installProcessRuntime({
   languageModel,
   agentDirectories,
   toolMissingReporter,
-  setup,
+  setup = {},
   inlineComments,
   toolAvailability = toolAvailabilityLayer,
   lean = directLeanLanguageServices(),
@@ -1123,7 +1123,7 @@ export function installProcessRuntime({
     Layer.succeed(AgentEngine)({
       executeAgent,
       resumeToolUseFromResumeData,
-      resumeClaimedRun,
+      resumeRun,
     }),
     inlineComments === undefined
       ? Layer.empty

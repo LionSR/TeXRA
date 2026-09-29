@@ -480,7 +480,7 @@ describe('headless delegation', () => {
           catch: ensureError,
         }),
       // No wake in these cases resumes a run.
-      resumeClaimedRun: () => Effect.succeed({ failed: 'not_resumable' }),
+      resumeRun: () => Effect.succeed({ failed: 'not_resumable' }),
     };
     mocks.getVisibleAgents.mockReturnValue(
       Effect.succeed([

@@ -404,6 +404,22 @@ the unchecked lists grow; it is not scheduled.
 
 ## Move 2: plugins are typed Layers at the existing lifetimes
 
+**Status (re-checked 2026-09-28 against `4b521aa462`).** Mostly landed; the
+text below is the plan as reviewed. On `main`: `PLUGIN_PROCESS_LAYERS`
+(GitHub only, its drain a step of the shutdown protocol), `PLUGIN_SESSION_LAYERS`
+(Codex and Claude registries; the WeakMaps are gone), `PLUGIN_PROMPT_SECTIONS`
+(`memory-workflow`), `PLUGIN_CONTINUATIONS`, and `PLUGIN_EVENT_ARMS` as typed
+`plugin.fact` arms (goal), with `GitHubSubscriptions`, `CodexThreads` and
+`ClaudeAgentSessions` out of `ProcessServices` (`PluginServices`); the goal
+grant is core approval state (#13420). `PACKAGE_SETUP` is deleted with this
+note: `setup` defaults to `{}` and the package composes none. The plugin-note,
+one-run-program and ledger amendments are recorded in the ledger entry
+"Plugins own typed tables at their seams". Not moved, with the reasons in that
+entry: `run.fact` todos and plan (core loop state, not one plugin's), inquiry
+and workflow-checkpoint rows (core aggregate kinds), the `documents` fold slice
+(PR 5's `RunView` half). Deferred: the SDK's plugin set
+(`TexraProcessOptions.plugins`) waits on move 4, and PR 7 needs owner decisions.
+
 ### Current state
 
 `PLUGIN_LAYERS` is empty by design and `PluginLayer` is `Layer<never>`
@@ -787,7 +803,45 @@ hits in 5 files.
 - `ProcessLayer` as a whole waits until a PR shows it deletes more than it
   adds.
 
-### Current state
+### Re-check against main (2026-09-28)
+
+Most of the shrunk move had already landed or does not pay.
+
+- **Host identity is done.** It is `WorkspaceRoots.host` with an `sdk` member;
+  `SetupPlatform.host`, `installedHost` in production, `initProcessSettingHost`
+  and `processToolHost` no longer exist.
+- **The SDK already has the bound transport** (`modelBinding` hands every model
+  `longRunningModelFetch`) and runs the first-install seed itself. The rest of
+  `bootstrapHost` is a global dispatcher an embedder must not set, account
+  probes the SDK deliberately answers signed-out, and bundled skills it has no
+  resources for. Routing the SDK through it would add three switches to save
+  one call.
+- **Process fibers**: the reprobe and the app-signal listeners are already
+  `forkScoped`; the extension's welcome and the desktop's unopened-projects
+  dialog were the startup-time `forkDetach` calls and moved onto the
+  activation and process scopes. The watcher fibers are owned by their VS Code
+  disposables and stay. Two desktop `forkDetach` calls remain on purpose, each
+  started by one user action: the setup run in `desktopOnboardingIpc.ts`
+  (it outlives the card action, and its run stops when the sessions close at
+  shutdown) and the browser sign-in attempt in `desktopSupabaseAuth.ts`.
+  Moving them onto `processScope` means threading that scope, which only the
+  startup program holds, through both factories' options for a fiber the
+  process exit ends anyway. The per-command `forkDetach` calls under
+  `packages/extension/src/commands` and `frontend` are the same class.
+- **`AppSignals` finalizer: not done.** The desktop and CLI secret stores emit
+  inside `Effect.ensuring`, so they could take a hub from the context. The
+  other emitters cannot: the VS Code callbacks and command handlers in
+  `extension.ts` and the settings view, and the plain synchronous code in
+  `src/tools` (`AcceptRunFilesTool`, `ApplyTeamTool`, `PollingSourceBase`,
+  `RunSubscriptionRegistry`) and `desktopProgressFileActions.ts` hold no
+  Effect context, and `emitAppSignal` stays synchronous for them. A service
+  hub would sit beside the module reference for those callers, not replace
+  it, and the hub holds nothing once its subscribers are interrupted.
+- **Owner-id nonce: deferred.** The second-graph guard stays, so nothing
+  consumes the nonce yet. Adding it now would also strand a disposed graph's
+  leases as `alive` in a live process, where today the same id reclaims them.
+
+### State at plan time (superseded where the re-check above says so)
 
 Five composition roots install the process runtime (extension, desktop, CLI
 `cliProcessRuntime.ts`, the SDK, and the test harness that 79 suites import).

@@ -782,19 +782,19 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       vscode.commands.executeCommand('setContext', 'texra.activated', true),
     catch: ensureError,
   });
-
   const welcomeKey = 'texra.welcomeShown';
   if (!(yield* globalState.get<boolean>(welcomeKey))) {
-    // Land first-run users on the welcome card in the TeXRA panel: the one
-    // onboarding surface that opens by itself. It links the walkthrough.
-    // A failure leaves the flag unset, so the welcome shows again next time.
-    yield* Effect.forkDetach(
+    // First-run welcome card; a failure leaves the flag unset, so it repeats.
+    yield* Effect.forkScoped(
       fromHost('texra.showMainView', () =>
         vscode.commands.executeCommand('texra.showMainView'),
       ).pipe(
         Effect.andThen(globalState.update(welcomeKey, true)),
+        // Scope close interrupts this fiber; that is not a failed welcome.
         Effect.catchCause((cause) =>
-          Effect.logWarning('Welcome failed', cause),
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning('Welcome failed', cause),
         ),
         withLogChannel(EXTENSION_CHANNEL),
       ),

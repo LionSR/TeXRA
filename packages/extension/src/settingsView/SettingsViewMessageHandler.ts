@@ -38,10 +38,6 @@ import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import {
-  getProgressRunLabel,
-  revealProgressRun,
-} from '@progressView/progressNavigation';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
@@ -112,7 +108,7 @@ export class SettingsViewMessageHandler {
     private readonly session: SessionHandle,
     private readonly progressView: Pick<
       ProgressViewProvider,
-      'refreshCatalogs' | 'refreshApiKeyStatus'
+      'refreshCatalogs' | 'refreshApiKeyStatus' | 'revealRun' | 'runLabel'
     >,
   ) {
     this.body = createSettingsViewBody({
@@ -179,8 +175,8 @@ export class SettingsViewMessageHandler {
           Effect.asVoid(
             signInWithSubscription(session.roots, this.channel, providerId),
           ),
-        revealRun: revealProgressRun,
-        runLabel: getProgressRunLabel,
+        revealRun: (runId) => progressView.revealRun(runId),
+        runLabel: (runId) => progressView.runLabel(runId),
         // The status-bar tooltip paints the approval policy outside this
         // view's round-trip, so it follows the policy on its own signal.
         stateSettingApplied: (key) => {

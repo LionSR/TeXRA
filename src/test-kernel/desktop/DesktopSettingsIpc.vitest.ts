@@ -123,7 +123,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   liveScopes.push(scope);
   const settings = testRuntime().runSync(
     createDesktopSettingsIpc({
-      runtime: testRuntime(),
+      spawn: (program) => {
+        testRuntime().runFork(program);
+      },
       bindings: createStubSettingsBindings({
         post: (message) =>
           Effect.flatMap(message, (built) =>

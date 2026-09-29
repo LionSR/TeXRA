@@ -78,7 +78,11 @@ export function createExtensionCommandActions(
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signOut: () => authSignOut,
     runSetupAssistant: () =>
-      Effect.asVoid(launchSetupAssistant(secrets, session)),
+      Effect.asVoid(
+        launchSetupAssistant(secrets, session, (runId) =>
+          progressViewProvider.presentLaunchedRun(runId),
+        ),
+      ),
     openGettingStarted: () =>
       fromPromise(() => sysOpenGettingStarted(context.extension.id)),
     createSampleProject: () =>
@@ -108,7 +112,9 @@ export function createExtensionCommandActions(
     execute: (input) =>
       input === undefined
         ? progressViewProvider.submit()
-        : agentRunExecuteCommand(input, session),
+        : agentRunExecuteCommand(input, session, (runId) =>
+            progressViewProvider.presentLaunchedRun(runId),
+          ),
   };
 }
 

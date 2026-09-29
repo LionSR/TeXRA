@@ -19,9 +19,8 @@ import {
 import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { agentName } from '@shared/schemas';
+import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
@@ -209,6 +208,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
   session: SessionHandle,
+  onRunResolved: (runId: RunId) => void,
 ) {
   return Effect.gen(function* () {
     // Every setup entry point funnels through here (command, status pill,
@@ -293,7 +293,7 @@ export function launchSetupAssistant(
       { config },
       {
         session,
-        onRunResolved: presentLaunchedProgressRun,
+        onRunResolved,
       },
     );
 
