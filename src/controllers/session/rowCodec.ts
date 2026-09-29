@@ -133,11 +133,11 @@ export function prepareEventDraft(input: SessionEventDraft): {
 
 export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   const { type, aggregateId: _key, ...payload } = draft;
-  const kind = ROW_KINDS[type];
-  if (kind.blob === undefined || draft.type !== 'context.blob') {
+  const { version } = ROW_KINDS[type];
+  if (draft.type !== 'context.blob') {
     return {
       type,
-      version: kind.version,
+      version,
       data: JSON.stringify(payload),
       blob: null,
     };
@@ -152,7 +152,7 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   }
   return {
     type,
-    version: kind.version,
+    version,
     data: JSON.stringify({ ...payload, payload: { digest } }),
     blob: { digest, value: canonical },
   };
@@ -216,8 +216,8 @@ export function decodeRow(
   try {
     data = JsonObjectSchema.parse(JSON.parse(row.data));
     for (const step of kind.upcast.slice(stored - 1)) data = { ...step(data) };
-    if (kind.blob !== undefined) {
-      const field = JsonObjectSchema.parse(data[kind.blob]);
+    if (row.type === 'context.blob') {
+      const field = JsonObjectSchema.parse(data.payload);
       // The value is stored canonical, so its text hashes to its address.
       if (
         row.blobValue === null ||
@@ -227,7 +227,7 @@ export function decodeRow(
         return blocked('corrupt');
       data = {
         ...data,
-        [kind.blob]: { ...field, value: JSON.parse(row.blobValue) },
+        payload: { ...field, value: JSON.parse(row.blobValue) },
       };
     }
   } catch {

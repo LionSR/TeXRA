@@ -1,10 +1,9 @@
 /**
  * The session store's aside copies: the file-level moves that keep a copy
- * of a store beside it (a pre-1.0 store retired to `.pre1`, a schema
- * stepped forward from `.schema<N>`, a damaged file moved to
- * `.corrupt-<stamp>`), each at a name no earlier copy holds and removed
- * after 30 days, and the test of whether a failed open is SQLite reporting
- * the file damaged.
+ * of a store beside it (a pre-1.0 store retired to `.pre1`, a damaged file
+ * moved to `.corrupt-<stamp>`), each at a name no earlier copy holds and
+ * removed after 30 days, and the test of whether a failed open is SQLite
+ * reporting the file damaged.
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
@@ -89,7 +88,7 @@ export const underCopy = Effect.fnUntraced(function* <E>(
 /** An aside copy beside the store: its kind, the stamp a `.corrupt-` copy
  *  is dated by (a rename keeps the damaged file's mtime), the `.<n>` of a
  *  taken name, and a moved WAL or shared-memory file. */
-const ASIDE = /^\.(?:pre1|schema\d+|corrupt-(\d+))(?:\.\d+)?(?:-wal|-shm)?$/;
+const ASIDE = /^\.(?:pre1|corrupt-(\d+))(?:\.\d+)?(?:-wal|-shm)?$/;
 const ASIDE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Remove the aside copies beside the store at `filename` that are over 30

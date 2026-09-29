@@ -137,15 +137,6 @@ const ADDITIVE = [
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
 ];
 
-/** The forward-only steps between `SCHEMA_VERSION`s, each run under the
- *  write lock after a copy is kept (`foreignKeysOff` for a table rebuild).
- *  None yet: 100 is the first. */
-const STEPS: readonly {
-  readonly from: number;
-  readonly foreignKeysOff: boolean;
-  readonly statements: readonly string[];
-}[] = [];
-
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
   pragma: string,
@@ -248,7 +239,6 @@ const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
  *   fresh: nothing in it is kept, current values included.
  * - An empty file gets the schema, under the write lock; of two processes
  *   creating at once, the second finds it stamped and does nothing.
- * - An older 1.0 schema is copied to `<file>.schema<N>` and stepped forward.
  */
 const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,
@@ -309,32 +299,8 @@ const prepareStore = Effect.fnUntraced(function* (
       movedAside = { path, aside, reason: 'pre-1.0' };
       continue;
     }
-    const steps = STEPS.filter((step) => step.from >= stored);
-    const foreignKeysOff = steps.some((step) => step.foreignKeysOff);
-    if (foreignKeysOff) yield* run(sql, 'PRAGMA foreign_keys = OFF');
-    yield* underCopy(
-      sql,
-      `${filename}.schema${stored}`,
-      Effect.gen(function* () {
-        for (const step of steps)
-          for (const statement of step.statements) yield* run(sql, statement);
-        const violation = (yield* sql.unsafe('PRAGMA foreign_key_check', []))
-          .length;
-        if (violation > 0)
-          return yield* Effect.fail(
-            new Error(
-              `Upgrading ${path} from schema ${stored} left ${violation} foreign-key violations; nothing was changed.`,
-            ),
-          );
-        yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }),
-    ).pipe(
-      Effect.ensuring(
-        foreignKeysOff
-          ? run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore)
-          : Effect.void,
-      ),
-    );
+    // 100 is the first schema: anything above it is a newer build's.
+    return yield* newerStore(path, stored);
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
   if (mode === 'persistent') {

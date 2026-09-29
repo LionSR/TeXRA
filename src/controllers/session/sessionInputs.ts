@@ -12,7 +12,7 @@ import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  blockedRunStart,
+  AgentCategory,
   DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
@@ -265,15 +265,30 @@ export const sessionInputsLayer = Layer.effect(
 
 /**
  * The fold inputs of blocked verdicts. A run whose own `run.start` is the
- * unreadable row has no row that creates it: it is listed from its
- * verdict's envelope (`blockedRunStart`), with nothing else known, so it
+ * unreadable row has no row that creates it: it is listed from a
+ * `run.start` on its verdict's envelope, with no identity but its id, so it
  * shows as blocked instead of vanishing.
  */
 function blockedInputs(verdicts: readonly BlockedAggregate[]): FoldInput[] {
   return verdicts.flatMap((verdict): FoldInput[] =>
     verdict.type === 'run.start'
       ? [
-          { _tag: 'event', read: 'listing', event: blockedRunStart(verdict) },
+          {
+            _tag: 'event',
+            read: 'listing',
+            event: {
+              type: 'run.start',
+              aggregateId: verdict.aggregateId,
+              seq: 1,
+              commit: verdict.commit,
+              origin: null,
+              at: verdict.at,
+              identity: { kind: 'agent', agent: 'unknown' },
+              userFollowUpSupport: 'unsupported',
+              category: AgentCategory.ToolUse,
+              parent: null,
+            },
+          },
           verdict,
         ]
       : [verdict],
