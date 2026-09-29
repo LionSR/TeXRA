@@ -96,15 +96,18 @@ const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
  * The package labels every non-HTTP, non-parse failure `transport`, including
  * local ones (a stale persistent socket, a bug in stream handling). Only a
  * failure whose cause chain shows the network itself (a code in
- * `NETWORK_ERROR_CODES`, an SDK connection or timeout class, a bare `fetch
- * failed`) is evidence about the shared route; the rest is the caller's own
- * to retry.
+ * `NETWORK_ERROR_CODES`, an undici `UND_ERR_INFO` timeout, an SDK connection
+ * or timeout class, a bare `fetch failed`) is evidence about the shared route;
+ * the rest is the caller's own to retry.
  */
 function hasNetworkEvidence(error: ModelError): boolean {
   return causeChain(error.cause).some((link) => {
     const { code, message } = link as { code?: unknown; message?: unknown };
     return (
       (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) ||
+      (code === 'UND_ERR_INFO' &&
+        typeof message === 'string' &&
+        /\b(?:stream )?timeout\b/i.test(message)) ||
       (typeof message === 'string' &&
         /^(?:fetch failed|failed to fetch)$/i.test(message.trim())) ||
       getErrorClassNames(link).some((name) =>
