@@ -75,13 +75,12 @@ const DOCTOR_ARGS = {
   'prune-storage': {
     type: 'boolean',
     description:
-      'List the workspace stores whose project is gone, and delete them once confirmed',
+      'List the workspace stores whose project is gone and old aside copies of history, and delete them once confirmed',
   },
   yes: {
     type: 'boolean',
     alias: 'y',
-    description:
-      'Delete the listed stores without asking (with --prune-storage)',
+    description: 'Delete what --prune-storage lists without asking',
   },
 } as const;
 

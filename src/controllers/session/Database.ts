@@ -682,10 +682,10 @@ export const databaseLayer = (
           );
         }
       });
-      /** A read of the projections, in one read transaction with the check
-       *  that they are current: another build's rebuild between the two
-       *  would otherwise hand it a half-built projection. One that is not
-       *  current catches up and the read runs again. */
+      /** A read of the projections, in the same read transaction as the
+       *  check that they are current, so another build's rebuild can never
+       *  hand it a half-built projection. When one is not current, it
+       *  catches up and the read runs again. */
       const projected = <A, E>(read: Effect.Effect<A, E>) =>
         Effect.gen(function* () {
           for (;;) {

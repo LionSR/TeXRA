@@ -85,29 +85,48 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   return moved;
 });
 
-/** An aside copy beside the store: its kind, the stamp a `.corrupt-` copy
- *  is dated by (a rename keeps the damaged file's mtime), the `.<n>` of a
- *  taken name, and a moved WAL or shared-memory file. */
-const ASIDE = /^\.(?:pre1|corrupt-(\d+))(?:\.\d+)?(?:-wal|-shm)?$/;
+/** An aside copy beside the store: its kind (a pre-1.0 build's `.format<N>`
+ *  among them), the stamp a `.corrupt-` copy is dated by (a rename keeps the
+ *  damaged file's mtime), the `.<n>` of a taken name, and a moved WAL or
+ *  shared-memory file. */
+const ASIDE = /^\.(?:(format\d+)|pre1|corrupt-(\d+))(?:\.\d+)?(?:-wal|-shm)?$/;
 const ASIDE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Remove the aside copies beside the store at `filename` that are over 30
- *  days old, logging each path and size (the storage design's §7). */
-export const removeOldAsides = Effect.fnUntraced(function* (filename: string) {
+/**
+ * The old aside copies beside the store at `filename`, with their sizes:
+ * this build's over 30 days old, and every pre-1.0 build's `.format<N>`
+ * history copy (`legacy`), which no build reads and which only
+ * `texra doctor --prune-storage` removes, once the user confirms (owner
+ * ruling Q4).
+ */
+export const oldAsides = Effect.fnUntraced(function* (filename: string) {
   const fs = yield* FileSystem.FileSystem;
   const now = yield* Clock.currentTimeMillis;
+  const old: { path: string; bytes: number; legacy: boolean }[] = [];
   for (const name of yield* fs.readDirectory(dirname(filename))) {
     const match = ASIDE.exec(name.slice(basename(filename).length));
     if (!name.startsWith(basename(filename)) || match === null) continue;
     const path = join(dirname(filename), name);
     const info = yield* fs.stat(path);
-    const at = match[1]
-      ? Number(match[1])
+    const at = match[2]
+      ? Number(match[2])
       : Option.getOrElse(info.mtime, () => new Date(now)).getTime();
-    if (now - at <= ASIDE_RETENTION_MS) continue;
+    if (match[1] || now - at > ASIDE_RETENTION_MS)
+      old.push({ path, bytes: Number(info.size), legacy: !!match[1] });
+  }
+  return old;
+});
+
+/** Remove the aside copies this build writes (`.pre1`, `.corrupt-`) beside
+ *  the store at `filename` once over 30 days old, logging each path and size
+ *  (the storage design's §7). */
+export const removeOldAsides = Effect.fnUntraced(function* (filename: string) {
+  const fs = yield* FileSystem.FileSystem;
+  for (const { path, bytes, legacy } of yield* oldAsides(filename)) {
+    if (legacy) continue;
     yield* fs.remove(path, { force: true });
     yield* Effect.logInfo(
-      `Removed ${path} (${info.size} bytes), an aside copy of the session store over 30 days old.`,
+      `Removed ${path} (${bytes} bytes), an aside copy of the session store over 30 days old.`,
     ).pipe(withLogChannel('sessionDatabase'));
   }
 });
