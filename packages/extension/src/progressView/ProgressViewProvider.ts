@@ -4,14 +4,12 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 import {
-  Cause,
   Data,
   Effect,
   Exit,
   Fiber,
   FileSystem,
   Scope,
-  Stream,
   SubscriptionRef,
 } from 'effect';
 
@@ -42,6 +40,7 @@ import {
   type HostSnapshotSource,
 } from '@controllers/session/hostSnapshotSource';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
+import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -302,29 +301,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         session,
       ),
     });
-    // A workflow run's `run.end` is the completion chime, one per process
-    // (PRD 12.4), never a renderer transition hook that every subscriber
-    // would replay. A failed run does not chime.
-    const sessionEvents = this.runtime.runFork(
-      Stream.runForEach(session.events.all(session.now()), (event) =>
-        this.toolEditApprovals.handleSessionEvent(event).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              if (
-                event.type === 'run.end' &&
-                event.output.category === 'workflow' &&
-                event.outcome !== 'failed'
-              )
-                this.chime();
-            }),
-          ),
-        ),
-      ),
-    );
     const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
-      dispose: () =>
-        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention])),
+      dispose: () => this.runtime.runFork(Fiber.interrupt(attention)),
     });
 
     const hostRequests = createExtensionHostRequests({
@@ -348,9 +327,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // Attached for the window's life, before the first run of this window
     // asks anything. Requests this host does not present (bash, plan,
     // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them.
-    const detachHostInteractions = this.runtime.runSync(
-      session.interactions.use({
+    // request row decides them. A workflow run's `run.end` is the completion
+    // chime, one per process (PRD 12.4), never a renderer transition hook
+    // that every subscriber would replay. A failed run does not chime.
+    const hostScope = this.runtime.runSync(Scope.make());
+    this.runtime.runSync(
+      attachSessionHost(session, this.toolEditApprovals, {
         ...createAgentPresentationHost(
           this,
           globalState,
@@ -380,38 +362,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 cause,
               }),
           }),
-        // Staging is the host's half of a `request.opened`; the fold lists the
-        // request either way, so a staging failure is reported, never swallowed.
-        presentToolEdit: (request) =>
-          this.runtime.runFork(
-            this.toolEditApprovals
-              .present(request)
-              .pipe(
-                Effect.catchCause((cause) =>
-                  Effect.logError('Tool edit preview staging failed').pipe(
-                    Effect.annotateLogs({ data: Cause.squash(cause) }),
-                    withLogChannel(CHANNEL),
-                  ),
-                ),
-              ),
-          ),
-        // An open that never committed leaves the staged preview with no
-        // decision to release it; this is that release, composed into the
-        // session's own program rather than run here: closing the diff view
-        // and deleting the temp files behind it is asynchronous, and the
-        // refusal is not reported until it is done. The controller's programs
-        // take this window's services from the runtime's context, which the
-        // session that composes them does not carry.
-        releaseToolEdit: (requestId) =>
-          Effect.flatMap(this.runtime.contextEffect, (context) =>
-            Effect.provideContext(
-              this.toolEditApprovals.release(requestId),
-              context,
-            ),
-          ),
-      }),
+        onEvent: (event) =>
+          Effect.sync(() => {
+            if (
+              event.type === 'run.end' &&
+              event.output.category === 'workflow' &&
+              event.outcome !== 'failed'
+            )
+              this.chime();
+          }),
+      }).pipe(Scope.provide(hostScope)),
     );
-    this.disposables.push({ dispose: detachHostInteractions });
+    this.disposables.push({
+      dispose: () => this.runtime.runFork(Scope.close(hostScope, Exit.void)),
+    });
 
     this.watchWorkspace();
   }

@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Cause, Effect, Scope, Stream } from 'effect';
+import { Effect, Scope } from 'effect';
 
 import {
   type RunEndResult,
@@ -20,7 +20,7 @@ import {
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { withLogChannel } from '@logger/effectLog';
+import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import {
   type ProcessRuntime,
   withProcessServices,
@@ -42,8 +42,6 @@ import {
 } from './desktopAgentLaunch.js';
 import { desktopSpawner } from './desktopWindows.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-
-const CHANNEL = 'DesktopAgentRun';
 
 export interface DesktopAgentRunOptions {
   host: DesktopAgentRunHost;
@@ -138,7 +136,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     // (`request.opened` folds into the view), and a surface's `request.decide`
     // settles it there; the staged preview is discarded when the request
     // resolves, whichever way.
-    const spawn = desktopSpawner(runtime, yield* Scope.Scope);
+    const scope = yield* Scope.Scope;
+    const spawn = desktopSpawner(runtime, scope);
     const toolEditApprovals = new ToolEditApprovalController({
       host: new DesktopToolEditApprovalHost({
         ui: {
@@ -162,64 +161,15 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         ),
       ),
     );
-    // Total: a failed event read is logged, not left to end this fiber
-    // silently with every staged preview waiting on a `request.decided`.
-    yield* Effect.forkScoped(
-      withProcessServices(
-        runtime,
-        Stream.runForEach(session.events.all(session.now()), (event) =>
-          toolEditApprovals.handleSessionEvent(event),
-        ),
-      ).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : Effect.logWarning(
-                'The tool-edit follower stopped; staged previews are released only on window close',
-              ).pipe(
-                Effect.annotateLogs({ data: Cause.squash(cause) }),
-                withLogChannel(CHANNEL),
-              ),
-        ),
-      ),
-      { startImmediately: true },
-    );
     // Attached for the window's life, before the first run of this window
     // asks anything. This host presents only the tool-edit preview; every
     // other request (bash, plan, proposal, retry, question) is listed by the
     // fold and answered by a surface's `request.decide`.
-    yield* Effect.acquireRelease(
-      session.interactions.use({
+    yield* withProcessServices(
+      runtime,
+      attachSessionHost(session, toolEditApprovals, {
         emit: handlePresentationEvent,
-        // Staging runs on a fiber of this window's runtime: the session hands
-        // the request over and does not wait, and a staging failure is logged
-        // here rather than left to a fiber nobody reads.
-        presentToolEdit: (request) => {
-          spawn(
-            toolEditApprovals
-              .present(request)
-              .pipe(
-                Effect.catchCause((cause) =>
-                  Effect.logWarning(
-                    'Failed to stage the tool-edit preview',
-                  ).pipe(
-                    Effect.annotateLogs({ data: Cause.squash(cause) }),
-                    withLogChannel(CHANNEL),
-                  ),
-                ),
-              ),
-          );
-        },
-        // An open that never committed leaves the staged preview with no
-        // decision to release it; this is that release, composed rather than
-        // run so the session's own fiber waits for the diff view and the temp
-        // files behind it to go. The controller's programs take this window's
-        // services from the runtime's context, which the session that composes
-        // them does not carry.
-        releaseToolEdit: (requestId) =>
-          withProcessServices(runtime, toolEditApprovals.release(requestId)),
-      }),
-      (detach) => Effect.sync(detach),
+      }).pipe(Scope.provide(scope)),
     );
 
     /**
