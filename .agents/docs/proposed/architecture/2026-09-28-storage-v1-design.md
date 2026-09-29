@@ -156,11 +156,13 @@ Both changes narrow the ratchets; neither widens one.
   both.
 - **Large strings live outside the row, compressed, once per store.** The
   codec replaces every payload string of 4096 characters or more, at any
-  depth, with `{"$b": "<sha256 of the string>"}` and stores the string
-  once in `blob` as zstd level 3 (Node's built-in `zlib.zstdCompressSync`),
-  keyed by the sha256 of its uncompressed text. A payload's own key of the
-  form `$b`, `$$b`, … gains one `$` when stored and loses it when read, so
-  a stored `$b` is always a reference and round-trips are exact.
+  depth, with `{"$b": "<digest>"}` and stores the string once in `blob`:
+  its JSON encoding (`JSON.stringify`, which escapes a lone surrogate that
+  UTF-8 would turn into U+FFFD), zstd level 3 (Node's built-in
+  `zlib.zstdCompressSync`), keyed by the sha256 of that encoding. A
+  payload's own key of the form `$b`, `$$b`, … gains one `$` when stored
+  and loses it when read, so a stored `$b` is always a reference and
+  round-trips are exact.
   - Every event read selects a row's blobs with it, a correlated
     `group_concat` over `event_blob` (digest and `hex(value)`), so decoding
     stays one synchronous call per row. The codec decompresses each
@@ -205,8 +207,8 @@ CREATE TABLE event_sequence (
 ) STRICT;
 
 CREATE TABLE blob (
-  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the uncompressed string
-  value  BLOB NOT NULL                                  -- zstd level 3 of the string
+  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the string's JSON encoding
+  value  BLOB NOT NULL                                  -- zstd level 3 of that encoding
 ) STRICT;
 
 CREATE TABLE event (

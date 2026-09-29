@@ -12,11 +12,11 @@
  *   with the current arm; a higher one, or a kind this build lacks, is
  *   `Blocked`; a known version that fails its schema is `Corrupt`. A
  *   plugin value carries its arm's version and is upcast through the arm.
- * - **Blobs.** A payload string of 4096 characters or more is stored once
- *   per store, zstd-compressed in `blob` under the sha256 of its text; the
- *   row keeps `{"$b": digest}` (a payload's own `$b` key is stored `$$b`),
- *   and the read inflates it, digest verified. A `context.blob` row's value
- *   is stored as its canonical JSON text.
+ * - **Blobs.** A payload string of 4096+ characters is stored once per store,
+ *   zstd of its JSON encoding (lone surrogates survive) under that text's
+ *   sha256; the row keeps `{"$b": digest}` (a payload's own `$b` key is
+ *   stored `$$b`), and the read inflates it, digest verified. A
+ *   `context.blob` row's value is stored as its canonical JSON text.
  * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
  *   `logical_id`, and composed back from them here.
  */
@@ -45,7 +45,7 @@ import type { SqlError } from 'effect/unstable/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
 
-// zstd arrived in Node 22.15 (the CLI needs 22.19; Electron and VS Code ship 24).
+// zstd: Node 22.15+ (the CLI needs 22.19; Electron and VS Code ship 24).
 if (typeof zstdCompressSync !== 'function')
   throw new Error('The session store needs zstd: Node 22.19 or later.');
 
@@ -170,8 +170,9 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
   // The replacer sees each value (after `toJSON`) before its children.
   const data = JSON.stringify(stored, (_key, value: unknown) => {
     if (typeof value === 'string' && value.length >= 4096) {
-      const digest = sha256(value);
-      blobs.set(digest, value);
+      const json = JSON.stringify(value);
+      const digest = sha256(json);
+      blobs.set(digest, json);
       return { $b: digest };
     }
     return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -233,11 +234,10 @@ function parseData({ data, blobs }: z.infer<typeof RowSchema>): unknown {
       return value;
     if (!('$b' in value)) return renameRefShaped(value, (key) => key.slice(1));
     const digest = String(value.$b);
-    const text = zstdDecompressSync(
-      Buffer.from(hex.get(digest) ?? '', 'hex'),
-    ).toString('utf8');
+    const zst = Buffer.from(hex.get(digest) ?? '', 'hex');
+    const text = zstdDecompressSync(zst).toString('utf8');
     if (sha256(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
-    return text;
+    return z.string().parse(JSON.parse(text));
   });
 }
 

@@ -2200,18 +2200,19 @@ describe('the C1 event table and the C6 publisher', () => {
 
   /**
    * Outlined strings (the design's §2). Failure modes: a string of 4 KB or
-   * more reads back changed, or its object's key order does; a payload's own
-   * `$b` or `$$b` key reads as a reference or loses a `$`; the same string is
-   * stored once per row, not once per store; a damaged blob reads as text
-   * instead of blocking its aggregate; deleting a run collects a blob another
-   * run still references, or keeps one nobody does.
+   * more reads back changed (a lone surrogate among them), or its object's
+   * key order does; a payload's own `$b` or `$$b` key reads as a reference or
+   * loses a `$`; the same string is stored once per row, not once per store;
+   * a damaged blob reads as text instead of blocking its aggregate; deleting
+   * a run collects a blob another run still references, or keeps one nobody
+   * does.
    */
   it.effect(
     'stores a large string once, compressed, and reads it exact',
     () => {
       const storage = workspace();
       const shared = `${'\\frac{a}{b} — ünïcode\n'.repeat(300)}end`;
-      const solo = 'y'.repeat(4096);
+      const solo = `\uD800${'y'.repeat(4096)}`;
       const script = (
         id: string,
         run: RunId,
