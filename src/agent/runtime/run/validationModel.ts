@@ -23,7 +23,6 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { Effect, Stream } from 'effect';
-import { envVar } from '@utils/system/envFlags';
 import {
   originOf,
   type Model,
@@ -32,6 +31,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm/turn';
+import { envVar } from '@utils/system/envFlags';
 import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
