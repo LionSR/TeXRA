@@ -458,10 +458,8 @@ export function logPayloadRow(
     // ── No row ──────────────────────────────────────────────────────────
     // A compaction lifecycle row is not a row of its own: the correlated
     // block the fold projects from several of them is, via
-    // `compactionActivityRow`. `internal` is a durable marker nothing
-    // renders.
+    // `compactionActivityRow`.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
-    case MESSAGE_TYPES.INTERNAL:
       return undefined;
 
     default:

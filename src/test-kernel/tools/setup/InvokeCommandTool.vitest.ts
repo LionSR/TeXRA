@@ -100,7 +100,6 @@ describe('InvokeCommandTool allowlist', () => {
         'editor.action.deleteAllLines',
         'workbench.action.terminal.sendSequence',
         'texra.refreshApiKeyStatus',
-        'texra.refreshAllOptions',
       ]) {
         const result = yield* invoke(tool, { command });
         assert.equal(result.status, 'error');

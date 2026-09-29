@@ -24,7 +24,7 @@ there is a single runtime implementation behind both.
                           │  • logSdkError / logProgressStatus     │
                           │  • logUserMessage                      │
                           │  • startToolUseCard / endToolUseCard   │
-                          │  • debugInternal / logInternal / …     │
+                          │  • logWebSearch / logFilesLoaded / …   │
                           └────────────────────┬───────────────────┘
                                                │  call
                                                ▼

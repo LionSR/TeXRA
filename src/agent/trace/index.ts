@@ -29,8 +29,6 @@ export {
   startCompactionActivity,
   logProgressStatus,
   logUserMessage,
-  logInternal,
-  debugInternal,
   logContextManagementEvent,
   logWebSearch,
   logFilesLoaded,

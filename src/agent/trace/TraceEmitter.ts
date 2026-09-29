@@ -91,7 +91,6 @@ export class TraceEmitter implements AgentTrace {
       message,
       data: options.data,
       messageType: options.messageType,
-      verbose: options.verbose,
       stageId: options.stageId,
     });
   }

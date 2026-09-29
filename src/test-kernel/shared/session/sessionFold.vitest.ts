@@ -1567,7 +1567,6 @@ describe('foldRunState', () => {
                 messages: [USER('summary')],
                 cause,
                 continuation: null,
-                continuationDropped: null,
                 usage: null,
               },
             }),
@@ -1603,19 +1602,16 @@ describe('foldRunState', () => {
             coveredItems: 2,
           },
         };
-        const compaction = (
-          continuationDropped: 'history-replaced' | null,
-        ) => ({
+        const compaction = {
           type: 'model.compaction',
           payload: {
             keepPrefix: 1,
             messages: [USER('summary')],
             cause: 'context-limit',
             continuation: null,
-            continuationDropped,
             usage: null,
           },
-        });
+        };
         // C6: the response row is the production source of the anchor, so the
         // cold fold a resume reads must restore it.
         const restored = stateOf(
@@ -1655,11 +1651,8 @@ describe('foldRunState', () => {
         // it: continuing from an anchor over a prefix that is gone is the
         // same window in the other direction.
         expect(
-          stateOf(
-            foldRunState(restored, [
-              ledgerRow(12, compaction('history-replaced')),
-            ]),
-          )?.continuation,
+          stateOf(foldRunState(restored, [ledgerRow(12, compaction)]))
+            ?.continuation,
         ).toBeNull();
       },
     ],

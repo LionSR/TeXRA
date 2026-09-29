@@ -28,7 +28,6 @@ import type { LanguageModel } from '@platform/languageModel';
 import {
   AGENT_SOURCE,
   AgentCategory,
-  MESSAGE_TYPES,
   DeclinableUsageRouteSchema,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
@@ -257,7 +256,6 @@ export const agentRunLayer = (
       if (workflow && snapshot === null && declared.length > 0) {
         logger.warn(
           `The workflow family advertises no tools under this release, so the tools this agent declares are not offered to the model: ${declared.join(', ')}. Run the agent in the tool-use family if it needs them.`,
-          { messageType: MESSAGE_TYPES.INTERNAL },
         );
       }
 

@@ -26,7 +26,11 @@
       "project": ["src/**/*.{ts,mts}!"]
     },
     "packages/cli": {
-      "entry": ["src/bin/texra.ts!", "scripts/**/*.{ts,tsx,mjs}!"],
+      "entry": [
+        "src/bin/texra.ts!",
+        "scripts/{build-bundle,copy-docs,copy-resources}.mjs!",
+        "scripts/**/*.{ts,tsx,mjs}"
+      ],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/desktop": {
@@ -35,7 +39,7 @@
         "src/main/index.ts!",
         "src/preload/index.ts!",
         "tests/**/*.{ts,tsx}",
-        "design-harness/**/*.{ts,mjs}!"
+        "design-harness/**/*.{ts,mjs}"
       ],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     }

@@ -49,7 +49,6 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
  */
 const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
   latexdiff: MESSAGE_TYPES.LATEXDIFF,
-  scratchpad: MESSAGE_TYPES.SCRATCHPAD,
   missingOutputs: MESSAGE_TYPES.MISSING_OUTPUTS,
   webSearch: MESSAGE_TYPES.WEB_SEARCH,
   contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
@@ -64,21 +63,12 @@ function appendLog(
   text: string,
   data: unknown,
   level: LogLevel = 'info',
-  verbose: boolean = d.ctx.debug,
 ): void {
   const decoded = decodeLogPayload(messageType, data);
   if ('issue' in decoded) {
     write(d, {
       kind: 'log',
-      base: open(
-        d,
-        d.stampId,
-        groupId,
-        MESSAGE_TYPES.ERROR,
-        true,
-        'error',
-        verbose,
-      ),
+      base: open(d, d.stampId, groupId, MESSAGE_TYPES.ERROR, true, 'error'),
       text: `Malformed ${messageType} payload`,
       payload: {
         messageType: MESSAGE_TYPES.ERROR,
@@ -87,7 +77,7 @@ function appendLog(
     });
     return;
   }
-  const base = open(d, d.stampId, groupId, messageType, true, level, verbose);
+  const base = open(d, d.stampId, groupId, messageType, true, level);
   const { payload } = decoded;
   switch (payload.messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
@@ -119,20 +109,14 @@ export function recordLogRow(
 ): void {
   switch (event.type) {
     case 'log': {
-      const messageType = asMessageType(event.messageType);
-      if (
-        messageType === MESSAGE_TYPES.INTERNAL ||
-        (event.level === 'debug' && !d.ctx.debug)
-      )
-        return;
+      if (event.level === 'debug' && !d.ctx.debug) return;
       appendLog(
         d,
         event.stageId,
-        messageType,
+        asMessageType(event.messageType),
         event.message,
         event.data,
         event.level,
-        event.verbose,
       );
       return;
     }
@@ -156,19 +140,6 @@ export function recordLogRow(
     }
 
     case 'domain': {
-      // A retry lifecycle is a durable marker nothing renders.
-      if (event.key === 'modelRetryLifecycle') {
-        appendLog(
-          d,
-          event.stageId,
-          MESSAGE_TYPES.INTERNAL,
-          '',
-          event.data,
-          'info',
-          false,
-        );
-        return;
-      }
       if (event.key === 'filesLoaded') {
         const payload = isObject(event.data) ? event.data : {};
         appendLog(

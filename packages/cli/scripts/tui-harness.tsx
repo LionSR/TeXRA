@@ -616,7 +616,6 @@ interface HarnessLogRow {
   readonly text?: string;
   readonly data?: unknown;
   readonly groupId?: string;
-  readonly verbose?: boolean;
 }
 
 /** Publish complete fixture rows on the event plane. */
@@ -631,7 +630,6 @@ function seedRows(runId: RunId, entries: readonly HarnessLogRow[]): void {
       messageType: entry.messageType,
       data: entry.data,
       stageId: entry.groupId,
-      verbose: entry.verbose,
     })),
   );
 }

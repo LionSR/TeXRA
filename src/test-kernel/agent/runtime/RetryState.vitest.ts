@@ -1082,7 +1082,6 @@ describe('ModelInvoker retry', () => {
                   coveredItems: 1,
                 },
               },
-              continuationDropped: null,
               usage: null,
             },
           },

@@ -141,7 +141,7 @@ describe('compaction activity projection', () => {
     const projection = projectCompactionActivities([
       advancingEntry(1),
       activityEntry(2, 'live', 'started'),
-      advancingEntry(3, MESSAGE_TYPES.INTERNAL),
+      advancingEntry(3, MESSAGE_TYPES.DEFAULT),
     ]);
     expect(projection.blocks[0]?.status).toBe('running');
 
