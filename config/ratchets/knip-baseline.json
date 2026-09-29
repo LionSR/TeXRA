@@ -152,6 +152,42 @@
       "name": "getSecretStorageMode"
     },
     {
+      "file": "src/auth/oauth/deviceAuthorization.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "DeviceCodeTimedOut"
+    },
+    {
+      "file": "src/auth/oauth/deviceAuthorization.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "SessionCompletionFailed"
+    },
+    {
+      "file": "src/auth/oauth/oauthRequest.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "OAuthNetworkError"
+    },
+    {
+      "file": "src/auth/oauth/oauthRequest.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "OAuthUnexpectedResponse"
+    },
+    {
+      "file": "src/auth/xai/xaiOAuthClient.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "DeviceAuthorizationDenied"
+    },
+    {
+      "file": "src/auth/xai/xaiOAuthClient.ts",
+      "category": "unused",
+      "kind": "exports",
+      "name": "DeviceCodeExpired"
+    },
+    {
       "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
       "category": "production-dead",
       "kind": "exports",

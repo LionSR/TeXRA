@@ -40,7 +40,7 @@ const FORM_HEADERS = {
 } as const;
 
 /** The user refused the device authorization (terminal, re-auth required). */
-class DeviceAuthorizationDenied extends Data.TaggedError(
+export class DeviceAuthorizationDenied extends Data.TaggedError(
   'DeviceAuthorizationDenied',
 )<{
   readonly message: string;
@@ -48,7 +48,7 @@ class DeviceAuthorizationDenied extends Data.TaggedError(
 }> {}
 
 /** The server expired the device code before the user approved. */
-class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
+export class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
   readonly message: string;
   readonly status: number;
 }> {}
