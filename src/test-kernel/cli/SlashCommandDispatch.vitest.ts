@@ -686,7 +686,7 @@ describe('handleTuiSlashCommand', () => {
           'ChatGPT subscription disabled for Codex models.',
         );
         // One fact per line, not a single ' · '-joined sentence.
-        expect(entry.split('\n').length).toBeGreaterThan(2);
+        expect(entry?.split('\n').length).toBeGreaterThan(2);
       }),
   );
 
