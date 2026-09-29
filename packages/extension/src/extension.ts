@@ -795,9 +795,8 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   const welcomeKey = 'texra.welcomeShown';
   if (!(yield* readState(globalState, welcomeKey, StateFlagSchema))) {
-    // Land first-run users on the welcome card in the TeXRA panel: the one
-    // onboarding surface that opens by itself. It links the walkthrough.
-    // A failure leaves the flag unset, so the welcome shows again next time.
+    // First-run users land on the welcome card (it links the walkthrough); a
+    // failure leaves the flag unset, so it shows again next time.
     yield* Effect.forkDetach(
       fromHost('texra.showMainView', () =>
         vscode.commands.executeCommand('texra.showMainView'),
