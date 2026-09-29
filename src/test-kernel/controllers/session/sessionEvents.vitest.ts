@@ -1119,7 +1119,6 @@ describe('Sessions owner', () => {
               requestId: 'closing-plan',
               runId: RUN,
               plan: { objective: 'Settle the pending request during close.' },
-              goalEnabled: false,
             },
           }),
         );

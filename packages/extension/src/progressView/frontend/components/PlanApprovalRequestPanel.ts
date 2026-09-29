@@ -1,7 +1,7 @@
 /** Plan request card: "Approve this plan", its objective, Run as Goal. */
 
 // Third-party imports
-import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
+import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -49,38 +49,32 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
   }
 
   protected override handleExtraKey(key: string): boolean {
-    if (key !== 'r' || !this.permission.data.goalEnabled) return false;
+    if (key !== 'r') return false;
     this.emitAction({ action: 'approve_and_goal' });
     return true;
   }
 
   override render(): TemplateResult {
-    const { plan, goalEnabled } = this.permission.data;
+    const { plan } = this.permission.data;
 
     return this.renderCard(
       // Kept to one line so the pre-wrap body gets no template whitespace.
       // prettier-ignore
       html`
         <div class="plan-request__objective" dir="auto">${plan.objective}</div>
-        ${
-          goalEnabled
-            ? html`<div class="plan-request__goal-explanation">
-                <strong>${PLAN_GOAL_COPY.action}</strong>
-                ${PLAN_GOAL_COPY.progressViewExplanation}
-              </div>`
-            : nothing
-        }
+        <div class="plan-request__goal-explanation">
+          <strong>${PLAN_GOAL_COPY.action}</strong>
+          ${PLAN_GOAL_COPY.progressViewExplanation}
+        </div>
       `,
-      goalEnabled
-        ? renderLabeledActionButton({
-            icon: 'rocket',
-            text: PLAN_GOAL_COPY.action,
-            title: `${PLAN_GOAL_COPY.action} (r)`,
-            action: 'approve_and_goal',
-            disabled: this.readOnly,
-            onClick: () => this.emitAction({ action: 'approve_and_goal' }),
-          })
-        : nothing,
+      renderLabeledActionButton({
+        icon: 'rocket',
+        text: PLAN_GOAL_COPY.action,
+        title: `${PLAN_GOAL_COPY.action} (r)`,
+        action: 'approve_and_goal',
+        disabled: this.readOnly,
+        onClick: () => this.emitAction({ action: 'approve_and_goal' }),
+      }),
     );
   }
 }
