@@ -301,9 +301,15 @@ export function handleSharedHostRequest(
         );
         if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
           yield* Effect.forkDetach(
-            host.showInfo(
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-            ),
+            host
+              .showInfo(
+                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+              )
+              .pipe(
+                Effect.catch((cause) =>
+                  Effect.logWarning('Dropped-file notice failed', cause),
+                ),
+              ),
           );
         }
         return { kind: 'files', paths: attached.paths };
