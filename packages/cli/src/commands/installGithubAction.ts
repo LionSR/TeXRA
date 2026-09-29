@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { tryOpenBrowser } from '../runtime/browser';

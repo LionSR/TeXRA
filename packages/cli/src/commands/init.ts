@@ -4,7 +4,7 @@ import { getVisibleAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
 import { type CliContext } from '../runtime/cliContext';

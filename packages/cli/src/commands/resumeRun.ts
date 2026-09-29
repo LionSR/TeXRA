@@ -16,7 +16,7 @@ import {
 } from '@shared/schemas';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';

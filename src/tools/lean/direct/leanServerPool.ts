@@ -35,7 +35,7 @@ import { ChildProcessSpawner } from 'effect/unstable/process';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';

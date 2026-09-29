@@ -21,7 +21,7 @@ import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { toPosixPath } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   emptyExtractionResult,

@@ -41,7 +41,8 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 import {
   normalizeLineEndings,
   splitContentLines,

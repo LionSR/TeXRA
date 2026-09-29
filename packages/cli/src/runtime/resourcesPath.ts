@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Data, Effect, FileSystem } from 'effect';
 
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 /** No resources candidate exists beside this build of the CLI. */
 class CliResourcesNotFound extends Data.TaggedError('CliResourcesNotFound')<{

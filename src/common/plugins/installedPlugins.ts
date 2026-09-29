@@ -17,7 +17,7 @@ import {
   SkillNameSchema,
   type InstalledPlugin,
 } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 
 // Local imports - plugin install record, reading and git
 import {

@@ -11,7 +11,7 @@ import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 // Local file imports

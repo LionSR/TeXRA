@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
-import { pathExists } from '@utils/files/fsDurability';
+import { pathExists } from '@utils/files/fsEntryExists';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 const CHANNEL = 'LatexParsing';
