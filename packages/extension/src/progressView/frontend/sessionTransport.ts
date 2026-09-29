@@ -9,7 +9,16 @@
  * its session channel to `receive`: the extension's window carries nothing
  * else, and the desktop's session channel is its own.
  */
-import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Queue,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import {
   installWebviewRuntime,
@@ -77,6 +86,9 @@ interface OpenSession extends WebviewSession {
   /** This session's requests awaiting their `response`, by request id. The
    *  session's scope interrupts every one still here when it closes. */
   readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
+  /** The frames the host sent, in arrival order; one fiber of the session's
+   *  scope feeds them to the frames service. */
+  readonly inbox: Queue.Queue<EventsFrame>;
 }
 
 /** What a request answers when its session closed before the host did. */
@@ -95,11 +107,10 @@ export function installWebviewTransport(
     action: WireSurfaceAction,
   ) => void = () => undefined;
 
-  /** Route one frame to its session's frames service; the frames service
-   *  drops a frame of another generation. A frame for a session that is
-   *  not open is the host's defect, dropped loudly. `feed` is synchronous,
-   *  so frames are fed in arrival order on the caller's turn: a forked
-   *  fiber per frame would let the scheduler interleave two frames' rows. */
+  /** Queue one frame for its session's feeder, which hands them to the frames
+   *  service in arrival order; the frames service drops a frame of another
+   *  generation. A frame for a session that is not open is the host's
+   *  defect, dropped loudly. */
   const deliver = (frame: EventsFrame): void => {
     const session = sessions.get(frame.session);
     if (!session) {
@@ -108,7 +119,7 @@ export function installWebviewTransport(
       );
       return;
     }
-    runtime.runSync(session.graph.frames.feed(frame));
+    Queue.offerUnsafe(session.inbox, frame);
   };
 
   const receive = (data: unknown): void => {
@@ -158,7 +169,7 @@ export function installWebviewTransport(
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
       const pending = new Map<string, Deferred.Deferred<Response['result']>>();
-      const { scope, graph } = runtime.runSync(
+      const { scope, graph, inbox } = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
           const graph = yield* WebviewSessions.open(key).pipe(
@@ -176,7 +187,12 @@ export function installWebviewTransport(
               });
             }),
           );
-          return { scope, graph };
+          const inbox = yield* Queue.unbounded<EventsFrame>();
+          yield* Effect.forkIn(
+            Stream.runForEach(Stream.fromQueue(inbox), graph.frames.feed),
+            scope,
+          );
+          return { scope, graph, inbox };
         }),
       );
       const session: OpenSession = {
@@ -184,6 +200,7 @@ export function installWebviewTransport(
         graph,
         scope,
         pending,
+        inbox,
         view$: toSignal(
           runtime,
           SubscriptionRef.changes(graph.view.ref),
