@@ -145,6 +145,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
+  // `surface`, `bindings` and `navigation` are declared below and read only
+  // inside lazy callbacks; the order cannot flip, since the surface takes the
+  // onboarding this account call returns.
   const { onboarding, signIn, signOut, refreshFunnelAfterLaunch } =
     yield* openWindowAccount({
       host,
