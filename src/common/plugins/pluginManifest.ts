@@ -21,6 +21,11 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - this module's neighbours
 import {
+  configuredHooks,
+  HooksConfigSchema,
+  type ConfiguredHook,
+} from './hookConfig';
+import {
   parseMcpServers,
   ServerNameSchema,
   type McpServerConfig,
@@ -58,7 +63,9 @@ const PluginManifestSchema = z.object({
   mcpServers: z
     .union([ComponentPathsSchema, z.record(z.string(), z.unknown())])
     .optional(),
-  hooks: z.unknown().optional(),
+  hooks: z
+    .union([ComponentPathsSchema, z.record(z.string(), z.unknown())])
+    .optional(),
   lspServers: z.unknown().optional(),
   outputStyles: z.unknown().optional(),
   apps: z.unknown().optional(),
@@ -74,12 +81,10 @@ export const PLUGIN_MANIFEST_FILES = [
 const McpFileSchema = z.record(z.string(), z.unknown());
 
 /**
- * Components that run code other than a declared MCP server. A plugin with
- * any of them is a code plugin, which TeXRA refuses to enable until it can
- * run one out of process behind a typed boundary.
+ * Components that run code TeXRA does not run yet: LSP servers. A plugin
+ * with one is refused. Hooks run out of process (`./pluginHooks`).
  */
 const CODE_COMPONENTS = [
-  { label: 'hooks', field: 'hooks', files: [path.join('hooks', 'hooks.json')] },
   { label: 'LSP servers', field: 'lspServers', files: ['.lsp.json'] },
 ] as const;
 
@@ -190,7 +195,13 @@ export interface ResolvedPlugin {
   /** Its stdio MCP servers, `${CLAUDE_PLUGIN_ROOT}` expanded, each run in
    *  the plugin directory under the name `plugin_<plugin>_<server>`. */
   readonly mcpServers: readonly McpServerConfig[];
-  /** Labels of the components that run code other than an MCP server. */
+  /** Its command hooks TeXRA runs, and one line for each configured hook
+   *  or event it does not run. */
+  readonly hooks: {
+    readonly hooks: readonly ConfiguredHook[];
+    readonly unsupported: readonly string[];
+  };
+  /** Labels of the components that run code TeXRA refuses (LSP servers). */
   readonly code: readonly string[];
   /** Labels of the data components TeXRA does not load. */
   readonly ignored: readonly string[];
@@ -318,6 +329,61 @@ function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
   });
 }
 
+/** The conventional hooks file, read when present. */
+const HOOKS_FILE = path.join('hooks', 'hooks.json');
+
+/**
+ * The hooks a plugin configures: `hooks/hooks.json` when present, plus each
+ * path or inline object its manifests declare under `hooks` (an inline
+ * object holds the events under `hooks`, or is the events map itself).
+ */
+function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
+  return Effect.gen(function* () {
+    const declared = manifests.flatMap((manifest) =>
+      manifest.hooks === undefined ? [] : [manifest.hooks],
+    );
+    const hooks: ConfiguredHook[] = [];
+    const unsupported: string[] = [];
+    const add = (source: string, config: z.infer<typeof HooksConfigSchema>) => {
+      const found = configuredHooks(source, config);
+      hooks.push(...found.hooks);
+      unsupported.push(...found.unsupported);
+    };
+    const files = [
+      HOOKS_FILE,
+      ...declared.flatMap((entry) =>
+        typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
+      ),
+    ];
+    const read = new Set<string>();
+    for (const [index, file] of files.entries()) {
+      const resolved = yield* containedPath(dir, file);
+      if (resolved === undefined) {
+        if (index === 0) continue;
+        return yield* failPlugin(
+          `Plugin ${name} declares hooks in "${file}", which does not exist.`,
+        );
+      }
+      if (read.has(resolved)) continue;
+      read.add(resolved);
+      const config = yield* readJsonFile(resolved, HooksConfigSchema);
+      if (config !== undefined) add(path.relative(dir, resolved), config);
+    }
+    for (const entry of declared) {
+      if (typeof entry === 'string' || Array.isArray(entry)) continue;
+      const config = HooksConfigSchema.safeParse(
+        'hooks' in entry ? entry : { hooks: entry },
+      );
+      if (!config.success)
+        return yield* failPlugin(
+          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${z.prettifyError(config.error)}`,
+        );
+      add('manifest', config.data);
+    }
+    return { hooks, unsupported };
+  });
+}
+
 /** The labels of `components` that `dir` contains, by field or file. */
 function presentComponents(
   dir: string,
@@ -405,6 +471,7 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
         found.flatMap((manifest) => toList(manifest.agents)),
       ),
       mcpServers: mcp.servers,
+      hooks: yield* hooksOf(dir, name.data, found),
       code: yield* presentComponents(dir, found, CODE_COMPONENTS),
       ignored: yield* presentComponents(dir, found, IGNORED_COMPONENTS),
       warnings: mcp.warnings,

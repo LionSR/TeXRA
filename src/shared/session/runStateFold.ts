@@ -21,6 +21,7 @@ import {
   requestParksItsCaller,
   type CommitOrdinal,
   type DispatchFacts,
+  type HookOutcomes,
   type InvocationRef,
   type JsonValue,
   type ModelCompatibilityKey,
@@ -81,6 +82,7 @@ export type RunLedgerDraft = Extract<
       | 'run.snapshot'
       | 'tools.offered'
       | 'context.blob'
+      | 'hook.outcome'
       | 'output.produced'
       | 'tool.start'
       | 'tool.end'
@@ -195,8 +197,11 @@ export type RunState = RunPosition & {
   /** The names of the skills it listed. */
   readonly offeredSkills: readonly string[];
   readonly offeredSystem: string | null; // its system text's address
+  readonly offeredHooks: readonly string[]; // the hooks it pinned
   /** The run's `context.blob` rows: model-facing content by address. */
   readonly contents: Readonly<Record<string, JsonValue>>;
+  /** The `hook.outcome` rows by point: a recorded point never runs again. */
+  readonly hookOutcomes: HookOutcomes;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
@@ -281,7 +286,9 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   offeredContinuation: null,
   offeredSkills: [],
   offeredSystem: null,
+  offeredHooks: [],
   contents: {},
+  hookOutcomes: {},
 });
 
 /**
@@ -373,16 +380,14 @@ function foldRow(
     for (const message of added) messages.push(message);
     return messages;
   };
+  /** A row out of the order the ledger writes. */
+  const outOfOrder = (detail: string) => refuse('out-of-order', detail, commit);
   if (current !== null && commit <= current.commit) {
-    return refuse(
-      'out-of-order',
-      `commit ${commit} is not above ${current.commit}`,
-      commit,
-    );
+    return outOfOrder(`commit ${commit} is not above ${current.commit}`);
   }
   /** A row that presupposes the opening snapshot, folded before it. */
   const beforeOpening = (what: string) =>
-    refuse('out-of-order', `${what} before the opening run.snapshot`, commit);
+    outOfOrder(`${what} before the opening run.snapshot`);
   /** The state with this ledger row counted in. */
   const advance = (state: RunState): RunState => ({
     ...state,
@@ -399,19 +404,15 @@ function foldRow(
     // `unresolved` is a malformed aggregate here: this fold reads a run's
     // whole history, so a decision always follows the opening it answers.
     if (row.type === 'output.produced' && !opened(current)) {
-      return refuse('out-of-order', 'output before opening snapshot', commit);
+      return outOfOrder('output before opening snapshot');
     }
     const verdict = applyRunRow(current, row, pass);
     if (verdict.kind === 'unchanged') return null;
     if (verdict.kind === 'unresolved') {
-      return refuse(
-        'out-of-order',
-        `decision names no request ${verdict.requestId}`,
-        commit,
-      );
+      return outOfOrder(`decision names no request ${verdict.requestId}`);
     }
     if (verdict.kind === 'contradiction') {
-      return refuse('out-of-order', verdict.detail, commit);
+      return outOfOrder(verdict.detail);
     }
     const state = current ?? freshRunState(commit);
     const at = verdict.rows.at;
@@ -460,10 +461,8 @@ function foldRow(
             open.invocation.invocationId === p.invocation.invocationId &&
             p.invocation.attempt <= open.invocation.attempt
           ) {
-            return refuse(
-              'out-of-order',
+            return outOfOrder(
               `attempt ${p.invocation.attempt} does not follow ${open.invocation.attempt}`,
-              commit,
             );
           }
           return Result.succeed({
@@ -486,11 +485,7 @@ function foldRow(
         case 'response': {
           const open = state.openAttempt;
           if (open === null || !sameInvocation(open.invocation, p.invocation)) {
-            return refuse(
-              'out-of-order',
-              `${p.kind} names no open attempt`,
-              commit,
-            );
+            return outOfOrder(`${p.kind} names no open attempt`);
           }
           if (p.kind === 'identified') {
             return Result.succeed({
@@ -515,10 +510,8 @@ function foldRow(
             });
           }
           if (state.pendingResponse !== null) {
-            return refuse(
-              'out-of-order',
+            return outOfOrder(
               `response ${p.responseId} while ${state.pendingResponse.responseId} is undelivered`,
-              commit,
             );
           }
           const settled: RunState = {
@@ -611,28 +604,22 @@ function foldRow(
       const p = row.payload;
       const pending = current.pendingResponse;
       if (pending === null || pending.responseId !== p.responseId) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `intent names response ${p.responseId}, pending is ${pending?.responseId ?? 'none'}`,
-          commit,
         );
       }
       const pendingIntents = writable(pass, current.pendingIntents, copyById);
       for (const callId of p.callIds) {
         const call = pending.calls.find((fact) => fact.callId === callId);
         if (call === undefined || call.parallelSafe) {
-          return refuse(
-            'out-of-order',
+          return outOfOrder(
             `intent names ${callId}, which is not a barrier call of ${p.responseId}`,
-            commit,
           );
         }
         const known = pendingIntents[callId];
         if (known !== undefined && p.attempt < known.attempt) {
-          return refuse(
-            'out-of-order',
+          return outOfOrder(
             `intent attempt ${p.attempt} is below ${known.attempt} for ${callId}`,
-            commit,
           );
         }
         pendingIntents[callId] = {
@@ -657,10 +644,8 @@ function foldRow(
       const p = row.payload;
       const intent = current.pendingIntents[p.callId];
       if (intent === undefined || intent.attempt !== p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `binding ${p.requestId} names no pending intent for ${p.callId} at attempt ${p.attempt}`,
-          commit,
         );
       }
       const pendingIntents = writable(pass, current.pendingIntents, copyById);
@@ -674,6 +659,7 @@ function foldRow(
         offeredContinuation: row.payload.continuation,
         offeredSkills: row.payload.skills,
         offeredSystem: row.payload.system,
+        offeredHooks: row.payload.hooks,
       });
     case 'context.blob': {
       const { digest, value } = row.payload;
@@ -683,12 +669,20 @@ function foldRow(
       contents[digest] = value;
       return Result.succeed({ ...state, contents });
     }
+    case 'hook.outcome': {
+      // An opening batch carries its opening hooks: no opened run needed.
+      const p = row.payload;
+      const state = advance(current ?? freshRunState(commit));
+      const byPoint = writable(pass, state.hookOutcomes, (h) => ({ ...h }));
+      byPoint[p.point] = [...(byPoint[p.point] ?? []), p];
+      return Result.succeed({ ...state, hookOutcomes: byPoint });
+    }
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;
       // A permit presupposes the request.opened it names.
       if (permit !== null && current.requests[permit.requestId] === undefined) {
-        return refuse('out-of-order', `dangling ${permit.requestId}`, commit);
+        return outOfOrder(`dangling ${permit.requestId}`);
       }
       // The retry owner's durable gate, its one carrier: `null` retires it.
       return Result.succeed({
@@ -720,10 +714,8 @@ function foldRow(
         );
       }
       if (previous !== undefined && previous.attempt > p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `${p.callId} attempt ${p.attempt} is below ${previous.attempt}`,
-          commit,
         );
       }
       // A pending intent is this call's outcome-unknown barrier, and only the
@@ -733,10 +725,8 @@ function foldRow(
       // with no re-run decision anywhere in the rows.
       const intent = current.pendingIntents[p.callId];
       if (intent !== undefined && intent.attempt !== p.attempt) {
-        return refuse(
-          'out-of-order',
+        return outOfOrder(
           `${p.callId} settles attempt ${p.attempt} while its intent admitted attempt ${intent.attempt}`,
-          commit,
         );
       }
       let pendingIntents = current.pendingIntents;
