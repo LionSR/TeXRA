@@ -29,7 +29,7 @@ interface FormFrameProps {
   readonly showCloseHint?: boolean;
 }
 
-export function formFrameWidth(columns: number | undefined): number {
+function formFrameWidth(columns: number | undefined): number {
   const normalized =
     columns != null && Number.isFinite(columns) && columns > 0
       ? Math.floor(columns)
