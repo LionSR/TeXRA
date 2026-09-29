@@ -267,7 +267,7 @@ export function WorkflowPopup({
   const hints: KeyHint[] = [
     { key: '←/→', action: 'phase' },
     { key: '↑/↓', action: 'select' },
-    { key: 'Enter', action: 'open' },
+    { key: 'Enter', action: 'open / toggle' },
     { key: '/', action: 'filter' },
     { key: 'f', action: 'next failed' },
     ...(controllable
