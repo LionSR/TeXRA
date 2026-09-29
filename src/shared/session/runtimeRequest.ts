@@ -23,11 +23,22 @@ import {
 
 const runScoped = { runId: RunIdSchema };
 
+/**
+ * Why a run stops. `user` is an explicit stop of the work (a stop button,
+ * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
+ * background operation it is observing. `shutdown` only ends this process's
+ * hold on the run (an exit, a signal, a session close), leaving that
+ * operation for a resume to observe.
+ */
+const RunStopReasonSchema = z.enum(['user', 'shutdown']);
+export type RunStopReason = z.infer<typeof RunStopReasonSchema>;
+
 export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('run.stop'),
     ...runScoped,
     detachActiveChildren: z.boolean().nullish(),
+    reason: RunStopReasonSchema,
   }),
   z.object({ kind: z.literal('run.delete'), ...runScoped }),
   z.object({ kind: z.literal('run.compact'), ...runScoped }),

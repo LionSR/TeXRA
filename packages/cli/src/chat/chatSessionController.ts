@@ -55,7 +55,10 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  RunStopReason,
+  RuntimeRequest,
+} from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -179,8 +182,9 @@ export interface ChatSessionController {
    */
   resume(id: RunId): Effect.Effect<void, Error>;
 
-  /** Request stop of the root run using the configured child policy. */
-  stop(): void;
+  /** Request stop of the root run using the configured child policy, for
+   *  `reason`: a `user` stop also cancels its remote background work. */
+  stop(reason: RunStopReason): void;
 
   /**
    * The composer's submit path (PRD 10.1): a slash command, the first
@@ -371,7 +375,11 @@ export function createChatSessionController(
       });
     });
 
-  const requestStop = (): void => {
+  // The reason of the stop asked last, for a stop re-issued once the launch
+  // gap closes.
+  let stopReason: RunStopReason = 'user';
+  const requestStop = (reason: RunStopReason): void => {
+    stopReason = reason;
     session.stopRequested = true;
     // A continuation of the stopped conversation stops with it.
     if (preparingRoot) preparingRoot.stopped = true;
@@ -390,7 +398,7 @@ export function createChatSessionController(
     session.interruptedRunId = runId;
     // Ctrl-C leaves the child policy unset, so the session's request handler
     // applies the configured "Keep subagents running".
-    runtime.runFork(request({ kind: 'run.stop', runId }));
+    runtime.runFork(request({ kind: 'run.stop', runId, reason: stopReason }));
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to
@@ -746,8 +754,8 @@ export function createChatSessionController(
   // stop
   // -----------------------------------------------------------------------
 
-  const stop = (): void => {
-    requestStop();
+  const stop = (reason: RunStopReason): void => {
+    requestStop(reason);
     interruptActiveRun();
   };
 

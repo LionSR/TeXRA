@@ -416,7 +416,7 @@ export async function runChat(
     }
 
     const meta = sessionMetaSignal.get();
-    if (isRunPending) chatController.stop();
+    if (isRunPending) chatController.stop('user');
     followUpQueue.clear();
     chatController.clearPendingSkills();
     session.clearRunState();
@@ -548,7 +548,7 @@ export async function runChat(
     getApprovalPolicy,
     flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
-    interruptActive: () => chatController.stop(),
+    interruptActive: (reason) => chatController.stop(reason),
     quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's

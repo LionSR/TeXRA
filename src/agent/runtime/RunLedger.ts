@@ -156,10 +156,9 @@ function contractViolation(
 }
 
 /**
- * The typed origin positions of a ledger row: every place a `ModelOrigin`
- * binding reaches a durable row. An assertion over these positions, never a
- * recursive shape sniff, so an `endpoint` key inside tool output or a message
- * body stays data rather than becoming a refusal.
+ * Every place a `ModelOrigin` binding reaches a durable ledger row. The
+ * assertion reads these typed positions, never a recursive shape sniff, so an
+ * `endpoint` key in tool output or a message body stays data, not a refusal.
  */
 function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
   if (row.type === 'model.compaction') {
@@ -173,6 +172,8 @@ function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
       return [p.origin];
     case 'accepted':
       return [p.operation.origin];
+    case 'cancelled':
+      return [p.evidence.requestedOrigin];
     case 'response': {
       const continuation =
         p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;

@@ -688,7 +688,9 @@ export function App(props: AppProps): React.JSX.Element {
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
-        onKillRun={(runId) => request({ kind: 'run.stop', runId })}
+        onKillRun={(runId) =>
+          request({ kind: 'run.stop', runId, reason: 'user' })
+        }
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

@@ -401,6 +401,7 @@ function installOwnerSession(): {
             yield* session.runs
               .stop(req.runId, {
                 detachActiveChildren: req.detachActiveChildren ?? undefined,
+                reason: req.reason,
               })
               .settlement // The handler words a refused stop as a request error; this
               // stub has no such vocabulary, so a refusal is a defect here.
@@ -587,7 +588,7 @@ describe('createChatSessionController', () => {
     ctrl.startRootRun(makeRunRequest('Check the draft.'));
     await executed.promise;
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    ctrl.stop();
+    ctrl.stop('user');
     run.reject(new Error('run stopped'));
     await awaitRunSettled(session);
 
@@ -675,6 +676,7 @@ describe('createChatSessionController', () => {
           kind: 'run.stop',
           runId: rootRun,
           detachActiveChildren: true,
+          reason: 'user',
         });
         yield* Effect.promise(() => awaitRunSettled(session));
 
@@ -929,7 +931,7 @@ describe('createChatSessionController', () => {
     expect(session.isResumableIdle()).toBe(false);
 
     // Ctrl-C fires while resume() is still rehydrating.
-    ctrl.stop();
+    ctrl.stop('user');
     expect(session.stopRequested).toBe(true);
 
     rehydrated.resolve();
@@ -970,7 +972,7 @@ describe('createChatSessionController', () => {
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     await resumeStarted.promise;
     expect(mocks.resumeRun).toHaveBeenCalledOnce();
-    ctrl.stop();
+    ctrl.stop('user');
     expect(session.interruptedRunId).toBeUndefined();
 
     resumeReached.resolve();
@@ -1122,7 +1124,7 @@ describe('createChatSessionController', () => {
       'demo-model',
     );
 
-    ctrl.stop();
+    ctrl.stop('user');
     helperModel.resolve(undefined);
 
     await resumeStarted;

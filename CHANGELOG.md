@@ -302,6 +302,15 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Stopping a run cancels its background response.** A workflow turn sent
+  as an OpenAI or Google background response used to keep running, and
+  billing, on the provider after you pressed Stop. An explicit stop (the Stop
+  button, Ctrl-C on a running turn, an agent's kill) now cancels it, and
+  resuming the run sends the turn again instead of waiting on the cancelled
+  one. Quitting TeXRA, a signal, or closing a project still leaves the
+  response running so a resume can pick up its result. If the cancel fails,
+  the run's log says so and the stop goes ahead.
+
 - **Output failures that were hidden now show as warnings in the run.** A
   failed latexdiff, a workspace dependency latexdiff could not copy, a run
   workspace that could not be prepared, an output file that could not be
@@ -310,6 +319,7 @@ All notable changes to this project will be documented in this file.
   Headless `--output-format ndjson` progress no longer carries the
   undisplayed `internal` log lines or `modelRetryLifecycle` domain events,
   and `inquiryThreadUpdated` no longer carries `resumeOutcome`.
+
 - **A tool call cut off by a crash no longer runs twice unasked.** Resuming
   a run after the process died mid-call used to re-run any call that could
   run in parallel, even one with side effects. Now only read-only tools

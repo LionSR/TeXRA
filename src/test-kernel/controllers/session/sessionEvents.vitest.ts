@@ -742,7 +742,11 @@ describe('Sessions owner', () => {
         expect(
           SubscriptionRef.getUnsafe(view.ref).runs.get(RUN)?.readOnly,
         ).toBe(false);
-        const request = { kind: 'run.stop', runId: RUN } as const;
+        const request = {
+          kind: 'run.stop',
+          runId: RUN,
+          reason: 'user',
+        } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
         expect(stop).not.toHaveBeenCalled();
@@ -760,6 +764,7 @@ describe('Sessions owner', () => {
         // configured "Keep subagents running".
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
+          reason: 'user',
         });
       }).pipe(
         Effect.provide(graph([runStart])),

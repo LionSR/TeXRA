@@ -290,7 +290,7 @@ const startLoop = (
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    const stop = session.runs.stop(runId);
+    const stop = session.runs.stop(runId, { reason: 'user' });
     expect(stop.accepted()).toBe(true);
     yield* stop.settlement;
   });
@@ -340,7 +340,7 @@ describe('childRunLoop E2E fixtures', () => {
           .mockImplementationOnce((id) => {
             const lease = claimChildRun(id);
             if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.stop(runId);
+              stop = session.runs.stop(runId, { reason: 'user' });
             return lease;
           });
         const loop = yield* startLoop(runId, {
@@ -530,7 +530,7 @@ describe('childRunLoop E2E fixtures', () => {
         // tracked in this fixture, so the stop reaches the loop via its
         // child activation.
         const stopping = yield* Effect.forkChild(
-          session.runs.stop(PARENT_RUN_ID).settlement,
+          session.runs.stop(PARENT_RUN_ID, { reason: 'user' }).settlement,
           { startImmediately: true },
         );
         yield* rejectTurn(1, createAbortError());
@@ -1128,7 +1128,7 @@ describe('childRunLoop E2E fixtures', () => {
         // the terminal it would interrupt is uninterruptible: the delivery
         // completes exactly once and the queue releases — there is no live
         // continuation the stop could tear down.
-        const stop = session.runs.stop(runId);
+        const stop = session.runs.stop(runId, { reason: 'user' });
         expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
@@ -1278,7 +1278,9 @@ describe('childRunLoop E2E fixtures', () => {
         // for the test to run once the loop is done.
         const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
-          stopSettlements.push(session.runs.stop(runId).settlement);
+          stopSettlements.push(
+            session.runs.stop(runId, { reason: 'user' }).settlement,
+          );
         });
 
         const loop = yield* startLoop(runId, strategy, {
