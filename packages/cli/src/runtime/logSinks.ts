@@ -129,22 +129,21 @@ function writeRaw(key: StreamKey, text: string): void {
 // A waiting write takes the direct path unconditionally. Its callers are the
 // exit edges — the resume hint, the chat TUI's teardown warning, and the
 // shutdown sequence's final flush, which runs after the process runtime has
-// been disposed — so it must never run on that runtime, and the settle
-// callback is the promise's own resolve rather than a run nested inside
-// another.
-function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
-  const stream = openStream(key);
-  if (!stream) return Promise.resolve();
-  return new Promise<void>((resolve) => {
+// been disposed — so it never needs that runtime. The stream's write callback
+// is the foreign edge, wrapped exactly once here.
+function writeRawAndWait(key: StreamKey, text: string): Effect.Effect<void> {
+  return Effect.callback<void>((resume) => {
+    const stream = openStream(key);
+    if (!stream) return resume(Effect.void);
     bestEffortStreamWrite(
       () =>
         stream.write(text, (error) => {
           if (error) closed[key] = true;
-          resolve();
+          resume(Effect.void);
         }),
       () => {
         closed[key] = true;
-        resolve();
+        resume(Effect.void);
       },
     );
   });
@@ -171,15 +170,13 @@ export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
 }
 
-export function writeTextStderrAndWait(text: string): Promise<void> {
+export function writeTextStderrAndWait(text: string): Effect.Effect<void> {
   return writeRawAndWait('stderr', `${text}\n`);
 }
 
-/** Wait until every stderr write queued before this call has completed. The
- *  stream write callback is the foreign edge and is wrapped exactly once
- *  here, so the shutdown sequence yields this instead of lifting it. */
+/** Wait until every stderr write queued before this call has completed. */
 export function flushTextStderr(): Effect.Effect<void> {
-  return Effect.promise(() => writeRawAndWait('stderr', ''));
+  return writeRawAndWait('stderr', '');
 }
 
 /**

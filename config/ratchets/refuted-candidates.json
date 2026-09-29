@@ -98,19 +98,6 @@
       ]
     },
     {
-      "id": "RT-write-raw-and-wait",
-      "candidate": "writeRawAndWait as an Effect",
-      "why": "It runs after the process runtime is disposed, so its Effect form needed a bare Effect.runSync and was reverted; the CLI drops its last stderr line without it.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/cli/src/runtime/logSinks.ts",
-          "symbol": "writeRawAndWait",
-          "signature": "function writeRawAndWait(key: StreamKey, text: string): Promise<void> {…}"
-        }
-      ]
-    },
-    {
       "id": "RT-desktop-pty-host-effect",
       "candidate": "The desktop PTY host as an Effect",
       "why": "Built, measured, reverted: the file would become a runtime effect importer whose catch sites two of five are irreducibly synchronous, so it needs Effect.runSync in a module holding no runtime. Measured +21 LoC for one lift removed.",

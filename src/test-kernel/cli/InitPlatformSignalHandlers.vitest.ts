@@ -123,7 +123,7 @@ describe('CLI platform signal handlers', () => {
         order.push('ndjson');
       }),
     );
-    const { runCliPlatformShutdownSequence } =
+    const { cliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
     const { writeTextStderr } = await import('@cli/runtime/logSinks');
     // A diagnostic written as the process goes down, still in flight when
@@ -131,11 +131,11 @@ describe('CLI platform signal handlers', () => {
     writeTextStderr('shutdown diagnostic');
 
     let resolved = false;
-    const shutdown = runCliPlatformShutdownSequence({ quiet: false }).then(
-      () => {
-        resolved = true;
-      },
-    );
+    const shutdown = Effect.runPromise(
+      cliPlatformShutdownSequence({ quiet: false }),
+    ).then(() => {
+      resolved = true;
+    });
     await secondWriteCaptured.promise;
 
     expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
@@ -156,7 +156,7 @@ describe('CLI platform signal handlers', () => {
     expect(resolved).toBe(true);
   });
 
-  it('runCliPlatformShutdownSequence still flushes NDJSON with no platform up', async () => {
+  it('cliPlatformShutdownSequence still flushes NDJSON with no platform up', async () => {
     vi.resetModules();
     const order: string[] = [];
     mocks.flushNdjsonStdout.mockImplementation(() =>
@@ -164,11 +164,11 @@ describe('CLI platform signal handlers', () => {
         order.push('flush');
       }),
     );
-    const { runCliPlatformShutdownSequence } =
+    const { cliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
 
     await expect(
-      runCliPlatformShutdownSequence({ quiet: false }),
+      Effect.runPromise(cliPlatformShutdownSequence({ quiet: false })),
     ).resolves.toBeUndefined();
     expect(order).toEqual(['flush']);
   });

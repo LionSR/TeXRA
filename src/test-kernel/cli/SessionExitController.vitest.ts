@@ -12,7 +12,7 @@ import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
   handOffCliShutdownSignalHandlers: vi.fn(),
-  runCliPlatformShutdownSequence: vi.fn(),
+  cliPlatformShutdownSequence: vi.fn(),
   writeTextStderrAndWait: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
@@ -23,7 +23,8 @@ vi.mock('@cli/runtime/cliContext', () => ({
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
-  runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
+  cliPlatformShutdownSequence: mocks.cliPlatformShutdownSequence,
+  runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
 }));
 
 vi.mock('@cli/runtime/logSinks', () => ({
@@ -39,8 +40,8 @@ describe('chat TUI session exit controller', () => {
   beforeAll(bindTestSessionView);
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
-    mocks.writeTextStderrAndWait.mockResolvedValue(undefined);
+    mocks.cliPlatformShutdownSequence.mockReturnValue(Effect.void);
+    mocks.writeTextStderrAndWait.mockReturnValue(Effect.void);
   });
 
   function createController(session: TuiSession) {
@@ -80,14 +81,11 @@ describe('chat TUI session exit controller', () => {
       exitCalled.resolve();
       return undefined as never;
     }) as typeof process.exit);
-    let finishStderrWrite: (() => void) | undefined;
-    const stderrWrite = new Promise<void>((resolve) => {
-      finishStderrWrite = resolve;
-    });
+    const stderrWrite = createDeferred();
     const stderrWaitCalled = createDeferred();
     mocks.writeTextStderrAndWait.mockImplementationOnce(() => {
       stderrWaitCalled.resolve();
-      return stderrWrite;
+      return Effect.promise(() => stderrWrite.promise);
     });
     vi.spyOn(session, 'isResumableIdle').mockReturnValue(true);
     const { controller } = createController(session);
@@ -105,10 +103,10 @@ describe('chat TUI session exit controller', () => {
           'Transcript flush failed during exit; the session tail may be missing: disk full',
         ),
       );
-      expect(mocks.runCliPlatformShutdownSequence).not.toHaveBeenCalled();
+      expect(mocks.cliPlatformShutdownSequence).not.toHaveBeenCalled();
       expect(exit).not.toHaveBeenCalled();
 
-      finishStderrWrite?.();
+      stderrWrite.resolve();
       await exitCalled.promise;
       expect(exit).toHaveBeenCalledWith(CliExitCode.Success);
     } finally {

@@ -12,7 +12,8 @@ import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   handOffCliShutdownSignalHandlers,
-  runCliPlatformShutdownSequence,
+  cliPlatformShutdownSequence,
+  runCliExit,
 } from '@cli/runtime/initPlatform';
 import { writeTextStderrAndWait, writeTextStdout } from '@cli/runtime/logSinks';
 import {
@@ -20,7 +21,10 @@ import {
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
 import { DisposableStore } from '@platform/disposable';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
@@ -144,11 +148,11 @@ export function createSessionExitController(
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
   // would have run — lifecycle shutdown (which ends by disposing the process
   // runtime, draining any queued usage entries) then the NDJSON flush — so it
-  // still happens once before the process dies. runCliPlatformShutdownSequence
+  // still happens once before the process dies. cliPlatformShutdownSequence
   // is idempotent-safe to call again, so the normal return path can still
   // rely on bin/texra.ts's own `finally`.
-  const runPlatformShutdown = (): Promise<void> =>
-    runCliPlatformShutdownSequence({ quiet: ctx.quiet });
+  const shutdownPlatform = () =>
+    cliPlatformShutdownSequence({ quiet: ctx.quiet });
   // Drain artifact writes and canonical event publication before shutdown.
   // Platform shutdown then settles executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves. Every
@@ -157,10 +161,8 @@ export function createSessionExitController(
   // still be restored.
   const persistSession = ctx.flushArtifacts.pipe(
     Effect.catchCause((cause) =>
-      Effect.promise(() =>
-        writeTextStderrAndWait(
-          `[warn] [cli.lifecycle] Transcript flush failed during exit; the session tail may be missing: ${toErrorMessage(Cause.squash(cause))}`,
-        ),
+      writeTextStderrAndWait(
+        `[warn] [cli.lifecycle] Transcript flush failed during exit; the session tail may be missing: ${toErrorMessage(Cause.squash(cause))}`,
       ),
     ),
   );
@@ -245,7 +247,9 @@ export function createSessionExitController(
     }
   };
 
-  const beginTeardown = async (cause: ExitCause): Promise<void> => {
+  // The synchronous prefix runs when this is called, before any Effect is
+  // run; the returned program is the rest of the exit, run once by `teardown`.
+  const beginTeardown = (cause: ExitCause): Effect.Effect<void, Error> => {
     detachSignals();
     // Snapshot the view while it is still bound: disposing ctx.disposables
     // below unbinds it, but the resume hint prints later.
@@ -260,15 +264,12 @@ export function createSessionExitController(
       // mode or emulator keyboard state.
       ctx.terminal.release();
       printResumeHintOnExit(resumeHint);
-      // `runCliPlatformShutdownSequence` catches its own failures and never
-      // rejects, so there is no catch arm to write here.
-      try {
-        await ctx.runtime.runPromise(persistSession);
-        await runPlatformShutdown();
-      } finally {
-        process.exit(cause.exitCode);
-      }
-      return;
+      // `persistSession` and the shutdown sequence catch their own failures,
+      // so the exit is unconditional.
+      return Effect.gen(function* () {
+        yield* withProcessServices(ctx.runtime, persistSession);
+        yield* shutdownPlatform();
+      }).pipe(Effect.ensuring(Effect.sync(() => process.exit(cause.exitCode))));
     }
 
     // A suspended (idle/WAITING) root session is resumable, so it takes no
@@ -303,7 +304,8 @@ export function createSessionExitController(
     // never observes `stopRequested` — draining first would block the quit
     // behind a long model turn. Re-check after the drain for a run the drain
     // itself started.
-    const { disposalFailure, resumableIdle } = await ctx.runtime.runPromise(
+    const drain = withProcessServices(
+      ctx.runtime,
       Effect.gen(function* () {
         // A disposal failure does not stop the exit: it is reported and
         // rethrown once the session is persisted and the terminal restored.
@@ -331,33 +333,39 @@ export function createSessionExitController(
         return { disposalFailure, resumableIdle: idle };
       }),
     );
-    ctx.terminal.release();
-    // Print the resume hint after the terminal modes are restored, but before
-    // resetCliState() clears the stream tree the hint is built from.
-    printResumeHintOnExit(resumeHint);
-    resetCliState();
-    if (resumableIdle) {
-      // The run parked at the WAIT node keeps the event loop alive, so a normal return
-      // would never let the process exit. Force-exit here, AFTER persistence is
-      // flushed and the resume hint is printed, preserving the suspended flow
-      // record on disk for `texra resume`. Run platform shutdown first so queued
-      // usage logs flush — bin/texra.ts's finally won't on exit().
-      // Terminal modes are restored, so stderr is the operator's again; the
-      // log sink is silent for the whole TUI session and would drop this.
-      if (disposalFailure) {
-        await writeTextStderrAndWait(
-          `[error] [cli.sessionExit] Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
-        );
+    return Effect.gen(function* () {
+      const { disposalFailure, resumableIdle } = yield* drain;
+      ctx.terminal.release();
+      // Print the resume hint after the terminal modes are restored, but before
+      // resetCliState() clears the stream tree the hint is built from.
+      printResumeHintOnExit(resumeHint);
+      resetCliState();
+      if (resumableIdle) {
+        // The run parked at the WAIT node keeps the event loop alive, so a normal return
+        // would never let the process exit. Force-exit here, AFTER persistence is
+        // flushed and the resume hint is printed, preserving the suspended flow
+        // record on disk for `texra resume`. Run platform shutdown first so queued
+        // usage logs flush — bin/texra.ts's finally won't on exit().
+        // Terminal modes are restored, so stderr is the operator's again; the
+        // log sink is silent for the whole TUI session and would drop this.
+        if (disposalFailure) {
+          yield* writeTextStderrAndWait(
+            `[error] [cli.sessionExit] Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+          );
+        }
+        yield* shutdownPlatform();
+        if (disposalFailure) session.runExitCode = CliExitCode.AgentError;
+        yield* Effect.sync(() => process.exit(session.runExitCode));
       }
-      await runPlatformShutdown();
-      if (disposalFailure) session.runExitCode = CliExitCode.AgentError;
-      process.exit(session.runExitCode);
-    }
-    if (disposalFailure) throw disposalFailure;
+      if (disposalFailure) return yield* Effect.fail(disposalFailure);
+    });
   };
 
+  // The one run of the exit (`runCliExit`, off the process runtime that
+  // platform shutdown disposes). Signal handlers fire it and forget; the
+  // graceful path joins the same promise.
   const teardown = (cause: ExitCause): Promise<void> => {
-    teardownPromise ??= beginTeardown(cause);
+    teardownPromise ??= runCliExit(beginTeardown(cause));
     return teardownPromise;
   };
 

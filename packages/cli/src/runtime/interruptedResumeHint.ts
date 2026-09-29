@@ -51,7 +51,7 @@ export function writeInterruptedResumeHint(
   waitForWrite = false,
 ): Effect.Effect<void> {
   return waitForWrite
-    ? Effect.promise(() => writeTextStderrAndWait(hint))
+    ? writeTextStderrAndWait(hint)
     : Effect.sync(() => writeTextStderr(hint));
 }
 

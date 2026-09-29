@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => ({
   commitRunEndAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
-  writeTextStderrAndWait: vi.fn<() => Promise<void>>(async () => undefined),
+  writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
   finalizeRun: vi.fn(),
 }));
 
@@ -1289,14 +1289,11 @@ describe('executeCliConfig', () => {
         });
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);
-        let settleRecoveryWrite!: () => void;
-        const recoveryWrite = new Promise<void>((resolve) => {
-          settleRecoveryWrite = resolve;
-        });
+        const recoveryWrite = yield* Deferred.make<void>();
         const noticeStarted = yield* Deferred.make<void>();
         mocks.writeTextStderrAndWait.mockImplementationOnce(() => {
           Deferred.doneUnsafe(noticeStarted, Effect.void);
-          return recoveryWrite;
+          return Deferred.await(recoveryWrite);
         });
 
         const run = yield* Effect.forkChild(
@@ -1324,7 +1321,7 @@ describe('executeCliConfig', () => {
         });
         yield* settle;
         expect(shutdownResolved).toBe(false);
-        settleRecoveryWrite();
+        yield* Deferred.succeed(recoveryWrite, undefined);
         yield* Fiber.join(shutdown);
         expect(yield* Fiber.join(run)).toMatchObject({
           ok: true,
