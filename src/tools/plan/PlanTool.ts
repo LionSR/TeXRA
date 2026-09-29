@@ -226,7 +226,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     kind: 'planApproval',
     // The tool is offered only while the goal plugin is on, so the user can
     // always run an approved plan as a goal.
-    data: { requestId, runId, plan, goalEnabled: true },
+    data: { requestId, runId, plan },
   });
 
   if (result.action === 'approve') {

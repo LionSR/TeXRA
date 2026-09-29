@@ -440,7 +440,6 @@ describe('App foreground Escape ownership', () => {
           requestId: 'plan-unrelated',
           runId: GRANDCHILD,
           plan: { objective: 'Keep this unrelated request queued.' },
-          goalEnabled: false,
         },
       });
       seedRequest({
@@ -449,7 +448,6 @@ describe('App foreground Escape ownership', () => {
           requestId: 'plan-queued-workflow-child',
           runId: CHILD,
           plan: { objective: 'Promote the queued workflow child.' },
-          goalEnabled: false,
         },
       });
 
@@ -475,7 +473,6 @@ describe('App foreground Escape ownership', () => {
           requestId: 'plan-workflow-popup',
           runId: WORKFLOW,
           plan: { objective: 'Verify the workflow.' },
-          goalEnabled: false,
         },
       });
       await waitFor(() => stdout.output.includes('Approve plan?'));
@@ -491,7 +488,6 @@ describe('App foreground Escape ownership', () => {
           requestId: 'plan-workflow-child',
           runId: CHILD,
           plan: { objective: 'Verify the child result.' },
-          goalEnabled: false,
         },
       });
       await waitFor(() => stdout.output.includes('Verify the child result.'));

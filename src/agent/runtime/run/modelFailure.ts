@@ -33,6 +33,8 @@ export interface ModelFailure {
   readonly info: RetryErrorInfo;
   readonly autoRetryable: boolean;
   readonly verdict: ModelRouteVerdict;
+  /** A chained request's stored response is missing or past retention. */
+  readonly storedResponseGone: boolean;
 }
 
 /** True when the package reports the input itself exceeded the window. */
@@ -103,6 +105,14 @@ export function classifyModelFailure(
     formatted: withPackageFacts,
     info: toRetryErrorInfo(withPackageFacts),
     autoRetryable,
+    storedResponseGone:
+      withPackageFacts.statusCode === 404 ||
+      ((withPackageFacts.statusCode === 400 ||
+        withPackageFacts.statusCode === undefined) &&
+        /previous[_ ]?(response|interaction)/i.test(withPackageFacts.message) &&
+        /not found|expired|no longer|does not exist/i.test(
+          withPackageFacts.message,
+        )),
     verdict:
       packageError?.retryAfterMs === undefined
         ? verdict

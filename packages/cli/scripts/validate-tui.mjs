@@ -1815,30 +1815,9 @@ const SCENARIOS = [
   {
     name: 'plan-approval',
     frame: 'scrollback',
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-    ],
-    unexpect: [
-      'r run as goal',
-      'Runs until done; only Bash is automatic',
-      '/model models',
-    ],
-    maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: 'Approve plan?', max: 3 },
-    ],
-  },
-  {
-    name: 'plan-approval-goal',
-    frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     expect: [
@@ -1860,7 +1839,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
       HARNESS_PLAN_APPROVAL_OBJECTIVE: [
         '  CLI Dogfood Friction Report',
         '**Objective:** During the course of this CLI dogfood session, observe and document any friction, rough edges, or UX issues in the CLI/TUI interaction',
@@ -1901,7 +1879,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
       HARNESS_PLAN_APPROVAL_OBJECTIVE: [
         '## Objective',
         'Prove that $\\sqrt{2} + \\sqrt{3}$ is irrational.',
@@ -1934,26 +1911,9 @@ const SCENARIOS = [
     frame: 'scrollback',
     rows: 10,
     cols: 80,
-    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: ' Ctrl-C ',
-    expect: [
-      'Approve plan?',
-      'Coordinate a short math proof through CLI chat.',
-      'y approve',
-      'n reject',
-      'Esc reject',
-    ],
-    unexpect: ['Runs until done; only Bash is automatic', '/model models'],
-  },
-  {
-    name: 'compact-plan-approval-goal',
-    frame: 'scrollback',
-    rows: 10,
-    cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     expect: [
@@ -1973,7 +1933,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     keys: ['r', '/status', '\r'],
@@ -1993,7 +1952,6 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: ' Ctrl-C ',
     keys: [DC2],

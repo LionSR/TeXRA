@@ -208,12 +208,6 @@ export const PlanApprovalPermissionSchema = z.strictObject({
   requestId: z.string(),
   runId: RunIdSchema,
   plan: PlanSchema,
-  /**
-   * True when the goal experimental feature flag is enabled at request
-   * time. Frontend uses this to decide whether to render the
-   * "Run as Goal" button.
-   */
-  goalEnabled: z.boolean().prefault(false),
 });
 export type PlanApprovalPermission = z.infer<
   typeof PlanApprovalPermissionSchema
