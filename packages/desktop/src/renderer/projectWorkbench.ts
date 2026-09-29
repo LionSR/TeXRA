@@ -5,6 +5,7 @@ import { nothing, type TemplateResult } from 'lit';
 
 import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { Theme } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import { postMessage } from '@shared/hostBridge';
 
@@ -78,25 +79,28 @@ export function createProjectWorkbench(options: {
   // session's close fails whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
     new Error(`The host answered a file request with ${outcome.kind}.`);
+  const workspaceFile = (
+    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
+  ) =>
+    surfaces.answer({
+      kind: 'host.request',
+      session,
+      requestId: crypto.randomUUID(),
+      request: { kind: 'workspaceFile', action },
+    });
   const editorPane = createEditorPane({
     listFiles: async (directory) => {
-      const outcome = await surfaces.workspaceFile(session, {
-        kind: 'list',
-        directory,
-      });
+      const outcome = await workspaceFile({ kind: 'list', directory });
       if (outcome.kind !== 'entries') throw unexpected(outcome);
       return outcome.entries;
     },
     readFile: async (path) => {
-      const outcome = await surfaces.workspaceFile(session, {
-        kind: 'read',
-        path,
-      });
+      const outcome = await workspaceFile({ kind: 'read', path });
       if (outcome.kind !== 'contents') throw unexpected(outcome);
       return outcome.contents;
     },
     writeFile: async (path, contents) => {
-      await surfaces.workspaceFile(session, { kind: 'write', path, contents });
+      await workspaceFile({ kind: 'write', path, contents });
     },
     onRequestOpen: (path) =>
       updateState(

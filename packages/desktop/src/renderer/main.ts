@@ -79,10 +79,7 @@ import {
   type WorkbenchPlacement,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
-import {
-  SESSION_WIRE_API_KEY,
-  type SessionWireApi,
-} from '../shared/hostBridgeChannels';
+import { resolveSessionWire } from '../shared/hostBridgeChannels';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
@@ -199,11 +196,7 @@ function setShell(next: Shell): void {
 // One fold, one surface, and one host snapshot per open project, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
-const sessionWire = (globalThis as { [SESSION_WIRE_API_KEY]?: SessionWireApi })[
-  SESSION_WIRE_API_KEY
-];
-if (!sessionWire)
-  throw new Error('The desktop session channel is unavailable.');
+const sessionWire = resolveSessionWire();
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
   post: sessionWire.post,
@@ -859,7 +852,7 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
   sidePanel: toggleSidePanelVisibility,
 };
 
-const MESSAGE_ROUTES = createMessageRoutes({
+const routeMessage = createMessageRoutes({
   saveAllFiles: () => {
     void projectWorkbenches.get(shell.active)?.editorPane.save();
   },
@@ -996,13 +989,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
 // protocol has its own channel (`sessionWire`, above). The settings view's
 // pushes reach `<settings-app>` through its own listener and match no route
 // here.
-window.addEventListener('message', (event) => {
-  const { data } = event;
-  if (typeof data !== 'object' || data === null) return;
-  if ('command' in data && typeof data.command === 'string') {
-    MESSAGE_ROUTES.get(data.command)?.(data);
-  }
-});
+window.addEventListener('message', (event) => routeMessage(event.data));
 
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.

@@ -31,6 +31,7 @@ import {
   DownMessageSchema,
   type DownMessage,
   type EventsFrame,
+  type HostOutcome,
   type Response,
   type Subscribe,
   type UpMessage,
@@ -70,6 +71,11 @@ export interface WebviewTransport {
   request(
     message: Extract<UpMessage, { requestId: string }>,
   ): Promise<Response['result']>;
+  /** A `host.request` settled with the host's outcome, or failed with its
+   *  refusal (a session that closes first is a refusal too). */
+  answer(
+    message: Extract<UpMessage, { kind: 'host.request' }>,
+  ): Promise<HostOutcome>;
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
@@ -161,6 +167,30 @@ export function installWebviewTransport(
     runtime.runFork(Scope.close(session.scope, Exit.void));
   };
 
+  const request = (
+    message: Extract<UpMessage, { requestId: string }>,
+  ): Promise<Response['result']> => {
+    const session = sessions.get(message.session);
+    if (!session) {
+      console.warn(
+        `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
+      );
+      return Promise.resolve(CANCELLED);
+    }
+    const settled = Deferred.makeUnsafe<Response['result']>();
+    session.pending.set(message.requestId, settled);
+    post(message);
+    return runtime.runPromise(
+      Deferred.await(settled).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.succeed(CANCELLED)
+            : Effect.failCause(cause),
+        ),
+      ),
+    );
+  };
+
   return {
     receive,
     open(key) {
@@ -240,25 +270,14 @@ export function installWebviewTransport(
       );
       post(message);
     },
-    request(message) {
-      const session = sessions.get(message.session);
-      if (!session) {
-        console.warn(
-          `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
-        );
-        return Promise.resolve(CANCELLED);
-      }
-      const settled = Deferred.makeUnsafe<Response['result']>();
-      session.pending.set(message.requestId, settled);
-      post(message);
-      return runtime.runPromise(
-        Deferred.await(settled).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.succeed(CANCELLED)
-              : Effect.failCause(cause),
-          ),
-        ),
+    request,
+    async answer(message) {
+      const result = await request(message);
+      if (result.ok) return result.outcome as HostOutcome;
+      throw new Error(
+        'reason' in result.error
+          ? result.error.reason
+          : `The host could not complete the request (${result.error._tag}).`,
       );
     },
     onSurfaceAction(listener) {

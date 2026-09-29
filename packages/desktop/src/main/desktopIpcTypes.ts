@@ -1,5 +1,5 @@
-import type { ProcessServices } from '@platform/processRuntime';
 import { Effect } from 'effect';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { z } from 'zod';
 
 export type DesktopCommandMessage = { command: string } & Record<

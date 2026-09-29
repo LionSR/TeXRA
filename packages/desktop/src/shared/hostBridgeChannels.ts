@@ -17,3 +17,12 @@ export interface SessionWireApi {
   /** Replaces the previous listener; the renderer's one transport reads it. */
   onMessage(listener: (message: unknown) => void): void;
 }
+
+/** The preload's session channel, as the renderer finds it. */
+export function resolveSessionWire(): SessionWireApi {
+  const wire = (globalThis as { [SESSION_WIRE_API_KEY]?: SessionWireApi })[
+    SESSION_WIRE_API_KEY
+  ];
+  if (!wire) throw new Error('The desktop session channel is unavailable.');
+  return wire;
+}

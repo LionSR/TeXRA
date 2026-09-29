@@ -17,11 +17,7 @@ import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import type {
-  HostOutcome,
-  Response,
-  UpMessage,
-} from '@shared/session/sessionFrames';
+import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
@@ -45,6 +41,7 @@ import {
   installWebviewTransport,
   transcriptAggregates,
   type WebviewSession,
+  type WebviewTransport,
 } from './sessionTransport';
 
 /** One open session as the root holds it: its three records as signals. */
@@ -65,13 +62,8 @@ export interface SessionSurfaces {
   act(key: string, action: SurfaceAction): void;
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
-  /** A host request answered to its caller, not presented on the surface:
-   *  the desktop editor's file I/O. Settles with the outcome, or fails with
-   *  the host's refusal; a session that closes first fails it as cancelled. */
-  workspaceFile(
-    key: string,
-    action: Extract<HostRequest, { kind: 'workspaceFile' }>['action'],
-  ): Promise<HostOutcome>;
+  /** A host request answered to its caller, not presented on the surface. */
+  answer: WebviewTransport['answer'];
   /** The composer's Send for the resolved selection: a follow-up to the
    *  selected run, else a launch from the launcher's instruction. The
    *  button and the run accelerator both land here. */
@@ -100,7 +92,6 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
-  /** The pipe `UpMessage`s leave by. */
   readonly post: (message: UpMessage) => void;
 }): SessionSurfaces {
   const transport = installWebviewTransport(options.post);
@@ -493,21 +484,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) void runtimeRequestFor(entry, request);
     },
-    async workspaceFile(key, action) {
-      const result = await transport.request({
-        kind: 'host.request',
-        session: key,
-        requestId: requestId(),
-        request: { kind: 'workspaceFile', action },
-      });
-      if (result.ok) return result.outcome as HostOutcome;
-      const { error } = result;
-      throw new Error(
-        'reason' in error
-          ? error.reason
-          : `The host could not complete the request (${error._tag}).`,
-      );
-    },
+    answer: transport.answer,
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
       if (entry) void hostRequestFor(entry, hostRequest);

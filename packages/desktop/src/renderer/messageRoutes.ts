@@ -109,7 +109,7 @@ function messageRoute<
  */
 export function createMessageRoutes(
   handlers: DesktopMessageRouteHandlers,
-): ReadonlyMap<string, (data: unknown) => void> {
+): (data: unknown) => void {
   const routes: MessageRoute[] = [
     messageRoute(DesktopSaveFileMessageSchema, () => {
       handlers.saveAllFiles();
@@ -185,5 +185,10 @@ export function createMessageRoutes(
   const table = new Map(routes);
   if (table.size !== routes.length)
     throw new Error('Two pushes share a command');
-  return table;
+  return (data) => {
+    if (typeof data !== 'object' || data === null) return;
+    if ('command' in data && typeof data.command === 'string') {
+      table.get(data.command)?.(data);
+    }
+  };
 }
