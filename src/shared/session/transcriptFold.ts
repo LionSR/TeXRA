@@ -172,7 +172,11 @@ function record(d: Draft, event: TranscriptEvent): void {
       if (slot?.kind !== 'tool') return;
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
       if (inProgress && !ix.activeTools.has(event.logId)) return;
+      // A ledger run's card output is projected from its settlement and
+      // names no tool or input: those are the ones its `tool.start` opened.
       slot.log = decodeToolUseLog({
+        toolName: slot.log.toolName,
+        input: slot.log.input,
         ...(isObject(event.result) ? event.result : {}),
         status: event.status,
       });

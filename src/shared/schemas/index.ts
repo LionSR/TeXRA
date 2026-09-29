@@ -88,6 +88,7 @@ export * from './runState';
 export * from './runSnapshotState';
 export * from './rowValues';
 export * from './runLedgerEvent';
+export * from './storedTurn';
 export * from './offeredTools';
 export * from './hookOutcome';
 export * from './followUp';

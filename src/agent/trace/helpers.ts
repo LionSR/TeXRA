@@ -29,6 +29,7 @@ import {
   type FileListEntry,
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
+  toJsonValue,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -181,7 +182,12 @@ export function logWebSearch(
   data: unknown,
   stageId?: string,
 ): void {
-  trace.emit({ type: 'domain', key: 'webSearch', data, stageId });
+  trace.emit({
+    type: 'domain',
+    key: 'webSearch',
+    data: toJsonValue(data),
+    stageId,
+  });
 }
 
 /** Files-loaded card with full {@link FileListEntry} entries. */
@@ -194,7 +200,7 @@ export function logFilesLoaded(
   trace.emit({
     type: 'domain',
     key: 'filesLoaded',
-    data: { category, entries },
+    data: toJsonValue({ category, entries }),
     text: category,
     stageId,
   });

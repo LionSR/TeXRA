@@ -10,7 +10,11 @@
  * without TeXRA-specific sugar; they reduce to the same `tool.start` /
  * `tool.end` emissions.
  */
-import type { ToolCallStatus, ToolUseLog } from '@shared/schemas';
+import {
+  toJsonValue,
+  type ToolCallStatus,
+  type ToolUseLog,
+} from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
 import type { AgentTrace } from './AgentTrace';
@@ -32,7 +36,13 @@ export function startToolUseCard(
   stageId?: string,
 ): ToolUseCardRef {
   const logId = generateShortId();
-  trace.emit({ type: 'tool.start', logId, toolName, input, stageId });
+  trace.emit({
+    type: 'tool.start',
+    logId,
+    toolName,
+    input: toJsonValue(input),
+    stageId,
+  });
   return { logId, groupId: stageId };
 }
 
@@ -53,7 +63,7 @@ export function endToolUseCard(
     type: 'tool.end',
     logId: ref.logId,
     status,
-    result,
+    result: toJsonValue(result),
     stageId: ref.groupId,
   });
 }

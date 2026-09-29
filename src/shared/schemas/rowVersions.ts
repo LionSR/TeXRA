@@ -10,8 +10,11 @@
  * higher one, or a kind this registry lacks, blocks its aggregate and is
  * never rewritten.
  *
- * Before the 1.0 release every kind is unreleased: its shape may change with
- * no upcaster and no bump, and no upcaster exists yet.
+ * The release watermark is the frozen schemas, `config/storage/frozen/`
+ * (`npm run storage:freeze` at a release; `rowVersions.vitest.ts`): a
+ * version frozen there never changes in place. Before the 1.0 release every
+ * kind is unreleased: its shape may change with no upcaster and no bump, and
+ * no upcaster exists yet.
  */
 import type { JsonValue } from './jsonValue';
 import type { SessionEventDraft } from './sessionEvent';
@@ -30,6 +33,10 @@ interface RowKind {
 }
 
 const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
+
+/** The version every current-value family writes and reads
+ *  (`CURRENT_VALUE_SCHEMAS`), until one gains an upcaster. */
+export const CURRENT_VALUE_VERSION = 1;
 
 /** Every arm of `SessionEventDraftSchema`: a new arm without an entry does
  *  not compile. */

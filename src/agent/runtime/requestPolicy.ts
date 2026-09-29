@@ -132,7 +132,7 @@ export function policyDecidedRows(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
-): RunLedgerDraft[] {
+): Extract<RunLedgerDraft, { type: 'request.decided' }>[] {
   const answer = answerFor(session, payload);
   if (answer === undefined) return [];
   if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);

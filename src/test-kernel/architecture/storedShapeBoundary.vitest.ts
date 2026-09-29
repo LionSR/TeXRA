@@ -1,6 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { SessionEventDraftSchema } from '@shared/schemas';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
+  collectModuleSpecifiers,
   expectRealCoverage,
   parseSourceFile,
   productionFilesUnder,
@@ -35,6 +36,7 @@ const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
 const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/';
 const ROW_CODEC = 'src/controllers/session/rowCodec.ts';
 const ROW_VERSIONS = 'src/shared/schemas/rowVersions.ts';
+const SESSION_EVENT = 'src/shared/schemas/sessionEvent.ts';
 
 /** A SQLite JSON function other than `json_each` over one bound parameter. */
 const PAYLOAD_JSON_READ =
@@ -52,6 +54,42 @@ const STORED_TYPE = new RegExp(
 const VERSION_COLUMN = /\be\.version\b/;
 /** The registry and the upcasters it carries. */
 const REGISTRY_READ = /\bROW_KINDS\b|\.upcast(?:ers)?\b/;
+
+/**
+ * Every repo module `SessionEventSchema` reaches, and the `@texra-ai/llm`
+ * imports among them (§4): a stored shape the package owns makes a provider
+ * SDK or enum change a stored format change.
+ */
+function llmImportsOfStoredShapes(): {
+  readonly reached: readonly string[];
+  readonly llm: readonly string[];
+} {
+  const config = ts.readConfigFile(
+    resolve(REPO_ROOT, 'tsconfig.json'),
+    ts.sys.readFile,
+  );
+  const options = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    REPO_ROOT,
+  ).options;
+  const reached = new Set([resolve(REPO_ROOT, SESSION_EVENT)]);
+  const llm: string[] = [];
+  for (const file of reached) {
+    for (const specifier of collectModuleSpecifiers(parseSourceFile(file))) {
+      if (specifier.startsWith('@texra-ai/llm'))
+        llm.push(`${relative(REPO_ROOT, file)} -> ${specifier}`);
+      const target = ts.resolveModuleName(specifier, file, options, ts.sys)
+        .resolvedModule?.resolvedFileName;
+      if (target !== undefined && !target.includes('node_modules'))
+        reached.add(target);
+    }
+  }
+  return {
+    reached: [...reached].map((file) => relative(REPO_ROOT, file)),
+    llm,
+  };
+}
 
 /** Every string and template-literal piece of one production file. */
 function literals(file: string): string[] {
@@ -150,5 +188,18 @@ describe('stored shape boundary', () => {
     const codec = readFileSync(resolve(REPO_ROOT, ROW_CODEC), 'utf8');
     expect(VERSION_COLUMN.test(codec)).toBe(true);
     expect(REGISTRY_READ.test(stripComments(codec))).toBe(true);
+  });
+
+  it('stores no shape the llm package owns', () => {
+    const { reached, llm } = llmImportsOfStoredShapes();
+    // Not vacuous: the walk reaches the stored turn and its ledger arms.
+    expect(reached).toContain('src/shared/schemas/runLedgerEvent.ts');
+    expect(reached).toContain('src/shared/schemas/storedTurn.ts');
+    expect(
+      llm,
+      llm.length === 0
+        ? undefined
+        : 'A stored shape is storage-owned (`storedTurn.ts`); `RunLedger` converts the package’s values (`src/agent/runtime/storedTurn.ts`).',
+    ).toEqual([]);
   });
 });

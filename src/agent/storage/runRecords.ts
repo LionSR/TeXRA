@@ -9,6 +9,7 @@
 import { Effect, Result } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { ledgerRows } from '@agent/runtime/storedTurn';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
@@ -179,7 +180,9 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       // The usage is folded from these same rows, so the terminal fact and
       // the totals come from one read and a resume can never pair them
       // across two.
-      const folded = foldRunState(null, rows);
+      const folded = Result.flatMap(ledgerRows(rows), (live) =>
+        foldRunState(null, live),
+      );
       if (Result.isFailure(folded)) {
         yield* Effect.logWarning(
           'Failed to fold the run usage from its ledger rows',

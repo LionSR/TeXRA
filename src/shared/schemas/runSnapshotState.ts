@@ -7,14 +7,13 @@
  */
 import { z } from 'zod';
 
-import { TurnProtocolSchema } from '@texra-ai/llm/turn';
-
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
 import { FileLocationSchema } from './output';
 import { QualifiedSkillNameSchema } from './skillName';
+import { StoredProtocolSchema } from './storedTurn';
 import {
   type RunUsageTotals,
   TokenCountSchema,
@@ -45,7 +44,7 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   /** Response time in milliseconds */
   responseTimeMs: z.number().nonnegative(),
   /** Wire surface that produced this usage; usage is billed per surface. */
-  provider: TurnProtocolSchema,
+  provider: StoredProtocolSchema,
 
   // Optional metrics (when supported by provider)
   /** Tokens served from cache (reduces cost) */

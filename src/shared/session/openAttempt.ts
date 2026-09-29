@@ -5,8 +5,9 @@
  * observes, and `cancelled` retires that operation after a user stop, so a
  * resume submits anew instead of observing work the user stopped.
  */
-import type { InvocationRef, SessionEvent } from '@shared/schemas';
+import type { InvocationRef } from '@shared/schemas';
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm/turn';
+import type { ModelMessagePayload } from './ledgerTurns';
 
 export type OpenAttempt = {
   readonly invocation: InvocationRef;
@@ -22,7 +23,7 @@ export type OpenAttempt = {
 };
 
 type ProviderRow = Extract<
-  Extract<SessionEvent, { type: 'model.message' }>['payload'],
+  ModelMessagePayload,
   { kind: 'identified' | 'accepted' | 'cancelled' }
 >;
 

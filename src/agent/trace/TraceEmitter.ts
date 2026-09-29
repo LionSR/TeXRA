@@ -10,7 +10,12 @@
  *   - swallow per-sink exceptions so one bad sink can't break the run
  */
 import { writeLogLine } from '@logger/logSink';
-import { RUN_OUTCOME, type LogLevel, type RunOutcome } from '@shared/schemas';
+import {
+  RUN_OUTCOME,
+  toJsonValue,
+  type LogLevel,
+  type RunOutcome,
+} from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -89,7 +94,7 @@ export class TraceEmitter implements AgentTrace {
       type: 'log',
       level,
       message,
-      data: options.data,
+      data: options.data === undefined ? undefined : toJsonValue(options.data),
       messageType: options.messageType,
       stageId: options.stageId,
     });

@@ -15,9 +15,14 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 
 ## Steps
 
-1. **Changelog.** Move `[Unreleased]` content into a new dated
-   `## [X.Y.Z] - YYYY-MM-DD` section, folding in anything that accumulated
-   since a prior draft that never shipped. Commit and push to `main`.
+1. **Changelog and storage freeze.** Move `[Unreleased]` content into a new
+   dated `## [X.Y.Z] - YYYY-MM-DD` section, folding in anything that
+   accumulated since a prior draft that never shipped. Run
+   `npm run storage:freeze`: it writes the JSON Schema of every stored row
+   kind, plugin arm and current-value family at its current version (the
+   frozen fixtures `src/test-kernel/schemas/rowVersions.vitest.ts` checks),
+   which releases those versions: every later build reads them through
+   upcasters. Commit both and push to `main`.
 
 2. **Tags.** Cut both off that commit and push:
 
