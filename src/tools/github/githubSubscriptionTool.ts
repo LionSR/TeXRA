@@ -39,7 +39,7 @@ import {
 } from './checkAnnotationLevels';
 import { issueRef, prRef } from './githubPaths';
 import { getGitHubToken } from './githubAuth';
-import { ghGet } from './githubClient';
+import { ghGet, type GitHubServices } from './githubClient';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -312,7 +312,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
 const ghGetOk = <T>(
   path: string,
   failure = (status: number) => `Unexpected GitHub response status: ${status}`,
-): Effect.Effect<T, Error, Secrets> =>
+): Effect.Effect<T, Error, GitHubServices> =>
   Effect.flatMap(ghGet<T>(path), (res) =>
     res.status === 200
       ? Effect.succeed(res.data)
@@ -328,7 +328,7 @@ const resolveIssueIsPR = (
   owner: string,
   repo: string,
   number: number,
-): Effect.Effect<boolean, Error, Secrets> =>
+): Effect.Effect<boolean, Error, GitHubServices> =>
   Effect.map(
     ghGetOk<GhIssue>(
       `/repos/${owner}/${repo}/issues/${number}`,
@@ -433,7 +433,7 @@ interface OpenPullSummary {
 const getDefaultBranch = (
   owner: string,
   repo: string,
-): Effect.Effect<string, Error, Secrets> =>
+): Effect.Effect<string, Error, GitHubServices> =>
   Effect.map(
     ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (repository) => repository.default_branch ?? 'main',
@@ -462,7 +462,7 @@ const getLocalDefaultBranchHint = (
 const listOpenPullSuggestions = (
   owner: string,
   repo: string,
-): Effect.Effect<string, Error, Secrets> =>
+): Effect.Effect<string, Error, GitHubServices> =>
   Effect.map(
     ghGet<OpenPullSummary[]>(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,
@@ -489,7 +489,7 @@ const getFindCurrentFallbackInfo = (
 ): Effect.Effect<
   { defaultBranch?: string; suggestions: string },
   never,
-  Secrets | ChildProcessSpawner
+  GitHubServices | ChildProcessSpawner
 > =>
   Effect.zip(
     getDefaultBranch(owner, repo).pipe(

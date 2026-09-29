@@ -19,9 +19,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { Disposable } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 
+import type { GitHubServices } from './githubClient';
 import type { PollEventListener } from './PollingSourceBase';
 
 export interface SubscriptionBinding<K extends string> {
@@ -33,7 +33,7 @@ interface PollingSourceLike<K extends string, Input> {
   subscribe(
     input: Input,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets>;
+  ): Effect.Effect<Disposable, never, GitHubServices>;
   updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
   has(key: K): boolean;
@@ -113,7 +113,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     session: SessionHandle,
-  ): Effect.Effect<boolean, never, Secrets> {
+  ): Effect.Effect<boolean, never, GitHubServices> {
     return Effect.suspend(() => {
       const key = this.opts.keyOf(input);
       const bound = this.perRun.get(runId) ?? new Map<K, BoundSubscription>();

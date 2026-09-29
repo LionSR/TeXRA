@@ -1,19 +1,29 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 import { TestClock } from 'effect/testing';
-import { HTTPError, TimeoutError } from 'ky';
+import {
+  HttpClientError,
+  HttpClientRequest,
+  HttpClientResponse,
+} from 'effect/unstable/http';
 import { describe, expect } from 'vitest';
 
 // Local imports - tools
 import { retryTransientFetch } from '@tools/timeouts';
 
-function kyErrorWithStatus(status: number): HTTPError {
-  return new HTTPError(
-    new Response(null, { status }),
-    new Request('https://example.com'),
-    {} as never,
-  );
+const request = HttpClientRequest.get('https://example.com');
+
+function statusError(status: number): HttpClientError.HttpClientError {
+  return new HttpClientError.HttpClientError({
+    reason: new HttpClientError.StatusCodeError({
+      request,
+      response: HttpClientResponse.fromWeb(
+        request,
+        new Response(null, { status }),
+      ),
+    }),
+  });
 }
 
 /**
@@ -26,7 +36,7 @@ function kyErrorWithStatus(status: number): HTTPError {
  * initial failure whether or not another attempt follows.
  */
 function expectTransience(
-  error: unknown,
+  error: Error,
   transient: boolean,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
@@ -48,63 +58,42 @@ function expectTransience(
 }
 
 describe('retryTransientFetch transience classification', () => {
-  it.effect('treats ky TimeoutError as transient', () =>
+  it.effect('treats the request deadline as transient', () =>
+    expectTransience(new Cause.TimeoutError(), true),
+  );
+
+  it.effect('treats a transport failure (no response) as transient', () =>
     expectTransience(
-      new TimeoutError(new Request('https://example.com')),
+      new HttpClientError.HttpClientError({
+        reason: new HttpClientError.TransportError({
+          request,
+          cause: new TypeError('fetch failed'),
+        }),
+      }),
       true,
     ),
   );
 
-  it.effect('treats AbortSignal.timeout() errors as transient', () => {
-    const err = Object.assign(new Error('Timeout'), { name: 'TimeoutError' });
-    return expectTransience(err, true);
-  });
-
-  it.effect(
-    'treats AbortError with TimeoutError cause as transient (undici wrapping)',
-    () => {
-      const cause = Object.assign(new Error('signal timed out'), {
-        name: 'TimeoutError',
-      });
-      const err = Object.assign(new Error('The operation was aborted'), {
-        name: 'AbortError',
-        cause,
-      });
-      return expectTransience(err, true);
-    },
-  );
-
-  it.effect.each(['Failed to fetch', 'fetch failed'])(
-    'treats network failures (no response) as transient: %s',
-    // fetch throws TypeError for connection reset, DNS failure, socket hang-up
-    (message) => expectTransience(new TypeError(message), true),
-  );
-
-  it.effect(
-    'treats programmer TypeErrors as permanent (not every TypeError is a network error)',
-    () =>
-      // A bug in the wrapped call (reading a property of undefined) must
-      // surface, not be silently retried as if it were a transient network
-      // failure.
-      expectTransience(
-        new TypeError("Cannot read properties of undefined (reading 'x')"),
-        false,
-      ),
-  );
-
   it.effect.each([408, 429, 500, 503])(
     'treats request timeouts, rate limits, and 5xx errors as transient: HTTP %i',
-    (status) => expectTransience(kyErrorWithStatus(status), true),
+    (status) => expectTransience(statusError(status), true),
   );
 
   it.effect.each([400, 404])(
     'treats 4xx responses as permanent: HTTP %i',
-    (status) => expectTransience(kyErrorWithStatus(status), false),
+    (status) => expectTransience(statusError(status), false),
   );
 
-  it.effect.each([new Error('boom'), 'nope', undefined])(
-    'treats non-http errors as permanent: %s',
-    (value) => expectTransience(value, false),
+  it.effect.each([
+    new Error('boom'),
+    new HttpClientError.HttpClientError({
+      reason: new HttpClientError.DecodeError({
+        request,
+        response: HttpClientResponse.fromWeb(request, new Response('x')),
+      }),
+    }),
+  ])('treats other failures as permanent: %s', (error) =>
+    expectTransience(error, false),
   );
 });
 
@@ -116,7 +105,7 @@ describe('retryTransientFetch', () => {
         const retriesLeft: number[] = [];
         const fiber = yield* Effect.forkChild(
           Effect.flip(
-            retryTransientFetch(Effect.fail(kyErrorWithStatus(503)), {
+            retryTransientFetch(Effect.fail(statusError(503)), {
               retries: 3,
               minTimeout: 1,
               timeoutMs: 1000,
@@ -130,8 +119,7 @@ describe('retryTransientFetch', () => {
         // The three backoff intervals together take less than 14 ms.
         yield* TestClock.adjust('40 millis');
         const error = yield* Fiber.join(fiber);
-        expect(error._tag).toBe('RequestFailed');
-        expect(error.cause).toBeInstanceOf(HTTPError);
+        expect(HttpClientError.isHttpClientError(error)).toBe(true);
         expect(retriesLeft).toEqual([3, 2, 1, 0]);
       }),
   );

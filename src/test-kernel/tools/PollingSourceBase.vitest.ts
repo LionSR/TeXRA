@@ -5,6 +5,7 @@ import { describe, expect } from 'vitest';
 
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 // Local imports - tools
 import { getNewestTimestamp } from '@tools/github/githubPaths';
 import { DedupedResource } from '@tools/github/pollingDedup';
@@ -148,7 +149,10 @@ describe('PollingSourceBase lifetime', () => {
             Effect.andThen(Deferred.await(release)),
           ),
         )
-        .pipe(Effect.provideService(Secrets, new FakeSecrets()));
+        .pipe(
+          Effect.provideService(Secrets, new FakeSecrets()),
+          Effect.provide(testHttpClientLayer),
+        );
 
       yield* source.emitForTest('event');
       yield* Deferred.await(started);

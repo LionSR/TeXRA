@@ -1,15 +1,16 @@
 // Third-party imports
 import { Effect } from 'effect';
-import ky from 'ky';
 import { z } from 'zod';
 
 // Internal imports
-import { ToolResult } from '@shared/schemas';
-import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
+import {
+  retryTransientFetch,
+  scopedOkClient,
+  toFetchToolError,
+} from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -74,23 +75,17 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
   (query: string) =>
     retryTransientFetch(
       Effect.gen(function* () {
-        const raw = yield* Effect.tryPromise({
-          try: (signal) =>
-            ky
-              .get('https://api.duckduckgo.com/', {
-                searchParams: {
-                  q: query,
-                  format: 'json',
-                  no_redirect: 1,
-                  no_html: 1,
-                },
-                timeout: false,
-                signal,
-                retry: 0,
-              })
-              .json<unknown>(),
-          catch: ensureError,
+        const client = yield* scopedOkClient;
+        const response = yield* client.get('https://api.duckduckgo.com/', {
+          urlParams: {
+            q: query,
+            format: 'json',
+            no_redirect: 1,
+            no_html: 1,
+          },
+          acceptJson: true,
         });
+        const raw = yield* response.json;
         // Validate the body at the boundary. A malformed shape is not
         // transient, so it is not retried; the classification below surfaces
         // it as a tool error.
@@ -187,10 +182,8 @@ export const WebSearchTool = defineTool({
   description:
     'Search the web and return top results from the DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
-  execute: (input: WebSearchInput): Effect.Effect<ToolResult, Error> => {
-    // The owning agent run's cancellation enters here as interruption —
-    // without it, a cancelled run would wait out searches (and their
-    // retries) that only observe the internal timeout.
-    return searchWeb(input);
-  },
+  // The owning agent run's cancellation enters here as interruption —
+  // without it, a cancelled run would wait out searches (and their
+  // retries) that only observe the internal timeout.
+  execute: searchWeb,
 });
