@@ -293,7 +293,6 @@ describe('completedRunArchive facade', () => {
         const conversationResult = yield* Effect.promise(() =>
           readCompletedRunConversation(runId),
         );
-        expect(conversationResult.source).toBe('streamLog');
         expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(
           true,
         );
@@ -450,7 +449,6 @@ describe('completedRunArchive facade', () => {
           session,
         );
         expect(archived).toEqual({
-          source: 'streamLog',
           conversation: [
             {
               kind: 'user-message',
@@ -490,7 +488,6 @@ describe('completedRunArchive facade', () => {
           offset: 2,
           limit: 2,
         }).pipe(Effect.provide(toolLayer));
-        expect(firstPage.output).toContain('Source: streamLog');
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
         expect(firstPage.output).toContain('<message index="1"');
@@ -533,10 +530,7 @@ describe('completedRunArchive facade', () => {
     await stampRun(runId);
 
     const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult).toEqual({
-      conversation: null,
-      source: 'none',
-    });
+    expect(conversationResult).toEqual({ conversation: null });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
     expect(await completedRunTodos(runId)).toEqual([]);
@@ -598,10 +592,7 @@ describe('completedRunArchive facade', () => {
       const result = yield* Effect.promise(() =>
         readCompletedRunConversation(runId),
       );
-      expect(result).toEqual({
-        conversation: null,
-        source: 'none',
-      });
+      expect(result).toEqual({ conversation: null });
       expect(hasCompletedRunConversationEvidence(result)).toBe(false);
 
       const endpoint = yield* ExecutionsTool.call({

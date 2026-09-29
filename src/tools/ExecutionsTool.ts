@@ -557,7 +557,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       runId,
       context.session,
     ).pipe(Effect.orDie);
-    const { conversation, source } = conversationResult;
+    const { conversation } = conversationResult;
 
     if (!conversation) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
@@ -571,11 +571,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       return executed(
         formatConversation([], {
           totalMessages: 0,
-          metadata: [
-            'Source: none',
-            'Returned message interval: [0, 0)',
-            'Next offset: none',
-          ],
+          metadata: ['Returned message interval: [0, 0)', 'Next offset: none'],
         }),
       );
     }
@@ -587,7 +583,6 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       offset: pageStart,
       totalMessages: conversation.length,
       metadata: [
-        `Source: ${source}`,
         `Returned message interval: [${pageStart}, ${pageEnd})`,
         `Next offset: ${pageEnd < conversation.length ? pageEnd : 'none'}`,
       ],

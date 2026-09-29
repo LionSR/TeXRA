@@ -148,21 +148,12 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     super.connectedCallback();
     installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
-    this.postReady();
+    postMessage(SETTINGS_VIEW_COMMANDS.WEBVIEW_READY);
   }
 
   override disconnectedCallback(): void {
     window.removeEventListener('message', this.messageListener);
     super.disconnectedCallback();
-  }
-
-  /** Tell the host this view is mounted, tagged with the desktop surface. */
-  private postReady(): void {
-    const view = this.getAttribute('data-desktop-view');
-    postMessage(
-      SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      view == null ? {} : { view },
-    );
   }
 
   private selectSettingsEntry(

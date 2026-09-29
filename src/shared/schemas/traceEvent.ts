@@ -28,7 +28,6 @@ export const TranscriptEventSchemas = {
     message: z.string(),
     data: z.unknown().optional(),
     messageType: z.string().optional(),
-    verbose: z.boolean().optional(),
   }),
   stageStart: trace('stage.start', {
     id: z.string(),

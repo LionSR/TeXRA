@@ -165,7 +165,7 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
     }).pipe(
       recoverOutputFailure({
         logger,
-        level: 'debug',
+        level: 'warn',
         label: 'Error processing output file',
         recover: () => handleNoOutputs(state, deps, currRound, outputLocation),
       }),

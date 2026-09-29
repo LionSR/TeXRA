@@ -98,15 +98,6 @@ describe('transcript row builders', () => {
     ]);
   });
 
-  it('drops the state-only and marker message types', () => {
-    expect(
-      logPayloadRow(base, '', {
-        messageType: MESSAGE_TYPES.INTERNAL,
-        data: { kind: 'workflowPlan', attemptId: 'x', phases: [], tasks: [] },
-      }),
-    ).toBeUndefined();
-  });
-
   it('keeps phase counts when a phase closes', () => {
     const runTrace = createTestRunTrace('phase' as RunId);
     const phase = runTrace.trace.openStage('Reduce', {

@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 
-import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 import type { ConfigProvider } from '@platform/interfaces';
@@ -104,15 +104,13 @@ export class XmlOutputManager {
         result.method === 'latex'
           ? 'from \\documentclass block'
           : 'using fallback method';
-      logInternal(
-        this.logger,
+      this.logger.debug(
         `Recovered ${OUTPUT_DOCUMENTS_TAG} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
       );
       return result.documents;
     }
 
-    debugInternal(
-      this.logger,
+    this.logger.debug(
       `No ${OUTPUT_DOCUMENTS_TAG} found in output file using fallback method`,
     );
     return null;
@@ -164,8 +162,7 @@ export class XmlOutputManager {
   private collectLatexFencedBlocks(outputContent: string): string[] {
     return collectLatexFencedBlocksFromResponse(outputContent, {
       onUnclosedFence: (lineCount) => {
-        debugInternal(
-          this.logger,
+        this.logger.debug(
           `Dropped unclosed LaTeX fence with ${formatResultCount(lineCount, 'line')} during fallback extraction`,
         );
       },
@@ -222,8 +219,7 @@ export class XmlOutputManager {
       );
       if (documents.length === 0) return null;
 
-      logInternal(
-        this.logger,
+      this.logger.debug(
         `Recovered ${OUTPUT_DOCUMENTS_TAG} by matching unlabeled fenced ` +
           `blocks against the original input files (${formatResultCount(documents.length, 'document')})`,
       );
@@ -242,8 +238,7 @@ export class XmlOutputManager {
         });
       }
       if (documents.length < blocks.length) {
-        debugInternal(
-          this.logger,
+        this.logger.debug(
           `${blocks.length - documents.length} of ${formatResultCount(blocks.length, 'fenced block')} matched no input file and were dropped`,
         );
       }
@@ -289,8 +284,7 @@ export class XmlOutputManager {
         Effect.flatMap((parsed) =>
           Effect.sync((): NamedDocument[] | null => {
             if (parsed.documents === null) {
-              debugInternal(
-                this.logger,
+              this.logger.debug(
                 `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML (${parsed.reason}), attempting fallback extraction...`,
               );
             }
@@ -299,8 +293,7 @@ export class XmlOutputManager {
         ),
         Effect.catch((err) =>
           Effect.sync((): NamedDocument[] | null => {
-            debugInternal(
-              this.logger,
+            this.logger.debug(
               `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
             );
             return null;
@@ -335,8 +328,7 @@ export class XmlOutputManager {
             this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
         });
         if (documents) {
-          logInternal(
-            this.logger,
+          this.logger.debug(
             `Recovered ${OUTPUT_DOCUMENTS_TAG} from filename headers (${formatResultCount(documents.length, 'document')})`,
           );
           if (expectedFiles.length > 1) {
@@ -374,8 +366,7 @@ export class XmlOutputManager {
               content: blocks.join('\n\n'),
             },
           ];
-          logInternal(
-            this.logger,
+          this.logger.debug(
             `Recovered ${OUTPUT_DOCUMENTS_TAG} from ` +
               `unlabeled fenced blocks under ${soleExpectedFile} (${formatResultCount(blocks.length, 'block')})`,
           );
