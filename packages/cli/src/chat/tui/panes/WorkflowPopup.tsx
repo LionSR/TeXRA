@@ -283,8 +283,7 @@ export function WorkflowPopup({
   const layout = readerLayout({
     availableRows,
     extraRows: POPUP_HEADER_ROWS + (filterShown ? 1 : 0),
-    // A many-phase, many-call run needs the whole terminal, not the
-    // 80-column form frame.
+    // The whole terminal: a many-call run outgrows the 80-column frame.
     frameWidth: Math.max(1, columns),
     hints,
     title,
