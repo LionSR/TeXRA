@@ -97,7 +97,10 @@ export const signInCliSubscription = Effect.fn(
   };
 
   return yield* provider.signIn({
-    transport: init.device ? 'device' : 'loopback',
+    // `auto` tries the browser callback and drops to a device code when its
+    // ports are taken or no browser is reachable, so the user is never left
+    // with a bare bind error and no link.
+    transport: init.device ? 'device' : 'auto',
     present,
   });
 });
