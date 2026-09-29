@@ -29,7 +29,9 @@ The design does five things:
 - **The store shrinks.** It uses incremental vacuum, a WAL limit, and
   garbage collection of aside copies and orphaned stores.
 
-One physical bump, to `SCHEMA_VERSION` 100, carries all of it.
+One physical bump carries all of it. The 1.0 baseline is `SCHEMA_VERSION`
+101: Lane 1 stamped 100, the blob layout (§2) changed that DDL before any
+release, and 100 never shipped.
 
 ### What gets deleted or collapsed
 
@@ -187,7 +189,7 @@ Both changes narrow the ratchets; neither widens one.
 -- New files only: auto_vacuum must be set before the first table exists.
 PRAGMA auto_vacuum = INCREMENTAL;
 PRAGMA application_id = 1415927890;   -- 0x54655852 'TeXR': identifies a TeXRA store
-PRAGMA user_version = 100;            -- SCHEMA_VERSION
+PRAGMA user_version = 101;            -- SCHEMA_VERSION, the 1.0 baseline
 
 CREATE TABLE event_sequence (
   id           INTEGER PRIMARY KEY,           -- local surrogate; never leaves the file
@@ -326,8 +328,10 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 
 `SCHEMA_VERSION` names the DDL, not the vocabulary.
 
-- **Numbering.** It starts at **100**. Any stamp from 1 to 99 is a pre-1.0
-  `SESSION_EVENT_FORMAT`, so the two numbering schemes cannot collide.
+- **Numbering.** The 1.0 baseline is **101**. Any stamp from 1 to 99 is a
+  pre-1.0 `SESSION_EVENT_FORMAT`, so the two numbering schemes cannot
+  collide; 100 is the pre-release 1.0 store (the single `event.blob`
+  column) that main wrote before the blob layout and no release shipped.
 - **When it bumps.** Only for a change an older build cannot write around: a
   column change or a table rebuild. An additive index or projection table is
   `CREATE … IF NOT EXISTS` and bumps nothing, because projections carry
@@ -351,8 +355,9 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 4. Read `user_version` (`v`).
    - `v > SCHEMA_VERSION`: refuse, with nothing touched (`DatabaseOpenFailed`,
      reason `newer`).
-   - `v` from 1 to 99 (pre-1.0): start fully clean (owner ruling Q3). Nothing
-     in the store is kept, `current_value` and `input_history` included.
+   - `v` from 1 to 100 (pre-1.0, the never-shipped 100 included): start
+     fully clean (owner ruling Q3). Nothing in the store is kept,
+     `current_value` and `input_history` included.
      Retire it with `retireStore`'s existing pattern:
      - `VACUUM INTO` a staged copy.
      - `BEGIN IMMEDIATE`, then re-read `user_version` and `data_version`
@@ -371,9 +376,9 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
      - `auto_vacuum` first.
      - Then `BEGIN IMMEDIATE`, re-read `user_version`, and, if it is still
        0, apply the DDL and stamp `application_id` and `SCHEMA_VERSION`.
-     - Of two processes creating at once, the second sees 100 and does
+     - Of two processes creating at once, the second sees 101 and does
        nothing.
-   - `100 ≤ v < SCHEMA_VERSION`: back up with `VACUUM INTO texra.db.schema<v>`
+   - `101 ≤ v < SCHEMA_VERSION` (after 1.0 only): back up with `VACUUM INTO texra.db.schema<v>`
      under the same re-read pattern.
      - Set `PRAGMA foreign_keys = OFF` if any step needs it. The PRAGMA is
        a no-op inside a transaction, so it is set before `BEGIN`.
@@ -911,8 +916,9 @@ internals.
 
 ## 12. Plan
 
-There are four lanes, and exactly one physical bump: Lane 1, to
-`SCHEMA_VERSION` 100. Everything after Lane 1 changes only unreleased row
+There are four lanes, and exactly one physical bump before 1.0: Lane 1, to
+`SCHEMA_VERSION` 100, which the blob layout moved to 101, the 1.0 baseline,
+before any release. Everything after Lane 1 changes only unreleased row
 versions (§3, the release watermark).
 
 | Lane                | Order                    | Depends on | Effort    | In the 1.0 reader?                                                  |

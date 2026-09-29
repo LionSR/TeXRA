@@ -1371,7 +1371,7 @@ describe('the C1 event table and the C6 publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 100,
+          user_version: 101,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -1652,7 +1652,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 101;
+    const format = 102;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(

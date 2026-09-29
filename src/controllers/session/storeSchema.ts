@@ -6,9 +6,10 @@
  *
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`, read by `rowCodec.ts`), so it moves
- * only for a change an older build cannot write around. It starts at 100;
- * a stamp from 1 to 99 is a store written before 1.0, which this build
- * never reads and moves aside whole.
+ * only for a change an older build cannot write around. The 1.0 baseline is
+ * 101. A stamp from 1 to 99 is a store written before 1.0, and 100 a
+ * pre-release of the 1.0 store that never shipped; this build reads
+ * neither and moves them aside whole.
  *
  * This module knows no row kind and no payload field.
  */
@@ -28,7 +29,7 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 100;
+const SCHEMA_VERSION = 101;
 /** `TeXR`: a TeXRA store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
@@ -238,7 +239,8 @@ const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
  * - A foreign `application_id` or a newer `SCHEMA_VERSION` is refused
  *   untouched, and so is any other file below 100 that is not a pre-1.0
  *   TeXRA store by its own tables (`PRE1_SIGNATURE`).
- * - A store written before 1.0 is copied whole to `<file>.pre1` (or the
+ * - A store written before 1.0 (below 101, the never-shipped 100
+ *   included) is copied whole to `<file>.pre1` (or the
  *   first free `.pre1.<n>`), every table is dropped, and the file starts
  *   fresh: nothing in it is kept, current values included.
  * - An empty file gets the schema, under the write lock; of two processes
@@ -278,7 +280,7 @@ const prepareStore = Effect.fnUntraced(function* (
       yield* run(sql, 'COMMIT');
       continue;
     }
-    if (stored < 100) {
+    if (stored < SCHEMA_VERSION) {
       // Off outside the transaction (a no-op inside one): a drop then
       // neither checks nor cascades a foreign key it removes anyway.
       yield* run(sql, 'PRAGMA foreign_keys = OFF');
@@ -303,7 +305,7 @@ const prepareStore = Effect.fnUntraced(function* (
       movedAside = { path, aside, reason: 'pre-1.0' };
       continue;
     }
-    // 100 is the first schema: anything above it is a newer build's.
+    // 101 is the 1.0 baseline: anything above it is a newer build's.
     return yield* newerStore(path, stored);
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
