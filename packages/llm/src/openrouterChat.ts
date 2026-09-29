@@ -25,7 +25,7 @@ import {
 } from './turn.js';
 import { decodeTurnRequest } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from './message.js';
-import { sameModelOrigin } from './protocol.js';
+import { originOf, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
   authOrRejectionKind,
@@ -427,12 +427,7 @@ export function openrouterChatModel(
       kind: 'unsupported',
       message: 'This model implements OpenRouter Chat.',
     });
-  const origin = Object.freeze({
-    protocol: config.protocol,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-    codecVersion: 1 as const,
-  });
+  const origin = originOf(config);
   const http = transport.fetch ?? globalThis.fetch;
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.prepareTurn')(
     function* (request) {

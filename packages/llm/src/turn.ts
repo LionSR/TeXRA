@@ -48,6 +48,7 @@ import {
 export {
   JsonObjectSchema,
   ModelOriginSchema,
+  originOf,
   sameModelOrigin,
   TurnProtocolSchema,
 } from './protocol.js';
@@ -811,7 +812,6 @@ export const InputTokenEstimateSchema = z
   .strictObject({
     inputTokens: z.int().nonnegative(),
     coverage: z.enum([
-      'kimi-messages',
       'google-converted-content',
       'anthropic-message-input',
       'responses-input',

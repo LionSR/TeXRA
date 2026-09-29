@@ -28,7 +28,7 @@ import {
   enrichModelError,
   type RemoteOperation,
 } from './errors.js';
-import { sameModelOrigin } from './protocol.js';
+import { originOf, sameModelOrigin } from './protocol.js';
 import { ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
@@ -49,12 +49,12 @@ import {
   responseEvents,
   sdkEvents,
   type HttpTurnResult,
-  type ResponseOrigin,
 } from './openaiResponsesCodec.js';
 import {
   ResponseAuthenticationSchema,
   estimateResponseInput,
   openaiAbortMatch,
+  openaiClient,
   prepareResponsesTurn,
   responseAuthentication,
   responseParameters,
@@ -102,23 +102,13 @@ export function openaiResponsesModel(
       message: 'This model implements the Responses protocol.',
     });
   }
-  const origin = Object.freeze({
-    protocol: config.protocol,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-    codecVersion: 1,
-  } satisfies ResponseOrigin);
+  const origin = originOf(config);
   const authentication = responseAuthentication(transport.authentication);
-  const client = new OpenAI({
-    apiKey: authentication.token,
-    defaultHeaders: authentication.headers,
-    baseURL: config.deployment.endpoint,
-    fetch: transport.fetch,
-    maxRetries: 0,
-    organization: null,
-    project: null,
-    logLevel: 'off',
-  });
+  const client = openaiClient(
+    config.deployment.endpoint,
+    authentication,
+    transport.fetch,
+  );
   // Uploads need a files endpoint and a stable account: an API-key binding.
   // A subscription token rotates and its backend serves no files endpoint.
   const uploads =

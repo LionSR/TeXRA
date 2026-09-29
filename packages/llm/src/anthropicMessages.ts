@@ -25,13 +25,13 @@ import {
 } from './turn.js';
 import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from './message.js';
-import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
+import { JsonObjectSchema, originOf, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
   parseOutboundToolArguments,
-  pullStream,
+  sdkStream,
 } from './transport.js';
 import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type { ModelOrigin } from './protocol.js';
@@ -483,12 +483,7 @@ export function anthropicMessagesModel(
         'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
     });
   }
-  const origin: ModelOrigin = {
-    protocol: 'anthropic-messages',
-    codecVersion: 1,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-  };
+  const origin = originOf(config);
   const client = new Anthropic({
     apiKey: transport.apiKey,
     authToken: null,
@@ -580,15 +575,6 @@ export function anthropicMessagesModel(
             try: () => client.messages.create(body, { signal }),
             catch: sdkFailure,
           });
-          const iterator = yield* Effect.acquireRelease(
-            Effect.sync(() => source[Symbol.asyncIterator]()),
-            (iterator) => {
-              // A queued return cannot release a pending SDK read until its request aborts.
-              source.controller.abort();
-              if (!iterator.return) return Effect.void;
-              return Effect.promise(() => iterator.return!());
-            },
-          );
           const content: Array<TurnResult['content'][number]> = [];
           let open:
             | {
@@ -601,7 +587,7 @@ export function anthropicMessagesModel(
           let stopped = false;
           let stop: z.infer<typeof StopSchema> = {};
           let usage: z.infer<typeof UsageSchema> = {};
-          const chunks = pullStream(() => iterator.next(), sdkFailure);
+          const chunks = yield* sdkStream(source, sdkFailure);
           const progress = chunks.pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* (): Effect.fn.Return<
