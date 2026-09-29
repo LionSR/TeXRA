@@ -104,7 +104,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
 
   if (decision === 'allow') return { action: 'approve' };
   if (isTexraApprovalDenied(decision)) {
-    run.onApprovalPolicyDenial?.({ kind: 'executable' });
+    session.interactions.approvalDenied({ kind: 'executable' }, runId);
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 

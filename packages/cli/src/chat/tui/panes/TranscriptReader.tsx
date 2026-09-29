@@ -17,7 +17,6 @@ import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import type { RunId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
 
-import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView, runViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
@@ -46,7 +45,7 @@ export function TranscriptReader({
   const transcript = runViewOf(view, runId)?.transcript ?? EMPTY_TRANSCRIPT;
   const layout = readerLayout({
     availableRows,
-    frameWidth: formFrameWidth(columns),
+    frameWidth: Math.max(1, columns),
     hints: READER_SCROLL_HINTS,
     title,
   });

@@ -57,7 +57,23 @@ const RecordedRequestSchema = z.strictObject({
   controls: JsonValueSchema,
   /** The resolved agent definition the run was launched with. */
   agent: Sha256Schema,
+  /** Set when the run's continuation matched the binding yet the request
+   *  omitted it: the retry after the vendor dropped the chained response. */
+  fullTranscript: z.literal(true).optional(),
 });
+
+/** The continuation a request bound to `origin` chains on, as a spreadable
+ *  field; empty when the origin differs or `omit` (the full-transcript retry). */
+export const chainedContinuation = (
+  state: RunState,
+  origin: ModelOrigin,
+  omit?: boolean,
+) =>
+  omit !== true &&
+  state.continuation !== null &&
+  sameModelOrigin(state.continuation.origin, origin)
+    ? { continuation: state.continuation }
+    : {};
 
 /** The controls a re-prepared request restates, where the protocol has them. */
 const RestatedControlsSchema = z.looseObject({
@@ -119,6 +135,10 @@ export function attemptRows(
     tools: resolved.tools.map((tool) => sha256(tool)),
     controls: resolved.controls,
     agent: sha256(agent),
+    ...(!('continuation' in resolved) &&
+    'continuation' in chainedContinuation(state, origin)
+      ? { fullTranscript: true as const }
+      : {}),
   };
   return [
     ...blobRows(run.runId, state, [
@@ -183,10 +203,7 @@ function recordedTurn(state: RunState) {
         DeclarationSchema.parse(blob(state, digest)),
       ),
       controls: recorded.controls,
-      ...(state.continuation !== null &&
-      sameModelOrigin(state.continuation.origin, open.origin)
-        ? { continuation: state.continuation }
-        : {}),
+      ...chainedContinuation(state, open.origin, recorded.fullTranscript),
     },
   };
 }

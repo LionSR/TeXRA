@@ -43,7 +43,6 @@ import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
-import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import { initializeLatexSupport } from '@frontend/setup';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
@@ -217,12 +216,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
-    // The editor's language models, so the run layer binds `vscode-lm`
-    // models on this host (R2); consent was granted from the settings view.
-    editorModel: {
-      acquire: (configuration) =>
-        acquireVscodeLanguageModel(context, configuration),
-    },
     // The Comments UI behind the `inline_comment` tool. The provider reads
     // the controller this host registers at activation, so it is a value
     // from module load; nothing about it waits on that registration.

@@ -74,6 +74,9 @@ async function installPlatform(
   detachHostInteractions();
   detachHostInteractions = Effect.runSync(
     testDefaultSession().interactions.use({
+      approvalDenied: () => {
+        policyDenials += 1;
+      },
       presentToolEdit: (request) => {
         approvalRequests.push(request);
       },
@@ -156,9 +159,6 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
           runId,
           session: testDefaultSession(),
           toolPolicy: {},
-          onApprovalPolicyDenial: () => {
-            policyDenials += 1;
-          },
         },
       }),
     ),

@@ -54,6 +54,7 @@ import {
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
+import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
@@ -420,10 +421,9 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
- * the byte-exact conversation and the loop's durable state, on the run's
- * aggregate beside its display rows, read only by `foldRunState` through
- * `RunLedger`. Never redacted, never on a renderer's transport
- * (`isDisplaySessionEvent`), never in the cold listing (`listingTypeOf`).
+ * the byte-exact conversation and the loop's durable state (its hooks'
+ * outcomes included), read only by `foldRunState` through `RunLedger`. Never
+ * redacted, on a renderer's transport or in the cold listing.
  */
 const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
@@ -438,13 +438,13 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.snapshot', { payload: RunSnapshotPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
+  durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
   /**
-   * One child turn's identity and fate: the child loop's own bookkeeping,
-   * never a renderer's. The key is structural, (run, attempt, turn index),
-   * so the same accepted turn always folds to the same identity and a
-   * later attempt that reuses the run id never collides with it. Pending
-   * is the fold: `accepted` without `settled` is the active turn; the
-   * latest `settled` is the last turn whose delivery ran.
+   * One child turn's identity and fate, the child loop's own bookkeeping.
+   * The key is structural, (run, attempt, turn index), so an accepted turn
+   * always folds to one identity and a later attempt reusing the run id
+   * never collides with it. `accepted` without `settled` is the active
+   * turn; the latest `settled` is the last turn whose delivery ran.
    */
   durable('child.turn', {
     attemptId: z.string().min(1),
@@ -543,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 42;
+export const SESSION_EVENT_FORMAT = 44;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -618,15 +618,15 @@ export function listingTypeOf(
     case 'run.snapshot':
     case 'tools.offered':
     case 'context.blob':
+    case 'hook.outcome':
     case 'child.turn':
     case 'workflow.script':
     case 'workflow.journal':
     case 'workflow.attempt':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
-      // rows stay out, so a cold hydrate never pulls a `run.snapshot` into
-      // every renderer (`run.position` and `output.produced` are listing rows).
-      // Keyed records and the checkpoint journal are folded whole by their
-      // readers. Not compiler-enforced; the fold suite pins it.
+      // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
+      // renderer (`run.position`, `output.produced` are listing rows). Keyed
+      // records and the journal fold whole; the fold suite pins this list.
       return null;
     case 'request.opened':
     case 'request.decided':

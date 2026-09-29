@@ -22,7 +22,8 @@ export const PluginListItemSchema = z.object({
   /** Whether the user trusts it as it is now; enabled and untrusted, it
    *  loads nothing until it is reviewed again. */
   trusted: z.boolean(),
-  /** Code components, which keep it from being enabled. */
+  /** Code components TeXRA does not run (LSP servers), which keep it from
+   *  being enabled. */
   code: z.array(z.string()),
   skillCount: z.number(),
   commandCount: z.number(),

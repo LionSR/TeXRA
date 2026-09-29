@@ -16,6 +16,21 @@ without renderer errors, but it does not verify VS Code command registration,
 activation events, or view-container integration. Use the VS Code checks below
 for those host-level behaviors.
 
+## Automated Host Check
+
+```bash
+npm run compile:fast
+npm run test:vscode                      # latest stable VS Code
+npm run test:vscode -- --vscode minimum  # engines.vscode
+```
+
+This launches the built extension in a real VS Code and asserts, from inside the
+extension host, that it activates, that every manifest command is registered, and
+that `showProgressView`, `showAgents` and `openProgressViewInTab` run and open a
+TeXRA webview tab. It runs in CI on push, nightly and dispatch, not on pull
+requests. It makes no model call: the extension keeps API keys only in VS Code
+SecretStorage, which a test cannot seed.
+
 ## Development Host
 
 ```bash
@@ -23,7 +38,7 @@ corepack pnpm install
 npm run compile:safe
 npm run check:extension-package-invariants
 
-SMOKE_ROOT="$(mktemp -d)"
+SMOKE_ROOT="$(mktemp -d /tmp/vsh-XXXXXX)" # keep it short: VS Code's IPC socket path limit is ~100 chars
 mkdir -p "$SMOKE_ROOT/workspace" "$SMOKE_ROOT/user-data" "$SMOKE_ROOT/extensions"
 printf '\\documentclass{article}\n\\begin{document}\nSmoke\n\\end{document}\n' > "$SMOKE_ROOT/workspace/main.tex"
 
@@ -49,7 +64,7 @@ npm run build:fast
 npm run check:vsix-contents
 
 VSIX="releases/texra-$(node -p "require('./packages/extension/package.json').version").vsix"
-SMOKE_ROOT="$(mktemp -d)"
+SMOKE_ROOT="$(mktemp -d /tmp/vsh-XXXXXX)" # keep it short: VS Code's IPC socket path limit is ~100 chars
 mkdir -p "$SMOKE_ROOT/workspace" "$SMOKE_ROOT/user-data" "$SMOKE_ROOT/extensions"
 printf '\\documentclass{article}\n\\begin{document}\nSmoke\n\\end{document}\n' > "$SMOKE_ROOT/workspace/main.tex"
 

@@ -167,10 +167,10 @@ yields the detach disposer, so it is `yield*`ed. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
-(`src/agent/runtime/HostInteractions.ts:85-91`). An unanswered request stays
+(`src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
-presentation events, and says `approvalPromptsUnavailable: true` (§3), which
-keeps the approval-gated tools away from the model.
+presentation events, and sets `approvalPromptsUnavailable: true` on the
+object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
 
 ### Putting it together
 
@@ -181,7 +181,7 @@ runtime packages named `@controllers/session/sessionLayer`,
 `@agent/runtime/runAgent`, and so on.
 
 ```ts
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect } from 'effect';
 import { AgentDirectories } from '@platform/interfaces';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
@@ -235,51 +235,13 @@ await runtime.runPromise(
     const session = yield* initializeDefaultSession({ roots });
     const detachHostInteractions = yield* session.interactions.use({
       // §3: this host can answer no approval, so no run of the session is
-      // offered a tool that would ask for one.
+      // offered a tool that would ask for one, and the session denies the
+      // retry a provider failure opens.
       approvalPromptsUnavailable: true,
       emit: (event, payload) => {
         console.error(`[texra] ${event}`, payload);
       },
     });
-    // §3 — DO NOT SKIP: approvalPromptsUnavailable above removes every tool
-    // that opens a request, but a provider failure still opens a `retry`, and
-    // nothing answers it unless this process does. Deny each one once.
-    const answered = new Set<string>();
-    const retryDenier = yield* Effect.forkChild(
-      Stream.runForEach(session.viewChanges, (view) => {
-        // Forget what the fold no longer lists, so the set tracks only
-        // live requests over a long-lived session.
-        const live = new Set(view.requests.map((pending) => pending.requestId));
-        for (const requestId of answered) {
-          if (!live.has(requestId)) answered.delete(requestId);
-        }
-        return Effect.forEach(
-          view.requests.filter(
-            (pending) =>
-              pending.payload.kind === 'retry' &&
-              !answered.has(pending.requestId),
-          ),
-          (pending) => {
-            answered.add(pending.requestId);
-            return session.requests
-              .request({
-                kind: 'request.decide',
-                runId: pending.runId,
-                requestId: pending.requestId,
-                decision: { action: 'deny', reason: 'No retry prompts.' },
-              })
-              .pipe(
-                // A refused write answered nothing: forget the request so
-                // the next view denies it again.
-                Effect.catch(() =>
-                  Effect.sync(() => answered.delete(pending.requestId)),
-                ),
-              );
-          },
-          { discard: true },
-        );
-      }),
-    );
     yield* loadAgents();
 
     const validated = validateRunRequest({
@@ -293,10 +255,7 @@ await runtime.runPromise(
 
     yield* Effect.ensuring(
       runAgent(validated.request, { session }),
-      Effect.andThen(
-        Fiber.interrupt(retryDenier),
-        Effect.sync(detachHostInteractions),
-      ),
+      Effect.sync(detachHostInteractions),
     );
   }),
 );
@@ -440,7 +399,7 @@ this document.
 
 A run that needs a person commits a `request.opened` row carrying what a
 surface shows (a diff, a command, a question) and parks. The row is answered
-by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:407-421`).
+by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:381-396`).
 "Pending" is nothing but the fold: an opened request with no decision is
 listed in the session view's `requests`
 (`src/shared/session/sessionView.ts:256`;
@@ -467,7 +426,7 @@ run's `request.decided` row, and the run continues from it.
 `HostInteractions` is not part of this path. It is a presentation port —
 events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
 carry — and no method on it returns a decision
-(`src/agent/runtime/HostInteractions.ts:85-91`). Attaching a host with
+(`src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
 `session.interactions.use(...)` is how a host sees what a run does; it never
 unparks a run.
 
@@ -475,69 +434,82 @@ unparks a run.
 
 The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
 `proposal`, `planApproval`, `externalInquiry`, `userQuestion`
-(`src/shared/schemas/progressView/data.ts:133-156`). Every kind but
+(`src/shared/schemas/progressView/data.ts:106-128`). Every kind but
 `externalInquiry` parks the tool or turn that opened it
-(`requestParksItsCaller`, `:171-175`); an external inquiry is answered later
+(`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
 and parks nothing.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
-A host attached with `approvalPromptsUnavailable: true`
-(`HostInteractions`, `src/agent/runtime/HostInteractions.ts:96`) withholds
-every `requiresApproval` tool from the model before the first turn, so a run
-cannot open the requests those tools would raise. It is a fact of the
-session, not a launch option: `executeAgent` reads the attached host's answer
-into the run context on a fresh launch and on a resume
-(`src/agent/runtime/executeAgent.ts:360`, `:521`), so a delegated child,
-which runs on its parent's session, and a run the session wakes on its own
-get the same answer. The run layer forwards it to tool resolution
-(`src/agent/runtime/run/AgentRun.ts:243`), and `resolveAgentTools` drops the
-gated tools (`src/agent/runtime/agentToolResolution.ts:245-249`). The tools that open
+The host says it by supplying `approvalPromptsUnavailable` on the object it
+passes to `session.interactions.use({...})`, as in the §1 example; it is a
+field of `HostInteractions` (`src/agent/runtime/HostInteractions.ts:97`), not
+an option of `runAgent`, and `RunAgentOptions` has no such property. The
+session's `interactions.approvalPromptsUnavailable` getter reads the attached
+host's answer (`HostInteractions.ts:272-276`), and it is `false` while no host
+is attached. It is a fact of the session, not a launch option: each step
+applies the session's approval policy to it (`withholdsApprovalTools`,
+`src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
+(`src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
+attached mid-run reaches the next step's offer, and a delegated child, which
+runs on its parent's session, and a run the session wakes on its own get the
+same answer. When the answer is to withhold, `resolveAgentTools` drops every
+catalog `requiresApproval` tool before the model sees it
+(`src/agent/runtime/agentToolResolution.ts:245-249`), so a run cannot open the
+requests those tools would raise. Tools an embedder supplies in
+`RunAgentOptions.tools` are not withheld: they are overlaid after the gates
+(`resolveStepTools`, `agentToolResolution.ts:356-365`) and the model is
+offered them, so a run-scoped tool that needs approval is left to the
+approval guard, which may deny the call, rather than removed. The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
 `userQuestion` requests all declare `requiresApproval: true`. This is a loud,
-defined degradation — an agent that cannot ask is not given the tools that
-ask — rather than a hang.
+defined degradation — an agent that cannot ask is not given the catalog tools
+that ask — rather than a hang.
 
-The CLI's hosts answer it from the approval policy
-(`cliApprovalPromptsUnavailable`,
-`packages/cli/src/runtime/approval/settleApprovals.ts`), through the headless
-adapter's getter (`packages/cli/src/runtime/approvalAdapter.ts:320`) and the
-TUI's.
+The headless CLI host answers it from its mode alone
+(`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its
+approval policy to that fact, so `yolo` still offers the gated tools to a run
+that cannot prompt.
 
 ### Answering the rest: `retry`
 
 `retry` has no tool behind it. The model invoker opens one on a
-user-retryable provider failure, so the flag cannot remove it, and a headless
-embedder must answer it. The `@texra-ai/agent` package's own sessions do
-exactly this: a listener over `viewChanges` denies each pending `retry`
-with the decide command above (`denyRetryRequests`,
-`packages/agent/src/effect/sessionPrograms.ts:91-146`). It keeps the set of
-requests it has answered, prunes it as the fold drops them, and forgets a
-request whose decision was refused so a later level denies it again. The worked
-example in §1 inlines the same listener.
-
-The headless CLI does the same for every kind, answering from policy first
-and from a terminal prompt otherwise
+user-retryable provider failure, so the flag cannot remove it. The session
+decides it in the batch that opens it (`decideRetryApproval`, read off
+`session.approvalPolicy` and this same flag): a host that cannot answer gets
+the denial as the run's `request.decided` row, with no listener of its own.
+The `@texra-ai/agent` package's sessions rely on that, and the headless CLI
+answers what its policy leaves open from a terminal prompt
 (`createHeadlessCliHostInteractions`,
-`packages/cli/src/runtime/approvalAdapter.ts:141`).
+`packages/cli/src/runtime/approvalAdapter.ts`).
+
+The same holds for a plan, a delegation proposal and a question
+(`decideRequestOpening`, called by `SessionHandle.openRequest`).
 
 ### What ends a wait without a decision
 
 Stopping the run (`session.runs.stop(runId)`, with the id
 `RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
-the run, and the fold drops a closed run's open requests with it
-(`src/shared/session/sessionFold.ts:1858-1860`). That is
-the cancellation path, not a substitute for answering a run that should
-continue.
+the run. A request opened through `SessionHandle.openRequest` (a command, an
+edit, a plan, a delegation, a question) is closed by the interruption: it
+commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
+(`src/agent/runtime/SessionHandle.ts:706-788`). A loop-owned `retry` request
+is not opened there, and no such row is written for it, so an unanswered
+`retry` stays listed until a `request.decided` resolves it
+(`projectRequests`, `src/shared/session/sessionFold.ts:1138-1156`, rebuilds a
+run's list from its unresolved rows). Stopping is the cancellation path, not a
+substitute for answering a run that should continue.
 
-### Why there is no runtime default
+### Why the flag is the host's, and the answer is the session's
 
 A request is a durable row, answerable by any surface that folds the session
-— the TUI, a reattached desktop window, a resumed process. A built-in
-decider could not tell a session nobody watches from one whose surface has
-not attached yet, and it would answer requests a person was meant to see.
-The caller knows which case it is in, and says so with a host attached with
-`approvalPromptsUnavailable` plus a decider for `retry`.
+— the TUI, a reattached desktop window, a resumed process. A session with no
+host attached says nothing about whether a surface is coming — it could not
+tell a session nobody watches from one whose surface has not attached yet —
+so the session never settles a request on that ground. The caller states it:
+a host attached with `approvalPromptsUnavailable: true` says nobody will
+answer, and the session's approval policy then decides every request it can
+when it opens.
 
 ---
 

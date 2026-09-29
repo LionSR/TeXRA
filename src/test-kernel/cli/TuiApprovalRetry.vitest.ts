@@ -1,6 +1,5 @@
-// The TUI host's side of the request protocol (one run model, 3.7): what it
-// answers from `view.requests` with nobody to ask, the bypass a decision turns
-// on, and the credential work behind a retry on the user's own key. A run asks
+// The TUI host's side of the request protocol (one run model, 3.7): the
+// bypass a decision turns on, and the credential work behind a retry on the user's own key. A run asks
 // with `session.openRequest`; the surface answers with `request.decide`.
 
 import { it } from '@effect/vitest';
@@ -60,13 +59,9 @@ import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   AgentCategory,
-  aggregateId,
-  RUN_OUTCOME,
   type AgentProposalPermission,
   type PermissionPayload,
   type RequestDecision,
@@ -78,7 +73,6 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
-import { untrackRun } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -86,7 +80,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
@@ -212,19 +205,6 @@ function proposalPayload(
     memories: [],
     workingDirectory: null,
     agentCategory: AgentCategory.ToolUse,
-  };
-}
-
-/** Transient retry with no subscription exhaustion behind it. */
-function ordinaryRetry(
-  label: string,
-  requestId: string = label,
-): RetryPermission {
-  return {
-    requestId,
-    runId: runIdFor(label),
-    operation: 'model request',
-    errorMessage: 'Temporary connection error.',
   };
 }
 
@@ -357,60 +337,6 @@ afterEach(async () => {
 });
 
 describe('TUI request decisions', () => {
-  it.effect(
-    'reconsiders a detached child delegation when live policy changes to yolo',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        yield* ensureRun(runIdFor('waiting-proposal-parent'));
-        const runId = runIdFor('waiting-proposal-policy-change');
-        yield* ensureRun(runId);
-        const session = testDefaultSession();
-        session.runs.track(testRunHandle({ runId, agent: 'orchestrator' }));
-        const pending = yield* Effect.forkChild(
-          openRequest(runId, {
-            kind: 'proposal',
-            data: proposalPayload('waiting-proposal-policy-change', runId),
-          }),
-        );
-        yield* waitForApproval('proposal', { runId });
-        session.publish([
-          { type: 'run.detach', aggregateId: aggregateId('run', runId) },
-        ]);
-        yield* session.settlePublications();
-        expect(
-          SubscriptionRef.getUnsafe(session.view).runs.get(runId)?.ownedHere,
-        ).toBe(true);
-        yield* waitForApproval('proposal', { runId });
-        session.setApprovalPolicy('yolo');
-        expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        yield* waitForNoApproval();
-        untrackRun(session.runs, runId);
-      }),
-  );
-
-  it.effect(
-    'reports an automatic yolo retry rejection as a policy denial',
-    () =>
-      Effect.gen(function* () {
-        tui(host(), { approvalPolicy: 'yolo' });
-
-        const decision = yield* openRetry(
-          ordinaryRetry('yolo-transient', 'yolo-transient-retry'),
-        );
-
-        expect(decision).toEqual({
-          action: 'deny',
-          reason:
-            'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
-        });
-        expect(runOutcomeExitCode(RUN_OUTCOME.FAILED)).toBe(
-          CliExitCode.AgentError,
-        );
-        yield* waitForNoApproval();
-      }),
-  );
-
   it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
       tui();
@@ -540,7 +466,6 @@ describe('TUI request decisions', () => {
           data: {
             requestId: 'plan-excluded',
             runId,
-            goalEnabled: false,
             plan: { objective: 'Keep the approval categories distinct.' },
           },
         }),

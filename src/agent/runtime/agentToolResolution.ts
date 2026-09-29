@@ -76,10 +76,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentToolResolution';
 
-/** What a run resolves each step's tools from: fixed at its open. */
+/** What a step resolves its tools from: fixed at the run's open, but the
+ *  approval flag the step reads live. */
 export interface StepToolInputs {
   readonly tools: AgentToolUseSetting['tools'];
-  /** When true, approval-gated tools are withheld. */
+  /** When true, approval-gated tools are withheld: read live each step. */
   readonly approvalPromptsUnavailable: boolean;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;

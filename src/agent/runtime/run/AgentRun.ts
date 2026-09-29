@@ -37,7 +37,6 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
@@ -57,7 +56,8 @@ import type { SessionHandle } from '../SessionHandle';
  * beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  /** The host cannot answer an approval prompt: the gates deny what they
+   *  would present. Which tools a step offers reads the session live. */
   readonly approvalPromptsUnavailable?: boolean;
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
@@ -85,12 +85,6 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /**
-   * Record that this run met an approval-policy denial: a request settled as
-   * denied, or approval-gated tools were withheld from the model when the
-   * run resolved its tools.
-   */
-  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -101,7 +95,7 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
-  readonly toolInputs: StepToolInputs;
+  readonly toolInputs: Omit<StepToolInputs, 'approvalPromptsUnavailable'>;
   /**
    * The run's current step: the tools it offers and the pin that holds its
    * catalog generation, replaced by each new step. A delegated child reads
@@ -160,7 +154,6 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
-  readonly onApprovalPolicyDenial?: AgentRunShape['onApprovalPolicyDenial'];
 }
 
 /**
@@ -233,10 +226,8 @@ export const agentRunLayer = (
         .hold(workflow ? [] : declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
-      const toolInputs: StepToolInputs = {
+      const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
-        approvalPromptsUnavailable:
-          ctx.toolPolicy.approvalPromptsUnavailable === true,
         host: session.roots.host,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
@@ -336,7 +327,6 @@ export const agentRunLayer = (
         toolPolicy: ctx.toolPolicy,
         workingDirectory: ctx.workingDirectory,
         delegationAgentScope: ctx.delegationAgentScope,
-        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
         opening: ctx.opening,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,

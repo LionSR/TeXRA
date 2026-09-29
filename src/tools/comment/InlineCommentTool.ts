@@ -60,7 +60,7 @@ export interface InlineCommentProvider {
 /**
  * The host's inline-comment provider, served by `installProcessRuntime`'s
  * `inlineComments` option on the one host that has a Comments UI. A host
- * without one provides no layer, exactly as it does for `EditorModel`, and
+ * without one provides no layer, exactly as it does for `ToolMissingReporter`, and
  * the tool reads the absence rather than a module slot's `undefined`.
  */
 export class InlineComments extends Context.Service<

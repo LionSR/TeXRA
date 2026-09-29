@@ -199,7 +199,7 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     });
     switch (decision) {
       case 'deny-policy':
-        parent.run.onApprovalPolicyDenial?.({ kind: 'proposal' });
+        session.interactions.approvalDenied({ kind: 'proposal' }, runId);
         return {
           result: {
             action: 'deny',

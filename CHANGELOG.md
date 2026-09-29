@@ -172,6 +172,19 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
+  that ships hooks now works in TeXRA. Its hooks can add notes to what you
+  ask, block a tool call they object to (the agent is told why), and add
+  notes to a tool's result. They cannot approve anything on your behalf:
+  your approval setting still decides. Enabling such a plugin shows each
+  hook and the scripts it runs; anything whose script TeXRA cannot pin down
+  is shown as its exact command, and changing a hook or its scripts asks
+  you to trust the plugin again. Hooks never see your API keys, and one
+  that hangs is stopped. Enabling or disabling a plugin reaches open
+  conversations at their next step. `texra plugin show <name>` lists a
+  plugin's hooks and the ones TeXRA does not run. Plugins with language
+  servers still cannot be enabled. Session history from earlier builds is
+  cleared the first time this build opens a workspace.
 - **Tool changes reach open conversations** — switching Memory or a Tools
   plugin on or off (in the settings, or with `texra tools enable|disable`
   from another shell) now takes effect at the conversation's next step
@@ -284,6 +297,32 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **`yolo` and `never` mean the same on every host.** The session decides
+  the approval policy when a plan, delegation, question or model-error retry
+  opens, so the extension and desktop now match the terminal: `never` denies
+  them, `yolo` approves plans and delegations, and `yolo` denies a question
+  or a retry rather than answer it for you, so under `yolo` the extension and
+  desktop no longer show the Retry panel or an `ask_user` question. Under
+  `never`, tools that need approval are no longer offered to the model on the
+  extension and desktop either, and a policy change made while a request is
+  already waiting leaves that request for you to answer (a headless run
+  denies it).
+
+- **A custom agent you turned off stays off under the default roster** —
+  it reappeared in the selector whenever the roster resolved to all agents,
+  which is the default for a new workspace. Choosing "All agents" still
+  shows it again.
+- **Resuming after a vendor deleted its stored response no longer fails.**
+  When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
+  Google) is refused because the vendor no longer holds it, TeXRA logs a
+  warning and retries once with the full transcript.
+- **Desktop model requests no longer fail with "Connection error".** The
+  desktop app's bundled runtime rejected the proxy-aware connection model calls
+  use, so every request to a model failed with an undici dispatcher error.
+
+- **GPT-6 models stay on your ChatGPT subscription when the OpenRouter
+  toggle is on** — they have no OpenRouter route, so they fell through to the
+  OpenAI API key (and failed without one).
 - **A run's menu offers only what its state allows** — "Delete output files"
   was offered on a workflow run that was still starting, and Delete session
   on a run another TeXRA window held. Every surface now offers the same

@@ -3,17 +3,18 @@
  *
  * A run asks a person with `request.opened`; the fold lists it in
  * `view.requests` until a `request.decided` answers it. This host watches
- * that list and answers each request from the terminal — the policy's own
- * decision when there is nobody to ask, otherwise the prompt the operator
- * sees — and stages nothing else: the port it attaches presents events,
- * mirrors bypass state, and holds a tool edit's preview so the diff can be
- * printed.
+ * that list and answers each request with the prompt the operator sees. The
+ * session already settled what its approval policy decides, so what is listed
+ * needs a person, or a denial on a run with nobody to ask. Nothing else is
+ * staged: the port it attaches presents events, mirrors bypass state, and
+ * holds a tool edit's preview so the diff can be printed.
  */
 import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { texraApprovalDenialMessage } from '@shared/approvalPolicy';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
   PermissionPayload,
@@ -26,16 +27,11 @@ import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  cliApprovalPromptsUnavailable,
-  settleExecutable,
-  settleHumanInputDenial,
-  settleRetry,
-} from './approval/settleApprovals';
-import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
   askApproval,
   queueCliApprovalQuestion,
+  warnApprovalDenied,
 } from './approval/approvalPrompts';
 import {
   buildAgentProposalApprovalContent,
@@ -150,6 +146,8 @@ export function createHeadlessCliHostInteractions(
   // without that step, so mirror the seed here. TUI uses a different adapter
   // and keeps the live session value from `/approval`.
   session.setApprovalPolicy(context.approvalPolicy);
+  /** Only an interactive run can answer a prompt. */
+  const promptsUnavailable = context.mode !== 'interactive';
   /** Requests this host has taken on, pruned as the fold drops them. */
   const acted = new Set<string>();
   /** The preview a tool edit's durable payload cannot carry. */
@@ -192,13 +190,21 @@ export function createHeadlessCliHostInteractions(
     },
   );
 
-  /** One pending request, answered: policy first, then the prompt. Returns
-   *  whether the decision reached the ledger. */
+  /** One pending request, answered: denied when this run has nobody to ask
+   *  (a request opened before the host or policy changed is listed pending,
+   *  and a prompt on a closed stdin never settles), else by the prompt.
+   *  Returns whether the decision reached the ledger. */
   const answer = Effect.fn('approvalAdapter.answer')(function* (
     runId: RunId,
     payload: AnswerablePayload,
   ) {
     const requestId = payload.data.requestId;
+    if (promptsUnavailable) {
+      return yield* decide(runId, requestId, {
+        action: 'deny',
+        reason: texraApprovalDenialMessage('deny-unpresentable'),
+      });
+    }
     const ask = (content: CliApprovalContent) =>
       askApproval(context, content, hooks);
     switch (payload.kind) {
@@ -214,29 +220,21 @@ export function createHeadlessCliHostInteractions(
           requestId,
           yield* ask(yield* toolEditContent(payload)),
         );
-      case 'planApproval': {
-        const settled = settleExecutable(session, context, runId);
+      case 'planApproval':
         return yield* decide(
           runId,
           requestId,
-          settled ??
-            (yield* ask({
-              summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
-            })),
+          yield* ask({
+            summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+          }),
         );
-      }
-      case 'proposal': {
-        const settled = settleExecutable(session, context, runId);
+      case 'proposal':
         return yield* decide(
           runId,
           requestId,
-          settled ??
-            (yield* ask(buildAgentProposalApprovalContent(payload.data))),
+          yield* ask(buildAgentProposalApprovalContent(payload.data)),
         );
-      }
       case 'retry': {
-        const settled = settleRetry(session, payload.data, context);
-        if (settled) return yield* decide(runId, requestId, settled);
         // The pre-prompt hook fires here and again inside `askApproval`; that
         // double call is pre-existing retry behavior, not a bug to "fix".
         hooks.beforePrompt?.();
@@ -256,16 +254,12 @@ export function createHeadlessCliHostInteractions(
           cause: note ?? null,
         });
       }
-      case 'userQuestion': {
-        const denial = settleHumanInputDenial(session, context, runId);
+      case 'userQuestion':
         return yield* decide(
           runId,
           requestId,
-          denial
-            ? { action: 'deny', reason: denial.reason }
-            : yield* askHeadlessUserQuestion(payload.data, context, hooks),
+          yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
-      }
     }
   });
 
@@ -316,10 +310,9 @@ export function createHeadlessCliHostInteractions(
 
   return {
     emit: hooks.emit,
-    // What the session withholds on every run it launches or resumes.
-    get approvalPromptsUnavailable() {
-      return cliApprovalPromptsUnavailable(session, context);
-    },
+    approvalPromptsUnavailable: promptsUnavailable,
+    approvalDenied: (denial, runId) =>
+      warnApprovalDenied(session, context, denial, runId),
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },

@@ -219,9 +219,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           .map((entry) => agentKeyOf(entry)),
       );
 
-      const current =
-        (yield* this.deps.roster.getEnabledAgentKeys(input.category)) ??
-        allAgents.map((entry) => agentKeyOf(entry));
+      const current = yield* this.enabledKeys(input.category);
 
       const updated = input.enabled
         ? [...new Set([...current, ...targetKeys])]
@@ -242,11 +240,22 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   private buildCategorySelectionItems(category: AgentCategory) {
     return Effect.gen({ self: this }, function* () {
-      const enabledKeys = yield* this.deps.roster.getEnabledAgentKeys(category);
+      const enabledKeys = yield* this.enabledKeys(category);
       return this.deps
         .getAgents(category)
         .map((entry) => this.toSelectionItem(entry, enabledKeys))
         .sort(byName);
+    });
+  }
+
+  /** The enabled keys; an `all` roster enables every visible agent, never a
+   *  custom agent the user hid. */
+  private enabledKeys(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      return (
+        (yield* this.deps.roster.getEnabledAgentKeys(category)) ??
+        (yield* this.deps.roster.getVisibleAgents(category)).map(agentKeyOf)
+      );
     });
   }
 

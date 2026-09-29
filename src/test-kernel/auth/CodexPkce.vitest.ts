@@ -105,4 +105,23 @@ describe('codex model eligibility', () => {
       }).kind === 'chatgpt-subscription',
     ).toBe(eligible);
   });
+
+  it('keeps a Responses-only model on the subscription under the OpenRouter toggle', () => {
+    const facts = {
+      ...OWN_KEY_ROUTE_FACTS,
+      chatgptSubscription: true,
+      useOpenRouter: true,
+    };
+    const flagged = { codexSubscription: true };
+    // No OpenRouter route exists for it, so the toggle cannot move it.
+    expect(
+      decideModelRoute(
+        openAIModel({ ...flagged, requiresResponsesAPI: true }),
+        facts,
+      ).kind,
+    ).toBe('chatgpt-subscription');
+    expect(decideModelRoute(openAIModel(flagged), facts).kind).toBe(
+      'openrouter',
+    );
+  });
 });

@@ -13,6 +13,7 @@ import {
   UNLOADED_COMPONENT_LABELS,
 } from '@common/plugins/pluginManifest';
 import {
+  describeHook,
   disablePlugin,
   enablePlugin,
   listPlugins,
@@ -39,8 +40,8 @@ import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSp
 
 /**
  * A mistake in what the user asked (an unknown name, a taken name) exits 2;
- * a plugin or git failure, a declined trust prompt and a refused code plugin
- * exit 1.
+ * a plugin or git failure, a declined trust prompt and a refused plugin with
+ * LSP servers exit 1.
  */
 function pluginExitCode(error: unknown): number {
   writeErrorStderr(error);
@@ -72,7 +73,8 @@ function withPluginEnv<A, E>(
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
 
 function pluginState(plugin: PluginListing): string {
-  if (plugin.code.length > 0) return 'code plugin, cannot be enabled';
+  if (plugin.code.length > 0)
+    return `ships ${plugin.code.join(', ')}, cannot be enabled`;
   if (!plugin.enabled) return 'disabled';
   return plugin.trusted ? 'enabled' : 'enabled, needs trust';
 }
@@ -96,7 +98,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
       const unloaded = [...plugin.code, ...plugin.ignored];
       return [
         header,
-        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')})`,
+        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length})`,
         `  not loaded: ${unloaded.length === 0 ? 'none' : unloaded.join(', ')}`,
       ].join('\n');
     })
@@ -217,6 +219,54 @@ const pluginListCommand = defineCliCommand({
             text: formatPluginList(plugins),
           });
           return CliExitCode.Success;
+        }),
+      ),
+    ),
+});
+
+/** One plugin in full: its listing, each hook it runs, and every hook or
+ *  event it configures that TeXRA does not run. */
+function formatPluginShow(plugin: PluginListing): string {
+  const listed = formatPluginList([plugin]);
+  if (plugin.problem) return listed;
+  return [
+    listed,
+    plugin.hooks.length === 0 ? '  hooks: none' : '  hooks:',
+    ...plugin.hooks.map((hook) => `    ${describeHook(hook)}`),
+    ...(plugin.unsupportedHooks.length === 0
+      ? []
+      : [
+          '  unsupported hooks (not run):',
+          ...plugin.unsupportedHooks.map((line) => `    ${line}`),
+        ]),
+  ].join('\n');
+}
+
+const pluginShowCommand = defineCliCommand({
+  meta: {
+    name: 'show',
+    description:
+      'Show one installed plugin: what it contains, its hooks, and what TeXRA does not run',
+  },
+  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  catchExitCode: pluginExitCode,
+  run: (context, ctx) =>
+    withPluginEnv(context, (env) =>
+      listPlugins(env).pipe(
+        Effect.flatMap((plugins) => {
+          const plugin = plugins.find(({ name }) => name === ctx.args.name);
+          if (plugin === undefined)
+            return Effect.fail(
+              new PluginRequestError({
+                message: `No plugin named ${ctx.args.name} is installed.`,
+              }),
+            );
+          emitCliResult(context, {
+            json: plugin,
+            ndjson: { kind: 'plugin' as const, plugin },
+            text: formatPluginShow(plugin),
+          });
+          return Effect.succeed(CliExitCode.Success);
         }),
       ),
     ),
@@ -360,11 +410,12 @@ export const pluginCommand = withUsageSections(
     meta: {
       name: 'plugin',
       description:
-        'Install Claude Code and Codex plugins: their skills, commands, agents and MCP servers',
+        'Install Claude Code and Codex plugins: their skills, commands, agents, MCP servers and hooks',
     },
     subCommands: {
       install: pluginInstallCommand,
       list: pluginListCommand,
+      show: pluginShowCommand,
       remove: pluginRemoveCommand,
       update: pluginUpdateCommand,
       enable: pluginEnableCommand,
@@ -385,6 +436,10 @@ export const pluginCommand = withUsageSections(
           'install one plugin a marketplace lists',
         ],
         [
+          'texra plugin show paper-protocol',
+          'list its hooks, and what TeXRA does not run',
+        ],
+        [
           'texra plugin enable paper-protocol',
           'review what it declares, trust it, and load it',
         ],
@@ -396,7 +451,7 @@ export const pluginCommand = withUsageSections(
       ],
     },
     {
-      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers. It does not load its ${UNLOADED_COMPONENT_LABELS.join(', ')}; a plugin with hooks or LSP servers runs code and cannot be enabled yet.`,
+      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers and command hooks, each in its own process. It does not load its ${UNLOADED_COMPONENT_LABELS.join(', ')}; a plugin with LSP servers cannot be enabled yet.`,
       rows: [],
     },
   ],
