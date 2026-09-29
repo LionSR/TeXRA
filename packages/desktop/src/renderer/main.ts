@@ -79,6 +79,10 @@ import {
   type WorkbenchPlacement,
 } from '../shared/desktopShellState';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
+import {
+  SESSION_WIRE_API_KEY,
+  type SessionWireApi,
+} from '../shared/hostBridgeChannels';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
@@ -196,9 +200,15 @@ function setShell(next: Shell): void {
 // One fold, one surface, and one host snapshot per open project, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
+const sessionWire = (
+  globalThis as { [SESSION_WIRE_API_KEY]?: SessionWireApi }
+)[SESSION_WIRE_API_KEY];
+if (!sessionWire) throw new Error('The desktop session channel is unavailable.');
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
+  post: sessionWire.post,
 });
+sessionWire.onMessage(projectSessions.receive);
 projectSessions.onChange(rerenderShell);
 // A project whose session has not framed its host snapshot yet is not listed:
 // the rail shows what is known.
@@ -982,12 +992,12 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
 });
 
-// The shell's one message listener: the desktop routes first, then the
-// session transport, which takes the frames, responses, and surface
-// actions of every open project's session. The settings view's pushes reach
-// `<settings-app>` through its own listener and match no route here.
+// The shell's one message listener, for the desktop commands. The session
+// protocol has its own channel (`sessionWire`, above). The settings view's
+// pushes reach `<settings-app>` through its own listener and match no route
+// here.
 window.addEventListener('message', (event) => {
-  for (const route of [...MESSAGE_ROUTES, projectSessions.receive]) {
+  for (const route of MESSAGE_ROUTES) {
     if (route(event.data)) return;
   }
 });

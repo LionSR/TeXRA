@@ -288,9 +288,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const port = yield* Effect.acquireRelease(
         bridge.attach({
           id: `window:${host.window.id}`,
-          send: (message) => {
-            host.post(message);
-          },
+          send: host.postSession,
         }),
         (attached) => attached.close,
       ).pipe(Effect.orDie);

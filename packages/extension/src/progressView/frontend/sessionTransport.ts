@@ -4,19 +4,18 @@
  * deliveries, request responses, and surface actions, and the signals the
  * root reads. The runtime and the per-session graphs are
  * `webviewSessionLayer`'s; the rest of the frontend reads signals and posts
- * `UpMessage`s, and nothing else touches the session layer. The entry owns
- * the window's one message listener and hands each message to `receive`;
- * the desktop renderer runs it as the last of its routes.
+ * `UpMessage`s, and nothing else touches the session layer. The host names
+ * the pipe `UpMessage`s leave by and hands every message that arrives on
+ * its session channel to `receive`: the extension's window carries nothing
+ * else, and the desktop's session channel is its own.
  */
 import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
-import { z } from 'zod';
 
 import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@controllers/session/webviewSessionLayer';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { hostBridge } from '@shared/hostBridge';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
@@ -51,9 +50,8 @@ export interface WebviewSession {
 }
 
 export interface WebviewTransport {
-  /** One message from the host bridge: true when it was a session message
-   *  and this transport took it, false when it belongs to another route. */
-  receive(data: unknown): boolean;
+  /** One message from the host's session channel. */
+  receive(data: unknown): void;
   /** Open (or reuse) a session's graph. */
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
@@ -87,15 +85,9 @@ const CANCELLED: Response['result'] = {
   error: { _tag: 'Cancelled' },
 };
 
-/** The discriminator alone: a message of one of the session kinds that
- *  still fails the schema is malformed, not another route's. */
-const DownKindSchema = z.object({
-  kind: z.enum(
-    DownMessageSchema.options.map((option) => option.shape.kind.value),
-  ),
-});
-
-export function installWebviewTransport(): WebviewTransport {
+export function installWebviewTransport(
+  post: (message: UpMessage) => void,
+): WebviewTransport {
   const runtime = installWebviewRuntime();
   const sessions = new Map<string, OpenSession>();
   let surfaceListener: (
@@ -119,18 +111,17 @@ export function installWebviewTransport(): WebviewTransport {
     runtime.runSync(session.graph.frames.feed(frame));
   };
 
-  const receive = (data: unknown): boolean => {
+  const receive = (data: unknown): void => {
     const parsed = DownMessageSchema.safeParse(data);
     if (!parsed.success) {
-      if (!DownKindSchema.safeParse(data).success) return false;
       console.warn('[progress] malformed session message', data, parsed.error);
-      return true;
+      return;
     }
     const message = parsed.data;
     switch (message.kind) {
       case 'events':
         deliver(message);
-        return true;
+        return;
       case 'response': {
         const pending = sessions.get(message.session)?.pending;
         const settle = pending?.get(message.requestId);
@@ -138,15 +129,15 @@ export function installWebviewTransport(): WebviewTransport {
           console.warn(
             `[progress] dropped a response to request ${message.requestId} of session ${message.session}: not pending`,
           );
-          return true;
+          return;
         }
         pending.delete(message.requestId);
         runtime.runSync(Deferred.succeed(settle, message.result));
-        return true;
+        return;
       }
       case 'surface.action':
         surfaceListener(message.session, message.action);
-        return true;
+        return;
     }
   };
 
@@ -230,7 +221,7 @@ export function installWebviewTransport(): WebviewTransport {
             Effect.andThen(graph.subscriptions.set(SHELL_PORT, aggregates)),
           ),
       );
-      hostBridge.postMessage(message);
+      post(message);
     },
     request(message) {
       const session = sessions.get(message.session);
@@ -242,7 +233,7 @@ export function installWebviewTransport(): WebviewTransport {
       }
       const settled = Deferred.makeUnsafe<Response['result']>();
       session.pending.set(message.requestId, settled);
-      hostBridge.postMessage(message);
+      post(message);
       return runtime.runPromise(
         Deferred.await(settled).pipe(
           Effect.catchCause((cause) =>

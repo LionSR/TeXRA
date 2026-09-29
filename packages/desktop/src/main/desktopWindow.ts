@@ -314,23 +314,27 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const hostBridge = yield* Effect.acquireRelease(
     Effect.sync(() =>
       installDesktopHostBridge(window, {
-        onRendererMessage: (message) => {
-          if (isDesktopCommandMessage(message)) {
-            const route = desktopInboundRoute(message.command);
-            // A command no surface owns is renderer drift, not a session
-            // message: session frames are keyed by `kind`, never `command`.
-            const program =
-              route && desktopRoutes[route].handleMessage(message);
-            // The one run site for every namespace's program, and its one
-            // report: a failure or defect reaches the window's async-error
-            // reporter.
-            if (program) spawn(host.reported(program));
+        onCommand: (message) => {
+          if (!isDesktopCommandMessage(message)) {
+            console.warn('Dropped a renderer command with no command name');
             return;
           }
-          // A session message names its project: that project's port answers
-          // it.
+          const route = desktopInboundRoute(message.command);
+          // A command no surface owns is renderer drift.
+          const program = route && desktopRoutes[route].handleMessage(message);
+          // The one run site for every namespace's program, and its one
+          // report: a failure or defect reaches the window's async-error
+          // reporter.
+          if (program) spawn(host.reported(program));
+        },
+        // A session message names its project: that project's port answers
+        // it.
+        onSession: (message) => {
           const addressed = SessionMessageEnvelopeSchema.safeParse(message);
-          if (!addressed.success) return;
+          if (!addressed.success) {
+            console.warn('Dropped a session message with no session key');
+            return;
+          }
           const binding = bindings.get(addressed.data.session);
           if (!binding) {
             console.warn(

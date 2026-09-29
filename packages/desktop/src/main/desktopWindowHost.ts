@@ -9,6 +9,7 @@ import { Cause, Effect } from 'effect';
 import { ExternalOpenFailed, type NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
+import type { DownMessage } from '@shared/session/sessionFrames';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
@@ -18,6 +19,7 @@ import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopAgentRunOptions } from './desktopAgentRun.js';
+import type { DesktopHostBridge } from './hostBridge.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 export type DesktopWindowHost = ReturnType<typeof createDesktopWindowHost>;
@@ -33,13 +35,18 @@ export function createDesktopWindowHost(options: {
   // Until then, and once the window or its page is gone, `post` reports that
   // nothing was delivered so a caller falls back to its external viewer
   // instead of reporting a success that reached nobody.
-  let renderer: { postToRenderer(message: unknown): void } | undefined;
+  let renderer: DesktopHostBridge | undefined;
+  const reachable = (bridge: DesktopHostBridge | undefined) =>
+    bridge !== undefined &&
+    !window.isDestroyed() &&
+    !window.webContents.isDestroyed();
   const post = (message: unknown): boolean => {
-    if (!renderer || window.isDestroyed() || window.webContents.isDestroyed()) {
-      return false;
-    }
-    renderer.postToRenderer(message);
+    if (!reachable(renderer)) return false;
+    renderer?.postToRenderer(message);
     return true;
+  };
+  const postSession = (message: DownMessage): void => {
+    if (reachable(renderer)) renderer?.postSession(message);
   };
 
   const dialogs = createDesktopDialogs(window, {
@@ -188,8 +195,10 @@ export function createDesktopWindowHost(options: {
   return {
     window,
     post,
-    /** Connect the renderer's push channel. */
-    connectRenderer(next: { postToRenderer(message: unknown): void }) {
+    /** A session-protocol push: the session port's `send`. */
+    postSession,
+    /** Connect the renderer's push channels. */
+    connectRenderer(next: DesktopHostBridge) {
       renderer = next;
     },
     dialogs,

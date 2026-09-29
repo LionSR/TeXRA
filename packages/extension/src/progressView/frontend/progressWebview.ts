@@ -25,14 +25,11 @@ export function mountProgressWebview(app: ProgressApp): () => void {
   }
   const sessions = createSessionSurfaces({
     storage: createWebviewStorage(hostBridge),
+    post: (message) => hostBridge.postMessage(message),
   });
   // Every message the extension posts to this window is a session message;
-  // one that is not is the host's defect.
-  const receive = (event: MessageEvent): void => {
-    if (!sessions.receive(event.data)) {
-      console.warn('[progress] unrecognized host message', event.data);
-    }
-  };
+  // one that is not is the host's defect, which `receive` reports.
+  const receive = (event: MessageEvent): void => sessions.receive(event.data);
   window.addEventListener('message', receive);
   sessions.sync([sessionKey]);
   const session = sessions.get(sessionKey);

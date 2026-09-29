@@ -17,7 +17,7 @@ import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { Response } from '@shared/session/sessionFrames';
+import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
@@ -52,8 +52,8 @@ interface SessionSurface {
 }
 
 export interface SessionSurfaces {
-  /** One host-bridge message: true when it was a session message. */
-  receive(data: unknown): boolean;
+  /** One message from the host's session channel. */
+  receive(data: unknown): void;
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
@@ -89,8 +89,10 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
+  /** The pipe `UpMessage`s leave by. */
+  readonly post: (message: UpMessage) => void;
 }): SessionSurfaces {
-  const transport = installWebviewTransport();
+  const transport = installWebviewTransport(options.post);
   interface Held extends SessionSurface {
     readonly session: WebviewSession;
     readonly persisted: PersistedState<
