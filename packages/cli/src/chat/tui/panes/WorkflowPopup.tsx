@@ -46,7 +46,6 @@ import { clampIndex, filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
-import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { type WorkflowPopupView } from '../state/cliState';
 import { killableRunId, sessionView, runViewOf } from '../state/sessionView';
@@ -284,7 +283,8 @@ export function WorkflowPopup({
   const layout = readerLayout({
     availableRows,
     extraRows: POPUP_HEADER_ROWS + (filterShown ? 1 : 0),
-    frameWidth: formFrameWidth(columns),
+    // The whole terminal: a many-call run outgrows the 80-column frame.
+    frameWidth: Math.max(1, columns),
     hints,
     title,
   });
