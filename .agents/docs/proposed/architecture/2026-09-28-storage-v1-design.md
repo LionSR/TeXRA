@@ -652,9 +652,9 @@ interface PluginArm {
   - This replaces `.format<N>` copies that are never collected.
 - **Orphaned workspace stores.** There are 259 today; 52 have `mkdtemp`
   roots.
-  - Each project open records `{ root, lastOpenedAt }` in the global
-    store's `current_value` (family `workspace-store`, key: the storage
-    directory id). The write is skipped when the record is under a day old.
+  - Each project open records `{ root }` in the global store's
+    `current_value` (family `workspace-store`, key: the storage directory
+    id). An unchanged record is not rewritten.
   - `texra doctor` reports store count, total size, aside copies, and
     stores whose root is missing.
   - `texra doctor --prune-storage` deletes those stores after listing them.

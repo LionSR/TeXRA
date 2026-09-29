@@ -61,12 +61,9 @@ export const CURRENT_VALUE_SCHEMAS = {
   inquiry: InquiryThreadRecordSchema,
   'update-check': UpdateCheckRecordSchema,
   /** The global root's record of a workspace store, keyed by its storage
-   *  directory id: the root it serves and when a host last opened it, so
-   *  `texra doctor --prune-storage` can tell a store whose root is gone. */
-  'workspace-store': z.object({
-    root: z.string().min(1),
-    lastOpenedAt: z.int().nonnegative(),
-  }),
+   *  directory id: the root it serves, so `texra doctor --prune-storage`
+   *  can tell a store whose root is gone. */
+  'workspace-store': z.object({ root: z.string().min(1) }),
 };
 export type CurrentValueFamily = keyof typeof CURRENT_VALUE_SCHEMAS;
 export type CurrentValue<F extends CurrentValueFamily> = z.infer<
