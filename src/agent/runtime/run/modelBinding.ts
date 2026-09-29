@@ -554,7 +554,7 @@ const PROTOCOL_DESCRIPTORS: {
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: xai,
         supportsForcedToolChoice: true,
-        openaiEndpoint: config.provider === ModelProvider.OPENAI,
+        openaiEndpoint: credential.endpoint === OPENAI_DEFAULT_ENDPOINT,
         requestDialect: 'openai',
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,

@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 import { bindModel } from '@agent/runtime/run/modelBinding';
 import { apiKeySecretName } from '@model/apiProviders';
@@ -144,5 +144,36 @@ describe('bindModel', () => {
         MODEL_CONFIGS['gpt4o'].shortName,
       );
     }),
+  );
+
+  it.effect(
+    "sends OpenAI's own request fields only to OpenAI's own endpoint",
+    () =>
+      Effect.gen(function* () {
+        const stores = hostStores();
+        yield* stores.globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+        const cacheKeyOn = (endpoint: string | undefined) =>
+          Effect.gen(function* () {
+            yield* stores.globalState.update(
+              GlobalStateKey.ENDPOINT_OPENAI,
+              endpoint,
+            );
+            const exit = yield* Effect.promise(() =>
+              bind(MODEL_CONFIGS['gpt4o']),
+            );
+            assert(Exit.isSuccess(exit));
+            const turn = yield* exit.value.model.prepareTurn({
+              messages: [
+                { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
+              ],
+              cacheKey: 'run-1',
+            });
+            assert(turn.protocol === 'openai-responses');
+            return turn.controls.promptCacheKey;
+          });
+        expect(yield* cacheKeyOn(undefined)).toBe('run-1');
+        // A proxy, Azure or a local gateway may refuse OpenAI's own fields.
+        expect(yield* cacheKeyOn('https://gateway.example/v1')).toBeUndefined();
+      }),
   );
 });
