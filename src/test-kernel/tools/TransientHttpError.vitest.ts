@@ -74,6 +74,21 @@ describe('retryTransientFetch transience classification', () => {
     ),
   );
 
+  it.effect(
+    'treats a connection reset while the body is read as transient',
+    () =>
+      expectTransience(
+        new HttpClientError.HttpClientError({
+          reason: new HttpClientError.DecodeError({
+            request,
+            response: HttpClientResponse.fromWeb(request, new Response('x')),
+            cause: new TypeError('terminated'),
+          }),
+        }),
+        true,
+      ),
+  );
+
   it.effect.each([408, 429, 500, 503])(
     'treats request timeouts, rate limits, and 5xx errors as transient: HTTP %i',
     (status) => expectTransience(statusError(status), true),

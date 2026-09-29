@@ -35,7 +35,7 @@ import {
   type FileSystem,
   type Path,
 } from 'effect';
-import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -1162,8 +1162,8 @@ export function installProcessRuntime({
           Layer.mergeAll(
             effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
-            // Filesystem, path, spawner and env ConfigProvider, once per
-            // process: no consumer builds its own.
+            Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
+            // Filesystem, path, spawner, env config: once per process.
             nodePlatformServices,
             processEnvConfigLayer,
           ),

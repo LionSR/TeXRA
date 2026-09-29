@@ -13,7 +13,7 @@
 
 // Third-party imports
 import { Cause, Effect } from 'effect';
-import { HttpBody, HttpClient, HttpClientError } from 'effect/unstable/http';
+import { HttpBody, HttpClientError } from 'effect/unstable/http';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 
@@ -21,7 +21,12 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { scopedOkClient, withRequestTimeout } from '@tools/timeouts';
+import {
+  isTransportReason,
+  scopedClient,
+  scopedOkClient,
+  withRequestTimeout,
+} from '@tools/timeouts';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
@@ -196,7 +201,7 @@ function bbtRequestError(
       );
     }
     // No response from a localhost endpoint is always a connection failure.
-    if (reason._tag === 'TransportError') return zoteroUnreachableError(port);
+    if (isTransportReason(reason)) return zoteroUnreachableError(port);
   }
   return new ToolError(`Better BibTeX API error: ${error.message}`);
 }
@@ -304,7 +309,7 @@ function connectorRequestFailure(error: Error, port: number): ConnectorResult {
   // callBetterBibTeX instead of surfacing a raw transport error.
   if (
     HttpClientError.isHttpClientError(error) &&
-    error.reason._tag === 'TransportError'
+    isTransportReason(error.reason)
   ) {
     return { status: 'error', message: zoteroUnreachableError(port).message };
   }
@@ -345,7 +350,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
       Effect.gen(function* () {
         // The request scope stays open through the body read, after the
         // header request has already settled.
-        const client = HttpClient.withScope(yield* HttpClient.HttpClient);
+        const client = yield* scopedClient;
         const response = yield* client.post(
           zoteroUrl(port, `/connector/${endpoint}`),
           { body: HttpBody.jsonUnsafe(body), acceptJson: true },

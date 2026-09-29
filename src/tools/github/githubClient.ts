@@ -8,13 +8,14 @@
  */
 
 import { Data, Duration, Effect } from 'effect';
-import { HttpClient, type Headers } from 'effect/unstable/http';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@platform/secrets';
+import { scopedClient } from '@tools/timeouts';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getGitHubToken } from './githubAuth';
+import type { Headers, HttpClient } from 'effect/unstable/http';
 
 const API_ORIGIN = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
@@ -123,7 +124,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
   // One attempt owns headers and body under one deadline; the request scope
   // aborts the request however the attempt ends.
   return yield* Effect.gen(function* () {
-    const client = HttpClient.withScope(yield* HttpClient.HttpClient);
+    const client = yield* scopedClient;
     const response = yield* client.get(`${API_ORIGIN}${path}`, { headers });
     if (response.status === StatusCodes.NOT_MODIFIED) {
       return { status: 304 } as const;

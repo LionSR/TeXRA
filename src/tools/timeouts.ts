@@ -28,6 +28,20 @@ import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
+ * A request that got no (complete) answer: nothing responded, or the
+ * connection dropped mid-body (undici's `TypeError`, "terminated"; a
+ * malformed body is a `SyntaxError`).
+ */
+export function isTransportReason(
+  reason: HttpClientError.HttpClientError['reason'],
+): boolean {
+  return (
+    reason._tag === 'TransportError' ||
+    (reason._tag === 'DecodeError' && reason.cause instanceof TypeError)
+  );
+}
+
+/**
  * Whether a request's failure is transient (worth retrying): the deadline, a
  * transport failure (no response received), or a 408/429/5xx status. Every
  * other failure is permanent: other 4xx statuses, a body that did not decode,
@@ -41,7 +55,7 @@ function isTransientRequestError(error: Error): boolean {
   if (!HttpClientError.isHttpClientError(error)) return false;
   const { reason } = error;
   return (
-    reason._tag === 'TransportError' ||
+    isTransportReason(reason) ||
     (reason._tag === 'StatusCodeError' &&
       isTransientHttpStatus(reason.response.status))
   );
@@ -49,11 +63,18 @@ function isTransientRequestError(error: Error): boolean {
 
 /**
  * The process client for one attempt under {@link withRequestTimeout}: the
- * attempt's scope aborts its requests, and a non-2xx status fails with a
- * `StatusCodeError`.
+ * attempt's scope aborts its requests. Every tool request takes its client
+ * from here or {@link scopedOkClient}.
  */
-export const scopedOkClient = Effect.map(HttpClient.HttpClient, (client) =>
-  HttpClient.filterStatusOk(HttpClient.withScope(client)),
+export const scopedClient = Effect.map(
+  HttpClient.HttpClient,
+  HttpClient.withScope,
+);
+
+/** {@link scopedClient} where a non-2xx status fails with a `StatusCodeError`. */
+export const scopedOkClient = Effect.map(
+  scopedClient,
+  HttpClient.filterStatusOk,
 );
 
 /**
@@ -148,7 +169,7 @@ export function toFetchToolError(
     if (reason._tag === 'StatusCodeError') {
       return new ToolError(messages.http(reason.response.status));
     }
-    if (reason._tag === 'TransportError') {
+    if (isTransportReason(reason)) {
       return new ToolError(
         messages.network(toErrorMessage(reason.cause ?? error)),
       );
