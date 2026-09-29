@@ -301,11 +301,7 @@ export function handleSharedHostRequest(
         yield* ports.snapshot.dismissBanner(request.banner);
         return done;
       case 'toolEdit':
-        yield* ports.toolEditApprovals.handleAction({
-          requestId: request.requestId,
-          action: request.action,
-          ...(request.feedback == null ? {} : { feedback: request.feedback }),
-        });
+        yield* ports.toolEditApprovals.handleAction(request);
         return done;
       case 'fileAction': {
         const config = yield* ports.runActions.readConfig(request.runId);

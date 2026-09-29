@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 import {
-  Cause,
   Data,
   Effect,
   Exit,
@@ -26,10 +25,11 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  ToolEditApprovalController,
-  type ToolEditApprovalHost,
-} from '@controllers/approval/ToolEditApprovalController';
+  followToolEditDecisions,
+  toolEditInteractions,
+} from '@controllers/approval/toolEditHostWiring';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
 import {
@@ -286,45 +286,38 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // (`request.opened` folds into the view) and this host's decision goes
     // back as that request's `request.decide`; the staged preview is
     // discarded when `request.decided` folds, whichever way it went.
-    const decideRequest: ToolEditApprovalHost['decide'] = (
-      runId,
-      requestId,
-      decision,
-    ) =>
-      session.requests
-        .request({ kind: 'request.decide', runId, requestId, decision })
-        .pipe(Effect.asVoid);
     this.toolEditApprovals = new ToolEditApprovalController({
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
-        decideRequest,
         this.runtime,
         session,
       ),
+      session,
     });
+    const toolEditReleases = this.runtime.runFork(
+      followToolEditDecisions(session, this.runtime, this.toolEditApprovals),
+    );
     // A workflow run's `run.end` is the completion chime, one per process
     // (PRD 12.4), never a renderer transition hook that every subscriber
     // would replay. A failed run does not chime.
     const sessionEvents = this.runtime.runFork(
       Stream.runForEach(session.events.all(session.now()), (event) =>
-        this.toolEditApprovals.handleSessionEvent(event).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              if (
-                event.type === 'run.end' &&
-                event.output.category === 'workflow' &&
-                event.outcome !== 'failed'
-              )
-                this.chime();
-            }),
-          ),
-        ),
+        Effect.sync(() => {
+          if (
+            event.type === 'run.end' &&
+            event.output.category === 'workflow' &&
+            event.outcome !== 'failed'
+          )
+            this.chime();
+        }),
       ),
     );
     const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
       dispose: () =>
-        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention])),
+        this.runtime.runFork(
+          Fiber.interruptAll([toolEditReleases, sessionEvents, attention]),
+        ),
     });
 
     const hostRequests = createExtensionHostRequests({
@@ -382,33 +375,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           }),
         // Staging is the host's half of a `request.opened`; the fold lists the
         // request either way, so a staging failure is reported, never swallowed.
-        presentToolEdit: (request) =>
-          this.runtime.runFork(
-            this.toolEditApprovals
-              .present(request)
-              .pipe(
-                Effect.catchCause((cause) =>
-                  Effect.logError('Tool edit preview staging failed').pipe(
-                    Effect.annotateLogs({ data: Cause.squash(cause) }),
-                    withLogChannel(CHANNEL),
-                  ),
-                ),
-              ),
-          ),
-        // An open that never committed leaves the staged preview with no
-        // decision to release it; this is that release, composed into the
-        // session's own program rather than run here: closing the diff view
-        // and deleting the temp files behind it is asynchronous, and the
-        // refusal is not reported until it is done. The controller's programs
-        // take this window's services from the runtime's context, which the
-        // session that composes them does not carry.
-        releaseToolEdit: (requestId) =>
-          Effect.flatMap(this.runtime.contextEffect, (context) =>
-            Effect.provideContext(
-              this.toolEditApprovals.release(requestId),
-              context,
-            ),
-          ),
+        ...toolEditInteractions(
+          this.toolEditApprovals,
+          this.runtime,
+          (program) => this.runtime.runFork(program),
+        ),
       }),
     );
     this.disposables.push({ dispose: detachHostInteractions });

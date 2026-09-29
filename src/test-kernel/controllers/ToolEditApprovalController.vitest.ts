@@ -132,16 +132,21 @@ function createTestHost() {
       },
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
-      decide: vi.fn(() => {
-        Deferred.doneUnsafe(decided, Effect.void);
-        return Effect.void;
-      }),
+    },
+    session: {
+      requests: {
+        request: vi.fn(() => {
+          Deferred.doneUnsafe(decided, Effect.void);
+          return Effect.succeed({ kind: 'done' as const });
+        }),
+      },
     },
   };
 }
 
-function createController(host: ReturnType<typeof createTestHost>['host']) {
-  const controller = new ToolEditApprovalController({ host });
+function createController(testHost: ReturnType<typeof createTestHost>) {
+  const { host, session } = testHost;
+  const controller = new ToolEditApprovalController({ host, session });
   onTestFinished(() => run(controller.dispose()));
   return controller;
 }
@@ -149,7 +154,7 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
 describe('tool edit approval controller', () => {
   it('holds a release open until the staging in flight has disposed', async () => {
     const testHost = createTestHost();
-    const controller = createController(testHost.host);
+    const controller = createController(testHost);
 
     const presented = run(controller.present(approvalRequest()));
     await run(Deferred.await(testHost.contextReady));
@@ -178,7 +183,7 @@ describe('tool edit approval controller', () => {
 
   it('holds a release open until the view being opened has disposed', async () => {
     const testHost = createTestHost();
-    const controller = createController(testHost.host);
+    const controller = createController(testHost);
 
     const presented = run(controller.present(approvalRequest()));
     await run(Deferred.await(testHost.contextReady));
@@ -212,7 +217,7 @@ describe('tool edit approval controller', () => {
 
   it('joins a second release to the cleanup the first one is running', async () => {
     const testHost = createTestHost();
-    const controller = createController(testHost.host);
+    const controller = createController(testHost);
     const disposal = Deferred.makeUnsafe<void>();
     testHost.preview.dispose.mockImplementation(() => Deferred.await(disposal));
 
@@ -247,7 +252,7 @@ describe('tool edit approval controller', () => {
 
   it('ignores actions that arrive after the request was decided', async () => {
     const testHost = createTestHost();
-    const controller = createController(testHost.host);
+    const controller = createController(testHost);
 
     Deferred.doneUnsafe(testHost.staging, Effect.void);
     Deferred.doneUnsafe(testHost.presentation, Effect.void);
@@ -257,9 +262,11 @@ describe('tool edit approval controller', () => {
 
     await run(controller.handleAction({ requestId, action: 'approve' }));
     await run(Deferred.await(testHost.decided));
-    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
-      action: 'approve',
-      content: 'edited by the user',
+    expect(testHost.session.requests.request).toHaveBeenCalledWith({
+      kind: 'request.decide',
+      runId: RUN,
+      requestId,
+      decision: { action: 'approve', content: 'edited by the user' },
     });
 
     // The fold's answer releases the preview; nothing acts on it afterwards.
@@ -268,16 +275,16 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
 
     await run(controller.handleAction({ requestId, action: 'openDiff' }));
-    await run(controller.handleAction({ requestId, action: 'reject' }));
+    await run(controller.handleAction({ requestId, action: 'approve' }));
     await Promise.resolve();
 
     expect(testHost.preview.showDiff).not.toHaveBeenCalled();
-    expect(testHost.host.decide).toHaveBeenCalledOnce();
+    expect(testHost.session.requests.request).toHaveBeenCalledOnce();
   });
 
   it('holds a release until a preview build still running has settled, and starts no build for a settled request', async () => {
     const testHost = createTestHost();
-    const controller = createController(testHost.host);
+    const controller = createController(testHost);
     const events: string[] = [];
     const builds: Deferred.Deferred<void, Error>[] = [];
     // The host build is a program now, and its own settlement is what a

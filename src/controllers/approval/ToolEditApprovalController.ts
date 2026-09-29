@@ -39,13 +39,14 @@ import {
 } from 'effect';
 
 // Local imports
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
   Rejected,
   type HostRequestFailure,
 } from '@shared/session/requestErrors';
-import type { RequestDecision, SessionEvent, RunId } from '@shared/schemas';
+import type { RequestDecision, SessionEvent } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   previewProposedLatex,
@@ -109,20 +110,13 @@ export interface ToolEditApprovalHost {
    */
   readonly openBuildDisplay: BuildDisplayFn;
   reportError(message: string): void;
-  /**
-   * Send the decision for a staged request: the host's `request.decide` on
-   * its session. Settles once the runtime answered; a refusal (the request
-   * already decided, the run gone) is the host's to word.
-   */
-  decide(
-    runId: RunId,
-    requestId: string,
-    decision: RequestDecision,
-  ): Effect.Effect<void, HostRequestFailure>;
 }
 
 interface ToolEditApprovalControllerOptions {
   host: ToolEditApprovalHost;
+  /** Where a staged request's decision goes: its `request.decide`. A refusal
+   *  (the request already decided, the run gone) comes back typed. */
+  session: { readonly requests: Pick<SessionHandle['requests'], 'request'> };
 }
 
 /** What both phases of one request name, whichever phase a release finds. */
@@ -250,48 +244,31 @@ export class ToolEditApprovalController {
     });
   }
 
-  handleAction(payload: {
-    requestId: string;
-    action: Extract<HostRequest, { kind: 'toolEdit' }>['action'];
-    feedback?: string;
-  }): Effect.Effect<void, never, PreviewServices> {
+  handleAction(
+    payload: Pick<
+      Extract<HostRequest, { kind: 'toolEdit' }>,
+      'requestId' | 'action'
+    >,
+  ): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       const entry = this.requests.get(payload.requestId);
       if (!entry) return Effect.void;
       if (entry.phase === 'initializing') {
         // No preview to read the edited file back from or to open, so the
         // proposal the request carries is the whole answer.
-        if (payload.action === 'approve') {
-          return this.detach(
-            this.decideFromPayload(entry, {
-              action: 'approve',
-              content: entry.request.proposedContent,
-            }),
-          );
-        }
-        if (payload.action === 'reject') {
-          return this.detach(
-            this.decideFromPayload(entry, {
-              action: 'reject',
-              feedback: payload.feedback?.trim() || null,
-            }),
-          );
-        }
-        return Effect.void;
+        return payload.action === 'approve'
+          ? this.detach(
+              this.decideFromPayload(entry, {
+                action: 'approve',
+                content: entry.request.proposedContent,
+              }),
+            )
+          : Effect.void;
       }
 
       switch (payload.action) {
         case 'approve':
           return this.detach(this.admit(entry, () => this.approve(entry)));
-        case 'reject':
-          return this.detach(
-            this.admit(entry, () =>
-              this.send(entry.request, {
-                action: 'reject',
-                feedback: payload.feedback?.trim() || null,
-              }),
-            ),
-          );
         case 'openDiff':
           return this.detach(this.admit(entry, () => entry.preview.showDiff()));
         case 'previewProposed':
@@ -465,11 +442,14 @@ export class ToolEditApprovalController {
           ),
         );
       }
-      return this.options.host.decide(
-        runId,
-        request.permission.requestId,
-        decision,
-      );
+      return this.options.session.requests
+        .request({
+          kind: 'request.decide',
+          runId,
+          requestId: request.permission.requestId,
+          decision,
+        })
+        .pipe(Effect.asVoid);
     });
   }
 
