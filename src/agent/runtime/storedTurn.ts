@@ -88,7 +88,8 @@ const storedOperation = ({
 }: RemoteOperation) => ({
   origin,
   providerResponseId,
-  evidence: { kind: origin.protocol, data: cursor },
+  // Wrapped once, by `stored`, like every other evidence value.
+  evidence: { kind: origin.protocol, ...cursor },
 });
 
 /** A ledger row as the store keeps it. */

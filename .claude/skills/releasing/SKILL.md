@@ -19,9 +19,10 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    dated `## [X.Y.Z] - YYYY-MM-DD` section, folding in anything that
    accumulated since a prior draft that never shipped. Run
    `npm run storage:freeze`: it writes the JSON Schema of every stored row
-   kind, plugin arm and current-value family at its current version to
-   `config/storage/frozen/`, which releases those versions (every later build
-   reads them through upcasters). Commit both and push to `main`.
+   kind, plugin arm and current-value family at its current version (the
+   frozen fixtures `src/test-kernel/schemas/rowVersions.vitest.ts` checks),
+   which releases those versions: every later build reads them through
+   upcasters. Commit both and push to `main`.
 
 2. **Tags.** Cut both off that commit and push:
 

@@ -1802,6 +1802,36 @@ describe('foldRunState', () => {
     ],
   ])('%s', (_name, check) => check());
 
+  it('stores an accepted remote operation once and reads it back as it was', () => {
+    const operation = {
+      origin: ORIGIN,
+      providerResponseId: 'resp-remote',
+      afterSequence: 7,
+      admittedFingerprint: 'b'.repeat(64),
+      store: true,
+    };
+    const accepted = message({
+      kind: 'accepted',
+      invocation: INVOCATION,
+      operation,
+      deadlineAtMs: 1_000,
+    });
+    const draft = storedDraft({
+      aggregateId: LEDGER_AGGREGATE,
+      ...accepted,
+    } as unknown as RunLedgerDraft);
+    // The cursor is provider evidence, wrapped exactly once.
+    expect(draft.type === 'model.message' && draft.payload).toMatchObject({
+      operation: {
+        evidence: {
+          kind: 'openai-responses',
+          data: { afterSequence: 7, admittedFingerprint: 'b'.repeat(64) },
+        },
+      },
+    });
+    expect(ledgerRow(1, accepted)).toMatchObject({ payload: { operation } });
+  });
+
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
     const state = stateOf(through(11));
     expect(state?.messages.map((m) => m.role)).toEqual([
