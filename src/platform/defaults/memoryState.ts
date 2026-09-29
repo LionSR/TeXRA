@@ -6,13 +6,14 @@ import type { StateStore, StateWriteFailed } from '../interfaces';
 
 /** In-memory platform state store for CLI, tests, and lightweight hosts. */
 export class MemoryStateStore implements StateStore {
-  private readonly values = new Map<string, unknown>();
+  private readonly values: Map<string, unknown>;
 
-  get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
-    return Effect.sync(() => {
-      const value = this.values.get(key);
-      return value === undefined ? (defaultValue as T) : (value as T);
-    });
+  constructor(values: Record<string, unknown> = {}) {
+    this.values = new Map(Object.entries(values));
+  }
+
+  get(key: string): Effect.Effect<unknown> {
+    return Effect.sync(() => this.values.get(key));
   }
 
   /** A map write cannot fail, so the port's error channel stays empty. */

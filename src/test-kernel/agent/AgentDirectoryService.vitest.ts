@@ -45,9 +45,7 @@ function createService(customDirectory = ''): {
   const service = new AgentDirectoryService({
     channel: 'AgentDirectoryServiceTest',
     resourcesPath: RESOURCES_PATH,
-    customDirectoryStore: {
-      get: () => Effect.succeed(customDirectory),
-    },
+    state: { get: () => Effect.succeed(customDirectory) },
     issueReporter: reporter,
   });
 

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readCustomAgentDir } from '@shared/config/settingsAccess';
 /**
  * Agent selection / custom-directory / mode-preset outbound message builders.
  *
@@ -39,14 +39,11 @@ export function buildCustomAgentDirMessage<E, R = never>(
   customDir: Effect.Effect<string, E, R>,
 ): Effect.Effect<UpdateCustomAgentDirMessage, E | StateReadFailed, R> {
   return Effect.gen(function* () {
-    const configuredPath = yield* globalState.get<string>(
-      GlobalStateKey.CUSTOM_AGENT_DIR,
-      '',
-    );
+    const configuredPath = yield* readCustomAgentDir(globalState);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
       path: yield* customDir,
-      isDefault: (configuredPath?.trim() ?? '') === '',
+      isDefault: configuredPath === '',
     };
   });
 }

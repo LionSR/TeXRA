@@ -122,7 +122,7 @@ function createController(options?: {
       ),
     getPresets: () =>
       workspaceState
-        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
+        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
         .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
@@ -133,10 +133,9 @@ function createController(options?: {
       now: () => options?.now ?? 123,
     }),
     workspaceState,
-    customPresets: workspaceState.get<unknown[]>(
-      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-      [],
-    ),
+    customPresets: workspaceState
+      .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
+      .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
   };
 }
 

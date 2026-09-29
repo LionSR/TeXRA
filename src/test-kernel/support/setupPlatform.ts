@@ -225,10 +225,8 @@ export const fakeHostSecrets: PlatformSecrets = {
 };
 
 export const fakeHostAppState: StateStore = {
-  get: <T>(key: string, defaultValue?: T) =>
-    Effect.suspend(() =>
-      installedHost().roots.globalState.get<T>(key, defaultValue),
-    ),
+  get: (key) =>
+    Effect.suspend(() => installedHost().roots.globalState.get(key)),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
   modify: (key, change) =>
     Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),

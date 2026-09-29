@@ -7,6 +7,7 @@ import type {
   StateReadFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   isRequestRefusal,
@@ -134,9 +135,10 @@ export function createDesktopOnboardingIpc(
   });
 
   const postCurrentState = Effect.gen(function* () {
-    const dismissed = yield* state.get<boolean>(
+    const dismissed = yield* readState(
+      state,
       DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-      false,
+      StateFlagSchema,
     );
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
   });

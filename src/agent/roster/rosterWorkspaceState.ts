@@ -62,9 +62,7 @@ export function serializeWorkspaceWrite<A, E>(
  */
 export function readAgentRosterSelection(repoState: StateStore) {
   return Effect.gen(function* () {
-    const raw = yield* repoState.get<unknown>(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    );
+    const raw = yield* repoState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION);
     if (raw === undefined) return INHERITED_AGENT_ROSTER;
     const parsed = AgentRosterSelectionSchema.safeParse(raw);
     if (parsed.success) return parsed.data;
@@ -87,9 +85,7 @@ function readHidden(
   repoState: StateStore,
 ): Effect.Effect<Set<string>, StateReadFailed> {
   return Effect.gen(function* () {
-    const raw = yield* repoState.get<unknown>(
-      WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
-    );
+    const raw = yield* repoState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS);
     if (raw === undefined) return new Set<string>();
     const parsed = HiddenCustomAgentKeysSchema.safeParse(raw);
     if (parsed.success) return new Set(parsed.data);

@@ -116,14 +116,16 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 }> {}
 
 /**
- * Application state read from its authority when the Effect executes.
- * Updates finish after commit; defaults apply only to absent keys. A change
+ * Application state read from its authority when the Effect executes. A read
+ * answers the stored JSON as `unknown`: the caller decodes it with its key's
+ * schema (`readState`), which also owns the default of an absent key. Updates
+ * finish after commit. A change
  * that depends on the current value goes through `modify`, never a `get`
  * then an `update`: the settings surfaces do not serialize their messages,
  * and hosts in separate processes share one store.
  */
 export interface StateStore {
-  get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
+  get(key: string): Effect.Effect<unknown, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
   /**
    * Read-modify-write of one key as one step at the store's authority:
@@ -158,7 +160,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
 ) {
   static layer(store: StateStore): Layer.Layer<AppState> {
     return Layer.succeed(AppState)({
-      get: (key, defaultValue) => store.get(key, defaultValue),
+      get: (key) => store.get(key),
       update: (key, value) => store.update(key, value),
       modify: (key, change) => store.modify(key, change),
       changes: () => Stream.succeed(undefined),

@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { z } from 'zod';
 /**
  * User-scoped onboarding state shared by every host.
  *
@@ -8,6 +9,7 @@ import { Effect } from 'effect';
  */
 
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -19,14 +21,11 @@ export function setOnboardingDeclined(
 }
 
 export function getFirstRunDone(state: StateStore) {
-  return Effect.gen(function* () {
-    return (
-      (yield* state.get<boolean>(
-        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-        false,
-      )) === true
-    );
-  });
+  return readState(
+    state,
+    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+    StateFlagSchema,
+  );
 }
 
 export function setFirstRunDone(
@@ -39,8 +38,10 @@ export function setFirstRunDone(
 /** User-level default team id, written by the setup agent's `apply_team`. */
 export function getDefaultTeamId(state: StateStore) {
   return Effect.gen(function* () {
-    const value = yield* state.get<string>(
+    const value = yield* readState(
+      state,
       GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
+      z.string().optional(),
     );
     return isNonEmptyString(value) ? value : undefined;
   });
@@ -63,11 +64,11 @@ export function clearDefaultTeamId(
 export function readOnboardingFlags(state: StateStore) {
   return Effect.gen(function* () {
     return {
-      declined:
-        (yield* state.get<boolean>(
-          GlobalStateKey.ONBOARDING_DECLINED,
-          false,
-        )) === true,
+      declined: yield* readState(
+        state,
+        GlobalStateKey.ONBOARDING_DECLINED,
+        StateFlagSchema,
+      ),
       firstRunDone: yield* getFirstRunDone(state),
     };
   });

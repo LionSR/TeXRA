@@ -54,7 +54,7 @@ const MULTI_AGENT_SHOW_HINT =
  */
 export function readCliMultiAgentPresets(repoState: StateStore) {
   return Effect.gen(function* () {
-    const customRaw = yield* repoState.get<unknown>(
+    const customRaw = yield* repoState.get(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     );
     return launchableTeamPresets(customRaw);

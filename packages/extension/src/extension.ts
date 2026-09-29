@@ -101,6 +101,7 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
+import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -783,7 +784,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     catch: ensureError,
   });
   const welcomeKey = 'texra.welcomeShown';
-  if (!(yield* globalState.get<boolean>(welcomeKey))) {
+  if (!(yield* readState(globalState, welcomeKey, StateFlagSchema))) {
     // First-run welcome card; a failure leaves the flag unset, so it repeats.
     yield* Effect.forkScoped(
       fromHost('texra.showMainView', () =>

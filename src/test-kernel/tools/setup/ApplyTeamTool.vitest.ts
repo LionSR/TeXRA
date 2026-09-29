@@ -9,7 +9,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -32,7 +31,7 @@ import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 import { createFakeSetupPlatform } from './fixtures';
 
 function workspaceRoster() {
-  return testWorkspaceRoots().repoState.get<AgentRosterSelection>(
+  return testWorkspaceRoots().repoState.get(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
 }

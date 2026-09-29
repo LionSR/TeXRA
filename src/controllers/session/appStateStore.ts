@@ -74,11 +74,8 @@ export function appStateStoreFromDatabase(
       );
   return {
     changes: (keys) => values.changes(family, keys.map(rowKey)),
-    get: <T>(key: string, defaultValue?: T) =>
+    get: (key) =>
       values.get(family, rowKey(key)).pipe(
-        Effect.map((value) =>
-          value === undefined ? (defaultValue as T) : (value as T),
-        ),
         Effect.mapError(
           (cause) =>
             new StateReadFailed({

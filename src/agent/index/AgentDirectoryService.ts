@@ -10,9 +10,10 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
-  type StateReadFailed,
+  type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
+import { readCustomAgentDir } from '@shared/config/settingsAccess';
 import type { AgentSource } from '@shared/schemas';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -20,10 +21,6 @@ import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
 } from './BundledAgentDirectories';
-
-interface CustomAgentDirectoryStore {
-  get(): Effect.Effect<string | undefined, StateReadFailed>;
-}
 
 type AgentDirectoryDocsId = 'custom-agents';
 
@@ -39,7 +36,8 @@ export interface AgentDirectoryServiceOptions {
    * host's install can never overwrite another's built-ins.
    */
   resourcesPath: string;
-  customDirectoryStore: CustomAgentDirectoryStore;
+  /** Where the configured custom agent directory is read from. */
+  state: Pick<StateStore, 'get'>;
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: AgentDirectoryIssueReporter;
@@ -96,8 +94,7 @@ export class AgentDirectoryService {
     string,
     AgentDirectoriesFailed
   > {
-    return this.options.customDirectoryStore.get().pipe(
-      Effect.map((configured) => (configured ?? '').trim()),
+    return readCustomAgentDir(this.options.state).pipe(
       Effect.mapError(
         (cause) =>
           new AgentDirectoriesFailed({

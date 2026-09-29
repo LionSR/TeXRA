@@ -54,11 +54,11 @@ const availabilityInputs = (
 class CountingStateStore extends FakeStateStore {
   copilotPreferenceReads = 0;
 
-  override get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
+  override get(key: string): Effect.Effect<unknown> {
     if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
       this.copilotPreferenceReads += 1;
     }
-    return super.get(key, defaultValue);
+    return super.get(key);
   }
 }
 

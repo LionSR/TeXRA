@@ -17,6 +17,7 @@ import type {
   SettingStore,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { settingByKey } from '@shared/state/stateSettings';
 
 const CHANNEL = 'settingsAccess';
@@ -83,14 +84,53 @@ export function readSetting(
   stores: SettingsStores,
 ): Effect.Effect<unknown, StateReadFailed> {
   return Effect.flatMap(inspectSetting(entry, stores), (stored) =>
-    stored.kind === 'value'
-      ? Effect.succeed(stored.value)
-      : Effect.logWarning(invalidStoredMessage(entry, stored.cause)).pipe(
-          withLogChannel(CHANNEL),
-          Effect.map(() => settingDefault(entry)),
-        ),
+    valueOrDefault(entry.key, entry.schema, stored),
   );
 }
+
+/**
+ * Read a state key that is not a catalog row (onboarding flags, the custom
+ * agent directory, the reasoning overrides) as `schema` decodes it: the
+ * schema's default when the key is absent, and, as for a catalog row, the
+ * default after a warning when a present value fails it. The one decode of
+ * these keys, so no reader casts the store's `unknown` to the type it hopes
+ * for.
+ */
+export function readState<S extends z.ZodType>(
+  state: Pick<StateStore, 'get'>,
+  key: string,
+  schema: S,
+): Effect.Effect<z.output<S>, StateReadFailed> {
+  return Effect.flatMap(state.get(key), (raw) =>
+    valueOrDefault(key, schema, classifyStored(schema, raw)),
+  ) as Effect.Effect<z.output<S>, StateReadFailed>;
+}
+
+/** A boolean state key that is off until something sets it. */
+export const StateFlagSchema = z.boolean().prefault(false);
+
+/**
+ * The custom agent directory the user configured, trimmed; empty when none is
+ * (the host then uses its default directory).
+ */
+export const readCustomAgentDir = (state: Pick<StateStore, 'get'>) =>
+  readState(
+    state,
+    GlobalStateKey.CUSTOM_AGENT_DIR,
+    z.string().trim().prefault(''),
+  );
+
+const valueOrDefault = (
+  key: string,
+  schema: z.ZodType,
+  stored: StoredSetting,
+) =>
+  stored.kind === 'value'
+    ? Effect.succeed(stored.value)
+    : Effect.logWarning(invalidStoredMessage(key, stored.cause)).pipe(
+        withLogChannel(CHANNEL),
+        Effect.map(() => schema.parse(undefined)),
+      );
 
 /**
  * {@link readSetting} without the snap to the default: a present value that
@@ -106,10 +146,10 @@ export function inspectSetting(
     const slot = settingSlot(entry, stores.host);
     return slot === 'config'
       ? Effect.sync(() =>
-          classifyStored(entry, rawConfigValue(entry, stores.config)),
+          classifyStored(entry.schema, rawConfigValue(entry, stores.config)),
         )
-      : Effect.map(stores[slot].get<unknown>(entry.key), (raw) =>
-          classifyStored(entry, raw),
+      : Effect.map(stores[slot].get(entry.key), (raw) =>
+          classifyStored(entry.schema, raw),
         );
   });
 }
@@ -125,11 +165,11 @@ export function readConfigSetting(
   entry: StateSettingEntry,
   config: ConfigProvider,
 ): unknown {
-  const stored = classifyStored(entry, rawConfigValue(entry, config));
+  const stored = classifyStored(entry.schema, rawConfigValue(entry, config));
   if (stored.kind === 'value') return stored.value;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
-  writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry, stored.cause));
+  writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry.key, stored.cause));
   return settingDefault(entry);
 }
 
@@ -148,11 +188,11 @@ function rawConfigValue(
 }
 
 /** A stored value against the row's schema; absent resolves to its default. */
-function classifyStored(entry: StateSettingEntry, raw: unknown): StoredSetting {
+function classifyStored(schema: z.ZodType, raw: unknown): StoredSetting {
   if (raw === undefined) {
-    return { kind: 'value', value: settingDefault(entry) };
+    return { kind: 'value', value: schema.parse(undefined) };
   }
-  const result = entry.schema.safeParse(raw);
+  const result = schema.safeParse(raw);
   return result.success
     ? { kind: 'value', value: result.data }
     : { kind: 'invalid', cause: z.prettifyError(result.error) };
@@ -164,8 +204,8 @@ function classifyStored(entry: StateSettingEntry, raw: unknown): StoredSetting {
  * an invalid *persisted* value must not vanish without a trace. Both readers
  * warn with this text before they substitute the default.
  */
-function invalidStoredMessage(entry: StateSettingEntry, cause: string): string {
-  return `Ignoring invalid persisted value for setting "${entry.key}": ${cause}`;
+function invalidStoredMessage(key: string, cause: string): string {
+  return `Ignoring invalid persisted value for setting "${key}": ${cause}`;
 }
 
 /**

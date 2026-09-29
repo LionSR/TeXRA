@@ -209,10 +209,7 @@ describe('coding-plan subscription runtime', () => {
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
         expect(
-          yield* hostStores().globalState.get(
-            GlobalStateKey.GLM_CODING_PLAN,
-            false,
-          ),
+          yield* hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN),
         ).toBe(true);
       }),
   );

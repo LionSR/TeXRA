@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { z } from 'zod';
 import {
   ModelProvider,
   ReasoningEffort,
@@ -8,6 +9,7 @@ import {
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import type { StateStore } from '@platform/interfaces';
+import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -21,9 +23,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
  */
 export function reasoningEffortOverrides(state: StateStore) {
   return Effect.gen(function* () {
-    const stored = yield* state.get<Record<string, string>>(
+    const stored = yield* readState(
+      state,
       GlobalStateKey.REASONING_LEVELS,
-      {},
+      z.record(z.string(), z.unknown()).prefault({}),
     );
     const overrides: Record<string, ReasoningEffort> = {};
     for (const [model, value] of Object.entries(stored)) {
@@ -36,7 +39,7 @@ export function reasoningEffortOverrides(state: StateStore) {
       // the model falls back to its catalog default; say so rather than
       // dropping the entry silently.
       yield* Effect.logWarning(
-        `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
+        `Stored reasoning level ${JSON.stringify(value)} for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
         parsed.error,
       );
     }

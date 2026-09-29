@@ -283,11 +283,11 @@ describe('CLI agent validation with a shadowed name', () => {
         const { stores } = makeFakeSettingsStores('cli');
         const delayedState = {
           ...stores.globalState,
-          get: <T>(key: string, defaultValue?: T) =>
+          get: (key: string) =>
             Effect.gen(function* () {
               yield* Deferred.succeed(entered, undefined);
               yield* Deferred.await(release);
-              return yield* stores.globalState.get<T>(key, defaultValue);
+              return yield* stores.globalState.get(key);
             }),
           update: stores.globalState.update.bind(stores.globalState),
         };

@@ -8,7 +8,6 @@ import { Effect, Layer } from 'effect';
 import { AgentDirectoryService } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const CHANNEL = 'AgentLoad';
 
@@ -26,9 +25,7 @@ export const agentDirectoriesLayer = (extensionPath: string) =>
         new AgentDirectoryService({
           channel: CHANNEL,
           resourcesPath: path.join(extensionPath, 'resources'),
-          customDirectoryStore: {
-            get: () => state.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-          },
+          state,
           issueReporter: {
             report: (message, docsId) =>
               showLoggedMessageWithDocs(CHANNEL, message, docsId),

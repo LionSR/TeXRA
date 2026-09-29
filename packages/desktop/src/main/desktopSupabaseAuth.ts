@@ -114,10 +114,7 @@ export function createDesktopPendingOAuthStore(
 
 const readPendingRecords = Effect.fn('desktopAuth.readPendingRecords')(
   function* (store: Pick<StateStore, 'get' | 'update'>) {
-    const persisted = yield* store.get<unknown>(
-      DESKTOP_PENDING_OAUTH_STATE_KEY,
-      null,
-    );
+    const persisted = yield* store.get(DESKTOP_PENDING_OAUTH_STATE_KEY);
     if (persisted == null) return {};
     const parsed = PendingRecordsSchema.safeParse(persisted);
     if (!parsed.success) {

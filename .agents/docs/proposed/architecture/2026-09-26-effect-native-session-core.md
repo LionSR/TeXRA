@@ -248,10 +248,10 @@ Workflow scripts and documents:
 
 Agent definitions and accounts:
 
-- **The CLI ignores the custom agents directory** _(confirmed)_: it passes
-  `customDirectoryStore: { get: () => Effect.succeed(undefined) }`
-  (`cliProcessRuntime.ts:224`) while the extension stores the setting in the
-  shared global state.
+- **The CLI ignored the custom agents directory** _(fixed by move 12)_: it
+  passed a `customDirectoryStore` that always answered `undefined` while the
+  extension stored the setting in the shared global state. `AgentDirectoryService`
+  now takes the state store and every host reads it through `readCustomAgentDir`.
 - **The built-in `creator` agent is broken off VS Code**: only the extension
   registers the agent and doc directories as external roots, so on desktop, the
   CLI and the SDK its path variables render as `''` (`frontend/setup.ts:33-90`,
@@ -264,11 +264,11 @@ Agent definitions and accounts:
 
 Persistence:
 
-- **Every format bump silently resets user settings.** It moves aside the
-  global database with the session vocabulary, re-runs
-  `seedDisabledToolDefaults`, tells users only about "session history" on the
-  extension and the CLI, and says nothing on desktop (`storeFormat.ts:51`,
-  `toolAvailability.ts:84-100`, `ui/copy/sessionStore.ts:10-15`).
+- **Every format bump silently resets user settings** _(fixed: #13441; a bump
+  now moves only event rows aside)_. It moved aside the global database with
+  the session vocabulary, re-ran `seedDisabledToolDefaults`, told users only
+  about "session history" on the extension and the CLI, and said nothing on
+  desktop.
 - **Moved-aside copies accumulate unreported**, one full copy per format per
   root (`storeFormat.ts:54-88`). They may be a user's only copy of old settings
   and history, so the fix reports their location and size; it does not delete
@@ -297,7 +297,7 @@ Hosts:
 | [9. Approval plane](#move-9-one-approval-authority-per-session)                          | the policy decided in core for two request kinds and in the CLI for the rest, seven bypass writers, grants without owners, MCP calls approved as shell               | M–L    | the `defineTool` freeze amendment (guard kinds)                                      |
 | [10. Run input and wakes](#move-10-a-runs-input-belongs-to-its-run-entry)                | the 729-line follow-up queue as a second in-process owner, 31 manual lease hand-offs, host resume ports for wakes, resume's cancellation predicates                  | L      | none                                                                                 |
 | [11. Agent catalog](#move-11-the-agent-catalog-is-a-process-service-that-runs-pin)       | module-slot catalog with 22 defensive loads, two loaders for one format, an extension-only watcher, live re-reads on resume                                          | M–L    | the plugin note's agent-source line if definitions are pinned                        |
-| [12. Application state](#move-12-one-application-state-plane)                            | the unlanded current-value decision, three homes for one setting, silent resets on every format bump                                                                 | L      | none (lands the accepted decision as written)                                        |
+| [12. Application state](#move-12-one-application-state-plane)                            | the current-value decision (landed in #13441), three homes for one setting, silent resets on every format bump (fixed); typed state reads (move 12 PR 6)             | L      | none (lands the accepted decision as written)                                        |
 | [13. Hosts as scoped programs](#move-13-hosts-are-scoped-programs-that-react-to-facts)   | the 1,380-line desktop window closure with unawaited teardown, two static singletons, the CLI's root-run slot machine, output presentation inside runs               | L      | the one-run-program parity table (presentation)                                      |
 
 Verdicts after the owner's review: move 1 shrinks to the lineage read, an
@@ -1692,89 +1692,36 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 
 ## Move 12: one application-state plane
 
-### Current state
+### Re-checked against `main` at `4b521aa` (2026-09-28)
 
-The accepted current-value decision (2026-09-22) has landed no code: there
-are zero hits for `current_value`, the `state.value.set` arm and
-`borrowsClaim` remain, and eight format bumps since then did not carry it.
-Project app-state writes therefore still append to the session's own event
-table through `Database.appendAll`, outside the publisher
-(`appStateStore.ts:56-62`), and every session-vocabulary bump resets global
-settings (the defect above). One catalog row can have three homes: the ten
-`WORKTREE_SHARED_KEYS` go to the global database on the extension, the
-Electron profile database on desktop, and the project database on the CLI; the
-26 `globalState` rows split desktop from the other hosts. The global databases
-run a 250 ms poll nobody reads, and the desktop project lists write two rows
-non-atomically. There are 21 raw `get<T>` casts of persisted state.
+Most of this move landed after the pin, in #13441. The note's first draft said
+the decision had "landed no code"; that was true at `3efffcc` and is not now.
 
-### Target
+Landed in #13441: each root database has a `current_value` table (families
+`app-state`, `repo-state`, `desktop-projects`, `inquiry`, `update-check`),
+written by one `values.modify` in one `BEGIN IMMEDIATE`; `state.value.set`,
+`borrowsClaim` and the four aggregate kinds are deleted; a format bump moves
+only the event rows aside, so settings survive it (the defect under
+"Persistence" above is fixed); the `repoState` slot replaced
+`WORKTREE_SHARED_KEYS` on every host; desktop `AppState` sits on the global
+database like the CLI's and the extension's; the two desktop project lists are
+one value and one write; and the global database's `data_version` poll now has
+readers (`values.changes` feeds `AppState.changes` across processes), so the
+"poll nobody reads" claim is refuted.
 
-```ts
-// deletion is for app-state and presentation only (the current-value
-// decision, amended by move 13). Two overloads, not a
-// conditional type: a conditional distributes over a `Family` union and would
-// admit undefined for a retained family. A caller holding a bare `Family`
-// matches neither overload and must narrow first.
-type DeletableFamily = 'app-state' | 'presentation';
-type RetainedFamily = Exclude<Family, DeletableFamily>;
-export class CurrentValues extends Context.Service<
-  CurrentValues,
-  {
-    get<F extends Family>(
-      f: F,
-      key: string,
-    ): Effect.Effect<Value<F> | undefined, DatabaseReadFailed>;
-    // one BEGIN IMMEDIATE each; a malformed row rolls back
-    modify<F extends DeletableFamily, A>(
-      f: F,
-      key: string,
-      change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
-    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>;
-    modify<F extends RetainedFamily, A>(
-      f: F,
-      key: string,
-      change: (v: Value<F> | undefined) => readonly [A, Value<F>],
-    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>;
-    // every live row of a family, latest write first (inquiry listing,
-    // inquiryRecords.ts:241-265, keeps the decision's revision order)
-    list<F extends Family>(
-      f: F,
-    ): Effect.Effect<
-      readonly { key: string; value: Value<F> }[],
-      DatabaseReadFailed
-    >;
-    readonly movedAside: StoreMovedAside | null; // reported by every host
-  }
->()('@texra/session/CurrentValues') {}
-```
+Landed with this move's remaining PR: `StateStore.get` answers `unknown` and
+takes no type argument or default. The typed reads (onboarding flags, the
+custom agent directory in four host adapters, the reasoning overrides, the
+Copilot route list, the welcome and instruction flags) decode through
+`readState(state, key, schema)`, which applies the schema's default for an
+absent key and, as for a catalog row, warns and defaults for a value that fails
+the schema. `AgentDirectoryService` takes the state store itself rather than a
+one-method adapter each host wrote.
 
-The table follows the accepted decision as written: a format mismatch clears
-the whole schema, current values included (the owner's review dropped the
-first draft's separate stamp, since 1.0 starts clean). The silent part of that
-reset is fixed by reporting it (PR 1). `SettingSlots` gains a `repoState` slot, so the catalog is the only router of a
-key on every host. One global root for `AppState`.
-
-### PRs
-
-1. Every host reports every moved-aside store, with its location and size,
-   and names settings. Nothing is deleted.
-2. One write for the desktop lists; no poll on the global databases.
-3. `CurrentValues` on its own format bump, taken now rather than waiting for
-   another (eight bumps have gone by without it; 1.0 starts clean); retire
-   `state.value.set` and `borrowsClaim`.
-4. After decision 12: desktop `AppState` onto the global database, in the same
-   bump.
-5. The `repoState` slot replaces `WORKTREE_SHARED_KEYS`; the CLI goes through
-   it.
-6. Schema-checked reads for the raw casts.
-
-### Rulings
-
-**Keep** the current-value decision as accepted, shared stamp included.
-**Keep** `EFF-ADOPT-config-provider` (settings stay synchronous) and
-`RT-corrupt-record-tag` (values decode at the database boundary).
-**Ask** for the call the archived global-database note left to the owner (two
-global roots on desktop).
+Still open: PR 1's desktop half. The desktop shows no notice when opening a
+project's store moved its history aside, and the fix lives in the window and
+project files that move 13 rewrites, so it follows that move. Moved-aside
+copies are still not sized or listed, and are not deleted.
 
 ## Move 13: hosts are scoped programs that react to facts
 

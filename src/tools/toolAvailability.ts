@@ -115,7 +115,7 @@ export function setToolEnabled(
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
-    const stored = yield* state.get<unknown>(GlobalStateKey.DISABLED_TOOLS);
+    const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
     if ((yield* Effect.fromResult(storedDisabledTools(stored))) !== undefined)
       return;
 
