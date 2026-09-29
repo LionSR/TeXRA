@@ -27,6 +27,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
   readonly parallelSafe: boolean | undefined;
+  readonly replay: ITool['replay'];
   readonly requiresApproval: ITool['requiresApproval'];
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
@@ -52,6 +53,8 @@ export type DefineToolOptions<T, R = never> = {
   guard?: ToolGuard<T, NoInfer<R>>;
   execute: ToolExecute<T, R>;
   parallelSafe?: boolean;
+  /** See {@link ITool.replay}; omitted is `'unsafe'`. */
+  replay?: ITool['replay'];
   requiresApproval?: ITool['requiresApproval'];
   slow?: boolean;
 };
@@ -90,6 +93,7 @@ export function defineTool<T, R = never>(
       }),
     },
     parallelSafe: def.parallelSafe,
+    replay: def.replay,
     requiresApproval: def.requiresApproval,
     slow: def.slow,
     unavailableHosts: def.unavailableHosts,

@@ -297,6 +297,17 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A tool call cut off by a crash no longer runs twice unasked.** Resuming
+  a run after the process died mid-call used to re-run any call that could
+  run in parallel, even one with side effects. Now only read-only tools
+  (file reads and searches, web and literature lookups, and MCP tools their
+  server marks read-only or idempotent) re-run on their own. Any other
+  unfinished call asks you "run it again, or skip it?"; with no one to ask,
+  the model is told the outcome is unknown and to check before retrying. A
+  call that never started is reported to the model as not started instead
+  of being run. Session history from earlier builds is cleared the first
+  time this build opens a workspace.
+
 - **`yolo` and `never` mean the same on every host.** The session decides
   the approval policy when a plan, delegation, question or model-error retry
   opens, so the extension and desktop now match the terminal: `never` denies

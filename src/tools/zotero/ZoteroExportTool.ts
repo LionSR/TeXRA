@@ -75,6 +75,7 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* (
 
 export const ZoteroExportTool = defineTool({
   name: 'zotero_export',
+  replay: 'safe',
   description:
     'Export BibTeX/BibLaTeX entries from Zotero by citation keys. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',

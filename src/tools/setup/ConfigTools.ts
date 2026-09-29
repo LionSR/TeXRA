@@ -71,6 +71,7 @@ type ReadConfigInput = z.infer<typeof ReadConfigInputSchema>;
 
 export const ReadConfigTool = defineTool({
   name: 'read_config',
+  replay: 'safe',
   description: `Read the effective value of a TeXRA configuration key.
 
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,

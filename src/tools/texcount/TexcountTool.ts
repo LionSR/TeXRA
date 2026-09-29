@@ -70,6 +70,7 @@ const texcount = Effect.fn('TexcountTool.execute')(function* (
 
 export const TexcountTool = defineTool({
   name: 'texcount',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Run texcount on one or more LaTeX files. Use mode="separate" (default) for individual files, "include" to follow \\input/\\include, or "sum" to aggregate independent sources.',

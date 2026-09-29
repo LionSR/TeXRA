@@ -210,6 +210,7 @@ const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
 
 export const ZoteroCollectionsTool = defineTool({
   name: 'zotero_collections',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'List Zotero collections (folders) with their keys. ' +

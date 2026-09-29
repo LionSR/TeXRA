@@ -263,6 +263,7 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
 
 export const ReadFileTool = defineTool({
   name: 'read_file',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',

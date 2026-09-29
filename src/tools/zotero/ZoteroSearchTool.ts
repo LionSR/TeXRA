@@ -196,6 +196,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
 
 export const ZoteroSearchTool = defineTool({
   name: 'zotero_search',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Search Zotero library by citation key, title, author, or year. ' +
