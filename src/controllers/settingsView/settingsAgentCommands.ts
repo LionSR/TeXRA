@@ -14,7 +14,6 @@ import {
   getAgent,
   getAgentsByCategory,
   getCustomAgentScanIssues,
-  loadAgents,
   refresh,
 } from '@agent/index';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -69,13 +68,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   );
 
   const postSelection = present.post(
-    Effect.andThen(
-      loadAgents(),
-      buildAgentSelectionMessage({
-        buildSelectionItems: () => catalog.buildSelectionItems(),
-        getCustomAgentScanIssues,
-      }),
-    ),
+    buildAgentSelectionMessage({
+      buildSelectionItems: () => catalog.buildSelectionItems(),
+      getCustomAgentScanIssues,
+    }),
   );
   const postCustomDir = present.post(
     buildCustomAgentDirMessage(globalState, customDirectory),
@@ -111,7 +107,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   // The file tools admit the new directory before the change reports done,
   // so a `creator` run launched right after can write there.
   const afterCustomDirChange = Effect.andThen(
-    Effect.andThen(registerCustomAgentRoot, bindings.customAgentDirChanged),
+    registerCustomAgentRoot,
     allSettledVoid<Error, ProcessServices>([
       postCustomDir,
       refreshAfterAgentMutation(),
@@ -250,7 +246,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to apply agent team',
         applySettingsTeamRoster(message.presetId, {
           catalog,
-          loadCatalog: () => loadAgents(),
           presentation: {
             showInfoMessage: present.notice,
             showErrorMessage: present.alert,
@@ -268,7 +263,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             placeHolder: 'e.g. My Research Team',
           });
           if (!name?.trim()) return;
-          yield* loadAgents();
           const preset = yield* catalog.saveCurrentPreset(name);
           yield* refreshAfterAgentMutation(undefined, true);
           yield* present.notice(`Saved team "${preset.name}"`);

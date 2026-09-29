@@ -25,9 +25,9 @@ import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { scanDirectory } from './agentYamlScanner';
-import { untilFollowerLoaded } from './catalogReadiness';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { scanPluginAgents } from './pluginAgents';
 import type { AgentEntry } from './agentEntry';
@@ -57,21 +57,20 @@ const LOOKUP_PRIORITY: AgentSource[] = [
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
 
-/**
- * Whether a load has published a catalog. Only a load that completes sets
- * it, so a failed load leaves the previous catalog serving.
- */
-let published = false;
-
 /** Custom-directory YAML the last published load could not turn into an agent. */
 let customScanIssues: readonly AgentScanIssue[] = Object.freeze([]);
+
+/** Why the last load failed; absent once one publishes. */
+let loadFailure: string | undefined;
+
+/** A source changed and its reload has not begun; cleared as a scan starts. */
+let changePending = false;
 
 /**
  * Loads are serialized on one per-key lane: every load enters it, so the
  * registry has one serialization point instead of a promise plus a queue.
- * A fiber that arrives while a load runs waits for it, then re-checks what
- * that load published — nothing on the load path may take the lane from
- * inside a load of its own.
+ * A fiber that arrives while a load runs waits for it — nothing on the load
+ * path may take the lane from inside a load of its own.
  */
 const catalogLoadLanes = new Map<string, PerKeyLane>();
 const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
@@ -79,25 +78,6 @@ const onCatalogLoadLane = withPerKeyLane(catalogLoadLanes, 'agentCatalogLoad');
 // =============================================================================
 // CORE API
 // =============================================================================
-
-/**
- * Load all agents into cache, unless a load already published them. Where a
- * catalog follower runs, its first reload is the initial load and this waits
- * for it. Concurrent calls join the in-flight load through the lane and
- * re-check what it published, so only one scan runs.
- */
-export function loadAgents(): Effect.Effect<
-  void,
-  AgentCatalogLoadError | StateReadFailed,
-  AgentCatalogServices
-> {
-  return Effect.andThen(
-    untilFollowerLoaded,
-    onCatalogLoadLane(
-      Effect.suspend(() => (published ? Effect.void : scanCatalog)),
-    ),
-  );
-}
 
 /**
  * Scan every agent source and publish the result. The caller holds the lane,
@@ -109,6 +89,7 @@ const scanCatalog: Effect.Effect<
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > = Effect.gen(function* () {
+  changePending = false;
   const startTime = yield* Clock.currentTimeMillis;
 
   const dirs = yield* AgentDirectories;
@@ -149,7 +130,6 @@ const scanCatalog: Effect.Effect<
   ]) {
     cache.set(agentKeyOf(entry), entry);
   }
-  published = true;
 
   yield* Effect.logInfo(
     `Loaded ${cache.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
@@ -190,17 +170,54 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
 }
 
 /**
- * Rescan after every older load has settled. The cache keeps serving the
- * catalog it already published until the new one lands, including when the
- * rescan fails.
+ * The one loader: rescan every source, after every older load has settled,
+ * and publish the catalog rebuilt from empty. The process's catalog layer
+ * (`agentCatalogFollower`) calls it when the runtime is built and on every
+ * change; nothing else needs the catalog loaded first. The cache keeps
+ * serving the catalog it already published until the new one lands,
+ * including when the rescan fails.
  */
 export function refresh(): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalogServices
 > {
-  return onCatalogLoadLane(scanCatalog);
+  return onCatalogLoadLane(
+    scanCatalog.pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          loadFailure = undefined;
+        }),
+      ),
+      Effect.tapError((error) =>
+        Effect.sync(() => {
+          loadFailure = toErrorMessage(error);
+        }),
+      ),
+    ),
+  );
 }
+
+/** Why the last load failed, so a launch that misses can say the catalog is
+ *  not loaded rather than that the agent does not exist. */
+export function getCatalogLoadFailure(): string | undefined {
+  return loadFailure;
+}
+
+/** A watched source changed: the reload is debounced, so the next
+ *  {@link settledCatalog} runs it now. */
+export function markCatalogStale(): void {
+  changePending = true;
+}
+
+/**
+ * The catalog a launch resolves against: any load already running has landed,
+ * and a change still waiting out its debounce is loaded now, so an agent
+ * edited a moment ago launches as saved.
+ */
+export const settledCatalog = Effect.suspend(() =>
+  changePending ? refresh() : onCatalogLoadLane(Effect.void),
+);
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
@@ -420,19 +437,11 @@ function sortAgentEntries(
   });
 }
 
-/**
- * Compute typed agent options data for Lit-native rendering.
- * Ensures cache is loaded first.
- */
+/** Compute typed agent options data for Lit-native rendering. */
 export function computeAgentOptionsData(
   stores: AgentRosterStores,
-): Effect.Effect<
-  AgentOptionsDataPayload,
-  AgentCatalogLoadError | StateReadFailed,
-  AgentCatalogServices
-> {
+): Effect.Effect<AgentOptionsDataPayload, StateReadFailed> {
   return Effect.gen(function* () {
-    yield* loadAgents();
     return {
       workflow: entriesToOptionData(
         sortAgentEntries(yield* getVisibleAgents(stores, 'workflow'), [

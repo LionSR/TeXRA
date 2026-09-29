@@ -4,16 +4,15 @@ import { assert, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
-  load: vi.fn(),
   buildVars: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
+  getCatalogLoadFailure: () => undefined,
+  getCustomAgentScanIssues: () => [],
   refresh: () => Effect.void,
+  settledCatalog: Effect.void,
   resolveAgentForLaunch: mocks.resolve,
-}));
-vi.mock('@agent/runtime/agentLoad', () => ({
-  loadAgentSettingAndPrompts: mocks.load,
 }));
 vi.mock('@agent/prompt/templateInputs', () => ({
   buildTemplateInputs: mocks.buildVars,
@@ -236,10 +235,11 @@ describe('AgentLaunchContext', () => {
         yield* session.interactions.use(recording.interactions);
 
         mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          Effect.succeed({
+            path: '/agents/chat.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
+          }),
         );
 
         // Rejected while preparing the definition, before any execution is
@@ -291,10 +291,11 @@ describe('AgentLaunchContext', () => {
         publishTestRunStart(session, EXECUTION_ID);
         yield* session.settlePublications();
         mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          Effect.succeed({
+            path: '/agents/chat.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
+          }),
         );
         mocks.buildVars.mockReturnValueOnce(
           Effect.fail(new Error('user vars unavailable')),
@@ -338,10 +339,11 @@ describe('AgentLaunchContext', () => {
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
         mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          Effect.succeed({
+            path: '/agents/chat.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
+          }),
         );
         mocks.buildVars.mockReturnValueOnce(
           Effect.succeed({
@@ -399,10 +401,11 @@ describe('AgentLaunchContext', () => {
         });
         const definitionMocks = () => {
           mocks.resolve.mockReturnValueOnce(
-            Effect.succeed({ path: '/agents/chat.yaml' }),
-          );
-          mocks.load.mockReturnValueOnce(
-            Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+            Effect.succeed({
+              path: '/agents/chat.yaml',
+              setting: { agentCategory: AgentCategory.ToolUse },
+              prompt: {},
+            }),
           );
           mocks.buildVars.mockReturnValueOnce(
             Effect.succeed({
@@ -480,10 +483,11 @@ describe('AgentLaunchContext', () => {
         }),
       );
       mocks.resolve.mockReturnValueOnce(
-        Effect.succeed({ path: '/agents/chat.yaml' }),
-      );
-      mocks.load.mockReturnValueOnce(
-        Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        Effect.succeed({
+          path: '/agents/chat.yaml',
+          setting: { agentCategory: AgentCategory.ToolUse },
+          prompt: {},
+        }),
       );
       mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
 

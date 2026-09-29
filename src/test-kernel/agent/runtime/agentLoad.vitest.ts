@@ -1,14 +1,11 @@
 import { strict as assert } from 'node:assert';
-import { writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { afterAll, beforeAll, describe, afterEach, vi } from 'vitest';
+import { afterAll, beforeAll, describe } from 'vitest';
 
-import { getAgent, loadAgents, refresh } from '@agent/index';
-import type { AgentEntry } from '@agent/index/agentEntry';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
+import { getAgent, refresh } from '@agent/index';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -16,7 +13,6 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
-import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
@@ -49,104 +45,10 @@ function onGlobalStorage<A, E>(
   );
 }
 
-vi.mock('@agent/index', async () => {
-  const actual =
-    await vi.importActual<typeof import('@agent/index')>('@agent/index');
-  return { ...actual, getAgent: vi.fn(actual.getAgent) };
-});
-
 const tempDirs: string[] = [];
 
 afterAll(async () => {
   await cleanupTempDirs(tempDirs);
-});
-
-describe('loadAgentSettingAndPrompts', () => {
-  // The loader reads its YAML through the process filesystem, so the
-  // definitions under test are real files in a temp directory of this
-  // suite's own rather than an intercepted read.
-  let definitionDir = '';
-
-  function putYaml(entry: AgentEntry, lines: string[]): void {
-    writeFileSync(entry.path, lines.join('\n'));
-  }
-
-  function customEntry(name: string, category: AgentCategory): AgentEntry {
-    const definitionPath = path.join(definitionDir, `${name}.yaml`);
-    return { source: 'custom', name, path: definitionPath, category };
-  }
-
-  /** The loader on the process filesystem it reads its definitions through. */
-  const loadDefinition = (entry: AgentEntry) =>
-    loadAgentSettingAndPrompts(
-      entry,
-      Effect.succeed({ loadable: [], withheld: [] }),
-    ).pipe(
-      Effect.provide(
-        Layer.mergeAll(
-          nodePlatformLayer,
-          testHttpClientLayer,
-          AppState.layer(new FakeStateStore()),
-        ),
-      ),
-    );
-
-  beforeAll(async () => {
-    definitionDir = await makeTempDir('texra-agent-load-', tempDirs);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it.effect(
-    'rejects a circular "inherits" chain instead of recursing without bound',
-    () =>
-      Effect.gen(function* () {
-        const entryA = customEntry('agent_a', AgentCategory.Workflow);
-        const entryB = customEntry('agent_b', AgentCategory.Workflow);
-        const entryByName: Record<string, AgentEntry> = {
-          agent_a: entryA,
-          agent_b: entryB,
-        };
-
-        putYaml(entryA, [
-          'name: agent_a',
-          'inherits: agent_b',
-          'settings:',
-          '  agentCategory: workflow',
-          'prompts: {}',
-          '',
-        ]);
-        putYaml(entryB, [
-          'name: agent_b',
-          'inherits: agent_a',
-          'settings:',
-          '  agentCategory: workflow',
-          'prompts: {}',
-          '',
-        ]);
-
-        const actual = yield* Effect.promise(() =>
-          vi.importActual<typeof import('@agent/index')>('@agent/index'),
-        );
-        const getAgentMock = vi.mocked(getAgent);
-        // This is a plain vi.fn(actual.getAgent), not a spy, so restore the
-        // real implementation explicitly — as a finalizer, since a failing
-        // yield* never resumes a `finally` in the generator.
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => getAgentMock.mockImplementation(actual.getAgent)),
-        );
-        getAgentMock.mockImplementation(
-          (identifier: string) => entryByName[identifier.split(':').pop()!],
-        );
-
-        const error = yield* Effect.flip(loadDefinition(entryA));
-        assert.ok(
-          error.message.startsWith('Circular "inherits" chain detected:'),
-        );
-      }),
-  );
 });
 
 describe('agent registry load state', () => {
@@ -189,25 +91,6 @@ describe('agent registry load state', () => {
       ].join('\n'),
     );
   });
-
-  it.effect('answers loads from the published catalog without a rescan', () =>
-    Effect.gen(function* () {
-      const counter = { scans: 0 };
-      yield* Effect.promise(() =>
-        installDirectories(countingDirectories(counter)),
-      );
-      yield* onGlobalStorage(refresh());
-      counter.scans = 0;
-
-      yield* Effect.all(
-        [onGlobalStorage(loadAgents()), onGlobalStorage(loadAgents())],
-        { concurrency: 'unbounded' },
-      );
-
-      assert.strictEqual(counter.scans, 0);
-      assert.strictEqual(getAgent('custom:stateProbe')?.name, 'stateProbe');
-    }),
-  );
 
   it.effect('keeps serving the published catalog when a refresh fails', () =>
     Effect.gen(function* () {

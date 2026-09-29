@@ -4,7 +4,14 @@ import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { refresh, resolveAgentForLaunch } from '@agent/index';
+import {
+  getCatalogLoadFailure,
+  getCustomAgentScanIssues,
+  refresh,
+  resolveAgentForLaunch,
+  settledCatalog,
+} from '@agent/index';
+import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import {
   logUserMessage,
   TraceEmitter,
@@ -14,11 +21,10 @@ import {
 } from '@agent/trace';
 import { commitResumedActivation } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { AgentError } from '@common/errors';
-import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
@@ -191,6 +197,23 @@ function beginRunStage(
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
+/** A launch that misses names why: the catalog did not load, or the files the
+ *  scan skipped (a custom agent it rejects is unlisted) and their reasons. */
+const missNote = () => {
+  const failure = getCatalogLoadFailure();
+  const issues = getCustomAgentScanIssues();
+  return (
+    (failure === undefined
+      ? ''
+      : `. The agent catalog did not load: ${failure}`) +
+    (issues.length === 0
+      ? ''
+      : `. Custom agent files that failed to load:${issues
+          .map((issue) => `\n  ${issue.path}: ${issue.message}`)
+          .join('')}`)
+  );
+};
+
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
@@ -202,31 +225,36 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
     // (source, name), else the visible set validation used, else the full
-    // category; never blind source-priority on a bare name. A miss rescans the
-    // local directories once, so a YAML written since the catalog loaded runs.
+    // category; never blind source-priority on a bare name. The catalog is settled
+    // first (a saved edit inside the watcher's debounce is loaded now), and a
+    // miss rescans once more.
     const resolve = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,
       fullConfig.agent,
       fullConfig.agentSource,
     );
+    yield* settledCatalog;
     const agentEntry =
       (yield* resolve) ??
       (yield* Effect.andThen(refresh(), resolve)) ??
       (yield* presentLaunchError(
         interactions,
-        new AgentError(`Could not find agent: ${fullConfig.agent}`),
+        new AgentError(
+          `Could not find agent: ${fullConfig.agent}${missNote()}`,
+        ),
         'showAgentConfigBanner',
         {
           agentName: fullConfig.agent,
           category: fullConfig.agentCategory,
         },
       ));
-    const installed = yield* readInstalledPluginLoadOnce(input.session.roots);
-    const [setting, prompt] = yield* loadAgentSettingAndPrompts(
-      agentEntry,
-      installed,
-    );
+    if (agentEntry.source === 'plugin')
+      yield* requirePluginAgentLoads(
+        agentEntry,
+        yield* readInstalledPluginLoad(input.session.roots),
+      );
+    const { setting, prompt } = agentEntry;
 
     // Block category mismatch. Resolution is already category-scoped; this
     // catches what the registry's pre-merge category can't see: an agent that
@@ -270,7 +298,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         ? explicit
         : (setting.defaultOutputFiles ?? []).filter(Boolean),
     };
-    return { config, setting, prompt, agentEntry, modelConfig, installed };
+    return { config, setting, prompt, agentEntry, modelConfig };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -315,7 +343,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     Error,
     Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, setting, prompt, agentEntry, modelConfig, installed } =
+    const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolCall.workingDirectory`

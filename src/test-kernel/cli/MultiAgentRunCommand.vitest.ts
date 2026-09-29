@@ -396,8 +396,6 @@ describe('CLI multi-agent run command', () => {
       headlessAskError,
     );
     expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledOnce();
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledOnce();
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith();
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   });

@@ -8,7 +8,6 @@ import {
   type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import { loadAgents } from '@agent/index';
 import {
   type ProcessRuntime,
   withProcessServices,
@@ -136,10 +135,6 @@ export const kickoffDesktopSetup = (options: {
           ),
         );
       }
-      // Idempotent: joins the in-flight/initialized registry so a kickoff
-      // racing the startup `loadAgents()` cannot hit "Could not find agent:
-      // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-      yield* loadAgents();
       yield* options.run.runValidated(request);
     }).pipe(
       Effect.catch((error) => {

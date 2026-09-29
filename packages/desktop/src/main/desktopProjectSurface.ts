@@ -161,7 +161,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             onboarding.refreshOnboardingFunnel(),
           ),
         ),
-        customAgentDirChanged: Effect.void,
         // Selection is the surface's: a settings jump asks the shown
         // project's surface to select the run, and reports a run the view no
         // longer holds as missing.

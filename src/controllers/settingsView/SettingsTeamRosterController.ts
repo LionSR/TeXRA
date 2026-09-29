@@ -3,17 +3,15 @@ import {
   formatUnknownTeamMessage,
   missingMemberNames,
 } from '@common/teams/TeamPlan';
-import {
-  applyTeamRoster,
-  type TeamRosterApplicationDeps,
-} from '@common/teams/TeamRosterApplication';
+import { applyTeamRoster } from '@common/teams/TeamRosterApplication';
+import type { TeamRosterCatalog } from '@common/teams/TeamRoster';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { StateReadFailed } from '@platform/interfaces';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
+type SettingsTeamRosterCatalog = TeamRosterCatalog & {
   getPresetToolUseRoot(
     toolUseAgents: string[],
     presetId?: string,
@@ -25,10 +23,7 @@ type SettingsTeamRosterPresentation = Pick<
   'showInfoMessage' | 'showErrorMessage'
 >;
 
-interface SettingsTeamRosterOptions<R> extends Omit<
-  TeamRosterApplicationDeps<R>,
-  'catalog'
-> {
+interface SettingsTeamRosterOptions<R> {
   readonly catalog: SettingsTeamRosterCatalog;
   readonly presentation: SettingsTeamRosterPresentation;
   readonly refreshAfterApply: (
@@ -54,7 +49,7 @@ export function applySettingsTeamRoster<R = never>(
   options: SettingsTeamRosterOptions<R>,
 ): Effect.Effect<void, Error, R> {
   return Effect.gen(function* () {
-    const result = yield* applyTeamRoster<R>(presetId, options);
+    const result = yield* applyTeamRoster(presetId, options);
 
     switch (result.status) {
       case 'unknown':

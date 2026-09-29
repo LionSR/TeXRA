@@ -95,8 +95,6 @@ const AgentSettingInputSchema = z.strictObject({
   agentCategory: AgentCategorySchema.optional(),
 });
 
-export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
-
 export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
@@ -111,8 +109,6 @@ const AgentPromptInputSchema = z.strictObject({
   userPrefix: z.string().optional(),
   userRequest: z.union([z.string(), z.array(z.string())]).optional(),
 });
-
-export type AgentPromptInput = z.infer<typeof AgentPromptInputSchema>;
 
 export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,

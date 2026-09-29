@@ -67,6 +67,15 @@ const bundledAgentDirectories = () => ({
 
 beforeAll(async () => {
   customAgentsDir = await makeTempDir('texra-config-agents-', tempDirs);
+  // The catalog is loaded before the command runs, as the process runtime
+  // does at build.
+  const { refresh } = await import('@agent/index/agentRegistry');
+  const { AgentDirectories } = await import('@platform/interfaces');
+  await testRuntime().runPromise(
+    refresh().pipe(
+      Effect.provideService(AgentDirectories, bundledAgentDirectories()),
+    ),
+  );
 });
 
 setupPlatform({}, { agentDirectories: bundledAgentDirectories() });

@@ -13,7 +13,14 @@ import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - common
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import {
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
+import {
+  readInstalledPluginLoad,
+  type InstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
@@ -73,7 +80,7 @@ interface PluginAgent {
 }
 
 /** Read the subagent file `file` of plugin `plugin`. */
-export const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
+const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   file: string,
   plugin: string,
 ) {
@@ -133,6 +140,51 @@ export const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
 });
 
 /**
+ * A plugin agent runs only while its plugin loads (enabled, and trusted as it
+ * is). The catalog that listed it may predate a change another host made, so
+ * the launch asks again and refuses, saying why, if it no longer does.
+ */
+export const requirePluginAgentLoads = (
+  entry: AgentEntry,
+  load: InstalledPluginLoad,
+): Effect.Effect<void, Error> => {
+  const plugin = entry.name.slice(0, entry.name.indexOf(':'));
+  return load.loadable.some(({ record }) => record.name === plugin)
+    ? Effect.void
+    : Effect.fail(
+        new Error(
+          `Agent ${entry.name} does not run: ${
+            load.withheld.find((reason) =>
+              reason.startsWith(`Plugin ${plugin} `),
+            ) ?? `plugin ${plugin} is not installed or not enabled.`
+          }`,
+        ),
+      );
+};
+
+/** The catalog entry of a plugin agent read from `file`. */
+function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
+  return {
+    name: agent.name,
+    source: 'plugin',
+    path: file,
+    category: AgentCategory.ToolUse,
+    description: agent.description,
+    tools: agent.tools === undefined ? undefined : [...agent.tools],
+    setting: AgentSettingSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      // None named: `AgentRun` gives it what it inherits.
+      tools: agent.tools ?? [],
+    }),
+    // The task arrives as the instruction, as a Claude Code subagent's does.
+    prompt: AgentPromptSchema.parse({
+      systemPrompt: agent.systemPrompt,
+      userRequest: '{{ INSTRUCTION }}',
+    }),
+  };
+}
+
+/**
  * The catalog entries of the agents of the installed plugins that load now
  * (enabled, and trusted as they are). A file that does not read is no entry,
  * and a tool a file names that TeXRA has no counterpart for is dropped; both
@@ -158,14 +210,7 @@ export const scanPluginAgents = Effect.gen(function* () {
         yield* Effect.logWarning(
           `Agent ${agent.name} names tools TeXRA does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
         ).pipe(withLogChannel('agentRegistry'));
-      entries.push({
-        name: agent.name,
-        source: 'plugin',
-        path: file,
-        category: AgentCategory.ToolUse,
-        description: agent.description,
-        tools: agent.tools === undefined ? undefined : [...agent.tools],
-      });
+      entries.push(pluginAgentEntry(agent, file));
     }
   }
   return entries;

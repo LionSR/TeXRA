@@ -124,7 +124,6 @@ describe('CLI agents command', () => {
     const exitCode = await runListAgents(createRunCommandCliContext());
 
     expect(exitCode).toBe(0);
-    expect(agentCatalogMock.loadAgents).toHaveBeenCalledWith();
     expectEmittedAgents({
       json: [LEAN_AGENT],
       ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],

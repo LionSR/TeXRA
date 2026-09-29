@@ -197,7 +197,7 @@ export function createHostSnapshotSource(
   });
 
   const loadTeams = Effect.gen(function* () {
-    const teamOptions = yield* loadTeamOptions(
+    const teamOptions = loadTeamOptions(
       yield* createTeamCatalogPorts(options.stores.repoState),
     );
     catalogs = { ...catalogs, teamOptions };

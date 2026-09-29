@@ -30,7 +30,6 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected } from '@shared/session/requestErrors';
 import { assertNever } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isPastedImage } from '@utils/files/pastedImageName';
 import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 
@@ -158,18 +157,10 @@ export function prepareSurfaceLaunch(
       const teamId = launch.selectedTeamId || undefined;
       if (!teamId)
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
-      const resolution = yield* resolveTeamLaunch({
+      const resolution = resolveTeamLaunch({
         teamId,
         ...(yield* createTeamCatalogPorts(repoState)),
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.fail(
-            new Rejected({
-              reason: `Team launch failed: ${toErrorMessage(error)}`,
-            }),
-          ),
-        ),
-      );
+      });
       switch (resolution.status) {
         case 'unknown-team':
           return yield* new Rejected({

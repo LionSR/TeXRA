@@ -48,8 +48,6 @@ export interface SettingsHostBindings {
   readonly refreshCredentialStatus: HostEffect;
   /** Run one subscription's sign-in, its routing preference included. */
   signInSubscription(providerId: SubscriptionProviderId): HostEffect;
-  /** The custom agent directory setting changed. */
-  readonly customAgentDirChanged: HostEffect;
   /** Select a run in the host's run view. */
   revealRun(runId: RunId): HostEffect<'revealed' | 'missing' | 'unavailable'>;
   runLabel(runId: RunId): string | undefined;

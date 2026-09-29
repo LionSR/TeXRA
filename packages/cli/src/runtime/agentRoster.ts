@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
+import { createWorkspaceAgentRosterController } from '@agent/index';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   type AgentRosterCategorySelection,
@@ -29,7 +29,6 @@ export type CliAgentRosterRecord = AgentRosterSnapshot & {
 export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
   roots: SettingsStores,
 ) {
-  yield* loadAgents();
   const roster = createWorkspaceAgentRosterController(roots);
   return {
     ...(yield* roster.snapshot()),

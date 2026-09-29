@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 
 // Local imports
-import { loadAgents } from '@agent/index';
 import {
   closeAllSessions,
   initializeDefaultSession,
@@ -48,7 +47,7 @@ import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
-import { agentDirectoriesLayer } from '@frontend/agents/AgentDirectoryManager';
+import { agentDirectoriesLayer } from '@frontend/agents/agentDirectoriesLayer';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -588,14 +587,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ),
   );
   FileLister.initialize(context, runtimeSession);
-
-  yield* loadAgents().pipe(
-    Effect.catchCause((cause) =>
-      Effect.logError(
-        `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
-      ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-    ),
-  );
 
   // The setup pill: shown only while the host snapshot's API-key banner is,
   // the one credential answer the welcome card also reads (a ChatGPT

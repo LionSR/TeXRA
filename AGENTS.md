@@ -270,7 +270,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
   - `frontend/ui/` - Dialog helpers, diff views, message utilities
   - `frontend/editor/` - Active file guards and editor utilities
-  - `frontend/agents/` - Agent directory management (`AgentDirectoryManager`)
+  - `frontend/agents/` - The extension's agent-directory layer and final-output opener
   - `frontend/files/` - File lister and discovery utilities
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
@@ -646,7 +646,7 @@ For good separation of concerns and platform independence, core business logic s
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
   with `@utils/files/pastedImageUtils` so temporary assets map correctly back
   to storage without pulling Node filesystem code into browser bundles.
-- Surface files and agent directories through the shared frontend utilities (`fileLister` in `packages/extension/src/frontend/files/fileLister.ts`, `agentDirectories` in `packages/extension/src/frontend/agents/AgentDirectoryManager.ts`) instead of duplicating discovery logic.
+- Surface files through the shared frontend utility (`fileLister` in `packages/extension/src/frontend/files/fileLister.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
 
 **Logging and telemetry**
 

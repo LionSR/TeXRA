@@ -1,4 +1,4 @@
-import { Array as Arr, Effect, Result } from 'effect';
+import { Array as Arr, Result } from 'effect';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS,
@@ -220,18 +220,14 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
-export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
+export function loadTeamOptions<T extends TeamCatalogAgent>(ports: {
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   resolveAgent: TeamAgentResolver<T>;
-}): Effect.Effect<TeamOptionData[], Error, R> {
-  return Effect.gen(function* () {
-    yield* ports.ensureCatalogLoaded();
-    const presets = launchableTeamPresets(ports.customPresetsRaw);
-    return buildTeamOptions(
-      planTeamRuns(presets, { resolveAgent: ports.resolveAgent }),
-    );
-  });
+}): TeamOptionData[] {
+  const presets = launchableTeamPresets(ports.customPresetsRaw);
+  return buildTeamOptions(
+    planTeamRuns(presets, { resolveAgent: ports.resolveAgent }),
+  );
 }
 
 export type TeamLaunchResolution =
@@ -243,33 +239,26 @@ export type TeamLaunchResolution =
   | { readonly status: 'unknown-team' }
   | { readonly status: 'blocked'; readonly reason: string };
 
-export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
+export function resolveTeamLaunch<T extends TeamCatalogAgent>(args: {
   teamId: string;
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   resolveAgent: TeamAgentResolver<T>;
-}): Effect.Effect<TeamLaunchResolution, Error, R> {
-  return Effect.gen(function* () {
-    const preset = findTeamPreset(
-      launchableTeamPresets(args.customPresetsRaw),
-      args.teamId,
-    );
-    if (!preset) return { status: 'unknown-team' as const };
+}): TeamLaunchResolution {
+  const preset = findTeamPreset(
+    launchableTeamPresets(args.customPresetsRaw),
+    args.teamId,
+  );
+  if (!preset) return { status: 'unknown-team' };
 
-    yield* args.ensureCatalogLoaded();
-    const plan = planTeamRun(preset, { resolveAgent: args.resolveAgent });
-    if (!canLaunchTeam(plan)) {
-      return {
-        status: 'blocked' as const,
-        reason: teamLaunchBlockReason(plan)!,
-      };
-    }
-    return {
-      status: 'ready' as const,
-      fields: teamExecutionFields(plan),
-      missingNames: missingMemberNames(plan),
-    };
-  });
+  const plan = planTeamRun(preset, { resolveAgent: args.resolveAgent });
+  if (!canLaunchTeam(plan)) {
+    return { status: 'blocked', reason: teamLaunchBlockReason(plan)! };
+  }
+  return {
+    status: 'ready',
+    fields: teamExecutionFields(plan),
+    missingNames: missingMemberNames(plan),
+  };
 }
 
 // ---------------------------------------------------------------------------

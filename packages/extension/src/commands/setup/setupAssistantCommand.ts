@@ -3,7 +3,6 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { loadAgents } from '@agent/index';
 import {
   AgentConfigSchema,
   runAgent,
@@ -289,13 +288,6 @@ export function launchSetupAssistant(
       model: resolution.model,
       instruction: SETUP_INSTRUCTION,
     });
-
-    // Activation initializes the registry, but this command can also be
-    // invoked directly in tests or unusual startup paths. `loadAgents()` is
-    // idempotent: it joins the in-flight load through the catalog lane if one
-    // is running, returns immediately if already initialized, or kicks off a
-    // fresh load.
-    yield* loadAgents();
 
     const launch = runAgent(
       { config },

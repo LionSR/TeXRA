@@ -14,23 +14,21 @@ export {
   agentSourceDirectory,
 } from './AgentDirectoryService';
 
-export {
-  BUNDLED_AGENT_DIRECTORY_NAMES,
-  builtInToolUseRoots,
-} from './BundledAgentDirectories';
+export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 export { InvalidAgentTeamError } from '../roster/AgentRosterController';
 
 export type { AgentEntry } from './agentEntry';
 
 export {
-  loadAgents,
   getAgent,
   getCategoryAgent,
   resolveAgentForLaunch,
   getAgentsByCategory,
+  getCatalogLoadFailure,
   getCustomAgentScanIssues,
   refresh,
+  settledCatalog,
   // Typed data options
   computeAgentOptionsData,
   // Visible agents (for dropdowns and tools)
