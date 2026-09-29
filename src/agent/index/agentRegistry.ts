@@ -233,8 +233,7 @@ export function createWorkspaceAgentRosterController(
     repoState,
     globalState,
     getAgents,
-    getPresets: () =>
-      repoState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
     resolveAgent: getCategoryAgent,
   });
 }

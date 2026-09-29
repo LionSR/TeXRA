@@ -230,7 +230,7 @@ export function storedDisabledTools(
 /** The plugin ids the user switched off in `store`'s record; none while it
  *  is absent. */
 export function readDisabledTools(store: StateStore) {
-  return store.get<unknown>(GlobalStateKey.DISABLED_TOOLS).pipe(
+  return store.get(GlobalStateKey.DISABLED_TOOLS).pipe(
     Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
     Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
   );

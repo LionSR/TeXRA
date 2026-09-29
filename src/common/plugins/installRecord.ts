@@ -42,7 +42,7 @@ function storedRecord(stored: unknown) {
 
 /** The install record, as one read. */
 export function readInstalled(stores: Pick<SettingsStores, 'globalState'>) {
-  return stores.globalState.get<unknown>(GlobalStateKey.INSTALLED_PLUGINS).pipe(
+  return stores.globalState.get(GlobalStateKey.INSTALLED_PLUGINS).pipe(
     Effect.mapError((error) => new PluginError({ message: error.message })),
     Effect.flatMap((stored) => Effect.fromResult(storedRecord(stored))),
   );

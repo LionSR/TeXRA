@@ -10,6 +10,7 @@ import type {
   StateReadFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
+import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
@@ -27,7 +28,7 @@ export function showInstructionWithSuppress(
   return Effect.gen(function* () {
     const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-    if (showSuppress && (yield* store.get<boolean>(stateKey))) {
+    if (showSuppress && (yield* readState(store, stateKey, StateFlagSchema))) {
       return;
     }
 

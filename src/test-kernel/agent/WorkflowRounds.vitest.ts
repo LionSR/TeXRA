@@ -898,7 +898,7 @@ describe('the output facts a workflow round publishes', () => {
           },
           {
             workspaceState: {
-              get: <T>(key: string, defaultValue?: T) =>
+              get: (key: string) =>
                 key === WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
                   ? Effect.fail(
                       new StateReadFailed({
@@ -907,7 +907,7 @@ describe('the output facts a workflow round publishes', () => {
                         cause: new Error('read failed'),
                       }),
                     )
-                  : stateStore.get(key, defaultValue),
+                  : stateStore.get(key),
               update: (key, value) => stateStore.update(key, value),
               modify: (key, change) => stateStore.modify(key, change),
             },

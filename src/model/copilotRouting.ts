@@ -1,4 +1,5 @@
 import { Effect, Result } from 'effect';
+import { z } from 'zod';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 /**
  * Copilot routing: the per-model preference for serving a canonical base
@@ -22,6 +23,7 @@ import {
   type LanguageModelInfo,
   type LanguageModelReference,
 } from '@platform/languageModel';
+import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
@@ -127,7 +129,11 @@ export const discoverCopilotRoutes = Effect.fn(
  */
 export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
   return Effect.map(
-    state.get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, []),
+    readState(
+      state,
+      GlobalStateKey.COPILOT_ROUTE_MODELS,
+      z.array(z.string()).prefault([]),
+    ),
     liveRouteModels,
   );
 }

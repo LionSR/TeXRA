@@ -60,7 +60,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
@@ -224,10 +223,7 @@ export function installCliProcessRuntime(
           new AgentDirectoryService({
             channel: 'cli',
             resourcesPath: options?.resourcesPath ?? '',
-            customDirectoryStore: {
-              get: () =>
-                state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
-            },
+            state,
           }),
       ),
     );

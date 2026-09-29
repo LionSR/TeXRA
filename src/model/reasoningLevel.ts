@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { z } from 'zod';
 import {
   ModelProvider,
   ReasoningEffort,
@@ -8,6 +9,7 @@ import {
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import type { StateStore } from '@platform/interfaces';
+import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 /**
@@ -21,9 +23,10 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
  */
 export function reasoningEffortOverrides(state: StateStore) {
   return Effect.gen(function* () {
-    const stored = yield* state.get<Record<string, string>>(
+    const stored = yield* readState(
+      state,
       GlobalStateKey.REASONING_LEVELS,
-      {},
+      z.record(z.string(), z.string()).prefault({}),
     );
     const overrides: Record<string, ReasoningEffort> = {};
     for (const [model, value] of Object.entries(stored)) {

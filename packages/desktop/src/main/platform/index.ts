@@ -29,7 +29,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -143,10 +142,7 @@ export const initializeElectronPlatform = Effect.fn(
         new AgentDirectoryService({
           channel: 'desktop',
           resourcesPath,
-          customDirectoryStore: {
-            get: () =>
-              state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
-          },
+          state,
         }),
     ),
   );

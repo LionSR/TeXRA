@@ -28,11 +28,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import {
-  ALL_SETTINGS,
-  CLI_STATE_SETTINGS,
-  DEFAULT_GIT_AUTHOR_NAME,
-} from '@shared/state/stateSettings';
+import { ALL_SETTINGS, CLI_STATE_SETTINGS } from '@shared/state/stateSettings';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -530,12 +526,6 @@ describe('/config slash command wiring', () => {
       expect(
         yield* isStored(repoState, WorkspaceStateKey.GIT_AUTHOR_NAME),
       ).toBe(false);
-      expect(
-        yield* repoState.get(
-          WorkspaceStateKey.GIT_AUTHOR_NAME,
-          DEFAULT_GIT_AUTHOR_NAME,
-        ),
-      ).toBe(DEFAULT_GIT_AUTHOR_NAME);
     }),
   );
 

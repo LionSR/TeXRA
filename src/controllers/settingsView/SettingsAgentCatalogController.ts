@@ -56,10 +56,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.repoState.get<unknown>(
-          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-          [],
-        ),
+        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
       );
     });
   }

@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result, Scope, Stream } from 'effect';
+import { Effect, Scope, Stream } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -22,8 +22,8 @@ import {
   type ConfigTarget,
   ConfigWriteFailed,
   type AppStateStore,
-  type StateWriteFailed,
 } from '@platform/interfaces';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -311,56 +311,11 @@ export class FakeScopedConfigProvider implements ConfigProvider {
   }
 }
 
-export class FakeStateStore implements AppStateStore {
-  private readonly values = new Map<string, unknown>();
-
-  /** No change feed: a reader sees a write at its next read. */
+/** The platform's in-memory store, with the change feed an `AppStateStore`
+ *  has: none, so a reader sees a write at its next read. */
+export class FakeStateStore extends MemoryStateStore implements AppStateStore {
   changes(): Stream.Stream<void> {
     return Stream.succeed(undefined);
-  }
-
-  constructor(values: Record<string, unknown> = {}) {
-    for (const [key, value] of Object.entries(values)) {
-      this.values.set(key, value);
-    }
-  }
-
-  get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
-    return Effect.sync(() =>
-      this.values.has(key) ? (this.values.get(key) as T) : (defaultValue as T),
-    );
-  }
-
-  /**
-   * A map write cannot fail, so the port's error channel stays empty.
-   *
-   * The write happens INSIDE the returned Effect, like the SQLite store.
-   * A double that applied it eagerly would let a caller which awaits or
-   * discards the effect look correct here while silently writing nothing
-   * against the real store — the exact class this port's conversion exists to
-   * expose.
-   */
-  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
-    return Effect.sync(() => {
-      if (value === undefined) {
-        this.values.delete(key);
-      } else {
-        this.values.set(key, value);
-      }
-    });
-  }
-
-  modify<T, E>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E> {
-    return Effect.suspend(() => {
-      const result = change(this.values.get(key));
-      if (Result.isFailure(result)) return Effect.fail(result.failure);
-      if (result.success === undefined) this.values.delete(key);
-      else this.values.set(key, result.success);
-      return Effect.succeed(result.success);
-    });
   }
 }
 

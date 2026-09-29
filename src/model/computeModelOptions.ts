@@ -519,7 +519,7 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  */
 export function getEnabledModels(state: Pick<StateStore, 'get'>) {
   return Effect.gen(function* () {
-    const stored = yield* state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
+    const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
     const { selection, invalid } = selectionOf(stored);
     yield* reportInvalid(invalid);
     return enabledOrDefaults(selection);

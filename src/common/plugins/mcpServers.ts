@@ -45,9 +45,7 @@ export const revisionKey = (globalState: SettingsStores['globalState']) =>
   Effect.gen(function* () {
     const isKey = (value: unknown): value is string =>
       typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
-    const stored = yield* globalState.get<unknown>(
-      GlobalStateKey.MCP_REVISION_KEY,
-    );
+    const stored = yield* globalState.get(GlobalStateKey.MCP_REVISION_KEY);
     if (isKey(stored)) return stored;
     let replaced = false;
     const key = yield* globalState.modify(

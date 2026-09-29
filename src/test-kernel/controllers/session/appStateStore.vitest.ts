@@ -57,7 +57,7 @@ describe('application state on SQLite', () => {
       const reopened = yield* openStore(storage);
       expect(yield* reopened.get('texra.modelSelection')).toEqual(['b']);
       expect(yield* reopened.get('goals:index')).toEqual({ open: 1 });
-      expect(yield* reopened.get('texra.dropped', 'default')).toBe('default');
+      expect(yield* reopened.get('texra.dropped')).toBeUndefined();
     }),
   );
 
@@ -78,7 +78,7 @@ describe('application state on SQLite', () => {
       expect(yield* one.get('texra.glm.codingPlan')).toBe(false);
       expect(yield* two.get('texra.memory.enabled')).toBe(true);
       yield* two.update('texra.useOpenRouter', undefined);
-      expect(yield* one.get('texra.useOpenRouter', 'absent')).toBe('absent');
+      expect(yield* one.get('texra.useOpenRouter')).toBeUndefined();
 
       // Concurrent read-modify-writes of one key both land: each changes
       // the value the other committed, never a stale read of its own.
@@ -90,7 +90,7 @@ describe('application state on SQLite', () => {
         concurrency: 'unbounded',
       });
       expect(
-        [...(yield* one.get<string[]>('texra.disabledTools'))].sort(),
+        [...((yield* one.get('texra.disabledTools')) as string[])].sort(),
       ).toEqual(['a', 'b']);
     }),
   );

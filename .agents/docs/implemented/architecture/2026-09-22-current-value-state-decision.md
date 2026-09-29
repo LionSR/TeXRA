@@ -2,7 +2,13 @@
 
 Date: 2026-09-22
 
-Status: accepted 2026-09-22; implementation pending
+Status: implemented, 2026-09-28 (#13441). Read the rest as the decision and
+the audit that motivated it: the code sections describe the event-journal
+writers it replaced. It landed as `current_value(family, key, value, at)`,
+ordered by `at`, not the `revision` column drawn below, and the event-format
+stamp names the event vocabulary only, so a format bump moves the event rows
+aside and keeps every current value (no cleared-store report is needed for
+them). The repository settings became a fifth family, `repo-state`.
 
 Audit baseline: `origin/main` `c7df1f69a0ad385df0846c98102380b089aac45e`; #13008 and #13009 merged.
 

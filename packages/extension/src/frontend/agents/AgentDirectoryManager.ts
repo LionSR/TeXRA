@@ -25,7 +25,6 @@ import {
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -226,9 +225,7 @@ export const agentDirectoriesLayer = (extensionPath: string) =>
         new AgentDirectoryService({
           channel: CHANNEL,
           resourcesPath: path.join(extensionPath, 'resources'),
-          customDirectoryStore: {
-            get: () => state.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-          },
+          state,
           issueReporter: {
             report: (message, docsId) =>
               showLoggedMessageWithDocs(CHANNEL, message, docsId),

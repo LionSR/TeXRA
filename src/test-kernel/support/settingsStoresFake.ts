@@ -43,8 +43,8 @@ const ABSENT = Symbol('absent');
 
 /**
  * Whether a key is present in a store. Works for both `ConfigProvider` and
- * `StateStore` (neither exposes `has`) via a sentinel default, so reset/delete
- * assertions can distinguish "deleted" from "wrote the literal default".
+ * `StateStore` (neither exposes `has`), so reset/delete assertions can
+ * distinguish "deleted" from "wrote the literal default".
  */
 export function isStored(
   store: ConfigProvider | StateStore,
@@ -53,6 +53,6 @@ export function isStored(
   const read =
     'inspect' in store
       ? Effect.sync(() => store.get<unknown>(key, ABSENT))
-      : store.get<unknown>(key, ABSENT);
-  return Effect.map(read, (value) => value !== ABSENT);
+      : store.get(key);
+  return Effect.map(read, (value) => value !== ABSENT && value !== undefined);
 }
