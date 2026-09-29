@@ -297,6 +297,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A custom agent you turned off stays off under the default roster** —
+  it reappeared in the selector whenever the roster resolved to all agents,
+  which is the default for a new workspace. Choosing "All agents" still
+  shows it again.
 - **Resuming after a vendor deleted its stored response no longer fails.**
   When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
   Google) is refused because the vendor no longer holds it, TeXRA logs a

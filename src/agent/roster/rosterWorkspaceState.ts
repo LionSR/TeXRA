@@ -21,9 +21,11 @@ import {
   AGENT_CATEGORIES,
   AGENT_SOURCE,
   type AgentCategory,
+  type AgentModePreset,
   type AgentRosterCategorySelection,
   agentKeyOf,
   agentMatchesIdentifier,
+  type AgentRosterSelection,
   AgentRosterSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
@@ -175,5 +177,34 @@ export function forgetHiddenAgent(
         ...hidden,
       ]);
     }),
+  );
+}
+
+/** The identifiers a selection lists for a category; `undefined` means every
+ *  agent. */
+export function selectedIdentifiers(
+  selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
+  category: AgentCategory,
+  presets: readonly AgentModePreset[],
+): readonly string[] | undefined {
+  if (selection.kind === 'all') return undefined;
+  if (selection.kind === 'custom') {
+    const categorySelection = selection.agentKeys[category];
+    return categorySelection === 'all' ? undefined : categorySelection;
+  }
+  const preset = presets.find((candidate) => candidate.id === selection.teamId);
+  if (!preset) return undefined;
+  return preset.agents[category];
+}
+
+/** `entries` less the custom agents the user hid. */
+export function visibleAgents<Entry extends RosterEntry>(
+  repoState: StateStore,
+  entries: readonly Entry[],
+): Effect.Effect<Entry[], StateReadFailed> {
+  return Effect.map(unlistedCustomAgents(repoState, entries, []), (custom) =>
+    entries.filter(
+      (entry) => entry.source !== AGENT_SOURCE.CUSTOM || custom.includes(entry),
+    ),
   );
 }
