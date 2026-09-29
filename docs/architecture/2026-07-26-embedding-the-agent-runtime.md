@@ -493,18 +493,21 @@ is attached. The getter is sampled once when each launch or resume starts:
 (`src/agent/runtime/executeAgent.ts:356-357`, `:507-508`), and the run keeps
 that value, so attaching or detaching a host afterwards does not change the
 tools an in-progress run has. When the sampled value is `true`, every
-`requiresApproval` tool is withheld from the model before the first turn, so
-a run cannot open the requests those tools would raise. It is a fact of the
-session, not a launch option, so
-a delegated child, which runs on its parent's session, and a run the session
+catalog `requiresApproval` tool is withheld from the model before the first
+turn, so a run cannot open the requests those tools would raise. Tools an
+embedder supplies in `RunAgentOptions.tools` are not withheld: they are
+overlaid after the gates (`resolveStepTools`, `agentToolResolution.ts:356-365`)
+and the model is offered them, so a run-scoped tool that needs approval is
+left to the approval guard, which may deny the call, rather than removed. The
+flag is a fact of the session, not a launch option, so a delegated child, which runs on its parent's session, and a run the session
 wakes on its own get the same answer. The run layer forwards it to tool
 resolution (`src/agent/runtime/run/AgentRun.ts:238-239`), and
 `resolveAgentTools` drops the gated tools
 (`src/agent/runtime/agentToolResolution.ts:245-249`). The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
 `userQuestion` requests all declare `requiresApproval: true`. This is a loud,
-defined degradation — an agent that cannot ask is not given the tools that
-ask — rather than a hang.
+defined degradation — an agent that cannot ask is not given the catalog tools
+that ask — rather than a hang.
 
 The CLI's hosts answer it from the approval policy
 (`cliApprovalPromptsUnavailable`,
@@ -533,14 +536,15 @@ and from a terminal prompt otherwise
 
 Stopping the run (`session.runs.stop(runId)`, with the id
 `RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
-the run. It does not answer or close the run's open requests: only a
-`request.decided` row resolves one (`projectRequests`,
-`src/shared/session/sessionFold.ts:1138-1156`, rebuilds a run's list from its
-unresolved rows), so an unanswered request stays listed until then, or until
-the run is removed: `run.removed` drops every request of that run
-(`foldRunRemoved`, `src/shared/session/sessionFold.ts:1360-1378`). Stopping
-is the cancellation path, not a substitute for answering a run that should
-continue.
+the run. A request opened through `SessionHandle.openRequest` (a command, an
+edit, a plan, a delegation, a question) is closed by the interruption: it
+commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
+(`src/agent/runtime/SessionHandle.ts:706-788`). A loop-owned `retry` request
+is not opened there, and no such row is written for it, so an unanswered
+`retry` stays listed until a `request.decided` resolves it
+(`projectRequests`, `src/shared/session/sessionFold.ts:1138-1156`, rebuilds a
+run's list from its unresolved rows). Stopping is the cancellation path, not a
+substitute for answering a run that should continue.
 
 ### Why there is no runtime default
 
