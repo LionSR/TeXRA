@@ -109,9 +109,7 @@ describe('CLI config command', () => {
     mocks.initCliPlatform.mockReturnValue(
       Effect.succeed({ runtime: testRuntime(), roots: host.roots }),
     );
-    mocks.installCliProcessRuntime.mockImplementation(async () =>
-      testRuntime(),
-    );
+    mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
     mocks.readCliAgentRoster.mockResolvedValue({
       selection: { kind: 'all' },
       effectiveSelection: { kind: 'all' },

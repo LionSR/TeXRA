@@ -87,26 +87,13 @@
     {
       "id": "RT-install-cli-process-runtime",
       "candidate": "installCliProcessRuntime as an Effect program",
-      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20.",
+      "why": "It is the bootstrap edge itself, so there is no runtime to run it on; an Effect face forces a bare Effect.run* at every citty action and grows BARE_EFFECT_RUN_SITES from 7 to about 20. What changed (wave 3): its one await was the package manifest read, which is now synchronous, so the install is a plain function returning the runtime and its Promise face is gone; nothing to lift into Effect.",
       "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
       "symbols": [
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
           "symbol": "installCliProcessRuntime",
-          "signature": "export function installCliProcessRuntime( storageRoot: string, options?: CliProcessRuntimeInstall, ): Promise<ProcessRuntime> {…}"
-        }
-      ]
-    },
-    {
-      "id": "RT-write-raw-and-wait",
-      "candidate": "writeRawAndWait as an Effect",
-      "why": "It runs after the process runtime is disposed, so its Effect form needed a bare Effect.runSync and was reverted; the CLI drops its last stderr line without it.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/cli/src/runtime/logSinks.ts",
-          "symbol": "writeRawAndWait",
-          "signature": "function writeRawAndWait(key: StreamKey, text: string): Promise<void> {…}"
+          "signature": "export function installCliProcessRuntime( storageRoot: string, options?: CliProcessRuntimeInstall, ): ProcessRuntime {…}"
         }
       ]
     },

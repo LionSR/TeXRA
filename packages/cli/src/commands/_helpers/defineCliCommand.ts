@@ -1,5 +1,5 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
-import { Cause, Exit, type Effect } from 'effect';
+import { Cause, Effect, Exit, Result } from 'effect';
 
 import {
   installCliProcessRuntime,
@@ -15,6 +15,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { ProcessServices } from '@platform/processRuntime';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';
@@ -101,12 +102,10 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
  *
  * The runtime install and the run are this helper's, not each command's: a
  * command is one program on the process runtime, and this is the one place
- * the CLI enters it. Two commands cannot use this. `texra doctor`'s report
+ * the CLI enters it. One command cannot use this: `texra doctor`'s report
  * runs before the runtime exists and, when the platform init fails, after
  * that init has disposed the runtime it installed, so it has none to borrow
- * at either end. `texra chat` refuses an unusable terminal and skips its
- * update check before anything installs a runtime, which this helper does
- * before the program starts.
+ * at either end.
  */
 export function defineCliCommand<const A extends ArgsDef, E>(
   options: DefineCliCommandOptions<A, E>,
@@ -116,13 +115,14 @@ export function defineCliCommand<const A extends ArgsDef, E>(
     args: options.args,
     setup: options.setup,
     async run(ctx) {
-      // citty's `ctx.args` for a generic `ArgsDef` widens past the precise
-      // `ParsedGlobalArgs` shape; every command that uses this helper spreads
-      // `GLOBAL_ARGS`, overriding individual entries such as `cwd` only when
-      // it needs command-specific help text.
-      const context = await contextFromArgs(
-        ctx.args as ParsedGlobalArgs,
-        ctx.rawArgs,
+      // The CLI's one pre-runtime run (pinned in `BARE_EFFECT_RUN_SITES`):
+      // the context program opens the config stores before any process
+      // runtime exists. citty's `ctx.args` for a generic `ArgsDef` widens
+      // past the precise `ParsedGlobalArgs` shape; every command that uses
+      // this helper spreads `GLOBAL_ARGS`, overriding individual entries such
+      // as `cwd` only when it needs command-specific help text.
+      const context = await Effect.runPromise(
+        contextFromArgs(ctx.args as ParsedGlobalArgs, ctx.rawArgs),
       );
       const runCtx = ctx as CliCommandRunContext<A>;
       // Built before the run below, not inside it: a `CliUsageError` the
@@ -146,18 +146,27 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       // from inside a default-runtime fiber: started from one, a headless
       // run's Ctrl-C shutdown drain never settled. A failed install folds
       // into the same exit as a failed program, so both reach one report.
-      const exit = await installCliProcessRuntime(
-        context.storageRoot,
-        options.install === 'noPlatform'
-          ? { ...NO_PLATFORM_INSTALL, minimumLogLevel: context.minimumLogLevel }
-          : {
-              resourcesPath: context.resourcesPath,
-              minimumLogLevel: context.minimumLogLevel,
-            },
-      ).then(
-        (runtime) => runtime.runPromiseExit(program),
-        (error: unknown) => Exit.fail(error),
-      );
+      const runtime = Result.try({
+        try: () =>
+          installCliProcessRuntime(
+            context.storageRoot,
+            options.install === 'noPlatform'
+              ? {
+                  ...NO_PLATFORM_INSTALL,
+                  minimumLogLevel: context.minimumLogLevel,
+                }
+              : {
+                  resourcesPath: context.resourcesPath,
+                  minimumLogLevel: context.minimumLogLevel,
+                },
+          ),
+        catch: ensureError,
+      });
+      const exit: Exit.Exit<CliCommandOutcome, E | Error> = Result.isSuccess(
+        runtime,
+      )
+        ? await runtime.success.runPromiseExit(program)
+        : Exit.fail(runtime.failure);
       if (Exit.isSuccess(exit)) {
         const outcome = exit.value;
         if (typeof outcome === 'number') {

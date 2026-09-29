@@ -70,18 +70,6 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
   });
 }
 
-async function runDoctor(context: CliContext): Promise<number> {
-  // The command's one run, and the CLI's one pinned no-runtime run
-  // (`BARE_EFFECT_RUN_SITES` in dependencyDirection.vitest.ts): the program
-  // starts before the process runtime exists and, on the failed-init path,
-  // ends with that runtime already disposed, so it can borrow none.
-  const report = await Effect.runPromise(
-    suppressCliFetchStackLogs(doctorReport(context)),
-  );
-  writeDoctorReport(context, report);
-  return doctorExitCode(report);
-}
-
 const DOCTOR_ARGS = {
   ...GLOBAL_ARGS,
   'prune-storage': {
@@ -114,13 +102,25 @@ export const doctorCommand = defineCommand({
   // the process runtime and runs the command's program on it, and this report
   // can borrow a runtime at neither end — none exists when the init fold
   // begins, and an init that fails disposes the one it installed before it
-  // re-raises. So the `contextFromArgs` → `setExitCode` fold stays here.
+  // re-raises. So the whole command, context build included, is one program
+  // run here: the CLI's one pinned no-runtime run of a command
+  // (`BARE_EFFECT_RUN_SITES` in dependencyDirection.vitest.ts).
   async run(ctx) {
     if (ctx.args['prune-storage'] === true)
       return pruneStorageCommand.run?.(ctx);
-    const context = await contextFromArgs(ctx.args, ctx.rawArgs, {
-      printConfigWarnings: false,
-    });
-    setExitCode(await runDoctor(context));
+    setExitCode(
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const context = yield* contextFromArgs(ctx.args, ctx.rawArgs, {
+            printConfigWarnings: false,
+          });
+          const report = yield* suppressCliFetchStackLogs(
+            doctorReport(context),
+          );
+          writeDoctorReport(context, report);
+          return doctorExitCode(report);
+        }),
+      ),
+    );
   },
 });

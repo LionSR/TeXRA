@@ -1,4 +1,5 @@
-import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -100,76 +101,90 @@ describe('CLI platform signal handlers', () => {
     vi.doUnmock('@cli/runtime/foregroundCommand');
   });
 
-  it('waits for persistent stderr writes before shutdown resolves', async () => {
-    vi.resetModules();
-    const order: string[] = [];
-    const stderrCallbacks: Array<(error?: Error | null) => void> = [];
-    const secondWriteCaptured = createDeferred();
-    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((
-      ...args: unknown[]
-    ) => {
-      const callback = args.find(
-        (arg): arg is (error?: Error | null) => void =>
-          typeof arg === 'function',
-      );
-      if (callback) {
-        stderrCallbacks.push(callback);
-        if (stderrCallbacks.length === 2) secondWriteCaptured.resolve();
-      }
-      return true;
-    }) as typeof process.stderr.write);
-    mocks.flushNdjsonStdout.mockImplementation(() =>
-      Effect.sync(() => {
-        order.push('ndjson');
+  effectIt.effect(
+    'waits for persistent stderr writes before shutdown resolves',
+    () =>
+      Effect.gen(function* () {
+        vi.resetModules();
+        const order: string[] = [];
+        const stderrCallbacks: Array<(error?: Error | null) => void> = [];
+        const secondWriteCaptured = createDeferred();
+        const stderrWrite = vi
+          .spyOn(process.stderr, 'write')
+          .mockImplementation(((...args: unknown[]) => {
+            const callback = args.find(
+              (arg): arg is (error?: Error | null) => void =>
+                typeof arg === 'function',
+            );
+            if (callback) {
+              stderrCallbacks.push(callback);
+              if (stderrCallbacks.length === 2) secondWriteCaptured.resolve();
+            }
+            return true;
+          }) as typeof process.stderr.write);
+        mocks.flushNdjsonStdout.mockImplementation(() =>
+          Effect.sync(() => {
+            order.push('ndjson');
+          }),
+        );
+        const { cliPlatformShutdownSequence } = yield* Effect.promise(
+          () => import('@cli/runtime/initPlatform'),
+        );
+        const { writeTextStderr } = yield* Effect.promise(
+          () => import('@cli/runtime/logSinks'),
+        );
+        // A diagnostic written as the process goes down, still in flight when
+        // the sequence starts.
+        writeTextStderr('shutdown diagnostic');
+
+        let resolved = false;
+        const shutdown = yield* Effect.forkChild(
+          cliPlatformShutdownSequence({ quiet: false }).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                resolved = true;
+              }),
+            ),
+          ),
+        );
+        yield* Effect.promise(() => secondWriteCaptured.promise);
+
+        expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
+          'shutdown diagnostic\n',
+          '',
+        ]);
+        expect(order).toEqual([]);
+        expect(resolved).toBe(false);
+
+        stderrCallbacks[0]?.();
+        yield* Effect.promise(() => Promise.resolve());
+        expect(order).toEqual([]);
+        expect(resolved).toBe(false);
+
+        stderrCallbacks[1]?.();
+        yield* Fiber.join(shutdown);
+        expect(order).toEqual(['ndjson']);
+        expect(resolved).toBe(true);
       }),
-    );
-    const { runCliPlatformShutdownSequence } =
-      await import('@cli/runtime/initPlatform');
-    const { writeTextStderr } = await import('@cli/runtime/logSinks');
-    // A diagnostic written as the process goes down, still in flight when
-    // the sequence starts.
-    writeTextStderr('shutdown diagnostic');
+  );
 
-    let resolved = false;
-    const shutdown = runCliPlatformShutdownSequence({ quiet: false }).then(
-      () => {
-        resolved = true;
-      },
-    );
-    await secondWriteCaptured.promise;
+  effectIt.effect(
+    'cliPlatformShutdownSequence still flushes NDJSON with no platform up',
+    () =>
+      Effect.gen(function* () {
+        vi.resetModules();
+        const order: string[] = [];
+        mocks.flushNdjsonStdout.mockImplementation(() =>
+          Effect.sync(() => {
+            order.push('flush');
+          }),
+        );
+        const { cliPlatformShutdownSequence } = yield* Effect.promise(
+          () => import('@cli/runtime/initPlatform'),
+        );
 
-    expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
-      'shutdown diagnostic\n',
-      '',
-    ]);
-    expect(order).toEqual([]);
-    expect(resolved).toBe(false);
-
-    stderrCallbacks[0]?.();
-    await Promise.resolve();
-    expect(order).toEqual([]);
-    expect(resolved).toBe(false);
-
-    stderrCallbacks[1]?.();
-    await shutdown;
-    expect(order).toEqual(['ndjson']);
-    expect(resolved).toBe(true);
-  });
-
-  it('runCliPlatformShutdownSequence still flushes NDJSON with no platform up', async () => {
-    vi.resetModules();
-    const order: string[] = [];
-    mocks.flushNdjsonStdout.mockImplementation(() =>
-      Effect.sync(() => {
-        order.push('flush');
+        yield* cliPlatformShutdownSequence({ quiet: false });
+        expect(order).toEqual(['flush']);
       }),
-    );
-    const { runCliPlatformShutdownSequence } =
-      await import('@cli/runtime/initPlatform');
-
-    await expect(
-      runCliPlatformShutdownSequence({ quiet: false }),
-    ).resolves.toBeUndefined();
-    expect(order).toEqual(['flush']);
-  });
+  );
 });

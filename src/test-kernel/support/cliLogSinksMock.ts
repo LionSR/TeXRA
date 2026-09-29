@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { vi } from 'vitest';
 
 /**
@@ -22,7 +23,7 @@ const cliLogSinksMock = vi.hoisted(() => ({
   writeErrorStderr: vi.fn(),
   writeNdjsonStdout: vi.fn(),
   writeTextStderr: vi.fn(),
-  writeTextStderrAndWait: vi.fn(async () => undefined),
+  writeTextStderrAndWait: vi.fn(() => Effect.void),
   writeTextStdout: vi.fn(),
 }));
 

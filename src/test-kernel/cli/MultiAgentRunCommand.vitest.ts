@@ -326,7 +326,7 @@ describe('CLI multi-agent run command', () => {
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        readStdinText: expect.any(Function),
+        readStdinText: expect.anything(),
       },
       expect.any(Function),
     );
@@ -427,7 +427,7 @@ describe('CLI multi-agent run command', () => {
       {
         allowEmptyInput: true,
         requireWorkspaceFiles: true,
-        readStdinText: expect.any(Function),
+        readStdinText: expect.anything(),
       },
       expect.any(Function),
     );

@@ -39,7 +39,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => {
 
 // The harness's own runtime, read at call time: `installFakeHost` builds it
 // before each test, so the default cannot capture one at registration.
-cliInitPlatformMock.installCliProcessRuntime.mockImplementation(async () =>
+cliInitPlatformMock.installCliProcessRuntime.mockImplementation(() =>
   testRuntime(),
 );
 

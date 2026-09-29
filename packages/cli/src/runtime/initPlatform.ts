@@ -150,15 +150,15 @@ export type CliPlatformServices = SettingsStores & {
  * the platform's own (now handed-off) handlers would have. One definition
  * means the two paths can't drift.
  *
- * Runs on the default runtime rather than the process runtime: the lifecycle
- * shutdown below disposes the process runtime (`disposeCliProcessRuntime`)
- * before the flushes run, and a teardown path must not depend on the thing
- * it is tearing down.
+ * A program, not a run: the caller runs it on the default runtime rather
+ * than the process runtime, because the lifecycle shutdown below disposes the
+ * process runtime (`disposeCliProcessRuntime`) before the flushes run, and a
+ * teardown path must not depend on the thing it is tearing down.
  */
-export async function runCliPlatformShutdownSequence(options: {
+export function cliPlatformShutdownSequence(options: {
   /** The user's own `--quiet`, never a command's silenced log sink. */
   readonly quiet: boolean;
-}): Promise<void> {
+}): Effect.Effect<void> {
   // Each step is best effort, so a failure never stops termination, but it
   // is said, on stderr: the process runtime is gone by the flushes, and the
   // log sink is silent under the chat TUI (which has unmounted by now), so
@@ -168,23 +168,29 @@ export async function runCliPlatformShutdownSequence(options: {
       Effect.catchCause((cause) =>
         options.quiet
           ? Effect.void
-          : Effect.promise(() =>
-              writeTextStderrAndWait(
-                `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
-              ),
+          : writeTextStderrAndWait(
+              `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
             ),
       ),
     );
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      // Signal shutdown is best effort; output still gets one final flush.
-      yield* bestEffort('closing the platform', cliPlatformShutdown);
-      // A closed stderr pipe must not prevent signal-based termination.
-      yield* bestEffort('flushing stderr', flushTextStderr());
-      // A closed stdout pipe must not prevent signal-based termination.
-      yield* bestEffort('flushing stdout', flushNdjsonStdout());
-    }),
-  );
+  return Effect.gen(function* () {
+    // Signal shutdown is best effort; output still gets one final flush.
+    yield* bestEffort('closing the platform', cliPlatformShutdown);
+    // A closed stderr pipe must not prevent signal-based termination.
+    yield* bestEffort('flushing stderr', flushTextStderr());
+    // A closed stdout pipe must not prevent signal-based termination.
+    yield* bestEffort('flushing stdout', flushNdjsonStdout());
+  });
+}
+
+/**
+ * The one run of an exit program: the CLI's two exit edges, the platform's
+ * signal handlers above and the chat TUI's teardown, run theirs here, on the
+ * default runtime, because `cliPlatformShutdownSequence` disposes the process
+ * runtime a run on it would be standing on.
+ */
+export function runCliExit<E>(exit: Effect.Effect<void, E>): Promise<void> {
+  return Effect.runPromise(exit);
 }
 
 export function installCliShutdownSignalHandlers(quiet: boolean): void {
@@ -202,7 +208,7 @@ export function installCliShutdownSignalHandlers(quiet: boolean): void {
         process.once(signal, handler);
         return;
       }
-      await runCliPlatformShutdownSequence({ quiet });
+      await runCliExit(cliPlatformShutdownSequence({ quiet }));
       process.exit(exitCode);
     };
     process.once(signal, handler);
@@ -293,7 +299,7 @@ export function initCliPlatform(
     // update check, `clone` -- may already have installed it, and every later
     // init finds it installed; each then adopts that one rather than building a
     // second and leaving the first undisposed.
-    const runtime = yield* Effect.tryPromise({
+    const runtime = yield* Effect.try({
       try: () =>
         installCliProcessRuntime(context.storageRoot, {
           resourcesPath: context.resourcesPath,

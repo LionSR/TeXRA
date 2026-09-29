@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
@@ -23,7 +23,7 @@ import { DatabaseOpenFailed } from '@shared/session/database';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -78,7 +78,9 @@ export interface CliContext {
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
-  readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
+  readonly approvalPrompt?: (
+    request: CliPromptRequest,
+  ) => Effect.Effect<string, Error>;
 }
 
 export class CliUsageError extends Error {
@@ -171,14 +173,19 @@ export function cliEnvValue(key: string): string | undefined {
   return process.env[key];
 }
 
-export async function readCliStdinText(): Promise<string> {
-  process.stdin.setEncoding('utf8');
-  const chunks: string[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(String(chunk));
-  }
-  return chunks.join('');
-}
+export const readCliStdinText: Effect.Effect<string, Error> = Effect.tryPromise(
+  {
+    try: async () => {
+      process.stdin.setEncoding('utf8');
+      const chunks: string[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(String(chunk));
+      }
+      return chunks.join('');
+    },
+    catch: ensureError,
+  },
+);
 
 /** Ambient shell cwd for CLI output that will be copied back into that shell. */
 export function readCliCwd(): string {
@@ -206,24 +213,26 @@ interface CliPackageManifest {
   readonly bugs?: { readonly url?: string };
 }
 
-async function readCliPackageManifest(): Promise<
-  CliPackageManifest | undefined
-> {
+/**
+ * The CLI's `package.json`, read once and synchronously: a few hundred bytes
+ * off the package root, needed before any runtime exists (`--version`, the
+ * process-runtime install, the crash report), so it has no Promise or Effect
+ * face to keep in step with.
+ */
+function readCliPackageManifest(): CliPackageManifest | undefined {
   const candidates = [
     new URL('../../package.json', import.meta.url),
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
     // A candidate that is absent, unreadable or unparsable is the expected
-    // answer for the layout this build is not: try the next one. The read's
-    // rejection and the parse's throw are recovered separately because a
-    // `then` rejection handler does not see a throw from its own fulfillment
-    // handler.
-    const text = await readFile(candidate, 'utf8').then(
-      (value) => value,
-      () => undefined,
-    );
-    if (text === undefined) continue;
+    // answer for the layout this build is not: try the next one.
+    let text: string;
+    try {
+      text = readFileSync(candidate, 'utf8');
+    } catch {
+      continue;
+    }
     const pkg = Result.getOrUndefined(safeParseJson(text)) as
       CliPackageManifest | undefined;
     // Source and bundled `dist/bin` layouts both reach the CLI manifest via
@@ -234,18 +243,18 @@ async function readCliPackageManifest(): Promise<
   return undefined;
 }
 
-let cachedManifest: Promise<CliPackageManifest | undefined> | undefined;
+let cachedManifest:
+  { readonly value: CliPackageManifest | undefined } | undefined;
 
 /** The one cached read of the CLI's `package.json`; `readCliVersion` and
- *  `readCliBugsUrl` both derive from it instead of each keeping (and
- *  re-reading from disk behind) its own cache. */
-function loadCliPackageManifest(): Promise<CliPackageManifest | undefined> {
-  cachedManifest ??= readCliPackageManifest();
-  return cachedManifest;
+ *  `readCliBugsUrl` both derive from it. */
+function loadCliPackageManifest(): CliPackageManifest | undefined {
+  cachedManifest ??= { value: readCliPackageManifest() };
+  return cachedManifest.value;
 }
 
-export function readCliVersion(): Promise<string> {
-  return loadCliPackageManifest().then((pkg) => pkg?.version ?? 'unknown');
+export function readCliVersion(): string {
+  return loadCliPackageManifest()?.version ?? 'unknown';
 }
 
 /**
@@ -253,8 +262,8 @@ export function readCliVersion(): Promise<string> {
  * to point users at the bug tracker on an unexpected crash. Read from the
  * manifest rather than hard-coded so it tracks the published metadata.
  */
-export function readCliBugsUrl(): Promise<string | undefined> {
-  return loadCliPackageManifest().then((pkg) => pkg?.bugs?.url);
+export function readCliBugsUrl(): string | undefined {
+  return loadCliPackageManifest()?.bugs?.url;
 }
 
 /**
@@ -459,10 +468,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       stdoutColorEnabled,
       stderrColorEnabled,
       commandName: resolveCliCommandName(readCliEntrypointPath()),
-      // `readCliVersion` keeps its Promise face — `bin/texra.ts`, `root.ts`,
-      // `version.ts` and the chat TUI read it too — so it is wrapped once
-      // here. It answers `unknown` rather than failing.
-      version: yield* Effect.promise(readCliVersion),
+      version: readCliVersion(),
       resourcesPath: yield* resolveCliResourcesPath(),
       config,
       configWarnings,

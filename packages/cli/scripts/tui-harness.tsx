@@ -321,10 +321,11 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_PLATFORM_SERVICES = await (
-  await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
+const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
+  HARNESS_STORAGE_ROOT,
+  {
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
-  })
+  },
 ).runPromise(
   initCliPlatform({
     // The same provider the harness context resolves its rows through,

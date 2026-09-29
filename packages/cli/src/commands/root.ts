@@ -61,10 +61,10 @@ export const rootCommand = withUsageSections(
     // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
     // lazily so the bundled binary picks up the version emitted by the build
     // (see `readCliVersion` in cliContext.ts).
-    meta: async () => ({
+    meta: () => ({
       name: 'texra',
       description: 'TeXRA CLI — your AI theorist in the terminal',
-      version: await readCliVersion(),
+      version: readCliVersion(),
     }),
     // Global flags are duplicated here so citty's `findSubCommandIndex` knows
     // which leading flags take values (otherwise `texra --output-format ndjson
