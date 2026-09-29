@@ -76,7 +76,7 @@ function isStdinWorkflowInputSpec(inputSpec: string): boolean {
 interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
-  readonly readStdinText?: () => Promise<string>;
+  readonly readStdinText?: Effect.Effect<string, Error>;
 }
 
 type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
@@ -84,7 +84,7 @@ type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
 interface PreparedWorkflowInputExpansion {
   readonly entries: WorkflowInputExpansionEntry[];
   readonly flagLabel: string;
-  readonly readStdinText?: () => Promise<string>;
+  readonly readStdinText?: Effect.Effect<string, Error>;
 }
 
 export function hasMixedStdinWorkflowInputSpecs(
@@ -99,16 +99,13 @@ export function hasMixedStdinWorkflowInputSpecs(
 const materializeStdinWorkflowInput = Effect.fn(
   'materializeStdinWorkflowInput',
 )(function* (
-  readStdinText: () => Promise<string>,
+  readStdinText: Effect.Effect<string, Error>,
   tempDir: string,
 ): Effect.fn.Return<string, Error, Scope.Scope | FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
   // No resource exists while stdin is pending. Interruption cannot leave a
   // Promise continuation that creates a directory after shutdown.
-  const text = yield* Effect.tryPromise({
-    try: readStdinText,
-    catch: ensureError,
-  });
+  const text = yield* readStdinText;
   if (text.trim().length === 0)
     return yield* Effect.fail(
       new CliUsageError(
@@ -228,7 +225,7 @@ const prepareWorkflowInputExpansion = Effect.fn(
   FileSystem.FileSystem
 > {
   const entries: WorkflowInputExpansionEntry[] = [];
-  let readStdinText: (() => Promise<string>) | undefined;
+  let readStdinText: Effect.Effect<string, Error> | undefined;
   for (const spec of inputSpecs) {
     if (isStdinWorkflowInputSpec(spec)) {
       if (!options.readStdinText)
@@ -304,7 +301,7 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
   options: {
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
-    readonly readStdinText?: () => Promise<string>;
+    readonly readStdinText?: Effect.Effect<string, Error>;
   } = {},
 ): Effect.fn.Return<
   ExpandedRunInputs,
@@ -366,7 +363,7 @@ export function withExpandedRunInputs<T, E, R = never>(
   contextSpecs: readonly string[],
   cwd: string,
   options: {
-    readonly readStdinText: () => Promise<string>;
+    readonly readStdinText: Effect.Effect<string, Error>;
     readonly allowEmptyInput?: boolean;
     readonly requireWorkspaceFiles?: boolean;
   },

@@ -168,7 +168,7 @@ describe('CLI run command, tool-use agents', () => {
           {
             allowEmptyInput: true,
             requireWorkspaceFiles: true,
-            readStdinText: expect.any(Function),
+            readStdinText: expect.anything(),
           },
           expect.any(Function),
         );

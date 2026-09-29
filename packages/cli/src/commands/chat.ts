@@ -1,17 +1,21 @@
-import { defineCommand } from 'citty';
+import { Effect } from 'effect';
 
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
+import { CliUsageError } from '../runtime/cliContext';
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '../runtime/shortcutLabels';
+import {
+  formatInteractiveTerminalFailure,
+  interactiveTerminalFailure,
+} from '../runtime/terminalRequirements';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
-import { contextFromArgs } from './_helpers/context';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { setExitCode } from './_helpers/exitCode';
 import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,
   optString,
@@ -28,7 +32,7 @@ const alternateFocusShortcut = metaChordLabel(
 );
 
 export const chatCommand = withUsageSections(
-  defineCommand({
+  defineCliCommand({
     meta: { name: 'chat', description: 'Interactive tool-use chat session' },
     args: {
       ...INTERACTIVE_AGENT_GLOBAL_ARGS,
@@ -39,17 +43,34 @@ export const chatCommand = withUsageSections(
         description: 'Model for the session',
       },
     },
-    async run(ctx) {
-      rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat');
+    setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat'),
+    // The update check is the program; the session it hands the terminal to
+    // is `defineCliCommand`'s to mount once the check has settled. An unusable
+    // terminal is refused here, in the builder, before the runtime installs.
+    run: (context, ctx) => {
       const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
-      const context = await contextFromArgs(ctx.args, ctx.rawArgs);
-      await notifyCliUpdate(context);
-      const { runChat } = await import('../chat/tui/runChatTui');
-      const result = await runChat(context, {
-        agentOverride: optString(ctx.args.agent),
-        modelOverride,
-      });
-      setExitCode(result.exitCode);
+      // `mode === 'headless'` already covers --print / CI / non-TTY stdin
+      // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
+      // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
+      // mount and emit garbled output instead of a usable session).
+      const terminalFailure = interactiveTerminalFailure(context);
+      if (terminalFailure) {
+        // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
+        // actionable advice is "use `texra run`", not "fix your TERM".
+        throw new CliUsageError(
+          formatInteractiveTerminalFailure(terminalFailure, {
+            headlessMessage:
+              'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
+            dumbTerminalCommand: 'chat',
+            dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
+          }),
+        );
+      }
+      return notifyCliUpdate(context).pipe(
+        Effect.as({
+          chat: { agentOverride: optString(ctx.args.agent), modelOverride },
+        }),
+      );
     },
   }),
   [

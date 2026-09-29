@@ -871,7 +871,7 @@ describe('CLI run progress renderer', () => {
             testRuntime(),
             context({
               approvalPolicy: 'ask',
-              approvalPrompt: async () => 'n no review needed',
+              approvalPrompt: () => Effect.succeed('n no review needed'),
             }),
           );
 

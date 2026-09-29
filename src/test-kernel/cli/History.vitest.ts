@@ -97,7 +97,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => {
   const { Effect } = await import('effect');
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   return {
-    installCliProcessRuntime: vi.fn(async () => testRuntime()),
+    installCliProcessRuntime: vi.fn(() => testRuntime()),
     disposeCliProcessRuntime: Effect.void,
   };
 });

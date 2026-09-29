@@ -107,15 +107,15 @@ const STDIN_DOCUMENT =
   '\\documentclass{article}\\begin{document}Hi\\end{document}';
 
 function trackedStdinReader(body: string = STDIN_DOCUMENT): {
-  readStdinText: () => Promise<string>;
+  readStdinText: Effect.Effect<string>;
   readCount: () => number;
 } {
   let reads = 0;
   return {
-    readStdinText: async () => {
+    readStdinText: Effect.sync(() => {
       reads += 1;
       return body;
-    },
+    }),
     readCount: () => reads,
   };
 }
@@ -131,7 +131,7 @@ const expandSpecs = (
   flagLabel: '--input' | '--context' = '--input',
   options: {
     readonly requireWorkspaceFiles?: boolean;
-    readonly readStdinText?: () => Promise<string>;
+    readonly readStdinText?: Effect.Effect<string>;
   } = {},
 ) =>
   Effect.gen(function* () {

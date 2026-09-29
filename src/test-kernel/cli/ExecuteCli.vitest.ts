@@ -657,7 +657,7 @@ describe('executeCliRequest', () => {
       const finalized = yield* Deferred.make<void>();
       const onInterruptedRunFinalized = vi.fn(() => {
         Deferred.doneUnsafe(finalized, Effect.void);
-        return recoveryWrite;
+        return Effect.promise(() => recoveryWrite);
       });
       const published = yield* Deferred.make<LeaseOptions>();
       const hangingRun = stubHangingRun(published);

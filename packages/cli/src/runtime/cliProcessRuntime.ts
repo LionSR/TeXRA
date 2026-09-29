@@ -18,7 +18,7 @@
  * is loud.
  *
  * This module is the CLI's composition root for that runtime, and every
- * entry that awaits it holds the result in a local and threads it on: there
+ * entry that calls the install holds the result in a local and threads it on: there
  * is no process-wide runtime slot for anything below an entry to read it
  * back from (rulings ledger, #12720). Whether one is installed is asked of
  * the session owner `installProcessRuntime` installs beside it, which
@@ -26,9 +26,7 @@
  * boolean set beside the install goes stale in both directions -- true while
  * `selfIdentity()` is still in flight, and still true after the disposal,
  * which is how a caller after a platform shutdown ends up selecting a
- * disposed runtime. `pending` is not that latch: it is the in-flight install
- * itself, so a second caller joins the first rather than racing it to build
- * a second runtime, and it is cleared once that install settles.
+ * disposed runtime.
  *
  * The process identity is read as the runtime's own layer, over the
  * spawner that runtime serves, and `initCliPlatform`'s open of the default
@@ -67,8 +65,6 @@ import { readCliVersion } from './cliContext';
 import { CliSecrets, cliSecretsPath } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
 import { ensureCliSupabaseAuth } from './supabaseAuth';
-
-let pending: Promise<ProcessRuntime> | null = null;
 
 const NO_PLATFORM_APP_STATE =
   'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
@@ -169,8 +165,10 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
 
 /**
  * Install the process runtime, or join the one already installed: every entry
- * that awaits this holds it in a local and threads it on, so nothing below
- * the entry looks it up again.
+ * that calls this holds it in a local and threads it on, so nothing below
+ * the entry looks it up again. The install is synchronous end to end (the
+ * version it stamps on usage entries is a sync manifest read), so two callers
+ * cannot race to build two runtimes.
  *
  * Only the runtime comes back. The global state store this install opens is
  * the `AppState` the runtime itself serves, so an entry that needs the store
@@ -189,81 +187,75 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
 export function installCliProcessRuntime(
   storageRoot: string,
   options?: CliProcessRuntimeInstall,
-): Promise<ProcessRuntime> {
+): ProcessRuntime {
   const current = installedProcessRuntime();
   if (current) {
     // The output plane runs on whichever runtime this process ended up with,
     // installed here or found installed.
     setCliLogRuntime(current);
-    return Promise.resolve(current);
+    return current;
   }
-  if (pending) return pending;
-  pending = (async () => {
-    // The global root resolves here, at install, with the pure calculator:
-    // the directory is the state store's and the global database's to create
-    // when they open below, and clone — whose storage root may be read-only,
-    // and which runs no records operation — must not create it at all.
-    const globalStoragePath = resolveGlobalStoragePath(storageRoot);
-    const version = await readCliVersion();
-    const secrets = new CliSecrets(cliSecretsPath(storageRoot));
-    // The account plane is built beside the runtime that serves it.
-    const auth = ensureCliSupabaseAuth(secrets);
-    // The agent directories are a process service the runtime serves, so
-    // they are built here, before the install, rather than in the platform
-    // init that may join an already-installed runtime. The built-in agent
-    // directories read straight out of the CLI package's `dist/resources`;
-    // the platform-less entries pass no resources root and load no agents.
-    // The custom directory is the one the other hosts read, from the shared
-    // application state this runtime serves.
-    const agentDirectoriesLayer = Layer.effect(
-      AgentDirectories,
-      Effect.map(
-        AppState,
-        (state) =>
-          new AgentDirectoryService({
-            channel: 'cli',
-            resourcesPath: options?.resourcesPath ?? '',
-            state,
-          }),
-      ),
-    );
-    const runtime: ProcessRuntime = installProcessRuntime({
-      processStart: nodeProcesses.selfIdentity(),
-      globalStorage: globalStoragePath,
-      mcpConfigPath: USER_MCP_CONFIG_PATH,
-      secrets,
-      appState: options?.appState
-        ? AppState.layer(options.appState)
-        : Layer.effect(
-            AppState,
-            Effect.map(GlobalDatabase, (database) =>
-              appStateStoreFromDatabase(globalStoragePath, database.values),
-            ),
+  // The global root resolves here, at install, with the pure calculator:
+  // the directory is the state store's and the global database's to create
+  // when they open below, and clone — whose storage root may be read-only,
+  // and which runs no records operation — must not create it at all.
+  const globalStoragePath = resolveGlobalStoragePath(storageRoot);
+  const version = readCliVersion();
+  const secrets = new CliSecrets(cliSecretsPath(storageRoot));
+  // The account plane is built beside the runtime that serves it.
+  const auth = ensureCliSupabaseAuth(secrets);
+  // The agent directories are a process service the runtime serves, so
+  // they are built here, before the install, rather than in the platform
+  // init that may join an already-installed runtime. The built-in agent
+  // directories read straight out of the CLI package's `dist/resources`;
+  // the platform-less entries pass no resources root and load no agents.
+  // The custom directory is the one the other hosts read, from the shared
+  // application state this runtime serves.
+  const agentDirectoriesLayer = Layer.effect(
+    AgentDirectories,
+    Effect.map(
+      AppState,
+      (state) =>
+        new AgentDirectoryService({
+          channel: 'cli',
+          resourcesPath: options?.resourcesPath ?? '',
+          state,
+        }),
+    ),
+  );
+  const runtime: ProcessRuntime = installProcessRuntime({
+    processStart: nodeProcesses.selfIdentity(),
+    globalStorage: globalStoragePath,
+    mcpConfigPath: USER_MCP_CONFIG_PATH,
+    secrets,
+    appState: options?.appState
+      ? AppState.layer(options.appState)
+      : Layer.effect(
+          AppState,
+          Effect.map(GlobalDatabase, (database) =>
+            appStateStoreFromDatabase(globalStoragePath, database.values),
           ),
-      auth,
-      // A terminal has no editor language models; the CLI's platform installs
-      // the same port.
-      languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-      agentDirectories: agentDirectoriesLayer,
-      // CLI model traffic goes to the same Supabase usage log the extension
-      // writes to, tagged with editorType 'cli' and the CLI version. The
-      // runtime's disposal drains the queue, and that disposal is the last
-      // shutdown step of every exit path this process has.
-      usageLog: usageLogLayer({ version, editorType: 'cli' }),
-      // The one handle on the global root, held for this runtime's life and
-      // closed with it — or clone's refusal, which opens nothing.
-      globalDatabase:
-        options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
-      minimumLogLevel: options?.minimumLogLevel ?? 'Info',
-    });
-    // The output plane runs its Effects on this runtime from here on; the
-    // disposal below hands it back the no-runtime state.
-    setCliLogRuntime(runtime);
-    return runtime;
-  })().finally(() => {
-    pending = null;
+        ),
+    auth,
+    // A terminal has no editor language models; the CLI's platform installs
+    // the same port.
+    languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+    agentDirectories: agentDirectoriesLayer,
+    // CLI model traffic goes to the same Supabase usage log the extension
+    // writes to, tagged with editorType 'cli' and the CLI version. The
+    // runtime's disposal drains the queue, and that disposal is the last
+    // shutdown step of every exit path this process has.
+    usageLog: usageLogLayer({ version, editorType: 'cli' }),
+    // The one handle on the global root, held for this runtime's life and
+    // closed with it — or clone's refusal, which opens nothing.
+    globalDatabase:
+      options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
+    minimumLogLevel: options?.minimumLogLevel ?? 'Info',
   });
-  return pending;
+  // The output plane runs its Effects on this runtime from here on; the
+  // disposal below hands it back the no-runtime state.
+  setCliLogRuntime(runtime);
+  return runtime;
 }
 
 /**

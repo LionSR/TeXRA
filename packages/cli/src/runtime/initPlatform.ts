@@ -293,7 +293,7 @@ export function initCliPlatform(
     // update check, `clone` -- may already have installed it, and every later
     // init finds it installed; each then adopts that one rather than building a
     // second and leaving the first undisposed.
-    const runtime = yield* Effect.tryPromise({
+    const runtime = yield* Effect.try({
       try: () =>
         installCliProcessRuntime(context.storageRoot, {
           resourcesPath: context.resourcesPath,

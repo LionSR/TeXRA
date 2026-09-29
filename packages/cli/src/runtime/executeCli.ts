@@ -90,7 +90,7 @@ interface CliExecuteOptions {
   readonly publishWorkflowOutput?: CliWorkflowOutputHandler;
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
-  readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
+  readonly onInterruptedRunFinalized?: (runId: RunId) => Effect.Effect<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
   /** The agent boundary the request runs through: unset, the runtime's own;
@@ -386,10 +386,7 @@ export function executeCliRequest(
             );
             if (advertise) {
               yield* Deferred.succeed(recoveryNoticeStarted, undefined);
-              yield* Effect.tryPromise({
-                try: () => Promise.resolve(onFinalized(runId)),
-                catch: ensureError,
-              });
+              yield* onFinalized(runId);
             }
           }
           return true;

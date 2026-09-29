@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Cause, Effect, Exit, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import type { ProcessServices } from '@platform/processRuntime';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -20,7 +21,6 @@ import {
   readCliEntrypointPath,
   type CliContext,
 } from './cliContext';
-import { installCliProcessRuntime } from './cliProcessRuntime';
 import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
 import { askCliQuestion, writeTextStderr } from './logSinks';
@@ -263,49 +263,37 @@ export function resetCliUpdateNotifyLatchForTests(): void {
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
-export async function notifyCliUpdate(context: CliContext): Promise<void> {
-  if (updateNotifyStarted) return;
+export function notifyCliUpdate(
+  context: CliContext,
+): Effect.Effect<void, Error, ProcessServices> {
+  if (updateNotifyStarted) return Effect.void;
   updateNotifyStarted = true;
 
   const ambient = readCliAmbientState();
-  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return;
-  if (ambient.isCi) return;
+  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return Effect.void;
+  if (ambient.isCi) return Effect.void;
   // Require all three standard runs to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
   // `texra chat > out` is an interactive-mode usage error the command rejects
-  // later, and we must not prompt for (or run) a self-update before it does.
+  // before this runs, and we must not prompt for (or run) a self-update
+  // before it does.
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
-    return;
-  if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
+    return Effect.void;
+  if (context.outputFormat === 'ndjson' || context.quietLogs === true)
+    return Effect.void;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.
   const method = detectInstallMethod();
-  if (!method) return;
+  if (!method) return Effect.void;
 
   const { command, args } = buildUpdateCommand(method);
   const updateCmd = [command, ...args].join(' ');
   const style = createCliStyle(context.stderrColorEnabled);
-  // The process runtime captures the configured global storage root before
-  // the platform is installed. Check failures remain best-effort at this host.
-  let latest: string | undefined;
-  let confirmed = false;
-  // `installCliProcessRuntime` is the pre-runtime edge: until it resolves
-  // there is no process runtime to run the check program on. Its failure is
-  // NOT absorbed here. Every caller reaches `initCliPlatform` moments later
-  // (`chat` through `runChat`), and that awaits the
-  // same install with no handler at all, so swallowing the rejection here
-  // would only move the identical crash a few statements down while hiding
-  // why. The check's own best-effort silence is the `Effect.ignoreCause`
-  // below, which covers the part that actually runs on the runtime.
-  // The install is first-call-wins and `chat` reaches here before `runChat`,
-  // so this call must carry the same options: without `resourcesPath` the
-  // built-in agent directories resolve against the cwd and come up empty.
-  const runtime = await installCliProcessRuntime(context.storageRoot, {
-    resourcesPath: context.resourcesPath,
-    minimumLogLevel: context.minimumLogLevel,
-  });
-  const check = Effect.gen(function* () {
-    latest = yield* runDailyUpdateCheck<
+  return Effect.gen(function* () {
+    let confirmed = false;
+    // Best-effort by policy: any failure — typed, defect, or interruption —
+    // leaves `latest` unset and the check exits silently.
+    const latest = yield* runDailyUpdateCheck<
       ChildProcessSpawner | HttpClient.HttpClient
     >({
       currentVersion: context.version,
@@ -332,51 +320,47 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
             normalized === '' || normalized === 'y' || normalized === 'yes';
         }),
       stampFailure: 'ignore',
-    });
+    }).pipe(Effect.catchCause(() => Effect.undefined));
+    if (!latest) return;
+    if (!confirmed) {
+      writeTextStderr(
+        style.muted('Skipped. Update later with: ') + style.command(updateCmd),
+      );
+      return;
+    }
+
+    writeTextStderr(style.muted(`Updating via ${method}…`));
+    const update = yield* Effect.exit(runCliUpdate(method));
+    if (Exit.isFailure(update)) {
+      // Ctrl-C on the installer interrupts the foreground command. No command
+      // boundary owns this exit, so the interrupt's exit code is set here, as
+      // the success path below exits here too; any other failure propagates.
+      if (!Cause.hasInterruptsOnly(update.cause))
+        return yield* Effect.failCause(update.cause);
+      writeTextStderr(
+        style.muted('Update cancelled. Update later with: ') +
+          style.command(updateCmd),
+      );
+      return process.exit(CliExitCode.Interrupted);
+    }
+    if (!update.value) {
+      writeTextStderr(
+        `${style.error('Update failed.')} Run manually: ${style.command(updateCmd)}`,
+      );
+      return;
+    }
+
+    // The new version is on disk, but THIS process is still the old code. We
+    // intentionally do NOT re-exec the freshly installed binary: silently
+    // swapping the running program mid-session is more surprising than a
+    // one-line hand-off, and the next `texra` invocation runs `latest` from a
+    // fresh process.
+    writeTextStderr(
+      style.success(`Updated to ${latest}.`) +
+        style.muted(' Run ') +
+        style.command('texra') +
+        style.muted(' again to use it.'),
+    );
+    return process.exit(CliExitCode.Success);
   });
-  // Best-effort by policy: any failure — typed, defect, or interruption —
-  // leaves `latest` unset and the check exits silently, as the `catch` it
-  // replaces did.
-  await runtime.runPromise(Effect.ignoreCause(check));
-  if (!latest) return;
-  if (!confirmed) {
-    writeTextStderr(
-      style.muted('Skipped. Update later with: ') + style.command(updateCmd),
-    );
-    return;
-  }
-
-  writeTextStderr(style.muted(`Updating via ${method}…`));
-  const update = await runtime.runPromiseExit(runCliUpdate(method));
-  if (Exit.isFailure(update)) {
-    // Ctrl-C on the installer interrupts the foreground command. No command
-    // boundary owns this exit, so the interrupt's exit code is set here, as
-    // the success path below exits here too; any other failure propagates.
-    if (!Cause.hasInterruptsOnly(update.cause))
-      throw Cause.squash(update.cause);
-    writeTextStderr(
-      style.muted('Update cancelled. Update later with: ') +
-        style.command(updateCmd),
-    );
-    process.exit(CliExitCode.Interrupted);
-  }
-  if (!update.value) {
-    writeTextStderr(
-      `${style.error('Update failed.')} Run manually: ${style.command(updateCmd)}`,
-    );
-    return;
-  }
-
-  // The new version is on disk, but THIS process is still the old code. We
-  // intentionally do NOT re-exec the freshly installed binary: silently
-  // swapping the running program mid-session is more surprising than a
-  // one-line hand-off, and the next `texra` invocation runs `latest` from a
-  // fresh process.
-  writeTextStderr(
-    style.success(`Updated to ${latest}.`) +
-      style.muted(' Run ') +
-      style.command('texra') +
-      style.muted(' again to use it.'),
-  );
-  process.exit(CliExitCode.Success);
 }

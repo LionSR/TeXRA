@@ -43,7 +43,7 @@ describe('CLI workflow input lifecycle', () => {
           ['-'],
           [],
           root,
-          { readStdinText: async () => 'body from stdin' },
+          { readStdinText: Effect.succeed('body from stdin') },
           ({ inputFiles }) =>
             Effect.gen(function* () {
               yield* Deferred.succeed(
@@ -83,10 +83,10 @@ describe('CLI workflow input lifecycle', () => {
             [],
             root,
             {
-              readStdinText: () => {
+              readStdinText: Effect.suspend(() => {
                 Deferred.doneUnsafe(reading, Effect.void);
-                return new Promise<string>(() => undefined);
-              },
+                return Effect.never;
+              }),
             },
             () => Effect.void,
           ),
@@ -118,7 +118,7 @@ describe('CLI workflow input lifecycle', () => {
             ['-'],
             [],
             root,
-            { readStdinText: async () => 'body from stdin' },
+            { readStdinText: Effect.succeed('body from stdin') },
             ({ inputFiles }) =>
               Effect.gen(function* () {
                 materializedPath = path.resolve(root, inputFiles[0]);

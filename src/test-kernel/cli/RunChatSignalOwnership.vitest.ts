@@ -278,9 +278,7 @@ describe('runChat signal ownership wiring', () => {
         return cliServices();
       }),
     );
-    mocks.installCliProcessRuntime.mockImplementation(async () =>
-      testRuntime(),
-    );
+    mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
     mocks.handOffCliShutdownSignalHandlers.mockImplementation(() => {
       mocks.callOrder.push('handOffCliShutdownSignalHandlers');
     });

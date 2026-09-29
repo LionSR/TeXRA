@@ -26,8 +26,8 @@ export const versionCommand = defineCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const version = await readCliVersion();
+  run(ctx) {
+    const version = readCliVersion();
     emitCliResult(
       { outputFormat: parseVersionOutputFormat(ctx.args['output-format']) },
       {

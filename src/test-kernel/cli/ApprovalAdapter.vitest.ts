@@ -181,7 +181,7 @@ function agentProposal(
 function trackPromptEvents(): {
   events: string[];
   hooks: CliApprovalPromptHooks;
-  answerWith: (answer: string) => () => Promise<string>;
+  answerWith: (answer: string) => () => Effect.Effect<string>;
 } {
   const events: string[] = [];
   return {
@@ -191,10 +191,11 @@ function trackPromptEvents(): {
         events.push('before');
       },
     },
-    answerWith: (answer) => async () => {
-      events.push('prompt');
-      return answer;
-    },
+    answerWith: (answer) => () =>
+      Effect.sync(() => {
+        events.push('prompt');
+        return answer;
+      }),
   };
 }
 
@@ -322,7 +323,7 @@ describe('retry request classification (#7331)', () => {
   it.effect('cancels a retry the interactive user explicitly rejects', () =>
     Effect.gen(function* () {
       const result = yield* requestHeadlessRetry(
-        context({ approvalPrompt: async () => 'n not now' }),
+        context({ approvalPrompt: () => Effect.succeed('n not now') }),
       );
 
       // The operator's note rides the cancellation: a dismissed retry is
@@ -337,7 +338,7 @@ describe('buildToolEditApprovalContent', () => {
     Effect.gen(function* () {
       useCliHostInteractions(
         context({
-          approvalPrompt: async () => 'n proof misses the p = 5 case',
+          approvalPrompt: () => Effect.succeed('n proof misses the p = 5 case'),
         }),
       );
 
@@ -354,7 +355,7 @@ describe('buildToolEditApprovalContent', () => {
     Effect.gen(function* () {
       useCliHostInteractions(
         context({
-          approvalPrompt: async () => '',
+          approvalPrompt: () => Effect.succeed(''),
         }),
       );
 
@@ -368,9 +369,7 @@ describe('buildToolEditApprovalContent', () => {
     Effect.gen(function* () {
       useCliHostInteractions(
         context({
-          approvalPrompt: async () => {
-            throw new Error('terminal input closed');
-          },
+          approvalPrompt: () => Effect.fail(new Error('terminal input closed')),
         }),
       );
 
@@ -392,11 +391,12 @@ describe('buildToolEditApprovalContent', () => {
       const answers = ['n', 'use the workspace-local file path'];
       useCliHostInteractions(
         context({
-          approvalPrompt: async (request) => {
-            prompts.push(request.prompt);
-            summaries.push(request.summary);
-            return answers.shift() ?? '';
-          },
+          approvalPrompt: (request) =>
+            Effect.sync(() => {
+              prompts.push(request.prompt);
+              summaries.push(request.summary);
+              return answers.shift() ?? '';
+            }),
         }),
       );
 
@@ -427,11 +427,12 @@ describe('buildToolEditApprovalContent', () => {
 
         const decision = yield* askApproval(
           context({
-            approvalPrompt: async (request) => {
-              prompts.push(request.prompt);
-              summaries.push(request.summary);
-              return answers.shift() ?? '';
-            },
+            approvalPrompt: (request) =>
+              Effect.sync(() => {
+                prompts.push(request.prompt);
+                summaries.push(request.summary);
+                return answers.shift() ?? '';
+              }),
           }),
           { summary: 'bounded preview', details: () => 'complete proposal' },
           { beforePrompt },
@@ -458,7 +459,7 @@ describe('buildToolEditApprovalContent', () => {
 
       yield* askApproval(
         context({
-          approvalPrompt: async () => answers.shift() ?? '',
+          approvalPrompt: () => Effect.sync(() => answers.shift() ?? ''),
         }),
         {
           summary: 'bounded preview',
@@ -488,13 +489,13 @@ describe('buildToolEditApprovalContent', () => {
       const secondFirstPrompt = yield* Deferred.make<void>();
       stubStderrWrites();
       const cliContext = context({
-        approvalPrompt: async (request) => {
+        approvalPrompt: (request) => {
           summaries.push(request.summary);
-          if (request.summary !== 'first') return 'y';
+          if (request.summary !== 'first') return Effect.succeed('y');
           firstPromptCount += 1;
-          if (firstPromptCount === 1) return viewAnswer;
+          if (firstPromptCount === 1) return Effect.promise(() => viewAnswer);
           Deferred.doneUnsafe(secondFirstPrompt, Effect.void);
-          return decisionAnswer;
+          return Effect.promise(() => decisionAnswer);
         },
       });
 
@@ -556,9 +557,8 @@ describe('buildToolEditApprovalContent', () => {
       useCliHostInteractions(
         context({
           approvalPolicy: 'yolo',
-          approvalPrompt: async () => {
-            throw new Error('approval prompt should not be called');
-          },
+          approvalPrompt: () =>
+            Effect.die(new Error('approval prompt should not be called')),
         }),
       );
 

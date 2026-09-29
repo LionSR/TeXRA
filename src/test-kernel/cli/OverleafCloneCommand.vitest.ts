@@ -38,9 +38,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { Effect: EffectModule } = await import('effect');
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  mocks.installCliProcessRuntime.mockImplementation(() =>
-    Promise.resolve(testRuntime()),
-  );
+  mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
   return {
     ...actual,
     installCliProcessRuntime: mocks.installCliProcessRuntime,
@@ -142,9 +140,7 @@ describe('CLI Overleaf clone command', () => {
       stderr += text;
     });
     for (const mock of Object.values(mocks)) mock.mockReset();
-    mocks.installCliProcessRuntime.mockImplementation(() =>
-      Promise.resolve(testRuntime()),
-    );
+    mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
     mocks.deleteSecret.mockReturnValue(Effect.void);
     spawn.gitVersion = { stdout: 'git version 2.50.0' };
     spawn.clone = () => ({});
