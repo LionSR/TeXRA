@@ -1,5 +1,4 @@
 import { StatusCodes } from 'http-status-codes';
-import { isFiniteNumber } from '@utils/core';
 
 /**
  * Server errors (5xx), conflicts (409), rate limits (429), and request
@@ -24,5 +23,7 @@ export function isRetryableStatusCode(statusCode?: number): boolean {
 }
 
 export function pickStatus(value: unknown): number | undefined {
-  return isFiniteNumber(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }

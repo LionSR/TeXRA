@@ -2,7 +2,7 @@ import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { isObject } from '@utils/core';
-import { isNonEmptyString, isString } from '@utils/text/stringUtils';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { pickStatus } from './sdkErrorKinds';
 
@@ -112,7 +112,7 @@ export function getErrorClassNames(err: unknown): string[] {
   let prototype = Object.getPrototypeOf(err);
   while (prototype && prototype !== Object.prototype) {
     const className = prototype.constructor?.name;
-    if (isString(className) && className.length > 0) {
+    if (typeof className === 'string' && className.length > 0) {
       classNames.add(className);
     }
     prototype = Object.getPrototypeOf(prototype);
@@ -156,7 +156,7 @@ export function detectStatusText(
     (acc, c) => acc ?? c.statusText,
     undefined,
   );
-  if (isString(explicit) && explicit) return explicit;
+  if (typeof explicit === 'string' && explicit) return explicit;
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 
@@ -184,7 +184,10 @@ export function detectRawErrorBody(err: unknown): unknown {
   }
 
   // Google GenAI SDK may embed JSON in the error message
-  if (isString(candidate.message) && candidate.message.startsWith('{')) {
+  if (
+    typeof candidate.message === 'string' &&
+    candidate.message.startsWith('{')
+  ) {
     return Result.getOrUndefined(safeParseJson(candidate.message));
   }
 
@@ -231,7 +234,7 @@ export function inferStatusCodeFromBody(
   for (const candidate of candidates) {
     for (const field of ['type', 'code'] as const) {
       const value = candidate[field];
-      if (!isString(value)) continue;
+      if (typeof value !== 'string') continue;
       const statusCode = ERROR_TYPE_OR_CODE_TO_STATUS[value];
       if (statusCode !== undefined) return statusCode;
     }

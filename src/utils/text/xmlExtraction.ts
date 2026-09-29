@@ -9,7 +9,6 @@
 
 // Local imports - utils
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
-import { ensureArray, isObject } from '@utils/core';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
@@ -22,14 +21,12 @@ export interface NamedDocument {
 }
 
 /**
- * Opening `<document … name="…">` tag fragment; group 1 is the name attribute
- * value. Case-sensitive to match the XML spec and the primary extraction path
- * (addCdataToTagsMultiple + XMLParser), while the fallback regex extraction is
- * case-insensitive as a safety net (the counter should reflect what the
- * primary path can extract). Shared between {@link DOCUMENT_NAME_REGEX} and
+ * Opening `<document … name="…">` tag fragment (either quote style); group 1 is
+ * the name attribute value. Case-sensitive, like the CDATA wrapping that
+ * precedes extraction. Shared between {@link DOCUMENT_NAME_REGEX} and
  * `extractNamedDocuments` so the name-attribute capture cannot drift apart.
  */
-const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>`;
+const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name\\s*=\\s*["']([^"']*)["'][^>]*>`;
 
 /**
  * Regex pattern for matching document opening tags with name attributes.
@@ -37,25 +34,6 @@ const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[
  * Group 1: name attribute value
  */
 export const DOCUMENT_NAME_REGEX = new RegExp(DOCUMENT_OPEN_TAG_WITH_NAME);
-
-/**
- * Get a string representation of an object's structure without its values.
- * Uses centralized type guards for cleaner type checking.
- */
-function getObjectStructure(obj: unknown): string {
-  if (Array.isArray(obj)) {
-    return `Array(${obj.length})`;
-  }
-  if (isObject(obj)) {
-    const keys = Object.keys(obj);
-    const structure = keys.map((key) => {
-      const value = obj[key];
-      return `${key}: ${getObjectStructure(value)}`;
-    });
-    return `{${structure.join(', ')}}`;
-  }
-  return typeof obj;
-}
 
 /**
  * Extract text content from within a specific XML tag.
@@ -88,55 +66,6 @@ function extractNamedDocuments(content: string): NamedDocument[] {
     name: match[1] || 'unnamed',
     content: removeCDATA(match[2] ?? ''),
   }));
-}
-
-/**
- * Extract content from XML document element for multiple document case.
- *
- * Finding nothing is not an error: the caller (XmlOutputManager) owns the
- * regex recovery and narrates it, so a miss returns the reason instead of
- * logging it here.
- */
-export function extractContentFromXMLbyTagMultiple(
-  root: Record<string, unknown>,
-  containerTag: string,
-):
-  | { readonly documents: NamedDocument[] }
-  | { readonly documents: null; readonly reason: string } {
-  if (!isObject(root)) {
-    return {
-      documents: null,
-      reason: `Invalid root object. Structure: ${getObjectStructure(root)}`,
-    };
-  }
-
-  if (containerTag in root) {
-    const container = root[containerTag];
-    if (isObject(container) && OUTPUT_DOCUMENT_TAG in container) {
-      // fast-xml-parser yields an object for a single <document> and an array
-      // for several, and a bare string for a document with no attributes (which
-      // carries no name and no content, so it falls through to the regex tier).
-      const documents = ensureArray(container[OUTPUT_DOCUMENT_TAG]).filter(
-        isObject,
-      );
-      if (documents.length > 0) {
-        return {
-          documents: documents.map((entry) => ({
-            content: entry.content?.toString().trim() ?? '',
-            // Same missing-name contract as the regex tier (extractNamedDocuments):
-            // a document without a usable `name` attribute is named 'unnamed'
-            // rather than admitting `undefined` into downstream naming logic.
-            name: (entry.name as string | undefined) ?? 'unnamed',
-          })),
-        };
-      }
-    }
-  }
-
-  return {
-    documents: null,
-    reason: `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
-  };
 }
 
 /**
