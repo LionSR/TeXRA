@@ -37,9 +37,7 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-export function parseHistoryListLimit(
-  value: string | undefined,
-): number | undefined {
+function parseHistoryListLimit(value: string | undefined): number | undefined {
   if (!value || !/^\d+$/.test(value)) return undefined;
   const limit = Number(value);
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;

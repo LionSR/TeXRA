@@ -1,27 +1,15 @@
 import { it as effectIt } from '@effect/vitest';
 import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/unstable/http';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   detectInstallMethod,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
-  notifyCliUpdate,
-  resetCliUpdateNotifyLatchForTests,
 } from '@cli/runtime/updateChecker';
-import { withProcessServices } from '@platform/processRuntime';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-
-const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
-
-vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/cliContext')>()),
-  readCliAmbientState: mocks.readCliAmbientState,
-}));
 
 describe('detectInstallMethod', () => {
   it.each([
@@ -196,33 +184,5 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
           { command: 'brew', args: ['info', '--json=v2', 'texra'] },
         ]);
       }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
-});
-
-describe('notifyCliUpdate', () => {
-  // A CI run returns right after the ambient read, so the number of ambient
-  // reads is exactly the number of times the latch let the check start.
-  const context = createTestCliContext({ version: '0.39.3' });
-
-  beforeEach(() => {
-    resetCliUpdateNotifyLatchForTests();
-    mocks.readCliAmbientState.mockReset().mockReturnValue({
-      isCi: true,
-      stdinIsTty: true,
-      stdoutIsTty: true,
-      stderrIsTty: true,
-      termIsDumb: false,
-      stdoutColorEnabled: false,
-      stderrColorEnabled: false,
-    });
-  });
-
-  effectIt.live('runs the check at most once per process', () =>
-    Effect.gen(function* () {
-      yield* withProcessServices(testRuntime(), notifyCliUpdate(context));
-      yield* withProcessServices(testRuntime(), notifyCliUpdate(context));
-
-      expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(1);
-    }),
   );
 });

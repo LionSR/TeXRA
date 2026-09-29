@@ -21,9 +21,7 @@ const DEFAULT_PAGER = 'less -FIRX';
  * — we deliberately reuse the conventional env var). An explicitly empty
  * `PAGER=` disables paging, matching how `git`/`man` treat it.
  */
-export function resolvePagerCommand(
-  pagerEnv: string | undefined,
-): string | undefined {
+function resolvePagerCommand(pagerEnv: string | undefined): string | undefined {
   const pager = pagerEnv?.trim() ?? DEFAULT_PAGER;
   // `PAGER=` (empty) or `PAGER=cat` are the conventional "no pager" signals.
   if (pager === '' || pager === 'cat') return undefined;

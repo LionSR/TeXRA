@@ -167,7 +167,7 @@ export interface PRSubscriptionState extends BasePollSubscriptionState {
 }
 
 /** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
-export interface PRCurrentShaState {
+interface PRCurrentShaState {
   sha: string;
   /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
   ciStarted: boolean;

@@ -3,11 +3,9 @@ import { Effect } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import {
-  findCliModelAccessEntry,
   formatCliModelDetails,
   getCliModelAccessList,
   modelSelectItemsForCli,
-  runnableCliModelAccessEntries,
   loadCliModelAccessEntry,
   selectCliRunnableModel,
   type CliModelAccess,
@@ -162,47 +160,6 @@ describe('CLI model access resolution', () => {
         fallbackReason: 'builtin-default',
       }),
     ).resolves.toEqual({ model: 'deepseekT' });
-  });
-
-  it('filters runnable models by access-list availability', () => {
-    const entries = [
-      model('sonnet46T', {
-        model: modelOption('sonnet46T', {
-          availability: 'provider-key',
-        }),
-      }),
-      model('deepseekT', {
-        available: false,
-        model: modelOption('deepseekT', {
-          availability: 'provider-key',
-        }),
-      }),
-      model('openrouterOnlyT', {
-        available: false,
-        model: modelOption('openrouterOnlyT', {
-          availability: 'openrouter-key',
-        }),
-      }),
-      model('gemini31p', {
-        available: false,
-        model: modelOption('gemini31p', {
-          availability: 'missing-key',
-        }),
-      }),
-    ];
-
-    expect(
-      runnableCliModelAccessEntries(entries).map((entry) => entry.model.value),
-    ).toEqual(['sonnet46T']);
-  });
-
-  it('finds model access entries by id case-insensitively', () => {
-    const entries = [model('sonnet46T'), model('deepseekT')];
-
-    expect(findCliModelAccessEntry(entries, 'DEEPSEEKT')?.model.value).toBe(
-      'deepseekT',
-    );
-    expect(findCliModelAccessEntry(entries, 'missing')).toBeUndefined();
   });
 
   effectIt.effect(

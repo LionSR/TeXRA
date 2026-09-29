@@ -2,166 +2,16 @@
   "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. A normal-run finding whose only consumer is a kernel suite loading the module through the computed file:// URL in src/test-kernel/desktop/loadSourceModule.ts is not recorded here: the ratchet resolves those consumers by name and reports the finding as live, because knip cannot follow that import (#12084). A suite is not a production consumer, so the production run keeps such a finding and it is recorded as production-dead. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
-      "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "slashPaletteCommandLabelWidth"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "slashPaletteWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "agentSelectWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "currentVisibleAgent"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "hiddenCurrentAgentHint"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildConfigListItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "coerceSettingInput"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "settingEditKind"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "validateSettingInput"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/SkillsListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatSkillActivationPrompt"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "listFormSelectWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "pendingListFormChoice"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "shouldBufferAsyncListFormInput"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "shouldCloseAsyncListFormOnInput"
-    },
-    {
       "file": "packages/cli/src/chat/tui/input/textInputBindings.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "TEXT_INPUT_BINDINGS"
     },
     {
-      "file": "packages/cli/src/chat/tui/input/textInputDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "textInputDisplayRowCount"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/EditApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "COMPACT_EDIT_APPROVAL_MAX_ROWS"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/EditApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "editApprovalDiffRowsBudget"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isPlanApprovalGoalActionVisible"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "planApprovalGoalNoticeLine"
-    },
-    {
       "file": "packages/cli/src/chat/tui/modals/ScrollableModalText.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "modalTextDisplayLines"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "boundedUserQuestionPromptLines"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "userQuestionFreeTextSuggestionLine"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/InputBar.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "slashSubmitText"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/QueuedFollowUpsPanel.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "queuedFollowUpPanelDisplay"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/TodosPlanPanel.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "compactTodosPlanRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/TodosPlanPanel.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CompactTodosPlanRow"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
@@ -182,36 +32,6 @@
       "name": "scrollBoundedDiffDisplayLines"
     },
     {
-      "file": "packages/cli/src/chat/tui/render/ansiMarkdown.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "_resetAnsiMarkdownForTests"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/render/tuiViewportController.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "TuiRepaintOptions"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/terminalTitle.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "terminalTitleText"
-    },
-    {
-      "file": "packages/cli/src/commands/_helpers/dispatch.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "hasUsageNoColorFlag"
-    },
-    {
-      "file": "packages/cli/src/commands/_helpers/fetchSilencer.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isCliFetchStackLog"
-    },
-    {
       "file": "packages/cli/src/commands/agents.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -222,24 +42,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "showAgent"
-    },
-    {
-      "file": "packages/cli/src/commands/auth.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "assertLoginTransportExclusive"
-    },
-    {
-      "file": "packages/cli/src/commands/auth.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "shouldPromptForLoginProvider"
-    },
-    {
-      "file": "packages/cli/src/commands/history.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseHistoryListLimit"
     },
     {
       "file": "packages/cli/src/commands/history.ts",
@@ -278,12 +80,6 @@
       "name": "doctorNdjsonRecords"
     },
     {
-      "file": "packages/cli/src/runtime/doctor.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatDoctorText"
-    },
-    {
       "file": "packages/cli/src/runtime/executeCli.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -300,24 +96,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "NdjsonStdoutSink"
-    },
-    {
-      "file": "packages/cli/src/runtime/modelAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "findCliModelAccessEntry"
-    },
-    {
-      "file": "packages/cli/src/runtime/modelAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runnableCliModelAccessEntries"
-    },
-    {
-      "file": "packages/cli/src/runtime/pager.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolvePagerCommand"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",
@@ -338,22 +116,10 @@
       "name": "fetchLatestHomebrewFormulaVersion"
     },
     {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resetCliUpdateNotifyLatchForTests"
-    },
-    {
       "file": "packages/cli/src/runtime/workflowInputs.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "expandRunInputs"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workflowInputGlobOptions"
     },
     {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
@@ -362,82 +128,10 @@
       "name": "probeOutputPathForTests"
     },
     {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isRawSelectEscChordInput"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isRawSelectNavigationInput"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "nextSelectHighlightIndex"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "rawSelectArrowDirection"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectControlledHighlightIndex"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectHotkeyForIndex"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectIndexForHotkey"
-    },
-    {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectInitialHighlightIndex"
-    },
-    {
       "file": "packages/desktop/src/main/desktopNavigationPolicy.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "isAllowedExternalUrl"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopProtocolCallbacks.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "createDesktopProtocolCallbackRouter"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopProtocolCallbacks.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "findDesktopProtocolUrls"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopProtocolCallbacks.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseDesktopProtocolCallback"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopProtocolCallbacks.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DesktopProtocolApp"
     },
     {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
@@ -456,60 +150,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "getSecretStorageMode"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getVisibleAgent"
-    },
-    {
-      "file": "src/auth/oauth/deviceAuthorization.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceCodeTimedOut"
-    },
-    {
-      "file": "src/auth/oauth/deviceAuthorization.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "SessionCompletionFailed"
-    },
-    {
-      "file": "src/auth/oauth/oauthRequest.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "OAuthNetworkError"
-    },
-    {
-      "file": "src/auth/oauth/oauthRequest.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "OAuthUnexpectedResponse"
-    },
-    {
-      "file": "src/auth/oauth/pkce.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "computeCodeChallenge"
-    },
-    {
-      "file": "src/auth/supabaseSessionTypes.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_SUPABASE_SESSION_EXPIRY_MS"
-    },
-    {
-      "file": "src/auth/xai/xaiOAuthClient.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceAuthorizationDenied"
-    },
-    {
-      "file": "src/auth/xai/xaiOAuthClient.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "DeviceCodeExpired"
     },
     {
       "file": "src/controllers/modelAccess/subscriptionUsage/codexUsageAdapter.ts",
@@ -554,12 +194,6 @@
       "name": "packageCommandContributions"
     },
     {
-      "file": "src/shared/schemas/subscriptionUsage.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SubscriptionUsageSnapshotSchema"
-    },
-    {
       "file": "src/shared/state/stateSettings.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -588,18 +222,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/github/PRPollingSource.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "PRCurrentShaState"
-    },
-    {
-      "file": "src/tools/github/githubSubscriptionTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "parseOriginHeadDefaultBranch"
     },
     {
       "file": "src/tools/lean/direct/leanServerPool.ts",

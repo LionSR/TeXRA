@@ -16,7 +16,7 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  SubscriptionUsageSnapshotSchema,
+  SubscriptionUsageSnapshotsSchema,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -242,7 +242,7 @@ describe('subscription usage parsers', () => {
       // default (`available()` applies `?? DEFAULT_PLAN_NAMES`), so the
       // snapshot is built with that default's literal value here.
       expect(
-        SubscriptionUsageSnapshotSchema.safeParse({
+        SubscriptionUsageSnapshotsSchema.valueType.safeParse({
           state: 'available',
           provider: 'chatgpt',
           providerName: 'ChatGPT',
@@ -504,9 +504,9 @@ describe('SubscriptionUsageService', () => {
       const snapshot = await runUsage(makeService().getUsage(provider), http);
 
       expect(snapshot.state).toBe('available');
-      expect(SubscriptionUsageSnapshotSchema.parse(snapshot)).toStrictEqual(
-        snapshot,
-      );
+      expect(
+        SubscriptionUsageSnapshotsSchema.valueType.parse(snapshot),
+      ).toStrictEqual(snapshot);
       expect(http).toHaveBeenCalledTimes(1);
       const [calledUrl, init] = http.mock.calls[0];
       // The client calls fetch with a URL object and lowercased header keys.

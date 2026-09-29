@@ -122,7 +122,7 @@ function startSentence(text: string): string {
   return `${text.at(0)!.toUpperCase()}${text.slice(1)}`;
 }
 
-export function runnableCliModelAccessEntries(
+function runnableCliModelAccessEntries(
   models: readonly CliModelAccess[],
 ): CliModelAccess[] {
   return models.filter((entry) => entry.available);
@@ -208,7 +208,7 @@ export const getCliModelAccessList = Effect.fn('getCliModelAccessList')(
   },
 );
 
-export function findCliModelAccessEntry(
+function findCliModelAccessEntry(
   models: readonly CliModelAccess[],
   model: string,
 ): CliModelAccess | undefined {

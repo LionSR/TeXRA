@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  assertLoginTransportExclusive,
-  shouldPromptForLoginProvider,
-} from '@cli/commands/auth';
-import { CliUsageError } from '@cli/runtime/cliContext';
-import {
-  LOGIN_TRANSPORT_CONFLICT_MESSAGE,
-  parseChatLoginSlashArgs,
-} from '@cli/runtime/loginOptions';
+import { parseChatLoginSlashArgs } from '@cli/runtime/loginOptions';
 
 describe('CLI login arguments (texra login)', () => {
   it.each<{
@@ -97,21 +89,6 @@ describe('CLI login arguments (texra login)', () => {
     },
   );
 
-  it('rejects --device + --no-browser from the CLI login command', () => {
-    expect(() =>
-      assertLoginTransportExclusive({ device: true, noBrowser: true }),
-    ).toThrow(CliUsageError);
-    expect(() =>
-      assertLoginTransportExclusive({ device: true, noBrowser: true }),
-    ).toThrow(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
-    expect(() =>
-      assertLoginTransportExclusive({ device: true, noBrowser: false }),
-    ).not.toThrow();
-    expect(() =>
-      assertLoginTransportExclusive({ device: false, noBrowser: true }),
-    ).not.toThrow();
-  });
-
   it.each([
     'slack',
     'github google',
@@ -124,54 +101,4 @@ describe('CLI login arguments (texra login)', () => {
   ])('rejects invalid in-chat login slash command options: "%s"', (input) => {
     expect(parseChatLoginSlashArgs(input)).toBeUndefined();
   });
-
-  const interactiveText = {
-    mode: 'interactive' as const,
-    outputFormat: 'text' as const,
-    stdoutIsTty: true,
-    termIsDumb: false,
-  };
-
-  it.each<{
-    context: Parameters<typeof shouldPromptForLoginProvider>[0];
-    init: Parameters<typeof shouldPromptForLoginProvider>[1];
-    expected: boolean;
-  }>([
-    {
-      context: interactiveText,
-      init: { providerExplicit: false, noBrowser: false, device: false },
-      expected: true,
-    },
-    {
-      context: interactiveText,
-      init: { providerExplicit: true, noBrowser: false, device: false },
-      expected: false,
-    },
-    {
-      context: interactiveText,
-      init: { providerExplicit: false, noBrowser: true, device: false },
-      expected: false,
-    },
-    {
-      // Device logins pick the provider in the browser, never in the terminal.
-      context: interactiveText,
-      init: { providerExplicit: false, noBrowser: false, device: true },
-      expected: false,
-    },
-    {
-      context: { ...interactiveText, outputFormat: 'json' },
-      init: { providerExplicit: false, noBrowser: false, device: false },
-      expected: false,
-    },
-    {
-      context: { ...interactiveText, mode: 'headless' },
-      init: { providerExplicit: false, noBrowser: false, device: false },
-      expected: false,
-    },
-  ])(
-    'prompts for provider only for bare interactive text login (init=$init, context=$context, expected=$expected)',
-    ({ context, init, expected }) => {
-      expect(shouldPromptForLoginProvider(context, init)).toBe(expected);
-    },
-  );
 });

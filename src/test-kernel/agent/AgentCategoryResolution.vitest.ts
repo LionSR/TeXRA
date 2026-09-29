@@ -15,7 +15,7 @@ import {
 import {
   findAgentByIdentifier,
   getCategoryAgent,
-  getVisibleAgent,
+  getVisibleAgents,
   refresh,
   resolveAgentForLaunch,
   resolveDelegationScopeAgents,
@@ -36,6 +36,13 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
+/** The entry validation accepts: `identifier` within the visible roster. */
+function visibleAgent(category: AgentCategory, identifier: string) {
+  return getVisibleAgents(hostStores(), category).pipe(
+    Effect.map((entries) => findAgentByIdentifier(entries, identifier)),
+  );
+}
+
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
@@ -47,7 +54,7 @@ function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
 /**
  * A custom *workflow* agent named `assistant` collides with the bundled
  * *tool-use* `assistant`. Validation resolves through the category-aware
- * `getVisibleAgent`; a category-blind resolver would answer the same name with
+ * the visible roster; a category-blind resolver would answer the same name with
  * the custom workflow entry (source priority: custom > … > builtInToolUse) and
  * the run would fail with a category mismatch. Launch therefore carries the
  * validated entry's *source* and resolves the exact `(source, name)` key, so
@@ -126,12 +133,12 @@ describe('cross-category agent resolution', () => {
     'pins launch to the exact (source, name) entry validation captured',
     () =>
       Effect.gen(function* () {
-        // The tool-use delegation validates via getVisibleAgent and carries the
+        // The tool-use delegation validates via the visible roster and carries the
         // entry's source; launch resolves that exact key — the built-in tool-use
         // entry, never the colliding custom workflow shadow.
         const toolUse = yield* launchAs(
           'toolUse',
-          yield* getVisibleAgent(hostStores(), 'toolUse', 'assistant'),
+          yield* visibleAgent('toolUse', 'assistant'),
         );
         expect(toolUse?.category).toBe('toolUse');
         expect(toolUse?.source).toBe('builtInToolUse');
@@ -140,7 +147,7 @@ describe('cross-category agent resolution', () => {
         // workflow delegation validated.
         const workflow = yield* launchAs(
           'workflow',
-          yield* getVisibleAgent(hostStores(), 'workflow', 'assistant'),
+          yield* visibleAgent('workflow', 'assistant'),
         );
         expect(workflow?.category).toBe('workflow');
         expect(workflow?.source).toBe('custom');
@@ -152,16 +159,14 @@ describe('cross-category agent resolution', () => {
     () =>
       Effect.gen(function* () {
         // A direct launch without a pinned source (e.g. the webview "Run") routes
-        // through getVisibleAgent — the identical call validation makes — so it
+        // through the visible roster — the identical lookup validation makes — so it
         // resolves to exactly the entry validation would, never a same-name shadow.
         const toolUse = yield* resolveAgentForLaunch(
           hostStores(),
           AgentCategory.ToolUse,
           'assistant',
         );
-        expect(toolUse).toBe(
-          yield* getVisibleAgent(hostStores(), 'toolUse', 'assistant'),
-        );
+        expect(toolUse).toBe(yield* visibleAgent('toolUse', 'assistant'));
         expect(toolUse?.source).toBe('builtInToolUse');
 
         const workflow = yield* resolveAgentForLaunch(
@@ -169,9 +174,7 @@ describe('cross-category agent resolution', () => {
           AgentCategory.Workflow,
           'assistant',
         );
-        expect(workflow).toBe(
-          yield* getVisibleAgent(hostStores(), 'workflow', 'assistant'),
-        );
+        expect(workflow).toBe(yield* visibleAgent('workflow', 'assistant'));
 
         // A stale/missing pinned source falls through to that same visible-set tier.
         const stale = yield* resolveAgentForLaunch(

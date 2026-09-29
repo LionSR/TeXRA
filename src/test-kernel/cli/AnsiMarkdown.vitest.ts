@@ -5,13 +5,10 @@
 // inside fenced code, (c) routes through the shared factory + cache without
 // crashing, and (d) keeps implementation markers out of the final output.
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import stripAnsi from 'strip-ansi';
 
-import {
-  _resetAnsiMarkdownForTests,
-  renderAnsiMarkdown,
-} from '@cli/chat/tui/render/ansiMarkdown';
+import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import { normalizeKnownHtmlForCliMarkdown } from '@cli/chat/tui/render/htmlMarkdownNormalize';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 
@@ -62,10 +59,6 @@ function plainLinesWithinWidth(rendered: string, width: number): string[] {
 }
 
 describe('renderAnsiMarkdown', () => {
-  beforeEach(() => {
-    _resetAnsiMarkdownForTests();
-  });
-
   it('renders plain prose with no HTML escapes', () => {
     const out = renderAnsiMarkdown('Hello <world>');
     expect(out).toContain('Hello <world>');

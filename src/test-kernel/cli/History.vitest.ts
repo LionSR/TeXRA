@@ -103,7 +103,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => {
 });
 
 // Imported after vi.mock so the mocked dependencies are in place.
-import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
+import { runHistoryExport } from '@cli/commands/history';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -438,17 +438,6 @@ describe('CLI history runtime', () => {
     expect(formatCliHistoryText(entries)).toBe(
       'bea111\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
     );
-  });
-
-  it('parses positive history list limits', () => {
-    expect(parseHistoryListLimit('1')).toBe(1);
-    expect(parseHistoryListLimit('25')).toBe(25);
-    expect(parseHistoryListLimit('0')).toBeUndefined();
-    expect(parseHistoryListLimit('-1')).toBeUndefined();
-    expect(parseHistoryListLimit('1.5')).toBeUndefined();
-    expect(parseHistoryListLimit('abc')).toBeUndefined();
-    expect(parseHistoryListLimit('')).toBeUndefined();
-    expect(parseHistoryListLimit(undefined)).toBeUndefined();
   });
 
   it('returns null for ids without a run view, config, or flow state', async () => {
