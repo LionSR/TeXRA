@@ -13,7 +13,6 @@ import {
   type DiffResult,
   type RunId,
   type FileLocation,
-  MESSAGE_TYPES,
   type OutputFileInfo,
   type RoundIndexed,
   type RunStorageFileLocation,
@@ -97,14 +96,12 @@ export class LatexDiffManager {
     if (result.reason === 'missing-document-environment') {
       this.logger.debug(`Skipping ${operation}`, {
         data: result.message,
-        messageType: MESSAGE_TYPES.INTERNAL,
       });
       return;
     }
 
     this.logger.warn(`Failed to generate ${operation}`, {
       data: result.message,
-      messageType: MESSAGE_TYPES.INTERNAL,
     });
   }
 
@@ -132,7 +129,6 @@ export class LatexDiffManager {
             `Unable to mirror workspace dependency ${dependencyPath}: ${toErrorMessage(error)}`,
             {
               data: { path: dependencyPath, error },
-              messageType: MESSAGE_TYPES.INTERNAL,
             },
           );
         }),

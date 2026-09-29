@@ -19,11 +19,9 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateId as qualifyAggregateId,
   type ExternalInquiryPermission,
-  type InquiryResumeOutcome,
   type InquiryThreadId,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
-  type InquiryThreadUpdatedEvent,
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
@@ -99,21 +97,19 @@ function buildContinuationText(params: {
   return lines.join('\n');
 }
 
-/** The Background Tasks panel's row for the thread, with how the run took it. */
+/** The Background Tasks panel's row for the thread. */
 const publishThreadUpdate = Effect.fn('publishInquiryThreadUpdate')(function* (
   threadId: InquiryThreadId,
-  resumeOutcome: InquiryResumeOutcome,
   session: SessionHandle,
 ): Effect.fn.Return<void, Error, InquiryRecords> {
   const records = yield* InquiryRecords;
   const summary = yield* records.getThreadSummary(threadId);
   if (!summary) return;
-  const payload: InquiryThreadUpdatedEvent = { ...summary, resumeOutcome };
   session.publish([
     {
       type: 'inquiryThreadUpdated',
-      aggregateId: qualifyAggregateId('inquiry', payload.threadId),
-      ...payload,
+      aggregateId: qualifyAggregateId('inquiry', summary.threadId),
+      ...summary,
     },
   ]);
 });
@@ -198,7 +194,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     const lastTurn = manifest.turns.at(-1);
     const parentRunId: RunId | null | undefined = manifest.parentRunId;
     if (!lastTurn || parentRunId == null) {
-      yield* publishThreadUpdate(threadId, 'parent_finished', session);
+      yield* publishThreadUpdate(threadId, session);
       return;
     }
     const stillOpen = yield* records.listThreadsByStatus({
@@ -232,9 +228,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
       yield* Effect.logWarning(
         `Inquiry continuation for ${threadId}: run ${parentRunId} refused it (${result.reason}).`,
       ).pipe(withLogChannel(CHANNEL));
-      yield* publishThreadUpdate(threadId, 'parent_finished', session);
-      return;
     }
-    yield* publishThreadUpdate(threadId, result.status, session);
+    yield* publishThreadUpdate(threadId, session);
   },
 );

@@ -159,24 +159,6 @@ export function logUserMessage(
   });
 }
 
-/** Internal-only info line; subscribers suppress it from non-debug views. */
-export function logInternal(
-  trace: AgentTrace,
-  message: string,
-  stageId?: string,
-): void {
-  trace.info(message, { messageType: MESSAGE_TYPES.INTERNAL, stageId });
-}
-
-/** Internal-only debug line. */
-export function debugInternal(
-  trace: AgentTrace,
-  message: string,
-  stageId?: string,
-): void {
-  trace.debug(message, { messageType: MESSAGE_TYPES.INTERNAL, stageId });
-}
-
 // ─── Domain events ──────────────────────────────────────────────────────
 
 /**

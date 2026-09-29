@@ -24,7 +24,6 @@ export const MESSAGE_TYPES = {
   PROGRESS_STATUS: 'progressStatus',
   CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
-  INTERNAL: 'internal',
   CONTEXT_MANAGEMENT: 'contextManagement',
   WORKFLOW_TASK: 'workflowTask',
   DEFAULT: 'default',

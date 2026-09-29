@@ -57,7 +57,6 @@ import {
 } from '@shared/constants/workflowOutput';
 import {
   fileLocationDisplayPath,
-  MESSAGE_TYPES,
   OUTPUT_END_TAG,
   type AgentFileLocation,
   type CompileFailure,
@@ -148,7 +147,6 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       logger,
       level: 'warn' as const,
       label,
-      messageType: MESSAGE_TYPES.DEFAULT,
       recover: () => Effect.void,
     });
 
@@ -525,7 +523,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
             Effect.sync(() => {
               logger.warn(
                 `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
-                { data: error, messageType: MESSAGE_TYPES.INTERNAL },
+                { data: error },
               );
               return baseFiles;
             }),

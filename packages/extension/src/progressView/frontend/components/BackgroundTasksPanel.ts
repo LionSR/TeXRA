@@ -28,7 +28,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import type { InquiryThreadUpdatedEvent, RunId } from '@shared/schemas';
+import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
   descendantRuns,
   type SessionView,
@@ -268,7 +268,7 @@ export class BackgroundTasksPanel extends LitElement {
     );
   }
 
-  private inquiriesOf(run: RunView): InquiryThreadUpdatedEvent[] {
+  private inquiriesOf(run: RunView): InquiryThreadSummary[] {
     return (this.view?.inquiries ?? []).filter(
       (thread) => thread.parentRunId === run.id,
     );
@@ -400,7 +400,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private renderInquiryItem(
-    thread: InquiryThreadUpdatedEvent,
+    thread: InquiryThreadSummary,
     index: number,
   ): TemplateResult {
     const preview = thread.lastQuestionPreview || '(empty question)';
@@ -466,7 +466,7 @@ function renderClock(
 }
 
 function inquiryStatusVariant(
-  status: InquiryThreadUpdatedEvent['status'],
+  status: InquiryThreadSummary['status'],
 ): 'warning' | 'success' | 'neutral' {
   if (status === 'open') return 'warning';
   if (status === 'answered') return 'success';

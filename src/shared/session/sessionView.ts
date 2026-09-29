@@ -22,7 +22,7 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  InquiryThreadUpdatedEventSchema,
+  InquiryThreadSummarySchema,
   JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
@@ -355,7 +355,7 @@ const SessionViewSchema = z.object({
   requests: z.array(PendingRequestSchema),
   /** Latest snapshot per run. */
   policy: z.map(RunIdSchema, ApprovalPolicySnapshotSchema),
-  inquiries: z.array(InquiryThreadUpdatedEventSchema),
+  inquiries: z.array(InquiryThreadSummarySchema),
   queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
