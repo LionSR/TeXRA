@@ -26,7 +26,7 @@ export interface DesktopProtocolCallbackRouter {
   ): DesktopProtocolCallbackSubscription;
 }
 
-export interface DesktopProtocolApp {
+interface DesktopProtocolApp {
   isPackaged: boolean;
   setAsDefaultProtocolClient(
     protocol: string,
@@ -64,7 +64,7 @@ interface InstallDesktopProtocolOptions {
   focusMainWindow?: () => void;
 }
 
-export function parseDesktopProtocolCallback(
+function parseDesktopProtocolCallback(
   rawUrl: string,
 ): DesktopProtocolCallback | null {
   const url = URL.parse(rawUrl);
@@ -79,11 +79,11 @@ export function parseDesktopProtocolCallback(
   };
 }
 
-export function findDesktopProtocolUrls(argv: readonly string[]): string[] {
+function findDesktopProtocolUrls(argv: readonly string[]): string[] {
   return argv.filter((arg) => parseDesktopProtocolCallback(arg) != null);
 }
 
-export function createDesktopProtocolCallbackRouter(): DesktopProtocolCallbackRouter {
+function createDesktopProtocolCallbackRouter(): DesktopProtocolCallbackRouter {
   const listeners = new Set<DesktopProtocolCallbackListener>();
   const pendingCallbacks: DesktopProtocolCallback[] = [];
 

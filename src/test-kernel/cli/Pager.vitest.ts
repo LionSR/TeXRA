@@ -2,7 +2,7 @@ import { Cause, Effect, Exit, Stream } from 'effect';
 import * as PlatformError from 'effect/PlatformError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { pageStdout, resolvePagerCommand } from '@cli/runtime/pager';
+import { pageStdout } from '@cli/runtime/pager';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
@@ -38,14 +38,6 @@ const signalled = (method: string) =>
     module: 'ChildProcess',
     method,
   });
-
-describe('resolvePagerCommand', () => {
-  it('treats empty $PAGER or PAGER=cat as "no pager"', () => {
-    expect(resolvePagerCommand('')).toBeUndefined();
-    expect(resolvePagerCommand('   ')).toBeUndefined();
-    expect(resolvePagerCommand('cat')).toBeUndefined();
-  });
-});
 
 describe('pageStdout', () => {
   let stdout = '';

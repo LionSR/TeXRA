@@ -15,11 +15,6 @@ export function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-/** Check if value is a string. */
-export function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
 /** Floor a millisecond duration down to whole-second granularity. */
 function floorToWholeSeconds(durationMs: number): number {
   return Math.floor(durationMs / 1000) * 1000;

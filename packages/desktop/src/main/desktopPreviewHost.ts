@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import {
   Data,
@@ -195,7 +196,7 @@ export function createDesktopPreviewHost(
         command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
         session: roots.storage,
         title,
-        pdfPath,
+        pdfUrl: pathToFileURL(pdfPath).href,
       } satisfies DesktopShowPdfMessage,
     );
   }

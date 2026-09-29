@@ -15,7 +15,6 @@ import {
   type SupabaseSession,
 } from '@auth/SupabaseSession';
 import {
-  DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,
   type SupabaseSessionStorage,
 } from '@auth/supabaseSessionTypes';
@@ -229,15 +228,14 @@ describe('SupabaseSession', () => {
     });
 
     it('uses the default expiry when native sessions omit expires_at', () => {
+      const ONE_HOUR_MS = 60 * 60 * 1000;
       const nativeSession = makeNativeSession({ expires_at: undefined });
-      const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
+      const earliestExpiry = Date.now() + ONE_HOUR_MS;
 
       const session = toStorableSupabaseSession(nativeSession);
 
       assert.ok(session.expiresAt >= earliestExpiry);
-      assert.ok(
-        session.expiresAt <= Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-      );
+      assert.ok(session.expiresAt <= Date.now() + ONE_HOUR_MS);
     });
   });
 

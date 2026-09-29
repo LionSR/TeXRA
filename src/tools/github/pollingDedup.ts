@@ -1,9 +1,7 @@
 /** Deduplication and cursor tracking shared by GitHub polling sources. */
 
-import {
-  createBoundedIdSet,
-  type BoundedIdSet,
-} from '@utils/core/boundedIdSet';
+import { LRUCache } from 'lru-cache';
+
 import { getNewestTimestamp } from './githubPaths';
 
 interface DedupedResourceOptions<T, Id> {
@@ -14,7 +12,8 @@ interface DedupedResourceOptions<T, Id> {
 }
 
 export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
-  readonly seenIds: BoundedIdSet<Id>;
+  /** LRU-capped so long-running subscriptions don't grow it unboundedly. */
+  readonly seenIds: LRUCache<Id, true>;
   sinceCursor: string | undefined;
 
   private readonly getId: (item: T) => Id;
@@ -25,12 +24,12 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
     this.getId = options.getId;
     this.getCursor = options.getCursor;
     this.sinceCursor = options.sinceCursor;
-    this.seenIds = createBoundedIdSet<Id>(options.maxSeenIds);
+    this.seenIds = new LRUCache({ max: options.maxSeenIds });
   }
 
   seed(items: readonly T[]): void {
     for (const item of items) {
-      this.seenIds.add(this.getId(item));
+      this.seenIds.set(this.getId(item), true);
     }
     this.advanceCursor(items);
   }
@@ -47,7 +46,7 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
       newIds.add(id);
       emit(item);
     }
-    for (const id of newIds) this.seenIds.add(id);
+    for (const id of newIds) this.seenIds.set(id, true);
     this.advanceCursor(items);
   }
 

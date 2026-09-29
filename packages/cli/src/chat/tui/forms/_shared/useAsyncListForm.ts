@@ -66,7 +66,7 @@ interface UseAsyncListFormOptions<T> {
   readonly closeEmptyOnEnter?: boolean;
 }
 
-export function shouldCloseAsyncListFormOnInput(args: {
+function shouldCloseAsyncListFormOnInput(args: {
   readonly input: string;
   readonly key: Pick<ReturnKeyInput, 'escape' | 'return'>;
   readonly loading: boolean;
@@ -83,7 +83,7 @@ export function shouldCloseAsyncListFormOnInput(args: {
   );
 }
 
-export function shouldBufferAsyncListFormInput(args: {
+function shouldBufferAsyncListFormInput(args: {
   readonly input: string;
   readonly key: Pick<ReturnKeyInput, 'ctrl' | 'escape' | 'meta' | 'return'> & {
     readonly downArrow?: boolean;

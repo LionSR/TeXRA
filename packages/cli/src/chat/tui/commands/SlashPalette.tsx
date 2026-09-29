@@ -42,7 +42,7 @@ interface SlashPaletteWindow {
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
 // previous rows" / "… N more rows") can be visible at once — unlike `Select`'s simple
 // centered `visibleSelectRange`.
-export function slashPaletteWindow({
+function slashPaletteWindow({
   highlight,
   itemCount,
   maxVisibleCommands = MAX_VISIBLE_COMMANDS,
@@ -110,7 +110,7 @@ function slashPaletteEnterHintAction(
   return command?.formComponent ? 'open' : 'run';
 }
 
-export function slashPaletteCommandLabelWidth(
+function slashPaletteCommandLabelWidth(
   commands: readonly SlashCommand[],
 ): number {
   return commands.reduce(

@@ -200,7 +200,7 @@ describe('desktop Electron host bridge', () => {
       onSession: vi.fn(),
     });
     // `desktop:showPdf` is claimed by `DesktopOutboundMessageSchema`, so a
-    // payload missing `pdfPath` fails validation instead of passing through
+    // payload missing `pdfUrl` fails validation instead of passing through
     // unchecked.
     expect(() =>
       bridge.postToRenderer({ command: 'desktop:showPdf', title: 't' }),

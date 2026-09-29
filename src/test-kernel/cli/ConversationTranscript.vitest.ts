@@ -27,10 +27,7 @@ import {
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
 import { mergeLocalNotices } from '@cli/chat/tui/state/transcript';
-import {
-  createTuiViewportController,
-  type TuiRepaintOptions,
-} from '@cli/chat/tui/render/tuiViewportController';
+import { createTuiViewportController } from '@cli/chat/tui/render/tuiViewportController';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   estimateLiveTranscriptEntryRows,
@@ -1127,7 +1124,7 @@ describe('CLI conversation transcript', () => {
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {
-    const calls: TuiRepaintOptions[] = [];
+    const calls: unknown[] = [];
     const controller = createTuiViewportController({
       current: {
         repaint: (options) => {

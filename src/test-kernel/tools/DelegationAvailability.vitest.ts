@@ -14,14 +14,12 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
-  getVisibleAgent: vi.fn(),
   readModelAvailabilityInputs: vi.fn(),
   isWorktreeSupportEnabled: vi.fn(),
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
-  getVisibleAgent: mocks.getVisibleAgent,
   // No test here pins a delegation scope, so this
   // always falls through to the workspace-visible roster.
   resolveDelegationScopeAgents: (
