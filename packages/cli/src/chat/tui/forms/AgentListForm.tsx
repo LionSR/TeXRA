@@ -108,7 +108,7 @@ function agentPickerPrimarySectionTitle(
   return hasDelegatingAgents ? 'Delegating agents' : 'Tool-use agents';
 }
 
-export function currentVisibleAgent(
+function currentVisibleAgent(
   agents: readonly AgentIdentity[],
   currentAgent: string,
 ): AgentIdentity | undefined {
@@ -120,7 +120,7 @@ export function currentVisibleAgent(
   });
 }
 
-export function hiddenCurrentAgentHint(
+function hiddenCurrentAgentHint(
   agents: readonly AgentIdentity[],
   currentAgent: string,
 ): string | undefined {
@@ -129,7 +129,7 @@ export function hiddenCurrentAgentHint(
   return `Current: ${agentName(current)} (hidden from picker)`;
 }
 
-export function agentSelectWindow({
+function agentSelectWindow({
   availableRows,
   extraRows = 0,
   itemCount,

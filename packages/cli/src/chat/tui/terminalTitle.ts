@@ -27,7 +27,7 @@ import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
 const TITLE_FRAMES = ['⠋', '⠹', '⠴', '⠦'] as const;
 
 /** Project-aware terminal title, optionally annotated with live TUI state. */
-export function terminalTitleText(
+function terminalTitleText(
   cwd: string,
   state: SessionTitleState = 'idle',
   activityDetail?: string,

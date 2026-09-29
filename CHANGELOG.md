@@ -320,12 +320,17 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Desktop: a startup failure or unhandled error now shows one reload prompt.**
+  The "TeXRA could not start" panel and its "Continue without saved secrets"
+  button are gone (the keychain case is handled before the window loads, so the
+  button only re-ran the same render); a failed first render or a rejected promise
+  now asks whether to reload.
+
 - **Preferring a ChatGPT or Grok subscription now turns OpenRouter off in
   the extension and desktop app too.** Both subscription routes only apply
   with "Use OpenRouter for all models" off, so signing in with OpenRouter on
   left the preference doing nothing. The CLI already cleared OpenRouter; the
   extension, desktop and CLI now share one rule.
-
 - **Stopping a run cancels its background response.** A workflow turn sent
   as an OpenAI or Google background response used to keep running, and
   billing, on the provider after you pressed Stop. An explicit stop (the Stop

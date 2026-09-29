@@ -439,7 +439,7 @@ const getDefaultBranch = (
     (repository) => repository.default_branch ?? 'main',
   );
 
-export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
+function parseOriginHeadDefaultBranch(ref: string): string | undefined {
   const branch = ref.trim().replace(/^refs\/remotes\//, '');
   if (!branch.startsWith('origin/')) return undefined;
   return branch.slice('origin/'.length) || undefined;

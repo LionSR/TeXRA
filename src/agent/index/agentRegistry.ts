@@ -313,20 +313,6 @@ export function findAgentByIdentifier(
   return entries.find((entry) => agentMatchesIdentifier(entry, identifier));
 }
 
-/** Resolve an identifier to a currently visible agent entry. */
-export function getVisibleAgent(
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  identifier: string,
-) {
-  return Effect.gen(function* () {
-    return findAgentByIdentifier(
-      yield* getVisibleAgents(stores, category),
-      identifier,
-    );
-  });
-}
-
 /**
  * Resolve an identifier to an agent in a category, ignoring visibility: the
  * one member identity rule the roster, team plans and launch share. A bare
@@ -365,7 +351,10 @@ export function resolveAgentForLaunch(
       (source
         ? cache.get(agentKey(source, agentName(identifier)))
         : undefined) ??
-      (yield* getVisibleAgent(stores, category, identifier)) ??
+      findAgentByIdentifier(
+        yield* getVisibleAgents(stores, category),
+        identifier,
+      ) ??
       getCategoryAgent(category, identifier)
     );
   });

@@ -29,7 +29,7 @@ const SubscriptionUsageSnapshotBaseSchema = z.object({
   fetchedAt: z.int().nonnegative(),
 });
 
-export const SubscriptionUsageSnapshotSchema = z.discriminatedUnion('state', [
+const SubscriptionUsageSnapshotSchema = z.discriminatedUnion('state', [
   SubscriptionUsageSnapshotBaseSchema.extend({
     state: z.literal('available'),
     windows: z.array(SubscriptionUsageWindowSchema).min(1),

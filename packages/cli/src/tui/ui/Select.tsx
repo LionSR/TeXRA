@@ -88,7 +88,7 @@ function firstEnabledSelectIndex<T>(
   return index >= 0 ? index : 0;
 }
 
-export function selectInitialHighlightIndex<T>({
+function selectInitialHighlightIndex<T>({
   activeValue,
   initialIndex,
   items,
@@ -114,7 +114,7 @@ export function selectInitialHighlightIndex<T>({
   return firstEnabledSelectIndex(items);
 }
 
-export function selectControlledHighlightIndex<T>({
+function selectControlledHighlightIndex<T>({
   highlightedValue,
   items,
   previousIndex,
@@ -131,7 +131,7 @@ export function selectControlledHighlightIndex<T>({
     : clampIndex(previousIndex, items.length);
 }
 
-export function nextSelectHighlightIndex<T>({
+function nextSelectHighlightIndex<T>({
   direction,
   highlight,
   items,
@@ -214,7 +214,7 @@ function selectItemRenderKey<T>(item: SelectItem<T>, index: number): string {
  * Single-key shortcut for a row: `1`-`9` for the first nine, then `a`-`z` for
  * rows 10-35. Rows beyond that have no shortcut (undefined).
  */
-export function selectHotkeyForIndex(index: number): string | undefined {
+function selectHotkeyForIndex(index: number): string | undefined {
   if (index < 0) return undefined;
   if (index < 9) return String(index + 1);
   const letterIndex = index - 9;
@@ -223,7 +223,7 @@ export function selectHotkeyForIndex(index: number): string | undefined {
 }
 
 /** Inverse of {@link selectHotkeyForIndex}: maps a typed key to a row index. */
-export function selectIndexForHotkey(input: string): number | undefined {
+function selectIndexForHotkey(input: string): number | undefined {
   if (input.length !== 1) return undefined;
   if (input >= '1' && input <= '9') {
     return input.charCodeAt(0) - '1'.charCodeAt(0);
@@ -247,11 +247,11 @@ export function selectIndexForHotkeyInput(input: string): number | undefined {
   return first == null ? undefined : selectIndexForHotkey(first);
 }
 
-export function isRawSelectNavigationInput(input: string): boolean {
+function isRawSelectNavigationInput(input: string): boolean {
   return input.startsWith('\u001B[') || input.startsWith('\u001BO');
 }
 
-export function isRawSelectEscChordInput(input: string): boolean {
+function isRawSelectEscChordInput(input: string): boolean {
   return (
     input.startsWith('\u001B') &&
     input.length === 2 &&
@@ -259,7 +259,7 @@ export function isRawSelectEscChordInput(input: string): boolean {
   );
 }
 
-export function rawSelectArrowDirection(input: string): -1 | 1 | undefined {
+function rawSelectArrowDirection(input: string): -1 | 1 | undefined {
   if (input === '\u001B[A' || input === '\u001BOA') return -1;
   if (input === '\u001B[B' || input === '\u001BOB') return 1;
   return undefined;

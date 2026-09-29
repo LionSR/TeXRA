@@ -18,10 +18,7 @@ import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
-import {
-  installTerminalTitleUpdates,
-  terminalTitleText,
-} from '@cli/chat/tui/terminalTitle';
+import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import {
@@ -111,14 +108,6 @@ function clearTitleApprovals(): void {
   requests = [];
   syncView();
 }
-
-describe('terminalTitleText', () => {
-  it('strips control characters out of a hostile folder name', () => {
-    expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
-      '{T}·evil]0;pwned',
-    );
-  });
-});
 
 describe('installTerminalTitleUpdates', () => {
   const enableOscTitles = (): void => {

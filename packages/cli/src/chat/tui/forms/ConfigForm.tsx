@@ -48,7 +48,7 @@ type SettingInputResult =
  * editor, form-backed settings delegate to an existing list form; anything
  * else (e.g. a record) is read-only.
  */
-export function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
+function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
   if (settingIsBoolean(entry)) return 'boolean';
@@ -62,7 +62,7 @@ export function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
  * expects. Invalid numeric input carries the user-facing error that keeps the
  * editor open instead of silently ignoring the submit.
  */
-export function coerceSettingInput(
+function coerceSettingInput(
   raw: string,
   isNumber: boolean,
 ): SettingInputResult {
@@ -78,7 +78,7 @@ export function coerceSettingInput(
 }
 
 /** Coerce text input, then run the setting's own schema before writing. */
-export function validateSettingInput(
+function validateSettingInput(
   entry: SurfacedSettingEntry,
   raw: string,
   isNumber: boolean,
@@ -105,7 +105,7 @@ function settingDisplayName(entry: SurfacedSettingEntry): string {
   return entry.title ?? stripPrefix(entry.key);
 }
 
-export function buildConfigListItems(
+function buildConfigListItems(
   entries: readonly SurfacedSettingEntry[],
   readValue: (entry: SurfacedSettingEntry) => unknown,
 ): Array<SelectItem<string>> {

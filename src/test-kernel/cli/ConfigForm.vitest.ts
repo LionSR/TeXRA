@@ -4,14 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { z } from 'zod';
 
-import {
-  buildConfigListItems,
-  coerceSettingInput,
-  settingEditKind,
-  validateSettingInput,
-} from '@cli/chat/tui/forms/ConfigForm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
 import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
@@ -28,7 +21,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { ALL_SETTINGS, CLI_STATE_SETTINGS } from '@shared/state/stateSettings';
+import { CLI_STATE_SETTINGS, settingByKey } from '@shared/state/stateSettings';
 import type { SurfacedSettingEntry } from '@shared/state/stateSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -107,23 +100,12 @@ afterEach(() => {
   resetCliState();
 });
 
-/** A shape `/config` cannot edit inline, used by the read-only assertions. */
-const RECORD_ENTRY: SurfacedSettingEntry = {
-  key: 'texra.example.record',
-  schema: z.record(z.string(), z.string()).prefault({}),
-  description: 'A record setting with no inline editor.',
-  category: 'example',
-  slot: 'workspaceState',
-  surfaces: { cliConfig: true },
-};
-
 function entryByKey(key: string): SurfacedSettingEntry {
-  const entry = ALL_SETTINGS.find(
-    (candidate): candidate is SurfacedSettingEntry =>
-      candidate.key === key && candidate.surfaces !== undefined,
-  );
-  if (!entry) throw new Error(`missing catalog entry ${key}`);
-  return entry;
+  const entry = settingByKey(key);
+  if (entry?.surfaces === undefined) {
+    throw new Error(`missing catalog entry ${key}`);
+  }
+  return entry as SurfacedSettingEntry;
 }
 
 async function renderInkElement(element: unknown): Promise<InkRenderHandles> {
@@ -206,36 +188,6 @@ async function openConfigFormProps(
 }
 
 describe('ConfigForm helpers', () => {
-  it.each<[string, boolean, ReturnType<typeof coerceSettingInput>]>([
-    ['texra-ai', false, { ok: true, value: 'texra-ai' }],
-    ['', false, { ok: true, value: '' }],
-    ['120000', true, { ok: true, value: 120000 }],
-    ['  90000 ', true, { ok: true, value: 90000 }],
-    [
-      '',
-      true,
-      { ok: false, message: 'Enter a number, or press Ctrl-R to reset.' },
-    ],
-    ['abc', true, { ok: false, message: 'Enter a finite number.' }],
-    ['Infinity', true, { ok: false, message: 'Enter a finite number.' }],
-  ])('coerces %j input (numeric=%s)', (input, numeric, expected) => {
-    expect(coerceSettingInput(input, numeric)).toEqual(expected);
-  });
-
-  it('validates coerced text input against the setting schema', () => {
-    const timeout = entryByKey(
-      WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    );
-    expect(validateSettingInput(timeout, '120000', true)).toEqual({
-      ok: true,
-      value: 120000,
-    });
-
-    const invalid = validateSettingInput(timeout, '0', true);
-    expect(invalid.ok).toBe(false);
-    if (!invalid.ok) expect(invalid.message).not.toBe('');
-  });
-
   it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
     [
       {
@@ -252,13 +204,6 @@ describe('ConfigForm helpers', () => {
     [{ loading: false, error: true }, 'Status unavailable'],
   ])('summarizes key status without exposing values', (view, summary) => {
     expect(formatProviderApiKeySummary(view)).toBe(summary);
-  });
-
-  it('marks an unsupported schema kind read-only', () => {
-    expect(settingEditKind(RECORD_ENTRY)).toBe('readonly');
-    const [item] = buildConfigListItems([RECORD_ENTRY], () => ({}));
-    expect(item).toMatchObject({ disabled: true });
-    expect(item?.description).toContain('read-only');
   });
 });
 

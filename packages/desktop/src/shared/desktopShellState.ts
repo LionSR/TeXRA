@@ -66,7 +66,7 @@ export const WORKBENCH_KIND_META = {
     label: 'Logs',
     singleton: true,
   },
-  /** One compiled PDF per tab, keyed by its path (the tab's `target`). */
+  /** One compiled PDF per tab, keyed by its `file:` URL (the tab's `target`). */
   pdf: {
     defaultPlacement: 'right',
     icon: 'file-pdf',

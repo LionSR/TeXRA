@@ -25,9 +25,6 @@ export const DesktopProjectsMessageSchema = z.object({
    *  no-workspace session's, which is never listed in `open`. */
   activeKey: z.string(),
 });
-export type DesktopProjectsMessage = z.infer<
-  typeof DesktopProjectsMessageSchema
->;
 
 export const DesktopSelectProjectMessageSchema = z.object({
   command: z.literal(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT),
