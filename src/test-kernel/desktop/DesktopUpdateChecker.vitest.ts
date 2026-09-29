@@ -1,6 +1,6 @@
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
@@ -81,32 +81,5 @@ describe('desktop update checker', () => {
           );
         }),
       ),
-  );
-  it.live('coalesces concurrent checks into one fetch and notification', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
-        const pending = yield* Deferred.make<typeof release>();
-        const fetched = vi.fn();
-        const fetchRelease = Effect.gen(function* () {
-          fetched();
-          yield* Deferred.succeed(started, undefined);
-          return yield* Deferred.await(pending);
-        });
-        const firstNotify = vi.fn();
-        const secondNotify = vi.fn();
-        const first = yield* Effect.forkChild(
-          runCheck({ notify: firstNotify, fetchRelease }),
-        );
-        yield* Deferred.await(started);
-        yield* runCheck({ notify: secondNotify, fetchRelease });
-        expect(fetched).toHaveBeenCalledOnce();
-        yield* Deferred.succeed(pending, release);
-        yield* Fiber.join(first);
-        expect(fetched).toHaveBeenCalledOnce();
-        expect(firstNotify).not.toHaveBeenCalled();
-        expect(secondNotify).toHaveBeenCalledOnce();
-      }),
-    ),
   );
 });

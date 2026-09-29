@@ -11,7 +11,7 @@ import {
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
+import type { RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ExecuteCommand';
@@ -39,6 +39,8 @@ const WrappedExecuteInputSchema = z.object({
 export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
   session: SessionHandle,
+  /** Select the run this launch resolved: the launching surface's own. */
+  onRunResolved: (runId: RunId) => void,
 ): Effect.fn.Return<void, Error, ProcessServices> {
   // A configuration that does not parse fails the command, so its caller
   // hears the refusal instead of a settled launch that never started.
@@ -74,7 +76,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
       // keeps the user's selected model.
       preferHelperModel: wrapped?.preferHelperModel ?? false,
       ownApiKeyFallback: wrapped?.ownApiKeyFallback,
-      onRunResolved: presentLaunchedProgressRun,
+      onRunResolved,
     },
   );
   // Presentation reacts to the committed outcome; it never runs inside the run,

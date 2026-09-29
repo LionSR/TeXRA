@@ -108,7 +108,6 @@ interface Port {
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
-  private static _instance: ProgressViewProvider | undefined;
 
   public readonly bridge: SessionBridge;
   public readonly snapshot: HostSnapshotSource;
@@ -338,6 +337,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
       surfaceAction: (action) => this.surfaceAction(action),
+      presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
@@ -414,11 +414,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push({ dispose: detachHostInteractions });
 
     this.watchWorkspace();
-    ProgressViewProvider._instance = this;
-  }
-
-  public static getInstance(): ProgressViewProvider | undefined {
-    return this._instance;
   }
 
   public initialize() {
@@ -788,8 +783,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       for (const disposable of this.disposables.splice(0)) disposable.dispose();
       yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();
-      if (ProgressViewProvider._instance === this)
-        ProgressViewProvider._instance = undefined;
     });
   }
 }

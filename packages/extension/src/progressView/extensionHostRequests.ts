@@ -81,7 +81,6 @@ import {
 } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -133,6 +132,8 @@ interface ExtensionHostRequestsOptions {
   readonly runtime: ProcessRuntime;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
+  /** Select a run this window just launched (the launch's `onRunResolved`). */
+  presentLaunchedRun(runId: RunId): void;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -217,7 +218,7 @@ export function createExtensionHostRequests(
       preferHelperModel: runOptions.preferHelperModel ?? false,
       ownApiKeyFallback: runOptions.ownApiKeyFallback,
       onRun: runOptions.onRun,
-      onRunResolved: presentLaunchedProgressRun,
+      onRunResolved: options.presentLaunchedRun,
     }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };

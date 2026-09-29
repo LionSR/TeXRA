@@ -2,7 +2,6 @@ import { Data, Effect, FileSystem, type Path } from 'effect';
 
 import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
@@ -27,6 +26,7 @@ import type {
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
+import type { DesktopSpawn } from './desktopWindows.js';
 
 /** A shell action's host call rejected. The window reports it and stays up. */
 class ShellActionFailed extends Data.TaggedError('ShellActionFailed')<{
@@ -66,9 +66,8 @@ interface DesktopShellActionFactoryOptions extends Pick<
   /** The shown project's surfaces take the New-task state. */
   showLauncher(): void;
   onAsyncError: (error: unknown) => void;
-  /** The process runtime the composition root built; every shell action's
-   *  program is forked on it rather than on a bare `Effect.run*`. */
-  runtime: ProcessRuntime;
+  /** Every shell action's program runs on a fiber of the window's scope. */
+  spawn: DesktopSpawn;
 }
 
 /**
@@ -105,7 +104,7 @@ export function createDesktopShellActions(
       | ChildProcessSpawner
     >,
   ): void {
-    options.runtime.runFork(
+    options.spawn(
       program.pipe(
         Effect.catch((failure: ShellActionFailed | NotificationFailed) =>
           Effect.sync(() => reportAsyncError(failure.cause)),

@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
@@ -14,8 +15,11 @@ import type {
 export interface DesktopProjectsIpcActions {
   /** Send the open projects and which one this window shows. */
   postProjects(): void;
-  selectProject(key: string): void;
-  closeProject(key: string, hasUnsavedChanges: boolean): void;
+  selectProject(key: string): Effect.Effect<void, Error, ProcessServices>;
+  closeProject(
+    key: string,
+    hasUnsavedChanges: boolean,
+  ): Effect.Effect<void, Error, ProcessServices>;
 }
 
 /**
@@ -33,19 +37,18 @@ export function createDesktopProjectsIpc(
           return Effect.sync(() => actions.postProjects());
         case DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT: {
           const parsed = DesktopSelectProjectMessageSchema.safeParse(message);
-          return Effect.sync(() => {
-            if (parsed.success) actions.selectProject(parsed.data.key);
-          });
+          return parsed.success
+            ? actions.selectProject(parsed.data.key)
+            : Effect.void;
         }
         case DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT: {
           const parsed = DesktopCloseProjectMessageSchema.safeParse(message);
-          return Effect.sync(() => {
-            if (parsed.success)
-              actions.closeProject(
+          return parsed.success
+            ? actions.closeProject(
                 parsed.data.key,
                 parsed.data.hasUnsavedChanges,
-              );
-          });
+              )
+            : Effect.void;
         }
         default:
           return undefined;

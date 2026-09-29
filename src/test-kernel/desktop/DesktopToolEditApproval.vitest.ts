@@ -106,7 +106,9 @@ function createApprovalFixture(
     const session = createTestSession();
     yield* Effect.addFinalizer(() => closeSessionOf(session));
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
-      runtime: testRuntime(),
+      spawn: (program) => {
+        testRuntime().runFork(program);
+      },
       ui: {
         ...createStubDesktopAgentRunHost(),
         closeDiff: () => Effect.void,
