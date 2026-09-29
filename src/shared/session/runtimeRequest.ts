@@ -61,6 +61,11 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
       ...runScoped,
       bypass: z.enum(APPROVAL_BYPASS_KINDS),
       enabled: z.boolean(),
+      /** Turning a bypass on also approves the run's requests already
+       *  pending under it. This one is the surface's own, decided by the
+       *  `request.decide` that follows, which may carry more than a plain
+       *  approval. */
+      exceptRequestId: z.string().optional(),
     }),
   }),
   /** A workflow-script run's grandchild `agent()` call. `childRunId` is

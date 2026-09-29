@@ -61,6 +61,7 @@ describe('bash-request-panel', () => {
           runId: 'run-1',
           bypass: 'bash',
           enabled: true,
+          exceptRequestId: 'bash-request-1',
         },
       },
       {

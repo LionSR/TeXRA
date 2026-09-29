@@ -120,7 +120,13 @@ export function approvalDecisionArms(
         {
           runtime: {
             kind: 'policy.set',
-            change: { field: 'bypass', runId, bypass, enabled: true },
+            change: {
+              field: 'bypass',
+              runId,
+              bypass,
+              enabled: true,
+              exceptRequestId: requestId,
+            },
           },
         },
         decide(approve),
@@ -135,7 +141,6 @@ export function approvalDecisionArms(
             kind: 'toolEdit',
             requestId,
             action: decision.action,
-            feedback: null,
           },
         },
       ];
