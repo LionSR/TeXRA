@@ -302,6 +302,16 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Approve-all and "use my own key" behave the same on every host.**
+  Turning on "approve all" for a run (the switches in the run header, or
+  "approve all edits" on a prompt) now also approves the requests of that
+  kind already waiting, in the extension and desktop as it did in the
+  terminal. A retry on your own API key with no key entered stays pending in
+  the terminal, as it does in the extension and desktop, instead of being
+  denied: the card comes back with the reason and you choose again. The
+  desktop now tells you when a file drop skipped items, as the extension
+  does.
+
 - **A tool call cut off by a crash no longer runs twice unasked.** Resuming
   a run after the process died mid-call used to re-run any call that could
   run in parallel, even one with side effects. Now only read-only tools

@@ -983,21 +983,32 @@ export const TexraProcess: {
 ### Current state
 
 The PRD one-fold §8 protocol (six messages, three each way) is in place, and
-29 of 37 host requests go through one shared body. The rest has drifted:
+31 of 37 host requests go through one shared body; the six the hosts keep are
+the ones only one host can perform (pop-out, the editor's current file and open
+tabs, the native file picker, figure extraction). Landed on this branch of the
+plan:
 
-- **Tool-edit approve and reject** go through a `host.request toolEdit`
-  detour on the GUI hosts (`ToolEditRequestPanel.ts:62-81`) because approve
-  carries the content the user edited in the diff view. The TUI decides
-  directly.
-- **Own-key retry** has two implementations with opposite semantics: with no
-  key entered, the GUI leaves the retry pending
-  (`ProgressApiKeyRetryController.ts:62-71`), and the TUI denies it
-  (`subscribeApprovals.ts:162-220`).
-- **"Approve all delegated"** cascades onto pending requests only in the TUI
-  (`approvalQueue.ts:446-476`); `policy.set` only flips the flag.
-- **`HostRunActions.sendFollowUp`** bypasses `SessionRequests`.
-- About sixty lines of tool-edit wiring are copied between
-  `ProgressViewProvider.ts` and `desktopAgentRun.ts`.
+- **Approve-all** decides the run's pending requests of the kinds the bypass
+  covers inside `SessionRequests`, on every host (`policy.set` carries the
+  request the surface decides itself as `exceptRequestId`). The pending set is
+  read from the fold and each decision re-reads the committed rows, so a
+  request whose `request.opened` is committing in that instant stays pending
+  for the user; the single `exclusive` job over the durable set stays a
+  refinement.
+- **Own-key retry** stays pending on every host; the TUI's denial is gone.
+- **Reject** is a plain `request.decide` on every host. **Approve** stays the
+  host's `toolEdit` verb only because it reads the user's edit back from the
+  host's diff view before sending the `request.decide` that carries it.
+- **`launch` and `attachDroppedFiles`** are shared arms; the tool-edit
+  controller sends its own `request.decide`, and the two hosts wire it through
+  one `toolEditHostWiring.ts` instead of copying about sixty lines.
+
+What is left:
+
+- **`HostRequest` keeps `resume`, `runNew`, `runCompileFixer`,
+  `savePastedImage`, `polish` and `record` arms.** They are shared, but the
+  target moves them to `RuntimeRequest` (`run.resume`, `run.new`,
+  `media.store`), which is PR 6 below.
 - **The webview request side is Promise-based.** `SessionFrames` holds
   mutable state, and the pending map leaks (above).
 - **The desktop routes by heuristic.** Session and `desktop:*` messages share
@@ -1010,7 +1021,11 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
   `media.store`.
 - `request.decide` covers tool-edit approve and reject on every host, and
   carries the edited content in its payload, so the approved text lands in the
-  log. There is no `StagedEdits` port.
+  log. There is no `StagedEdits` port. (Reject landed as a plain
+  `request.decide`. `request.decide` already carries `content`, so approve
+  needs no schema change, but the webview cannot produce the edited text: the
+  host's `toolEdit` approve reads it from its diff view and sends the decision,
+  so that one verb stays a host arm.)
 - `policy.set` enabling approve-all also decides that run's pending requests
   of the kinds the bypass covers (`toolEdit`, `bash`, `proposal`, the keys of
   `BYPASS_OF_KIND` in `approvalDecision.ts:66-72`), on every host, inside
