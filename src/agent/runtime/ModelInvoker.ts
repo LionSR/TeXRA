@@ -93,6 +93,7 @@ import {
   routePolicies,
   type CallResult,
 } from './run/modelCall';
+import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { priceTurnUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
@@ -143,13 +144,6 @@ function reducedOutputBudget(available: number, buffer: number): number {
   const buffered = available - buffer;
   return buffered >= MIN_COMPLETION_TOKENS ? buffered : available;
 }
-
-/**
- * How long accepted background work is observed after its submission, as
- * the retired poller allowed. The deadline is absolute and recorded with the
- * `accepted` row: a resume observes under the original one, never a fresh one.
- */
-const BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000;
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
@@ -513,63 +507,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /**
-       * Background work: submit, and if the provider accepted it rather than
-       * completing at once, commit the `accepted` row with its deadline before
-       * `observe` is called (the commit barrier, row 4). A progress callback is
-       * no substitute: nothing observes an operation the ledger does not hold.
-       */
-      const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
-        resolved: Extract<ResolvedTurn, { mode: 'background' }>,
-        invocation: InvocationRef,
-        bound: BoundModel,
-        cell: RunCell,
-        onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
-        completed: AttemptOutcome,
-      ): Effect.fn.Return<void, ModelError | InvokeError> {
-        const background = bound.model.background;
-        if (background === undefined) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'The bound model resolved a background turn it cannot submit.',
-          });
-        }
-        const submission = yield* background.submit(resolved);
-        if (submission.kind === 'completed') {
-          completed.value = submission.result;
-          return;
-        }
-        const deadlineAtMs =
-          (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
-        yield* cell.append([
-          {
-            type: 'model.message',
-            aggregateId,
-            payload: {
-              kind: 'identified',
-              invocation,
-              providerResponseId: submission.operation.providerResponseId,
-              returnedModel: submission.returnedModel,
-            },
-          },
-          {
-            type: 'model.message',
-            aggregateId,
-            payload: {
-              kind: 'accepted',
-              invocation,
-              operation: submission.operation,
-              deadlineAtMs,
-            },
-          },
-        ]);
-        yield* Stream.runForEach(
-          background.observe(resolved, submission.operation, { deadlineAtMs }),
-          onEvent,
-        );
-      });
-
-      /**
        * One billed attempt: prepare, commit the `attempt` row, stream or
        * submit-and-observe, commit the `response` row. Preparation and the
        * events run interruptible; every append is the cell's, masked, so a
@@ -675,10 +612,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           resolved.mode === 'foreground'
             ? Stream.runForEach(bound.model.streamTurn(resolved), onEvent)
             : submitAndObserve(
+                run,
+                cell,
                 resolved,
                 invocation,
                 bound,
-                cell,
                 onEvent,
                 completed,
               ),
@@ -756,10 +694,13 @@ export const modelInvokerLayer = (): Layer.Layer<
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
           const streamed = yield* Effect.exit(
-            Stream.runForEach(
-              background.observe(resolved, accepted.operation, {
-                deadlineAtMs: accepted.deadlineAtMs,
-              }),
+            observeBackground(
+              run,
+              cell,
+              background,
+              resolved,
+              invocation,
+              accepted,
               eventSink(invocation, cell, trace, completed),
             ),
           );

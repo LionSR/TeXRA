@@ -27,9 +27,12 @@ import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 import {
+  BackgroundEventSchema,
+  BackgroundSubmissionSchema,
   ModelError,
+  RemoteOperationSchema,
   ResolvedTurnSchema,
   TurnResultSchema,
   type Model,
@@ -133,6 +136,12 @@ const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
     serviceTier: null,
   },
 });
+
+const BACKGROUND_PREPARED: Extract<ResolvedTurn, { mode: 'background' }> =
+  ResolvedTurnSchema.parse({ ...PREPARED, mode: 'background' }) as Extract<
+    ResolvedTurn,
+    { mode: 'background' }
+  >;
 
 const PROVIDER_RESPONSE_ID = 'resp-1';
 
@@ -1101,6 +1110,96 @@ describe('ModelInvoker retry', () => {
           ),
         ).toHaveLength(1);
         yield* Fiber.interrupt(pump);
+        yield* closeSessionOf(session);
+      }),
+  );
+  // Failure modes: a user stop leaves the remote job billing; a cancelled
+  // operation is re-observed on resume; a shutdown (or any interrupt without
+  // a `user` stop reason) cancels work a resume should pick back up.
+  it.effect(
+    'cancels an observed background response on a user stop, never on shutdown',
+    () =>
+      Effect.gen(function* () {
+        const session = sessionWithInteractions(undefined);
+        const stopped = new Map<RunId, 'user' | 'shutdown'>();
+        vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
+          stopped.get(runId),
+        );
+        const background = BACKGROUND_PREPARED;
+        const operation = RemoteOperationSchema.parse({
+          origin: ORIGIN,
+          providerResponseId: PROVIDER_RESPONSE_ID,
+          afterSequence: 0,
+          admittedFingerprint: 'a'.repeat(64),
+          store: false,
+        });
+        const scenario = Effect.fn('scenario')(function* (
+          reason: 'user' | 'shutdown',
+        ) {
+          const calls = { submit: 0, observe: 0, cancel: 0 };
+          const observing = yield* Deferred.make<void>();
+          const model: Model = {
+            prepareTurn: () => Effect.succeed(background),
+            streamTurn: () => Stream.die('no foreground turn'),
+            background: {
+              submit: () =>
+                Effect.sync(() => {
+                  calls.submit += 1;
+                  return BackgroundSubmissionSchema.parse(
+                    calls.submit === 1
+                      ? { kind: 'accepted', operation, returnedModel: null }
+                      : { kind: 'completed', result: completedTurn('fresh') },
+                  );
+                }),
+              observe: () => {
+                calls.observe += 1;
+                return calls.observe === 1
+                  ? Stream.fromEffect(
+                      Deferred.succeed(observing, undefined),
+                    ).pipe(Stream.drain, Stream.concat(Stream.never))
+                  : Stream.make(
+                      BackgroundEventSchema.parse({
+                        kind: 'completed',
+                        afterSequence: 1,
+                        result: completedTurn('observed'),
+                      }),
+                    );
+              },
+              cancel: (op) =>
+                Effect.sync(() => {
+                  calls.cancel += 1;
+                  return {
+                    kind: 'confirmed-cancelled',
+                    providerResponseId: op.providerResponseId,
+                    requestedOrigin: ORIGIN,
+                    returnedModel: null,
+                  };
+                }),
+            },
+          };
+          const kit = yield* openRun(session, model);
+          const fiber = yield* Effect.forkChild(invokeOn(kit));
+          yield* Deferred.await(observing);
+          stopped.set(kit.runId, reason);
+          yield* Fiber.interrupt(fiber);
+          const state = yield* session.ledger.load(kit.runId);
+          if (state === null) throw new Error('The run has no ledger state.');
+          const resumed = yield* invokeOn({ ...kit, state });
+          return { calls, accepted: state.openAttempt?.accepted, resumed };
+        });
+
+        const user = yield* scenario('user');
+        expect(user.calls.cancel).toBe(1);
+        expect(user.accepted).toBeNull();
+        // The resume submits anew instead of observing the cancelled work.
+        expect(user.calls).toEqual({ submit: 2, observe: 1, cancel: 1 });
+        expect(user.resumed.kind).toBe('response');
+
+        const shutdown = yield* scenario('shutdown');
+        expect(shutdown.accepted?.operation).toEqual(operation);
+        // The resume observes the operation the shutdown left running.
+        expect(shutdown.calls).toEqual({ submit: 1, observe: 2, cancel: 0 });
+        expect(shutdown.resumed.kind).toBe('response');
         yield* closeSessionOf(session);
       }),
   );

@@ -10,8 +10,6 @@ import {
   assistantMessageFromResult,
   type Continuation,
   type MessageSchema,
-  type ModelOrigin,
-  type RemoteOperation,
   type TurnResult,
 } from '@texra-ai/llm/turn';
 import {
@@ -51,6 +49,7 @@ import {
   type SharedRunRow,
   writable,
 } from './runRows';
+import { openAttemptAfter, type OpenAttempt } from './openAttempt';
 import { mutate } from './stateOperation';
 import type { z } from 'zod';
 
@@ -110,19 +109,6 @@ export class RunLedgerInconsistent extends Data.TaggedError(
 const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
 type LoopState = z.output<typeof LoopStateSchema>;
 type Message = z.output<typeof MessageSchema>;
-
-type OpenAttempt = {
-  readonly invocation: InvocationRef;
-  readonly request: string; // its recorded request's address
-  readonly origin: ModelOrigin;
-  readonly delivery: 'stream' | 'blocking' | 'background';
-  readonly providerResponseId: string | null;
-  readonly returnedModel: string | null;
-  readonly accepted: {
-    readonly operation: RemoteOperation;
-    readonly deadlineAtMs: number;
-  } | null;
-};
 
 type Settlement = Pick<
   ToolResultPayload,
@@ -482,32 +468,17 @@ function foldRow(
         }
         case 'identified':
         case 'accepted':
+        case 'cancelled':
         case 'response': {
           const open = state.openAttempt;
           if (open === null || !sameInvocation(open.invocation, p.invocation)) {
             return outOfOrder(`${p.kind} names no open attempt`);
           }
-          if (p.kind === 'identified') {
-            return Result.succeed({
-              ...state,
-              openAttempt: {
-                ...open,
-                providerResponseId: p.providerResponseId,
-                returnedModel: p.returnedModel,
-              },
-            });
-          }
-          if (p.kind === 'accepted') {
-            return Result.succeed({
-              ...state,
-              openAttempt: {
-                ...open,
-                accepted: {
-                  operation: p.operation,
-                  deadlineAtMs: p.deadlineAtMs,
-                },
-              },
-            });
+          if (p.kind !== 'response') {
+            const next = openAttemptAfter(open, p);
+            return typeof next === 'string'
+              ? outOfOrder(next)
+              : Result.succeed({ ...state, openAttempt: next });
           }
           if (state.pendingResponse !== null) {
             return outOfOrder(

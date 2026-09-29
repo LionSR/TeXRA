@@ -348,7 +348,7 @@ describe('runRegistry', () => {
           interrupt,
         );
 
-        const stop = registry.stop(runId);
+        const stop = registry.stop(runId, { reason: 'user' });
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
@@ -372,7 +372,7 @@ describe('runRegistry', () => {
       const handle = createHandle(runId, parentRunId);
       registry.track(handle);
 
-      expect(killRegistry(registry, runId)).toBe(false);
+      expect(killRegistry(registry, runId, { reason: 'user' })).toBe(false);
 
       expect(registry.getHandle(runId)).toBe(handle);
     } finally {
@@ -394,7 +394,7 @@ describe('runRegistry', () => {
       registry.track(handle);
       phases.set(runId, RUN_PHASE.WAITING);
 
-      expect(killRegistry(registry, runId)).toBe(false);
+      expect(killRegistry(registry, runId, { reason: 'user' })).toBe(false);
 
       expect(registry.getHandle(runId)).toBe(handle);
     } finally {
@@ -432,7 +432,7 @@ describe('runRegistry', () => {
           childInterrupt,
         );
 
-        yield* registry.stop(rootRunId).settlement;
+        yield* registry.stop(rootRunId, { reason: 'user' }).settlement;
 
         expect(rootInterrupt).toHaveBeenCalledOnce();
         expect(childInterrupt).toHaveBeenCalledOnce();
@@ -465,7 +465,7 @@ describe('runRegistry', () => {
           { agentName: 'test-grandchild' },
         );
 
-        const stop = registry.stop(childRunId);
+        const stop = registry.stop(childRunId, { reason: 'user' });
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
@@ -502,6 +502,7 @@ describe('runRegistry', () => {
 
         const stop = registry.stop(childRunId, {
           detachActiveChildren: true,
+          reason: 'user',
         });
         // A detaching stop admits the interrupt only once its detach batch
         // has committed, so the acceptance reads after the settlement.
@@ -539,7 +540,7 @@ describe('runRegistry', () => {
         });
         trackInterruptibleHandle(registry, { runId }, fiberInterrupt);
 
-        const stop = registry.stop(runId);
+        const stop = registry.stop(runId, { reason: 'user' });
         yield* stop.settlement;
         expect(stop.accepted()).toBe(true);
         expect(loopInterrupt).toHaveBeenCalledOnce();
@@ -586,6 +587,7 @@ describe('runRegistry', () => {
 
           yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
+            reason: 'user',
           }).settlement;
 
           expect(rootInterrupt).toHaveBeenCalledOnce();
@@ -624,7 +626,10 @@ describe('runRegistry', () => {
         );
 
         const error = yield* Effect.flip(
-          registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
+          registry.stop(rootRunId, {
+            detachActiveChildren: true,
+            reason: 'user',
+          }).settlement,
         );
         expect(error.message).toBe('detach batch refused');
         expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
@@ -664,7 +669,10 @@ describe('runRegistry', () => {
           );
 
           const stopped = yield* Effect.forkChild(
-            registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
+            registry.stop(rootRunId, {
+              detachActiveChildren: true,
+              reason: 'user',
+            }).settlement,
           );
           yield* Deferred.await(commitStarted);
           expect(rootInterrupt).not.toHaveBeenCalled();
@@ -705,7 +713,10 @@ describe('runRegistry', () => {
         );
 
         const stopped = yield* Effect.forkChild(
-          registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
+          registry.stop(rootRunId, {
+            detachActiveChildren: true,
+            reason: 'user',
+          }).settlement,
         );
         yield* Deferred.await(commitStarted);
 
@@ -761,6 +772,7 @@ describe('runRegistry', () => {
           // child whose lineage read preceded the stop registers inside it.
           yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
+            reason: 'user',
           }).settlement;
           expect(registry.getHandle(childRunId)?.parent).toBeNull();
           trackInterruptibleHandle(
@@ -837,6 +849,7 @@ describe('runRegistry', () => {
 
           yield* registry.stop(childRunId, {
             detachActiveChildren: true,
+            reason: 'user',
           }).settlement;
 
           expect(childInterrupt).toHaveBeenCalledOnce();
@@ -868,7 +881,7 @@ describe('runRegistry', () => {
           interrupt,
         });
 
-        yield* registry.stop(runId).settlement;
+        yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         expect(interrupt).toHaveBeenCalledOnce();
         expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
@@ -888,7 +901,7 @@ describe('runRegistry', () => {
         // registry's own runFork drops that failure.
         publishTestRunStart(testDefaultSession(), runId);
         yield* testDefaultSession().settlePublications();
-        yield* registry.stop(runId).settlement;
+        yield* registry.stop(runId, { reason: 'user' }).settlement;
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
         // a stop that reached no live handle still writes it.
@@ -922,6 +935,7 @@ describe('runRegistry', () => {
 
       stopRegistry(registry, parentRunId, {
         detachActiveChildren: true,
+        reason: 'user',
       });
 
       expect(childInterrupt).not.toHaveBeenCalled();
