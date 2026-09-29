@@ -177,6 +177,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`texra doctor --prune-storage` clears history left by deleted
+  projects** — it lists each workspace's stored history whose project
+  folder no longer exists (or, for history no current build has opened,
+  that has not changed for 90 days), with its size, and deletes them once
+  you confirm, or at once with `--yes`. History another TeXRA window has
+  open is kept. Nothing is ever deleted automatically: a project on an
+  unplugged drive looks deleted too. Deleting runs now also shrinks the
+  history file on disk, backup copies of the history are removed after 30
+  days, and opening one folder under differently cased spellings (on
+  macOS's default case-insensitive disk) no longer keeps two histories for
+  it.
 - **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
   that ships hooks now works in TeXRA. Its hooks can add notes to what you
   ask, block a tool call they object to (the agent is told why), and add

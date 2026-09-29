@@ -1,7 +1,7 @@
 /** Settings stores over a root's current values, read from SQLite on every operation. */
 import * as path from 'node:path';
 
-import { Effect, RcMap, Result } from 'effect';
+import { Clock, Effect, RcMap, Result } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -91,11 +91,47 @@ export function appStateStoreFromDatabase(
   };
 }
 
-/** Retain the project's persistent database for the caller's project scope. */
+/** How long a `workspace-store` record stands before an open rewrites it. */
+const RECORD_REFRESH_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Retain the project's persistent database for the caller's project scope,
+ * and record in the global root which workspace root the store serves
+ * (`workspace-store`, keyed by the storage directory id; the storage
+ * design's §7): `texra doctor --prune-storage` finds a store whose root is
+ * gone by it. A record under a day old is not rewritten. One that cannot be
+ * read or written is logged at warn and the project still opens: the store
+ * then only ages toward the prune's rule for a store with no record.
+ */
 export const openProjectStateStore = Effect.fn(
   'appStateStore.openProjectStateStore',
-)(function* (storage: string) {
+)(function* (storage: string, workspaceRoot: string | undefined) {
   const database = yield* RcMap.get(yield* ProjectDatabases, storage);
+  if (workspaceRoot !== undefined) {
+    const now = yield* Clock.currentTimeMillis;
+    yield* (yield* GlobalDatabase).values
+      .modify('workspace-store', path.basename(storage), (record) =>
+        Result.succeed(
+          record?.root === workspaceRoot &&
+            now - record.lastOpenedAt < RECORD_REFRESH_MS
+            ? ([undefined] as const)
+            : ([
+                undefined,
+                { root: workspaceRoot, lastOpenedAt: now },
+              ] as const),
+        ),
+      )
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will judge it by age alone.`,
+          ).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel('sessionDatabase'),
+          ),
+        ),
+      );
+  }
   return appStateStoreFromDatabase(storage, database.values);
 });
 

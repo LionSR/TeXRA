@@ -70,6 +70,7 @@ import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
   databaseLayer,
   globalDatabaseLayer,
+  storeOpenElsewhere,
 } from '@controllers/session/Database';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
@@ -899,7 +900,7 @@ describe('Sessions owner', () => {
             yield* Effect.addFinalizer(() =>
               Scope.close(projectScope, Exit.void),
             );
-            const state = yield* openProjectStateStore(storage).pipe(
+            const state = yield* openProjectStateStore(storage, undefined).pipe(
               Scope.provide(projectScope),
             );
             yield* state.update('shared', 'before session');
@@ -928,7 +929,7 @@ describe('Sessions owner', () => {
             expect((yield* Effect.flip(state.get('shared')))._tag).toBe(
               'StateReadFailed',
             );
-            const reopened = yield* openProjectStateStore(storage);
+            const reopened = yield* openProjectStateStore(storage, undefined);
             expect(yield* reopened.get('shared')).toBe('after session');
           }),
         ),
@@ -1402,6 +1403,27 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(readFileSync(earlier, 'utf8')).toBe('the earlier backup');
     });
   });
+
+  it.effect(
+    'tells a prune a store another process holds from one that is not SQLite',
+    () => {
+      // `texra doctor --prune-storage` keeps an open store, and lists a
+      // damaged one as unreadable instead of aborting the run on it.
+      const held = join(workspace(), 'texra.db');
+      const garbage = join(workspace(), 'texra.db');
+      writeFileSync(garbage, 'not a database, just some text '.repeat(200));
+      const holder = new DatabaseSync(held);
+      holder.exec('PRAGMA journal_mode = WAL; CREATE TABLE t (v);');
+      return Effect.gen(function* () {
+        expect(yield* storeOpenElsewhere(held)).toBe('open');
+        expect(yield* storeOpenElsewhere(garbage)).toBe('unreadable');
+        holder.close();
+        expect(yield* storeOpenElsewhere(held)).toBe('free');
+      }).pipe(
+        Effect.ensuring(Effect.sync(() => holder.isOpen && holder.close())),
+      );
+    },
+  );
 
   it.effect('refuses a foreign SQLite file and leaves it untouched', () => {
     // Another tool's database at the store's path: no TeXRA stamp, no
