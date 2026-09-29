@@ -111,7 +111,7 @@ export type SettingHost = (typeof SETTING_HOSTS)[number];
  * database), so a repository has one value on every host and in every
  * worktree.
  */
-export type SettingStore =
+type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
@@ -1187,7 +1187,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 // ============================================================================
 
 /** Every catalog row, config-tree and state-backed. */
-export const ALL_SETTINGS: readonly StateSettingEntry[] = [
+const ALL_SETTINGS: readonly StateSettingEntry[] = [
   ...CORE_SETTINGS,
   ...STATE_SETTINGS,
 ];
