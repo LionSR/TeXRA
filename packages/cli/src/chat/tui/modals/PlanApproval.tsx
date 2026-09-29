@@ -35,17 +35,14 @@ const PLAN_APPROVAL_GOAL_ACTION = {
   action: 'run as goal',
 } as const;
 
-function isCompactPlanApprovalRows(
-  availableRows: number | undefined,
-  goalEnabled = false,
-): boolean {
-  const compactMaxRows =
-    COMPACT_PLAN_APPROVAL_MAX_ROWS +
-    (goalEnabled ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0);
+function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
   return (
     availableRows !== undefined &&
     availableRows > 0 &&
-    isCompactRows(availableRows, compactMaxRows)
+    isCompactRows(
+      availableRows,
+      COMPACT_PLAN_APPROVAL_MAX_ROWS + PLAN_APPROVAL_GOAL_NOTICE_ROWS,
+    )
   );
 }
 
@@ -68,49 +65,43 @@ export function planApprovalGoalNoticeLine(
 function planApprovalCompactBodyRowsBudget({
   availableRows,
   columns,
-  goalEnabled,
 }: {
   readonly availableRows: number | undefined;
   readonly columns: number;
-  readonly goalEnabled: boolean;
 }): number | undefined {
   if (availableRows === undefined) return undefined;
   const chromeRows = confirmCardCompactChromeRows({
     title: PLAN_APPROVAL_TITLE,
     columns,
-    extraActions: goalEnabled ? [PLAN_APPROVAL_GOAL_ACTION] : [],
+    extraActions: [PLAN_APPROVAL_GOAL_ACTION],
   });
   return Math.max(0, availableRows - chromeRows);
 }
 
 export function isPlanApprovalGoalActionVisible({
   compact,
-  goalEnabled,
   visibleBodyRows,
 }: {
   readonly compact: boolean;
-  readonly goalEnabled: boolean;
   readonly visibleBodyRows: number;
 }): boolean {
   // Compact cards pin the notice above the body, so the action needs room
   // for the notice row plus at least one plan row.
-  return goalEnabled && (!compact || visibleBodyRows > 1);
+  return !compact || visibleBodyRows > 1;
 }
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { autoApproveAll, availableRows, onDecide, payload } = props;
-  const compact = isCompactPlanApprovalRows(availableRows, payload.goalEnabled);
+  const compact = isCompactPlanApprovalRows(availableRows);
   const compactBodyRows = compact
     ? planApprovalCompactBodyRowsBudget({
         availableRows,
         columns,
-        goalEnabled: payload.goalEnabled,
       })
     : undefined;
   const goalActionVisible = isPlanApprovalGoalActionVisible({
     compact,
-    goalEnabled: payload.goalEnabled,
     visibleBodyRows: compactBodyRows ?? 0,
   });
 
