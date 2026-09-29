@@ -390,10 +390,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // A wake resumes as in production. The module is read per call, so a
     // suite's own mock or spy of it is the resume the wake reaches.
     Layer.mock(AgentEngine, {
-      resumeClaimedRun: (runId, options) =>
+      resumeRun: (runId, options) =>
         Effect.flatMap(
           Effect.promise(() => import('@agent/runtime/resumeRun')),
-          (resume) => resume.resumeClaimedRun(runId, options),
+          (resume) => resume.resumeRun(runId, options),
         ),
     }),
     // An empty tool table (the real one loads every tool), with goal mode's

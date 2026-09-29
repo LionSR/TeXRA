@@ -48,10 +48,12 @@ type FollowUpConsumerKind = 'loop' | 'child' | 'recovery';
 
 /** The run's one consumer, and for recovery the claim hold an admission
  *  took for it, given back when a consumer adopts the run or the slot ends
- *  (`releasing` while that runs: taken, by nobody). */
+ *  (`releasing` while that runs: taken, by nobody). `reserved`: the wake an
+ *  admission owes the run, taken by the next resume (`claimRecovery`). */
 interface Slot {
   readonly lease: FollowUpConsumerLease;
   hold?: Effect.Effect<void, Error>;
+  reserved?: true;
   readonly releasing?: true;
 }
 
@@ -80,24 +82,20 @@ export interface FollowUpConsumerLease {
   readonly kind: FollowUpConsumerKind;
 }
 
-export interface FollowUpRecoveryLease extends FollowUpConsumerLease {
-  readonly kind: 'recovery';
-}
-
 /**
  * How one submission landed, decided from the run's owner after its rows
  * committed: every follow-up a replay of a delivery a turn already carried;
- * input a running loop holds this turn; input queued on the run (with
- * the recovery lease when this submission claimed it), which a consumer
- * holds or the next resume delivers from its rows; or a refusal. A refusal
- * without a reason: no entry to join (disposed session, closed run, or a
- * live-owner submission with no entry); `owned_elsewhere`: another live
- * process holds the run, and no row was written.
+ * input a running loop holds this turn; input queued on the run (`wake`: the
+ * caller owes the run a resume), which a consumer holds or the next resume
+ * delivers from its rows; or a refusal. A refusal without a reason: no entry
+ * to join (disposed session, closed run, or a live-owner submission with no
+ * entry); `owned_elsewhere`: another live process holds the run, and no row
+ * was written.
  */
 type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'delivered_live' }
-  | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
+  | { readonly kind: 'queued'; readonly wake?: true }
   | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
 
 interface FollowUpSubmitOptions {
@@ -160,7 +158,7 @@ export class ToolUseFollowUpQueue {
   /** Claim a DB-owned child, transferring an exact recovery capability if supplied. */
   claimChildRun(
     runId: RunId,
-    recovery?: FollowUpRecoveryLease,
+    recovery?: FollowUpConsumerLease,
   ): FollowUpConsumerLease | undefined {
     if (!recovery) return this.claimLive(runId, 'child');
     if (recovery.runId !== runId || !this.useRecovery(recovery)) return;
@@ -170,22 +168,26 @@ export class ToolUseFollowUpQueue {
     return lease;
   }
 
-  /** Claim persisted recovery before any asynchronous resume preparation. */
+  /** Claim persisted recovery before any asynchronous resume preparation:
+   *  the reserved wake, or a fresh claim when no consumer holds the run. */
   claimRecovery(
     runId: RunId,
     createIfMissing = false,
-  ): FollowUpRecoveryLease | undefined {
+  ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
     const entry =
       this.entries.get(runId) ??
       (createIfMissing ? this.createEntry(runId) : undefined);
-    if (!entry || entry.slot) return undefined;
-    return this.claim(entry, runId, 'recovery');
+    const slot = entry?.slot;
+    if (entry && !slot) return this.claim(entry, runId, 'recovery');
+    if (!slot?.reserved || entry!.pendingRelease !== undefined) return;
+    slot.reserved = undefined;
+    return slot.lease;
   }
 
   useRecovery(
-    recovery: FollowUpRecoveryLease,
-  ): FollowUpRecoveryLease | undefined {
+    recovery: FollowUpConsumerLease,
+  ): FollowUpConsumerLease | undefined {
     const entry = this.entries.get(recovery.runId);
     return entry?.slot?.lease === recovery &&
       recovery.kind === 'recovery' &&
@@ -199,8 +201,8 @@ export class ToolUseFollowUpQueue {
    * a running loop or child consumer, or queues without claiming when the
    * entry has no owner (so live notifications can reach a WAITING parent).
    * `recoverable` admits a registry-approved persisted run, creates its
-   * entry when needed, and claims its recovery lease when no consumer holds
-   * it. A run another live process holds is `refused` with
+   * entry when needed, and reserves its recovery (`wake`) when no consumer
+   * holds it. A run another live process holds is `refused` with
    * `owned_elsewhere`, writing nothing; any other write failure fails the
    * effect, writing nothing.
    */
@@ -477,7 +479,7 @@ export class ToolUseFollowUpQueue {
       const current = !this.disposed && this.entries.get(runId) === admitted;
       const slot = current ? admitted.slot : undefined;
       let owner = slot && !slot.releasing ? slot.lease : undefined;
-      let lease: FollowUpRecoveryLease | undefined;
+      let wake = false;
       // A deferred offer holds the rows back from a live consumer's input:
       // the caller re-submits once its own ordering allows, and the offer
       // happens then.
@@ -488,9 +490,14 @@ export class ToolUseFollowUpQueue {
       const liveOfferDeferred =
         options?.liveOffer === 'deferred' && liveConsumer;
       if (current && queued.length > 0) {
-        if (owner === undefined && admission === 'recoverable') {
-          lease = this.claim(admitted, runId, 'recovery');
-          owner = lease;
+        // `none` offers nothing to wake: its row waits for the next input.
+        if (
+          owner === undefined &&
+          admission === 'recoverable' &&
+          options?.liveOffer !== 'none'
+        ) {
+          owner = this.claim(admitted, runId, 'recovery');
+          if (owner) admitted.slot!.reserved = wake = true;
         }
         // A held row is offered by what releases it (`wakeTakes`, ...).
         if (owner !== undefined && holdUntil === undefined)
@@ -513,10 +520,9 @@ export class ToolUseFollowUpQueue {
         }
       }
       if (!current) return { kind: 'refused' };
-      // Every follow-up already on the rows: a replay. One still queued for a
-      // run no consumer holds was just claimed for its wake; any other replay
-      // was accepted before and changes nothing.
-      if (lease) return { kind: 'queued', lease };
+      // Every follow-up already on the rows: a replay, news only if it
+      // just reserved the wake.
+      if (wake) return { kind: 'queued', wake };
       if (!wrote) return { kind: 'duplicate' };
       if (owner?.kind === 'loop' && !liveOfferDeferred)
         return { kind: 'delivered_live' };
@@ -702,17 +708,14 @@ export class ToolUseFollowUpQueue {
     return entry;
   }
 
-  /** Mint the entry's single lease, typed by its kind. */
-  private claim<K extends FollowUpConsumerKind>(
+  /** Mint the entry's single lease. */
+  private claim(
     entry: QueueEntry,
     runId: RunId,
-    kind: K,
-  ): (FollowUpConsumerLease & { readonly kind: K }) | undefined {
+    kind: FollowUpConsumerKind,
+  ): FollowUpConsumerLease | undefined {
     if (entry.slot) return undefined;
-    const lease: FollowUpConsumerLease & { readonly kind: K } = {
-      runId,
-      kind,
-    };
+    const lease: FollowUpConsumerLease = { runId, kind };
     entry.slot = { lease };
     return lease;
   }
