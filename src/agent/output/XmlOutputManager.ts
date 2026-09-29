@@ -10,11 +10,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import {
-  OUTPUT_DOCUMENT_TAG,
-  OUTPUT_DOCUMENTS_TAG,
-  SCRATCHPAD_TAG,
-} from '@shared/schemas';
+import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { entryTypeAt } from '@utils/files/fsDurability';
 import {
@@ -38,6 +34,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import {
   assignByContentSimilarity,
   collectLatexFencedBlocks as collectLatexFencedBlocksFromResponse,
+  stripScratchpad,
 } from './extraction/contentSimilarity';
 import {
   extractFilenameHeaderDocuments,
@@ -242,17 +239,20 @@ export class XmlOutputManager {
       const rawOutputContent = normalizeLineEndings(
         yield* fs.readFileString(outputLocation.absolutePath),
       );
+      // The scratchpad is reasoning, not output: a tag it mentions must be
+      // neither counted nor extracted as a document.
+      const response = stripScratchpad(rawOutputContent);
       // Count document tag occurrences with name attributes (case-sensitive to
       // match extraction).
       const expectedDocumentCount =
-        rawOutputContent.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
+        response.match(DOCUMENT_NAME_REGEX_GLOBAL)?.length ?? 0;
 
       // The document-tag tiers read the CDATA-wrapped variant (which closes
       // an unclosed <document>); the header and similarity tiers below read
       // the raw response instead.
       const cdataWrapped = addCdataToTagsMultiple(
-        rawOutputContent,
-        [SCRATCHPAD_TAG, OUTPUT_DOCUMENT_TAG],
+        response,
+        [OUTPUT_DOCUMENT_TAG],
         { tag: OUTPUT_DOCUMENT_TAG, container: OUTPUT_DOCUMENTS_TAG },
       );
 

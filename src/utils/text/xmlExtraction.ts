@@ -22,16 +22,17 @@ export interface NamedDocument {
 
 /**
  * Opening `<document … name="…">` tag fragment (either quote style); group 1 is
- * the name attribute value. Case-sensitive, like the CDATA wrapping that
+ * the double-quoted value or group 2 the single-quoted one, so an apostrophe
+ * inside a double-quoted name survives. Case-sensitive, like the CDATA wrapping that
  * precedes extraction. Shared between {@link DOCUMENT_NAME_REGEX} and
  * `extractNamedDocuments` so the name-attribute capture cannot drift apart.
  */
-const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name\\s*=\\s*["']([^"']*)["'][^>]*>`;
+const DOCUMENT_OPEN_TAG_WITH_NAME = `<${OUTPUT_DOCUMENT_TAG}[^>]*name\\s*=\\s*(?:"([^"]*)"|'([^']*)')[^>]*>`;
 
 /**
  * Regex pattern for matching document opening tags with name attributes.
  * Single source of truth for document name extraction.
- * Group 1: name attribute value
+ * Group 1 (double-quoted) or group 2 (single-quoted): name attribute value
  */
 export const DOCUMENT_NAME_REGEX = new RegExp(DOCUMENT_OPEN_TAG_WITH_NAME);
 
@@ -63,8 +64,8 @@ function extractNamedDocuments(content: string): NamedDocument[] {
   );
 
   return [...content.matchAll(documentRegex)].map((match) => ({
-    name: match[1] || 'unnamed',
-    content: removeCDATA(match[2] ?? ''),
+    name: (match[1] ?? match[2]) || 'unnamed',
+    content: removeCDATA(match[3] ?? ''),
   }));
 }
 
