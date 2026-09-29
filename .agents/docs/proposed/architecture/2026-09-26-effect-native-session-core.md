@@ -1052,15 +1052,23 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
 
 ### PRs
 
-1. Transport lifetimes.
-2. `attachSessionHost`.
+1. Transport lifetimes. Landed: pending requests are scope-owned Deferreds
+   settled `Cancelled` when their session closes (#13398), the frames'
+   generation lives in a `SubscriptionRef`, and one fiber per session feeds
+   the frames service from an inbox queue.
+2. `attachSessionHost`. Landed for the extension and the desktop, which share
+   the tool-edit staging, its release and the event drain; the completion
+   chime rides as the extension's `onEvent`. The CLI keeps its own record,
+   since its TUI decides directly.
 3. Tool-edit decisions through `request.decide`, with the edited content in the
    payload.
 4. Own-key retry: stays pending on every host (decision 4).
 5. Approve-all decides pending requests on every host (decision 5).
 6. `run.resume`, `run.new {agent, preset, inputs}` and `media.store`.
-7. Desktop: file I/O moves off `desktop:*` onto `host.request`, and the
-   session protocol gets its own IPC channel.
+7. Desktop. Landed: the session protocol has its own IPC channel and preload
+   API, `desktop:*` commands route through one table keyed by command, and the
+   editor's file I/O is one `host.request` arm (`workspaceFile`) answered
+   through the transport, which deleted the renderer's second pending map.
 
 ## Move 6: split the session handle by audience
 

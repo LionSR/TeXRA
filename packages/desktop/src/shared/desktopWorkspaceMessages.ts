@@ -12,14 +12,6 @@ const DesktopWorkspaceMessageSchema = z.object({ session: z.string() });
 
 export const DESKTOP_WORKSPACE_COMMANDS = {
   // Editor
-  LIST_FILES: 'desktop:workspace:listFiles',
-  FILES_LISTED: 'desktop:workspace:filesListed',
-  FILES_LIST_ERROR: 'desktop:workspace:filesListError',
-  READ_FILE: 'desktop:workspace:readFile',
-  FILE_READ: 'desktop:workspace:fileRead',
-  WRITE_FILE: 'desktop:workspace:writeFile',
-  FILE_WRITTEN: 'desktop:workspace:fileWritten',
-  FILE_ERROR: 'desktop:workspace:fileError',
   FILES_CHANGED: 'desktop:workspace:filesChanged',
   // Terminal
   TERMINAL_START: 'desktop:terminal:start',
@@ -40,75 +32,8 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
 
 // ── Editor ──
 //
-// Editor file I/O is request/response RPC over the fire-and-forget channel.
-// The renderer tags each request with a `requestId` (the same correlation
-// pattern as `desktopPromptMessages.ts`) and the main process echoes it in
-// the response, so concurrent requests for the same path cannot
-// cross-resolve. `path`/`directory` still ride along for the main process's
-// own use and for logging context.
-
-const DesktopListFilesMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES),
-  requestId: z.uuid(),
-  directory: z.string().prefault(''),
-});
-
-const DesktopWorkspaceFileEntrySchema = z.object({
-  path: z.string(),
-  isDirectory: z.boolean(),
-});
-
-export const DesktopFilesListedMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED),
-    requestId: z.uuid(),
-    directory: z.string(),
-    files: z.array(DesktopWorkspaceFileEntrySchema),
-  });
-
-export const DesktopFilesListErrorMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR),
-    requestId: z.uuid(),
-    directory: z.string(),
-    message: z.string(),
-  });
-
-const DesktopReadFileMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.READ_FILE),
-  requestId: z.uuid(),
-  path: z.string(),
-});
-
-export const DesktopFileReadMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_READ),
-    requestId: z.uuid(),
-    path: z.string(),
-    contents: z.string(),
-  });
-
-const DesktopWriteFileMessageSchema = DesktopWorkspaceMessageSchema.extend({
-  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE),
-  requestId: z.uuid(),
-  path: z.string(),
-  contents: z.string(),
-});
-
-export const DesktopFileWrittenMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN),
-    requestId: z.uuid(),
-    path: z.string(),
-  });
-
-export const DesktopFileErrorMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR),
-    requestId: z.uuid(),
-    path: z.string(),
-    message: z.string(),
-  });
+// The editor's file I/O is `host.request` (`workspaceFile`), answered like any
+// other host request; only the change notice below is a desktop command.
 
 /**
  * Something outside the editor wrote into the workspace — an accepted run
@@ -222,9 +147,6 @@ export const DesktopBrowserStateMessageSchema =
 export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
   'command',
   [
-    DesktopListFilesMessageSchema,
-    DesktopReadFileMessageSchema,
-    DesktopWriteFileMessageSchema,
     DesktopTerminalStartMessageSchema,
     DesktopTerminalInputMessageSchema,
     DesktopTerminalResizeMessageSchema,
@@ -236,12 +158,17 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
   ],
 );
 
+export type DesktopWorkspaceInboundMessage = z.infer<
+  typeof DesktopWorkspaceInboundMessageSchema
+>;
+
+/** The commands the main process routes to a project's workspace. */
+export const DESKTOP_WORKSPACE_INBOUND_COMMANDS =
+  DesktopWorkspaceInboundMessageSchema.options.flatMap((option) => [
+    ...option.shape.command.values,
+  ]);
+
 type WorkspaceOutbound =
-  | z.infer<typeof DesktopFilesListedMessageSchema>
-  | z.infer<typeof DesktopFilesListErrorMessageSchema>
-  | z.infer<typeof DesktopFileReadMessageSchema>
-  | z.infer<typeof DesktopFileWrittenMessageSchema>
-  | z.infer<typeof DesktopFileErrorMessageSchema>
   | z.infer<typeof DesktopWorkspaceFilesChangedMessageSchema>
   | z.infer<typeof DesktopTerminalDataMessageSchema>
   | z.infer<typeof DesktopTerminalExitMessageSchema>

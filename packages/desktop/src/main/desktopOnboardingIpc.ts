@@ -24,8 +24,7 @@ import {
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../shared/desktopOnboardingMessages.js';
 import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
+  DesktopCommandRoutes,
   DesktopRenderer,
 } from './desktopIpcTypes.js';
 
@@ -86,7 +85,9 @@ interface DesktopOnboardingIpcOptions {
  * messages, the funnel state the `host` snapshot carries (PRD 8.1), and the
  * card actions the host request arms call.
  */
-export interface DesktopOnboardingIpc extends DesktopMessageHandler {
+export interface DesktopOnboardingIpc {
+  /** The startup chooser's two inbound commands. */
+  readonly routes: DesktopCommandRoutes;
   /** Recompute the funnel from credentials + flags and publish it. */
   refreshOnboardingFunnel(): OnboardingAction;
   /** The funnel as last derived; null before the first refresh. */
@@ -206,15 +207,9 @@ export function createDesktopOnboardingIpc(
     );
 
   return {
-    handleMessage(message: DesktopCommandMessage) {
-      switch (message.command) {
-        case DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE:
-          return postCurrentState;
-        case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
-          return dismiss;
-        default:
-          return undefined;
-      }
+    routes: {
+      [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState,
+      [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss,
     },
     refreshOnboardingFunnel: () => funnel.run(),
     funnelState: () => funnel.state ?? null,

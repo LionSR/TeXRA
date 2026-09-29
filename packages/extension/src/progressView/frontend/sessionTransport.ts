@@ -4,25 +4,34 @@
  * deliveries, request responses, and surface actions, and the signals the
  * root reads. The runtime and the per-session graphs are
  * `webviewSessionLayer`'s; the rest of the frontend reads signals and posts
- * `UpMessage`s, and nothing else touches the session layer. The entry owns
- * the window's one message listener and hands each message to `receive`;
- * the desktop renderer runs it as the last of its routes.
+ * `UpMessage`s, and nothing else touches the session layer. The host names
+ * the pipe `UpMessage`s leave by and hands every message that arrives on
+ * its session channel to `receive`: the extension's window carries nothing
+ * else, and the desktop's session channel is its own.
  */
-import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
-import { z } from 'zod';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Queue,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import {
   installWebviewRuntime,
   WebviewSessions,
 } from '@controllers/session/webviewSessionLayer';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
-import { hostBridge } from '@shared/hostBridge';
 import { toSignal, type StreamSignal } from '@shared/signals';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   DownMessageSchema,
   type DownMessage,
   type EventsFrame,
+  type HostOutcome,
   type Response,
   type Subscribe,
   type UpMessage,
@@ -51,18 +60,27 @@ export interface WebviewSession {
 }
 
 export interface WebviewTransport {
-  /** One message from the host bridge: true when it was a session message
-   *  and this transport took it, false when it belongs to another route. */
-  receive(data: unknown): boolean;
+  /** One message from the host's session channel. */
+  receive(data: unknown): void;
   /** Open (or reuse) a session's graph. */
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
   subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
   /** Answered on the matching `response` message of its session; answered
-   *  `Cancelled` when that session closes first or is not open. */
+   *  `Cancelled` when that session closes first or is not open, and
+   *  `Rejected` when `timeoutMs` passes with no response (the host's late
+   *  answer is then dropped). */
   request(
     message: Extract<UpMessage, { requestId: string }>,
+    timeoutMs?: number,
   ): Promise<Response['result']>;
+  /** A `host.request` settled with the host's outcome, or failed with its
+   *  refusal (a session that closes first, or `timeoutMs` passing, is a
+   *  refusal too). */
+  answer(
+    message: Extract<UpMessage, { kind: 'host.request' }>,
+    timeoutMs?: number,
+  ): Promise<HostOutcome>;
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
@@ -79,6 +97,9 @@ interface OpenSession extends WebviewSession {
   /** This session's requests awaiting their `response`, by request id. The
    *  session's scope interrupts every one still here when it closes. */
   readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
+  /** The frames the host sent, in arrival order; one fiber of the session's
+   *  scope feeds them to the frames service. */
+  readonly inbox: Queue.Queue<EventsFrame>;
 }
 
 /** What a request answers when its session closed before the host did. */
@@ -87,15 +108,9 @@ const CANCELLED: Response['result'] = {
   error: { _tag: 'Cancelled' },
 };
 
-/** The discriminator alone: a message of one of the session kinds that
- *  still fails the schema is malformed, not another route's. */
-const DownKindSchema = z.object({
-  kind: z.enum(
-    DownMessageSchema.options.map((option) => option.shape.kind.value),
-  ),
-});
-
-export function installWebviewTransport(): WebviewTransport {
+export function installWebviewTransport(
+  post: (message: UpMessage) => void,
+): WebviewTransport {
   const runtime = installWebviewRuntime();
   const sessions = new Map<string, OpenSession>();
   let surfaceListener: (
@@ -103,11 +118,10 @@ export function installWebviewTransport(): WebviewTransport {
     action: WireSurfaceAction,
   ) => void = () => undefined;
 
-  /** Route one frame to its session's frames service; the frames service
-   *  drops a frame of another generation. A frame for a session that is
-   *  not open is the host's defect, dropped loudly. `feed` is synchronous,
-   *  so frames are fed in arrival order on the caller's turn: a forked
-   *  fiber per frame would let the scheduler interleave two frames' rows. */
+  /** Queue one frame for its session's feeder, which hands them to the frames
+   *  service in arrival order; the frames service drops a frame of another
+   *  generation. A frame for a session that is not open is the host's
+   *  defect, dropped loudly. */
   const deliver = (frame: EventsFrame): void => {
     const session = sessions.get(frame.session);
     if (!session) {
@@ -116,21 +130,20 @@ export function installWebviewTransport(): WebviewTransport {
       );
       return;
     }
-    runtime.runSync(session.graph.frames.feed(frame));
+    Queue.offerUnsafe(session.inbox, frame);
   };
 
-  const receive = (data: unknown): boolean => {
+  const receive = (data: unknown): void => {
     const parsed = DownMessageSchema.safeParse(data);
     if (!parsed.success) {
-      if (!DownKindSchema.safeParse(data).success) return false;
       console.warn('[progress] malformed session message', data, parsed.error);
-      return true;
+      return;
     }
     const message = parsed.data;
     switch (message.kind) {
       case 'events':
         deliver(message);
-        return true;
+        return;
       case 'response': {
         const pending = sessions.get(message.session)?.pending;
         const settle = pending?.get(message.requestId);
@@ -138,15 +151,15 @@ export function installWebviewTransport(): WebviewTransport {
           console.warn(
             `[progress] dropped a response to request ${message.requestId} of session ${message.session}: not pending`,
           );
-          return true;
+          return;
         }
         pending.delete(message.requestId);
         runtime.runSync(Deferred.succeed(settle, message.result));
-        return true;
+        return;
       }
       case 'surface.action':
         surfaceListener(message.session, message.action);
-        return true;
+        return;
     }
   };
 
@@ -159,6 +172,50 @@ export function installWebviewTransport(): WebviewTransport {
     runtime.runFork(Scope.close(session.scope, Exit.void));
   };
 
+  const request = (
+    message: Extract<UpMessage, { requestId: string }>,
+    timeoutMs?: number,
+  ): Promise<Response['result']> => {
+    const session = sessions.get(message.session);
+    if (!session) {
+      console.warn(
+        `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
+      );
+      return Promise.resolve(CANCELLED);
+    }
+    const settled = Deferred.makeUnsafe<Response['result']>();
+    session.pending.set(message.requestId, settled);
+    post(message);
+    const response =
+      timeoutMs === undefined
+        ? Deferred.await(settled)
+        : Deferred.await(settled).pipe(
+            Effect.timeoutOrElse({
+              duration: timeoutMs,
+              orElse: () =>
+                Effect.sync((): Response['result'] => {
+                  session.pending.delete(message.requestId);
+                  return {
+                    ok: false,
+                    error: {
+                      _tag: 'Rejected',
+                      reason: 'The host did not answer in time.',
+                    },
+                  };
+                }),
+            }),
+          );
+    return runtime.runPromise(
+      response.pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.succeed(CANCELLED)
+            : Effect.failCause(cause),
+        ),
+      ),
+    );
+  };
+
   return {
     receive,
     open(key) {
@@ -167,7 +224,7 @@ export function installWebviewTransport(): WebviewTransport {
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
       const pending = new Map<string, Deferred.Deferred<Response['result']>>();
-      const { scope, graph } = runtime.runSync(
+      const { scope, graph, inbox } = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
           const graph = yield* WebviewSessions.open(key).pipe(
@@ -185,7 +242,12 @@ export function installWebviewTransport(): WebviewTransport {
               });
             }),
           );
-          return { scope, graph };
+          const inbox = yield* Queue.unbounded<EventsFrame>();
+          yield* Effect.forkIn(
+            Stream.runForEach(Stream.fromQueue(inbox), graph.frames.feed),
+            scope,
+          );
+          return { scope, graph, inbox };
         }),
       );
       const session: OpenSession = {
@@ -193,6 +255,7 @@ export function installWebviewTransport(): WebviewTransport {
         graph,
         scope,
         pending,
+        inbox,
         view$: toSignal(
           runtime,
           SubscriptionRef.changes(graph.view.ref),
@@ -230,27 +293,16 @@ export function installWebviewTransport(): WebviewTransport {
             Effect.andThen(graph.subscriptions.set(SHELL_PORT, aggregates)),
           ),
       );
-      hostBridge.postMessage(message);
+      post(message);
     },
-    request(message) {
-      const session = sessions.get(message.session);
-      if (!session) {
-        console.warn(
-          `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
-        );
-        return Promise.resolve(CANCELLED);
-      }
-      const settled = Deferred.makeUnsafe<Response['result']>();
-      session.pending.set(message.requestId, settled);
-      hostBridge.postMessage(message);
-      return runtime.runPromise(
-        Deferred.await(settled).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.succeed(CANCELLED)
-              : Effect.failCause(cause),
-          ),
-        ),
+    request,
+    async answer(message, timeoutMs) {
+      const result = await request(message, timeoutMs);
+      if (result.ok) return result.outcome as HostOutcome;
+      throw new Error(
+        'reason' in result.error
+          ? result.error.reason
+          : `The host could not complete the request (${result.error._tag}).`,
       );
     },
     onSurfaceAction(listener) {

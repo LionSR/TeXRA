@@ -129,6 +129,20 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     mediaType: z.string().min(1),
   }),
   z.object({ kind: z.literal('extractFigures') }),
+  /** The desktop editor pane's file I/O on the session's workspace: a
+   *  directory's entries, a file's contents, or a write. */
+  z.object({
+    kind: z.literal('workspaceFile'),
+    action: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('list'), directory: z.string() }),
+      z.object({ kind: z.literal('read'), path: z.string() }),
+      z.object({
+        kind: z.literal('write'),
+        path: z.string(),
+        contents: z.string(),
+      }),
+    ]),
+  }),
   /** A tool-edit prompt's verbs over the preview the host staged: the
    *  approval applies the proposed file as the user left it, so the host
    *  settles it; the others open editors and leave the approval pending. */

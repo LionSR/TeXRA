@@ -77,7 +77,7 @@ beforeEach(() => {
     host$: host,
     generation: 1,
   });
-  surfaces = createSessionSurfaces({ storage });
+  surfaces = createSessionSurfaces({ storage, post: vi.fn() });
   surfaces.sync([KEY]);
 });
 

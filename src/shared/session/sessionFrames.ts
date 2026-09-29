@@ -109,12 +109,18 @@ export type RequestErrorWire = z.infer<typeof RequestErrorWireSchema>;
 
 /** What the host answers a `host.request` with (PRD 8.3): the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
- *  stored image its file name; everything else is done. */
+ *  stored image its file name, the editor's file I/O a listing or a file's
+ *  contents; everything else is done. */
 const HostOutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
   z.object({ kind: z.literal('files'), paths: z.array(z.string()) }),
   z.object({ kind: z.literal('text'), text: z.string() }),
   z.object({ kind: z.literal('savedImage'), fileName: z.string() }),
+  z.object({
+    kind: z.literal('entries'),
+    entries: z.array(z.object({ path: z.string(), isDirectory: z.boolean() })),
+  }),
+  z.object({ kind: z.literal('contents'), contents: z.string() }),
 ]);
 export type HostOutcome = z.infer<typeof HostOutcomeSchema>;
 
@@ -201,7 +207,7 @@ export class SessionFrames extends Context.Service<
     ) => Stream.Stream<readonly FoldInput[]>;
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
     readonly begin: (generation: number) => Effect.Effect<void>;
-    /** Feed a frame synchronously, preserving arrival order. */
+    /** Deliver one frame; the caller feeds them in arrival order. */
     readonly feed: (frame: EventsFrame) => Effect.Effect<void>;
   }
 >()('@texra/session/SessionFrames') {
@@ -209,91 +215,94 @@ export class SessionFrames extends Context.Service<
     SessionFrames,
     Effect.gen(function* () {
       const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-      let current: FrameRead = {
+      const current = yield* SubscriptionRef.make<FrameRead>({
         generation: 0,
         queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
-      };
+      });
       return {
         host,
         inputs: (aggregates, previousDebug) =>
-          Stream.suspend(() =>
-            Stream.fromQueue(current.queue).pipe(
-              Stream.mapAccum(
-                () => {
-                  return {
-                    debug: undefined as boolean | undefined,
-                    pending: [] as FoldInput[],
-                    complete: false,
-                  };
-                },
-                (state, frame) => {
-                  if (!state.complete && frame.debug !== null)
-                    state.debug = frame.debug;
-                  // A blocked verdict marks a run its events create.
-                  state.pending.push(
-                    ...frame.events,
-                    ...frame.blocked,
-                    ...frame.chunks,
-                  );
-                  if (frame.local)
-                    state.pending.push({ _tag: 'local', local: frame.local });
-                  if (frame.existence !== null) {
-                    const marker: FoldInput = frame.replayComplete
-                      ? {
-                          _tag: 'replay.complete',
-                          existence: frame.existence,
-                        }
-                      : {
-                          _tag: 'drained',
-                          cursor: frame.cursor,
-                          existence: frame.existence,
-                        };
-                    state.pending.push(marker);
-                  }
-                  if (!state.complete) {
-                    if (!frame.replayComplete || state.debug === undefined)
-                      return [state, []] as const;
-                    const reset = state.debug !== previousDebug;
-                    const prefix: FoldInput[] = [
-                      { _tag: 'debug', enabled: state.debug },
-                      {
-                        _tag: 'subscriptions',
-                        set: aggregates.map((entry) => ({
-                          ...entry,
-                          fromSeq: reset ? 0 : entry.fromSeq,
-                        })),
-                      },
-                    ];
+          Stream.unwrap(
+            Effect.map(SubscriptionRef.get(current), ({ queue }) =>
+              Stream.fromQueue(queue).pipe(
+                Stream.mapAccum(
+                  () => {
+                    return {
+                      debug: undefined as boolean | undefined,
+                      pending: [] as FoldInput[],
+                      complete: false,
+                    };
+                  },
+                  (state, frame) => {
+                    if (!state.complete && frame.debug !== null)
+                      state.debug = frame.debug;
+                    // A blocked verdict marks a run its events create.
+                    state.pending.push(
+                      ...frame.events,
+                      ...frame.blocked,
+                      ...frame.chunks,
+                    );
+                    if (frame.local)
+                      state.pending.push({ _tag: 'local', local: frame.local });
+                    if (frame.existence !== null) {
+                      const marker: FoldInput = frame.replayComplete
+                        ? {
+                            _tag: 'replay.complete',
+                            existence: frame.existence,
+                          }
+                        : {
+                            _tag: 'drained',
+                            cursor: frame.cursor,
+                            existence: frame.existence,
+                          };
+                      state.pending.push(marker);
+                    }
+                    if (!state.complete) {
+                      if (!frame.replayComplete || state.debug === undefined)
+                        return [state, []] as const;
+                      const reset = state.debug !== previousDebug;
+                      const prefix: FoldInput[] = [
+                        { _tag: 'debug', enabled: state.debug },
+                        {
+                          _tag: 'subscriptions',
+                          set: aggregates.map((entry) => ({
+                            ...entry,
+                            fromSeq: reset ? 0 : entry.fromSeq,
+                          })),
+                        },
+                      ];
+                      return [
+                        {
+                          ...state,
+                          pending: [] as FoldInput[],
+                          complete: true,
+                        },
+                        [[...prefix, ...state.pending]],
+                      ] as const;
+                    }
+                    if (frame.existence === null) return [state, []] as const;
                     return [
-                      {
-                        ...state,
-                        pending: [] as FoldInput[],
-                        complete: true,
-                      },
-                      [[...prefix, ...state.pending]],
+                      { ...state, pending: [] as FoldInput[] },
+                      [state.pending],
                     ] as const;
-                  }
-                  if (frame.existence === null) return [state, []] as const;
-                  return [
-                    { ...state, pending: [] as FoldInput[] },
-                    [state.pending],
-                  ] as const;
-                },
+                  },
+                ),
               ),
             ),
           ),
         begin: (generation) =>
           Effect.gen(function* () {
-            current = {
+            yield* SubscriptionRef.set(current, {
               generation,
               queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
-            };
+            });
           }),
         feed: (frame) =>
           Effect.gen(function* () {
-            if (frame.generation !== current.generation) return;
+            const read = yield* SubscriptionRef.get(current);
+            if (frame.generation !== read.generation) return;
             if (frame.host) yield* SubscriptionRef.set(host, frame.host);
-            yield* Queue.offer(current.queue, frame);
+            yield* Queue.offer(read.queue, frame);
           }),
       };
     }),

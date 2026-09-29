@@ -40,7 +40,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
+import {
+  SettingsViewInboundMessageSchema,
+  type SettingsViewOutboundMessage,
+} from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
@@ -276,13 +279,13 @@ export class SettingsViewMessageHandler {
   ): Effect.Effect<void, never, ProcessServices> {
     return Effect.suspend(() => {
       this.activeView = webviewView;
-      return (
-        this.body.handleMessage(message, this.handlerRegistry) ??
-        Effect.logDebug('Message validation failed').pipe(
-          Effect.annotateLogs({ data: message }),
-          withLogChannel(this.channel),
-        )
-      );
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      return parsed.success
+        ? this.body.handleMessage(parsed.data, this.handlerRegistry)
+        : Effect.logDebug('Message validation failed').pipe(
+            Effect.annotateLogs({ data: message, error: parsed.error.message }),
+            withLogChannel(this.channel),
+          );
     });
   }
 

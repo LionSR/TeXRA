@@ -17,7 +17,7 @@ import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import type { Response } from '@shared/session/sessionFrames';
+import type { Response, UpMessage } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
@@ -41,6 +41,7 @@ import {
   installWebviewTransport,
   transcriptAggregates,
   type WebviewSession,
+  type WebviewTransport,
 } from './sessionTransport';
 
 /** One open session as the root holds it: its three records as signals. */
@@ -52,8 +53,8 @@ interface SessionSurface {
 }
 
 export interface SessionSurfaces {
-  /** One host-bridge message: true when it was a session message. */
-  receive(data: unknown): boolean;
+  /** One message from the host's session channel. */
+  receive(data: unknown): void;
   /** Open the sessions the host names and close the rest. */
   sync(keys: readonly string[]): void;
   get(key: string): SessionSurface | undefined;
@@ -61,6 +62,8 @@ export interface SessionSurfaces {
   act(key: string, action: SurfaceAction): void;
   runtimeRequest(key: string, request: RuntimeRequest): void;
   hostRequest(key: string, request: HostRequest): void;
+  /** A host request answered to its caller, not presented on the surface. */
+  answer: WebviewTransport['answer'];
   /** The composer's Send for the resolved selection: a follow-up to the
    *  selected run, else a launch from the launcher's instruction. The
    *  button and the run accelerator both land here. */
@@ -89,8 +92,9 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
+  readonly post: (message: UpMessage) => void;
 }): SessionSurfaces {
-  const transport = installWebviewTransport();
+  const transport = installWebviewTransport(options.post);
   interface Held extends SessionSurface {
     readonly session: WebviewSession;
     readonly persisted: PersistedState<
@@ -480,6 +484,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) void runtimeRequestFor(entry, request);
     },
+    answer: transport.answer,
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
       if (entry) void hostRequestFor(entry, hostRequest);
