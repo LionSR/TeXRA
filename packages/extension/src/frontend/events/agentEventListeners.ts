@@ -20,6 +20,7 @@ import {
   type RuntimePresentationEventPayloads,
   type SessionHandle,
 } from '@agent/runtime';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
@@ -91,12 +92,7 @@ function handleRequestShowError({
   // the session forks this program, so the handoff and a post-handoff
   // rejection (the extension host tearing down) are reported there rather
   // than becoming an unhandled rejection.
-  return Effect.tryPromise({
-    try: async () => {
-      await vscode.window.showErrorMessage(message);
-    },
-    catch: ensureError,
-  });
+  return vscodeUi.showErrorMessage(message);
 }
 
 function handleRequestShowInstruction(
@@ -169,19 +165,15 @@ function handleRequestEnsureProgressView(
     // visible: a successful handoff means the event was presented even if
     // the user dismisses it without retrying the reveal.
     const outputPart = fb.outputInfo ? ` (${fb.outputInfo})` : '';
-    const selection = yield* Effect.tryPromise({
-      try: async () =>
-        await vscode.window.showInformationMessage(
-          `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
-          {
-            modal: false,
-            detail:
-              'TeXRA agents run in the background; track them under Sessions in the TeXRA panel.',
-          },
-          'Show Sessions',
-        ),
-      catch: ensureError,
-    });
+    const selection = yield* vscodeUi.info(
+      `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
+      {
+        modal: false,
+        detail:
+          'TeXRA agents run in the background; track them under Sessions in the TeXRA panel.',
+        items: ['Show Sessions'],
+      },
+    );
     if (!selection) return;
     // The toast handoff already established delivery; a failed retry is
     // a diagnostic, not non-delivery, so it must not downgrade the event.

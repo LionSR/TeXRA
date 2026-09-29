@@ -54,10 +54,10 @@ function createProfileKeyController(
  * Prompt for an API key with a native button that opens the provider's key
  * portal without closing the input box, so the user can paste straight away.
  */
-async function promptForApiKey(
+function promptForApiKey(
   provider: ApiProvider,
   keyUrl: string | undefined,
-): Promise<string | undefined> {
+): Effect.Effect<string | undefined> {
   const ib = vscode.window.createInputBox();
   ib.title = `Set ${provider} API key`;
   ib.prompt = `Enter ${provider} API key`;
@@ -128,7 +128,7 @@ export function setApiKey(
     if (!target) return;
 
     const keyUrl = yield* getProviderKeyUrl(stores, target);
-    const apiKey = yield* Effect.promise(() => promptForApiKey(target, keyUrl));
+    const apiKey = yield* promptForApiKey(target, keyUrl);
     if (!apiKey) return;
 
     yield* createProfileKeyController(stores, secrets)

@@ -40,7 +40,11 @@ import {
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
-import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import {
+  safeExecuteCommand,
+  vscodeToolMissingReporter,
+} from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { initializeLatexSupport } from '@frontend/setup';
 import { FileLister } from '@frontend/files/fileLister';
@@ -319,23 +323,20 @@ const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
-async function explainWorkspaceRequired(
-  extensionPath: string,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  const openFolder = 'Open Folder';
-  const createSample = 'Create Sample Project';
-  const choice = await vscode.window.showInformationMessage(
-    'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
-    openFolder,
-    createSample,
-  );
-  if (choice === openFolder) {
-    await vscode.commands.executeCommand('workbench.action.files.openFolder');
-  } else if (choice === createSample) {
-    await createSampleProjectWithoutWorkspace(extensionPath, runtime);
-  }
-}
+const explainWorkspaceRequired = (extensionPath: string) =>
+  Effect.gen(function* () {
+    const openFolder = 'Open Folder';
+    const createSample = 'Create Sample Project';
+    const choice = yield* vscodeUi.info(
+      'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
+      { items: [openFolder, createSample] },
+    );
+    if (choice === openFolder) {
+      yield* safeExecuteCommand('workbench.action.files.openFolder');
+    } else if (choice === createSample) {
+      yield* createSampleProjectWithoutWorkspace(extensionPath);
+    }
+  });
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
@@ -345,15 +346,10 @@ function registerWalkthroughWorkspaceAction(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
-      async (
-        command: (typeof WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE)[number],
-      ) => {
-        if (hasSingleWorkspace) {
-          await vscode.commands.executeCommand(command);
-          return;
-        }
-        await explainWorkspaceRequired(context.extensionPath, runtime);
-      },
+      (command: (typeof WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE)[number]) =>
+        hasSingleWorkspace
+          ? vscode.commands.executeCommand(command)
+          : runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),
     ),
   );
 }
@@ -482,11 +478,13 @@ const activateExtension = Effect.fn('activateExtension')(function* (
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
         () =>
-          createSampleProjectWithoutWorkspace(context.extensionPath, runtime),
+          runtime.runPromise(
+            createSampleProjectWithoutWorkspace(context.extensionPath),
+          ),
       ),
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-        () => openGettingStarted(context.extension.id),
+        () => runtime.runPromise(openGettingStarted(context.extension.id)),
       ),
       vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, () =>
         runtime.runPromise(authSignIn),
