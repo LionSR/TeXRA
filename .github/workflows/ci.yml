@@ -405,6 +405,34 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  vscode-host-e2e:
+    name: vscode host e2e (${{ matrix.vscode }})
+    needs: changes
+    # Off pull requests: it downloads two VS Code builds and runs on a macOS
+    # runner. It loads the built extension in a real VS Code and checks
+    # activation, command registration and the webview panels
+    # (scripts/vscode-host-e2e-suite.cjs); `minimum` is engines.vscode.
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode: [stable, minimum]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Build extension
+        run: pnpm run compile:fast
+
+      - name: Run VS Code host e2e
+        run: pnpm run test:vscode -- --vscode ${{ matrix.vscode }}
+
   desktop-e2e:
     name: desktop e2e (macOS)
     needs: changes
