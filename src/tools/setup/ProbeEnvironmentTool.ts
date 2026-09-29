@@ -194,6 +194,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
  */
 export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
+  replay: 'safe',
   description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
   execute: (_input: ProbeInput) => probe(),

@@ -183,6 +183,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
 export const ExtractBibliographyTool = defineTool({
   name: 'extract_bib_entries',
+  replay: 'safe',
   description:
     'Collect BibTeX records for citations referenced in a LaTeX document.',
   schema: ExtractBibliographyInputSchema,

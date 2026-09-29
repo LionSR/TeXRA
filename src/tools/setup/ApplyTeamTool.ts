@@ -16,10 +16,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
-import {
-  createWorkspaceAgentRosterController,
-  loadAgents,
-} from '@agent/index/agentRegistry';
+import { createWorkspaceAgentRosterController } from '@agent/index/agentRegistry';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { missingMemberNames, planTeamRun } from '@common/teams/TeamPlan';
 import {
@@ -101,10 +98,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
       ),
   };
 
-  const result = yield* applyTeamRoster(input.teamId, {
-    catalog,
-    loadCatalog: () => loadAgents(),
-  });
+  const result = yield* applyTeamRoster(input.teamId, { catalog });
 
   if (result.status === 'unknown') {
     // The schema gates ids, so this only fires if the enum and the preset

@@ -8,7 +8,7 @@
 import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getVisibleAgents } from '@agent/index';
 import type { AgentConfig } from '@agent/runtime';
 import {
   CliUsageError,
@@ -189,7 +189,6 @@ export async function runChat(
         firstRunDone: yield* getFirstRunDone(services.globalState),
         pinnedAgent: explicitAgent ?? context.envAgent,
       });
-      yield* loadAgents();
       const defaults = resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent,

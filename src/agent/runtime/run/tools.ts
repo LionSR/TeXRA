@@ -6,7 +6,7 @@
  * own; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
-import { Result } from 'effect';
+import { Effect, Result } from 'effect';
 import {
   JsonObjectSchema,
   type TurnRequest,
@@ -17,6 +17,7 @@ import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { convertToolSchema } from './toolSchema';
 
@@ -112,6 +113,7 @@ export function dispatchFactsFor(
       toolName: call.name,
       ordinal: index,
       parallelSafe,
+      replay: registry?.get(call.name)?.replay ?? 'unsafe',
       partition,
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
@@ -120,3 +122,44 @@ export function dispatchFactsFor(
     };
   });
 }
+
+/** What the model reads for a call that may have run and left no result. */
+export const SKIPPED_OUTCOME_UNKNOWN =
+  'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.';
+/** What the model reads for a call of a recovered response that never ran. */
+export const SKIPPED_NOT_STARTED =
+  'The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.';
+
+/**
+ * Whether an unfinished call re-runs unasked: the replay word its response
+ * row saved and its tool's current one both say `safe`, and the stored
+ * arguments still validate against the tool's schema (an object, for a tool
+ * that carries only JSON Schema).
+ */
+export const replayable = Effect.fn('toolUse.replayable')(function* (
+  fact: DispatchFacts,
+  registry: IToolRegistry,
+  input: unknown,
+  logger: Pick<AgentTrace, 'warn'>,
+) {
+  const tool = registry.get(fact.toolName);
+  if (fact.replay !== 'safe' || tool?.replay !== 'safe') return false;
+  const schema = tool.definition.zodSchema;
+  if (schema === undefined)
+    return typeof input === 'object' && input !== null && !Array.isArray(input);
+  const parsed = yield* Effect.tryPromise({
+    try: () => schema.safeParseAsync(input),
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        logger.warn(
+          `The stored arguments of ${fact.toolName} could not be checked; the call is asked about instead of re-run.`,
+          { data: error },
+        );
+        return null;
+      }),
+    ),
+  );
+  return parsed?.success === true;
+});

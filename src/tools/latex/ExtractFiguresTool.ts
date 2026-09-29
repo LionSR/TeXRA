@@ -79,6 +79,7 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 
 export const ExtractLatexFiguresTool = defineTool({
   name: 'extract_figures',
+  replay: 'safe',
   description:
     'Resolve and list figure assets referenced by a LaTeX document, returning attachments when available.',
   schema: ExtractFiguresInputSchema,

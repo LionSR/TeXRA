@@ -27,14 +27,11 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 
 /**
- * Why a host command invocation never ran to completion, read off what the
- * implementations raise: the agent package has no command surface at all,
- * and the VS Code host's own `executeCommand` rejects once a command is
- * dispatched. Callers match the tag and read `reason`, so "this host cannot
- * invoke commands" and "the command ran and faulted" stay distinguishable.
+ * A host command that was dispatched and rejected (the VS Code host's own
+ * `executeCommand`). A host with no command surface leaves `commands`
+ * undefined instead of raising, and the tool reports that absence itself.
  */
 export class SetupCommandFailed extends Data.TaggedError('SetupCommandFailed')<{
-  readonly reason: 'command-unavailable' | 'command-failed';
   readonly message: string;
   readonly commandId: string;
   readonly cause?: unknown;

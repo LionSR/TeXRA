@@ -110,6 +110,10 @@ const DispatchFactsSchema = z.strictObject({
   toolName: z.string().min(1),
   ordinal: z.int().nonnegative(),
   parallelSafe: z.boolean(),
+  /** The tool's replay declaration when the call was committed: a resume
+   *  re-runs an unfinished call unasked only when this and the tool's
+   *  current declaration both say `safe`. */
+  replay: z.enum(['safe', 'unsafe']),
   /** Contiguous dispatch partition; each barrier is its own. */
   partition: z.int().nonnegative(),
   /** The primary this call duplicates. A duplicate never executes and never
@@ -288,8 +292,9 @@ export const ModelCompactionPayloadSchema = z
 export const ToolIntentPayloadSchema = z.strictObject({
   responseId: ResponseIdSchema,
   callIds: z.array(CallIdSchema).min(1).readonly(),
-  /** Increases only after an explicit re-run decision. An earlier approval
-   *  never authorizes another attempt implicitly. */
+  /** Increases only after a re-run decision: a person's, or the replay rule
+   *  for a call whose saved and current declarations both say `safe`. An
+   *  earlier approval never authorizes another attempt implicitly. */
   attempt: z.int().positive(),
 });
 

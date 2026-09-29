@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getVisibleAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
@@ -163,7 +163,6 @@ const runInit = Effect.fn('runInit')(function* (
     return CliExitCode.Usage;
   }
 
-  yield* loadAgents();
   const agents = implicitDefaultToolUseAgents(
     yield* getVisibleAgents(services, AgentCategory.ToolUse),
   );

@@ -611,9 +611,9 @@ function foldRow(
       const pendingIntents = writable(pass, current.pendingIntents, copyById);
       for (const callId of p.callIds) {
         const call = pending.calls.find((fact) => fact.callId === callId);
-        if (call === undefined || call.parallelSafe) {
+        if (call === undefined) {
           return outOfOrder(
-            `intent names ${callId}, which is not a barrier call of ${p.responseId}`,
+            `intent names ${callId}, which is not a call of ${p.responseId}`,
           );
         }
         const known = pendingIntents[callId];

@@ -297,6 +297,17 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A tool call cut off by a crash no longer runs twice unasked.** Resuming
+  a run after the process died mid-call used to re-run any call that could
+  run in parallel, even one with side effects. Now only read-only tools
+  (file reads and searches, web and literature lookups, and MCP tools their
+  server marks read-only or idempotent) re-run on their own. Any other
+  unfinished call asks you "run it again, or skip it?"; with no one to ask,
+  the model is told the outcome is unknown and to check before retrying. A
+  call that never started is reported to the model as not started instead
+  of being run. Session history from earlier builds is cleared the first
+  time this build opens a workspace.
+
 - **`yolo` and `never` mean the same on every host.** The session decides
   the approval policy when a plan, delegation, question or model-error retry
   opens, so the extension and desktop now match the terminal: `never` denies
@@ -316,6 +327,16 @@ All notable changes to this project will be documented in this file.
   When a request chained on a stored response (OpenAI, xAI, GLM, DashScope,
   Google) is refused because the vendor no longer holds it, TeXRA logs a
   warning and retries once with the full transcript.
+- **An agent you edit is picked up on every host, and one that is listed can
+  launch.** The terminal app and the desktop app now watch your custom agents
+  directory as VS Code does, so a saved edit shows in the next run without a
+  restart. The agent list and the launch now read one validated definition, so
+  an agent with a missing parent, an inheritance loop or a bad value is
+  reported as a problem with its file instead of being listed and then failing
+  when you run it. A saved edit is loaded within a third of a second, and a run
+  launched inside that window loads it first. A run that names an agent the
+  catalog could not load says so, rather than that the agent does not exist.
+
 - **Desktop model requests no longer fail with "Connection error".** The
   desktop app's bundled runtime rejected the proxy-aware connection model calls
   use, so every request to a model failed with an undici dispatcher error.

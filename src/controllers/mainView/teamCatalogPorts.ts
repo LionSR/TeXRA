@@ -1,6 +1,6 @@
 // Local imports
 import { Effect } from 'effect';
-import { getCategoryAgent, loadAgents } from '@agent/index';
+import { getCategoryAgent } from '@agent/index';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -16,7 +16,6 @@ export function createTeamCatalogPorts(repoState: StateStore) {
       customPresetsRaw: yield* repoState.get(
         WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
       ),
-      ensureCatalogLoaded: () => loadAgents(),
       resolveAgent: getCategoryAgent,
     };
   });

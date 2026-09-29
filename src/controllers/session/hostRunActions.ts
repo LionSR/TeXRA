@@ -601,7 +601,7 @@ export const createHostRunActions = (
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resume');
-        const resumed = yield* resumeOnSession(runId, { session });
+        const resumed = yield* resumeOnSession(runId, session);
         if (!('started' in resumed) || !resumed.delivered)
           return yield* Effect.fail(
             new Unavailable({

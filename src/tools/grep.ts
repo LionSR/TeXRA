@@ -223,6 +223,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
 
 export const GrepTool = defineTool({
   name: 'grep',
+  replay: 'safe',
   parallelSafe: true,
   description:
     'Search file contents using regex patterns. For surrounding lines use -C with output_mode "content".',

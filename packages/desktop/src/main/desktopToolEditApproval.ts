@@ -17,7 +17,6 @@ import type {
 } from '@controllers/approval/ToolEditApprovalController';
 import { hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -26,6 +25,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
+import type { DesktopSpawn } from './desktopWindows.js';
 
 export type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
@@ -54,8 +54,8 @@ interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
   /** The window's `request.decide`: where a staged request's decision goes. */
   decide: ToolEditApprovalHost['decide'];
-  /** The process runtime this window's run wiring was handed. */
-  runtime: ProcessRuntime;
+  /** Runs the error report on a fiber of the window's scope. */
+  spawn: DesktopSpawn;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -114,7 +114,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was; a dialog that cannot show
     // the report leaves a console trace instead of an unhandled rejection.
-    this.options.runtime.runFork(
+    this.options.spawn(
       this.options.ui.showErrorMessage(message).pipe(
         // The handler's parameter names the channel's whole error type, so a
         // second tag added here fails to compile instead of being dropped.

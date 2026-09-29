@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import {
   createWorkspaceAgentRosterController,
   InvalidAgentTeamError,
-  loadAgents,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas';
 import { CLI_STATE_SETTINGS } from '@shared/state/stateSettings';
@@ -101,9 +100,6 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   },
 ) {
   const roots = services.roots;
-  // The controller below resolves agent keys, so the registry must be loaded
-  // first; the honest roster read happens once, later, where it is emitted.
-  yield* loadAgents();
   const roster = createWorkspaceAgentRosterController(roots);
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;

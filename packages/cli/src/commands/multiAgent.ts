@@ -1,8 +1,9 @@
 import { Effect } from 'effect';
 import { defineCommand } from 'citty';
 
+import { getCategoryAgent } from '@agent/index';
 import type { AgentConfigPayload } from '@agent/runtime';
-import { canLaunchTeam } from '@common/teams/TeamPlan';
+import { canLaunchTeam, planTeamRuns } from '@common/teams/TeamPlan';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 
@@ -27,7 +28,6 @@ import {
   readCliMultiAgentPresets,
 } from '../runtime/multiAgentPresets';
 import {
-  loadCliMultiAgentPresetPlanSet,
   loadCliMultiAgentRunPlan,
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
@@ -85,8 +85,9 @@ const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const plans = yield* loadCliMultiAgentPresetPlanSet(
+  const plans = planTeamRuns(
     yield* readCliMultiAgentPresets(services.repoState),
+    { resolveAgent: getCategoryAgent },
   );
 
   emitCliResult(context, {

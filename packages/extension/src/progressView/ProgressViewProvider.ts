@@ -42,7 +42,7 @@ import {
   type HostSnapshotSource,
 } from '@controllers/session/hostSnapshotSource';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
@@ -108,7 +108,6 @@ interface Port {
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
-  private static _instance: ProgressViewProvider | undefined;
 
   public readonly bridge: SessionBridge;
   public readonly snapshot: HostSnapshotSource;
@@ -158,7 +157,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly debouncedRefreshCatalogs = createFlushableDebounce(
     () =>
       this.runtime.runFork(
-        this.refreshCatalogs().pipe(
+        this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
           Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
           withLogChannel(CHANNEL),
         ),
@@ -338,6 +337,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
       surfaceAction: (action) => this.surfaceAction(action),
+      presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
@@ -414,11 +414,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push({ dispose: detachHostInteractions });
 
     this.watchWorkspace();
-    ProgressViewProvider._instance = this;
-  }
-
-  public static getInstance(): ProgressViewProvider | undefined {
-    return this._instance;
   }
 
   public initialize() {
@@ -466,7 +461,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     fileWatcher.onDidDelete(refreshFiles);
     this.disposables.push(
       fileWatcher,
-      agentDirectories.watchAgentDirectories(this.runtime, () =>
+      // The catalog reloads itself on every change to its sources
+      // (`agentCatalogFollower`); this launcher repaints what it lists.
+      subscribeAppSignal(this.runtime, 'agentRosterChanged', () =>
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );
@@ -788,8 +785,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       for (const disposable of this.disposables.splice(0)) disposable.dispose();
       yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();
-      if (ProgressViewProvider._instance === this)
-        ProgressViewProvider._instance = undefined;
     });
   }
 }

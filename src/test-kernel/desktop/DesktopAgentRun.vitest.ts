@@ -56,7 +56,7 @@ describe('desktop agent run completion hook', () => {
       onTestFinished(() => {
         launch.mockRestore();
       });
-      const run = createDesktopAgentRun({
+      const run = yield* createDesktopAgentRun({
         host,
         toolEditPreview: {
           openPath: host.openPath,
@@ -70,7 +70,6 @@ describe('desktop agent run completion hook', () => {
         onRunCompleted: Effect.sync(onRunCompleted),
       });
       onTestFinished(async () => {
-        run.dispose();
         await testRuntime().runPromise(closeSessionOf(session));
       });
 

@@ -1,6 +1,4 @@
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   canLaunchTeam,
@@ -331,47 +329,21 @@ describe('plan status and launchability', () => {
 });
 
 describe('loadTeamOptions', () => {
-  it.effect('loads the catalog before planning team options', () =>
-    Effect.gen(function* () {
-      let loaded = false;
-      const resolveAgent = vi.fn(() => {
-        expect(loaded).toBe(true);
-        return undefined;
-      });
+  it('orders built-in teams by declaration, then customs alphabetically', () => {
+    const options = loadTeamOptions({
+      customPresetsRaw: [
+        preset({ id: 'cz', name: 'Zulu' }),
+        preset({ id: 'ca', name: 'Alpha' }),
+      ],
+      resolveAgent: () => undefined,
+    });
 
-      yield* loadTeamOptions({
-        customPresetsRaw: [],
-        ensureCatalogLoaded: () =>
-          Effect.sync(() => {
-            loaded = true;
-          }),
-        resolveAgent,
-      });
-
-      expect(resolveAgent).toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'orders built-in teams by declaration, then customs alphabetically',
-    () =>
-      Effect.gen(function* () {
-        const options = yield* loadTeamOptions({
-          customPresetsRaw: [
-            preset({ id: 'cz', name: 'Zulu' }),
-            preset({ id: 'ca', name: 'Alpha' }),
-          ],
-          ensureCatalogLoaded: () => Effect.void,
-          resolveAgent: () => undefined,
-        });
-
-        expect(options.map((option) => option.value)).toEqual([
-          ...AGENT_MODE_PRESETS.map((builtIn) => builtIn.id),
-          'ca',
-          'cz',
-        ]);
-      }),
-  );
+    expect(options.map((option) => option.value)).toEqual([
+      ...AGENT_MODE_PRESETS.map((builtIn) => builtIn.id),
+      'ca',
+      'cz',
+    ]);
+  });
 });
 
 describe('resolveTeamLaunch', () => {
@@ -386,7 +358,6 @@ describe('resolveTeamLaunch', () => {
     return {
       teamId: 'custom-team',
       customPresetsRaw: [preset()],
-      ensureCatalogLoaded: () => Effect.void,
       resolveAgent: fromCatalog((category) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
       ),
@@ -394,54 +365,46 @@ describe('resolveTeamLaunch', () => {
     };
   }
 
-  it.effect('returns execution-scoped fields for a ready team', () =>
-    Effect.gen(function* () {
-      expect(yield* resolveTeamLaunch(launchArgs())).toEqual({
-        status: 'ready',
-        fields: {
-          agent: 'builtInToolUse:lead',
-          delegationAgentScope: {
-            workflow: ['builtInWorkflow:writer'],
-            toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
-          },
-          cli: { multiAgentPresetId: 'custom-team' },
+  it('returns execution-scoped fields for a ready team', () => {
+    expect(resolveTeamLaunch(launchArgs())).toEqual({
+      status: 'ready',
+      fields: {
+        agent: 'builtInToolUse:lead',
+        delegationAgentScope: {
+          workflow: ['builtInWorkflow:writer'],
+          toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
-        missingNames: [],
-      });
-    }),
-  );
+        cli: { multiAgentPresetId: 'custom-team' },
+      },
+      missingNames: [],
+    });
+  });
 
-  it.effect('reports an unknown team without consulting catalog ports', () =>
-    Effect.gen(function* () {
-      const resolveAgent = vi.fn(() => undefined);
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({ teamId: 'missing', resolveAgent }),
-        ),
-      ).toEqual({ status: 'unknown-team' });
-      expect(resolveAgent).not.toHaveBeenCalled();
-    }),
-  );
+  it('reports an unknown team without consulting catalog ports', () => {
+    const resolveAgent = vi.fn(() => undefined);
+    expect(
+      resolveTeamLaunch(launchArgs({ teamId: 'missing', resolveAgent })),
+    ).toEqual({ status: 'unknown-team' });
+    expect(resolveAgent).not.toHaveBeenCalled();
+  });
 
-  it.effect('blocks a planned team with no delegation-capable root', () =>
-    Effect.gen(function* () {
-      expect(
-        yield* resolveTeamLaunch(
-          launchArgs({
-            customPresetsRaw: [
-              preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
-            ],
-            resolveAgent: fromCatalog((category) =>
-              category === 'workflow'
-                ? [agent('writer', { source: 'builtInWorkflow' })]
-                : [agent('plain')],
-            ),
-          }),
-        ),
-      ).toEqual({
-        status: 'blocked',
-        reason: 'no runnable team root',
-      });
-    }),
-  );
+  it('blocks a planned team with no delegation-capable root', () => {
+    expect(
+      resolveTeamLaunch(
+        launchArgs({
+          customPresetsRaw: [
+            preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
+          ],
+          resolveAgent: fromCatalog((category) =>
+            category === 'workflow'
+              ? [agent('writer', { source: 'builtInWorkflow' })]
+              : [agent('plain')],
+          ),
+        }),
+      ),
+    ).toEqual({
+      status: 'blocked',
+      reason: 'no runnable team root',
+    });
+  });
 });

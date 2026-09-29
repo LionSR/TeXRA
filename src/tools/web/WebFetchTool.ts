@@ -200,6 +200,7 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
 
 export const WebFetchTool = defineTool({
   name: 'web_fetch',
+  replay: 'safe',
   slow: true,
   parallelSafe: true,
   description:

@@ -4,17 +4,12 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
-  loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
 }));
 
 vi.mock('@agent/index', async (importActual) => ({
   ...(await importActual<typeof import('@agent/index')>()),
   resolveAgentForLaunch: launchMocks.resolveAgent,
-}));
-vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
-  loadAgentSettingAndPrompts: launchMocks.loadAgent,
 }));
 
 import {
@@ -375,10 +370,9 @@ describe('completedRunArchive facade', () => {
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
+            setting: { agentCategory: AgentCategory.ToolUse },
+            prompt: {},
           }),
-        );
-        launchMocks.loadAgent.mockReturnValue(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
 
         // The one fact a resume reads: the run aggregate's latest

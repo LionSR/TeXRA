@@ -78,10 +78,6 @@ describe('agent YAML scanner', () => {
             '    - third',
           ],
           'prompt-child.yaml': ['name: prompt-child', 'inherits: prompt-base'],
-          'missing-parent.yaml': [
-            'name: missing-parent',
-            'inherits: no-such-parent',
-          ],
         });
 
         const { entries } = yield* scanCustom(dir);
@@ -90,9 +86,37 @@ describe('agent YAML scanner', () => {
         expect(
           entries.find((entry) => entry.name === 'prompt-child')?.rounds,
         ).toBe(3);
-        expect(
-          entries.find((entry) => entry.name === 'missing-parent')?.rounds,
-        ).toBeUndefined();
+      }),
+  );
+
+  it.live(
+    'lists only agents whose whole definition resolves: a missing parent or a loop is an issue',
+    () =>
+      Effect.gen(function* () {
+        const dir = yield* agentDir({
+          'orphan.yaml': ['name: orphan', 'inherits: no-such-parent'],
+          'loop-a.yaml': ['name: loop-a', 'inherits: loop-b'],
+          'loop-b.yaml': ['name: loop-b', 'inherits: loop-a'],
+          'ok.yaml': toolUseAgent('ok', 'fine'),
+        });
+
+        const { entries, issues } = yield* scanCustom(dir);
+
+        expect(entries.map((entry) => entry.name)).toEqual(['ok']);
+        expect(issues.map(({ path, message }) => [path, message])).toEqual([
+          [
+            'loop-a.yaml',
+            expect.stringContaining('Circular "inherits" chain detected'),
+          ],
+          [
+            'loop-b.yaml',
+            expect.stringContaining('Circular "inherits" chain detected'),
+          ],
+          [
+            'orphan.yaml',
+            expect.stringContaining('Unable to locate parent agent'),
+          ],
+        ]);
       }),
   );
 
@@ -134,6 +158,12 @@ describe('agent YAML scanner', () => {
           '  agentCategory: workflow',
           '  documentTag: documents',
         ],
+        // A custom agent names its category: none is defaulted, it is reported.
+        'uncategorized.yaml': [
+          'name: uncategorized',
+          'prompts:',
+          '  systemPrompt: hi',
+        ],
         'valid.yaml': toolUseAgent('valid', 'hi'),
       });
 
@@ -148,6 +178,10 @@ describe('agent YAML scanner', () => {
         expect.objectContaining({
           path: 'retired.yaml',
           message: expect.stringContaining('documentTag'),
+        }),
+        expect.objectContaining({
+          path: 'uncategorized.yaml',
+          message: expect.stringContaining('agentCategory'),
         }),
       ]);
     }),

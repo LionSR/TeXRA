@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
-import { getCategoryAgent, loadAgents } from '@agent/index';
-import { planTeamRun, planTeamRuns } from '@common/teams/TeamPlan';
-import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
+import { getCategoryAgent } from '@agent/index';
+import { planTeamRun } from '@common/teams/TeamPlan';
+import { findTeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
 
 import { missingMultiAgentPresetMessage } from './agents';
@@ -29,7 +29,6 @@ export function loadCliMultiAgentRunPlan(
   repoState: StateStore,
 ) {
   return Effect.gen(function* () {
-    yield* loadAgents();
     const preset = findTeamPreset(
       yield* readCliMultiAgentPresets(repoState),
       init.preset,
@@ -43,13 +42,6 @@ export function loadCliMultiAgentRunPlan(
       resolveAgent: getCategoryAgent,
       agentOverride: init.agent,
     });
-  });
-}
-
-export function loadCliMultiAgentPresetPlanSet(presets: readonly TeamPreset[]) {
-  return Effect.gen(function* () {
-    yield* loadAgents();
-    return planTeamRuns(presets, { resolveAgent: getCategoryAgent });
   });
 }
 

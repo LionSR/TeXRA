@@ -9,8 +9,10 @@ import { Data, Effect, FileSystem, Result } from 'effect';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import {
   AgentDefinitionSchema,
-  AgentWorkflowSettingSchema,
+  AgentPromptSchema,
+  AgentSettingSchema,
   type AgentDefinition,
+  type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
@@ -219,42 +221,45 @@ function formatSchemaIssue(issue: ZodIssue): string {
   return issue.message ? `${prefix}${issue.message}` : '';
 }
 
-type InheritedBlockName = 'prompts' | 'settings';
-
-interface InheritedDefinitionBlock<T> {
-  readonly value: T;
-  readonly complete: boolean;
-}
-
-function inheritedDefinitionBlock<B extends InheritedBlockName>(
+/**
+ * One block of the definition (`settings` or `prompts`) with its `inherits`
+ * chain merged in: the parent gives defaults and the child overrides. The
+ * chain is looked up by name in the same source's scan, so a parent that is
+ * absent or a chain that loops is an error of this file, reported as its
+ * issue, never a listed agent that fails at launch.
+ */
+function inheritedDefinitionBlock<B extends 'prompts' | 'settings'>(
   entry: ParsedAgentYaml,
   definitions: Map<string, ParsedAgentYaml>,
   block: B,
-  seen: ReadonlySet<string> = new Set([entry.name]),
-): InheritedDefinitionBlock<AgentDefinition[B]> {
+  seen: readonly string[] = [entry.name],
+): AgentDefinition[B] {
   // Parameterizing over the block name (not the value type) lets this index
   // without a cast: `AgentDefinitionSchema` pins `entry.definition[block]` to
   // exactly `AgentDefinition[B]`, so passing the wrong block name for a given
   // T is no longer expressible.
   const ownBlock = entry.definition[block];
   const parentName = entry.definition.inherits;
-  if (!parentName) return { value: ownBlock, complete: true };
+  if (!parentName) return ownBlock;
 
   const parent = definitions.get(parentName);
-  if (!parent || seen.has(parent.name)) {
-    return { value: ownBlock, complete: false };
+  if (!parent) {
+    throw new Error(
+      `Unable to locate parent agent "${parentName}" in the same directory.`,
+    );
   }
-
-  const inherited = inheritedDefinitionBlock(
-    parent,
-    definitions,
-    block,
-    new Set([...seen, parent.name]),
+  if (seen.includes(parent.name)) {
+    throw new Error(
+      `Circular "inherits" chain detected: ${[...seen, parent.name].join(' -> ')}.`,
+    );
+  }
+  return mergeInheritedAgentObject(
+    inheritedDefinitionBlock(parent, definitions, block, [
+      ...seen,
+      parent.name,
+    ]),
+    ownBlock,
   );
-  return {
-    value: mergeInheritedAgentObject(inherited.value, ownBlock),
-    complete: inherited.complete,
-  };
 }
 
 /** Round floor for a workflow agent: one round per `userRequest` template. */
@@ -263,81 +268,80 @@ export function userRequestTemplateCount(userRequest: unknown): number {
   return typeof userRequest === 'string' && userRequest ? 1 : 0;
 }
 
+/**
+ * The tools a workflow agent declares can never run: a workflow run offers
+ * the model none. Say so at scan time instead of letting the agent author
+ * discover it from a model that keeps asking for a tool that never answers.
+ */
+function inertToolsWarning(setting: AgentSetting): string | undefined {
+  return setting.agentCategory === AgentCategory.Workflow &&
+    setting.tools.length > 0
+    ? `Workflow-category agent declares tools: [${setting.tools
+        .map((tool) => tool.name)
+        .join(
+          ', ',
+        )}]. Workflow runs never dispatch tool calls, so these are inert; remove tools: or make the agent toolUse.`
+    : undefined;
+}
+
+/**
+ * The entry a definition file makes: its settings and prompts with the
+ * inheritance chain merged and the schema's defaults applied, the one
+ * validation a launch reads.
+ */
 function scanYaml(
   entry: ParsedAgentYaml,
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
-  // A malformed `rounds` is dropped, not fatal: the scan reports it once the
-  // entry is built.
-  let malformedRounds: string | undefined;
   return Effect.try({
     try: () => {
-      const settingsBlock = inheritedDefinitionBlock(
+      const inherited = inheritedDefinitionBlock(
         entry,
         definitions,
         'settings',
       );
-      const promptsBlock = inheritedDefinitionBlock(
-        entry,
-        definitions,
-        'prompts',
+      const setting = AgentSettingSchema.parse(
+        source === 'builtInToolUse' && !inherited.agentCategory
+          ? { ...inherited, agentCategory: AgentCategory.ToolUse }
+          : inherited,
       );
-      const rawSettings = settingsBlock.value;
-      const rawPrompts = promptsBlock.value;
-      const defaultOutputFiles = rawSettings.defaultOutputFiles;
-
-      const tools = rawSettings.tools?.map((tool) => tool.name);
-
-      const rawCategory = rawSettings.agentCategory;
-      const category =
-        source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
-          ? AgentCategory.ToolUse
-          : AgentCategory.Workflow;
-
-      let rounds: number | undefined;
-      if (
-        category === AgentCategory.Workflow &&
-        settingsBlock.complete &&
-        promptsBlock.complete
-      ) {
-        const parsedRounds = AgentWorkflowSettingSchema.shape.rounds.safeParse(
-          rawSettings.rounds,
-        );
-        if (parsedRounds.success) {
-          rounds = Math.max(
-            parsedRounds.data,
-            userRequestTemplateCount(rawPrompts.userRequest),
-          );
-        } else {
-          malformedRounds = `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`;
-        }
-      }
-
+      const prompt = AgentPromptSchema.parse(
+        inheritedDefinitionBlock(entry, definitions, 'prompts'),
+      );
+      const tools = setting.tools.map((tool) => tool.name);
       return {
         name: entry.name,
         source,
         path: entry.path,
-        category,
+        category: setting.agentCategory,
         description: entry.definition.description,
-        tools: tools?.length ? tools : undefined,
-        defaultOutputFiles: defaultOutputFiles?.length
-          ? defaultOutputFiles
-          : undefined,
-        rounds,
+        tools: tools.length ? tools : undefined,
+        rounds:
+          setting.agentCategory === AgentCategory.Workflow
+            ? Math.max(
+                setting.rounds,
+                userRequestTemplateCount(prompt.userRequest),
+              )
+            : undefined,
+        setting,
+        prompt,
       };
     },
     catch: (cause) =>
       new AgentScanError({
         path: entry.path,
-        message: toErrorMessage(cause),
+        message: formatScanFailure(cause),
         cause,
       }),
   }).pipe(
-    Effect.tap(() =>
-      malformedRounds === undefined
+    Effect.tap(({ setting }) => {
+      const inert = inertToolsWarning(setting);
+      return inert === undefined
         ? Effect.void
-        : Effect.logWarning(malformedRounds).pipe(withLogChannel(CHANNEL)),
-    ),
+        : Effect.logWarning(`${entry.path}: ${inert}`).pipe(
+            withLogChannel(CHANNEL),
+          );
+    }),
   );
 }

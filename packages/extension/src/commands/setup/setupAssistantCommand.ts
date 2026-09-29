@@ -3,7 +3,6 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { loadAgents } from '@agent/index';
 import {
   AgentConfigSchema,
   runAgent,
@@ -20,9 +19,8 @@ import {
 import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { agentName } from '@shared/schemas';
+import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import {
@@ -210,6 +208,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
   session: SessionHandle,
+  onRunResolved: (runId: RunId) => void,
 ) {
   return Effect.gen(function* () {
     // Every setup entry point funnels through here (command, status pill,
@@ -290,18 +289,11 @@ export function launchSetupAssistant(
       instruction: SETUP_INSTRUCTION,
     });
 
-    // Activation initializes the registry, but this command can also be
-    // invoked directly in tests or unusual startup paths. `loadAgents()` is
-    // idempotent: it joins the in-flight load through the catalog lane if one
-    // is running, returns immediately if already initialized, or kicks off a
-    // fresh load.
-    yield* loadAgents();
-
     const launch = runAgent(
       { config },
       {
         session,
-        onRunResolved: presentLaunchedProgressRun,
+        onRunResolved,
       },
     );
 
