@@ -278,8 +278,10 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     continuationInheritsInstructions: z.boolean(),
     /** The route takes `tool_choice` naming one function, not only `auto`. */
     supportsForcedToolChoice: z.boolean(),
-    /** The route routes its prompt cache by `prompt_cache_key` (OpenAI's). */
-    supportsPromptCacheKey: z.boolean(),
+    /** OpenAI's own endpoint (the API or the ChatGPT subscription): it routes
+     *  its prompt cache by `prompt_cache_key` and takes mid-conversation
+     *  `developer` messages. */
+    openaiEndpoint: z.boolean(),
     /**
      * `openai` sends OpenAI's full request surface; `compatible` omits what
      * the vendor Responses endpoints do not take: the encrypted-reasoning

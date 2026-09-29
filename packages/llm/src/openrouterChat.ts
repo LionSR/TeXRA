@@ -217,6 +217,9 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       continue;
     }
     calls = [];
+    // User text, not a system message: OpenRouter routes to upstreams that
+    // take system text only at the head, where the update would land in
+    // front of the cached prefix it is appended after.
     if (message.role === 'system') {
       messages.push({ role: 'user', content: systemUpdateText(message.text) });
       continue;

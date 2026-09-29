@@ -29,7 +29,7 @@ liveProtocol({
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: false,
         supportsForcedToolChoice: true,
-        supportsPromptCacheKey: true,
+        openaiEndpoint: true,
         requestDialect: 'openai',
         defaults: {
           temperature: 0,
