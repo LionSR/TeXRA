@@ -102,6 +102,7 @@ import {
   verdictBook,
   type EncodedRow,
 } from './rowCodec';
+import { isDamaged } from './storeAside';
 import { assertStoreFormat, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
@@ -322,11 +323,9 @@ export const databaseLayer = (
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
       ))?.data_version;
-      // A failed read (a busy wait past the timeout, an I/O error) is logged
-      // and the poll backs off, doubling from 250 ms to at most 30 s over a
-      // streak of failures and resetting on the first healthy tick, so a blip
-      // neither ends change notification nor slows it afterwards. The version
-      // is checkpointed only once the commit behind it is read.
+      // A failed read is logged and the poll backs off, 250 ms doubling to
+      // 30 s over a streak, reset on the first healthy tick. The version is
+      // checkpointed only once the commit behind it is read.
       let failures = 0;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
@@ -630,12 +629,9 @@ export const databaseLayer = (
             }),
           ),
         );
-      /**
-       * Bring every projection to this build's version and to the store's
-       * high-water commit before a read of it: a projection another build
-       * versioned differently is emptied and rebuilt, and one that is behind
-       * catches up, 1,000 rows per transaction.
-       */
+      /** Before a read, a projection another build versioned is emptied and
+       *  rebuilt, and one behind the high-water commit catches up, 1,000
+       *  rows per transaction. */
       const ensureProjections = Effect.gen(function* () {
         if (yield* query(projectionsCurrent)) return;
         let done = false;
@@ -1262,8 +1258,8 @@ export const databaseLayer = (
     }),
   ).pipe(Layer.provide(Reactivity.layer));
 
-/** Whether another process has the store at `filename` open: SQLite's
- *  exclusive lock, which every open connection (and so every claim) refuses. */
+/** Whether another process has the store open (its exclusive lock is
+ *  refused), or the file is no SQLite store at all (NOTADB, CORRUPT). */
 export const storeOpenElsewhere = (filename: string) =>
   Effect.scoped(
     Effect.flatMap(
@@ -1275,17 +1271,21 @@ export const storeOpenElsewhere = (filename: string) =>
         ),
     ),
   ).pipe(
-    Effect.as(false),
-    Effect.catchIf(isBusy, () => Effect.succeed(true)),
+    Effect.as('free' as const),
+    Effect.catchIf(isBusy, () => Effect.succeed('open' as const)),
+    Effect.catchCause((cause) =>
+      isDamaged(cause)
+        ? Effect.succeed('unreadable' as const)
+        : Effect.failCause(cause),
+    ),
     Effect.provide(Reactivity.layer),
   );
 
 /**
  * The process's handle on the global storage root: one connection, schema and
- * `data_version` poll for every application record of that root, built with
- * the runtime the entry hands it to and closed with it. Building it creates
- * the directory, the SQLite file and the poll fiber, so an entry that must
- * create none passes a refusing layer (`installProcessRuntime`'s option).
+ * `data_version` poll for every application record of that root, closed with
+ * the entry's runtime. Building it creates the directory, the file and the
+ * poll fiber, so an entry that must create none passes a refusing layer.
  */
 export const globalDatabaseLayer = (
   storage: string,
