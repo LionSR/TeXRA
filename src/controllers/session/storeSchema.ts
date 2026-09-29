@@ -12,11 +12,17 @@
  *
  * This module knows no row kind and no payload field.
  */
-import { randomUUID } from 'node:crypto';
-import { Cause, Clock, Effect, Exit, FileSystem, Scope } from 'effect';
+import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
-import type * as SqlClient from 'effect/unstable/sql/SqlClient';
+import {
+  freeName,
+  isDamaged,
+  pragmaValue,
+  run,
+  underCopy,
+  type Sql,
+} from './storeAside';
 
 const CHANNEL = 'sessionDatabase';
 
@@ -139,15 +145,6 @@ const STEPS: readonly {
   readonly statements: readonly string[];
 }[] = [];
 
-type Sql = SqlClient.SqlClient;
-
-const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
-
-const pragmaValue = (sql: Sql, pragma: string) =>
-  sql
-    .unsafe<Record<string, unknown>>(`PRAGMA ${pragma}`, [])
-    .pipe(Effect.map((rows) => rows[0]?.[pragma]));
-
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
   pragma: string,
@@ -185,22 +182,6 @@ const PRE1_SIGNATURE = `SELECT
   (SELECT count(*) FROM pragma_table_info('event_sequence')
     WHERE name = 'aggregate_id') AS keyed`;
 
-/**
- * The first of `base`, `base.2`, `base.3`, … that names no file (with its
- * `-wal` and `-shm` companions, for a whole database moved aside): an
- * earlier copy is never replaced, on any platform's `rename`.
- */
-const freeName = Effect.fnUntraced(function* (base: string) {
-  const fs = yield* FileSystem.FileSystem;
-  for (let n = 1; ; n += 1) {
-    const name = n === 1 ? base : `${base}.${n}`;
-    const taken = yield* Effect.forEach(['', '-wal', '-shm'], (suffix) =>
-      fs.exists(`${name}${suffix}`),
-    );
-    if (!taken.some(Boolean)) return name;
-  }
-});
-
 /** The refusal of a store a newer build wrote: nothing in it is touched. */
 const newerStore = (path: string, stored: number) =>
   Effect.fail(
@@ -208,55 +189,6 @@ const newerStore = (path: string, stored: number) =>
       `Session store ${path} was written by a newer TeXRA build (schema ${stored}); this build writes schema ${SCHEMA_VERSION}. Update TeXRA to open it. Nothing in the store was changed.`,
     ),
   );
-
-/**
- * Keep a copy of the store beside it, at the first free name from `base`
- * ({@link freeName}), then run `body` under the write lock only if nothing
- * committed since the copy: `VACUUM INTO` cannot run inside a transaction,
- * so the transaction re-reads `user_version` and `data_version` (which moves
- * on every other connection's commit) and, if either moved, discards the
- * copy and answers null for the caller to start over from what the store
- * now is. The name is chosen under the lock, so two processes retiring one
- * store never pick the same one. Answers the copy's path.
- */
-const underCopy = Effect.fnUntraced(function* <E>(
-  sql: Sql,
-  base: string,
-  body: Effect.Effect<void, E>,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const stamp = yield* pragmaValue(sql, 'user_version');
-  const version = yield* pragmaValue(sql, 'data_version');
-  const staged = `${base}.${randomUUID()}.partial`;
-  yield* sql.unsafe('VACUUM INTO ?', [staged]);
-  yield* run(sql, 'BEGIN IMMEDIATE');
-  const moved = yield* Effect.gen(function* () {
-    if (
-      (yield* pragmaValue(sql, 'user_version')) !== stamp ||
-      (yield* pragmaValue(sql, 'data_version')) !== version
-    ) {
-      return null;
-    }
-    const aside = yield* freeName(base);
-    yield* fs.rename(staged, aside);
-    yield* body;
-    return aside;
-  }).pipe(
-    Effect.onError(() =>
-      Effect.all([
-        run(sql, 'ROLLBACK').pipe(Effect.ignore),
-        fs.remove(staged, { force: true }).pipe(Effect.ignore),
-      ]),
-    ),
-  );
-  if (moved === null) {
-    yield* run(sql, 'ROLLBACK');
-    yield* fs.remove(staged, { force: true });
-    return null;
-  }
-  yield* run(sql, 'COMMIT');
-  return moved;
-});
 
 /** Give an empty file the 1.0 header: `auto_vacuum` is fixed when the first
  *  page is written, which enabling WAL already did, so one `VACUUM` of the
@@ -278,6 +210,10 @@ const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
   if (application !== 0 && application !== APPLICATION_ID)
     return yield* foreignStore(path, `application id ${application}`);
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
+  // Every 1.0 store is stamped with the application id in the transaction
+  // that stamps its schema: a schema-100 file without it is not TeXRA's.
+  if (stored >= 100 && application !== APPLICATION_ID)
+    return yield* foreignStore(path, `user_version ${stored}, no TeXRA id`);
   if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
   const tables = yield* userTables(sql);
   if (
@@ -329,10 +265,10 @@ const prepareStore = Effect.fnUntraced(function* (
   yield* verifyPragma(sql, 'foreign_keys', 1);
   let movedAside: SessionStoreMovedAside | null = null;
   for (;;) {
-    const stored = Number(yield* pragmaValue(sql, 'user_version'));
-    if (stored === SCHEMA_VERSION) break;
     // An in-memory store is this process's own, never another's file.
     if (mode === 'persistent') yield* refuseUnowned(sql, path);
+    const stored = Number(yield* pragmaValue(sql, 'user_version'));
+    if (stored === SCHEMA_VERSION) break;
     const tables = yield* userTables(sql);
     if (stored === 0 && tables.length === 0) {
       if (mode === 'persistent') yield* incrementalVacuum(sql);
@@ -446,6 +382,24 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return yield* Effect.failCause(attempt.cause);
   }
   yield* Scope.close(first, Exit.void);
+  // Another process may have seen the same damage and already put a fresh
+  // store here: move the file only while it is the one that still fails a
+  // read, by the same identity (inode, size, mtime) up to the rename.
+  const identity = fs.stat(filename).pipe(
+    Effect.map((info) => `${info.ino}/${info.size}/${info.mtime}`),
+    Effect.orElseSucceed(() => null),
+  );
+  const seen = yield* identity;
+  const stillDamaged = yield* Effect.scoped(
+    Effect.flatMap(probe, (sql) => userTables(sql)),
+  ).pipe(
+    Effect.as(false),
+    Effect.catchCause((cause) => Effect.succeed(isDamaged(cause))),
+  );
+  if (!stillDamaged || seen === null || (yield* identity) !== seen) {
+    const sql = yield* connect;
+    return { sql, movedAside: yield* prepareStore(sql, mode, path, filename) };
+  }
   const aside = yield* freeName(
     `${filename}.corrupt-${yield* Clock.currentTimeMillis}`,
   );
@@ -463,24 +417,6 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     movedAside: { path, aside, reason: 'corrupt' } as SessionStoreMovedAside,
   };
 });
-
-/** Whether a failed open is SQLite reporting the file damaged or foreign:
- *  `SQLITE_CORRUPT` (11) or `SQLITE_NOTADB` (26), as a driver defect or a
- *  statement's classified cause. */
-function isDamaged(cause: Cause.Cause<unknown>): boolean {
-  return cause.reasons.some((reason) => {
-    if (reason._tag === 'Interrupt') return false;
-    let error: unknown = reason._tag === 'Fail' ? reason.error : reason.defect;
-    while (error !== null && typeof error === 'object') {
-      const code = (error as { errcode?: unknown }).errcode;
-      if (typeof code === 'number') return [11, 26].includes(code & 0xff);
-      error =
-        (error as { reason?: { cause?: unknown } }).reason?.cause ??
-        (error as { cause?: unknown }).cause;
-    }
-    return false;
-  });
-}
 
 /** Refuse a write once another build has re-stamped the store under this
  *  process; read inside the write transaction, so the check and the append

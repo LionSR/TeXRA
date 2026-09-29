@@ -35,6 +35,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { DatabaseAggregateBlocked } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 
@@ -156,7 +157,13 @@ export function encodeDraft(draft: SessionEventDraft): EncodedRow {
  */
 export type RowVerdict =
   | { readonly _tag: 'event'; readonly event: SessionEvent }
-  | { readonly _tag: 'leftOut'; readonly kind: string }
+  | {
+      readonly _tag: 'leftOut';
+      readonly kind: string;
+      /** Its plugin is installed but a later build wrote this value: the
+       *  plugin must not write the kind over it. */
+      readonly newer: BlockedAggregate | null;
+    }
   | BlockedAggregate;
 
 const RowSchema = z.object({
@@ -233,7 +240,14 @@ export function decodeRow(
   const name = `${event.plugin}/${event.kind}`;
   const arm = PLUGIN_ARMS.get(name);
   if (arm === undefined || event.version > arm.version)
-    return { _tag: 'leftOut', kind: name };
+    return {
+      _tag: 'leftOut',
+      kind: name,
+      newer:
+        arm === undefined
+          ? null
+          : { ...blocked('newer', event.version), type: `plugin.fact/${name}` },
+    };
   let value = event.value;
   for (const step of arm.upcasters.slice(event.version - 1))
     value = step(value);
@@ -328,24 +342,67 @@ export function verdictBook(
         ).pipe(withLogChannel(CHANNEL));
       return { events, skipped };
     });
-  /** The aggregates holding a row of a kind this build lacks or of a
-   *  newer version: `stored_kind` says whether any exist, so the normal
-   *  store checks no row. */
-  const refresh = Effect.gen(function* () {
-    yield* retain;
-    for (const kind of unreadableKinds(yield* exec(STORED_KINDS))) {
-      for (const row of yield* exec(AGGREGATES_ABOVE, [kind.type, kind.above]))
-        yield* block({
-          _tag: 'blocked',
-          aggregateId: aggregateOf(row.kind, row.logicalId),
-          uid: z.string().parse(row.uid),
-          reason: kind.reason,
-          type: kind.type,
-          version: z.int().parse(row.version),
-          commit: z.int().parse(row.commit),
-          at: z.int().parse(row.at),
-        });
-    }
-  });
-  return { blocked, decodeAll, refresh, retain };
+  /** The aggregates (every one, or `only`) holding a row of a kind this
+   *  build lacks or of a newer version, read in the caller's transaction:
+   *  `stored_kind` says whether any exist, so the normal store checks no
+   *  row. Each is recorded, and answered. */
+  const scan = (only?: AggregateId) =>
+    Effect.gen(function* () {
+      const found: BlockedAggregate[] = [];
+      for (const kind of unreadableKinds(yield* exec(STORED_KINDS))) {
+        const rows = yield* only === undefined
+          ? exec(AGGREGATES_ABOVE, [kind.type, kind.above])
+          : exec(`${AGGREGATES_ABOVE} HAVING s.kind = ? AND s.logical_id = ?`, [
+              kind.type,
+              kind.above,
+              ...aggregateColumns(only),
+            ]);
+        for (const row of rows) {
+          const verdict: BlockedAggregate = {
+            _tag: 'blocked',
+            aggregateId: aggregateOf(row.kind, row.logicalId),
+            uid: z.string().parse(row.uid),
+            reason: kind.reason,
+            type: kind.type,
+            version: z.int().parse(row.version),
+            commit: z.int().parse(row.commit),
+            at: z.int().parse(row.at),
+          };
+          found.push(verdict);
+          yield* block(verdict);
+        }
+      }
+      return found;
+    });
+  const refresh = Effect.andThen(retain, scan());
+  /** A ledger read or claim of a blocked aggregate is refused whole. */
+  const refuse = <E>(
+    id: AggregateId,
+    failed: (cause: DatabaseAggregateBlocked) => E,
+  ) => {
+    const verdict = blocked.get(id);
+    return verdict === undefined
+      ? Effect.void
+      : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
+  };
+  /** In the caller's transaction: the newer value of plugin kind `name` an
+   *  aggregate (its surrogate) holds, which this build's plugin must not
+   *  write over. */
+  const newerPlugin = (aggregate: number, name: string) =>
+    exec(
+      `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+       WHERE e.aggregate = ? AND e.type = 'plugin.fact'`,
+      [aggregate],
+    ).pipe(
+      Effect.map(
+        (rows) =>
+          rows
+            .map(decodeRow)
+            .flatMap((v) =>
+              v._tag === 'leftOut' && v.kind === name ? [v] : [],
+            )
+            .find((v) => v.newer !== null)?.newer,
+      ),
+    );
+  return { blocked, decodeAll, newerPlugin, refresh, refuse, retain, scan };
 }

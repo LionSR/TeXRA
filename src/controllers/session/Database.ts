@@ -1,24 +1,18 @@
 /**
- * The persistence substrate
- * (`.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md`,
- * reshaped for 1.0 by
- * `.agents/docs/proposed/architecture/2026-09-28-storage-v1-design.md`): the
- * connection, its transactions and their busy retry, the ledger's one write
- * path, claims, the aggregate lifecycle, deletion and collection, and the
- * reads. One database per session root, parameterized by `WorkspaceRoots`,
- * never a process singleton.
+ * The persistence substrate (`2026-09-03-persistence-substrate-decision.md`,
+ * reshaped by `2026-09-28-storage-v1-design.md`): the connection, its
+ * transactions and busy retry, the ledger's one write path, claims, the
+ * aggregate lifecycle, deletion and collection, and the reads. One database
+ * per session root (`WorkspaceRoots`), never a process singleton; an
+ * ephemeral session runs the same schema in SQLite memory, and a failed file
+ * open is an error, never the ephemeral mode.
  *
- * Persistent sessions open one file; explicitly ephemeral sessions run the same
- * schema and transactions in SQLite memory. A failed file open is an error and
- * never selects the ephemeral mode.
- *
- * Below this module, `storeSchema.ts` owns the DDL and the open sequence;
- * `rowCodec.ts` owns every stored shape, so this module hands it drafts and
- * gets typed events or verdicts back, and never reads a payload field;
- * `projections.ts` owns the pure projectors whose operations this module
- * executes inside the append transaction. This module owns the envelope:
- * the writer (C5, from `ProcessIdentity`), the publish clock, and the `seq`
- * and `commit` ordinals, none of which a caller can supply.
+ * `storeSchema.ts` owns the DDL and the open sequence; `rowCodec.ts` every
+ * stored shape (this module hands it drafts, gets events or verdicts back,
+ * and reads no payload field); `projections.ts` the projectors whose
+ * operations run in the append transaction. This module owns the envelope:
+ * the writer (C5, `ProcessIdentity`), the publish clock, and the `seq` and
+ * `commit` ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -242,16 +236,7 @@ export const databaseLayer = (
           Effect.flatMap(verdicts.decodeAll),
           Effect.map(({ events }) => events),
         );
-      /** A ledger read or claim of a blocked aggregate is refused whole. */
-      const refuseBlocked = <E>(
-        id: AggregateId,
-        failed: (cause: DatabaseAggregateBlocked) => E,
-      ) => {
-        const verdict = blocked.get(id);
-        return verdict === undefined
-          ? Effect.void
-          : Effect.fail(failed(new DatabaseAggregateBlocked(verdict)));
-      };
+      const refuseBlocked = verdicts.refuse;
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
       );
@@ -808,6 +793,15 @@ export const databaseLayer = (
               'Sequence refused for an absent aggregate',
             );
           }
+          // A plugin never writes its kind over a value a later build wrote.
+          const newer =
+            draft.type === 'plugin.fact'
+              ? yield* verdicts.newerPlugin(
+                  aggregate,
+                  `${draft.plugin}/${draft.kind}`,
+                )
+              : undefined;
+          if (newer) return yield* new DatabaseAggregateBlocked(newer);
           // The seq-1 rule (decision 9): a run aggregate begins with exactly
           // one `run.start`, and nothing else ever lands at seq 1.
           if (
@@ -1056,6 +1050,11 @@ export const databaseLayer = (
             yield* proveReclaimable(observed);
             return yield* transact(
               Effect.gen(function* () {
+                // Under the lock, not the cache: a newer build may have
+                // written a row this build cannot read since the poll.
+                for (const id of ids)
+                  for (const verdict of yield* verdicts.scan(id))
+                    return yield* new DatabaseAggregateBlocked(verdict);
                 yield* claimObserved(
                   observed,
                   'Claim changed before acquisition',

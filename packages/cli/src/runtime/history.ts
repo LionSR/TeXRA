@@ -43,6 +43,7 @@ import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
 import { cliRunStanding } from './toolUseResumeData';
 import {
+  blockedHistoryEntry,
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from './historyLabels';
@@ -155,23 +156,21 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
 
 /**
  * The history readers take the process session as the open that yields it
- * (`CliPlatformServices.session`): a listing is the first thing `history`
- * asks of the session, so the open runs inside the reader's own program, which
- * the calling surface runs once on the runtime it holds
- * (`CliPlatformServices.runtime`).
+ * (`CliPlatformServices.session`), so the open runs inside the reader's own
+ * program, on the runtime the calling surface holds.
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
-    // A row's resumability comes from the snapshot probe the listing already
-    // did; only a failed workflow row still reads its persisted state. That
-    // read is bounded here so a history full of failed workflow runs cannot
-    // fold every run's ledger at once. `Effect.forEach` preserves input
-    // order.
+    // Resumability comes from the listing's snapshot probe; only a failed
+    // workflow row reads its state, bounded so a history of them does not
+    // fold every ledger at once. `Effect.forEach` keeps input order.
     const opened = yield* session;
-    const entries = yield* listRuns(opened);
     return yield* Effect.forEach(
-      entries.filter(isUserVisibleRun),
-      (entry) => toCliHistoryEntry(entry, opened),
+      (yield* listRuns(opened)).filter(isUserVisibleRun),
+      (entry) =>
+        entry.kind === 'blocked'
+          ? Effect.succeed(blockedHistoryEntry(entry))
+          : toCliHistoryEntry(entry, opened),
       { concurrency: HISTORY_ENTRY_CONCURRENCY },
     );
   },

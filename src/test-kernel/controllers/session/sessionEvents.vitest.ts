@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -43,6 +44,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { TestClock } from 'effect/testing';
+import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
@@ -71,6 +73,7 @@ import {
 } from '@controllers/session/Database';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
+import { openStore } from '@controllers/session/storeSchema';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
@@ -1489,6 +1492,94 @@ describe('the C1 event table and the C6 publisher', () => {
         }
         expect(yield* listing).toEqual(['run.start', 'run.config']);
       });
+    },
+  );
+
+  it.effect(
+    'refuses a claim of a run a newer build wrote to since this connection last looked',
+    () => {
+      // A newer build commits a row this build cannot read and releases the
+      // run before this connection's poll has seen it: its verdict cache is
+      // stale, so only the claim's own transaction can refuse.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.appendAll([runStart, waiting]);
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec(`UPDATE event SET version = 2 WHERE type = 'run.position';
+              UPDATE stored_kind SET version = 2 WHERE type = 'run.position';
+              UPDATE event_sequence SET owner_id = NULL;`);
+          } finally {
+            raw.close();
+          }
+        });
+        expect(yield* db.readBlocked()).toEqual([]);
+        const refused = yield* Effect.flip(
+          db.acquireClaims([runStart.aggregateId]),
+        );
+        expect(refused).toMatchObject({
+          _tag: 'DatabaseWriteFailed',
+          cause: { _tag: 'DatabaseAggregateBlocked', type: 'run.position' },
+        });
+        const stored = reader(storage);
+        try {
+          expect(
+            stored
+              .prepare('SELECT owner_id AS owner FROM event_sequence')
+              .get(),
+          ).toEqual({ owner: null });
+        } finally {
+          stored.close();
+        }
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
+  it.effect(
+    'leaves a store another process already recovered from damage in place',
+    () => {
+      // Two processes saw the same damaged file. The first moved it aside
+      // and created a fresh store; the second, recovering after it, must not
+      // move that fresh store aside as if it were the damaged one.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((database) => database.appendAll([runStart])),
+          Effect.provide(substrate(storage)),
+        );
+        const filename = join(realpathSync.native(storage), 'texra.db');
+        let attempts = 0;
+        const connect = Effect.suspend(() =>
+          (attempts += 1) === 1
+            ? Effect.die(
+                Object.assign(new Error('file is not a database'), {
+                  errcode: 26,
+                }),
+              )
+            : SqlDriver.make({ filename }),
+        );
+        const opened = yield* openStore(
+          connect,
+          SqlDriver.make({ filename, readonly: true, disableWAL: true }),
+          'persistent',
+          filename,
+          filename,
+        );
+        expect(opened.movedAside).toBeNull();
+        expect(
+          readdirSync(storage).filter((name) => name.includes('.corrupt-')),
+        ).toEqual([]);
+        const rows = yield* opened.sql.unsafe<{ n: number }>(
+          'SELECT count(*) AS n FROM event',
+          [],
+        );
+        expect(rows[0]?.n).toBe(1);
+      }).pipe(
+        Effect.provide(Layer.merge(nodePlatformLayer, Reactivity.layer)),
+        Effect.scoped,
+      );
     },
   );
 
