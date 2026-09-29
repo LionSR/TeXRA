@@ -705,6 +705,7 @@ function rerenderShell(): void {
 }
 
 function reportRuntimeFailure(error: unknown): void {
+  console.error('TeXRA desktop renderer failure', error);
   const shouldReload = window.confirm(
     `TeXRA encountered an unexpected error.\n\n${extractErrorMessage(error) ?? 'TeXRA could not finish starting up.'}\n\nReload TeXRA now?`,
   );
@@ -715,20 +716,19 @@ function reportRuntimeFailure(error: unknown): void {
 // Bootstrap
 // =============================================================================
 
-// A module-load throw or a rejected promise is reported once, loudly, with the
-// choice to reload; nothing renders a second copy of the shell.
+// A failed first render or a rejected promise is reported once, loudly, with
+// the choice to reload; nothing renders a second copy of the shell.
 window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
-  console.error('TeXRA desktop renderer unhandled rejection', event.reason);
   reportRuntimeFailure(event.reason);
 });
-window.addEventListener('error', (event) => {
-  // A ResizeObserver loop notice is an ErrorEvent with no error behind it.
-  if (event.error) reportRuntimeFailure(event.error);
-});
 
-logsController.rerenderViewer();
-rerenderShell();
+try {
+  logsController.rerenderViewer();
+  rerenderShell();
+} catch (error) {
+  reportRuntimeFailure(error);
+}
 
 // =============================================================================
 // Onboarding + command palette
