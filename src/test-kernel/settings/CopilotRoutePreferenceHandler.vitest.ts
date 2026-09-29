@@ -87,6 +87,7 @@ import {
   type LanguageModelInfo,
   type LanguageModelPort,
 } from '@platform/languageModel';
+import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -376,23 +377,26 @@ describe('Copilot route preference handler', () => {
     },
   );
 
-  it('allows opt-out without consulting current Copilot access', async () => {
-    const port = await installModels(GEMINI_PRO);
-    await testRuntime().runPromise(
-      createHandler().handleMessage(
-        {
-          command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
-          modelName: 'gemini31p',
-        },
-        createWebviewView(),
-      ),
-    );
-    expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-      'gemini31p',
-      false,
-      installedHost().roots.globalState,
-    );
-    expect(port.selectModels).not.toHaveBeenCalled();
-    expect(mocks.selectChatModels).not.toHaveBeenCalled();
-  });
+  it.effect('allows opt-out without consulting current Copilot access', () =>
+    Effect.gen(function* () {
+      const port = yield* Effect.promise(() => installModels(GEMINI_PRO));
+      yield* withProcessServices(
+        testRuntime(),
+        createHandler().handleMessage(
+          {
+            command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
+            modelName: 'gemini31p',
+          },
+          createWebviewView(),
+        ),
+      );
+      expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
+        'gemini31p',
+        false,
+        installedHost().roots.globalState,
+      );
+      expect(port.selectModels).not.toHaveBeenCalled();
+      expect(mocks.selectChatModels).not.toHaveBeenCalled();
+    }),
+  );
 });
