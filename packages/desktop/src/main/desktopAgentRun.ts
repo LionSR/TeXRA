@@ -152,14 +152,34 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         spawn,
       }),
     });
+    // Dispose joins any tool-edit LaTeX build still displaying, which has no
+    // cancellation signal, so the window's release must not wait on it: it
+    // runs detached, as a window close never waits on a compile.
     yield* Effect.addFinalizer(() =>
-      withProcessServices(runtime, toolEditApprovals.dispose()),
+      Effect.asVoid(
+        Effect.forkDetach(
+          withProcessServices(runtime, toolEditApprovals.dispose()),
+        ),
+      ),
     );
+    // Total: a failed event read is logged, not left to end this fiber
+    // silently with every staged preview waiting on a `request.decided`.
     yield* Effect.forkScoped(
       withProcessServices(
         runtime,
         Stream.runForEach(session.events.all(session.now()), (event) =>
           toolEditApprovals.handleSessionEvent(event),
+        ),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.logWarning(
+                'The tool-edit follower stopped; staged previews are released only on window close',
+              ).pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
+              ),
         ),
       ),
       { startImmediately: true },
