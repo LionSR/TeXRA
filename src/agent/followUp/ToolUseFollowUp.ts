@@ -15,10 +15,7 @@ import {
   runHeldMessage,
   runUnreadableMessage,
 } from '@shared/runs/runStatusDisplay';
-import type {
-  FollowUpQueueInput,
-  FollowUpRecoveryLease,
-} from './ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from './ToolUseFollowUpQueueManager';
 
 /**
  * Why a submission could not be admitted, worded for the user by
@@ -103,38 +100,32 @@ const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
 /**
  * The resume every automatic wake and every host's Resume takes: the one
- * resume (`resumeClaimedRun`) on the session that holds the run, started on
- * the fork the session's launches run on, so the attempt belongs to the
- * session and outlives a caller that stops waiting. It reaches that resume
- * through {@link AgentEngine}, because a resumed run's child loop wakes its
- * parent through here in turn.
+ * resume (`resumeRun`) on the session that holds the run, started on the fork
+ * the session's launches run on, so the attempt belongs to the session and
+ * outlives a caller that stops waiting. It reaches that resume through
+ * {@link AgentEngine}, because a resumed run's child loop wakes its parent
+ * through here in turn.
  *
  * What the run did not take is told to the user here, once: a refusal by its
  * reason, a fault as a failure unless the session's terminal-result presenter
  * took it. A fault answers as a refusal, so the caller reads one fact:
- * whether the run took the resume. A recovery it did not take goes back for
- * the next attempt. The attempt is cancelled for good once the run has left
- * the session's view: a run id deleted and re-created is not the run it was
- * admitted for.
+ * whether the run took the resume. The resume gives back the recovery it
+ * claimed and the run did not take. The attempt is cancelled for good once
+ * the run has left the session's view: a run id deleted and re-created is
+ * not the run it was admitted for.
  */
 export function resumeOnSession(
   runId: RunId,
-  options: {
-    readonly session: SessionHandle;
-    readonly recovery?: FollowUpRecoveryLease;
-    /** The caller's own monotone stop (a user who stopped the run). */
-    readonly isCancellationRequested?: () => boolean;
-  },
+  session: SessionHandle,
 ): Effect.Effect<ResumeRunResult> {
-  const { session, recovery } = options;
   const attempt = Effect.suspend(() => {
     let runMissing = false;
     const isCancellationRequested = (): boolean => {
       runMissing ||= session.runView(runId) === undefined;
-      return runMissing || options.isCancellationRequested?.() === true;
+      return runMissing;
     };
     return Effect.flatMap(AgentEngine, (engine) =>
-      engine.resumeClaimedRun(runId, { ...options, isCancellationRequested }),
+      engine.resumeRun(runId, { session, isCancellationRequested }),
     ).pipe(
       Effect.tap((result) =>
         'failed' in result && !isCancellationRequested()
@@ -162,32 +153,22 @@ export function resumeOnSession(
           Effect.as(RESUME_REFUSED),
         );
       }),
-      Effect.tap((result) =>
-        Effect.sync(() => {
-          const lease = recovery && session.followUps.useRecovery(recovery);
-          if (lease && !('started' in result && result.delivered))
-            session.followUps.release(lease, 'recoverable');
-        }),
-      ),
     );
   });
   return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
 }
 
 /**
- * Wake a recovery lease whose follow-up row is already durable: the session
- * resumes the run on its own fork ({@link resumeOnSession}), which gives the
- * lease back when the run does not take the resume, whether or not the
- * caller stays for the answer. True when the run took the resume.
+ * Wake a run whose follow-up row is already durable: true when the run took
+ * the resume ({@link resumeOnSession}), whether or not the caller stays for
+ * the answer.
  */
 export function startFollowUpWake(
   runId: RunId,
-  recovery: FollowUpRecoveryLease,
   session: SessionHandle,
-  isCancellationRequested?: () => boolean,
 ): Effect.Effect<boolean> {
   return Effect.map(
-    resumeOnSession(runId, { session, recovery, isCancellationRequested }),
+    resumeOnSession(runId, session),
     (result) => 'started' in result && result.delivered,
   );
 }
@@ -260,8 +241,8 @@ function admitFollowUp(
 
 /**
  * Queue a submission on a run no running loop here holds: a waiting or resuming
- * run, or one a user's message continues. A `recoverable` admission claims
- * the run's recovery when no consumer holds it, and that claim wakes it.
+ * run, or one a user's message continues. A `recoverable` admission reserves
+ * the run's recovery when no consumer holds it, and that reservation wakes it.
  */
 function admitQueued(
   runId: RunId,
@@ -279,12 +260,10 @@ function admitQueued(
           reason: submission.reason ?? 'not_resumable',
         };
       }
-      if (submission.kind !== 'queued' || !submission.lease) {
+      if (submission.kind !== 'queued' || !submission.wake) {
         return { status: 'queued' };
       }
-      return {
-        resume: startFollowUpWake(runId, submission.lease, ownerSession),
-      };
+      return { resume: startFollowUpWake(runId, ownerSession) };
     },
   );
 }

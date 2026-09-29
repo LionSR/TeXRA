@@ -18,7 +18,6 @@ import type { RunInput } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
-  FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   startFollowUpWake,
@@ -222,7 +221,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
 export interface ChildRunLoopParams<TTurn, R = never> {
   readonly session: SessionHandle;
   /** The recovery boundary already claimed this queue before loading its rows. */
-  readonly queueLease?: FollowUpRecoveryLease;
+  readonly queueLease?: FollowUpConsumerLease;
   /**
    * Agent-CLI presentation. Native engines finalize their own run handle.
    */
@@ -467,13 +466,12 @@ interface PendingChildDelivery {
   readonly parent: RunParent;
   readonly followUp: FollowUpQueueInput;
   /**
-   * The parent follow-up row is already durable. A recovery lease means this
-   * process still has to wake the parent after this child's finalize; a
-   * deferred live offer carries no lease, and the resubmit in
-   * `submitPendingDelivery` offers the durable row to the live parent at
-   * that same post-finalize point.
+   * The parent follow-up row is already durable. `wake` means this process
+   * still has to wake the parent after this child's finalize; a deferred
+   * live offer has none, and the resubmit in `submitPendingDelivery` offers
+   * the durable row to the live parent at that same post-finalize point.
    */
-  readonly recovery?: FollowUpRecoveryLease;
+  readonly wake?: true;
 }
 
 /**
@@ -592,8 +590,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
         pending = {
           parent,
           followUp,
-          ...(submitted.kind === 'queued' && submitted.lease
-            ? { recovery: submitted.lease }
+          ...(submitted.kind === 'queued' && submitted.wake
+            ? { wake: submitted.wake }
             : {}),
         };
       }
@@ -645,15 +643,14 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
     { runId, parentRunId: targetRunId },
   );
-  const recovery = pending.recovery;
-  if (recovery) {
-    const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
+  if (pending.wake) {
+    const resumed = yield* startFollowUpWake(targetRunId, session);
     if (!resumed) yield* warnParentNotResumed;
   }
   // Duplicate-safe: the parent row was admitted before the child prompt
   // was consumed. This wake still goes through submitFollowUp so a mocked
-  // delivery site (and a live parent that needs no recovery lease) still
-  // sees it at the original post-finalize point.
+  // delivery site (and a live parent that needs no wake) still sees it at
+  // the original post-finalize point.
   const delivery = yield* submitFollowUp(targetRunId, pending.followUp, {
     session,
   });

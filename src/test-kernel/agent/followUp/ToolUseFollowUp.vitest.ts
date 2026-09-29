@@ -41,10 +41,7 @@ function mockTryResume(): Mock<() => Effect.Effect<boolean, Error>> {
   return vi.fn(() => Effect.succeed(true));
 }
 
-type TryResume = (
-  runId: RunId,
-  recovery: unknown,
-) => Effect.Effect<boolean, Error>;
+type TryResume = (runId: RunId) => Effect.Effect<boolean, Error>;
 
 /** The case's answer to the one resume a wake reaches: whether the run took
  *  it. The fake session's fork serves it as the engine's resume. */
@@ -60,8 +57,8 @@ const withResumePort =
 
 /** The engine a fake session's fork runs a resume attempt on. */
 const caseEngine = {
-  resumeClaimedRun: (runId: RunId, options: { readonly recovery?: unknown }) =>
-    Effect.map(tryResume(runId, options.recovery), (resumed) =>
+  resumeRun: (runId: RunId) =>
+    Effect.map(tryResume(runId), (resumed) =>
       resumed
         ? { started: true, delivered: true }
         : { failed: 'not_resumable' },
@@ -318,16 +315,12 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect('claims one recovery and orders repeated submissions once', () =>
+  it.effect('reserves one wake and orders repeated submissions once', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
       const barrier = createDeferred<boolean>();
-      const claimed: unknown[] = [];
-      const tryResumeRun = vi.fn((_: RunId, recovery: unknown) => {
-        claimed.push(recovery);
-        return Effect.promise(() => barrier.promise);
-      });
+      const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
 
       const first = yield* Effect.forkChild(
         submitFollowUp(
@@ -353,7 +346,6 @@ describe('submitFollowUp', () => {
 
       yield* settle;
       expect(tryResumeRun).toHaveBeenCalledTimes(1);
-      expect(claimed).toHaveLength(1);
       expect(yield* Fiber.join(second)).toEqual({ status: 'queued' });
       expect(yield* Fiber.join(third)).toEqual({ status: 'queued' });
       expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
@@ -364,7 +356,7 @@ describe('submitFollowUp', () => {
   );
 
   it.effect(
-    'releases declined recovery after the submitting fiber is interrupted',
+    'keeps the input queued when the submitting fiber is interrupted mid-wake',
     () =>
       Effect.gen(function* () {
         const runId = generateRunId();
@@ -389,18 +381,16 @@ describe('submitFollowUp', () => {
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
-        // The wake runs on the session's fork: it answers the decline and
-        // settles the lease even though the fiber that dispatched it is gone.
+        // The wake runs on the session's fork: it answers the decline even
+        // though the fiber that dispatched it is gone.
         yield* settle;
 
-        const successor = session.followUps.claimLive(runId, 'child');
-        expect(successor).toBeDefined();
         // The input is the run's row, whichever consumer takes it next.
         expect(recorded.queued(runId)).toEqual(['keep this input']);
       }),
   );
 
-  it.effect('releases recovery when the resume faults', () =>
+  it.effect('answers a faulted resume as a failed wake', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
       const session = fakeSession({ kind: 'queue' });
@@ -413,7 +403,6 @@ describe('submitFollowUp', () => {
           withResumePort(() => Effect.fail(new Error('resume prep failed'))),
         ),
       ).toEqual({ status: 'queued', wake: 'failed' });
-      expect(session.followUps.claimLive(runId, 'child')).toBeDefined();
       expect(recorded.queued(runId)).toEqual(['keep this input']);
     }),
   );
@@ -538,7 +527,7 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
         'recoverable',
       );
       expect(submission).toMatchObject({ kind: 'queued' });
-      expect(submission.kind === 'queued' && submission.lease).toBeTruthy();
+      expect(submission).toEqual({ kind: 'queued', wake: true });
       expect(recoveryFirst.claimLive(runId, 'child')).toBeUndefined();
 
       const childFirst = recordedFollowUps().followUps;
@@ -918,9 +907,10 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
 
         // Still queued on the rows: the run is woken for it, and no second
         // row is written.
-        expect(
-          yield* followUps.submit(id, delivery, 'recoverable'),
-        ).toMatchObject({ kind: 'queued', lease: { kind: 'recovery' } });
+        expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
+          kind: 'queued',
+          wake: true,
+        });
         expect(queued(id)).toEqual(['child result']);
       }),
   );

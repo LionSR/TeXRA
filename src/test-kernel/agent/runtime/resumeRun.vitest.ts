@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -132,16 +132,12 @@ const createSession = Effect.fn('test.createSession')(function* () {
 });
 
 /**
- * The two resume programs over the fake host's process services: the suite
- * runs them on the default runtime rather than a process runtime, so the
- * services they require are provided here.
+ * The resume program over the fake host's process services: the suite runs
+ * it on the default runtime rather than a process runtime, so the services
+ * it requires are provided here.
  */
 function resumeOne(...args: Parameters<typeof resumeRun>) {
   return Effect.provide(resumeRun(...args), fakeProcessServices());
-}
-
-function resumeClaimedOne(...args: Parameters<typeof resumeClaimedRun>) {
-  return Effect.provide(resumeClaimedRun(...args), fakeProcessServices());
 }
 
 describe('resumeRun tool-use queue ownership', () => {
@@ -195,9 +191,7 @@ describe('resumeRun tool-use queue ownership', () => {
           ),
         );
 
-        const resumed = yield* Effect.forkChild(
-          resumeClaimedOne(RUN, { session }),
-        );
+        const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
         yield* Deferred.await(configRead);
         expect(
           yield* session.followUps.submit(
@@ -228,9 +222,7 @@ describe('resumeRun tool-use queue ownership', () => {
         ),
       );
 
-      const resumed = yield* Effect.forkChild(
-        resumeClaimedOne(RUN, { session }),
-      );
+      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(existsRead);
       expect(
         yield* session.followUps.submit(
@@ -302,18 +294,16 @@ describe('resumeRun tool-use queue ownership', () => {
     }),
   );
 
-  it.effect('refuses a recovery lease invalidated during storage reads', () =>
+  it.effect('refuses a recovery invalidated during storage reads', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      const submission = yield* session.followUps.submit(
-        RUN,
-        { from: { kind: 'user' as const }, text: 'stale' },
-        'recoverable',
-      );
-      expect(submission).toMatchObject({ kind: 'queued' });
-      if (submission.kind !== 'queued' || !submission.lease) {
-        throw new Error('recovery not claimed');
-      }
+      expect(
+        yield* session.followUps.submit(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'stale' },
+          'recoverable',
+        ),
+      ).toEqual({ kind: 'queued', wake: true });
       const config =
         yield* Deferred.make<ReturnType<typeof snapshot>['agentConfig']>();
       const configRead = yield* Deferred.make<void>();
@@ -323,12 +313,7 @@ describe('resumeRun tool-use queue ownership', () => {
         ),
       );
 
-      const resumed = yield* Effect.forkChild(
-        resumeOne(RUN, {
-          session,
-          recovery: submission.lease,
-        }),
-      );
+      const resumed = yield* Effect.forkChild(resumeOne(RUN, { session }));
       yield* Deferred.await(configRead);
       session.followUps.terminalize(RUN);
       yield* Deferred.succeed(config, snapshot().agentConfig);
@@ -350,6 +335,8 @@ describe('resumeRun tool-use queue ownership', () => {
         (yield* Effect.flip(resumeOne(RUN, { session }))).message,
       ).toContain('failed');
       expect(yield* queuedTexts(session)).toEqual(['keep me']);
+      // The resume that claimed the recovery gave it back: the next claims it.
+      expect(session.followUps.claimRecovery(RUN)).toBeDefined();
     }),
   );
 
@@ -393,24 +380,18 @@ describe('resumeRun tool-use queue ownership', () => {
       }),
   );
 
-  it.effect('adopts the exact recovery generation claimed by submission', () =>
+  it.effect('claims the recovery a submission reserved', () =>
     Effect.gen(function* () {
       const session = yield* createSession();
-      const submission = yield* session.followUps.submit(
-        RUN,
-        { from: { kind: 'user' as const }, text: 'claimed' },
-        'recoverable',
-      );
-      expect(submission).toMatchObject({ kind: 'queued' });
-      if (submission.kind !== 'queued' || !submission.lease) {
-        throw new Error('recovery not claimed');
-      }
-      const recovery = submission.lease;
+      expect(
+        yield* session.followUps.submit(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'claimed' },
+          'recoverable',
+        ),
+      ).toEqual({ kind: 'queued', wake: true });
 
-      const result = yield* resumeOne(RUN, {
-        session,
-        recovery,
-      });
+      const result = yield* resumeOne(RUN, { session });
       expect(result).toMatchObject({
         started: true,
         delivered: true,
@@ -424,19 +405,17 @@ describe('resumeRun tool-use queue ownership', () => {
   );
 
   it.effect(
-    'keeps caller-supplied input recoverable for workflow records',
+    'keeps a reserved wake input on the rows for workflow records',
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
-        const submission = yield* session.followUps.submit(
-          RUN,
-          { from: { kind: 'user' as const }, text: 'workflow input' },
-          'recoverable',
-        );
-        expect(submission).toMatchObject({ kind: 'queued' });
-        if (submission.kind !== 'queued' || !submission.lease) {
-          throw new Error('recovery not claimed');
-        }
+        expect(
+          yield* session.followUps.submit(
+            RUN,
+            { from: { kind: 'user' as const }, text: 'workflow input' },
+            'recoverable',
+          ),
+        ).toEqual({ kind: 'queued', wake: true });
         readConfigMock.mockReturnValueOnce(
           Effect.succeed({
             ...snapshot().agentConfig,
@@ -445,12 +424,9 @@ describe('resumeRun tool-use queue ownership', () => {
         );
         retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
-        expect(
-          yield* resumeOne(RUN, {
-            session,
-            recovery: submission.lease,
-          }),
-        ).toEqual({ failed: 'finished' });
+        expect(yield* resumeOne(RUN, { session })).toEqual({
+          failed: 'finished',
+        });
         expect(yield* queuedTexts(session)).toEqual(['workflow input']);
       }),
   );

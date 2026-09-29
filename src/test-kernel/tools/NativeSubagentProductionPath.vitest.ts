@@ -434,15 +434,16 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
  * point while its final delivery wakes the parent, so the claim, not the
  * lane, is the durable boundary these assertions read against.
  */
-/** Queue a user's input on a stopped run: the recovery its admission claims. */
+/** Queue a user's input on a stopped run: the recovery its admission
+ *  reserves, which the next resume claims. */
 function queueRecovery(runId: RunId, text: string) {
-  return session.followUps
-    .submit(runId, { text, from: { kind: 'user' } }, 'recoverable')
-    .pipe(
-      Effect.map((queued) =>
-        queued.kind === 'queued' ? queued.lease : undefined,
-      ),
-    );
+  return Effect.asVoid(
+    session.followUps.submit(
+      runId,
+      { text, from: { kind: 'user' } },
+      'recoverable',
+    ),
+  );
 }
 
 function waitForClaimRelease(runId: RunId): Promise<void> {
@@ -627,7 +628,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
     childId = undefined;
-    // Every wake: an admission that claimed the run's recovery.
+    // Every wake: an admission that reserved the run's recovery.
     resumedRuns = [];
     const followUps = session.followUps;
     const submitBatch = followUps.submitBatch.bind(followUps);
@@ -635,7 +636,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       submitBatch(runId, ...rest).pipe(
         Effect.tap((submitted) =>
           Effect.sync(() => {
-            if (submitted.kind === 'queued' && submitted.lease)
+            if (submitted.kind === 'queued' && submitted.wake)
               resumedRuns.push(runId);
           }),
         ),
@@ -751,14 +752,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toHaveLength(1);
         childTurns.push({ text: 'Recovered result C.' });
         parentTurns.push({ text: 'Parent received recovered result C.' });
+        yield* queueRecovery(runId, 'Continue after restart.');
         const recovered = yield* Effect.forkChild(
-          withProcessServices(
-            testRuntime(),
-            resumeRun(runId, {
-              session,
-              recovery: yield* queueRecovery(runId, 'Continue after restart.'),
-            }),
-          ),
+          withProcessServices(testRuntime(), resumeRun(runId, { session })),
         );
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result C.'),
@@ -824,16 +820,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           Effect.fail(new Error('Recovered model binding failed.')),
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
+        yield* queueRecovery(runId, 'Keep this unconsumed input.');
         expect(
           yield* withProcessServices(
             testRuntime(),
-            resumeRun(runId, {
-              session,
-              recovery: yield* queueRecovery(
-                runId,
-                'Keep this unconsumed input.',
-              ),
-            }),
+            resumeRun(runId, { session }),
           ),
         ).toEqual({
           started: true,

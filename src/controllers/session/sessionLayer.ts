@@ -43,7 +43,7 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import { resumeClaimedRun } from '@agent/runtime/resumeRun';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
@@ -1123,7 +1123,7 @@ export function installProcessRuntime({
     Layer.succeed(AgentEngine)({
       executeAgent,
       resumeToolUseFromResumeData,
-      resumeClaimedRun,
+      resumeRun,
     }),
     inlineComments === undefined
       ? Layer.empty
