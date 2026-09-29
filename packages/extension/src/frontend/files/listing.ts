@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -31,10 +32,10 @@ function getRelativePathPreservingSymlinks(
 
 /** Every file under the workspace root that passes `config`'s filters, as
  *  workspace-relative paths. */
-export async function getFilesRecursively(
+export function getFilesRecursively(
   root: string,
   config: FileFilterConfig,
-): Promise<string[]> {
+): Effect.Effect<string[]> {
   const filters = prepareFileFilters(config);
 
   let excludePattern: vscode.RelativePattern | undefined;
@@ -46,12 +47,16 @@ export async function getFilesRecursively(
     );
   }
 
-  const files = await vscode.workspace.findFiles(
-    new vscode.RelativePattern(root, '**/*'),
-    excludePattern,
+  return Effect.promise(() =>
+    vscode.workspace.findFiles(
+      new vscode.RelativePattern(root, '**/*'),
+      excludePattern,
+    ),
+  ).pipe(
+    Effect.map((files) =>
+      files
+        .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
+        .filter((relativePath) => passesFileFilters(relativePath, filters)),
+    ),
   );
-
-  return files
-    .map((uri) => getRelativePathPreservingSymlinks(uri.fsPath, root))
-    .filter((relativePath) => passesFileFilters(relativePath, filters));
 }

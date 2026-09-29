@@ -161,12 +161,14 @@ async function requestModelAccess(handler = createHandler()): Promise<void> {
       refreshed.resolve();
     }),
   );
-  await handler.handleMessage(
-    {
-      command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-      modelName: 'gemini31p',
-    },
-    createWebviewView(),
+  await testRuntime().runPromise(
+    handler.handleMessage(
+      {
+        command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+        modelName: 'gemini31p',
+      },
+      createWebviewView(),
+    ),
   );
   // The inbound dispatcher starts the handler asynchronously. Observe its
   // existing final refresh, not merely acknowledgement of the inbound message.
@@ -376,12 +378,14 @@ describe('Copilot route preference handler', () => {
 
   it('allows opt-out without consulting current Copilot access', async () => {
     const port = await installModels(GEMINI_PRO);
-    await createHandler().handleMessage(
-      {
-        command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
-        modelName: 'gemini31p',
-      },
-      createWebviewView(),
+    await testRuntime().runPromise(
+      createHandler().handleMessage(
+        {
+          command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
+          modelName: 'gemini31p',
+        },
+        createWebviewView(),
+      ),
     );
     expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
       'gemini31p',

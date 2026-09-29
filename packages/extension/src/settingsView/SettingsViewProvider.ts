@@ -10,6 +10,7 @@ import {
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
+import { withLogChannel } from '@logger/effectLog';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -18,10 +19,12 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
+import {
+  postToWebview,
+  SettingsViewMessageHandler,
+} from './SettingsViewMessageHandler';
 
 function isReadyMessage(message: unknown): boolean {
   return (
@@ -125,25 +128,10 @@ export class SettingsViewProvider {
       // disposing the dashboard panel meanwhile runs cleanupView.
       if (tab == null || !this._view) return;
       if (this.viewReady) {
-        const webview = this._view.webview;
-        yield* Effect.tryPromise({
-          try: () => this.postTab(webview, { tab, agentSubTab }),
-          catch: ensureError,
-        });
+        yield* this.postTab(this._view.webview, { tab, agentSubTab });
       } else {
         this.pendingTab = { tab, agentSubTab };
       }
-    });
-  }
-
-  private async postTab(
-    webview: vscode.Webview,
-    { tab, agentSubTab }: NonNullable<SettingsViewProvider['pendingTab']>,
-  ): Promise<void> {
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-      tab,
-      ...(agentSubTab && { agentSubTab }),
     });
   }
 
@@ -164,15 +152,37 @@ export class SettingsViewProvider {
         ),
       ),
     );
-    return panel.webview.onDidReceiveMessage(async (message) => {
-      await this.messageHandler.handleMessage(message, panel);
-      if (this._view !== panel || !isReadyMessage(message)) return;
-      // The ready handler has repainted the view; the tab asked for while it
-      // loaded goes after that data, as a reveal of a live panel orders them.
-      this.viewReady = true;
-      const pending = this.pendingTab;
-      this.pendingTab = undefined;
-      if (pending) await this.postTab(panel.webview, pending);
+    return panel.webview.onDidReceiveMessage((message) => {
+      this.runtime.runFork(
+        Effect.gen({ self: this }, function* () {
+          yield* this.messageHandler.handleMessage(message, panel);
+          if (this._view !== panel || !isReadyMessage(message)) return;
+          // The ready handler has repainted the view; the tab asked for while
+          // it loaded goes after that data, as a reveal of a live panel
+          // orders them.
+          this.viewReady = true;
+          const pending = this.pendingTab;
+          this.pendingTab = undefined;
+          if (pending) yield* this.postTab(panel.webview, pending);
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError('Settings view message failed', cause).pipe(
+              withLogChannel('SettingsViewProvider'),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  private postTab(
+    webview: vscode.Webview,
+    { tab, agentSubTab }: NonNullable<SettingsViewProvider['pendingTab']>,
+  ) {
+    return postToWebview(webview, {
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tab,
+      ...(agentSubTab && { agentSubTab }),
     });
   }
 

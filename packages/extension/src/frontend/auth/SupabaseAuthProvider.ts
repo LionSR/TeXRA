@@ -1,7 +1,7 @@
 import { Deferred, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
-import { type AuthPortError, callPort, settleFailure } from '@auth/authProgram';
+import { AuthPortError, callPort, settleFailure } from '@auth/authProgram';
 import {
   AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
@@ -27,8 +27,9 @@ import {
   type AuthCallbackTransport,
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -123,12 +124,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private transport(): AuthCallbackTransport {
     return {
       open: (route) =>
-        callPort(() => {
-          if (!this.uriHandler) {
-            throw new Error(AUTH_URI_HANDLER_NOT_INITIALIZED);
-          }
-          return this.buildCallbackUrl(route.nonce);
-        }),
+        this.uriHandler
+          ? this.buildCallbackUrl(route.nonce)
+          : Effect.fail(
+              new AuthPortError({
+                cause: new Error(AUTH_URI_HANDLER_NOT_INITIALIZED),
+              }),
+            ),
       presentSignInUrl: (url) =>
         callPort(async () => {
           await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -189,17 +191,23 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     this._onDidChangeSessions.dispose();
   }
 
+  /** The `vscode.AuthenticationProvider` contract owes VS Code a Promise: each
+   *  member is the R1(a) boundary that runs one program here, and a failure
+   *  reaches the editor as the port's own error. */
+  private async settle<A, E>(
+    program: Effect.Effect<A, E, ProcessServices>,
+  ): Promise<A> {
+    const exit = await this.runtime.runPromiseExit(program);
+    if (Exit.isSuccess(exit)) return exit.value;
+    throw settleFailure(exit.cause);
+  }
+
   /** Get sessions from secure storage. */
-  async getSessions(
+  getSessions(
     _scopes?: readonly string[],
     _options?: vscode.AuthenticationProviderSessionOptions,
   ): Promise<vscode.AuthenticationSession[]> {
-    // The `vscode.AuthenticationProvider` contract owes VS Code a Promise, so
-    // this is the R1(a) boundary that runs the program on the extension's
-    // runtime; a failure reaches the editor as the port's own error.
-    const exit = await this.runtime.runPromiseExit(this.loadUsableSessions());
-    if (Exit.isSuccess(exit)) return exit.value;
-    throw settleFailure(exit.cause);
+    return this.settle(this.loadUsableSessions());
   }
 
   /**
@@ -286,11 +294,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * picks it: a web/Codespaces workbench routes through the editor's own
    * external URI, a desktop editor through the https bridge page.
    */
-  private async buildCallbackUrl(nonce: string): Promise<string> {
+  private buildCallbackUrl(
+    nonce: string,
+  ): Effect.Effect<string, AuthPortError> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
-      const externalUri = await vscode.env.asExternalUri(
-        vscode.Uri.parse(getAuthCallbackUri(vscode.env.uriScheme)),
-      );
       // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
       // the redirect URL is what routes the callback back into the editor.
       // skipEncoding (toString(true)) so auth-js's encodeURIComponent over
@@ -305,7 +312,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // bare callback URL, so it is also correct for plain web.
       // PKCE flow: the callback carries a one-time ?code= (query), which the
       // shared coordinator exchanges for a session.
-      return withCallbackNonce(externalUri.toString(true), nonce);
+      return callPort(() =>
+        Promise.resolve(
+          vscode.env.asExternalUri(
+            vscode.Uri.parse(getAuthCallbackUri(vscode.env.uriScheme)),
+          ),
+        ),
+      ).pipe(
+        Effect.map((externalUri) =>
+          withCallbackNonce(externalUri.toString(true), nonce),
+        ),
+      );
     }
 
     // Desktop: redirect GoTrue to the https bridge page instead of straight to
@@ -314,9 +331,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     // forwards that to ${scheme}://${id}/auth-callback for a real-click handoff.
     // ext/id/nonce ride in the PATH (not a query) so redirect_to carries no '?'
     // that an OAuth round-trip could mangle into the function name.
-    return (
+    return Effect.succeed(
       `${AUTH_BRIDGE_URL}/${encodeURIComponent(vscode.env.uriScheme)}` +
-      `/${encodeURIComponent(getExtensionId())}/${nonce}`
+        `/${encodeURIComponent(getExtensionId())}/${nonce}`,
     );
   }
 
@@ -326,7 +343,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    *
    * @param scopes - Scopes array, may contain provider hint as "provider:github-browser" or "provider:google"
    */
-  async createSession(
+  createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
     const requestedProvider = scopes
@@ -337,8 +354,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const provider =
       requestedProvider === 'github-browser' ? 'github' : requestedProvider;
 
-    return this.createSessionViaSupabaseOAuth(
-      isOAuthProvider(provider) ? provider : DEFAULT_OAUTH_PROVIDER,
+    return this.settle(
+      this.signInWithProgress(
+        isOAuthProvider(provider) ? provider : DEFAULT_OAUTH_PROVIDER,
+      ),
     );
   }
 
@@ -347,16 +366,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * notification. The token's cancellation is the one host signal the shared
    * program cannot see for itself, so it races the attempt.
    */
-  private async createSessionViaSupabaseOAuth(
-    provider: OAuthProvider,
-  ): Promise<vscode.AuthenticationSession> {
-    return vscode.window.withProgress(
+  private signInWithProgress(provider: OAuthProvider) {
+    return withVSCodeProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: 'TeXRA Authentication',
         cancellable: true,
       },
-      async (progress, token) => {
+      (progress, token) => {
         progress.report({ message: 'Waiting for authentication...' });
         const cancelled = Deferred.makeUnsafe<never, Error>();
         const cancel = (): void => {
@@ -368,34 +385,30 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         const listener = token.onCancellationRequested(cancel);
         if (token.isCancellationRequested) cancel();
 
-        const exit = await this.runtime.runPromiseExit(
-          Effect.raceFirst(
-            this.signIn.signIn({ provider }),
-            Deferred.await(cancelled),
-          ).pipe(
-            // Resolve through the program `getSessions` answers with, so its
-            // failure policy — a rejected load rejects the attempt, a
-            // resolution failure answers an empty list — applies unchanged to
-            // the post-commit read.
-            Effect.andThen(this.loadUsableSessions()),
-            Effect.flatMap((sessions) =>
-              sessions.length === 0
-                ? Effect.fail(
-                    new Error('Session creation failed. Try signing in again.'),
-                  )
-                : Effect.succeed(sessions[0]),
-            ),
-            Effect.ensuring(Effect.sync(() => listener.dispose())),
-            Effect.catchCause((cause) => {
-              this.notifier.showError(
-                `Authentication failed: ${toErrorMessage(settleFailure(cause))}`,
-              );
-              return Effect.failCause(cause);
-            }),
+        return Effect.raceFirst(
+          this.signIn.signIn({ provider }),
+          Deferred.await(cancelled),
+        ).pipe(
+          // Resolve through the program `getSessions` answers with, so its
+          // failure policy — a rejected load rejects the attempt, a
+          // resolution failure answers an empty list — applies unchanged to
+          // the post-commit read.
+          Effect.andThen(this.loadUsableSessions()),
+          Effect.flatMap((sessions) =>
+            sessions.length === 0
+              ? Effect.fail(
+                  new Error('Session creation failed. Try signing in again.'),
+                )
+              : Effect.succeed(sessions[0]),
           ),
+          Effect.ensuring(Effect.sync(() => listener.dispose())),
+          Effect.catchCause((cause) => {
+            this.notifier.showError(
+              `Authentication failed: ${toErrorMessage(settleFailure(cause))}`,
+            );
+            return Effect.failCause(cause);
+          }),
         );
-        if (Exit.isSuccess(exit)) return exit.value;
-        throw settleFailure(exit.cause);
       },
     );
   }
@@ -408,12 +421,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * target whatever session was last handed to the client, revoking every
    * device's refresh tokens with its default global scope.
    */
-  async removeSession(sessionId: string): Promise<void> {
-    const cancelPending = this.signIn.cancel();
-    const exit = await this.runtime.runPromiseExit(
-      cancelPending.pipe(Effect.andThen(this.clearLocalSession(sessionId))),
+  removeSession(sessionId: string): Promise<void> {
+    return this.settle(
+      this.signIn
+        .cancel()
+        .pipe(Effect.andThen(this.clearLocalSession(sessionId)), Effect.asVoid),
     );
-    if (Exit.isFailure(exit)) throw settleFailure(exit.cause);
   }
 
   /**

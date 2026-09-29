@@ -58,11 +58,6 @@ export function createExtensionCommandActions(
   secrets: PlatformSecrets,
   session: SessionHandle,
 ): ExtensionCommandActions {
-  // The walkthrough and the docs page are VS Code calls; each is one
-  // foreign edge lifted here.
-  const fromPromise = (run: () => PromiseLike<unknown>) =>
-    Effect.asVoid(Effect.tryPromise({ try: run, catch: ensureError }));
-
   return {
     showSettings: (tab, agentSubTab) =>
       settingsViewProvider.showSettingsView(tab, agentSubTab),
@@ -83,19 +78,20 @@ export function createExtensionCommandActions(
           progressViewProvider.presentLaunchedRun(runId),
         ),
       ),
-    openGettingStarted: () =>
-      fromPromise(() => sysOpenGettingStarted(context.extension.id)),
+    openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
     createSampleProject: () =>
       sysCreateSampleProject(context.extensionPath, session),
     downloadArXivSource: () => latexDownloadArXivSource(session),
     openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
     openDoc: (page) =>
       page
-        ? fromPromise(() =>
-            vscode.env.openExternal(
-              vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
-            ),
-          )
+        ? Effect.tryPromise({
+            try: () =>
+              vscode.env.openExternal(
+                vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
+              ),
+            catch: ensureError,
+          }).pipe(Effect.asVoid)
         : Effect.void,
     indentCurrentTeX: () => latexIndentCurrentTeX(session),
     fixCompilation: () => latexFixCompilation(session),

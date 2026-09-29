@@ -12,7 +12,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -30,11 +30,10 @@ const reportFailure = (err: unknown) =>
  * activation, so the regular onboarding takes over). Must not touch a
  * session — the no-workspace activation path returns before one exists.
  */
-export async function createSampleProjectWithoutWorkspace(
+export function createSampleProjectWithoutWorkspace(
   extensionPath: string,
-  runtime: ProcessRuntime,
-): Promise<void> {
-  const create = Effect.gen(function* () {
+): Effect.Effect<void, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const parentPath = yield* selectFolder({
       openLabel: 'Create sample project here',
@@ -53,22 +52,17 @@ export async function createSampleProjectWithoutWorkspace(
       yield* fs.copy(path.join(extensionPath, 'resources', 'examples'), dest);
     }
     yield* Effect.tryPromise({
-      try: async () => {
-        await vscode.commands.executeCommand(
+      try: () =>
+        vscode.commands.executeCommand(
           'vscode.openFolder',
           vscode.Uri.file(dest),
           { forceNewWindow: false },
-        );
-      },
+        ),
       catch: ensureError,
     });
-  });
-
-  await runtime.runPromise(
-    create.pipe(
-      Effect.catch((error: PlatformError.PlatformError | Error) =>
-        reportFailure(error),
-      ),
+  }).pipe(
+    Effect.catch((error: PlatformError.PlatformError | Error) =>
+      reportFailure(error),
     ),
   );
 }
