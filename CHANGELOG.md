@@ -177,15 +177,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **Mid-run skill and plugin changes no longer re-bill the whole
-  conversation** — a run's system text is now fixed at its first request
-  and rebuilt only when the conversation is compacted. When a skill, a
-  plugin's instructions, the bibliography setting or the model changes
-  mid-run, the agent is told in a short system note after the latest
-  message, so the provider's cache of everything before it still applies.
-  A tool added or removed is announced the same way; the provider still
-  re-reads the conversation once, since the tool list heads every request.
-  OpenAI requests also carry the run as their prompt-cache key.
+- **Enabling a skill or plugin mid-run no longer re-reads the whole
+  conversation at full price** — the agent is told what changed, and the
+  earlier conversation stays cached. Adding or removing a tool still costs
+  one full re-read. OpenAI models also reuse their cache more often across
+  a run.
 - **`texra doctor --prune-storage` clears history left by deleted
   projects** — it lists each workspace's stored history whose project
   folder no longer exists (or, for history no current build has opened,
