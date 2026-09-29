@@ -13,8 +13,8 @@
  * Every verb is an Effect and the controller holds no runtime: a run belongs
  * at a host boundary (the Effect-4 migration's R1, frozen at zero below one
  * by `config/ratchets/effect-migration-baseline.json`) and this controller is
- * host-agnostic, so the two host wiring points that own a controller
- * (`desktopAgentRun.ts`, `ProgressViewProvider.ts`) supply the fiber.
+ * host-agnostic, so the host that owns a controller supplies the fiber
+ * (`toolEditHostWiring.ts` is the wiring both hosts share).
  *
  * Two shapes recur. **Admission is synchronous, the work is an Effect**: the
  * bookkeeping — the map write, the `Deferred` a later caller joins — happens
@@ -197,8 +197,8 @@ export class ToolEditApprovalController {
 
   /**
    * Stage the preview for a tool-edit request the fold lists (the runtime's
-   * `presentToolEdit`). The decision reaches the runtime through
-   * {@link ToolEditApprovalHost.decide}, never through this call.
+   * `presentToolEdit`). The decision reaches the runtime as a
+   * `request.decide` through the session, never through this call.
    */
   present(
     request: ToolEditApprovalRequest,
@@ -229,7 +229,7 @@ export class ToolEditApprovalController {
 
       // Detached, because a staging failure leaves the entry in place — the
       // request is still open in the fold with its panel on screen, and an
-      // approve or reject on it decides from the payload — and because the
+      // approve on it decides from the payload — and because the
       // staging has to finish whatever became of the caller waiting below.
       // The failure itself is re-raised here, which is where each host
       // reports it.
@@ -250,25 +250,15 @@ export class ToolEditApprovalController {
       'requestId' | 'action'
     >,
   ): Effect.Effect<void, never, PreviewServices> {
+    const { requestId, action } = payload;
+    if (action === 'approve') {
+      return this.approveStaged(requestId).pipe(Effect.asVoid);
+    }
     return Effect.suspend(() => {
-      const entry = this.requests.get(payload.requestId);
-      if (!entry) return Effect.void;
-      if (entry.phase === 'initializing') {
-        // No preview to read the edited file back from or to open, so the
-        // proposal the request carries is the whole answer.
-        return payload.action === 'approve'
-          ? this.detach(
-              this.decideFromPayload(entry, {
-                action: 'approve',
-                content: entry.request.proposedContent,
-              }),
-            )
-          : Effect.void;
-      }
+      const entry = this.requests.get(requestId);
+      if (entry?.phase !== 'pending') return Effect.void;
 
-      switch (payload.action) {
-        case 'approve':
-          return this.detach(this.admit(entry, () => this.approve(entry)));
+      switch (action) {
         case 'openDiff':
           return this.detach(this.admit(entry, () => entry.preview.showDiff()));
         case 'previewProposed':
@@ -286,13 +276,35 @@ export class ToolEditApprovalController {
             ),
           );
       }
-      payload.action satisfies never;
+      action satisfies never;
       return Effect.void;
     });
   }
 
+  /**
+   * Approve one staged request as its Approve button does: the edited
+   * document read back from the view, or the proposal when there is none.
+   * `false` when nothing is staged, which the caller answers itself.
+   */
+  approveStaged(
+    requestId: string,
+  ): Effect.Effect<boolean, never, PreviewServices> {
+    return Effect.suspend(() => {
+      const entry = this.requests.get(requestId);
+      if (!entry) return Effect.succeed(false);
+      return this.detach(
+        entry.phase === 'initializing'
+          ? this.decideFromPayload(entry, {
+              action: 'approve',
+              content: entry.request.proposedContent,
+            })
+          : this.admit(entry, () => this.approve(entry)),
+      ).pipe(Effect.as(true));
+    });
+  }
+
   /** Drop every staged preview and settle once all are gone; the runs that
-   *  opened the requests, still pending in the fold, close them. */
+   *  opened the requests close them. */
   dispose(): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
@@ -309,9 +321,8 @@ export class ToolEditApprovalController {
 
   /**
    * Drop the preview staged for one request, and settle once it is gone.
-   * The `request.decided` route above is how a decided request releases; a
-   * host runs this directly for a request whose `request.opened` was refused,
-   * which no decision follows, and waits for it before reporting the refusal.
+   * `request.decided` is how a decided request releases; a host runs this for
+   * a request whose `request.opened` was refused, which no decision follows.
    * A {@link present} call still in flight is the reason that wait has to
    * reach inside it: dropping the entry alone would settle while the host was
    * still writing temp files it would then delete on its own time, or still
@@ -427,8 +438,7 @@ export class ToolEditApprovalController {
     );
   }
 
-  /** Send one decision for a staged request; the fold's `request.decided`
-   *  then releases the preview through {@link handleSessionEvent}. */
+  /** Send one decision; `request.decided` then releases the preview. */
   private send(
     request: ToolEditApprovalRequest,
     decision: RequestDecision,
@@ -553,11 +563,10 @@ export class ToolEditApprovalController {
 
   /**
    * Admit one action on an entry: the join a release waits on is registered
-   * here, synchronously, in the step its caller found the entry in, and
-   * withdrawn once the action settles. The action itself is a thunk, so a
-   * host method behind it is invoked when the action runs rather than when it
-   * is admitted. A failure is reported only while the request is unsettled:
-   * an action that fails after the entry is gone has no user left to tell.
+   * synchronously and withdrawn once the action settles. The action is a
+   * thunk, so a host method runs when the action does, not when admitted. A
+   * failure is reported only while the request is unsettled: after that no
+   * user is left to tell.
    */
   private admit(
     entry: PendingToolEditApproval,
@@ -576,17 +585,15 @@ export class ToolEditApprovalController {
               }
             }),
       ),
-      // Withdrawn from this action's own exit, whichever it is, so a release
-      // can never be left waiting on a join nothing will fill.
+      // Withdrawn on any exit, so a release is never left waiting on a join.
       Effect.onExit(() => withdraw),
     );
   }
 
   /**
-   * Register one join on an entry and hand back its withdrawal: registered
-   * synchronously, in the step its caller found the entry in, and withdrawn
-   * by whichever exit that caller decides owns it. A join never fails — the
-   * work behind it reports its own failure — so {@link cleanup} waits on
+   * Register one join on an entry, synchronously in the step its caller
+   * found the entry in, and hand back its withdrawal. A join never fails —
+   * the work behind it reports its own failure — so {@link cleanup} waits on
    * ordering, not on a second error channel.
    */
   private track(entry: PendingToolEditApproval): Effect.Effect<void> {
@@ -599,11 +606,8 @@ export class ToolEditApprovalController {
     });
   }
 
-  /**
-   * Start one admitted program on a fiber of its own that outlives this call,
-   * which is what voiding its promise used to mean: nothing here waits for
-   * it, and a release joins it through the entry, never through this fork.
-   */
+  /** Start one admitted program on a fiber that outlives this call; a
+   *  release joins it through the entry, never through this fork. */
   private detach(
     program: Effect.Effect<void, never, PreviewServices>,
   ): Effect.Effect<void, never, PreviewServices> {
@@ -611,24 +615,20 @@ export class ToolEditApprovalController {
   }
 
   /**
-   * The display program the preview programs get for one entry. It refuses to
-   * start a build for a request that already settled, and it runs the host's
-   * build on a fiber of its own: the program's settle race interrupts the
-   * fiber that yielded this one, which must not take the build down with it,
-   * and the join registered here is what {@link release} waits on so the
-   * build is not still reading the temp files it deletes.
+   * The display program the preview programs get for one entry. It starts no
+   * build for a settled request, and runs the host's build on a fiber of its
+   * own: the settle race interrupts the fiber that yielded this one, which
+   * must not take the build down, and {@link release} joins it so the build
+   * is not still reading the temp files it deletes.
    */
   private buildDisplayFor(entry: PendingToolEditApproval): BuildDisplayFn {
     return (location, options) =>
       Effect.suspend(() => {
-        // The program's own settled check and this call are separate steps, so
-        // a settle can land between them: refuse to start work for a request
-        // nobody is looking at.
+        // A settle can land between the program's own check and this one.
         if (entry.isSettled()) return Effect.void;
 
-        // Registered before the fork, in this same step, and withdrawn from
-        // the build's own exit rather than from the caller's: an interrupted
-        // caller leaves the build running, which is exactly what a release
+        // Withdrawn from the build's own exit, not the caller's: an
+        // interrupted caller leaves the build running, which a release
         // still has to wait for.
         const withdraw = this.track(entry);
         return Effect.forkDetach(

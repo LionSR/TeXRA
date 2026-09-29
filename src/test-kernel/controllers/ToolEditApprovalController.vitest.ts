@@ -282,6 +282,26 @@ describe('tool edit approval controller', () => {
     expect(testHost.session.requests.request).toHaveBeenCalledOnce();
   });
 
+  it("approves a staged request with the user's edit for an approve-all, and reports an unstaged one as not held", async () => {
+    const testHost = createTestHost();
+    const controller = createController(testHost);
+
+    Deferred.doneUnsafe(testHost.staging, Effect.void);
+    Deferred.doneUnsafe(testHost.presentation, Effect.void);
+    await run(controller.present(approvalRequest()));
+    const requestId = testHost.contextForRequest().requestId;
+
+    expect(await run(controller.approveStaged(requestId))).toBe(true);
+    await run(Deferred.await(testHost.decided));
+    expect(testHost.session.requests.request).toHaveBeenCalledWith({
+      kind: 'request.decide',
+      runId: RUN,
+      requestId,
+      decision: { action: 'approve', content: 'edited by the user' },
+    });
+    expect(await run(controller.approveStaged('never-staged'))).toBe(false);
+  });
+
   it('holds a release until a preview build still running has settled, and starts no build for a settled request', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost);

@@ -994,7 +994,9 @@ plan:
   read from the fold and each decision re-reads the committed rows, so a
   request whose `request.opened` is committing in that instant stays pending
   for the user; the single `exclusive` job over the durable set stays a
-  refinement.
+  refinement. A tool edit a host staged a diff view for is approved through
+  the host's `approveToolEdit` port, which reads the user's edit back like
+  the Approve button, so a bulk approve never drops it.
 - **Own-key retry** stays pending on every host; the TUI's denial is gone.
 - **Reject** is a plain `request.decide` on every host. **Approve** stays the
   host's `toolEdit` verb only because it reads the user's edit back from the

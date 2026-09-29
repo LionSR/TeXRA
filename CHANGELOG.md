@@ -306,7 +306,7 @@ All notable changes to this project will be documented in this file.
   Turning on "approve all" for a run (the switches in the run header, or
   "approve all edits" on a prompt) now also approves the requests of that
   kind already waiting, in the extension and desktop as it did in the
-  terminal. A retry on your own API key with no key entered stays pending in
+  terminal; an edit you made in a waiting request's diff view is kept. A retry on your own API key with no key entered stays pending in
   the terminal, as it does in the extension and desktop, instead of being
   denied: the card comes back with the reason and you choose again. The
   desktop now tells you when a file drop skipped items, as the extension

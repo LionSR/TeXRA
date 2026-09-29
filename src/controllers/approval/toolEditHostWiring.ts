@@ -23,7 +23,8 @@ import type { ToolEditApprovalController } from './ToolEditApprovalController';
 const CHANNEL = 'ToolEditApproval';
 
 /**
- * The tool-edit members of `session.interactions.use`. Staging runs on the
+ * The tool-edit members of `session.interactions.use`. `approveToolEdit`
+ * is how an approve-all reaches the edits a user made in a staged diff view. Staging runs on the
  * host's own fiber scheme (`spawn`): the session hands the request over and
  * does not wait, and a staging failure is logged here rather than left to a
  * fiber nobody reads. The release is composed into the session's own program
@@ -36,7 +37,12 @@ export function toolEditInteractions(
   controller: ToolEditApprovalController,
   runtime: ProcessRuntime,
   spawn: (program: Effect.Effect<void, never, ProcessServices>) => void,
-): Required<Pick<HostInteractions, 'presentToolEdit' | 'releaseToolEdit'>> {
+): Required<
+  Pick<
+    HostInteractions,
+    'presentToolEdit' | 'releaseToolEdit' | 'approveToolEdit'
+  >
+> {
   return {
     presentToolEdit: (request) =>
       spawn(
@@ -53,6 +59,8 @@ export function toolEditInteractions(
       ),
     releaseToolEdit: (requestId) =>
       withProcessServices(runtime, controller.release(requestId)),
+    approveToolEdit: (requestId) =>
+      withProcessServices(runtime, controller.approveStaged(requestId)),
   };
 }
 
