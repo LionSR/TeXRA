@@ -81,7 +81,7 @@ function answerFor(
           action: 'deny',
           reason: texraApprovalDenialMessage(decision),
         },
-        denial: { kind: 'executable' },
+        denial: { kind: 'plan' },
       };
     }
     case 'userQuestion': {

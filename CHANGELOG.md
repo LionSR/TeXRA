@@ -306,8 +306,7 @@ All notable changes to this project will be documented in this file.
   `never`, tools that need approval are no longer offered to the model on the
   extension and desktop either, and a policy change made while a request is
   already waiting leaves that request for you to answer (a headless run
-  denies it). The npm package denies retries by policy instead of through its
-  own listener.
+  denies it).
 
 - **A custom agent you turned off stays off under the default roster** —
   it reappeared in the selector whenever the roster resolved to all agents,

@@ -121,6 +121,7 @@ export function decideTexraApproval(input: {
  */
 export type ApprovalPolicyDenial =
   | { readonly kind: 'executable' }
+  | { readonly kind: 'plan' }
   | { readonly kind: 'proposal' }
   | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
   | {

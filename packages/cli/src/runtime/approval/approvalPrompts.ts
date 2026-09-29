@@ -76,6 +76,8 @@ function approvalDenialMessage(
   switch (denial.kind) {
     case 'executable':
       return `Command or edit denied: ${reason}. ${allow} it.`;
+    case 'plan':
+      return `Plan denied: ${reason}. ${allow} it.`;
     case 'proposal':
       return `Delegation denied: ${reason}. ${allow} it.`;
     case 'withheldTools':
