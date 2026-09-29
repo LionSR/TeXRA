@@ -43,7 +43,6 @@ export interface ToolCallShape {
         | 'logger'
         | 'delegationAgentScope'
         | 'steps'
-        | 'onApprovalPolicyDenial'
         | 'scope'
       >
     | undefined;

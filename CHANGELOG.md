@@ -297,6 +297,17 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **`yolo` and `never` mean the same on every host.** The session decides
+  the approval policy when a plan, delegation, question or model-error retry
+  opens, so the extension and desktop now match the terminal: `never` denies
+  them, `yolo` approves plans and delegations, and `yolo` denies a question
+  or a retry rather than answer it for you, so under `yolo` the extension and
+  desktop no longer show the Retry panel or an `ask_user` question. Under
+  `never`, tools that need approval are no longer offered to the model on the
+  extension and desktop either, and a policy change made while a request is
+  already waiting leaves that request for you to answer (a headless run
+  denies it).
+
 - **A custom agent you turned off stays off under the default roster** —
   it reappeared in the selector whenever the roster resolved to all agents,
   which is the default for a new workspace. Choosing "All agents" still

@@ -127,8 +127,8 @@ Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
 opening a root twice resolves the one session already open there; a second
 root gets its own. The package never borrows a host's runtime (see "The
-platform" below), so every session on it is the package's own and its inline
-retry denial answers the retries of every run on it. A
+platform" below), so every session on it is the package's own, and its host answers no
+approval prompt, so the session denies the retries of every run on it. A
 session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,

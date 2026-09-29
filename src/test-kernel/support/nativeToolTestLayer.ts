@@ -39,7 +39,6 @@ export const testRunTools = (
 ): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
   toolInputs: {
     tools: [],
-    approvalPromptsUnavailable: false,
     host: stores.host,
     runTools: Object.values(tools),
     injectTools: false,

@@ -1,6 +1,7 @@
 import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import type { FileLocation } from '@shared/schemas';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
+import type { FileLocation, RunId } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { HostPresentationFailed } from './runtimePresentationEvents';
@@ -88,12 +89,19 @@ export interface HostInteractions {
     payload: RuntimePresentationEventPayloads[K],
   ): HostPresentation;
   /**
-   * This host has no channel that can answer an approval prompt (an embedder
-   * with no surface). A session fact, not a launch option: every run the
-   * session launches or resumes, whatever triggered it, is offered no
-   * approval-gated tool while such a host is attached.
+   * This host has no channel that can answer an approval prompt (a headless
+   * run, an embedder with no surface): a fact about the host alone. The
+   * session applies its approval policy to it, both when it decides a request
+   * and when it withholds approval-gated tools from a run.
    */
   readonly approvalPromptsUnavailable?: boolean;
+  /**
+   * The session's approval policy closed a gate on `runId` (a command, edit,
+   * plan, delegation, retry or question) or withheld tools from it. Told
+   * after the fact, so a host can say why nothing was asked; it answers
+   * nothing.
+   */
+  approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
   /** Add one manual criticism to the active host diagnostics surface. */
@@ -265,6 +273,10 @@ export class SessionHostInteractions implements HostInteractions {
     return (
       this.activeAttachment?.interactions.approvalPromptsUnavailable === true
     );
+  }
+
+  approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
+    this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
   }
 
   get readDiagnostics(): DiagnosticsReader | undefined {

@@ -76,6 +76,7 @@ import { UsageLog } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
+import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
@@ -948,6 +949,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             errorDetails: info,
             credentialSwitch,
           };
+          const payload = { kind: 'retry', data: request } as const;
           logErrorData(logger, 'Model request failed', recorded);
           logRetryLifecycle(operationId, 'retry_decision_requested', failed, {
             userRetryable: info.userRetryable,
@@ -965,19 +967,17 @@ export const modelInvokerLayer = (): Layer.Layer<
               type: 'request.opened',
               aggregateId,
               requestId,
-              // The row is committed here rather than at the session's door
-              // (`openRequest`), so the door's `rawErrorBody` drop happens
-              // here too: the raw response body never reaches a durable row.
-              payload: redactedForFact({ kind: 'retry', data: request }),
+              // Committed here, not at the session's door (`openRequest`), so
+              // the door's `rawErrorBody` drop is here: no durable raw body.
+              payload: redactedForFact(payload),
               thread: null,
             },
             ...retryRows(runId, state, pendingRetry('waiting'), {
               lastError: info,
             }),
-            // The invoker's own answer, recorded like any other.
             ...(automatic
               ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-              : []),
+              : policyDecidedRows(session, runId, payload)),
           ]);
         }
         const state = yield* cell.current;

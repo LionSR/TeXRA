@@ -92,6 +92,7 @@ import {
   type HostInteractions,
 } from './HostInteractions';
 import { redactedForFact } from './loop/rows';
+import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { presentTerminalResults } from './terminalResultToast';
@@ -403,9 +404,8 @@ export class SessionHandle {
 
   /**
    * One run's full approval-policy snapshot: the policy this session holds
-   * plus the bypass values its approval queues own. The launcher stamps it on
-   * `run.start` as the initial snapshot; every later change is published
-   * through {@link publishApprovalPolicy}. Never a toggle delta.
+   * plus its bypass values. The launcher stamps it on `run.start`; every
+   * later change goes through {@link publishApprovalPolicy}. Never a delta.
    */
   approvalPolicySnapshotFor(runId: RunId): ApprovalPolicySnapshot {
     return {
@@ -415,10 +415,9 @@ export class SessionHandle {
   }
 
   /**
-   * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
-   * section 6, item 2), for a change after the run's `run.start`. The session
-   * layer binds it as the approval state's `onPolicyChanged` when it builds
-   * this session's {@link requests}, which is the other caller.
+   * The one emitter of `approval.policy` for a change after the run's
+   * `run.start`. The session layer binds it as the approval state's
+   * `onPolicyChanged` when it builds this session's {@link requests}.
    */
   publishApprovalPolicy(runId: RunId): void {
     if (this.refusedAfterClose()) return;
@@ -749,6 +748,7 @@ export class SessionHandle {
           payload: redactedForFact(payload),
           thread: options.thread ?? null,
         },
+        ...policyDecidedRows(this, runId, payload),
       ]).pipe(Effect.tapError(() => releaseUncommitted));
       return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
