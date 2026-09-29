@@ -308,13 +308,9 @@ export const acquireVscodeLanguageModel = Effect.fn(
       if (
         (authored.mode !== undefined && authored.mode !== 'foreground') ||
         (authored.toolChoice !== undefined && authored.toolChoice !== 'auto') ||
-        Object.entries(authored).some(
-          ([key, value]) =>
-            value !== undefined &&
-            !['mode', 'system', 'messages', 'tools', 'toolChoice'].includes(
-              key,
-            ),
-        )
+        authored.maxOutputTokens !== undefined ||
+        authored.store !== undefined ||
+        authored.continuation !== undefined
       ) {
         return yield* new ModelError({
           kind: 'unsupported',

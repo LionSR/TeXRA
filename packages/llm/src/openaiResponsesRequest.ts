@@ -43,16 +43,10 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
       'The model input is invalid.',
     );
     if (
-      author.thinkingLevel !== undefined ||
-      author.thinking !== undefined ||
-      author.effort !== undefined ||
-      author.cache !== undefined ||
-      author.stopSequences !== undefined ||
       (author.continuation !== undefined &&
         author.continuation.origin.protocol !== 'openai-responses') ||
       (author.mode === 'background' &&
         (config.background !== 'supported' || transport.kind !== 'http')) ||
-      (!config.supportsTemperature && author.temperature !== undefined) ||
       (!config.supportsMaxOutputTokens &&
         author.maxOutputTokens !== undefined) ||
       (!config.supportsStorage && author.store === true)
@@ -76,22 +70,15 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
       continuation: author.continuation,
       controls: {
         temperature: config.supportsTemperature
-          ? (author.temperature ?? config.defaults.temperature)
+          ? config.defaults.temperature
           : null,
         maxOutputTokens:
           author.maxOutputTokens ?? config.defaults.maxOutputTokens,
         store: author.store ?? config.defaults.store,
-        parallelToolCalls:
-          author.parallelToolCalls ?? config.defaults.parallelToolCalls,
+        parallelToolCalls: config.defaults.parallelToolCalls,
         toolChoice: author.toolChoice ?? 'auto',
-        reasoning:
-          author.reasoning === undefined
-            ? config.defaults.reasoning
-            : author.reasoning,
-        serviceTier:
-          author.serviceTier === undefined
-            ? config.defaults.serviceTier
-            : author.serviceTier,
+        reasoning: config.defaults.reasoning,
+        serviceTier: config.defaults.serviceTier,
       },
     });
     if (turn.protocol !== 'openai-responses')
