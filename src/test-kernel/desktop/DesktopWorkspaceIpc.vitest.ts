@@ -143,63 +143,85 @@ describe('desktop workspace IPC', () => {
       }),
   );
 
-  it('reads regular workspace files but rejects symlink targets outside the workspace', async () => {
-    const ipc = createIpc(vi.fn());
-    const run = testRuntime();
+  it.effect(
+    'reads regular workspace files but rejects symlink targets outside the workspace',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
 
-    expect(
-      await run.runPromise(ipc.file({ kind: 'read', path: 'paper.tex' })),
-    ).toEqual({ kind: 'contents', contents: 'inside' });
+        expect(
+          yield* ipc
+            .file({ kind: 'read', path: 'paper.tex' })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'contents', contents: 'inside' });
 
-    const refused = [
-      ipc.file({ kind: 'read', path: 'linked.tex' }),
-      ipc.file({ kind: 'write', path: 'linked.tex', contents: 'overwritten' }),
-      ipc.file({
-        kind: 'write',
-        path: 'dangling-linked.tex',
-        contents: 'created outside',
+        const refused = [
+          ipc.file({ kind: 'read', path: 'linked.tex' }),
+          ipc.file({
+            kind: 'write',
+            path: 'linked.tex',
+            contents: 'overwritten',
+          }),
+          ipc.file({
+            kind: 'write',
+            path: 'dangling-linked.tex',
+            contents: 'created outside',
+          }),
+        ];
+        for (const program of refused) {
+          const exit = yield* Effect.exit(
+            program.pipe(Effect.provide(context)),
+          );
+          expect(Exit.isFailure(exit)).toBe(true);
+        }
+        expect(readFileSync(externalPath, 'utf8')).toBe('outside');
+        expect(existsSync(missingExternalPath)).toBe(false);
       }),
-    ];
-    for (const program of refused) {
-      const exit = await run.runPromiseExit(program);
-      expect(Exit.isFailure(exit)).toBe(true);
-    }
-    expect(readFileSync(externalPath, 'utf8')).toBe('outside');
-    expect(existsSync(missingExternalPath)).toBe(false);
-  });
+  );
 
-  it('keeps a UTF-8 byte-order mark when reading, so a save cannot delete it', async () => {
-    const ipc = createIpc(vi.fn());
+  it.effect(
+    'keeps a UTF-8 byte-order mark when reading, so a save cannot delete it',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
 
-    writeFileSync(
-      join(workspacePath, 'bom.tex'),
-      Buffer.concat([
-        Buffer.from([0xef, 0xbb, 0xbf]),
-        Buffer.from('hi', 'utf8'),
-      ]),
-    );
-    expect(
-      await testRuntime().runPromise(
-        ipc.file({ kind: 'read', path: 'bom.tex' }),
-      ),
-    ).toEqual({ kind: 'contents', contents: '\uFEFFhi' });
-  });
+        writeFileSync(
+          join(workspacePath, 'bom.tex'),
+          Buffer.concat([
+            Buffer.from([0xef, 0xbb, 0xbf]),
+            Buffer.from('hi', 'utf8'),
+          ]),
+        );
+        expect(
+          yield* ipc
+            .file({ kind: 'read', path: 'bom.tex' })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'contents', contents: '\uFEFFhi' });
+      }),
+  );
 
-  it('recreates a workspace file deleted after the editor loaded it', async () => {
-    const ipc = createIpc(vi.fn());
-    rmSync(join(workspacePath, 'paper.tex'));
+  it.effect(
+    'recreates a workspace file deleted after the editor loaded it',
+    () =>
+      Effect.gen(function* () {
+        const ipc = createIpc(vi.fn());
+        const context = yield* testRuntime().contextEffect;
+        rmSync(join(workspacePath, 'paper.tex'));
 
-    expect(
-      await testRuntime().runPromise(
-        ipc.file({
-          kind: 'write',
-          path: 'paper.tex',
-          contents: 'recovered buffer',
-        }),
-      ),
-    ).toEqual({ kind: 'done' });
-    expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
-      'recovered buffer',
-    );
-  });
+        expect(
+          yield* ipc
+            .file({
+              kind: 'write',
+              path: 'paper.tex',
+              contents: 'recovered buffer',
+            })
+            .pipe(Effect.provide(context)),
+        ).toEqual({ kind: 'done' });
+        expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+          'recovered buffer',
+        );
+      }),
+  );
 });
