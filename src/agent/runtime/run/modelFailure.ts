@@ -98,25 +98,35 @@ const NETWORK_ERROR_CODES: ReadonlySet<string> = new Set([
  * The package labels every non-HTTP, non-parse failure `transport`, including
  * local ones (a stale persistent socket, a bug in stream handling). Only a
  * failure whose cause chain shows the network itself (a code in
- * `NETWORK_ERROR_CODES`, an undici `UND_ERR_INFO` timeout, an SDK connection
- * or timeout class, a bare `fetch failed`) is evidence about the shared route;
- * the rest is the caller's own to retry.
+ * `NETWORK_ERROR_CODES`, an undici `UND_ERR_INFO` timeout) is evidence about
+ * the shared route; the rest is the caller's own to retry. A coded cause
+ * decides: undici wraps deterministic failures (`UND_ERR_INVALID_ARG`) in the
+ * same `fetch failed` as network ones, so the wrapper message and the SDK
+ * connection or timeout class count only when no link carries a code.
  */
 function hasNetworkEvidence(error: ModelError): boolean {
-  return causeChain(error.cause).some((link) => {
-    const { code, message } = link as { code?: unknown; message?: unknown };
-    return (
-      (typeof code === 'string' && NETWORK_ERROR_CODES.has(code)) ||
-      (code === 'UND_ERR_INFO' &&
-        typeof message === 'string' &&
-        /\b(?:stream )?timeout\b/i.test(message)) ||
-      (typeof message === 'string' &&
-        /^(?:fetch failed|failed to fetch)$/i.test(message.trim())) ||
+  const chain = causeChain(error.cause) as {
+    code?: unknown;
+    message?: unknown;
+  }[];
+  const coded = chain.filter(({ code }) => typeof code === 'string');
+  if (coded.length > 0) {
+    return coded.some(
+      ({ code, message }) =>
+        NETWORK_ERROR_CODES.has(code as string) ||
+        (code === 'UND_ERR_INFO' &&
+          typeof message === 'string' &&
+          /\b(?:stream )?timeout\b/i.test(message)),
+    );
+  }
+  return chain.some(
+    (link) =>
+      (typeof link.message === 'string' &&
+        /^(?:fetch failed|failed to fetch)$/i.test(link.message.trim())) ||
       getErrorClassNames(link).some((name) =>
         /(?:Connection|Timeout)Error$/.test(name),
-      )
-    );
-  });
+      ),
+  );
 }
 
 /**

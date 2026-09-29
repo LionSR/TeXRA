@@ -645,6 +645,19 @@ describe('recovery-route verdicts', () => {
       expected: { retryAfterMs: undefined },
     },
     {
+      name: 'keeps a deterministic undici code local despite the fetch-failed wrapper',
+      error: new ModelError({
+        kind: 'transport',
+        message: 'Connection error',
+        cause: new TypeError('fetch failed', {
+          cause: Object.assign(new Error('invalid header'), {
+            code: 'UND_ERR_INVALID_ARG',
+          }),
+        }),
+      }),
+      expected: undefined,
+    },
+    {
       name: 'coordinates a structured status-less server failure from the SDK',
       error: statuslessServerError('temporary provider failure'),
       expected: { retryAfterMs: undefined },
