@@ -16,7 +16,8 @@ interface ElectronHostBridgeInstallOptions {
   exposeInMainWorld(name: string, api: HostBridgeApi | SessionWireApi): void;
   onHostMessage(
     channel:
-      typeof ELECTRON_WEBVIEW_PUSH_CHANNEL | typeof ELECTRON_SESSION_PUSH_CHANNEL,
+      | typeof ELECTRON_WEBVIEW_PUSH_CHANNEL
+      | typeof ELECTRON_SESSION_PUSH_CHANNEL,
     listener: (message: unknown) => void,
   ): void;
   postToRenderer(message: unknown): void;

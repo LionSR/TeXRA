@@ -76,8 +76,10 @@ export const SETTINGS_VIEW_INBOUND_COMMANDS =
     ...option.shape.command.values,
   ]);
 
-export interface DesktopSettingsIpc
-  extends Pick<SettingsViewBody, 'refreshAfterAuthChange' | 'signInSubscription'> {
+export interface DesktopSettingsIpc extends Pick<
+  SettingsViewBody,
+  'refreshAfterAuthChange' | 'signInSubscription'
+> {
   /** The one route every inbound settings command runs. */
   readonly route: DesktopCommandRoute;
 }
@@ -237,7 +239,9 @@ export function createDesktopSettingsIpc(
     route: (message) =>
       body.handleMessage(message, registry) ??
       Effect.sync(() =>
-        console.warn(`Dropped a malformed settings message: ${message.command}`),
+        console.warn(
+          `Dropped a malformed settings message: ${message.command}`,
+        ),
       ),
   };
   return Effect.as(

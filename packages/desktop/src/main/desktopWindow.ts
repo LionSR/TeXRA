@@ -299,7 +299,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       return settings
         ? settings.route(message)
         : Effect.sync(() =>
-            console.warn(`Dropped ${message.command}: no project shows settings`),
+            console.warn(
+              `Dropped ${message.command}: no project shows settings`,
+            ),
           );
     }),
     claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, bindings.workspaceRoute),
