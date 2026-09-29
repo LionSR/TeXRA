@@ -322,7 +322,6 @@ export function open(
   messageType: MessageType,
   settled: boolean,
   level: LogLevel = 'info',
-  verbose: boolean = d.ctx.debug,
 ): TranscriptRowBase {
   d.ix.appended += 1;
   return {
@@ -330,7 +329,7 @@ export function open(
     seqNo: d.ix.appended,
     timestamp: d.at,
     level,
-    verbose,
+    verbose: d.ctx.debug,
     messageType,
     ...(settled ? { settlementSeqNo: (d.ix.settled += 1) } : {}),
     ...(groupId !== undefined ? { groupId } : {}),

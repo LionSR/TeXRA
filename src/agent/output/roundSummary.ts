@@ -7,7 +7,7 @@
 
 import { Effect } from 'effect';
 
-import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
+import type { FileLocation } from '@shared/schemas';
 
 import { computeOutputDiffStats } from './diffComputation';
 import {
@@ -58,14 +58,6 @@ export const summarizeRound = Effect.fn('documents.summarizeRound')(function* (
       state.openedOutputs.add(filePath);
     }
   }
-
-  deps.logger.debug('Finalized round', {
-    data: {
-      round: currRound,
-      files: fileInfos.length,
-    },
-    messageType: MESSAGE_TYPES.INTERNAL,
-  });
 
   return { filesToOpen } satisfies RoundSummary;
 });

@@ -32,7 +32,7 @@ export type InquiryThreadId = z.infer<typeof InquiryThreadIdSchema>;
 const InquiryThreadStatusSchema = z.enum(['open', 'answered', 'dropped']);
 export type InquiryThreadStatus = z.infer<typeof InquiryThreadStatusSchema>;
 
-const InquiryThreadSummarySchema = z.object({
+export const InquiryThreadSummarySchema = z.object({
   threadId: InquiryThreadIdSchema,
   /** The run the last question was asked under; continuations flow back to it. */
   parentRunId: RunIdSchema.nullable(),
@@ -42,25 +42,6 @@ const InquiryThreadSummarySchema = z.object({
   turnCount: z.int().nonnegative(),
 });
 export type InquiryThreadSummary = z.infer<typeof InquiryThreadSummarySchema>;
-
-// ============================================================================
-// Resume outcome — UI badge metadata for inquiryThreadUpdated events
-// ============================================================================
-
-const InquiryResumeOutcomeSchema = z.enum([
-  'sent',
-  'queued',
-  'parent_finished',
-]);
-export type InquiryResumeOutcome = z.infer<typeof InquiryResumeOutcomeSchema>;
-
-export const InquiryThreadUpdatedEventSchema =
-  InquiryThreadSummarySchema.extend({
-    resumeOutcome: InquiryResumeOutcomeSchema.nullish(),
-  });
-export type InquiryThreadUpdatedEvent = z.infer<
-  typeof InquiryThreadUpdatedEventSchema
->;
 
 // ============================================================================
 // Draft persistence — open-turn textarea state, debounced

@@ -24,7 +24,6 @@ export const MESSAGE_TYPES = {
   PROGRESS_STATUS: 'progressStatus',
   CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
-  INTERNAL: 'internal',
   CONTEXT_MANAGEMENT: 'contextManagement',
   // Legacy protocol spelling retained for stored histories and consumers.
   WORKFLOW_TASK: 'workflowTask',

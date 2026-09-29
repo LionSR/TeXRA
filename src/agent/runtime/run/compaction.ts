@@ -318,8 +318,6 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
         messages: [replacement],
         cause: force === 'overflow' ? 'context-window' : 'context-limit',
         continuation: null,
-        continuationDropped:
-          state.continuation === null ? null : 'history-replaced',
         usage: summarized.value.usage,
       },
     },

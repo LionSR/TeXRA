@@ -229,13 +229,6 @@ class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
   }
 }
 
-type RetryLifecycleEvent =
-  | 'attempt_started'
-  | 'attempt_succeeded'
-  | 'attempt_failed'
-  | 'retry_decision_requested'
-  | 'retry_decided';
-
 /**
  * Build a request service for one run; its model is run-owned, and every row
  * it writes goes through the run cell the loop hands each invocation.
@@ -258,29 +251,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         agentName: run.config.agent,
         agentCategory: run.config.agentCategory,
         runId,
-      };
-
-      const logRetryLifecycle = (
-        operationId: string,
-        event: RetryLifecycleEvent,
-        bound: BoundModel,
-        details: Record<string, unknown> = {},
-      ): void => {
-        logger.emit({
-          type: 'domain',
-          key: 'modelRetryLifecycle',
-          data: {
-            kind: 'model_retry_lifecycle',
-            event,
-            operationId,
-            operation: 'Model request',
-            runId,
-            agentName: run.config.agent,
-            model: bound.modelId,
-            credentialRoute: bound.usageRoute,
-            ...details,
-          },
-        });
       };
 
       const saveDebug = (
@@ -452,7 +422,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
-        operationId: string,
         trace: AttemptTrace,
         started: number,
         streamed: Exit.Exit<void, unknown>,
@@ -470,9 +439,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           const refused = findStorageRefusal(streamed.cause);
           if (refused) return yield* Effect.fail(refused);
           const cause = Cause.squash(streamed.cause);
-          logRetryLifecycle(operationId, 'attempt_failed', bound, {
-            attempt: invocation.attempt,
-          });
           return yield* failAttempt(cause, bound, completed.streamedText);
         }
         const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
@@ -534,9 +500,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ...snapshotRow(runId, state, { runtime: { lastError: null } }),
           positionRow(runId, state, 'response.ready'),
         ]);
-        logRetryLifecycle(operationId, 'attempt_succeeded', bound, {
-          attempt: invocation.attempt,
-        });
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
         return {
           kind: 'response',
@@ -617,7 +580,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
-        operationId: string,
       ): Effect.fn.Return<
         InvocationResponse,
         AttemptFailed | InvokeError,
@@ -699,10 +661,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             }
           }
         }
-        logRetryLifecycle(operationId, 'attempt_started', bound, {
-          attempt: invocation.attempt,
-          delivery: resolved.mode,
-        });
         // The durable fact before the billed request (F1), with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>
@@ -730,7 +688,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           invocation,
           request,
           bound,
-          operationId,
           trace,
           started,
           streamed,
@@ -752,7 +709,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           invocation: InvocationRef,
           request: InvokeRequest,
           bound: BoundModel,
-          operationId: string,
           accepted: NonNullable<
             NonNullable<RunState['openAttempt']>['accepted']
           >,
@@ -796,11 +752,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               bound,
             );
           }
-          logRetryLifecycle(operationId, 'attempt_started', bound, {
-            attempt: invocation.attempt,
-            delivery: 'background',
-            resumed: true,
-          });
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
@@ -817,7 +768,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             invocation,
             request,
             bound,
-            operationId,
             trace,
             started,
             streamed,
@@ -837,7 +787,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
-        operationId: string,
       ): Effect.Effect<
         InvocationResponse,
         AttemptFailed | InvokeError,
@@ -852,7 +801,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           baseBackoffMs: RETRY_BACKOFF_MS,
           onWait: (delayMs) =>
             logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-        })(attemptOnce(cell, invocation, request, bound, operationId));
+        })(attemptOnce(cell, invocation, request, bound));
       };
 
       /** Rebind a retry, retiring the failed binding; a failure keeps it, loudly. */
@@ -907,7 +856,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         // so a restart re-presents the same facts the first prompt showed.
         recorded: ProviderError,
         failedAttempt: InvocationRef,
-        operationId: string,
         outstanding: string | null,
       ): Effect.fn.Return<
         Decision,
@@ -951,11 +899,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           };
           const payload = { kind: 'retry', data: request } as const;
           logErrorData(logger, 'Model request failed', recorded);
-          logRetryLifecycle(operationId, 'retry_decision_requested', failed, {
-            userRetryable: info.userRetryable,
-            statusCode: info.statusCode,
-            provider: info.provider,
-          });
           if (automatic !== null) {
             logProgressStatus(
               logger,
@@ -1007,9 +950,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             decision = row.decision;
           }
         }
-        logRetryLifecycle(operationId, 'retry_decided', failed, {
-          action: decision.action,
-        });
         if (decision.action === 'retry') {
           logger.debug('Manual retry triggered');
           const selection = decision.credentials ?? 'configured';
@@ -1059,7 +999,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
       > {
         const state = yield* cell.current;
-        const operationId = `model-operation-${generateShortId()}`;
         // One initial attempt plus the configured automatic retries; the
         // setting is bounded to [0, 5], so the limit is always >= 1.
         const limit =
@@ -1128,7 +1067,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 yield* SynchronizedRef.get(run.model),
                 failure,
                 failedAttempt,
-                operationId,
                 outstanding,
               );
               outstanding = null;
@@ -1168,7 +1106,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 invocation,
                 request,
                 bound,
-                operationId,
                 observing.accepted,
               ),
             );
@@ -1184,7 +1121,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 sent.fullTranscript,
               );
             exit = yield* Effect.exit(
-              gatedAttempt(cell, invocation, sent, bound, operationId),
+              gatedAttempt(cell, invocation, sent, bound),
             );
           }
           if (Exit.isSuccess(exit)) return exit.value;

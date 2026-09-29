@@ -14,5 +14,4 @@ export const DESKTOP_THEME_KIND = {
 
 export const WebviewReadyMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.WEBVIEW_READY),
-  view: z.enum(['main', 'progress', 'settings']).nullish(),
 });
