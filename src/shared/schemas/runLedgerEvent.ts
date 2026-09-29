@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import {
+  CancellationEvidenceSchema,
   ContinuationSchema,
   MessageSchema,
   ModelOriginSchema,
@@ -34,11 +35,7 @@ import {
   NormalizedUsageSchema,
   ToolUseSnapshotStateSchema,
 } from './runSnapshotState';
-import {
-  ErrorToolResultSchema,
-  ExecutedToolResultSchema,
-  ToolFileAttachmentSchema,
-} from './toolResult';
+import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
@@ -158,6 +155,17 @@ export const ModelMessagePayloadSchema = z
       invocation: InvocationRefSchema,
       operation: RemoteOperationSchema,
       deadlineAtMs: z.int().positive(),
+    }),
+    /**
+     * A user stop cancelled the accepted operation; `evidence` is the
+     * provider's reply verbatim. It retires the operation, so a resume starts
+     * a new attempt instead of observing work the user stopped. A cancel that
+     * failed leaves no row, and the still-live operation stays observable.
+     */
+    z.strictObject({
+      kind: z.literal('cancelled'),
+      invocation: InvocationRefSchema,
+      evidence: CancellationEvidenceSchema,
     }),
     /**
      * A completed provider turn, committed once and reused after restart.
@@ -303,62 +311,6 @@ export const ToolBindingPayloadSchema = z.strictObject({
 });
 
 /* ------------------------------------------------------------ tool.result */
-
-/** `ToolFileAttachment.bytes` is a `Uint8Array`, which JSON does not
- *  reconstruct; a path alone is not recoverable content; a capture failure
- *  records the omission and its reason rather than a claim that bytes were
- *  included. */
-const SettledAttachmentSchema = z.strictObject({
-  path: z.string().min(1),
-  mimeType: z.string().min(1),
-  description: z.string().optional(),
-  content: z.discriminatedUnion('kind', [
-    z.strictObject({ kind: z.literal('base64'), data: z.base64() }),
-    z.strictObject({
-      kind: z.literal('metadata-only'),
-      reason: z.string().min(1),
-    }),
-  ]),
-});
-
-/**
- * The follow-up builder's input. Derived from the exported members, never
- * re-declared: `files` loses its binary payload and `diagnostics` is narrowed
- * from `z.unknown()` to JSON, because an arbitrary value in a durable payload
- * is a `JSON.stringify` throw waiting for a cycle or a BigInt.
- *
- * `SettledFileSchema` is derived from `ToolFileAttachmentSchema`, NOT rebuilt
- * as a `strictObject`: its base `FileReferenceSchema` is a `z.looseObject`
- * and real attachments carry `base64Data`/`bytes` plus whatever extra keys a
- * tool attached, so a strict rebuild would refuse every executed result that
- * has an attachment. That same looseness is why the two binary fields go
- * through a transform rather than `.omit()`: on a loose object an omitted key
- * is only undeclared, so `base64Data` and the `Uint8Array` in `bytes` would
- * pass through as unknown keys and land in the row anyway. What the transform
- * leaves is then validated as JSON, exactly as `diagnostics` is: the loose
- * keys a tool attached are `unknown`, and a third byte buffer or a cyclic
- * object among them is the same `JSON.stringify` throw, on a row that is
- * already committed. The check runs after the transform rather than as a
- * `.pipe`, so the accepted input stays the real attachment a tool produced.
- */
-const SettledFileMetadataSchema = ToolFileAttachmentSchema.omit({
-  base64Data: true,
-  bytes: true,
-}).catchall(JsonValueSchema);
-const SettledFileSchema = ToolFileAttachmentSchema.transform(
-  ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
-).superRefine((file, ctx) => {
-  const metadata = SettledFileMetadataSchema.safeParse(file);
-  if (metadata.success) return;
-  for (const issue of metadata.error.issues) ctx.addIssue({ ...issue });
-});
-const SettledToolResultSchema = z.discriminatedUnion('status', [
-  ExecutedToolResultSchema.omit({ files: true }).extend({
-    files: z.array(SettledFileSchema).optional(),
-    diagnostics: JsonValueSchema.optional(),
-  }),
-  ErrorToolResultSchema.extend({ diagnostics: JsonValueSchema.optional() }),
-]);
 
 /**
  * Per-call state operations over the run's mutable `state` slice, never a

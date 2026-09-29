@@ -361,7 +361,7 @@ export function WorkflowPopup({
         return;
       }
       if (input === 'x' && selectedRunId) {
-        onRequest({ kind: 'run.stop', runId: selectedRunId });
+        onRequest({ kind: 'run.stop', runId: selectedRunId, reason: 'user' });
       }
     },
     // The filter input owns every key while it edits.

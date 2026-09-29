@@ -10,11 +10,15 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
+import { withLogChannel } from '@logger/effectLog';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
@@ -38,25 +42,50 @@ class SubscriptionPreferenceUpdateFailed extends Data.TaggedError(
   'SubscriptionPreferenceUpdateFailed',
 )<{ readonly cause: unknown }> {}
 
+const externalOpener = new VscodeExternalOpener();
+
 /** How VS Code shows a subscription sign-in prompt. */
 function vscodePresenter(
   provider: SubscriptionProvider,
+  channel: string,
 ): SubscriptionSignInPresenter {
   const { displayName, sessionName, copyTarget } = provider;
   return {
-    presentDeviceCode: (prompt) => {
-      void vscode.env.clipboard.writeText(prompt.userCode);
-      const openUrl = prompt.verificationUrlComplete ?? prompt.verificationUrl;
-      void (async () => {
-        const choice = await vscode.window.showInformationMessage(
-          `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}. The code was copied to the clipboard.`,
-          `Open ${displayName}`,
+    presentDeviceCode: (prompt) =>
+      Effect.gen(function* () {
+        const copied = yield* Effect.tryPromise({
+          try: () => vscode.env.clipboard.writeText(prompt.userCode),
+          catch: ensureError,
+        }).pipe(
+          Effect.as(true),
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Could not copy the ${displayName} sign-in code: ${error.message}`,
+            ).pipe(withLogChannel(channel), Effect.as(false)),
+          ),
         );
-        if (choice === `Open ${displayName}`) {
-          await vscode.env.openExternal(vscode.Uri.parse(openUrl));
+        const openLabel = `Open ${displayName}`;
+        const choice = yield* vscodeUi.info(
+          `Enter ${displayName} code ${prompt.userCode} at ${prompt.verificationUrl}.${copied ? ' The code was copied to the clipboard.' : ''}`,
+          { items: [openLabel] },
+        );
+        if (choice === openLabel) {
+          yield* externalOpener.openExternal(
+            prompt.verificationUrlComplete ?? prompt.verificationUrl,
+          );
         }
-      })();
-    },
+      }).pipe(
+        // The flow does not wait for this prompt, so its failure has no
+        // caller to reach: it is reported here, once.
+        Effect.catch((error) =>
+          showLoggedErrorMessage(
+            channel,
+            `${displayName} sign-in code could not be shown`,
+            error,
+          ),
+        ),
+        Effect.asVoid,
+      ),
     presentSignInUrl: (url) =>
       Effect.gen(function* () {
         // `openExternal` always targets the system default browser. The
@@ -65,13 +94,9 @@ function vscodePresenter(
         // toast — users whose subscription lives in a different browser (e.g.
         // default is Safari but the provider is signed in on Chrome) get a
         // link they can paste there instead.
-        const choice = yield* Effect.promise(() =>
-          vscode.window.showInformationMessage(
-            `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
-            { modal: true },
-            OPEN_DEFAULT_BROWSER,
-            COPY_SIGN_IN_LINK,
-          ),
+        const choice = yield* vscodeUi.info(
+          `Sign in with ${displayName}. If your ${sessionName} session is in a different browser than your OS default, copy the link and open it there instead.`,
+          { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );
         if (choice === COPY_SIGN_IN_LINK) {
           yield* Effect.promise(() => vscode.env.clipboard.writeText(url));
@@ -83,9 +108,7 @@ function vscodePresenter(
         if (choice !== OPEN_DEFAULT_BROWSER) {
           return yield* Effect.fail(new SubscriptionSignInCancelled());
         }
-        yield* Effect.promise(() =>
-          vscode.env.openExternal(vscode.Uri.parse(url)),
-        );
+        yield* externalOpener.openExternal(url);
       }),
   };
 }
@@ -116,7 +139,7 @@ export function signInWithSubscription(
           // Remote windows cannot reach the extension host's loopback port
           // from the user's local browser.
           transport: vscode.env.remoteName ? 'device' : 'loopback',
-          present: vscodePresenter(provider),
+          present: vscodePresenter(provider, channel),
         }),
     ).pipe(
       // A transport defect is reported the same as its typed failure, exactly

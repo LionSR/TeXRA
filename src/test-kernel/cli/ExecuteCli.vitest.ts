@@ -682,6 +682,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
         detachActiveChildren: false,
+        reason: 'shutdown',
       });
       expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 

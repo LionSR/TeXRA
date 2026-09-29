@@ -740,7 +740,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
-        yield* session.runs.stop(runId).settlement;
+        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         yield* waitForParentTurns(2);
         const afterStop = yield* readCompletedRunConversation(
@@ -787,7 +787,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         yield* waitForParentTurns(4);
         expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
-        yield* session.runs.stop(runId).settlement;
+        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
         // An already idle saved run needs no new input or model turn to
@@ -814,7 +814,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect((yield* readChildTurnState(session, runId)).active).toBeNull();
         expect(childTurns).toHaveLength(0);
-        yield* session.runs.stop(runId).settlement;
+        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         modelBindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
@@ -1165,7 +1165,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Stop the child before turn 2 persists any result. The registry stop
         // reaches the loop as well as the turn, so the turn is interrupted rather
         // than delivered as a cancelled completion.
-        const stopped = session.runs.stop(runId);
+        const stopped = session.runs.stop(runId, { reason: 'user' });
         expect(stopped.accepted()).toBe(true);
         const stopFiber = yield* Effect.forkChild(stopped.settlement, {
           startImmediately: true,

@@ -225,7 +225,9 @@ describe('runWithLifecycle', () => {
           yield* Deferred.await(parked.started);
           expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
-          const stop = testDefaultSession().runs.stop(runId);
+          const stop = testDefaultSession().runs.stop(runId, {
+            reason: 'user',
+          });
 
           expect(stop.accepted()).toBe(false);
 

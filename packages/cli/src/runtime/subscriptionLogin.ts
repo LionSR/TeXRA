@@ -80,13 +80,14 @@ export const signInCliSubscription = Effect.fn(
       userCode,
       verificationUrl,
       verificationUrlComplete,
-    }) => {
-      const openUrl = verificationUrlComplete ?? verificationUrl;
-      options.writeProgress(
-        `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
-        { copyable: true },
-      );
-    },
+    }) =>
+      Effect.sync(() => {
+        const openUrl = verificationUrlComplete ?? verificationUrl;
+        options.writeProgress(
+          `To sign in with ${displayName}:\n  1. Open ${openUrl}\n  2. Enter the one-time code: ${userCode}\nWaiting for approval... (Ctrl-C cancels)`,
+          { copyable: true },
+        );
+      }),
     presentSignInUrl: (url) =>
       presentCliSignInUrl({
         writeProgress: options.writeProgress,
@@ -97,7 +98,10 @@ export const signInCliSubscription = Effect.fn(
   };
 
   return yield* provider.signIn({
-    transport: init.device ? 'device' : 'loopback',
+    // `auto` tries the browser callback and drops to a device code when its
+    // ports are taken or no browser is reachable, so the user is never left
+    // with a bare bind error and no link.
+    transport: init.device ? 'device' : 'auto',
     present,
   });
 });

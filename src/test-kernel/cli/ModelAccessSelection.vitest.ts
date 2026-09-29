@@ -346,9 +346,9 @@ describe('CLI model access routes', () => {
         );
         expect(descriptions).toEqual({
           chatgpt: 'On · user@example.com',
-          grok: 'Off · sign in required to enable',
+          grok: 'Off · select to sign in and turn on',
           'kimi-code': 'On · key configured',
-          'glm-code': 'Off · key configured',
+          'glm-code': 'Off · select to turn on',
         });
 
         yield* updateCliModelAccess(

@@ -222,11 +222,11 @@ function buildCopyTarget(
 /** Offer a quick-pick between replacing the original and saving a postfixed
  *  copy, used when run metadata is available. Returns undefined when the user
  *  cancels. */
-async function pickReplaceOrCopyTarget(
+function pickReplaceOrCopyTarget(
   baseLocation: FileLocation,
   editedPath: string,
   copyMeta: AcceptCopyMeta,
-): Promise<ReplaceOrCopyTarget | undefined> {
+): Effect.Effect<ReplaceOrCopyTarget | undefined, AcceptEditedFailed> {
   const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
   const copyTarget = buildCopyTarget(baseLocation, copyMeta);
   type AcceptItem = vscode.QuickPickItem & {
@@ -245,13 +245,19 @@ async function pickReplaceOrCopyTarget(
     },
   ];
 
-  const pick = await vscode.window.showQuickPick<AcceptItem>(acceptItems, {
-    title: 'Accept edits',
-    placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
-    ignoreFocusOut: true,
-    prompt: `Edited file: ${path.basename(editedPath)}`,
-  });
-  return pick?.target;
+  return Effect.tryPromise({
+    try: () =>
+      vscode.window.showQuickPick<AcceptItem>(acceptItems, {
+        title: 'Accept edits',
+        placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
+        ignoreFocusOut: true,
+        prompt: `Edited file: ${path.basename(editedPath)}`,
+      }),
+    catch: acceptEditedFailure(
+      'pick-target',
+      'The accept target could not be chosen',
+    ),
+  }).pipe(Effect.map((pick) => pick?.target));
 }
 
 export const handleAcceptEdited = Effect.fn(
@@ -288,18 +294,11 @@ export const handleAcceptEdited = Effect.fn(
 
     // Run metadata present: let the user replace the original or save a
     // postfixed copy, then commit the chosen target.
-    const resolved = yield* Effect.tryPromise({
-      try: () =>
-        pickReplaceOrCopyTarget(
-          baseLocation,
-          editedLocation.absolutePath,
-          copyMeta,
-        ),
-      catch: acceptEditedFailure(
-        'pick-target',
-        'The accept target could not be chosen',
-      ),
-    });
+    const resolved = yield* pickReplaceOrCopyTarget(
+      baseLocation,
+      editedLocation.absolutePath,
+      copyMeta,
+    );
     if (!resolved) return false;
 
     const targetExisted = yield* fs.exists(

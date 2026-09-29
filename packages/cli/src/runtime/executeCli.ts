@@ -431,6 +431,7 @@ export function executeCliRequest(
           launchVerdict.kind !== 'published'
             ? session.runs.stop(launchRunId, {
                 detachActiveChildren: false,
+                reason: 'shutdown',
               })
             : undefined;
         if (stop?.accepted() === true && launchVerdict.kind === 'undecided') {

@@ -42,10 +42,7 @@ export function initializeLatexSupport(
 
   const recommendLatexWorkshop = Effect.gen(function* () {
     const latexWorkshop = vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID);
-    if (
-      !latexWorkshop &&
-      (yield* Effect.promise(workspaceContainsLatexFiles))
-    ) {
+    if (!latexWorkshop && (yield* workspaceContainsLatexFiles)) {
       // Only nag if the workspace actually contains LaTeX files; a user
       // evaluating TeXRA or using it on a non-LaTeX project should not be
       // prompted to install a TeX extension they don't need. They'll still
@@ -74,11 +71,6 @@ export function initializeLatexSupport(
 
 /** A failed search propagates: `initializeLatexSupport` logs it and skips the
  *  recommendation, rather than reading "the query failed" as "no .tex files". */
-async function workspaceContainsLatexFiles(): Promise<boolean> {
-  const hits = await vscode.workspace.findFiles(
-    '**/*.tex',
-    '**/node_modules/**',
-    1,
-  );
-  return hits.length > 0;
-}
+const workspaceContainsLatexFiles = Effect.promise(() =>
+  vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1),
+).pipe(Effect.map((hits) => hits.length > 0));

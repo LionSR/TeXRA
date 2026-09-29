@@ -177,6 +177,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`texra doctor --prune-storage` clears history left by deleted
+  projects** — it lists each workspace's stored history whose project
+  folder no longer exists (or, for history no current build has opened,
+  that has not changed for 90 days), with its size, and deletes them once
+  you confirm, or at once with `--yes`. History another TeXRA window has
+  open is kept. Nothing is ever deleted automatically: a project on an
+  unplugged drive looks deleted too. Deleting runs now also shrinks the
+  history file on disk, backup copies of the history are removed after 30
+  days, and opening one folder under differently cased spellings (on
+  macOS's default case-insensitive disk) no longer keeps two histories for
+  it.
 - **Plugins with hooks can be enabled** — a Claude Code or Codex plugin
   that ships hooks now works in TeXRA. Its hooks can add notes to what you
   ask, block a tool call they object to (the agent is told why), and add
@@ -302,6 +313,15 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Stopping a run cancels its background response.** A workflow turn sent
+  as an OpenAI or Google background response used to keep running, and
+  billing, on the provider after you pressed Stop. An explicit stop (the Stop
+  button, Ctrl-C on a running turn, an agent's kill) now cancels it, and
+  resuming the run sends the turn again instead of waiting on the cancelled
+  one. Quitting TeXRA, a signal, or closing a project still leaves the
+  response running so a resume can pick up its result. If the cancel fails,
+  the run's log says so and the stop goes ahead.
+
 - **Output failures that were hidden now show as warnings in the run.** A
   failed latexdiff, a workspace dependency latexdiff could not copy, a run
   workspace that could not be prepared, an output file that could not be
@@ -310,6 +330,7 @@ All notable changes to this project will be documented in this file.
   Headless `--output-format ndjson` progress no longer carries the
   undisplayed `internal` log lines or `modelRetryLifecycle` domain events,
   and `inquiryThreadUpdated` no longer carries `resumeOutcome`.
+
 - **A tool call cut off by a crash no longer runs twice unasked.** Resuming
   a run after the process died mid-call used to re-run any call that could
   run in parallel, even one with side effects. Now only read-only tools
