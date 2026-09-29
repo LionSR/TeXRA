@@ -1,7 +1,7 @@
 // Standard library imports
 import * as path from 'node:path';
 
-import { escapesRoot } from '@utils/core/pathCore';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 
 export interface AgentWorkspaceOptions {
   workingDirectory?: string;
@@ -30,14 +30,10 @@ export function buildAgentWorkspaceOptions(
   }
   if (!workingDirectory) return { workingDirectory: workspacePath };
 
-  const relativeToWorkspace = path.relative(
+  const isInsideWorkspace = isStrictlyWithin(
     path.resolve(workspacePath),
     path.resolve(workingDirectory),
   );
-  const isInsideWorkspace =
-    relativeToWorkspace.length > 0 &&
-    !escapesRoot(relativeToWorkspace) &&
-    !path.isAbsolute(relativeToWorkspace);
 
   return isInsideWorkspace
     ? { workingDirectory, additionalDirectories: [workspacePath] }

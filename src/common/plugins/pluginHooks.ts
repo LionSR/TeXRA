@@ -18,10 +18,11 @@ import which from 'which';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - this module's neighbours
-import { escapes, PluginError } from './pluginManifest';
+import { PluginError } from './pluginManifest';
 import type { ConfiguredHook } from './hookConfig';
 import type { HookRun } from './hookProtocol';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -208,8 +209,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
       const real = yield* fs
         .realPath(word)
         .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
-      if (real !== undefined && !escapes(path.relative(realRoot, real)))
-        continue;
+      if (real !== undefined && isPathWithin(realRoot, real)) continue;
       const info = real === undefined ? undefined : yield* fs.stat(real);
       files.push({
         kind: 'external',

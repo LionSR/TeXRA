@@ -21,13 +21,14 @@ import { LRUCache } from 'lru-cache';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - utilities
+import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
 
 // Local imports - plugin reading
 import { envDigest, type McpServerConfig } from './mcpServers';
 import { pinHook } from './pluginHooks';
-import { escapes, PluginError, type ResolvedPlugin } from './pluginManifest';
+import { PluginError, type ResolvedPlugin } from './pluginManifest';
 
 const sha256 = (value: string | Uint8Array) =>
   createHash('sha256').update(value).digest('hex');
@@ -143,8 +144,7 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
       const real = yield* fs
         .realPath(candidate)
         .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
-      if (real === undefined || !escapes(path.relative(realRoot, real)))
-        continue;
+      if (real === undefined || isPathWithin(realRoot, real)) continue;
       const info = yield* fs.stat(real);
       if (info.type === 'File')
         found.push({
