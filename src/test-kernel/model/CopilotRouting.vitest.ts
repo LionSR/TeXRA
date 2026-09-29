@@ -18,7 +18,10 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
-import { LanguageModel } from '@platform/languageModel';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeHostLanguageModel,
@@ -68,9 +71,9 @@ function languageModelPort(
   models: readonly LanguageModelInfo[],
 ): LanguageModelPort {
   return {
+    ...UNAVAILABLE_LANGUAGE_MODEL_PORT,
     isAvailable: () => true,
     selectModels: vi.fn(() => Effect.succeed(models)),
-    onDidChange: () => ({ dispose() {} }),
   };
 }
 

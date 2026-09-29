@@ -189,11 +189,13 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
           const outcome = next();
           if ('fail' in outcome) {
             return Stream.fail(
-              new ModelError({
-                kind: 'transport',
-                message: 'attempt failed',
-                cause: outcome.fail,
-              }),
+              outcome.fail instanceof ModelError
+                ? outcome.fail
+                : new ModelError({
+                    kind: 'transport',
+                    message: 'attempt failed',
+                    cause: outcome.fail,
+                  }),
             );
           }
           if ('silent' in outcome) return Stream.empty;
@@ -410,20 +412,47 @@ const invokeOn = ({ layer, runId, state }: InvokerKit) =>
     Effect.provide(testHttpClientLayer),
   );
 
-/** An Error carrying the HTTP status/body shape the classifiers read. */
+/**
+ * What the package raises over an SDK reply: its kind, status and
+ * `retry-after`, with the SDK error (and its reply body) as the cause.
+ */
 function httpError(
   message: string,
   status: number,
-  extra: Record<string, unknown> = {},
-): Error {
-  return Object.assign(new Error(message), { status, ...extra });
+  {
+    headers,
+    ...body
+  }: Record<string, unknown> & {
+    headers?: Record<string, string>;
+  } = {},
+): ModelError {
+  const retryAfter = headers?.['retry-after'];
+  return new ModelError({
+    kind:
+      status === 401 || status === 403
+        ? 'authentication'
+        : 'provider-rejection',
+    message,
+    status,
+    ...(retryAfter === undefined
+      ? {}
+      : { retryAfterMs: Number(retryAfter) * 1000 }),
+    cause: Object.assign(new Error(message), { status, ...body }),
+  });
 }
 
 /** A status-less OpenAI server_error response, as the SDK raises it. */
-function statuslessServerError(message: string): OpenAIAPIError {
+function statuslessServerError(message: string): ModelError {
   const body = { type: 'server_error', code: 'server_error', message };
-  return new OpenAIAPIError(undefined, body, message, undefined);
+  return new ModelError({
+    kind: 'provider-rejection',
+    message,
+    cause: new OpenAIAPIError(undefined, body, message, undefined),
+  });
 }
+
+/** The binding every classification below ran under. */
+const BOUND = boundModel(stubModel([]).model);
 
 /**
  * The two recovery projections `gatedAttempt` hands the session gate: the
@@ -433,7 +462,7 @@ function statuslessServerError(message: string): OpenAIAPIError {
 const wireRouteRecovery = (
   error: Error,
 ): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error);
+  const { verdict } = classifyModelFailure(error, BOUND);
   return verdict.wireRouteFailure
     ? { retryAfterMs: verdict.retryAfterMs }
     : undefined;
@@ -441,7 +470,7 @@ const wireRouteRecovery = (
 const modelRouteRecovery = (
   error: Error,
 ): { retryAfterMs: number | undefined } | undefined => {
-  const { verdict } = classifyModelFailure(error);
+  const { verdict } = classifyModelFailure(error, BOUND);
   return verdict.rateLimitScope === 'model'
     ? { retryAfterMs: verdict.retryAfterMs }
     : undefined;
@@ -451,7 +480,7 @@ describe('model failure classification', () => {
   it('treats a user abort as a cancellation, never an automatic retry', () => {
     const abort = new DOMException('Request aborted', 'AbortError');
 
-    expect(classifyModelFailure(abort).autoRetryable).toBe(false);
+    expect(classifyModelFailure(abort, BOUND).autoRetryable).toBe(false);
   });
 
   it('carries the text streamed before the failure onto the retry surface', () => {
@@ -465,14 +494,14 @@ describe('model failure classification', () => {
       undefined,
     );
 
-    const failure = classifyModelFailure(error, 'api-key', 'partial answer');
+    const failure = classifyModelFailure(error, BOUND, 'partial answer');
 
     expect(failure.formatted.partialText).toBe('partial answer');
     expect(failure.info.partialText).toBe('partial answer');
     // A failure with nothing streamed carries no tail at all.
     expect(
-      classifyModelFailure(statuslessServerError('nothing streamed')).formatted
-        .partialText,
+      classifyModelFailure(statuslessServerError('nothing streamed'), BOUND)
+        .formatted.partialText,
     ).toBeUndefined();
   });
 
@@ -484,7 +513,7 @@ describe('model failure classification', () => {
       undefined,
     );
 
-    expect(classifyModelFailure(error).formatted).toMatchObject({
+    expect(classifyModelFailure(error, BOUND).formatted).toMatchObject({
       message: 'HTTP 503 Service Unavailable – 503 transient provider failure',
       userRetryable: true,
     });
@@ -495,6 +524,20 @@ describe('model failure classification', () => {
       name: 'a status-less OpenAI server_error response',
       error: statuslessServerError('temporary provider failure'),
       autoRetryable: true,
+    },
+    {
+      name: 'an unknown status-less provider reply',
+      error: new ModelError({
+        kind: 'provider-rejection',
+        message: 'Unexpected provider failure.',
+        cause: new OpenAIAPIError(
+          undefined,
+          { type: 'unexpected_error', message: 'Unexpected provider failure.' },
+          'Unexpected provider failure.',
+          undefined,
+        ),
+      }),
+      autoRetryable: false,
     },
     {
       name: 'an HTTP conflict after provider SDK retries are disabled',
@@ -540,7 +583,9 @@ describe('model failure classification', () => {
       autoRetryable: false,
     },
   ])('classifies $name', ({ error, autoRetryable }) => {
-    expect(classifyModelFailure(error).autoRetryable).toBe(autoRetryable);
+    expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(
+      autoRetryable,
+    );
   });
 
   // The package's own refusals are deterministic: repeating them bills again
@@ -550,7 +595,7 @@ describe('model failure classification', () => {
     (kind) => {
       const error = new ModelError({ kind, message: 'refused' });
 
-      expect(classifyModelFailure(error).autoRetryable).toBe(false);
+      expect(classifyModelFailure(error, BOUND).autoRetryable).toBe(false);
     },
   );
 });
@@ -591,25 +636,26 @@ describe('recovery-route verdicts', () => {
 
   it.each([
     {
-      name: 'recognizes the nested Undici stream timeout from long model calls',
-      error: new Error('Connection error', {
-        cause: new TypeError('fetch failed', {
-          cause: Object.assign(
-            new Error('HTTP/2: "stream timeout after 300000"'),
-            { code: 'UND_ERR_INFO' },
-          ),
-        }),
+      name: 'cools the wire route on a transport failure from long model calls',
+      error: new ModelError({
+        kind: 'transport',
+        message: 'Connection error',
+        cause: new TypeError('fetch failed'),
       }),
       expected: { retryAfterMs: undefined },
     },
     {
-      name: 'recognizes a retryable HTTP status carried by an SDK error cause',
-      error: new Error('request failed', {
-        cause: httpError('service unavailable', 503, {
-          headers: { 'retry-after': '7' },
+      name: 'keeps a deterministic undici code local despite the fetch-failed wrapper',
+      error: new ModelError({
+        kind: 'transport',
+        message: 'Connection error',
+        cause: new TypeError('fetch failed', {
+          cause: Object.assign(new Error('invalid header'), {
+            code: 'UND_ERR_INVALID_ARG',
+          }),
         }),
       }),
-      expected: { retryAfterMs: 7_000 },
+      expected: undefined,
     },
     {
       name: 'coordinates a structured status-less server failure from the SDK',
@@ -626,15 +672,6 @@ describe('recovery-route verdicts', () => {
         },
       }),
       expected: { retryAfterMs: undefined },
-    },
-    {
-      name: 'does not classify deterministic Undici request errors as route failures',
-      error: new TypeError('fetch failed', {
-        cause: Object.assign(new Error('invalid request option'), {
-          code: 'UND_ERR_INVALID_ARG',
-        }),
-      }),
-      expected: undefined,
     },
     {
       name: 'keeps per-response retries local to their invocation',

@@ -82,9 +82,10 @@ vi.mock('vscode', async (original) => {
 });
 
 // Local imports
-import type {
-  LanguageModelInfo,
-  LanguageModelPort,
+import {
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+  type LanguageModelInfo,
+  type LanguageModelPort,
 } from '@platform/languageModel';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -107,9 +108,9 @@ function languageModelPort(
   models: readonly LanguageModelInfo[],
 ): LanguageModelPort {
   return {
+    ...UNAVAILABLE_LANGUAGE_MODEL_PORT,
     isAvailable: () => true,
     selectModels: vi.fn(() => Effect.succeed(models)),
-    onDidChange: () => ({ dispose() {} }),
   };
 }
 

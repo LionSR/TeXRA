@@ -288,6 +288,8 @@ export const fakeHostLanguageModel: LanguageModelPort = {
     installedHost().languageModel.selectModels(selector),
   onDidChange: (listener) =>
     installedHost().languageModel.onDidChange(listener),
+  acquire: (configuration) =>
+    installedHost().languageModel.acquire(configuration),
 };
 
 /** The `AgentDirectories` service of every test runtime, delegating per call

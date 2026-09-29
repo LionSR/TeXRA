@@ -1,4 +1,9 @@
-import { Context, Effect, Layer } from 'effect';
+import {
+  ModelError,
+  type Model,
+  type VscodeLanguageModelConfiguration,
+} from '@texra-ai/llm/turn';
+import { Context, Effect, Layer, type Scope } from 'effect';
 
 // Local imports - platform
 import type { Disposable } from './interfaces';
@@ -45,6 +50,14 @@ export interface LanguageModelPort {
    * `LanguageModelInfo.access` folds access into each catalogue entry.
    */
   onDidChange(listener: () => void): Disposable;
+  /**
+   * The editor's model for one discovered route, live in the caller's scope
+   * (its request handle and uploads close with it). The run layer binds
+   * `vscode-lm` models through this.
+   */
+  acquire(
+    configuration: VscodeLanguageModelConfiguration,
+  ): Effect.Effect<Model, ModelError, Scope.Scope>;
 }
 
 /** Shared implementation for CLI, desktop, tests, and unsupported editors. */
@@ -53,6 +66,13 @@ export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
     isAvailable: () => false,
     selectModels: () => Effect.succeed([]),
     onDidChange: () => ({ dispose() {} }),
+    acquire: () =>
+      Effect.fail(
+        new ModelError({
+          kind: 'unsupported',
+          message: 'This host does not expose editor language models.',
+        }),
+      ),
   },
 );
 

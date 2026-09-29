@@ -1,7 +1,7 @@
 import { getReasonPhrase, StatusCodes } from 'http-status-codes';
 import { Result } from 'effect';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { isObject, normalizeFilePath } from '@utils/core';
+import { isObject } from '@utils/core';
 import { isNonEmptyString, isString } from '@utils/text/stringUtils';
 
 import { pickStatus } from './sdkErrorKinds';
@@ -120,27 +120,6 @@ export function getErrorClassNames(err: unknown): string[] {
   return [...classNames];
 }
 
-/** Field aliases across thrown SDK/provider error shapes — the only fields
- *  `detectStatusCode`/`detectStatusText`/`detectRequestId`/`detectRawErrorBody`
- *  read. Kept in one type so a new alias lands in a single place instead of
- *  redeclared per detector. Nested carriers (`response`, `error`) are left
- *  as loose records since each detector reads a different field off them. */
-type SdkErrorLike = {
-  status?: unknown;
-  statusCode?: unknown;
-  code?: unknown;
-  statusText?: unknown;
-  request_id?: unknown;
-  requestId?: unknown;
-  requestID?: unknown;
-  message?: unknown;
-  headers?: HeaderBag;
-  response?: Record<string, unknown>;
-  error?: Record<string, unknown>;
-  body?: unknown;
-  data?: unknown;
-};
-
 /** Direct-or-enveloped SDK error candidates: the thrown error itself, then
  *  its nested `.response` and `.error` carriers (some SDKs preserve the full
  *  envelope, others unwrap it before it reaches us). Mirrors
@@ -181,108 +160,19 @@ export function detectStatusText(
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
 
-export function detectProvider(err: unknown): string | undefined {
-  if (!isObject(err)) {
-    return undefined;
-  }
-
-  const candidate = err as {
-    provider?: string;
-    headers?: HeaderBag;
-    stack?: string;
-  };
-
-  if (isString(candidate.provider)) {
-    return candidate.provider;
-  }
-
-  const classNameProvider = detectProviderFromClassNames(
-    getErrorClassNames(err),
-  );
-  if (classNameProvider) return classNameProvider;
-
-  return (
-    detectProviderFromText(candidate.stack ?? '') ??
-    detectProviderFromHeaders(candidate.headers)
-  );
-}
-
-function detectProviderFromClassNames(
-  classNames: readonly string[],
-): string | undefined {
-  // Match SDK class-name fragments, then normalize aliases to the canonical
-  // API-provider names used by SecretManager / model handlers. This also covers
-  // no-response connection errors whose provider only appears on a base SDK
-  // class such as OpenAIError or AnthropicError.
-  const names = classNames.map((name) => name.toLowerCase());
-  const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
-    (provider) => names.some((name) => name.includes(provider)),
-  );
-  if (match === 'kimi') return 'moonshot';
-  return match;
-}
-
-export type HeaderBag =
-  | {
-      get?: (key: string) => string | null;
-    }
-  | Record<string, unknown>;
-type HeaderDetectedProvider = 'anthropic';
-
-export function getHeaderValue(
-  headers: HeaderBag | undefined,
-  name: string,
-): string | undefined {
-  const maybeGet = isObject(headers) ? headers.get : undefined;
-  const direct =
-    typeof maybeGet === 'function' ? maybeGet.call(headers, name) : undefined;
-  if (isString(direct) && direct) return direct;
-
-  const indexed = (headers as Record<string, unknown> | undefined)?.[name];
-  return isString(indexed) && indexed ? indexed : undefined;
-}
-
-function detectProviderFromHeaders(
-  headers: HeaderBag | undefined,
-): HeaderDetectedProvider | undefined {
-  return getHeaderValue(headers, 'request-id') ? 'anthropic' : undefined;
-}
-
-function detectProviderFromText(text: string): string | undefined {
-  const lowered = normalizeFilePath(text.toLowerCase());
-  if (lowered.includes(`@anthropic-${'ai'}/sdk`)) return 'anthropic';
-  if (lowered.includes('node_modules/openai')) return 'openai';
-  // Keep the Google package marker split so the desktop startup bundle
-  // verifier does not mistake this stack-text detector for an eager SDK import.
-  if (lowered.includes(`@google/${'genai'}`)) return 'google';
-  return undefined;
-}
-
-/** Extract request ID from SDK errors (property or headers). */
-export function detectRequestId(err: unknown): string | undefined {
-  if (!isObject(err)) return undefined;
-
-  const candidate = err as SdkErrorLike;
-
-  const directId =
-    candidate.request_id ?? candidate.requestId ?? candidate.requestID;
-  if (isString(directId) && directId) {
-    return directId;
-  }
-
-  return (
-    getHeaderValue(candidate.headers, 'request-id') ??
-    getHeaderValue(candidate.headers, 'x-request-id')
-  );
-}
-
 /** Extract raw error body from SDK errors for error debugging. */
 export function detectRawErrorBody(err: unknown): unknown {
   if (!isObject(err)) {
     return undefined;
   }
 
-  const candidate = err as SdkErrorLike;
+  const candidate = err as {
+    error?: unknown;
+    body?: unknown;
+    data?: unknown;
+    response?: { data?: unknown };
+    message?: unknown;
+  };
 
   const directBody =
     candidate.error ??
