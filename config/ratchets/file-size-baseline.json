@@ -58,7 +58,7 @@
     "src/agent/workflowScript/runWorkflowScript.ts": 860,
     "src/agent/workflowScript/sandbox.ts": 618,
     "src/controllers/approval/ToolEditApprovalController.ts": 677,
-    "src/controllers/session/Database.ts": 1311,
+    "src/controllers/session/Database.ts": 1308,
     "src/controllers/session/hostRunActions.ts": 713,
     "src/controllers/session/sessionLayer.ts": 1237,
     "src/latex/arxivProcessor.ts": 734,
