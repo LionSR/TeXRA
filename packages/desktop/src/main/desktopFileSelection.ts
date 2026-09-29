@@ -6,12 +6,9 @@ import {
   getFileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { attachDroppedFiles } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
-import type { DocumentFileType, FileOptions } from '@shared/schemas';
-import { Rejected } from '@shared/session/requestErrors';
+import type { FileOptions } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
 interface DesktopFileSelectionDialogOptions {
@@ -31,8 +28,7 @@ interface DesktopFileSelectionOptions {
 
 /**
  * The file lists and pickers of one paper: the `host` snapshot's file
- * catalogs (PRD 8.1) and the `pickFiles` and `attachDroppedFiles` arms of
- * `host.request` (8.3).
+ * catalogs (PRD 8.1) and the `pickFiles` arm of `host.request` (8.3).
  */
 export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited
@@ -48,20 +44,6 @@ export interface DesktopFileSelection {
    * the dialog was cancelled.
    */
   pickFiles(fileType: ListableFileType): Promise<string[] | null>;
-  /**
-   * Paths dropped onto the launcher: the regular files inside the paper
-   * whose extension the target category admits, workspace-relative. The
-   * same plan the extension applies; a drop that attaches nothing fails with
-   * the `Rejected` the request answers the surface with.
-   */
-  attachDroppedFiles(
-    paths: readonly string[],
-    category: DocumentFileType,
-  ): Effect.Effect<
-    string[],
-    PlatformError.PlatformError | Rejected,
-    FileSystem.FileSystem
-  >;
 }
 
 const DIALOG_TITLE_BY_FILE_TYPE: Record<ListableFileType, string> = {
@@ -110,13 +92,6 @@ export function createDesktopFileSelection(
       return selectedFiles.map((file) =>
         toWorkspaceRelative(workspacePath, file),
       );
-    },
-    attachDroppedFiles(paths, category) {
-      return attachDroppedFiles(
-        workspacePath,
-        paths,
-        getIncludedExtensions(category),
-      ).pipe(Effect.map((attached) => attached.paths));
     },
   };
 }

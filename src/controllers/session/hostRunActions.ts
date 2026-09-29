@@ -150,6 +150,8 @@ export interface HostRunActionPorts {
 /** What a host's request arms do once {@link createHostRunActions} has bound
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
+  /** The host's launcher, as the launcher's Send reaches it. */
+  readonly runValidated: HostRunActionPorts['runValidated'];
   resume(
     runId: RunId,
   ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
@@ -618,6 +620,7 @@ export const createHostRunActions = (
         const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
       }),
+      runValidated: ports.runValidated,
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {

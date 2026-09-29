@@ -9,10 +9,6 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import {
-  launchApprovalOptions,
-  prepareSurfaceLaunch,
-} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
@@ -472,6 +468,9 @@ export function createDesktopHostRequests(
         ),
     exportTranscript,
     surfaceAction: (action) => options.postSurfaceAction(action),
+    showInfo: (message) => host.showInfoMessage(message),
+    // The window's paper is its one workspace: any launch runs as asked.
+    admitLaunch: () => Effect.void,
     // One window per paper: the two surface actions above are the whole
     // move into the launcher here, so there is no sidebar left to raise.
     showLauncher: Effect.void,
@@ -544,6 +543,7 @@ export function createDesktopHostRequests(
     snapshot: options.snapshot,
     draftRequests,
     toolEditApprovals: run.toolEditApprovals,
+    session,
     host: hostBindings,
   };
 
@@ -592,25 +592,6 @@ export function createDesktopHostRequests(
         case 'useCurrentFile':
         case 'addOpenedFiles':
           return yield* Effect.fail(notOnDesktop("The editor's current file"));
-        case 'attachDroppedFiles': {
-          const { paths: dropped, category } = request;
-          return {
-            kind: 'files',
-            paths: yield* options.files.attachDroppedFiles(dropped, category),
-          };
-        }
-        case 'launch': {
-          const launch = yield* prepareSurfaceLaunch(
-            request,
-            session.roots.repoState,
-            session.roots.storage,
-          );
-          const approval = launchApprovalOptions(request, session.approvals);
-          yield* run
-            .runValidated(launch, approval)
-            .pipe(Effect.mapError((e) => hostFailure('run.runValidated', e)));
-          return done;
-        }
         case 'extractFigures':
           return yield* Effect.fail(notOnDesktop('Figure extraction'));
       }

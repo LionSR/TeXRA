@@ -31,7 +31,7 @@ const BASE_FILE_OPTIONS = [
 
 /**
  * The file lists and pickers of one paper: the `host` snapshot's file
- * catalogs and the `pickFiles` and `attachDroppedFiles` arms (PRD 8.1, 8.3).
+ * catalogs and the `pickFiles` arm (PRD 8.1, 8.3).
  */
 describe('desktop file selection', () => {
   const tempDirs = useTempDirs();
@@ -123,40 +123,14 @@ describe('desktop file selection', () => {
       }),
   );
 
-  it.effect(
-    'reports a cancelled picker as null and attaches only the admitted dropped files',
-    () =>
-      Effect.gen(function* () {
-        const files = yield* Effect.promise(() => createFileSelection());
+  it.effect('reports a cancelled picker as null', () =>
+    Effect.gen(function* () {
+      const files = yield* Effect.promise(() => createFileSelection());
 
-        expect(
-          yield* Effect.promise(() => files.pickFiles('context')),
-        ).toBeNull();
-        expect(
-          yield* withProcessServices(
-            runtime,
-            files.attachDroppedFiles(
-              [
-                join(workspacePath, 'notes.md'),
-                join(workspacePath, 'sections'),
-                '/elsewhere/x.tex',
-              ],
-              'context',
-            ),
-          ),
-        ).toEqual(['notes.md']);
-
-        const error = yield* Effect.flip(
-          withProcessServices(
-            runtime,
-            files.attachDroppedFiles(
-              [join(workspacePath, 'sections')],
-              'input',
-            ),
-          ),
-        );
-        expect(error).toMatchObject({ _tag: 'Rejected' });
-      }),
+      expect(
+        yield* Effect.promise(() => files.pickFiles('context')),
+      ).toBeNull();
+    }),
   );
 
   it.effect('skips a circular symlink instead of failing the catalog', () =>

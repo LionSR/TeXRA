@@ -22,14 +22,7 @@ import {
 } from '@commands/files/fileSelectionCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import {
-  attachDroppedFiles,
-  normalizeMainViewFileExtension,
-} from '@controllers/mainView/MainViewDroppedFilesController';
-import {
-  launchApprovalOptions,
-  prepareSurfaceLaunch,
-} from '@controllers/mainView/backend/MainViewRunLaunchController';
+import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
@@ -75,7 +68,6 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import {
   withProcessServices,
-  type AgentCatalogServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
@@ -111,10 +103,7 @@ import {
 } from '@utils/files/workspaceFS';
 import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 import { getToolDocsCommand } from '@utils/system/toolUtils';
-import {
-  formatResultCount,
-  normalizeLineEndings,
-} from '@utils/text/stringUtils';
+import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -376,44 +365,23 @@ export function createExtensionHostRequests(
     });
   }
 
-  /** The launcher's Send: the surface's selections through the shared
-   *  launch preparation, then the one launch command. */
-  function launch(
-    request: Extract<HostRequest, { kind: 'launch' }>,
-  ): Effect.Effect<
-    void,
-    HostCallFailed | RequestRefusal | StateReadFailed,
-    AgentCatalogServices
-  > {
-    return Effect.gen(function* () {
-      const { launch: form } = request;
-      const requestedWorkingDirectory = form.workingDirectory.trim();
-      if (
-        requestedWorkingDirectory &&
-        !vscode.workspace.workspaceFolders?.some(
-          (folder) =>
-            path.resolve(folder.uri.fsPath) ===
-            path.resolve(requestedWorkingDirectory),
-        )
-      ) {
-        return yield* Effect.fail(
+  /** A working directory outside the open workspace folders cannot launch. */
+  const admitLaunch: SharedHostRequestBindings['admitLaunch'] = (form) => {
+    const requestedWorkingDirectory = form.workingDirectory.trim();
+    return requestedWorkingDirectory &&
+      !vscode.workspace.workspaceFolders?.some(
+        (folder) =>
+          path.resolve(folder.uri.fsPath) ===
+          path.resolve(requestedWorkingDirectory),
+      )
+      ? Effect.fail(
           new Rejected({
             reason:
               'Choose one of the open workspace folders as the working directory.',
           }),
-        );
-      }
-      const prepared = yield* prepareSurfaceLaunch(
-        request,
-        session.roots.repoState,
-        session.roots.storage,
-      );
-      yield* runValidated(
-        prepared,
-        launchApprovalOptions(request, session.approvals),
-      ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
-    });
-  }
+        )
+      : Effect.void;
+  };
 
   function getOpenedFiles(): Effect.Effect<string[]> {
     const workspaceRoot = session.roots.workspace;
@@ -438,30 +406,6 @@ export function createExtensionHostRequests(
         fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
       ),
     ]);
-  }
-
-  function attachDropped(
-    request: Extract<HostRequest, { kind: 'attachDroppedFiles' }>,
-  ) {
-    return attachDroppedFiles(
-      session.roots.workspace,
-      request.paths,
-      getIncludedExtensions(request.category),
-    ).pipe(
-      Effect.tap((attached) =>
-        attached.attachedCount > 0 && attached.rejectedCount > 0
-          ? Effect.forkDetach(
-              vscodeUi.showInfoMessage(
-                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-              ),
-            )
-          : Effect.void,
-      ),
-      Effect.map((attached): HostOutcome => ({
-        kind: 'files',
-        paths: attached.paths,
-      })),
-    );
   }
 
   /** The editor's current file into a launcher field. */
@@ -578,6 +522,8 @@ export function createExtensionHostRequests(
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),
+    showInfo: (message) => vscodeUi.showInfoMessage(message),
+    admitLaunch,
     showLauncher: Effect.suspend(() => options.showInSidebar()),
     runWorkflowDiff: (diff) => commandVerb('texra.runLatexdiff', diff),
     runWorkflowFileOperation: (operation, request) =>
@@ -673,6 +619,7 @@ export function createExtensionHostRequests(
     snapshot,
     draftRequests,
     toolEditApprovals,
+    session,
     host: hostBindings,
   };
 
@@ -725,11 +672,6 @@ export function createExtensionHostRequests(
           };
           return outcome;
         }
-        case 'attachDroppedFiles':
-          return yield* attachDropped(request);
-        case 'launch':
-          yield* launch(request);
-          return done;
         case 'extractFigures':
           yield* commandVerb('texra.extractTikzFigures');
           return done;

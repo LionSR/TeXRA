@@ -15,8 +15,16 @@
  */
 import { Effect } from 'effect';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
+import { attachDroppedFiles } from '@controllers/mainView/MainViewDroppedFilesController';
 import type { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
+import {
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
+import { hostFailure } from '@controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import {
   launchPatchOf,
@@ -37,16 +45,19 @@ import type {
   HostOutcome,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 /** The kinds {@link handleSharedHostRequest} answers. */
 const SHARED_HOST_REQUEST_KINDS = [
   'agentConfigBanner',
   'apiKeyBanner',
+  'attachDroppedFiles',
   'clean',
   'dismissBanner',
   'exportTranscript',
   'fileAction',
   'gettingStarted',
+  'launch',
   'latexdiff',
   'latexdiffs',
   'onboarding',
@@ -99,6 +110,7 @@ type HostVerb<A> = Effect.Effect<
 /** The launcher form of a settled run's setup, as `launchPatchOf` takes it. */
 type LaunchConfig = Parameters<typeof launchPatchOf>[0];
 
+type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type OpenSettingsRequest = Extract<HostRequest, { kind: 'openSettings' }>;
 type AgentConfigBannerRequest = Extract<
   HostRequest,
@@ -124,12 +136,17 @@ export interface SharedHostRequestBindings {
   /** Reveal the first file defining `label`; `false` when none does. */
   openLabel(label: string): HostVerb<boolean>;
   exportTranscript(runId: RunId): HostVerb<void>;
+  showInfo(message: string): HostVerb<void>;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** Bring the launcher into view behind a restore. The desktop's window is
    *  the launcher, so the two surface actions above are the whole move
    *  there; only the extension has a sidebar to raise. */
   readonly showLauncher: HostVerb<void>;
+  /** Admit a launch this host cannot run as asked, with the refusal that
+   *  says why; the extension names only open workspace folders as a working
+   *  directory. */
+  admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
   runWorkflowDiff(request: WorkflowDiffRequest): HostVerb<void>;
   runWorkflowFileOperation(
     operation: 'pack' | 'clean',
@@ -181,6 +198,7 @@ export interface SharedHostRequestPorts {
    *  {@link HostDraftRequests.attach} bound it. */
   readonly draftRequests: ReturnType<HostDraftRequests['attach']>;
   readonly toolEditApprovals: ToolEditApprovalController;
+  readonly session: Pick<SessionHandle, 'roots' | 'approvals'>;
   readonly host: SharedHostRequestBindings;
 }
 
@@ -274,6 +292,40 @@ export function handleSharedHostRequest(
       }
       case 'openRunStorage':
         yield* ports.workflowFileActions.openRunStorage(request.runId);
+        return done;
+      case 'attachDroppedFiles': {
+        const attached = yield* attachDroppedFiles(
+          ports.session.roots.workspace,
+          request.paths,
+          getIncludedExtensions(request.category),
+        );
+        if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
+          yield* Effect.forkDetach(
+            host.showInfo(
+              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+            ),
+          );
+        }
+        return { kind: 'files', paths: attached.paths };
+      }
+      case 'launch':
+        yield* host.admitLaunch(request.launch);
+        yield* prepareSurfaceLaunch(
+          request,
+          ports.session.roots.repoState,
+          ports.session.roots.storage,
+        ).pipe(
+          Effect.flatMap((prepared) =>
+            ports.runActions
+              .runValidated(
+                prepared,
+                launchApprovalOptions(request, ports.session.approvals),
+              )
+              .pipe(
+                Effect.mapError((cause) => hostFailure('runValidated', cause)),
+              ),
+          ),
+        );
         return done;
       case 'resume':
         yield* ports.runActions.resume(request.runId);
