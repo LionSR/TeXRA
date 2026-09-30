@@ -872,7 +872,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
     slot: 'repoState',
-    enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
+    enumLabels: [
+      'Sonnet 5.5',
+      'Sonnet 5',
+      'Fable 5.1',
+      'Opus 5.5',
+      'Opus 5',
+      'Haiku 4.5',
+    ],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
   surfacedSetting({
