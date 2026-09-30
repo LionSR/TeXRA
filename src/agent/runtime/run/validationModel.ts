@@ -1,6 +1,6 @@
 /**
  * The deterministic model the package-validation gate runs against, and the
- * CI-only gate that selects it.
+ * gate that selects it.
  *
  * Package validation (`pnpm --filter @texra-ai/cli run build` with
  * `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`) swaps the real provider
@@ -18,7 +18,7 @@
  * loads a stub in place of this module
  * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
  * environment-opened gate ships. The
- * runtime keys (the per-run switch, the flag-file path, `CI`, and the per-turn
+ * runtime keys (the per-run switch, the flag-file path, and the per-turn
  * workflow-script switch) go through the ambient Effect `ConfigProvider`
  * (`envVar`), read when the program runs, never at module load.
  */
@@ -149,6 +149,31 @@ function goldenTurn(
         : text('Child result.'),
     );
   }
+  // The interactive chat: a plan the user runs as a goal, the goal
+  // completed, and a reply to the message sent after a `/model` switch.
+  if (system.includes('GOLDEN-CHAT')) {
+    const steps = [
+      () =>
+        call('plan', {
+          command: 'update',
+          objective: 'Answer the golden chat, then stop.',
+        }),
+      () =>
+        call('plan', {
+          command: 'complete',
+          reason: 'The golden chat is answered.',
+        }),
+    ];
+    const step = steps[results.length];
+    if (step !== undefined) return Effect.succeed([step()]);
+    return Effect.succeed(
+      text(
+        said.includes('After the model switch.')
+          ? 'Answered after the model switch.'
+          : 'Golden chat goal complete.',
+      ),
+    );
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
@@ -205,9 +230,11 @@ function mathematicalValidationOutput(prompt: string): {
 }
 
 /**
- * True only inside a guarded package-validation run: the include flag is set,
- * the per-run env var is `1`, `CI=1`, and an absolute flag file holds the
- * expected sentinel. Any partial/forged activation dies rather than silently
+ * True only inside a guarded package-validation run: the bundle was built
+ * with the include flag, the per-run env var is `1`, and an absolute flag
+ * file holds the expected sentinel. `CI` is not read, so an interactive
+ * `texra chat` (which a CI marker would force headless) can run against the
+ * scripted model. Any partial/forged activation dies rather than silently
  * falling through to real models.
  */
 export const shouldUseInternalValidationModel = Effect.fn(
@@ -225,11 +252,10 @@ export const shouldUseInternalValidationModel = Effect.fn(
   if ((yield* envVar(envKey)) !== '1') return false;
 
   const flagPath = yield* envVar(flagEnvKey);
-  const ci = yield* envVar('CI');
-  if (ci !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
+  if (!flagPath || !path.isAbsolute(flagPath)) {
     return yield* Effect.die(
       new Error(
-        `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
+        `${envKey}=1 is restricted to package validation and needs an absolute ${flagEnvKey} path.`,
       ),
     );
   }

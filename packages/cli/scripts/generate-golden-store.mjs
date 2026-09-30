@@ -25,13 +25,15 @@
  *   follow-up the parent never reads, so it stays queued. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
+ * - `golden_chat`, the interactive `texra chat` driven under a PTY: a plan
+ *   the user runs as a goal (`r` on the approval, the `goal` plugin fact)
+ *   and the goal completed, then `/model` and a message, so the switch is
+ *   recorded at the run's next model boundary. Only the chat makes either:
+ *   the headless policy approves a plan without a goal. Each keystroke
+ *   waits for the screen or the store to show the step before it, so the
+ *   rows commit in one order.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
- *
- * Not in the store: a mid-run model switch and a `goal` plugin fact. The
- * scripted model needs `CI=1`, which makes the CLI headless, and both are
- * made only in the interactive chat (`/model`, and "run as goal" on a plan
- * approval); the headless policy approves a plan without a goal.
  *
  * What differs between two generations is normalized before the dump: the
  * temporary paths, the process identities, the clock, the random ids, and
@@ -54,9 +56,12 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
+
+import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 
 const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
@@ -140,12 +145,13 @@ function scenario(root) {
     '\\section{Notes}\nThe golden store reads this file.\n',
   );
   // The caller's environment (Windows needs `SystemRoot` and the like), less
-  // its TeXRA settings and provider keys, with every home the CLI could
-  // resolve (`HOME`, and `USERPROFILE` on Windows) in the temporary root.
+  // its TeXRA settings, provider keys and `CI` (which would force the chat
+  // headless), with every home the CLI could resolve (`HOME`, and
+  // `USERPROFILE` on Windows) in the temporary root.
   const env = {
     ...Object.fromEntries(
       Object.entries(process.env).filter(
-        ([name]) => !name.startsWith('TEXRA_'),
+        ([name]) => !name.startsWith('TEXRA_') && name !== 'CI',
       ),
     ),
     ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
@@ -163,7 +169,6 @@ function scenario(root) {
     SHELL: '/bin/sh',
     TZ: 'UTC',
     LANG: 'C',
-    CI: '1',
     TEXRA_NO_UPDATE_CHECK: '1',
     TEXRA_NO_TELEMETRY: '1',
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
@@ -202,12 +207,52 @@ function scenario(root) {
     );
     return { child, exited, output: () => output, done: () => done };
   };
+  // The interactive chat, on a PTY whose screen a headless terminal keeps.
+  const chat = async (command) => {
+    ensureNodePtySpawnHelperExecutable();
+    const require = createRequire(import.meta.url);
+    const { spawn: spawnPty } = require('node-pty');
+    const { Terminal } = require('@xterm/headless');
+    const cols = 100;
+    const rows = 40;
+    const term = new Terminal({ cols, rows, allowProposedApi: true });
+    const child = spawnPty(process.execPath, argv(command), {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd: project,
+      env: { ...env, TERM: 'xterm-256color' },
+    });
+    let done = false;
+    child.onData((data) => term.write(data));
+    const exited = new Promise((resolve) =>
+      child.onExit((exit) => {
+        done = true;
+        resolve(exit);
+      }),
+    );
+    const screen = () => {
+      const buffer = term.buffer.active;
+      return Array.from(
+        { length: rows },
+        (_, i) =>
+          buffer.getLine(buffer.viewportY + i)?.translateToString(true) ?? '',
+      ).join('\n');
+    };
+    return {
+      write: (data) => child.write(data),
+      screen,
+      exited,
+      output: screen,
+      done: () => done,
+    };
+  };
   const store = () => {
     const dir = path.join(home, '.texra/v1/workspace-storage');
     const [key] = existsSync(dir) ? readdirSync(dir) : [];
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, start, store };
+  return { run, start, chat, store };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -319,6 +364,63 @@ async function generate(root) {
       '--print',
     ]);
 
+  // The interactive chat: each keystroke waits for the step before it.
+  const tty = await cli.chat([
+    'chat',
+    '--agent',
+    'golden_chat',
+    '--model',
+    'gpt56',
+  ]);
+  const shows = (label, text) =>
+    until(label, () => tty.screen().includes(text), tty);
+  const send = async (text) => {
+    await shows('the idle prompt', 'Ctrl-C exit');
+    tty.write(text);
+    await shows(`the typed ${JSON.stringify(text)}`, `› ${text}`);
+    tty.write('\r');
+  };
+  const chatRun = () =>
+    query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
+  const waiting = (turn) =>
+    until(
+      `the chat waiting after turn ${turn}`,
+      () =>
+        query(
+          cli.store(),
+          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type = 'run.position'
+             AND json_extract(e.data, '$.payload.at') = 'waiting'
+             AND json_extract(e.data, '$.payload.turn') = ?`,
+          [chatRun(), turn],
+        ).length > 0,
+      tty,
+    );
+  await send('Start the golden chat.');
+  await until(
+    'the plan approval',
+    () =>
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND e.type = 'request.opened'
+           AND json_extract(e.data, '$.payload.kind') = 'planApproval'`,
+        [chatRun()],
+      ).length > 0 && tty.screen().includes('r run as goal'),
+    tty,
+  );
+  tty.write('r');
+  await waiting(1);
+  await send('/model gemini38f');
+  await shows('the model switch notice', 'Model switched to gemini38f');
+  await send('After the model switch.');
+  await waiting(2);
+  await shows('the idle prompt', 'Ctrl-C exit');
+  tty.write('\x03');
+  const exit = await tty.exited;
+  if (exit.exitCode !== 0)
+    fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
+
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
   const before = new Set(
@@ -410,6 +512,8 @@ const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
  *  such as `plan-`. */
 const NANO_KEYS = new Set(['id', 'logId', 'stageId', 'attemptId', 'requestId']);
 const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
+/** A goal's random id (`goal_` and 12 hex digits). */
+const GOAL_ID = /goal_[0-9a-f]{12}/g;
 /** Numbers that measure wall time. */
 const TIMING_KEYS = new Set([
   'wallTimeMs',
@@ -446,6 +550,7 @@ function normalize(file, root) {
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
   const nanos = tokens((n) => `golden${n.toString().padStart(15, '0')}`);
+  const goals = tokens((n) => `goal_${n.toString(16).padStart(12, '0')}`);
   const times = tokens((n) => new Date(BASE_AT + n * 1000).toISOString());
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
@@ -461,6 +566,7 @@ function normalize(file, root) {
     if (typeof value === 'string') {
       for (const match of value.match(UUID) ?? []) uuids.get(match);
       for (const match of value.match(ISO) ?? []) times.get(match);
+      for (const match of value.match(GOAL_ID) ?? []) goals.get(match);
       if (NANO_KEYS.has(key) && NANO.test(value))
         nanos.get(NANO.exec(value)[1]);
       return;
@@ -478,6 +584,7 @@ function normalize(file, root) {
     ...roots.map((prefix) => [prefix, '/golden']),
     // The bundle's own resources, which the system prompt lists.
     [realpathSync.native(validationRoot), '/texra'],
+    ...goals.seen,
     ...[...ids.seen].map(([from, to]) => [
       new RegExp(`(?<![0-9a-f])${from}(?![0-9a-f])`, 'g'),
       to,
