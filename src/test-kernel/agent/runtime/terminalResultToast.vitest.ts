@@ -35,15 +35,18 @@ async function toastsFor(
     emitted.push({ event: name, payload });
   });
   const detachHost = Effect.runSync(session.interactions.use({ emit }));
-  const committed = new Promise<void>((resolve) =>
-    session.onResult(() => Effect.sync(() => resolve())),
+  // The folded tail presents the row, then sweeps the run's children.
+  const swept = new Promise<void>((resolve) =>
+    vi
+      .spyOn(session.runs, 'sweepChildrenOfFoldedStop')
+      .mockImplementation(() => resolve()),
   );
   try {
     if (parent !== null) publishTestRunStart(session, parent);
     publishTestRunStart(session, event.runId, { parent });
     const { runId, ...row } = event;
     session.publish([{ ...row, aggregateId: aggregateId('run', runId) }]);
-    await committed;
+    await swept;
   } finally {
     detachHost();
     await Effect.runPromise(closeSessionOf(session));

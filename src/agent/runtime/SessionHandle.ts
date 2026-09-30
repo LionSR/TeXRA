@@ -43,7 +43,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { AgentEvent, ResultEvent } from '@agent/trace';
+import type { AgentEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
@@ -95,7 +95,7 @@ import { redactedForFact } from './loop/rows';
 import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
-import { presentTerminalResults } from './terminalResultToast';
+import { presentTerminalResult } from './terminalResultToast';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionGraph } from './sessionGraph';
 import type { SessionApprovals } from './runApprovalQueue';
@@ -353,19 +353,17 @@ export class SessionHandle {
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();
-    presentTerminalResults(this);
   }
 
   /**
    * Shut this session's doors: from here on a detached publication, a
    * transcript subscription and a request's cancellation write nothing, and
-   * no result listener hears another row. The session layer runs it as the
+   * no terminal result is presented for another row. The session layer runs it as the
    * last of the session entry's own finalizers, after every owner above has
    * unwound, so a fact those owners publish on the way out still lands.
    */
   closeDoors(): void {
     this.disposed = true;
-    this.resultListeners.clear();
   }
 
   /** Whether a publication arrives after {@link closeDoors}: it writes
@@ -566,29 +564,6 @@ export class SessionHandle {
    */
   claimOwner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed> {
     return this.graph.claimOwner(runId);
-  }
-
-  /**
-   * Terminal result listeners consume committed table rows, including run
-   * usage and agent identity. Cleared when the session unwinds.
-   */
-  private readonly resultListeners = new Set<
-    (event: ResultEvent) => Effect.Effect<void>
-  >();
-
-  /**
-   * Subscribe to the `run.end` rows of this session's runs, each delivered
-   * once the view has folded it, so a listener that reads the run's view
-   * (its parent, its status) reads the state the row produced. Hosts hold
-   * the session, so this is how they receive a run's outcome — per-run
-   * traces are created inside the run and are not reachable from the host
-   * otherwise.
-   */
-  onResult(listener: (event: ResultEvent) => Effect.Effect<void>): () => void {
-    this.resultListeners.add(listener);
-    return () => {
-      this.resultListeners.delete(listener);
-    };
   }
 
   /**
@@ -1104,7 +1079,7 @@ export class SessionHandle {
 
   /**
    * One row of the fold-gated tail ({@link folded}, PRD 7.2): the follow-up
-   * lifecycle, the result listeners and the folded-stop child sweep, none on
+   * lifecycle, the terminal-result presenter and the folded-stop child sweep, none on
    * the raw tail above: each reads the run's view synchronously, and a
    * notification ahead of the fold would hand it the state the row replaced.
    */
@@ -1117,20 +1092,20 @@ export class SessionHandle {
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
       if (target.kind !== 'run' || event.type !== 'run.end') return;
-      // A throwing listener is logged and never stops the ones after it.
-      yield* Effect.forEach(
-        [...this.resultListeners],
-        (listener) =>
-          Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning('Session result listener threw').pipe(
-                Effect.annotateLogs({ data: Cause.squash(cause) }),
-                withLogChannel(CHANNEL),
-              ),
+      // Presented once the view has folded the row, so the presenter reads
+      // the run's parent edge from the state the row produced.
+      if (!this.disposed) {
+        yield* Effect.suspend(() =>
+          presentTerminalResult(this, { ...event, runId: target.id }),
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning('Terminal result presentation threw').pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              withLogChannel(CHANNEL),
             ),
           ),
-        { discard: true },
-      );
+        );
+      }
       this.runs.sweepChildrenOfFoldedStop(target.id);
     });
   }

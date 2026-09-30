@@ -49,7 +49,7 @@ function presentAgentFailure(
   return Effect.void;
 }
 
-/** The failures {@link presentTerminalResults} took: its receipts, held by
+/** The failures {@link presentTerminalResult} took: its receipts, held by
  *  the error a run throws, so they go when that error does. */
 const presentedFailures = new WeakSet<object>();
 
@@ -69,16 +69,17 @@ export function receiveTerminalFailure(
 }
 
 /**
- * Install the session's one terminal-result presenter: every root run's
- * failure, from its committed `run.end`, on the attached host or replayed to
- * the next one. The session installs it once, before any run can end.
+ * The session's one terminal-result presenter, run for each `run.end` row the
+ * session authored once its view has folded: a root run's failure goes to the
+ * attached host or is replayed to the next one.
  */
-export function presentTerminalResults(session: SessionHandle): void {
-  session.onResult((event) =>
-    !event.error || isChildResult(session, event)
-      ? Effect.void
-      : presentAgentFailure(session.interactions, event.error),
-  );
+export function presentTerminalResult(
+  session: SessionHandle,
+  event: ResultEvent,
+): Effect.Effect<void> {
+  return !event.error || isChildResult(session, event)
+    ? Effect.void
+    : presentAgentFailure(session.interactions, event.error);
 }
 
 /** Whether the terminal-result presenter took this failure (or one it

@@ -215,6 +215,21 @@ export class ToolUseFollowUpQueue {
     return this.submitBatch(runId, [followUp], admission, options);
   }
 
+  /** `live_owner` `submit` for a producer with no fiber: enqueued on the
+   *  publisher now, so it commits in call order; a failure is logged. */
+  submitDetached(runId: RunId, followUp: FollowUpQueueInput): void {
+    this.port.detach((append) =>
+      this.admit(runId, [followUp], 'live_owner', append).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(`Follow-up for run ${runId} was not queued`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+          ),
+        ),
+      ),
+    );
+  }
+
   /**
    * Submit follow-ups as one admission: their new rows are one transaction,
    * so the batch is queued whole or not at all.
@@ -225,15 +240,10 @@ export class ToolUseFollowUpQueue {
     admission: 'live_owner' | 'recoverable',
     options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
-    const replayable = new Set(
-      followUps.flatMap((followUp) =>
-        followUp.deliveryId === undefined ? [] : [followUp.deliveryId],
-      ),
-    );
     // A session that has closed takes no admission: its publisher is gone.
     if (this.disposed) return Effect.succeed({ kind: 'refused' });
     return this.port.exclusive((append) =>
-      this.admit(runId, followUps, replayable, admission, append, options),
+      this.admit(runId, followUps, admission, append, options),
     );
   }
 
@@ -385,7 +395,6 @@ export class ToolUseFollowUpQueue {
   private admit(
     runId: RunId,
     followUps: readonly FollowUpQueueInput[],
-    replayable: ReadonlySet<string>,
     admission: 'live_owner' | 'recoverable',
     append: Append,
     options?: FollowUpSubmitOptions,
@@ -428,14 +437,7 @@ export class ToolUseFollowUpQueue {
       }));
       admitted.admitting = true;
       const written = yield* Effect.exit(
-        this.writeRows(
-          runId,
-          stamped,
-          replayable,
-          consumerHoldsClaim,
-          closed,
-          append,
-        ),
+        this.writeRows(runId, stamped, consumerHoldsClaim, closed, append),
       );
 
       // Nothing yields from here until the claim's disposition is decided.
@@ -538,7 +540,6 @@ export class ToolUseFollowUpQueue {
   private writeRows(
     runId: RunId,
     followUps: readonly QueuedFollowUp[],
-    replayable: ReadonlySet<string>,
     consumerHoldsClaim: boolean,
     closed: () => boolean,
     append: Append,
@@ -568,9 +569,7 @@ export class ToolUseFollowUpQueue {
           // claim, not written again, and queued unless the rows consumed it.
           const replayed = new Set(
             followUps.flatMap(({ followUpId }) =>
-              replayable.has(followUpId) && port.named(runId, followUpId)
-                ? [followUpId]
-                : [],
+              port.named(runId, followUpId) ? [followUpId] : [],
             ),
           );
           const pending =

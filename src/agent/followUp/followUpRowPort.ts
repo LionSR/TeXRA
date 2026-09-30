@@ -14,7 +14,7 @@ export interface FollowUpRowPort {
     job: (append: Append) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E>;
   /** Enqueue a job on that publisher and return (`SessionGraph.detach`). */
-  readonly detach: (job: (append: Append) => Effect.Effect<void>) => void;
+  readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
   /** The run's pending follow-ups (`SessionEvents.pendingFollowUps`). */
   readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
   /** Whether a committed terminal row of the run's latest lifecycle is

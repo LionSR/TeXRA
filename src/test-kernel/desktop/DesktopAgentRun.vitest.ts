@@ -41,7 +41,7 @@ function completedRunEnd(runId: RunId): SessionEventDraft {
 describe('desktop agent run completion hook', () => {
   // The desktop onboarding funnel refresh rides this hook: a first
   // successful run must clear the setup card without a restart (#11934).
-  // session.onResult fires at run.end inside finalizeTerminal, before
+  // The run.end row commits inside finalizeTerminal, before
   // AgentRunLifecycle writes firstRunDone; the hook must wait for the
   // awaited launch to settle.
   it.effect('fires after the awaited launch settles, not from run.end', () =>

@@ -34,7 +34,7 @@ export type StreamKind = string;
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
- * (`SessionHandle.onResult`): the `run.end` row named by
+ * (`presentTerminalResult`): the `run.end` row named by
  * its run. Not an {@link AgentEvent} arm: the row is written once by the
  * storage finalizer (`finalizeRun`), never emitted on a trace.
  */
