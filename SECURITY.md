@@ -37,8 +37,9 @@ anonymous.
 - **Prompt injection that escalates privilege** — content in a user's documents,
   tool results, or fetched pages that makes an agent take an action the approval
   gate should have covered.
-- **The hosted services used by earlier versions** — authentication, the
-  remote-agent catalog, and anonymous usage reporting at `remote.texra.ai`.
+- **Hosted services** — the anonymous usage-reporting endpoint at
+  `remote.texra.ai`, which current versions use, and the authentication and
+  remote-agent catalog services used by earlier versions.
 - **Webview and renderer isolation** — the VS Code webviews and the Electron
   renderer, including navigation policy and any path from rendered content to
   host APIs.
