@@ -8,7 +8,7 @@ the
 **Build TeXRA's own Effect-native LLM package, and make its boundary usable by
 both the reflection pipeline and the tool-use loop.** This draft proposes
 concrete resolutions to R1–R4 in the
-[architectural review](../../archived/architecture/2026-09-06-agent-architecture-review.md). It refines the
+architectural review. It refines the
 [LLM package study](2026-09-06-llm-package-architecture-study.md) and supplies
 amendments for the [runtime proposal](../../implemented/architecture/2026-09-04-agent-runtime-on-effect.md); it
 does not introduce another runtime or persistence authority.

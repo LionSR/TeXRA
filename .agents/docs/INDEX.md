@@ -1,7 +1,6 @@
 # Index: one authoritative note per topic
 
-Read the owner first. Everything else on a topic is background, and a note in
-`archived/` is history, never current design. When the design changes, change
+Read the owner first. Everything else on a topic is background. When the design changes, change
 the owning note rather than adding a parallel one. Questions already settled
 live in the
 [architecture rulings ledger](./implemented/architecture/2026-08-01-architecture-rulings-ledger.md)

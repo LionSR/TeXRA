@@ -15,7 +15,7 @@ also renders, streams and dispatches tools. `@effect/sql-sqlite-node` drives
 `node:sqlite`'s `DatabaseSync`, so a statement, and SQLite's busy wait on a
 locked database, blocks the whole process. The substrate decision already
 recorded this and deferred it until measured
-([persistence substrate decision](../../archived/architecture/2026-09-03-persistence-substrate-decision.md),
+(persistence substrate decision,
 "Client selection at the approved host floor"). The delivery plan named the
 two candidates: a short busy wait with bounded Effect retry of
 database-only transactions, or a dedicated database worker

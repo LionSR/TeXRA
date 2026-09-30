@@ -6,7 +6,7 @@ Origin: the recurring scheduled "review and refactor for Agent SDK readiness"
 charter — identify the agent core, model handler, logger and surface areas;
 audit each for unnecessary abstraction; plan API-surface simplification; design
 subagent boundaries; document findings. This note is the finding, and it
-supersedes the [2026-09-24 pass](../../archived/architecture/2026-09-24-agent-sdk-readiness-reverify.md),
+supersedes the 2026-09-24 pass,
 which is now archived.
 
 Pin: verified against branch `claude/eager-noether-q6bj0r` at `f0811a0`. The

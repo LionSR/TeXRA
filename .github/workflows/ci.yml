@@ -229,7 +229,7 @@ jobs:
         # Windows — while costing ~16 min per shard against ~10 on Linux and
         # setting the wall-clock for the entire workflow. The inventory of
         # genuine Windows defects the matrix did surface is in
-        # .agents/docs/archived/process/2026-07-29-open-source-readiness.md §4.6.
+        # 2026-07-29-open-source-readiness.md §4.6.
         #
         # What it does run on is the nightly schedule, alone (#12943). A suite
         # that hard-codes a `/` in a native absolute path, or mocks POSIX-only

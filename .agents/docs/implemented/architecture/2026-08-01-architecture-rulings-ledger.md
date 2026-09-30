@@ -43,7 +43,7 @@ function with one direction: `meta.outcome` narrows the envelope, never widens
 it to `completed`.
 
 **Home.** The disease this closes is D1 in
-[`2026-06-10-lifecycle-status-ownership.md`](../../archived/architecture/2026-06-10-lifecycle-status-ownership.md).
+`2026-06-10-lifecycle-status-ownership.md`.
 
 ---
 
@@ -239,7 +239,7 @@ unchanged. See the [plugin architecture note](./2026-09-24-plugin-architecture.m
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
 
 **Question.** Decision 8 of the
-[Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification)
+Effect-4 PRD §15
 ratified Effect's best-practice guides, including "one `provide` at the
 process entry". The landed runtime provides services at three lifetimes, not
 one. Is that a deviation to repair?
@@ -310,7 +310,7 @@ Deleting the row (the allowlist is the ruling, and a zeroed row would stop
 naming these four). Building a second internal cancellation tree beside the
 fiber's, which is what converting these to signals-of-signals would produce.
 
-## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers [Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification) decision 2)
+## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers Effect-4 PRD §15 decision 2)
 
 **Question.** Decision 2 asked whether the host managed runtime belongs
 directly in each composition root or behind one host-neutral
@@ -702,7 +702,7 @@ other than interrupting the fiber that awaits it.
 ## The agent SDK's public surface is Effect; R1 boundary kind (c) is retired (ruled 2026-09-21)
 
 **Question.** Rule R1 of the Effect migration
-(`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`
+(`2026-08-26-effect-4-runtime-migration.md`
 §7) admitted three boundary kinds; kind (c) was "the SDK's public Promise API
 in `packages/agent/src`": the root entry `packages/agent/src/index.ts`
 rendered the package's Effect services as `runAgent` / `closeSession` /
@@ -1084,3 +1084,55 @@ specified.
   per-host prompt or allowlist), and memory-write gating is dropped, so nothing
   reads a taxonomy. Reopen: a tool family needs an effect
   class no guard kind can express.
+
+## Effect migration design rules R1 to R10 (ratified 2026-08-26; amended 2026-09-06 and later)
+
+The migration PRD that carried these rules is deleted (history keeps it). Live
+notes cite the rules by number; this is their text.
+
+- **R1.** Effect inside, Promises at the boundary. A boundary is a host entry a
+  framework invokes, a named runtime entry, or nothing else (the tool `call`
+  contract and the SDK are no longer boundaries; see the entries above).
+  `Effect.run*` is forbidden below a boundary.
+- **R2.** Services follow semantic boundaries. A service earns its place when it
+  is independently implemented, acquired, scoped, or substituted in tests; plain
+  inputs stay arguments.
+- **R3.** Layers follow lifetimes: host process, session, agent run, call.
+  Longer-lived layers may build shorter-lived ones, never the reverse. No
+  `FooLayer` wrapper that only calls `Layer.succeed`.
+- **R4.** The agent runtime is plain Effect: no state-machine framework, node,
+  graph, cursor, or flow record. A run appends rows to the ledger and folds them.
+- **R5.** Interruption replaces internal abort choreography. `AbortSignal` only
+  where an external SDK or host API requires one.
+- **R6.** Scope owns resources (`acquireRelease`, scoped layers, finalizers).
+- **R7.** Expected failures use the typed error channel, bugs are defects,
+  cancellation is interruption, and domain decisions stay success values. One
+  user-facing error taxonomy (`classifyAgentError`), no second presentation path.
+- **R8.** One clock and one schedule model; tests advance the test clock.
+- **R9.** `AgentTrace` and `AgentEvent` stay the product traces; Effect spans
+  may enrich them, and no host UI reads generic Effect logs.
+- **R10.** Replacement must delete: each PR states what became unreachable, what
+  collapsed, what imports went, and the line and element delta. There are no
+  temporary adapters and no retirement clock.
+
+## Service scopes: HeldSessions and ExternalRoots stay (ruled 2026-09-20)
+
+`HeldSessions` is not converted to Effects: zero production breaks, but 414
+`testDefaultSession()` call sites in 45 suites for about 35 LoC. `ExternalRoots`
+is not made a standalone service: one writer, four readers, keyed by kind, a
+sound freeze rule; a service is +4 signatures for 0 deletions. Reopen when a
+consumer needs either to be scoped per session. Pinned by `SCOPE-held-sessions-as-effects`
+and `SCOPE-external-roots-standalone-service` in `config/ratchets/refuted-candidates.json`.
+
+## Cross-host Copilot OAuth is not approved (parked 2026-06-22)
+
+A GitHub Copilot route over the device flow and the undocumented
+`api.githubcopilot.com` backend (borrowed client id, editor-impersonation headers)
+would work on all three hosts but runs against Copilot's Terms and carries
+documented account-suspension risk. Do not build it without explicit maintainer
+acceptance of that risk; the official `vscode.lm` route is the only sanctioned one.
+
+## Adaptive document workflows are not planned (ruled 2026-09-06)
+
+The owner does not want a model-chosen, candidate-file document workflow replacing
+the reflection rounds. Do not re-propose it as specified.

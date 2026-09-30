@@ -4,15 +4,12 @@ This document sets the common conventions for contributions. Follow these norms 
 
 ## TeXRA 1.0 direction
 
-Accepted 2026-09-09. TeXRA 1.0 is the next release generation, developed on
-`main` in this repository. It introduces breaking changes to the application
-and its stored state. This is a development target, not a claim that 1.0 has
-shipped or that the transition is complete.
-
-The [implementation and retirement plan](.agents/docs/proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)
-records the audited removal targets and proposed order. `release/0.40` starts
-at `v0.40.10` and carries focused fixes for existing users under the released
-storage and execution contracts; the 1.0 breaking changes apply to `main`.
+TeXRA 1.0 is the next release generation, developed on `main`, with breaking
+changes to the application and its stored state (accepted 2026-09-09; a
+development target, not a claim that 1.0 has shipped). The
+[implementation and retirement plan](.agents/docs/proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)
+records the audited removal targets. `release/0.40` carries focused fixes for
+existing users under the released storage and execution contracts.
 
 - **Project terminology.** Use **project** for the user's working unit in
   product text, documentation, and new or revised application interfaces. A
@@ -20,65 +17,37 @@ storage and execution contracts; the 1.0 breaking changes apply to `main`.
   **paper** when referring to an actual scholarly document, not as a synonym
   for a project. Existing application identifiers using `paper` should be
   renamed coherently when their surrounding interfaces are revised.
-- **Breaking storage format.** SQLite is the authoritative store for
-  persistent application state. TeXRA 1.0 does not import or migrate the
-  legacy JSON store, histories, or execution checkpoints. Do not develop
-  JSON-to-SQLite migration, legacy readers, dual writes, or compatibility
-  adapters for this transition. Remove obsolete compatibility code and its
-  dedicated tests when replacing the corresponding storage path. This
-  decision supersedes earlier proposals requiring preservation or import of
-  legacy application state. It does not authorize deleting
-  existing user data: initialize new state separately and leave old state
-  untouched. Research files remain ordinary files; JSON may still be used
-  for deliberate configuration, interchange, and export formats.
-- **Effect-native implementation.** Express asynchronous application logic
-  directly through Effect services, layers, scoped resources, typed errors,
-  and structured concurrency. Keep execution of Effect programs at the
-  established host, tool, and SDK boundaries. Use the supported idioms of the
-  pinned Effect version; do not preserve Promise-based orchestration or add
-  pass-through adapters merely to retain an old internal interface. Pure
-  computation should remain simple TypeScript where Effect adds no value.
-- **Effect-native tests.** Test Effect programs with `@effect/vitest`,
-  `it.effect`, and scoped test layers. Use the Effect test clock for retries,
-  delays, and deadlines, and test interruption and resource release through
-  Effect's own lifecycle. Use `it.live` when the test intentionally exercises
-  real external I/O or real time. Do not rebuild a Promise-based test harness
-  around the retired implementation or mock every internal service call.
-  Pure functions and schemas may use ordinary Vitest. Retire obsolete tests
-  with their implementation and keep behavioral coverage at the final
-  application's durable boundaries.
-- **Modern, direct design.** Prefer the current supported APIs and one
-  coherent implementation. Historical internal formats and interfaces are
-  not constraints on the 1.0 design. This does not remove requirements for
-  correctness, interruption handling, transactional storage, or the external
-  protocols that TeXRA continues to support.
+- **Breaking storage format.** SQLite is the authoritative store for persistent
+  application state. 1.0 does not import or migrate the legacy JSON store,
+  histories, or execution checkpoints: no JSON-to-SQLite migration, legacy
+  readers, dual writes, or compatibility adapters, and obsolete compatibility
+  code goes with its tests. This does not authorize deleting existing user
+  data: initialize new state separately and leave old state untouched. Research
+  files remain ordinary files; JSON remains fine for deliberate configuration,
+  interchange, and export formats.
+- **Effect-native implementation and tests.** Express asynchronous application
+  logic through Effect services, layers, scoped resources, typed errors, and
+  structured concurrency, with execution kept at the established host, tool,
+  and SDK boundaries; do not preserve Promise-based orchestration or add
+  pass-through adapters to retain an old internal interface. Pure computation
+  stays simple TypeScript. Test Effect programs with `@effect/vitest`,
+  `it.effect`, scoped test layers, and the test clock for retries, delays, and
+  deadlines; use `it.live` only for real external I/O or real time. Pure
+  functions and schemas may use ordinary Vitest. Retire tests with their
+  implementation and keep coverage at the final application's durable
+  boundaries.
 - **Use the supported stack before writing infrastructure.** Prefer the
-  maintained facilities provided by Effect, SQLite, Node, and the host APIs
-  for concurrency, resource lifetime, retries, streams, database access, and
-  filesystem operations. Check their actual supported APIs before adding a
-  custom implementation. Custom infrastructure requires a concrete product
-  requirement that those facilities cannot meet; preserving an old internal
-  interface is not such a requirement. Remove redundant implementations and
-  pass-through layers when adopting the supported facility. Do not preserve
-  technical debt merely because removing it breaks an internal API, schema,
-  or test tied to the old design.
-- **Build the intended 1.0 design directly.** Do not spend implementation
-  effort on temporary migration tools, transitional adapters, compatibility
-  mirrors, or cleanup systems whose purpose disappears with the old design.
-  Divide work into complete changes that remain useful in 1.0, rather than
-  intermediate systems scheduled for replacement. Revise an obsolete
-  requirement before building machinery to satisfy it.
-- **The native cleanup addon is retired.** Its script directory, loader,
-  prebuilt binaries, CI matrix, packaging assertions, and addon-specific
-  tests are gone. Generated-file deletion now resolves and
-  checks in `src/controllers/session/deletionCleanup.ts`: the storage root and
-  its runs directory are resolved with `realpath`, a runs directory that does
-  not resolve to itself is refused rather than followed, and every target must
-  fall inside it. That is weaker than the addon's handle-confined deletion,
-  which also survived a root replaced _during_ the removal; #12139 owns the
-  final file ownership and deletion contract. Do not reintroduce a compiled extension for
-  this. Effect-native means using Effect's execution model, not adding custom
-  compiled extensions.
+  maintained facilities of Effect, SQLite, Node, and the host APIs
+  (concurrency, resource lifetime, retries, streams, database, filesystem) and
+  check their actual APIs before adding a custom implementation. Custom
+  infrastructure needs a product requirement those facilities cannot meet;
+  preserving an old internal interface is not one. Do not build temporary
+  migration tools, transitional adapters, or compatibility mirrors: build the
+  1.0 design directly, in complete changes that stay useful.
+- **No compiled extensions.** The native cleanup addon is retired; generated-file
+  deletion resolves and checks paths in
+  `src/controllers/session/deletionCleanup.ts` (#12139 owns the final contract).
+  Do not reintroduce a compiled extension for it.
 
 ## Changelog Guidelines
 
@@ -99,21 +68,13 @@ When updating CHANGELOG.md:
 ## Development workflow
 
 1. **Install dependencies**: run `corepack pnpm install` if needed.
-2. **Install the local hooks (recommended)**: install `pre-commit` with
-   `python -m pip install pre-commit`, then run `npm run hooks:install`. That
-   runs `pre-commit install` and chains a git hook (`scripts/format-staged.mjs`)
-   ahead of it which stages Prettier's output automatically: when staged
-   content needs formatting, the hook formats the staged blob, stages the
-   result, and folds the same formatting into the working tree, so the commit
-   proceeds without a manual re-stage. Unstaged edits are never overwritten --
-   if Prettier's rewrite overlaps them, the hook keeps the working-tree copy
-   and prints a notice to run `npm run format` after committing to sync.
-   Without the chained hook, the `npm-format` pre-commit hook rewrites
-   supported staged files and aborts; review the diff and stage only the
-   intended hunks before retrying. For a partially staged file, use
-   `git add -p` so unrelated unstaged edits stay out. Re-run
-   `npm run hooks:install` after any manual `pre-commit install`, which does
-   not know about the chained hook.
+2. **Install the local hooks (recommended)**: install `pre-commit`
+   (`python -m pip install pre-commit`), then run `npm run hooks:install`. The
+   chained hook (`scripts/format-staged.mjs`) stages Prettier's output for you
+   and never overwrites unstaged edits (it keeps the working-tree copy and asks
+   you to run `npm run format` afterward). Use `git add -p` for a partially
+   staged file, and re-run `npm run hooks:install` after any manual
+   `pre-commit install`.
 3. **Run checks before committing**:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
@@ -141,88 +102,57 @@ by what it reaches, not by how many tests it has:
 Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
 repository module, imports `@platform/*` or a support module that installs or
-reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What
-a source scan cannot see — a suite that changes process-wide state a library
-reads once, such as the environment chalk takes its color level from — is found
-by file-order shuffles and fixed in the suite: set the state on the instance it
-lives on and restore it after. There is no list of exempt suites. A module
-under test that reaches for an ambient host or the workspace roots itself is a
-production defect, and the fix is to make it take its host as a layer or a
-value. So the practical
-rule for a new suite: test the module directly, provide dependencies as values
-or layers, and do not mock repository modules. A `vi.mock` is what moves your
-suite to the slow tier; removing it moves it back. The tier is not a target to
-opt into — write the suite the durable way and it lands there.
+reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`.
+Process-wide state a source scan cannot see (such as the environment chalk takes
+its color level from) is found by file-order shuffles and fixed in the suite:
+set the state on the instance it lives on and restore it after. There is no
+list of exempt suites. A module under test that reaches for an ambient host or
+the workspace roots itself is a production defect; make it take its host as a
+layer or a value. So for a new suite: test the module directly, provide
+dependencies as values or layers, and do not mock repository modules. A
+`vi.mock` is what moves your suite to the slow tier; the tier is not a target
+to opt into.
 
-`packages/llm` carries a third project, in its own
-`packages/llm/vitest.live.config.mjs`: one suite per HTTP route (a vendor
-endpoint and the credential it takes, so a coding-plan subscription key gets
-its own suite beside the API key's), run against the real provider (`npm run test:live`). It sits outside
-`vitest.config.mjs` on purpose — it spends money and needs the network, so it
-is never part of `npm test`. Each suite gates itself on its route's key and
-skips without it; CI runs it only on the `live-llm` label
-(`.github/workflows/live-llm.yml`).
-
-`packages/cli/scripts/validate-journeys.mjs` is the end-to-end sibling: the
-polish, latexFixer, latexdiff and citations journeys run through the real
-`texra run` NDJSON on a cheap model and pass on a LaTeX build of the files they
-leave behind. It runs nightly and on the `live-journeys` label
-(`.github/workflows/live-journeys.yml`), never in `npm test`.
+`packages/llm` carries a third project, `packages/llm/vitest.live.config.mjs`:
+one suite per HTTP route (a vendor endpoint and the credential it takes), run
+against the real provider (`npm run test:live`). It is never part of `npm test`
+because it spends money and needs the network; each suite gates itself on its
+route's key, and CI runs it only on the `live-llm` label
+(`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
+is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
+journeys run through the real `texra run` NDJSON on a cheap model. It runs
+nightly and on the `live-journeys` label (`.github/workflows/live-journeys.yml`),
+never in `npm test`.
 
 ### Scoping the test run
 
-`npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
-and the one to run before opening a pull request, but it takes minutes, which is
-too slow to sit in front of each local commit — and a check that slow is a check
-that gets skipped. The loop is stock Vitest, no scripts:
-
-- `npm run test:watch` while editing — Vitest keeps the process warm and
-  reruns the suites whose module graph reaches what you saved.
-- `npm run test:changed` before a commit — `vitest --changed`: git's
-  uncommitted files, then the same module-graph selection. Pass a ref to
-  widen it (`npm run test:changed -- origin/main` before pushing a branch).
-- `npm run test:pure` before a push — the whole `pure` tier in ~30s. It
-  includes the architecture ratchets, which read the repository from disk and
-  so are never selected by a module graph; this is how they get run locally.
-
-Selection is only as good as the module graph: a changed YAML resource or
-image selects nothing, and a change to the harness itself (`vitest.config.mjs`,
-`src/test-kernel/support/`) is not covered by the mapping it invalidates. Those
-are what `npm test` is for.
+`npm test` runs every suite under `src/test-kernel/` and is the gate CI
+enforces, but it takes minutes. The loop is stock Vitest: `npm run test:watch`
+while editing, `npm run test:changed` before a commit (pass a ref to widen it,
+e.g. `-- origin/main`), `npm run test:pure` before a push (the whole `pure`
+tier in ~30s, including the architecture ratchets, which read the repository
+from disk and are never selected by a module graph). Selection is only as good
+as the module graph: a changed YAML resource or image selects nothing, and a
+change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`)
+is not covered; those are what `npm test` is for.
 
 ### Build system: esbuild + Vite
 
-The extension host is bundled with esbuild and the webviews with Vite (`compile:fast`, `watch:fast`, `package:fast`, and `build:fast`).
+The extension host is bundled with esbuild and the webviews with Vite
+(`compile:fast`, `watch:fast`, `package:fast`, `build:fast`). Both only strip
+TypeScript types, so a build never catches a type error: run `npm run typecheck`
+or the `:safe` variants (`compile:safe`, `package:safe`, `build:safe`), which
+type check first. CI always runs `typecheck`.
 
-**Why the build doesn't catch type errors**: Vite and esbuild only strip TypeScript types without checking them. They treat TypeScript as "JavaScript with type annotations to remove."
-
-**Safe build scripts** run `tsc --noEmit` before building to catch type errors:
-
-| Script                 | Description              |
-| ---------------------- | ------------------------ |
-| `npm run typecheck`    | Standalone type checking |
-| `npm run compile:safe` | typecheck + compile:fast |
-| `npm run package:safe` | typecheck + package:fast |
-| `npm run build:safe`   | typecheck + build:fast   |
-
-The full `npm run typecheck` command composes independently runnable checks:
-`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:agent`, `typecheck:llm`,
-`typecheck:cli`, `typecheck:trace-viewer`, and `typecheck:desktop`. During
-development, run the checks for the affected parts; before committing, run the
-full command. Unlike the other targeted commands, `typecheck:agent` performs the
-complete agent-package build and regenerates `packages/agent/dist/`.
-
-There is deliberately no `typecheck:extension`: the root `tsconfig.json` already
-includes `packages/extension/src/**`, so `typecheck:workspace` compiles the
-extension sources — a separate extension-scoped `tsc` run checked a strict
-subset of the same files under the same options.
-
-**Recommended workflow**:
-
-- Use `compile:fast` during development for speed
-- Use `compile:safe` before committing to catch type errors
-- Use `build:initial` when validating a full initial build because it builds the desktop app and VSIX artifacts
-- CI should always run `typecheck` or use safe variants
+`npm run typecheck` composes independently runnable checks:
+`typecheck:workspace`, `typecheck:test-kernel`, `typecheck:agent`,
+`typecheck:llm`, `typecheck:cli`, `typecheck:trace-viewer`, and
+`typecheck:desktop`. Run the affected ones while developing and the full command
+before committing. `typecheck:agent` performs the complete agent-package build
+and regenerates `packages/agent/dist/`. There is deliberately no
+`typecheck:extension`: the root `tsconfig.json` already includes
+`packages/extension/src/**`. Use `build:initial` to validate a full initial
+build (desktop app and VSIX artifacts).
 
 ## Commit messages
 
@@ -271,39 +201,17 @@ One of those baselines budgets the code itself rather than an import edge, and i
 
 A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
 
-- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
-  - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
-  - `frontend/ui/` - Dialog helpers, diff views, message utilities
-  - `frontend/editor/` - Active file guards and editor utilities
-  - `frontend/agents/` - The extension's agent-directory layer and final-output opener
-  - `frontend/latex/` - LaTeX build integration, linting
-  - `frontend/media/` - Image and audio handling
+- `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows; subfolders `system/`, `ui/`, `editor/`, `agents/`, `latex/`, `media/`). Prefer these helpers over duplicating logic in commands or webviews.
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
 - `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
-
-  Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
+  Do not read this as "everything in `utils/` is shared with the webviews". If a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
-    - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
-    - `utils/core/pathCore.ts` - sibling Node-only path module
-  - `utils/files/` - Filesystem utilities, rules, and vars
-  - `utils/config/` - Settings helpers: catalog-modeled settings (`readSettingFrom`, `writeSettingTo` in `src/utils/config/platformSettings.ts`); a raw path read is the caller's own `config.get(...)` on the `ConfigProvider` it holds
-  - `utils/system/` - Shell command execution (`execUtils`)
-  - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
-  - `src/utils/prompt.ts` - Prompt builder utilities
 
-- `packages/extension/src/commands/` - VS Code commands grouped by domain
-- `packages/extension/src/settingsView/` - Unified settings webview (Account &
-  Usage, Subscriptions, Providers & Models, Agents, Teams, Tools, Integrations,
-  Git, Shortcuts, LaTeX, Memory, Goals)
-- `packages/extension/src/progressView/` - Task tracking board webview, including the file-selection, banner and onboarding-card components it owns; there is no separate main-view bundle
-- `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
-- `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
-- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types — plus `litControllers/`, `monaco/`, and `highlighting/`, rendering code that never made the move to `src/ui/` (consumers are webview/renderer UI code, plus one main-process diff-labeling caller, `packages/desktop/src/main/desktopDiffHost.ts`, and the UI toolkit's own markdown pipeline, `src/ui/markdown/katexHtmlProcessor.ts`; the three were shelved along with a broader, separately proposed regroup of six `src/shared/` subtrees into their own subdirectory that was rejected on cost — 235 import statements plus 9 hardcoded literal test paths for that six-directory regroup, not for these three alone — not because that code is a wire contract); `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
-- `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
+- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from (`ui/wa/`, `ui/styles/`, `ui/transcript/`, `ui/markdown/`, `ui/copy/`); see CLAUDE.md "Layout" for its boundaries, including the `litControllers/`, `monaco/`, `highlighting/` trio that stayed in `src/shared/`. `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 
 ### Pragmatic implementations
 
@@ -425,25 +333,11 @@ This project uses Zod v4. Follow these idiomatic patterns:
 - Co-locate types with schemas in the same file for maintainability
 - Add compile-time assertions (using `satisfies`) when schemas must stay synchronized with external types
 
-**Type definitions**
+**Type and validation idioms**
 
-- `.int()` instead of `.number().int()` - native integer type
-- `.uuid()` instead of `.string().uuid()` - native UUID type
-- `.iso.datetime()` instead of `.string().datetime()` - ISO datetime validator
-- `.enum(MyEnum)` instead of `.nativeEnum(MyEnum)` - works with TS enums
-- `.looseObject({...})` instead of `.object({...}).passthrough()` - allows extra keys
-- `.strictObject({...})` - disallows extra keys (use for tool input schemas, except discriminated-union branches - see "Tool input schemas")
-
-**Validation and refinement**
-
-- `.describe('...')` - add field documentation for tool schemas and types
-- `.refine()` / `.superRefine()` - custom validation logic
-- `.nullable()` - accept null (distinct from `.nullish()` which accepts null OR undefined)
-- `.nonnegative()` / `.positive()` - numeric constraints
-- `.regex()` - pattern matching for strings
-- `.url()` - URL validation
-- `.transform()` - value transformation after validation
-- `.custom<T>()` - use sparingly for external SDK types with explanatory comments
+- `z.int()`, `z.uuid()`, `z.iso.datetime()`, `z.enum(MyEnum)`, `z.looseObject({...})`; `z.strictObject({...})` for tool input schemas, except discriminated-union branches (see "Tool input schemas")
+- `.describe('...')` on tool schema fields; `.nullable()` is distinct from `.nullish()` (null or undefined)
+- `.custom<T>()` only for external SDK types, with an explanatory comment
 
 **Default values**
 
@@ -459,68 +353,13 @@ corruption or contract drift into an ordinary default.
 An absent required field is also a validation error, so `.catch(...)` replaces
 missing required data as well as invalid present data.
 
-**When to use each default pattern:**
+Examples: `.prefault(0)` / `.prefault([])` when loading saved state; `.catch('comfortable')` on a non-authoritative view-state field, or `Schema.catch(DEFAULT).parse(data)` for an all-or-nothing view-state fallback (never `safeParse` plus a ternary).
 
-```typescript
-// Deserialization (loading saved state) - use .prefault()
-const SnapshotSchema = z.object({
-  count: z.int().prefault(0), // normalize missing fields
-  items: z.array(z.string()).prefault([]),
-});
-
-// Non-authoritative view-state recovery - use .catch() only by policy
-const PanelStateSchema = z.object({
-  density: z.enum(['compact', 'comfortable']).catch('comfortable'),
-});
-
-// Non-authoritative schema-level fallback (all-or-nothing)
-const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
-```
-
-**Safe parsing with fallback**
-
-```typescript
-// Old verbose pattern
-const result = PanelStateSchema.safeParse(data);
-const verbosePanelState = result.success ? result.data : DEFAULT_PANEL_STATE;
-
-// Zod v4 native
-const panelState = PanelStateSchema.catch(DEFAULT_PANEL_STATE).parse(data);
-```
-
-**Null handling from databases**
-
-```typescript
-// Accept null from DB, normalize to undefined
-description: z.string().nullish(),  // null | undefined → undefined
-```
+**Null handling from databases**: accept null with `z.string().nullish()` and normalize to undefined.
 
 **Tool input schemas (IMPORTANT)**
 
-Use `.nullish()` instead of `.optional()` for optional fields in tool input schemas. OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require optional fields to also be nullable for structured output compatibility.
-
-```typescript
-// Tool schemas - use .nullish() for API compatibility
-const ToolInputSchema = z.strictObject({
-  required: z.string(),
-  optional: z.string().nullish(), // NOT .optional()
-});
-```
-
-When checking for missing optional values, use `== null` (not `=== undefined`) to handle both null and undefined:
-
-```typescript
-if (input.optional == null) {
-  // handles both null and undefined
-}
-```
-
-When passing nullish tool values to functions expecting `T | undefined` (not `T | null | undefined`), coalesce to undefined:
-
-```typescript
-// Function expects string | undefined, but .nullish() gives string | null | undefined
-const result = processPath(input.path ?? undefined);
-```
+Use `.nullish()` instead of `.optional()` for optional fields in tool input schemas (`z.strictObject({ required: z.string(), optional: z.string().nullish() })`). OpenAI-compatible APIs (DeepSeek, Kimi, etc.) require optional fields to also be nullable for structured output compatibility. Check for missing optional values with `== null` (not `=== undefined`), and coalesce with `?? undefined` when passing a nullish tool value to a function expecting `T | undefined`.
 
 **Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
 
@@ -530,7 +369,7 @@ See: https://platform.openai.com/docs/guides/structured-outputs
 
 **Design for the model's first call**
 
-Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required. A required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior (for example, "every command except X"), verify it against the actual dispatch table whenever either changes; the two can drift independently. Evidence: the memory tool once required `path` for `view`, so every fresh session rendered an error card until the model retried; the fix's own description string then misdescribed `rename` until review caught it.
+Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required: a required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior, verify it against the actual dispatch table whenever either changes.
 
 **Compatibility and format retirement**
 
@@ -558,74 +397,19 @@ old files is kept.
 
 ### ES2023+ Patterns
 
-Use modern JavaScript features available with ES2022+ target:
+Use the modern features the ES2022+ target provides: `.at()`, `Object.hasOwn()`,
+`.flatMap()`, `.replaceAll()`, `.toSorted()` / `.findLast()` / `.toReversed()`
+instead of mutate-then-sort or backwards index loops, `.slice()` over
+`.substring()`, `for...of` (with `.entries()` when the index is needed) over
+index loops, `Number.parseInt(value, 10)` with an explicit radix, the `node:`
+protocol for Node builtins, and `node:timers/promises` for sleeping in
+Node-only code. Use `?? false` for boolean coercion, not `|| false`. Copies from
+a Set/Map still need the spread before `.toSorted()`.
 
-```typescript
-// Use .at() for negative array indexing
-const lastItem = items.at(-1);
-
-// Use Object.hasOwn() instead of hasOwnProperty
-if (Object.hasOwn(obj, 'key')) { ... }
-
-// Use .flatMap() for map+flatten
-const allItems = groups.flatMap((g) => g.items);
-
-// Use .replaceAll() for global string replacement
-const cleaned = text.replaceAll('\r\n', '\n');
-
-// Use optional chaining consistently
-abortController?.abort();
-if (!runStage?.id) return;
-
-// Use ?? false for boolean coercion (not || false)
-const isEnabled = config.enabled ?? false;
-
-// Iterate Sets directly without Array.from()
-for (const item of mySet) { ... }
-
-// Import Node builtins with the node: protocol
-import * as path from 'node:path';
-
-// Use .toSorted() instead of spread-then-mutate (copies from a Set/Map
-// still need the spread first)
-const sorted = items.toSorted((a, b) => a.localeCompare(b));
-
-// Use for...of — with .entries() when the index is needed — instead of
-// index-based loops; iterator values are non-undefined, so guards and
-// non-null assertions on arr[i] disappear
-for (const [i, step] of plan.steps.entries()) { ... }
-
-// Use .findLast()/.findLastIndex() or .toReversed() instead of
-// backwards index loops
-const round = segments.map(parseRound).findLast((r) => r !== null);
-
-// Use .every() for pairwise array comparison instead of manual loops
-const equal = a.length === b.length && a.every((x, i) => x === b[i]);
-
-// Use .slice() instead of .substring()
-const preview = text.slice(0, 100);
-
-// Use Number.parseInt with an explicit radix instead of bare parseInt
-const line = Number.parseInt(value, 10);
-
-// In Node-only code, sleep via node:timers/promises instead of a
-// hand-rolled Promise around setTimeout
-import { setTimeout as sleep } from 'node:timers/promises';
-await sleep(25);
-```
-
-Index-based loops are still right when the index itself is the point: token
-consumers that advance `i` by a variable stride, queue/BFS loops that append
-to the array mid-iteration, and `charCodeAt(i)` hash loops (`for...of` walks
-code points, not UTF-16 units, which changes persisted hash output).
-
-### Refactoring for simplicity
-
-Aim for code that looks like it was designed correctly from the start:
-
-- **Use built-in methods**: `Array.isArray()`, optional chaining, and standard library functions handle most cases cleanly.
-- **Normalize at the edge**: Convert external input once at the boundary (Zod schemas work well), then use only the canonical shape everywhere else.
-- **Extract only when repeated**: Create a helper when the same logic appears in multiple places—not before.
+Index-based loops are still right when the index is the point: token consumers
+that advance `i` by a variable stride, queue/BFS loops that append mid-iteration,
+and `charCodeAt(i)` hash loops (`for...of` walks code points, not UTF-16 units,
+which changes persisted hash output).
 
 ### Platform decoupling rules
 
@@ -640,20 +424,17 @@ For good separation of concerns and platform independence, core business logic s
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 
-4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). There is no `Platform` object to add a field to: it shrank onto those services (ruling 2026-09-13, #12073 R-1) and is gone, and a process fact has one home, the service the runtime serves.
+4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the composition root provides once per process (`SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). There is no `Platform` object to add a field to; a process fact has one home, the service the runtime serves.
 
-5. **Prefer the session's own `roots.workspace` over `vscode.workspace.workspaceFolders`.** Carry it as data from the caller that holds it (a run's `session.roots`, a tool's `ToolCall.roots`); inside Effect, take it from the `WorkspaceFs` service, whose `root` is the same value. There is no ambient fallback left, since `workspaceRootPath()` was deleted with the rest of the ambient readers (#12770), so code that cannot name a caller holding the root has an owner to thread it from, not a helper to reach for.
+5. **Prefer the session's own `roots.workspace` over `vscode.workspace.workspaceFolders`.** Carry it as data from the caller that holds it (a run's `session.roots`, a tool's `ToolCall.roots`); inside Effect, take it from the `WorkspaceFs` service, whose `root` is the same value. There is no ambient fallback: code that cannot name a caller holding the root has an owner to thread it from, not a helper to reach for.
 
 ### Patterns across the codebase
 
 **Configuration, storage, and workspace files**
 
-- For a raw config path, read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's `session.roots.config`, a host command's `session.roots.config`), and write with that same provider's `update(...)` (the `ConfigProvider.update` port; there is no `platform().config`) — there is no standalone `updateConfig`/`watchConfig` helper, and no change-notification API today. Nearly every `texra.*` config path is also modeled in the Zod catalog (`src/shared/schemas/coreSettings.ts` / `src/shared/state/stateSettings.ts`), and for most catalog-modeled settings the catalog reader in `src/utils/config/platformSettings.ts` is preferable to a raw cast — it routes through the shared validation/`onWrite` path instead of trusting the stored shape. Read one with `readSettingFrom(stores, key)` and write one with `writeSettingTo(stores, key, value)` over the settings slots the caller holds: a tool call's `call.roots`, a run's `session.roots`, a host command's `session.roots`, a CLI command's installed roots — a `WorkspaceRoots` is a `SettingsStores`. There is no ambient reader and no exception to it: #12421 deleted the workspace-roots carrier and the process-roots holder retired with `SessionHandleInit.roots` becoming required, so a caller that cannot name its slots has an owner to fix, not a fallback to reach for. Exception on scope: the handful of `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) keep merged-config semantics on their runtime reads, so they do not go through the catalog reader, which answers a global-target row from global scope only. The toggles read the provider's raw `config.get(...)`, which deliberately merges workspace over global, so a workspace override stays visible and honored (the values stranded at workspace scope by the regression window are #11173's cleanup); telemetry keeps its own consent precedence over both scopes in `UsageLogService`. The catalog helpers also default to the `'vscode'` storage slot; the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) diverge by host and go through the CLI's own `readGitAuthorSettingsFromState` instead. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writeSettingTo` directly — it adds the open-workspace guard and the approval-policy side effect that a bare catalog write skips.
-- Inside Effect, reach a session's files through the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`): each captures its root when its layer is built and refuses a path that escapes it. Workspace path math is a pure function of the root: `workspaceAbsolutePath`/`workspaceRelativePath`/`locateInWorkspace` in `@utils/files/workspaceFS`. Outside Effect, a helper takes the root as data: every run-storage path helper in `@utils/files/runStorageFs` has the root as its first parameter. The `@utils/files` static classes are all retired: `RelativeFS` and `StorageFS`, which read the ambient roots, went with #12421, and `AbsoluteFS` followed. Nothing in `@utils/files` resolves a root on its own any more.
-- Generate and identify pasted-image filenames with
-  `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
-  with `@utils/files/pastedImageUtils` so temporary assets map correctly back
-  to storage without pulling Node filesystem code into browser bundles.
+- For a raw config path, read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's `session.roots.config`, a host command's `session.roots.config`) and write with that provider's `update(...)`; there is no standalone `updateConfig`/`watchConfig` helper and no change-notification API. Nearly every `texra.*` path is modeled in the Zod catalog (`src/shared/schemas/coreSettings.ts` / `src/shared/state/stateSettings.ts`); for those, prefer the catalog helpers in `src/utils/config/platformSettings.ts` (`readSettingFrom(stores, key)`, `writeSettingTo(stores, key, value)`) over a raw cast, since they route through the shared validation/`onWrite` path. The `stores` are the settings slots the caller holds (a `WorkspaceRoots` is a `SettingsStores`); there is no ambient reader, so a caller that cannot name its slots has an owner to fix, not a fallback to reach for. Exceptions: the `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) keep merged-config semantics on runtime reads and do not go through the catalog reader, which answers a global-target row from global scope only (telemetry keeps its own consent precedence in `UsageLogService`); and the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) go through the CLI's own `readGitAuthorSettingsFromState`, since the catalog helpers default to the `'vscode'` storage slot. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writeSettingTo` directly: it adds the open-workspace guard and the approval-policy side effect a bare catalog write skips.
+- Inside Effect, reach a session's files through the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`): each captures its root when its layer is built and refuses a path that escapes it. Workspace path math is a pure function of the root (`workspaceAbsolutePath`/`workspaceRelativePath`/`locateInWorkspace` in `@utils/files/workspaceFS`). Outside Effect, a helper takes the root as data: every run-storage path helper in `@utils/files/runStorageFs` has the root as its first parameter. Nothing in `@utils/files` resolves a root on its own.
+- Generate and identify pasted-image filenames with `@utils/files/pastedImageName` and resolve, validate, and persist their paths with `@utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
 - Surface files through the shared listing (`listWorkspaceFilesOfType` in `src/controllers/session/workspaceFileOptions.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
 
 **Logging and telemetry**
@@ -665,8 +446,7 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns a `runId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
-- Resume a persisted run, tool-use or workflow, via `resumeRun` (`src/agent/runtime/resumeRun.ts`), which continues it with `resumeToolUseFromResumeData`; `runAgent` launches fresh runs only.
+- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **Run loop architecture**
@@ -675,7 +455,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 
 - **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). Workflow agents run it in round mode (`loop/rounds.ts`): the documents plugin's continuation policy opens each round's turn and processes its output (`src/agent/output/documentRounds.ts`), and the agent is offered no tools. `loop/rows.ts` builds every ledger draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
 - **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
-- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
+- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer). No services bag, no node fields.
 - **A run's input queue is its own, never context.** A conversation run claims its lease over the follow-up queue in its own scope (`claimFollowUps` in `runtime/FollowUps.ts`, from `runToolUse`); a round-mode run takes no input and claims none. A child launched from a parent's tool call runs in that call's fiber, so a context-provided queue would hand it the parent's: never read another run's input from context.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `run.position` for every wait and every halt; a `run.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
 - **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`request.opened` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled. Compaction summaries and helper calls take the invoker's call path (`run/modelCall.ts`): the same gate, automatic batch, pricing and usage report, marked with a `purpose`.
@@ -685,8 +465,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Webviews and UI**
 
 - Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
-- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`) for consistent interactions.
-- Keep CSS modular (per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`) and use Web Awesome icons (e.g., `${waIcon('chevron-down')}`) for toggle affordances.
+- Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
 
 **Progress view**
 
@@ -705,8 +484,6 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 - Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
 - Initialize new agent YAML files from the templates in `packages/extension/resources/agents/` and `packages/extension/resources/tool_use_agents/`.
 - Dispose event listeners and watchers when webviews close to prevent leaks.
-- Prefer enums or discriminated unions over bare booleans in configuration objects.
-- Favor debug logs for routine events and reserve info/error levels for notable outcomes.
 - Use the helpers in `packages/extension/src/frontend/ui/dialogs.ts` and `packages/extension/src/frontend/ui/instruction.ts` for consistent notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
@@ -715,41 +492,34 @@ Two message-passing architectures coexist for the extension's views. Match the
 one the view you're touching already uses:
 
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
-  (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
-  active-webview tracking, the `HandlerRegistry` build, and the toast for an
-  unsupported command — over the shared settings body
+  (`packages/extension/src/settingsView/`) owns its inbound dispatch directly
+  (active-webview tracking, the `HandlerRegistry` build, the toast for an
+  unsupported command) over the shared settings body
   (`src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
   modules; only the VS Code-specific LaTeX arms live in
-  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract
-  base: this is the only view on the pattern, so the machinery lives in the one
-  class that uses it.
+  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract base.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_COMMANDS`) — use those, not string literals. Frontend state lives in module-level reactive
-  signals declared in `settingsView/frontend/settingsState.ts`
+  `SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
+  module-level reactive signals in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
-  outbound message-handler registry (`settingsViewHandlers`, typed
-  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive) that mutates
-  those signals — there is no Redux store or reducer.
+  outbound handler registry (`settingsViewHandlers`, typed
+  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive). There is no
+  Redux store or reducer.
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
-  event-fold, not request/response: `ProgressViewProvider` implements
-  `vscode.WebviewViewProvider` directly — composed with
-  `BundledViewContentProvider` (`common/webview/BundledViewContentProvider.ts`)
-  for shared webview boilerplate — and routes through `SessionBridge` /
-  `HostDraftRequests` as typed `runtime.request` / `host.request` calls (see
-  `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`). Its Lit
-  components (`progressView/frontend/components/`) read the `SessionView` fold
-  (`src/shared/session/sessionView.ts`) and `Surface` records as properties
-  directly; there is no command-constant registry or slice layer here.
+  event-fold: `ProgressViewProvider` implements `vscode.WebviewViewProvider`
+  directly, composed with `BundledViewContentProvider`, and routes through
+  `SessionBridge` / `HostDraftRequests` as typed `runtime.request` /
+  `host.request` calls (see
+  `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`).
+  Its Lit components (`progressView/frontend/components/`) read the
+  `SessionView` fold (`src/shared/session/sessionView.ts`) and `Surface`
+  records as properties; there is no command-constant registry or slice layer.
 - **Naming Convention**: within whichever pattern applies, follow
   `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
   `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
   this section, not a silent third variant.
-- **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
-- **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
-- **Module Structure**: Keep UI managers/handlers focused on a single responsibility
-- **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
-- **Dropdown Menus**: Should close when clicking outside, not just on toggle
-- **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`
+- **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors.
+- **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it.
 - **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `src/ui/README.md`. Read it before adding a control or a local style override
 
 ### UI anti-patterns
@@ -778,99 +548,45 @@ adding new code or refactoring existing modules:
 
 ### Flattening abstraction layers
 
-When refactoring, eliminate unnecessary wrapper functions and indirection layers:
+Eliminate wrapper functions and indirection layers: entry points (`executeAgent`) run the loop program (`runToolUse`) directly, not through a chain of wrappers.
 
-**Anti-pattern (too many layers):**
-
-```
-executeAgent()
-  → wrapperFunction()
-    → coreFunction()
-      → runToolUse()
-```
-
-**Preferred (direct execution):**
-
-```
-executeAgent()
-  → runToolUse()
-```
-
-**Guidelines:**
-
-- Entry points should run the loop program directly, not delegate to wrapper functions
-- If a wrapper only creates state + runs the program + interprets results, inline it
-- Delete wrapper files entirely when they become unused (don't leave empty re-exports)
-- Update tests to exercise the underlying program directly rather than through wrappers
-- Update imports to point to the module that defines the symbol, never a re-exporting file
+- If a wrapper only creates state, runs the program, and interprets results, inline it.
+- Delete wrapper files when they become unused; leave no empty re-exports.
+- Update tests to exercise the underlying program directly, and imports to point at the module that defines the symbol, never a re-exporting file.
 
 ### Discouraged factory patterns
 
-Avoid these patterns that add indirection without value:
+Avoid factories that add indirection without value: a two-layer factory whose inner `buildX` is called only from `createX` (inline it), and a trivial identity factory that only spreads into a new object (use an object literal).
 
-**Two-layer factories (called once):**
-
-```typescript
-// ❌ Anti-pattern: buildX only called from createX
-export function createContext(init) {
-  const services = buildServices(init);  // ← Extra layer
-  return { services, ... };
-}
-function buildServices(init) { ... }
-
-// ✅ Preferred: Inline if only called once
-export function createContext(init) {
-  const services = { ... };  // ← Direct
-  return { services, ... };
-}
-```
-
-**Trivial identity factories:**
-
-```typescript
-// ❌ Anti-pattern: Just spreads into new object
-function createOptions(options: Options): Options {
-  return { ...options };
-}
-
-// ✅ Preferred: Use object literal directly
-const options: Options = { ... };
-```
-
-**When factories ARE justified:**
-
-- Called from multiple locations (DRY)
-- Contain meaningful logic (validation, defaults, transforms)
-- Create class instances or complex objects
-- Need to capture closures with initialization context
+A factory IS justified when it is called from multiple locations, contains meaningful logic (validation, defaults, transforms), creates class instances or complex objects, or captures closures with initialization context.
 
 At review time this extends into the abstraction-cost guardrails (code-review checklist § 13): grep the caller count before approving any new shared helper (single-caller extractions are banned), and hold new ports/facades/template-methods to build-implies-delete-in-the-same-PR with net-LOC accounting.
 
 ## Code quality rules
 
-These rules were earned from a 2026-07 whole-repo simplification campaign, not derived top-down. Each one carries the evidence that motivated it, so a future reader can tell it was learned rather than theorized. They complement, and don't restate, the guardrails documented in this file: "Flattening abstraction layers" and "Discouraged factory patterns" above, "UI anti-patterns", the abstraction-cost guardrails (code-review checklist § 13), and the Zod-as-SSOT guidance above.
+These rules were learned from a 2026-07 whole-repo simplification campaign. They complement the guardrails above ("Flattening abstraction layers", "Discouraged factory patterns", "UI anti-patterns", the code-review checklist § 13, and Zod-as-SSOT).
 
-- **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. Across the 2026-07 campaign, five separate areas' main cleanup yield was deleting exports with zero outside consumers (20 in `src/tools` alone). Mechanical enforcement lives in the dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`; any unused export not in the baseline fails the check); this is the principle behind it.
+- **Exports are contracts; default to file-local.** A new export needs a consumer in the same PR. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) fails any unused export not in the baseline.
 
-- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol directly. Nothing has a re-export shim. The campaign deleted dead barrels in `workflowScript/`, `storage/`, and `index/` that no caller actually used.
+- **No convenience barrels.** A barrel/index re-export file exists only for a documented public surface (for example, the trace events SDK contract, which declares its surface in its own docstring). Everything else imports the file that defines the symbol. Nothing has a re-export shim.
 
-- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory that returns a new object each call; see "Discouraged factory patterns" above for when a factory is and isn't warranted. `Object.freeze` is shallow — for a literal with nested objects/arrays, or for a `Map`/`Set`, either deep-freeze it or use a factory, since a shallow freeze doesn't stop mutation of nested values or calls like `.set()`/`.add()`. A campaign consolidation once replaced fresh no-retry result literals with a single shared constant; the resulting aliasing behavior change was caught only by a follow-up factory rewrite and a `notStrictEqual` regression test.
+- **Never hand out a shared mutable literal.** A module-level object that a function returns, or that crosses a module boundary, must be frozen (`as const` plus `Object.freeze`) or produced fresh by a factory. `Object.freeze` is shallow: for nested objects/arrays or a `Map`/`Set`, deep-freeze or use a factory.
 
-- **Global registration requires a global consumer.** Register something globally (components, commands, providers) only when an external surface actually references it; consumers that are internal-only import locally instead. The docs theme once globally registered two components that no markdown page used.
+- **Global registration requires a global consumer.** Register something globally (components, commands, providers) only when an external surface references it; internal-only consumers import locally.
 
-- **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle, not a bare module-level variable. The only test flake hit during the 2026-07 campaign was a module-level session singleton colliding across suites.
+- **No bare module-level mutable singletons in tested code.** State that tests need to isolate belongs behind an injectable, resettable handle.
 
 - **Serialize asynchronous work through Effect.** Use Effect concurrency primitives or `withPerKeyLane` (`src/utils/core/perKeyQueue.ts`) when operations must run one at a time per key. Resource ownership must be released on success, failure, and interruption. Do not hand-write Promise chains for it; follow the TeXRA 1.0 direction above.
 
 ### Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across multiple suites gets promoted to `src/test-kernel/support/`. Five test lanes in the campaign removed about 860 lines that were almost entirely repeated literal setup; one file constructed the same handle inline 33 times.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 
 - **Effect-based tests use `@effect/vitest`.** A test body that executes an `Effect` program uses `it.effect` (`import { it } from '@effect/vitest'`; `describe`/`expect` stay on `vitest`) with `Effect.gen` + `yield*` instead of `await Effect.runPromise(...)`; rejection assertions use `Effect.flip` or `Effect.exit` plus `expect`. `it.effect` provides a `TestContext` whose clock starts at 0, so tests that depend on real time (real sleeps, polling loops, subprocess or network timeouts) use `it.live` instead. Keep `Effect.runPromise` only in hooks and non-test helpers. Inside `it.effect`/`it.live`, cleanup goes through `Effect.addFinalizer` or `Effect.acquireRelease` (the tester already provides a `Scope`), never `try/finally` around `yield*`: Effect's generator driver does not resume the generator's `finally` after a failed yield. Exemplar: `src/test-kernel/tools/Cancellation.vitest.ts`.
 
-- **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites should use Vitest `expect`. Existing suites may stay on `node:assert` (strict); do not convert them as drive-by work in a feature, polish, or refactor PR. Convert only in a dedicated mechanical PR (one file or one directory, no behavior changes riding along) using the strict mapping: `assert.equal` becomes `toBe`, `assert.deepEqual` becomes `toStrictEqual` (never `toEqual`, which drops the `{a: undefined}` versus `{}` distinction), `assert.ok` becomes `toBeTruthy()`, or `toBe(true)` when the argument is already a boolean expression. One file keeps `node:assert` even then: `shared/stateSettings.vitest.ts` uses its per-key message argument to name the failing settings key inside a catalog loop.
+- **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites use Vitest `expect`. Existing `node:assert` suites stay as they are; convert only in a dedicated mechanical PR (one file or directory, no behavior changes) using the strict mapping: `assert.equal` to `toBe`, `assert.deepEqual` to `toStrictEqual` (never `toEqual`), `assert.ok` to `toBeTruthy()`. `shared/stateSettings.vitest.ts` keeps `node:assert` for its per-key message argument.
 
 ## Documentation
 
