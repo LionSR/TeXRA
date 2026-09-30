@@ -915,41 +915,89 @@ export default tseslint.config(
   // Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
-  // entries). Everywhere else a run is below the boundary: convert the file
-  // and its callers so the run moves to a host entry. This block replaces the
-  // `no-restricted-syntax` array above for these files, so it repeats the
-  // <wa-icon> selector.
-  {
-    files: [
-      'src/**/*.{ts,tsx,mts}',
-      'packages/llm/src/**/*.{ts,tsx,mts}',
-      'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
-      'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
-      'packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}',
-    ],
-    ignores: [
-      'src/test-kernel/**',
-      '**/*.vitest.ts',
-      'src/ui/wa/webAwesomeIcons.ts',
+  // entries, which are exempt whole-file: that the run is on the entry's own
+  // runtime is enforced by review). Everywhere else a run is below the
+  // boundary: convert the file and its callers so the run moves to a host
+  // entry. `new AbortController()` is held to its two permanent residents
+  // (rulings ledger, "permanent AbortController residents"). Flat config
+  // replaces the `no-restricted-syntax` array for a file, so each file group
+  // below lists every selector that applies to it.
+  ...(() => {
+    const waIcon = {
+      selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
+      message:
+        'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
+    };
+    const runMessage =
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+    const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback)$/';
+    const run = [
+      {
+        selector: `CallExpression[callee.property.name=${runNames}]`,
+        message: runMessage,
+      },
+      {
+        selector: `CallExpression[callee.name=${runNames}]`,
+        message: runMessage,
+      },
+    ];
+    const abort = {
+      selector: "NewExpression[callee.name='AbortController']",
+      message:
+        'No new AbortController: the two permanent residents are named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
+    };
+    const entries = [
       'packages/extension/src/progressView/frontend/sessionTransport.ts',
       'src/shared/signals.ts',
       'src/platform/processRuntime.ts',
-    ],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
-          message:
-            'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
-        },
-        {
-          selector:
-            'CallExpression[callee.property.name=/^run(Promise|PromiseExit|Sync|Fork|Callback)$/]',
-          message:
-            'Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.',
-        },
-      ],
-    },
-  },
+    ];
+    const residents = [
+      'src/agent/runtime/childRunLoop.ts',
+      'src/tools/claudeAgent.ts',
+    ];
+    const iconFile = 'src/ui/wa/webAwesomeIcons.ts';
+    const block = (files, ignores, ...selectors) => ({
+      files,
+      ignores,
+      rules: { 'no-restricted-syntax': ['error', ...selectors] },
+    });
+    return [
+      // Hosts may run effects; they still may not add an AbortController.
+      block(
+        [
+          'packages/extension/src/**/*.{ts,tsx,mts}',
+          'packages/desktop/src/**/*.{ts,tsx,mts}',
+          'packages/cli/src/**/*.{ts,tsx,mts}',
+          'packages/agent/src/**/*.{ts,tsx,mts}',
+        ],
+        ['**/*.vitest.ts', iconFile, ...entries],
+        waIcon,
+        abort,
+      ),
+      // Everything else, webview frontends included (later wins over the host
+      // block for the frontends).
+      block(
+        [
+          'src/**/*.{ts,tsx,mts}',
+          'packages/llm/src/**/*.{ts,tsx,mts}',
+          'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
+          'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
+          'packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}',
+        ],
+        [
+          'src/test-kernel/**',
+          '**/*.vitest.ts',
+          iconFile,
+          ...entries,
+          ...residents,
+        ],
+        waIcon,
+        ...run,
+        abort,
+      ),
+      block(entries, [], waIcon, abort),
+      block(residents, [], waIcon, ...run),
+      block([iconFile], [], ...run, abort),
+    ];
+  })(),
 );

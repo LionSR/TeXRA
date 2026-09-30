@@ -57,7 +57,8 @@ Things the tree won't tell you:
   refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
   an `Effect.run*` call outside `packages/{extension,desktop,cli,agent}/src/`
   (webview frontends excluded) or a named runtime entry carved out in
-  `eslint.config.mjs`, and `no-warning-comments` fails on any `@adapter-until`
+  `eslint.config.mjs` (whole-file; the receiver is checked in review), as does
+  `new AbortController()` outside its two ledger residents, and `no-warning-comments` fails on any `@adapter-until`
   marker, since the owner ruled there are no temporary adapters. AGENTS.md
   "Directory organization"
   has the rules. The invariant to hold is "never widen a
