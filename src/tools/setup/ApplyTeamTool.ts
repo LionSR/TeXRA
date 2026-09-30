@@ -6,10 +6,9 @@
  * with the same roster (PRD: agent-native onboarding). The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
- * The roster write goes through the same shared application path
- * (`applyTeamRoster`) as the Settings "apply team" action, so the two can't
- * drift. Members that aren't in the registry yet are reported rather than
- * silently dropped.
+ * The roster write is the same `AgentRosterController.applyTeam` the
+ * Settings "apply team" action calls, so the two can't drift. Members that
+ * aren't in the registry yet are reported rather than silently dropped.
  */
 
 import { Effect } from 'effect';
@@ -17,17 +16,11 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
 import { createWorkspaceAgentRosterController } from '@agent/index/agentRegistry';
-import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import { missingMemberNames, planTeamRun } from '@common/teams/TeamPlan';
-import {
-  TeamCatalogPortFailed,
-  type TeamRosterCatalog,
-} from '@common/teams/TeamRoster';
-import { applyTeamRoster } from '@common/teams/TeamRosterApplication';
+import { teamPresets } from '@common/teams/TeamPresets';
+import { missingMemberNames } from '@common/teams/TeamPlan';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { defineTool } from '../core/define';
 
@@ -61,44 +54,7 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   const call = yield* ToolCall;
   const roster = createWorkspaceAgentRosterController(call.roots);
 
-  // Applying the roster and recording it as the default team both go
-  // through this tool's adapter — the Settings "apply team" action commits
-  // only the roster, since it has no notion of a fresh-workspace default.
-  const catalog: TeamRosterCatalog = {
-    resolvePreset: (presetId) =>
-      Effect.gen(function* () {
-        const preset = findTeamPreset(yield* roster.allPresets(), presetId);
-        if (!preset) return { ok: false, reason: 'unknownPreset' } as const;
-        return {
-          ok: true,
-          preset,
-          resolution: planTeamRun(preset, {
-            resolveAgent: (category, identifier) =>
-              roster.resolveAgent(category, identifier),
-          }),
-        };
-      }),
-    commitPreset: (preset) =>
-      Effect.gen(function* () {
-        yield* roster.setTeam(preset.id);
-        yield* roster.setDefaultTeam(preset.id);
-        // The setup agent runs this mid-conversation, so an open settings
-        // view is showing a roster this call just replaced.
-        emitAppSignal('agentRosterChanged', undefined);
-      }).pipe(
-        // The roster writes are the port's own failure: the two stores' tags
-        // would not name the port.
-        Effect.mapError(
-          (cause) =>
-            new TeamCatalogPortFailed({
-              message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
-              cause,
-            }),
-        ),
-      ),
-  };
-
-  const result = yield* applyTeamRoster(input.teamId, { catalog });
+  const result = yield* roster.applyTeam(input.teamId);
 
   if (result.status === 'unknown') {
     // The schema gates ids, so this only fires if the enum and the preset
@@ -111,6 +67,10 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   }
 
   const { preset } = result;
+  yield* roster.setDefaultTeam(preset.id);
+  // The setup agent runs this mid-conversation, so an open settings view is
+  // showing a roster this call just replaced.
+  emitAppSignal('agentRosterChanged', undefined);
   const { workflow: activeWorkflow, toolUse: activeToolUse } =
     result.resolution.agentKeys;
   // `agentKeys` holds only the agent keys that resolved in the registry. Names
