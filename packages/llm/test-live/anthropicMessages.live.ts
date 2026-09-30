@@ -15,7 +15,6 @@ liveProtocol({
           endpoint: 'https://api.anthropic.com',
           credentialScope: 'live',
         },
-        supportsInputTokenEstimation: true,
         supportsTemperature: true,
         supportsForcedToolChoice: true,
         supportsSystemMessages: false,

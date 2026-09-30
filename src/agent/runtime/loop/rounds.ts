@@ -170,8 +170,6 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
         bound: yield* SynchronizedRef.get(run.model),
         invoker,
         stores: session.roots,
-        system: undefined,
-        tools: [],
         force: 'overflow',
       }),
     );

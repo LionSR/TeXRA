@@ -52,7 +52,6 @@ import {
 } from './openaiResponsesCodec.js';
 import {
   ResponseAuthenticationSchema,
-  estimateResponseInput,
   openaiAbortMatch,
   openaiClient,
   prepareResponsesTurn,
@@ -760,20 +759,6 @@ export function openaiResponsesModel(
       ? {
           uploadFile: uploads.uploadFile,
           releaseUploads: uploads.releaseUploads,
-        }
-      : {}),
-    ...(config.supportsInputTokenEstimation
-      ? {
-          estimateInputTokens: (
-            input: Extract<ResolvedTurn, { mode: 'foreground' }>,
-          ) =>
-            estimateResponseInput(
-              config,
-              origin,
-              { kind: 'http' },
-              client,
-              input,
-            ),
         }
       : {}),
     ...(config.background === 'supported'

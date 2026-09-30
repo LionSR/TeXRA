@@ -488,8 +488,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 bound,
                 invoker,
                 stores: session.roots,
-                system: step.system,
-                tools,
                 force,
               }),
             );

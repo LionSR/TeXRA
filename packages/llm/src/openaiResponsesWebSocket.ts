@@ -12,7 +12,6 @@ import {
   TurnResultSchema,
   type Model,
   type OpenAIResponsesConfiguration,
-  type ResolvedTurn,
 } from './turn.js';
 import {
   ModelError,
@@ -26,8 +25,6 @@ import { originOf } from './protocol.js';
 import { rejoin } from './transport.js';
 import {
   ResponseAuthenticationSchema,
-  estimateResponseInput,
-  openaiClient,
   prepareResponsesTurn,
   responseAuthentication,
   responseParameters,
@@ -82,9 +79,6 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
     ),
   );
-  const countClient = config.supportsInputTokenEstimation
-    ? openaiClient(config.deployment.endpoint, selected)
-    : undefined;
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({
@@ -404,23 +398,5 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    ...(countClient
-      ? {
-          estimateInputTokens: Effect.fn(
-            'llm.responses.webSocketEstimateInputTokens',
-          )(function* (input: Extract<ResolvedTurn, { mode: 'foreground' }>) {
-            if (invalid) return yield* invalid;
-            if ((yield* Clock.currentTimeMillis) - openedAt >= 55 * 60_000)
-              return yield* closed;
-            return yield* estimateResponseInput(
-              config,
-              origin,
-              transport,
-              countClient,
-              input,
-            );
-          }),
-        }
-      : {}),
   });
 });
