@@ -105,13 +105,15 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
 /**
- * The picker's row budget is `FORM_FOREGROUND_MAX_ROWS` (18), the five team
- * presets are always listed, and the workflow section needs three rows
- * (heading, one workflow, the run hint). So the section renders only when at
- * most two tool-use agents are visible — and both workflows need a single one.
- * `agent-form` therefore names one agent, asserting both sections; the
- * 80-column and compact scenarios keep the five-agent selection, which is what
- * their windowing and width guards are about.
+ * The picker's row budget is `FORM_FOREGROUND_MAX_ROWS` (18). Its fixed chrome
+ * is eight rows plus one for the "Current: chat (hidden from picker)" hint
+ * `agent-form` shows, leaving nine for the list; the five team presets are
+ * always listed, and the workflow section needs three rows (heading, one row,
+ * the run hint). So the section renders only when at most one tool-use agent
+ * is visible, and its one row then holds the `… 2 more rows` overflow for the
+ * two workflows. `agent-form` therefore names one agent, asserting both
+ * sections; the 80-column and compact scenarios keep the five-agent selection,
+ * which is what their windowing and width guards are about.
  */
 const SINGLE_TOOL_USE_AGENT = 'research';
 const TWO_OPENAI_MODELS = ['gpt55', 'gpt55pro'].join('||');
