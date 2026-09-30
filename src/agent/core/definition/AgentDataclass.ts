@@ -114,6 +114,12 @@ export const AgentDefinitionSchema = z.strictObject({
   name: AgentNameSchema,
   description: z.string().optional(),
   inherits: z.string().optional(),
+  /**
+   * On a customized copy of a bundled agent: the digest of the bundled file it
+   * was copied from, so an app update that changes the bundled agent can say
+   * the copy is based on an older version.
+   */
+  basedOn: z.string().optional(),
   settings: AgentSettingInputSchema.prefault({}),
   prompts: AgentPromptInputSchema.prefault({}),
 });

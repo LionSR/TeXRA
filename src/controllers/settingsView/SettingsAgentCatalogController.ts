@@ -28,12 +28,15 @@ interface SettingsAgentCatalogEntry {
   description?: string;
   path?: string;
   tools?: string[];
+  basedOn?: string;
 }
 
 interface SettingsAgentCatalogControllerDeps {
   repoState: StateStore;
   roster: AgentRosterController<SettingsAgentCatalogEntry>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
+  /** The source of the changed bundled agent a customized copy overrides. */
+  newerBuiltInOf(entry: SettingsAgentCatalogEntry): AgentSource | undefined;
   now?: () => number;
 }
 
@@ -229,6 +232,7 @@ export class SettingsAgentCatalogController {
       hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,
       tools: entry.tools,
+      newerBuiltIn: this.deps.newerBuiltInOf(entry),
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.
