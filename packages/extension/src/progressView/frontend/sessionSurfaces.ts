@@ -60,7 +60,8 @@ export interface SessionSurfaces {
   get(key: string): SessionSurface | undefined;
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
-  runtimeRequest(key: string, request: RuntimeRequest): void;
+  /** Whether the runtime carried it out; a refusal is on the surface. */
+  runtimeRequest(key: string, request: RuntimeRequest): Promise<boolean>;
   hostRequest(key: string, request: HostRequest): void;
   /** A host request answered to its caller, not presented on the surface. */
   answer: WebviewTransport['answer'];
@@ -180,9 +181,8 @@ export function createSessionSurfaces(options: {
         if (view !== beforeReplay) next = pruneSurface(next, view);
         if (host) next = reconcileLaunch(next, host);
         setSurface(entry, next);
-        if (transcriptTier(entry).transcript !== entry.subscribedTranscript) {
+        if (transcriptTier(entry).transcript !== entry.subscribedTranscript)
           subscribeTranscript(entry);
-        }
         notify();
       },
     );
@@ -296,9 +296,8 @@ export function createSessionSurfaces(options: {
         }
         return;
       case 'launch':
-        if (launch.instruction === request.launch.instruction) {
+        if (launch.instruction === request.launch.instruction)
           act(entry, { kind: 'launch', patch: { instruction: '' } });
-        }
         return;
       default:
         return;
@@ -354,12 +353,12 @@ export function createSessionSurfaces(options: {
   async function runtimeRequestFor(
     entry: Held,
     request: RuntimeRequest,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
     if (request.kind === 'followUp.send') {
       const current = entry.surface$.get();
-      if (current.sending.has(request.runId)) return;
+      if (current.sending.has(request.runId)) return false;
       setSurface(entry, {
         ...current,
         sending: new Set([...current.sending, request.runId]),
@@ -384,7 +383,7 @@ export function createSessionSurfaces(options: {
       requestId: requestId(),
       request,
     });
-    if (held.get(key) !== entry) return;
+    if (held.get(key) !== entry) return false;
     presentResult(entry, result);
     // The runtime's refusal also reaches the run it was made on
     // (7.6): that run's controls paint it, and nothing here
@@ -396,12 +395,12 @@ export function createSessionSurfaces(options: {
         rejected: new Map(current.rejected).set(runId, result.error),
       });
     }
-    if (request.kind !== 'followUp.send') return;
+    if (request.kind !== 'followUp.send') return result.ok;
     const current = entry.surface$.get();
     const sending = new Set(current.sending);
     sending.delete(request.runId);
     setSurface(entry, { ...current, sending });
-    if (!result.ok) return;
+    if (!result.ok) return false;
     if (
       submitted !== undefined &&
       entry.surface$.get().drafts.get(request.runId) === submitted
@@ -412,6 +411,7 @@ export function createSessionSurfaces(options: {
         patch: EMPTY_DRAFT,
       });
     }
+    return true;
   }
 
   /** A follow-up sends once the host has stored every pasted image; an
@@ -482,7 +482,7 @@ export function createSessionSurfaces(options: {
     },
     runtimeRequest(key, request) {
       const entry = held.get(key);
-      if (entry) void runtimeRequestFor(entry, request);
+      return entry ? runtimeRequestFor(entry, request) : Promise.resolve(false);
     },
     answer: transport.answer,
     hostRequest(key, hostRequest) {

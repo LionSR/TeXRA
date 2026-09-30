@@ -77,10 +77,11 @@ export class RunTabs extends LitElement {
   /** Streams that need the user or are still running; `recent` is left
    *  out. */
   @property({ type: Boolean }) activeOnly = false;
-  /** Group headings (Running, Waiting on you, Interrupted, Recent). */
+  /** Group headings (Running, Waiting on you, Interrupted, Recent), and
+   *  the Trash last: a trashed row's run menu restores or deletes it. */
   @property({ type: Boolean }) sections = false;
-  /** Rows offer Delete, behind a confirmation: the desktop rail. */
-  @property({ type: Boolean }) removable = false;
+  /** Rows offer the run menu on `⋯` and right-click: the desktop rail. */
+  @property({ type: Boolean }) menu = false;
   /** The subtree to show instead of `view.order`: the Subagents pane. */
   @property({ attribute: false }) root: RunId | null = null;
 
@@ -128,7 +129,7 @@ export class RunTabs extends LitElement {
         .unread=${this.view?.queuedFollowUps.get(run.id)?.length ?? 0}
         ?expandable=${expandable}
         ?expanded=${expanded}
-        ?removable=${this.removable && run.actions.includes('delete')}
+        ?menu=${this.menu}
       ></run-tab>
       ${
         expandable
@@ -172,15 +173,25 @@ export class RunTabs extends LitElement {
     if (!this.sections) {
       body = this.renderRows(top, selected);
     } else {
-      body = html`${RUN_GROUP_ORDER.map((group) => {
-        const rows = top.filter((run) => run.group === group);
-        if (rows.length === 0) return nothing;
-        return html`<div class="group-heading group-${group}">
-            <span>${RUN_GROUP_LABELS[group]}</span>
-            <span class="group-count">${rows.length}</span>
-          </div>
-          ${this.renderRows(rows, selected)}`;
-      })}`;
+      const trashed = (this.activeOnly || rootRun ? [] : (view?.trash ?? []))
+        .map((id) => this.runOfEvent(id))
+        .filter((run): run is RunView => run !== undefined)
+        .filter((run) => this.matchesSearch(run, needle));
+      const section = (group: string, label: string, rows: RunView[]) =>
+        rows.length === 0
+          ? nothing
+          : html`<div class="group-heading group-${group}">
+                <span>${label}</span>
+                <span class="group-count">${rows.length}</span>
+              </div>
+              ${this.renderRows(rows, selected)}`;
+      body = html`${RUN_GROUP_ORDER.map((group) =>
+        section(
+          group,
+          RUN_GROUP_LABELS[group],
+          top.filter((run) => run.group === group),
+        ),
+      )}${section('trash', 'Trash', trashed)}`;
     }
 
     return html`

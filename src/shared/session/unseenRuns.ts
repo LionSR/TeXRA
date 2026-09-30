@@ -28,9 +28,9 @@ export function markShownRunSeen(surface: Surface, view: SessionView): Surface {
 }
 
 /**
- * The top-level runs that finished after this surface last showed them. A
- * run it never recorded was never shown here (it predates the record, or
- * another host launched it), so it is not news either.
+ * The top-level runs out of the Trash that finished after this surface last
+ * showed them. A run it never recorded was never shown here (it predates the
+ * record, or another host launched it), so it is not news either.
  */
 export function unseenRuns(
   surface: Surface,
@@ -41,6 +41,7 @@ export function unseenRuns(
     const seen = surface.seen.get(run.id);
     if (
       run.parentId === null &&
+      run.trashedAt === null &&
       run.durableOutcome !== null &&
       seen !== undefined &&
       run.lastTimestamp !== null &&

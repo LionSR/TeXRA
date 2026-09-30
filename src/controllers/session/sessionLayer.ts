@@ -645,7 +645,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
-        Effect.catch(logFailure('Background-shell cleanup failed.')),
+        Effect.catch(logFailure('Leftover-run cleanup failed.')),
         Effect.forkScoped,
       );
       // The session owns retries and waits for in-flight removal on close.

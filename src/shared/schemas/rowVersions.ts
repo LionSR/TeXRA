@@ -51,6 +51,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'child.park': V1,
   'run.removed': V1,
   'run.description': V1,
+  'run.trash': V1,
   'plugin.fact': V1,
   inquiryThreadUpdated: V1,
   'followup.queued': V1,

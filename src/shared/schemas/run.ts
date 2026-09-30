@@ -121,7 +121,10 @@ const RUN_ACTIONS = [
   'diff',
   'pack',
   'clean',
-  /** Remove the run and its folder from history. */
+  /** Move a top-level run to the Trash, and take it back out. */
+  'trash',
+  'untrash',
+  /** Remove the run and its folder for good: a trashed run, or a subagent. */
   'delete',
   /** Read-only: open its folder, export or copy its conversation. */
   'openRunStorage',

@@ -172,6 +172,8 @@ const RunViewCommonSchema = z.object({
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: z.int().positive(),
   runStartedAt: z.int().positive().nullable(),
+  /** When its newest `run.trash` put it in the Trash (`trash`, not `order`). */
+  trashedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
   /** Where the run's loop stands, in the coordinate its category counts,
@@ -280,9 +282,8 @@ export interface FollowUpHost {
  */
 export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
-  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked) {
+  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked)
     return false;
-  }
   if (run.group === 'running' || run.group === 'waiting') return true;
   return run.status === 'ready' && run.lastTimestamp === null;
 }
@@ -301,9 +302,8 @@ export function requestAnswerability(
   payload: Pick<PermissionPayload, 'kind'>,
 ): RequestAnswerability {
   if (run.readOnly) return 'readOnly';
-  if (run.approval === 'own' || !requestParksItsCaller(payload)) {
+  if (run.approval === 'own' || !requestParksItsCaller(payload))
     return 'answerable';
-  }
   return 'resume';
 }
 
@@ -331,6 +331,7 @@ const SessionViewSchema = z.object({
   runs: z.map(RunIdSchema, RunViewSchema),
   /** Top-level ids, `runOrdering` rule. */
   order: z.array(RunIdSchema),
+  trash: z.array(RunIdSchema), // The trashed top-level ids, same rule.
   /** The drained tail position, including rows no longer materialized.
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
@@ -435,6 +436,7 @@ export function emptySessionView(
     key,
     runs: new Map(),
     order: [],
+    trash: [],
     cursor,
     debug,
     folded: new Map(),
@@ -483,9 +485,7 @@ export function descendantRuns(
 ): readonly RunId[] {
   if (rootRunId === undefined) return [];
   const out: RunId[] = [];
-  // An index cursor over an append-only queue keeps this linear in the
-  // topology's size; `Array.shift()` would re-index the remainder on every
-  // pop and make a large fan-out's walk quadratic.
+  // An index cursor, not `shift()`, keeps a large fan-out's walk linear.
   const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {

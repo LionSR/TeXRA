@@ -282,9 +282,7 @@ const RunRemovedEventSchema = durable('run.removed', {
 const RunStartDraftSchema = RunStartEventSchema.omit({ parent: true }).extend({
   parent: RunParentSchema.pick({ id: true }).nullable(),
 });
-const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
-  runIds: true,
-});
+const RunRemovedDraftSchema = RunRemovedEventSchema.omit({ runIds: true });
 
 /**
  * The durable arms every renderer folds. This is the one declaration of the
@@ -338,6 +336,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
+  /** A top-level run moved to the Trash or out of it, the newest row its
+   *  standing; purged 30 days on at session open (`sweepLeftoverRuns`). */
+  durable('run.trash', { trashed: z.boolean() }),
   /** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
    *  latest per (plugin, kind) and never reads it; the plugin decodes it. */
   durable('plugin.fact', {
@@ -559,9 +560,8 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
     if (event.checkpointId != null)
       ids.push(aggregateId('workflow-checkpoint', event.checkpointId));
   }
-  if (event.type === 'inquiryThreadUpdated' && event.parentRunId !== null) {
+  if (event.type === 'inquiryThreadUpdated' && event.parentRunId !== null)
     ids.push(aggregateId('run', event.parentRunId));
-  }
   return ids;
 }
 

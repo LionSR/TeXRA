@@ -20,7 +20,6 @@ import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import { formatWorkflowRunContext } from '@ui/copy/workflowRunContext';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -28,19 +27,13 @@ import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 
-import {
-  ELEMENT_IDS,
-  NEUTRAL_RUN_ACTIONS,
-  RUN_MENU_ACTIONS,
-  type RunMenuAction,
-} from '../constants';
+import { ELEMENT_IDS } from '../constants';
 import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
@@ -55,6 +48,7 @@ import {
   deleteSessionConfirmStyles,
   renderDeleteSessionConfirm,
 } from './deleteSessionConfirm';
+import { renderRunMenuItems, selectRunMenuItem } from './runMenu';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -66,9 +60,6 @@ export interface HeaderMenuItem {
   readonly label: string;
   readonly activate: () => void;
 }
-
-/** The menu value of the delete item, which asks before it acts. */
-const DELETE_SESSION = 'deleteSession';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
 const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
@@ -84,7 +75,8 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
  * shell slots its own controls around it (the Sessions button at `start`,
  * New task at `end`), so a run never shows two rows of chrome: path and
  * title, status, time, an active run grant, Stop, and one menu holding the
- * run's actions, the shell's window items, and last, Delete session.
+ * run's actions, the shell's window items, and last, Move to Trash (a
+ * rail row's menu is the same one, `runMenu.ts`).
  */
 @customElement('run-header')
 export class RunHeader extends LitElement {
@@ -261,35 +253,6 @@ export class RunHeader extends LitElement {
     successTitle: 'Copied!',
   });
 
-  private runContextText(run: RunView): string {
-    if (run.category !== 'workflow') return '';
-    return formatWorkflowRunContext({
-      run: {
-        label: run.label,
-        model: run.model ?? undefined,
-        modelLabel: run.modelLabel ?? undefined,
-        runId: run.id,
-        description: run.description ?? undefined,
-      },
-      files: run.files,
-      compileFailures: run.compileFailures,
-    });
-  }
-
-  /** Send what a run action names (see `RunMenuAction.arm`). */
-  private dispatchAction(action: RunMenuAction, run: RunView): void {
-    const runId = run.id;
-    if (action.arm === 'copyRunContext') {
-      void this.copyRunContext.copy(this.runContextText(run));
-    } else if (action.arm === 'run.compact') {
-      this.dispatchEvent(
-        SessionUiEvents.runtime({ kind: 'run.compact', runId }),
-      );
-    } else {
-      this.dispatchEvent(SessionUiEvents.host({ kind: action.arm, runId }));
-    }
-  }
-
   /** Whether a run grant is on, per the run's policy snapshot. */
   private grantActive(run: RunView, kind: ApprovalBypassKind): boolean {
     return this.view?.policy.get(run.id)?.bypasses[kind] === true;
@@ -378,7 +341,7 @@ export class RunHeader extends LitElement {
       </div>
       ${
         this.confirmingDelete === run.id
-          ? renderDeleteSessionConfirm(this, run, () => {
+          ? renderDeleteSessionConfirm(run, () => {
               this.confirmingDelete = null;
             })
           : nothing
@@ -392,18 +355,6 @@ export class RunHeader extends LitElement {
     progressTitle: string | undefined,
     canGrant: boolean,
   ): TemplateResult {
-    // An agent run's menu lists its category's actions, a process's or a
-    // workflow container's the neutral ones, each shown only while the
-    // run's `actions` holds it. Edit as new task lives in the conversation's
-    // ended line.
-    const actions = (
-      run.identity.kind === 'agent'
-        ? RUN_MENU_ACTIONS[run.category]
-        : NEUTRAL_RUN_ACTIONS
-    ).filter((action) => run.actions.includes(action.action));
-    const runContext = this.runContextText(run);
-    const copied = this.copyRunContext.state.copied;
-    const canDelete = run.actions.includes('delete');
     return html`
       <wa-dropdown
         placement="bottom-end"
@@ -420,13 +371,14 @@ export class RunHeader extends LitElement {
             this.setGrant(run, bypass, checked);
             return;
           }
-          if (value === DELETE_SESSION) {
-            this.confirmingDelete = run.id;
-            return;
-          }
-          const action = actions.find((candidate) => candidate.id === value);
-          if (action) this.dispatchAction(action, run);
-          else
+          const chosen = selectRunMenuItem(
+            this,
+            run,
+            value,
+            this.copyRunContext,
+          );
+          if (chosen === 'delete') this.confirmingDelete = run.id;
+          if (chosen === 'unknown')
             this.menuItems.find((entry) => entry.value === value)?.activate();
         }}
       >
@@ -449,37 +401,18 @@ export class RunHeader extends LitElement {
             ? renderAutoApproveMenu((kind) => this.grantActive(run, kind))
             : nothing
         }
-        ${repeat(
-          actions,
-          (action) => action.id,
-          (action) => {
-            const isCopy = action.arm === 'copyRunContext';
-            return html`<wa-dropdown-item
-              value=${action.id}
-              ?disabled=${isCopy && runContext === ''}
-              >${waIcon(isCopy && copied ? 'check' : action.icon, {
-                slot: 'icon',
-              })}${action.label}</wa-dropdown-item
-            >`;
-          },
+        ${renderRunMenuItems(
+          run,
+          this.copyRunContext,
+          html`${repeat(
+            this.menuItems,
+            (item) => item.value,
+            (item) =>
+              html`<wa-dropdown-item value=${item.value}
+                >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
+              >`,
+          )}`,
         )}
-        ${repeat(
-          this.menuItems,
-          (item) => item.value,
-          (item) =>
-            html`<wa-dropdown-item value=${item.value}
-              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
-            >`,
-        )}
-        ${
-          canDelete
-            ? html`<wa-divider></wa-divider
-                ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}Delete
-                  session…</wa-dropdown-item
-                >`
-            : nothing
-        }
       </wa-dropdown>
       <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
     `;

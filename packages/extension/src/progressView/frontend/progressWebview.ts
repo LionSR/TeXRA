@@ -36,7 +36,7 @@ export function mountProgressWebview(app: ProgressApp): () => void {
   if (!session) throw new Error(`Session ${sessionKey} did not open`);
 
   app.addEventListener('runtime-request', (event) => {
-    sessions.runtimeRequest(sessionKey, event.detail);
+    void sessions.runtimeRequest(sessionKey, event.detail);
   });
   app.addEventListener('host-request', (event) => {
     sessions.hostRequest(sessionKey, event.detail);

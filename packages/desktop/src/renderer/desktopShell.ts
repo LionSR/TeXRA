@@ -57,6 +57,7 @@ interface ShellSidebarCallbacks {
   onProjectAction(key: string, action: ProjectAction): void;
   onToggleProjectCollapsed(key: string): void;
   onOpenSettings(): void;
+  onOpenTrash(): void;
 }
 
 function sidebarAction(options: {
@@ -187,7 +188,7 @@ function projectSection(
               .view=${project.view}
               .surface=${project.surface}
               .topLevelOnly=${true}
-              removable
+              menu
             ></run-tabs>
           </div>`
     }
@@ -257,42 +258,13 @@ export function shellSidebarTemplate(
           label: 'Settings',
           onClick: callbacks.onOpenSettings,
         })}
+        ${sidebarAction({
+          icon: 'trash',
+          label: 'Trash',
+          onClick: callbacks.onOpenTrash,
+        })}
       </footer>
     </aside>
-  `;
-}
-
-/**
- * The way into the selected conversation's subagents: the Subagents tab
- * holds the tree, so this only opens it. Nothing when the conversation has
- * no children.
- */
-export function subagentsButtonTemplate(
-  project: RailProject | undefined,
-  onOpen: () => void,
-): TemplateResult | typeof nothing {
-  if (!project) return nothing;
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  const rootId = run?.ancestors[0]?.id ?? run?.id;
-  const root = rootId === undefined ? undefined : project.view.runs.get(rootId);
-  if (root === undefined || root.rollup.total === 0) return nothing;
-  const { icon, label } = WORKBENCH_KIND_META.subagents;
-  return html`
-    <wa-button
-      type="button"
-      class="shell-subagents-open btn-secondary"
-      appearance="outlined"
-      size="s"
-      title="Show this task's subagents"
-      @click=${onOpen}
-    >
-      ${waIcon(icon, { slot: 'start' })}
-      <span>${label}</span>
-      <span class="shell-subagents-open-count" slot="end"
-        >${root.rollup.total}</span
-      >
-    </wa-button>
   `;
 }
 

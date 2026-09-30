@@ -57,12 +57,11 @@ import {
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import './desktopShell.css';
+import { shellSidebarTemplate, type RailProject } from './desktopShell';
 import {
-  shellSidebarTemplate,
   subagentsButtonTemplate,
-  type RailProject,
-} from './desktopShell';
-import { subagentsPaneTemplate } from './subagentsPane';
+  subagentsPaneTemplate,
+} from './subagentsPane';
 import {
   activeWorkbenchTab,
   initialDesktopShellState,
@@ -81,6 +80,7 @@ import { resolveSessionWire } from '../shared/hostBridgeChannels';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createDesktopSettingsDialog } from './settingsDialog';
+import { createTrash } from './trashDialog';
 import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
 import { createProjectRail } from './projectRail';
@@ -88,9 +88,8 @@ import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
 
-if (appRoot == null) {
+if (appRoot == null)
   throw new Error('TeXRA desktop renderer root was not found.');
-}
 
 // The theme is the renderer's own environment: Chromium follows the OS
 // (and Electron's `nativeTheme`) through these media queries, so no host
@@ -325,9 +324,8 @@ function toggleSidePanelVisibility(): void {
   currentWorkbench().workbench.togglePlacementVisibility('right', 'files');
 }
 
-// `<progress-app>` is instantiated once and slotted into
-// the shell template via Lit's DOM-node interpolation, so Lit preserves their
-// internal state across re-renders and tab switches.
+// `<progress-app>` is created once and slotted in by Lit's DOM-node
+// interpolation, which keeps its state across re-renders and tab switches.
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 {
   // No project open: nothing can run yet, so say what TeXRA is and open one.
@@ -385,6 +383,11 @@ const settingsDialog = createDesktopSettingsDialog(appRoot, {
   onShown: syncActiveBrowserView,
   onHidden: syncActiveBrowserView,
 });
+const trash = createTrash({
+  sessions: projectSessions,
+  projects: railProjects,
+  onChange: () => (rerenderShell(), syncActiveBrowserView()),
+});
 
 // The logs viewer is hosted directly in its workbench tab body.
 const logsController = createLogsPane();
@@ -412,9 +415,8 @@ function shellConversationTemplate(): TemplateResult {
   let sidebarToggleLabel = shellState().sidebarCollapsed
     ? 'Show sidebar'
     : 'Hide sidebar';
-  if (sidebarCollapsedWithPendingApproval) {
+  if (sidebarCollapsedWithPendingApproval)
     sidebarToggleLabel = 'Show sidebar (approval pending)';
-  }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
       id: 'shellSidebarToggle',
@@ -657,11 +659,13 @@ function shellTemplate(): TemplateResult {
                 }),
               ),
             onOpenSettings: () => settingsDialog.open(),
+            onOpenTrash: trash.open,
           },
         )}
       </div>
       <div slot="end" class="shell-frame-main-panel">${main}</div>
     </wa-split-panel>
+    ${trash.template()}
   `;
 }
 
@@ -800,9 +804,8 @@ const routeMessage = createMessageRoutes({
     projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
   'desktop:openSettings': () => settingsDialog.open(),
   'desktop:toggleLayout': (message) => {
-    if (projectWorkbenches.has(shell.active)) {
+    if (projectWorkbenches.has(shell.active))
       LAYOUT_PANEL_TOGGLES[message.panel]();
-    }
   },
   'desktop:setOnboarding': (message) => {
     if (message.shouldShow) startupTeamPanel.show();
@@ -819,9 +822,8 @@ const routeMessage = createMessageRoutes({
     // tab goes only once that leaves the pane empty, so a request settling
     // never dismisses another request's preview or an unrelated review.
     const project = projectWorkbenches.get(message.session);
-    if (project?.reviewPane.close(message.previewId)) {
+    if (project?.reviewPane.close(message.previewId))
       project.workbench.disposeWorkbenchTab('workbench:review');
-    }
   },
   'desktop:showPdf': (message) => {
     const project = projectWorkbenches.get(message.session);
@@ -883,7 +885,7 @@ const routeMessage = createMessageRoutes({
           surfaces: projectSessions,
           logsPane,
           isActive: () => shell.active === key,
-          isBrowserCovered: settingsDialog.isOpen,
+          isBrowserCovered: () => settingsDialog.isOpen() || trash.isOpen(),
           subagentsTemplate: () => {
             const session = projectSessions.get(key);
             return session
@@ -946,16 +948,15 @@ window.addEventListener('resize', () => {
 
 function sessionOf(event: Event): string | undefined {
   for (const node of event.composedPath()) {
-    if (node instanceof HTMLElement && node.dataset.session) {
+    if (node instanceof HTMLElement && node.dataset.session)
       return node.dataset.session;
-    }
   }
   return undefined;
 }
 
 appRoot.addEventListener('runtime-request', (event) => {
   const key = sessionOf(event);
-  if (key) projectSessions.runtimeRequest(key, event.detail);
+  if (key) void trash.request(key, event.detail);
 });
 appRoot.addEventListener('host-request', (event) => {
   const key = sessionOf(event);
@@ -967,9 +968,8 @@ appRoot.addEventListener('surface-action', (event) => {
   projectSessions.act(key, event.detail);
   // The rail is bound to one active run across every section: picking
   // a run in another project's tree picks that project too (PRD 12.2).
-  if (event.detail.kind === 'select' && key !== shell.active) {
+  if (event.detail.kind === 'select' && key !== shell.active)
     selectProject(key);
-  }
 });
 appRoot.addEventListener('composer-submit', (event) => {
   const key = sessionOf(event);

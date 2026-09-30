@@ -1,5 +1,6 @@
-// The one Delete-session confirmation: the run header's menu item and the
-// desktop rail row's × both ask here before the `run.delete` request leaves.
+// The one permanent-delete confirmation: the run menu's Delete permanently
+// (a trashed run, or a subagent) and the desktop Trash both ask here before
+// the `run.delete` request leaves. Move to Trash never asks.
 import { css, html, type TemplateResult } from 'lit';
 
 import type { RunView } from '@shared/session/sessionView';
@@ -20,12 +21,12 @@ export const deleteSessionConfirmStyles = css`
 `;
 
 /**
- * Asks before `run` is deleted. Confirming dispatches `run.delete` from
- * `host`; either button calls `dismiss`, which clears the host's
- * confirming state. Escape cancels.
+ * Asks before `run` is deleted for good. Confirming dispatches `run.delete`
+ * from the button, so it reaches the session its surroundings name; either
+ * button calls `dismiss`, which clears the host's confirming state. Escape
+ * cancels.
  */
 export function renderDeleteSessionConfirm(
-  host: HTMLElement,
   run: RunView,
   dismiss: () => void,
 ): TemplateResult {
@@ -34,25 +35,27 @@ export function renderDeleteSessionConfirm(
     variant="danger"
     size="small"
     role="alertdialog"
-    aria-label="Delete session"
+    aria-label="Delete permanently"
     @keydown=${(event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.stopPropagation();
       dismiss();
     }}
   >
-    ${waIcon('trash', { slot: 'icon' })} Delete “${run.label}”? Its conversation
-    and run folder are removed for good.
+    ${waIcon('trash', { slot: 'icon' })} Delete
+    “${run.description || run.label}” permanently? Its conversation and run
+    folder are removed for good.
     <div class="delete-confirm-actions">
       <wa-button
         id="confirmDeleteSession"
         variant="danger"
         size="s"
-        @click=${() => {
-          dismiss();
-          host.dispatchEvent(
+        @click=${(event: Event) => {
+          const button = event.currentTarget as HTMLElement;
+          button.dispatchEvent(
             SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
           );
+          dismiss();
         }}
         >Delete</wa-button
       >
