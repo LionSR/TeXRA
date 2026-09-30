@@ -75,9 +75,8 @@ import {
   sessionListRunIds,
 } from './state/cliState';
 import {
-  appendLocalErrorTranscript,
   appendLocalNotice,
-  describeRequestError,
+  appendLocalRequestRefusal,
 } from './state/transcript';
 import {
   INITIAL_CHILD_LIST_SELECTION,
@@ -296,9 +295,7 @@ export function App(props: AppProps): React.JSX.Element {
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
       Effect.catch(props.session.requests.request(req), (error) =>
-        Effect.sync(() =>
-          appendLocalErrorTranscript(describeRequestError(error)),
-        ),
+        Effect.sync(() => appendLocalRequestRefusal(error)),
       ),
     );
   };

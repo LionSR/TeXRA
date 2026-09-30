@@ -234,11 +234,13 @@ export function describeRequestError(error: RequestError): string {
   }
 }
 
-/** A refused runtime request, worded into the run it named. */
+/** A refused runtime request, worded into the run it named. The user's own
+ *  cancellation is not a failure and writes nothing. */
 export function appendLocalRequestRefusal(
   error: RequestError,
-  runId: RunId,
+  runId?: RunId,
 ): void {
+  if (error._tag === 'Cancelled') return;
   appendLocalErrorTranscript(describeRequestError(error), runId);
 }
 
