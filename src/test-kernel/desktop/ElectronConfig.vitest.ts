@@ -41,14 +41,16 @@ describe('desktop JsonConfigProvider (dual-store)', () => {
       );
       const globalPath = join(tempDir, 'global.json');
       const workspacePath = join(tempDir, 'workspace.json');
-      const [globalStore, workspaceStore] = yield* Effect.all([
+      const [globalStore, workspaceStore, localStore] = yield* Effect.all([
         JsonStore.open(globalPath),
         JsonStore.open(workspacePath),
+        JsonStore.open(join(tempDir, 'local.json')),
       ]);
       return {
         provider: new JsonConfigProvider({
           workspace: workspaceStore,
           global: globalStore,
+          local: localStore,
         }),
         globalStore,
         workspaceStore,

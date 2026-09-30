@@ -616,7 +616,7 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
+  it('writes the bash-approval toggle to the local config scope, not global or the project file', async () => {
     const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = await createCapturedSettingsFixture({
@@ -634,9 +634,10 @@ describe('desktop settings IPC', () => {
 
     expect(config.get('texra.toolUse.requireBashApproval')).toBe(false);
     // Security-adjacent scope pin: a per-workspace approval bypass must never
-    // be written to the global config target (see issue #7085).
+    // be written to the global config target (see issue #7085), nor to the
+    // project file a cloned repository controls.
     expect(config.lastTargetFor('texra.toolUse.requireBashApproval')).toBe(
-      'workspace',
+      'local',
     );
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,

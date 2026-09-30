@@ -26,9 +26,9 @@ interface CliAgentListResult {
 type CliAgentLaunchMode = 'chat' | 'workflowResume';
 
 const AGENT_LOOKUP_HINT =
-  'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.';
+  'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.';
 const MULTI_AGENT_PRESET_LOOKUP_HINT =
-  'Use `texra multi-agent list` for available team presets, then run `texra multi-agent show <preset>` to check a team before launch.';
+  'Use `texra multi-agent list` for available teams, then run `texra multi-agent show <team>` to check a team before launch.';
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
@@ -85,7 +85,7 @@ export function missingToolUseAgentMessage(name: string): string {
 }
 
 export function missingMultiAgentPresetMessage(name: string): string {
-  return `Multi-agent preset not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
+  return `Team not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
 }
 
 /**
@@ -286,6 +286,10 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push(`rounds: ${entry.rounds}`);
   }
   return lines.join('\n');
+}
+
+export function formatCliNewerBuiltInNotice(name: string): string {
+  return `A newer built-in version of ${name} is available; your custom copy still overrides it. Run \`texra agents reset ${name}\` to use the new version, or \`texra agents keep ${name}\` to keep yours.`;
 }
 
 export function formatCliHiddenAgentsNotice(

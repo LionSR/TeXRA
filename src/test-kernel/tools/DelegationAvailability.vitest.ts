@@ -53,7 +53,7 @@ const { toolTableLayer } = await import('@tools/liveTools');
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Agent selection: choose the most specific agent whose description matches.',
   '',
@@ -63,7 +63,7 @@ const DELEGATE_AGENT_DESCRIPTION = [
 const DELEGATE_WORKFLOW_DESCRIPTION = [
   'Delegate to a workflow agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Pick the agent whose description matches the task.',
 ].join('\n');
@@ -74,7 +74,7 @@ const WORKTREE_PLACEHOLDER =
 const DELEGATE_AGENT_WORKTREE_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Available models: loaded from the active API mode at runtime.',
   '',
@@ -198,7 +198,7 @@ describe('delegation agent availability', () => {
           'Available agents:\n- research: Derive things.',
         );
         expect(rewritten.description).not.toContain(
-          'loaded from the active roster at runtime',
+          'loaded from the enabled agents at runtime',
         );
         // Following sections survive the block replacement untouched.
         expect(rewritten.description).toContain(

@@ -55,14 +55,9 @@ export const TEST_ORIGIN = {
   },
 } as const;
 
-/**
- * A `Model` the harness never invokes: the invoker seam is faked above it.
- * Compaction still probes the optional token counter, and this model offers
- * none, so that one read answers `undefined` and the text heuristic decides.
- */
+/** A `Model` the harness never invokes: the invoker seam is faked above it. */
 const unusedModel = new Proxy({} as Model, {
   get(_target, property) {
-    if (property === 'estimateInputTokens') return undefined;
     throw new Error(`The harness model has no ${String(property)}.`);
   },
 });

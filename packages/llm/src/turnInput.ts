@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 import {
   TurnRequestSchema,
   type AnthropicMessagesConfiguration,
-  type ResolvedTurn,
   type TurnRequest,
 } from './turn.js';
 import { ModelError } from './errors.js';
@@ -26,28 +25,6 @@ export const decodeTurnRequest = (
         }),
       );
 };
-
-/**
- * The text parts of a turn that is one initial text-only user message with no
- * tools or continuation, the only input a provider count admits; otherwise
- * `undefined`.
- */
-export function initialTextInput(turn: {
-  readonly messages: ResolvedTurn['messages'];
-  readonly tools: ResolvedTurn['tools'];
-  readonly continuation?: unknown;
-}) {
-  const [message, ...rest] = turn.messages;
-  if (
-    turn.continuation !== undefined ||
-    turn.tools.length !== 0 ||
-    rest.length !== 0 ||
-    message?.role !== 'user'
-  )
-    return undefined;
-  const text = message.content.filter((part) => part.kind === 'text');
-  return text.length === message.content.length ? text : undefined;
-}
 
 /**
  * An Anthropic request's output limit and the thinking that fits below it: a

@@ -132,7 +132,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   const plan = yield* loadCliMultiAgentRunPlan(init, services.repoState);
   if (rejectsHeadlessAsk) {
     writeTextStderr(
-      `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
     );
     return CliExitCode.Usage;
   }
@@ -144,7 +144,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (!canLaunchTeam(plan)) {
     const singleAgentAdvice = plan.rootAgent
       ? `Start a single-agent chat with \`texra chat --agent ${plan.rootAgent.name}\` if that is what you want.`
-      : 'Install or create a runnable team root before launching this preset.';
+      : 'Install or create a runnable team root before launching this team.';
     writeTextStderr(
       formatCliMultiAgentTeamLaunchBlockMessage(plan, {
         requestedPreset: init.preset,
@@ -174,7 +174,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
       Effect.gen(function* () {
         if (runContext.approvalPolicy === 'never') {
           writeTextStderr(
-            `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+            `WARN team ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
           );
         }
 
@@ -243,7 +243,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
 });
 
 const multiAgentListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List multi-agent team presets' },
+  meta: { name: 'list', description: 'List teams' },
   args: {
     ...GLOBAL_ARGS,
   },
@@ -257,14 +257,14 @@ const multiAgentListCommand = defineCliCommand({
 const multiAgentShowCommand = defineCliCommand({
   meta: {
     name: 'show',
-    description: 'Show one multi-agent team preset and its resolved agents',
+    description: 'Show one team and its resolved agents',
   },
   args: {
     ...GLOBAL_ARGS,
     preset: {
       type: 'positional',
       required: true,
-      description: 'Preset id or name from `texra multi-agent list`',
+      description: 'Team id or name from `texra multi-agent list`',
     },
   },
   run: (context, ctx) =>
@@ -276,13 +276,13 @@ const multiAgentShowCommand = defineCliCommand({
 
 const multiAgentRunCommand = withUsageSections(
   defineCliCommand({
-    meta: { name: 'run', description: 'Run a multi-agent team preset' },
+    meta: { name: 'run', description: 'Run a team' },
     args: {
       ...AGENT_RUN_GLOBAL_ARGS,
       preset: {
         type: 'positional',
         required: true,
-        description: 'Preset id or name from `texra multi-agent list`',
+        description: 'Team id or name from `texra multi-agent list`',
       },
       input: {
         type: 'string',
@@ -300,8 +300,7 @@ const multiAgentRunCommand = withUsageSections(
       },
       agent: {
         type: 'string',
-        description:
-          'Root agent for the team run (defaults to the preset orchestrator)',
+        description: 'Root agent for the team run (defaults to the team lead)',
       },
       model: {
         type: 'string',
@@ -344,7 +343,7 @@ const multiAgentRunCommand = withUsageSections(
 export const multiAgentCommand = defineCommand({
   meta: {
     name: 'multi-agent',
-    description: 'List, show, and run multi-agent team presets',
+    description: 'List, show, and run teams',
   },
   subCommands: {
     list: multiAgentListCommand,

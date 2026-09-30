@@ -44,7 +44,7 @@ interface CliMultiAgentPresetListRecord extends TeamPreset {
 
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
 const MULTI_AGENT_SHOW_HINT =
-  'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
+  'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable teams.';
 
 /**
  * The team presets of the workspace whose state the caller holds: the built-in
@@ -102,7 +102,7 @@ function formatCliMultiAgentPresetAvailabilityPart(
 export function formatCliMultiAgentPresetList(
   plans: readonly CliMultiAgentPresetRunPlan[],
 ): string {
-  if (plans.length === 0) return 'No multi-agent presets found.';
+  if (plans.length === 0) return 'No teams found.';
 
   const rows = plans.map((plan) =>
     [
@@ -166,11 +166,11 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   const reason = teamLaunchBlockReason(plan);
   if (!reason) {
     throw new Error(
-      `Cannot format team launch block for launchable multi-agent preset "${plan.preset.id}".`,
+      `Cannot format team launch block for launchable team "${plan.preset.id}".`,
     );
   }
   const parts = [
-    `Multi-agent preset "${preset}" cannot start as a team: ${reason}.`,
+    `Team "${preset}" cannot start: ${reason}.`,
     `Run \`texra multi-agent show ${plan.preset.id}\` to see missing agents.`,
     options.followUpAdvice,
   ];
@@ -187,7 +187,7 @@ export function formatCliMultiAgentPresetRunWarnings(
   if (missing.length === 0) return [];
 
   const warnings = [
-    `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
+    `WARN team ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
   ];
 
   if (!plan.rootAgent || !hasDelegationTool(plan.rootAgent.tools)) {
@@ -198,7 +198,7 @@ export function formatCliMultiAgentPresetRunWarnings(
   if (availableTeamMembers === 0) return warnings;
 
   warnings.push(
-    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatResultCount(availableTeamMembers, 'available team agent')}.`,
+    `WARN team ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatResultCount(availableTeamMembers, 'available team agent')}.`,
   );
   return warnings;
 }

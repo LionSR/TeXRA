@@ -34,9 +34,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Publishing refuses a red commit before any installer is built, not after.
+  # The installer jobs skip when it fails, and publish requires them all.
+  require-green-ci:
+    name: require green CI
+    if: inputs.publish_desktop_release_artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Require green CI on the dispatched commit
+        uses: ./.github/actions/require-green-ci
+
   desktop-macos-installer:
     name: desktop installer (macOS)
-    if: inputs.run_desktop_installers
+    needs: require-green-ci
+    if: ${{ !failure() && !cancelled() && inputs.run_desktop_installers }}
     runs-on: macos-latest
     timeout-minutes: 45
     env:
@@ -118,7 +136,8 @@ jobs:
 
   desktop-linux-installer:
     name: desktop installer (Linux)
-    if: inputs.run_desktop_installers
+    needs: require-green-ci
+    if: ${{ !failure() && !cancelled() && inputs.run_desktop_installers }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -161,7 +180,8 @@ jobs:
 
   desktop-windows-artifact:
     name: desktop artifact (Windows)
-    if: inputs.run_windows_desktop
+    needs: require-green-ci
+    if: ${{ !failure() && !cancelled() && inputs.run_windows_desktop }}
     runs-on: windows-latest
     timeout-minutes: 30
     env:

@@ -252,7 +252,7 @@ function mockMaterializedStdin(inputFiles: string[]): void {
 describe('CLI multi-agent run command', () => {
   const tempDirs = useTempDirs();
   const headlessAskError =
-    'Cannot run multi-agent preset "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+    'Cannot run team "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -479,9 +479,9 @@ describe('CLI multi-agent run command', () => {
         agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
       }),
       message:
-        'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or create a runnable team root before launching this preset.',
+        'Team "mathematician" cannot start: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or create a runnable team root before launching this team.',
       followUpAdvice:
-        'Install or create a runnable team root before launching this preset.',
+        'Install or create a runnable team root before launching this team.',
       unexpectedWarning: 'WARN team delegation unavailable',
     });
   });
@@ -495,7 +495,7 @@ describe('CLI multi-agent run command', () => {
         },
       }),
       message:
-        'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
+        'Team "mathematician" cannot start: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
       followUpAdvice:
         'Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
       unexpectedWarning: 'Enable a delegating team root',

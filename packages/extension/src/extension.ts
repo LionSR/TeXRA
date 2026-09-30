@@ -268,12 +268,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         yield* openTexraConfigStores(
           DEFAULT_NODE_STORAGE_ROOT,
           workspaceRoot,
-          (message) =>
+          (message) => {
             runtime.runFork(
               Effect.logWarning(message).pipe(
                 withLogChannel(EXTENSION_CHANNEL),
               ),
-            ),
+            );
+            void vscode.window.showWarningMessage(message);
+          },
         ),
       );
       const roots = createNodeWorkspaceRoots({

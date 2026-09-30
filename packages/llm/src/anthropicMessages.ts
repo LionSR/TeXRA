@@ -5,10 +5,9 @@ import { Buffer } from 'node:buffer';
 import Anthropic, {
   APIError,
   APIConnectionError,
-  APIUserAbortError,
   toFile,
 } from '@anthropic-ai/sdk';
-import { Cause, Clock, Effect, Exit, Stream } from 'effect';
+import { Clock, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
@@ -23,12 +22,11 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
-import { decodeTurnRequest, initialTextInput, fitLimit } from './turnInput.js';
+import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from './message.js';
 import { JsonObjectSchema, originOf, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
-  ownedAbortSafeRequest,
   parseInboundToolArguments,
   parseOutboundToolArguments,
   sdkStream,
@@ -186,21 +184,6 @@ function sdkFailure(cause: unknown): ModelError {
     'The Anthropic transport failed.',
   );
 }
-
-/**
- * Anthropic's abort signature: the pinned SDK replaces caller abort reasons
- * both before headers and while forwarding abort to the response body, so
- * the match is only meaningful once Effect itself recorded an interrupt.
- */
-const anthropicAbortMatch = (
-  cause: unknown,
-  _signal: AbortSignal,
-  exit: Exit.Exit<unknown, ModelError>,
-): boolean =>
-  Exit.isFailure(exit) &&
-  Cause.hasInterrupts(exit.cause) &&
-  (cause instanceof APIUserAbortError ||
-    (cause instanceof DOMException && cause.name === 'AbortError'));
 
 const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
   part: Extract<
@@ -933,76 +916,10 @@ export function anthropicMessagesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.anthropic.estimateInputTokens')(function* (turn) {
-      if (turn.protocol !== 'anthropic-messages')
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'The prepared Anthropic count invocation is unsupported.',
-        });
-      const body = yield* invocationBody(turn, origin, config, uploads);
-      if (initialTextInput(turn) === undefined)
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Anthropic counting supports one initial text-only user message and optional system text.',
-        });
-      let requestId: string | undefined;
-      const failure = (cause: unknown) => {
-        const error = sdkFailure(cause);
-        return enrichModelError(error, {
-          cause,
-          requestId: error.requestId ?? requestId,
-          model: origin.requestedModel,
-        });
-      };
-      const response = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.messages
-            .countTokens(
-              {
-                model: body.model,
-                messages: body.messages,
-                ...(body.system === undefined ? {} : { system: body.system }),
-                ...(body.thinking === undefined
-                  ? {}
-                  : { thinking: body.thinking }),
-                ...(body.output_config === undefined
-                  ? {}
-                  : { output_config: body.output_config }),
-                ...(body.cache_control === undefined
-                  ? {}
-                  : { cache_control: body.cache_control }),
-              },
-              { signal },
-            )
-            .asResponse()
-            .then((response) => {
-              requestId = response.headers.get('request-id') ?? undefined;
-              return response.json() as Promise<unknown>;
-            }),
-        failure,
-        { isAbortMatch: anthropicAbortMatch },
-      );
-      const count = z.object({ input_tokens: CountSchema }).safeParse(response);
-      if (!count.success)
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Anthropic returned no valid input token estimate.',
-          cause: count.error,
-          requestId,
-          model: origin.requestedModel,
-        });
-      return Object.freeze({
-        inputTokens: count.data.input_tokens,
-        coverage: 'anthropic-message-input' as const,
-      });
-    });
   return Object.freeze({
     prepareTurn,
     streamTurn,
     uploadFile: uploads.uploadFile,
     releaseUploads: uploads.releaseUploads,
-    ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }

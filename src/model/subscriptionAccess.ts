@@ -58,7 +58,7 @@ export function isPreferSubscription(
  * Persist the preference in the scope that controls it. An `Effect`, so the
  * caller's program owns the write and its failure rather than receiving a
  * rejection it cannot compose. The value read back is always `enabled`:
- * every host's config is a two-layer `JsonConfigProvider`, and the write
+ * every host's config is a layered `JsonConfigProvider`, and the write
  * lands in the layer that wins, so no more specific setting can override it.
  */
 export function setPreferSubscription(

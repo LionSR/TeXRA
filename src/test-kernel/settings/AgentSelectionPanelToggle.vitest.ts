@@ -86,4 +86,35 @@ describe('AgentSelectionPanel', () => {
     // click-to-select handler must not also fire.
     expect(rowClicked).toBe(false);
   });
+
+  it('flags a custom copy whose built-in changed and offers its three resolutions', async () => {
+    const panel = await renderAgentSelectionPanel([
+      {
+        ...workflowAgent,
+        source: AGENT_SOURCE.CUSTOM,
+        newerBuiltIn: AGENT_SOURCE.BUILT_IN_WORKFLOW,
+      },
+    ]);
+    const root = panel.shadowRoot!;
+    expect(root.textContent).toContain('A newer built-in version is available');
+    const buttons = [...root.querySelectorAll('wa-button')];
+    const click = (text: string) =>
+      buttons
+        .find((button) => button.textContent?.trim() === text)!
+        .dispatchEvent(
+          new MouseEvent('click', { bubbles: true, composed: true }),
+        );
+    click('View built-in');
+    click('Reset to built-in');
+    click('Keep mine');
+
+    expect(mocks.postMessage.mock.calls).toEqual([
+      [
+        SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
+        { agentName: 'summarize', agentSource: AGENT_SOURCE.BUILT_IN_WORKFLOW },
+      ],
+      [SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, { agentName: 'summarize' }],
+      [SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT, { agentName: 'summarize' }],
+    ]);
+  });
 });

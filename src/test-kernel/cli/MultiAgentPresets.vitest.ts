@@ -108,7 +108,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(message).toBe(
-      'Multi-agent preset "mathematician" cannot start as a team: team root lean is not a delegating agent. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+      'Team "mathematician" cannot start: team root lean is not a delegating agent. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     );
     expect(message).not.toContain('cannot delegate');
   });
@@ -120,7 +120,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(() => formatCliMultiAgentTeamLaunchBlockMessage(plan)).toThrow(
-      /launchable multi-agent preset "lean-project"/,
+      /launchable team "lean-project"/,
     );
   });
 

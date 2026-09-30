@@ -254,6 +254,9 @@ export const POSITIONAL_COMPLETION_SOURCES: Readonly<
 > = {
   run: COMPLETION_SOURCES.launchableAgents,
   'agents show': COMPLETION_SOURCES.agents,
+  'agents customize': COMPLETION_SOURCES.launchableAgents,
+  'agents reset': COMPLETION_SOURCES.agents,
+  'agents keep': COMPLETION_SOURCES.agents,
   'models show': COMPLETION_SOURCES.models,
 };
 
