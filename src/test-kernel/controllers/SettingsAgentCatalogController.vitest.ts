@@ -131,6 +131,7 @@ function createController(options?: {
       repoState: workspaceState,
       roster,
       getAgents,
+      newerBuiltInOf: () => undefined,
       now: () => options?.now ?? 123,
     }),
     workspaceState,

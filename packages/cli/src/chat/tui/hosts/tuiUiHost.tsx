@@ -32,7 +32,7 @@ import { TextEntryForm } from '../forms/_shared/TextEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';
 import { closeActiveForm, openActiveForm } from '../state/formSlot';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalNotice,
   appendLocalErrorTranscript,
 } from '../state/transcript';
 
@@ -118,11 +118,11 @@ function chooseItem<T extends string>(
  */
 class TuiUiHost implements MessageHost, PromptHost {
   showInfoMessage(message: string): Effect.Effect<void, NotificationFailed> {
-    return Effect.sync(() => appendLocalAssistantTranscript(message));
+    return Effect.sync(() => appendLocalNotice(message));
   }
 
   showWarningMessage(message: string): Effect.Effect<void, NotificationFailed> {
-    return Effect.sync(() => appendLocalAssistantTranscript(message));
+    return Effect.sync(() => appendLocalNotice(message));
   }
 
   showErrorMessage(message: string): Effect.Effect<void, NotificationFailed> {
@@ -133,14 +133,14 @@ class TuiUiHost implements MessageHost, PromptHost {
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Effect.Effect<T | undefined, NotificationFailed> {
-    return this.present(message, options, appendLocalAssistantTranscript);
+    return this.present(message, options, appendLocalNotice);
   }
 
   warning<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Effect.Effect<T | undefined, NotificationFailed> {
-    return this.present(message, options, appendLocalAssistantTranscript);
+    return this.present(message, options, appendLocalNotice);
   }
 
   error<T extends string = string>(

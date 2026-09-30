@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
-import { builtInToolUseRoots } from '@agent/index/BundledAgentDirectories';
+import { customCopyPath, writeStampedCopy } from '@agent/index/customAgentCopy';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
@@ -47,7 +47,7 @@ interface SettingsAgentActionsOptions {
   readonly findAgent: (
     source: AgentSource,
     name: string,
-  ) => { path?: string } | undefined;
+  ) => { path?: string; digest?: string } | undefined;
   readonly getCustomAgentDirectory: () => SettingsActionEffect<string>;
   readonly getSourceDirectory: (
     source: AgentSource,
@@ -141,11 +141,8 @@ export function createSettingsAgentActions(
           );
           return;
         }
-        const entryPath = options.findAgent(
-          message.agentSource,
-          message.agentName,
-        )?.path;
-        if (!entryPath) {
+        const entry = options.findAgent(message.agentSource, message.agentName);
+        if (!entry?.path || entry.digest == null) {
           yield* options.showErrorMessage(
             `Agent not found or has no file: ${message.agentName}`,
           );
@@ -161,20 +158,13 @@ export function createSettingsAgentActions(
           ],
           { concurrency: 'unbounded' },
         );
-        // A tool plugin's bundled tool-use agent sits in its own root, not
-        // under the core source directory, so it is relativized against the
-        // root that holds it.
-        const sourceRoot =
-          sourceDir && message.agentSource === 'builtInToolUse'
-            ? (builtInToolUseRoots(sourceDir).find((root) =>
-                isStrictlyWithin(root, entryPath),
-              ) ?? sourceDir)
-            : sourceDir;
-        const relativePath = sourceRoot
-          ? path.relative(sourceRoot, entryPath)
-          : path.basename(entryPath);
-        const targetPath = path.join(customDir, relativePath);
-        if (!isStrictlyWithin(customDir, targetPath)) {
+        const targetPath = customCopyPath({
+          entryPath: entry.path,
+          source: message.agentSource,
+          sourceDir,
+          customDir,
+        });
+        if (!targetPath) {
           yield* options.showErrorMessage(
             'Refusing to copy: target path escapes the custom agents directory.',
           );
@@ -182,7 +172,6 @@ export function createSettingsAgentActions(
         }
 
         const fs = yield* FileSystem.FileSystem;
-        yield* fs.makeDirectory(path.dirname(targetPath), { recursive: true });
         const targetExists = yield* entryExists(fs, targetPath);
         if (targetExists) {
           const overwrite = yield* options.confirmAction(
@@ -192,7 +181,7 @@ export function createSettingsAgentActions(
           if (!overwrite) return;
         }
 
-        yield* fs.copy(entryPath, targetPath, { overwrite: true });
+        yield* writeStampedCopy(entry.path, targetPath, entry.digest);
         yield* options.openDocument(targetPath);
         yield* options.showInfoMessage(
           `Created custom copy: ${path.basename(targetPath)}`,
