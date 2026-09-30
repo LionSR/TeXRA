@@ -36,7 +36,7 @@ const rows = [
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'fable51', 'sonnet5', 'opus55'],
+    models: ['gemini31p', 'fable51', 'sonnet55', 'opus55'],
   },
 ];
 </script>
