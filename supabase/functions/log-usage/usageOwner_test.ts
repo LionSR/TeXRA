@@ -21,11 +21,12 @@ Deno.test('accepts a well-formed install id without a JWT', async () => {
 });
 
 Deno.test('rejects missing, malformed and non-v4 install ids', async () => {
-  for (const headers of [
+  const cases: Record<string, string>[] = [
     {},
     { [INSTALL_ID_HEADER]: 'not-a-uuid' },
     { [INSTALL_ID_HEADER]: 'a584b784-a4f1-1d44-a99f-36767d31e79d' },
-  ]) {
+  ];
+  for (const headers of cases) {
     equal(await resolveOwner(request(headers)), null);
   }
 });
