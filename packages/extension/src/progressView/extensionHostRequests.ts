@@ -46,7 +46,11 @@ import {
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
+import {
+  fromHost,
+  hostFailure,
+  type HostCallFailed,
+} from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -62,6 +66,7 @@ import {
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
@@ -83,11 +88,6 @@ import {
 } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  commandVerb,
-  runCommand,
-  runHandler,
-} from '@progressView/hostCommandCalls';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -99,6 +99,7 @@ import {
   Cancelled,
   Rejected,
   type HostRequestFailure,
+  type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
@@ -161,6 +162,46 @@ interface ExtensionHostRequests {
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
+
+const logCommandFailure =
+  (command: string) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>) => {
+    const log = (failure: unknown) =>
+      Effect.logError(
+        `Command ${command} failed: ${toErrorMessage(failure)}`,
+      ).pipe(withLogChannel(CHANNEL));
+    return self.pipe(Effect.tapError(log), Effect.tapDefect(log));
+  };
+
+/** A VS Code command lifted once through `fromHost`, named by the command,
+ *  with its failure logged before it travels on. */
+function runCommand<T = void>(
+  command: string,
+  ...args: unknown[]
+): Effect.Effect<T | undefined, HostCallFailed | RequestRefusal> {
+  return fromHost(command, () =>
+    vscode.commands.executeCommand<T | undefined>(command, ...args),
+  ).pipe(logCommandFailure(command));
+}
+
+/** One of this extension's own command handlers, run in the arm's fiber
+ *  rather than through `vscode.commands.executeCommand`: a typed failure or a
+ *  defect is named and logged as a command's is. */
+function runHandler<A, E, R>(
+  command: string,
+  handler: Effect.Effect<A, E, R>,
+): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+  return handler.pipe(
+    Effect.mapError((cause) => hostFailure(command, cause)),
+    logCommandFailure(command),
+  );
+}
+
+/** A VS Code command as a verb of the shared binding table: lifted once,
+ *  named, and with the command's own result discarded. */
+function commandVerb(command: string, ...args: unknown[]) {
+  return Effect.asVoid(runCommand(command, ...args));
+}
 
 /** The typed notification surface the run-action ports, the launch host, and
  *  the transcript export ports take. */
@@ -285,29 +326,32 @@ export function createExtensionHostRequests(
   const openExportPath = (
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, ExternalOpenFailed> =>
-    Effect.tryPromise({
-      try: async () => {
-        const uri = vscode.Uri.file(filePath);
-        if (kind === 'external') {
-          await vscode.env.openExternal(uri);
-          return;
-        }
-        if (kind === 'pdf') {
-          await vscode.commands.executeCommand('vscode.open', uri);
-          return;
-        }
-        const document = await vscode.workspace.openTextDocument(filePath);
-        await vscode.window.showTextDocument(document, { preview: false });
-      },
-      catch: (cause) =>
-        new ExternalOpenFailed({
-          kind: 'path',
-          target: filePath,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    });
+  ): Effect.Effect<void, ExternalOpenFailed> => {
+    const failed = (cause: unknown) =>
+      new ExternalOpenFailed({
+        kind: 'path',
+        target: filePath,
+        message: toErrorMessage(cause),
+        cause,
+      });
+    const uri = vscode.Uri.file(filePath);
+    if (kind === 'external') {
+      return Effect.tryPromise({
+        try: () => vscode.env.openExternal(uri),
+        catch: failed,
+      }).pipe(Effect.asVoid);
+    }
+    if (kind === 'pdf') {
+      return Effect.tryPromise({
+        try: () => vscode.commands.executeCommand('vscode.open', uri),
+        catch: failed,
+      }).pipe(Effect.asVoid);
+    }
+    return openFileInEditor(filePath).pipe(
+      Effect.asVoid,
+      Effect.mapError(failed),
+    );
+  };
 
   /** The transcript export, over the session's rooted filesystems the
    *  dispatch root already provided. */
