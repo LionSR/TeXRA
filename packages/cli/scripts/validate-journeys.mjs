@@ -274,7 +274,8 @@ if (unknown.length > 0) {
 if (!process.env[keyEnv]) {
   // A fork PR or an unconfigured repo has no secret; live-llm skips the same way.
   console.warn(`[journeys] ${keyEnv} is not set: skipping ${values.model}`);
-  process.exit(0);
+  // The nightly run must not stay green after a secret is rotated or removed.
+  process.exit(process.env.GITHUB_EVENT_NAME === 'schedule' ? 1 : 0);
 }
 
 if (!values['no-build']) {
