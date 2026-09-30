@@ -747,6 +747,18 @@ tools.
 
 ## Post-auth cache invalidation is a permanent host boundary; only the sign-out catalog refresh is shared (recorded 2026-09-23; moved here from the deleted `src/auth/authFlowEffects.ts` by [#13054](https://github.com/LionSR/TeXRA/issues/13054))
 
+**Superseded 2026-09-30 by D1** (below, "1.0 identity, account and
+telemetry"): TeXRA sign-in leaves all three hosts, so the TeXRA-account
+transitions this entry rules on go with it, and its one shared step,
+`invalidateRemoteAgentsAfterSignOut`, was already deleted with the remote
+agent catalog (#13442). Provider OAuth (ChatGPT/Codex, Grok/xAI) stays, but
+the code runs no post-sign-in invalidation sequence for it: each host's
+sign-in writes the subscription preference through
+`src/controllers/modelAccess/subscriptionProviders.ts`
+(`setPreferSubscription`) and model options are recomputed from the stores
+on read. Nothing of this boundary survives for provider OAuth. The text
+below is the record.
+
 **Question.** Should the post-sign-in and post-sign-out cache-invalidation
 sequence that each host runs be collapsed into one shared coordinator?
 

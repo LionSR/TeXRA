@@ -205,7 +205,10 @@ driver moves into core (decided 2026-09-27).
 5. **Trust: capabilities and approval for anything that loads.**
    - Every loaded plugin revision needs a trust decision through the core
      request authority, recorded as a row.
-   - The decision covers exactly the capabilities in the plugin's `R`.
+   - Approving a code plugin's hooks trusts a child process that can do
+     anything the user can in the workspace. There is no narrower grant:
+     `PluginModule<R>` capabilities and a typed RPC boundary are deferred
+     (ruled 2026-09-30), so the decision is about the whole process.
    - **The trust revision is not the config revision (decided 2026-09-27).**
      A code plugin's, and a stdio MCP server's, trust revision includes a
      content digest of what actually runs: the resolved executable or package
@@ -221,8 +224,8 @@ driver moves into core (decided 2026-09-27).
      (ruled 2026-09-30).
    - No third-party code ever loads in process. In-process loading is only
      for built-in (first-party) plugins.
-   - The loader's security review therefore covers two things: the process
-     boundary and the granted capability set.
+   - The loader's security review therefore covers the process boundary and
+     what the approval prompt tells the user they are trusting.
 
 Each owner requirement maps onto these primitives:
 
@@ -499,7 +502,7 @@ Merged since this note (on `main` at `30c8b30`):
   continuation, goal mode pauses on resume, and the format is 25.
 
 Already on that baseline: #13376 (defects 3 and 4), #13372 (defect 9),
-#13373 (defect 10) and #13375 (`removeRun` through the publisher).
+#13373 (defect 10) and #13375 (defect 7, `removeRun` through the publisher).
 
 In flight: paused children, the step-1 defects of the programme, plugin
 services (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`) and plugin-owned
@@ -518,10 +521,9 @@ The Effect mapping and the critique are beside it, as
 [`critique.md`](./2026-09-26-core-concepts/critique.md). The ones to fix first, because they are wrong
 behavior rather than structure:
 
-| #   | Defect                                                                                                                                                                                                                                                                                                                      | Evidence                                       | Invariant |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | --------- |
-| 6   | The agent definition is re-read live on resume, and resumed tools get no identity check (**tools fixed**: #13364, a resumed activation's first step offers only recorded tools with the same identity; the definition half stays open). Re-resolving the composition is the ruled behaviour (ledger 2026-09-23) and is kept | `executeAgent.ts:393`, `agentLoad.ts`          | 7         |
-| 7   | `removeRun` and app-state rows append outside the publisher                                                                                                                                                                                                                                                                 | `Database.ts:1013-1073`, `appStateStore.ts:76` | 1         |
+| #   | Defect                                                                                                                                                                                                                                                                                                                      | Evidence                              | Invariant |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------- |
+| 6   | The agent definition is re-read live on resume, and resumed tools get no identity check (**tools fixed**: #13364, a resumed activation's first step offers only recorded tools with the same identity; the definition half stays open). Re-resolving the composition is the ruled behaviour (ledger 2026-09-23) and is kept | `executeAgent.ts:393`, `agentLoad.ts` | 7         |
 
 ## Enforcement
 
