@@ -126,6 +126,13 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
         cacheDiscountFactor: 0.1,
       },
       capabilities: { cacheDiscountFactor: 0.1 },
+      longContextPricing: {
+        aboveInputTokens: 272_000,
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheDiscountFactor: 0.1,
+      },
+      tiers: { fast: { inputPrice: 4, outputPrice: 20 } },
     }),
   };
   const usageAt = (inputTokens: number): TurnResult['usage'] => ({
@@ -147,6 +154,18 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
     );
     expect(above?.cost).toBeCloseTo(
       (172_001 * 4 + 100_000 * 0.4 + 1000 * 15) / 1e6,
+      12,
+    );
+  });
+
+  it('bills a fast-tier binding at the fast rates', () => {
+    const fast = priceTurnUsage(
+      { ...boundSol, serviceTier: 'fast' },
+      usageAt(100_000),
+      1,
+    );
+    expect(fast?.cost).toBeCloseTo(
+      (0 * 4 + 100_000 * 0.4 + 1000 * 20) / 1e6,
       12,
     );
   });

@@ -28,7 +28,7 @@ const perMillion = (tokens: number, price: number): number =>
  * The rates for one turn. A plan route (ChatGPT/Codex, Grok, the GLM coding
  * plan, Kimi Code) is covered by the subscription, so every rate is zero and
  * the run records tokens without spend; an API-key route bills the catalog's
- * rates for the bound model. A model with a documented long-context tier
+ * rates for the bound model on its service tier. A model with a documented long-context tier
  * (OpenAI above 272K, xAI and Gemini Pro above 200K) bills the whole request
  * at the tier once the prompt, cached tokens included, is above it; llm-zoo's
  * `requestRates` owns that rule.
@@ -39,7 +39,7 @@ function turnRates(
   promptTokens: number,
 ): TurnRates {
   if (plan) return { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 };
-  return requestRates(bound.config, promptTokens);
+  return requestRates(bound.config, promptTokens, { tier: bound.serviceTier });
 }
 
 /**

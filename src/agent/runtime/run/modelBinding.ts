@@ -74,6 +74,8 @@ export interface BoundModel {
   readonly config: ModelConfig;
   /** What this binding asks the model for: thinking, effort and mode, and any level it substituted. */
   readonly reasoning: ReasoningChoice;
+  /** The service tier the requests are sent on, which pricing bills. */
+  readonly serviceTier?: 'fast';
   readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
@@ -878,7 +880,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ),
     );
   }
-  let config = yield* routeConfig(input.stores, requested, route);
+  const config = yield* routeConfig(input.stores, requested, route);
   const credential: RouteCredential =
     route.kind === 'chatgpt-subscription' || route.kind === 'xai-subscription'
       ? yield* resolveSubscriptionCredential(
@@ -908,14 +910,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
     input,
     reasoning,
   );
-  // A request on the fast tier is billed at its prices: the accounting reads
-  // the bound config.
-  const fast =
-    configuration.protocol === 'openai-responses' &&
-    configuration.defaults.serviceTier === 'fast'
-      ? config.tiers?.fast
-      : undefined;
-  if (fast !== undefined) config = { ...config, ...fast };
+
   // Background delivery and the persistent WebSocket are alternatives on the
   // Responses protocol, and background wins where the user selected both.
   const onWebSocket =
@@ -962,6 +957,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     modelId: input.modelId,
     config,
     reasoning,
+    ...(configuration.protocol === 'openai-responses' &&
+      configuration.defaults.serviceTier === 'fast' && {
+        serviceTier: 'fast' as const,
+      }),
     compatibilityKey,
     model,
     origin,
