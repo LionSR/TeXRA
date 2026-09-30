@@ -1,10 +1,20 @@
 // Node imports
-import { lookup } from 'node:dns/promises';
+import { lookup } from 'node:dns';
 
 // Third-party imports
 import { Effect, Stream } from 'effect';
-import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
+import {
+  FetchHttpClient,
+  HttpClient,
+  type HttpClientError,
+} from 'effect/unstable/http';
 import ipaddr from 'ipaddr.js';
+import {
+  Agent,
+  EnvHttpProxyAgent,
+  fetch as undiciFetch,
+  type Dispatcher,
+} from 'undici';
 import { z } from 'zod';
 
 // Local imports - core
@@ -19,6 +29,7 @@ import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 import { formatBytes } from '@utils/text/stringUtils';
+import type { LookupFunction } from 'node:net';
 
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
@@ -42,6 +53,9 @@ const WebFetchInputSchema = z.strictObject({
 
 type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
 
+const PRIVATE_ADDRESS_REFUSAL =
+  'Cannot fetch localhost or private network addresses. Provide a public URL instead.';
+
 /**
  * Default-deny, not a denylist: `ipaddr.js` classifies every address into a
  * named range (`private`, `loopback`, `carrierGradeNat`, `reserved`, …) with
@@ -50,48 +64,107 @@ type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
  * checks and even the `ip`/`private-ip` packages (e.g. missing the CGNAT
  * range, or an IPv4-mapped IPv6 literal like `::ffff:127.0.0.1` slipping past
  * an IPv6-only prefix check) — `ipaddr.process` normalizes that mapped form to
- * plain IPv4 before classification, so it is covered too.
+ * plain IPv4 before classification, so it is covered too. The NAT64 (DNS64
+ * synthesizes `64:ff9b::/96` for an IPv4-only host) and 6to4 ranges carry an
+ * IPv4 address, which is what decides them.
  */
 function isRestrictedIp(address: string): boolean {
-  return (
-    ipaddr.isValid(address) && ipaddr.process(address).range() !== 'unicast'
-  );
+  if (!ipaddr.isValid(address)) return false;
+  const ip = ipaddr.process(address);
+  const range = ip.range();
+  if (ip.kind() === 'ipv6' && (range === 'rfc6052' || range === '6to4')) {
+    const { parts } = ip as ipaddr.IPv6;
+    const [high, low] =
+      range === 'rfc6052' ? [parts[6], parts[7]] : [parts[1], parts[2]];
+    return isRestrictedIp(
+      [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.'),
+    );
+  }
+  return range !== 'unicast';
 }
 
 /**
- * Refuse a URL whose host is, or resolves to, a non-public address. The name
- * is resolved here because the host string alone says nothing (`localhost.`,
- * a public name with a loopback A record); every address it resolves to must
- * be public, so one private record among several fails the call. `hostname`
- * is a WHATWG `URL#hostname`, which brackets an IPv6 literal (`[::1]`) and
- * `ipaddr.isValid` rejects the bracketed form, so the brackets come off first.
- * The fetch resolves the name again, so this narrows DNS rebinding rather than
- * closing it.
+ * The resolver a connection uses: every address a name resolves to must be
+ * public, so one private record among several fails the connection. The check
+ * and the connect share one answer, so a name that answers differently a
+ * moment later (DNS rebinding) cannot reach a private address, and every
+ * redirect hop is covered. `net` does not resolve an IP literal, so
+ * {@link assertPublicLiteral} covers that form.
  */
-const assertPublicHost = Effect.fn('WebFetchTool.assertPublicHost')(function* (
-  url: URL,
-) {
-  const host = url.hostname.replaceAll(/^\[|\]$/g, '');
-  const addresses = ipaddr.isValid(host)
-    ? [host]
-    : (yield* Effect.tryPromise({
-        try: () => lookup(host, { all: true }),
-        catch: (error) =>
-          new ToolError(`Cannot resolve ${host}: ${toErrorMessage(error)}`),
-      })).map(({ address }) => address);
-  if (addresses.some(isRestrictedIp)) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Cannot fetch localhost or private network addresses. Provide a public URL instead.',
-      ),
+const publicOnlyLookup: LookupFunction = (hostname, options, callback) =>
+  lookup(hostname, options, (error, address, family) => {
+    if (error) {
+      callback(error, address, family);
+      return;
+    }
+    const resolved = [address]
+      .flat()
+      .map((entry) => (typeof entry === 'string' ? entry : entry.address));
+    callback(
+      resolved.some(isRestrictedIp)
+        ? new ToolError(PRIVATE_ADDRESS_REFUSAL)
+        : null,
+      address,
+      family,
     );
-  }
-});
+  });
 
 /**
- * GET `start`, following redirects by hand so every hop's host passes
- * {@link assertPublicHost}: the fetch runs with `redirect: 'manual'`, and a
- * redirect to a private address is the same refusal as asking for it.
+ * Built on first use, as the proxy agent reads the environment when it is
+ * constructed. Under a configured proxy the proxy resolves names and the
+ * connection is to the proxy, so the resolver guard cannot apply there.
+ */
+let dispatcher: Dispatcher | undefined;
+
+function webFetchDispatcher(): Dispatcher {
+  const { HTTP_PROXY, HTTPS_PROXY, http_proxy, https_proxy } = process.env;
+  dispatcher ??=
+    HTTP_PROXY || HTTPS_PROXY || http_proxy || https_proxy
+      ? new EnvHttpProxyAgent()
+      : new Agent({ connect: { lookup: publicOnlyLookup } });
+  return dispatcher;
+}
+
+/**
+ * undici's own `fetch`, not the global one: the global is the runtime's
+ * bundled undici, which rejects a dispatcher built by this package's undici
+ * (see `longRunningModelFetch`).
+ */
+const publicFetch: typeof fetch = (input, init) =>
+  undiciFetch(
+    input as Parameters<typeof undiciFetch>[0],
+    { ...init, dispatcher: webFetchDispatcher() } as Parameters<
+      typeof undiciFetch
+    >[1],
+  ) as unknown as Promise<Response>;
+
+/** Refuse an IP-literal host, the one form {@link publicOnlyLookup} never sees. */
+function assertPublicLiteral(url: URL) {
+  // `URL#hostname` brackets an IPv6 literal, which `ipaddr.isValid` rejects.
+  return isRestrictedIp(url.hostname.replaceAll(/^\[|\]$/g, ''))
+    ? Effect.fail(new ToolError(PRIVATE_ADDRESS_REFUSAL))
+    : Effect.void;
+}
+
+/**
+ * The resolver's refusal, which reaches the request as the cause of the cause
+ * of a transport failure, as a permanent `ToolError` instead of a transient
+ * failure the retry would repeat.
+ */
+function refusalOf(error: HttpClientError.HttpClientError): Error {
+  const { reason } = error;
+  return reason._tag === 'TransportError' &&
+    reason.cause instanceof Error &&
+    reason.cause.cause instanceof ToolError
+    ? reason.cause.cause
+    : error;
+}
+
+/**
+ * GET `start`, following redirects by hand so every hop's host is checked
+ * ({@link publicOnlyLookup}, {@link assertPublicLiteral}): the fetch runs with
+ * `redirect: 'manual'`, and a redirect to a private address is the same
+ * refusal as asking for it.
  */
 const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
   start: string,
@@ -102,11 +175,13 @@ const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
   );
   let target = new URL(start);
   for (let redirects = 0; ; redirects++) {
-    yield* assertPublicHost(target);
+    yield* assertPublicLiteral(target);
     const response = yield* client.get(target).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, publicFetch),
       Effect.provideService(FetchHttpClient.RequestInit, {
         redirect: 'manual',
       }),
+      Effect.mapError(refusalOf),
     );
     if (response.status < 300) return response;
     const { location } = response.headers;

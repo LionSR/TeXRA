@@ -179,16 +179,20 @@ All notable changes to this project will be documented in this file.
   policy and the two approval switches (edits, shell commands) are now read
   only from your own settings: per workspace, in your TeXRA storage, with a
   value in your user configuration file as the default for every workspace. A
-  `.texra/config.json` that sets one of them is ignored, and every host warns
-  naming the key, so a project that set `texra.approvalPolicy` (or a switch)
-  there needs it set again in the settings view or `/config`. `texra init` no
-  longer asks for an approval policy or writes one.
+  `.texra/config.json` that sets one of them is ignored, and each time the
+  project opens the host says so naming the key (a warning dialog in VS Code
+  and the desktop app, a message on stderr and in `texra doctor` in the
+  terminal), so a project that set `texra.approvalPolicy` (or a switch) there
+  needs it set again in the settings view or `/config`. `texra init` no longer
+  asks for an approval policy or writes one.
 
-- **`web_fetch` no longer follows a redirect into your network.** It resolves
-  each host and refuses any address that is not public (loopback, private,
-  link-local, cloud metadata), and checks every redirect hop the same way;
+- **`web_fetch` no longer follows a redirect into your network.** The
+  connection itself refuses any address that is not public (loopback, private,
+  link-local, cloud metadata), for the first request and every redirect hop;
   before, a name that resolves to `127.0.0.1` (such as `localhost.`) or a
-  redirect from a public page to a private address was fetched.
+  redirect from a public page to a private address was fetched. Behind an
+  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
+  address is refused.
 
 ### Features
 

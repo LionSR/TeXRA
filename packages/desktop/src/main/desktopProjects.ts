@@ -51,6 +51,7 @@ import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
+import { showDesktopWarningDialog } from './platform/warningDialog.js';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export interface DesktopProject {
@@ -303,9 +304,10 @@ export function openDesktopProjectRegistry(
                   openRepoStateStore(root, storage).pipe(
                     Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
-                  openTexraWorkspaceConfigStores(storage, root, (message) =>
-                    console.warn(`[desktop] ${message}`),
-                  ),
+                  openTexraWorkspaceConfigStores(storage, root, (message) => {
+                    console.warn(`[desktop] ${message}`);
+                    void showDesktopWarningDialog(message);
+                  }),
                 ],
                 { concurrency: 'unbounded' },
               );
