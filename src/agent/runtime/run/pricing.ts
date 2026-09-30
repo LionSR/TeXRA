@@ -85,6 +85,7 @@ const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
 const OPENAI_LONG_CONTEXT_MODELS: ReadonlySet<string> = new Set([
   'gpt-6-astra',
   'gpt-6-sol',
+  'gpt-6.1-sol',
   'gpt-6-luna',
 ]);
 const OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS = 272_001;
