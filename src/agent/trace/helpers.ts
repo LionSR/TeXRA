@@ -25,6 +25,7 @@ import {
   type CompactionActivityOutcome,
   type ContextManagementData,
   type ErrorContext,
+  type ErrorLogData,
   type FileListEntry,
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
@@ -57,11 +58,12 @@ export function logSdkError(
   });
 }
 
-/** Emit an error log with a pre-serialized data payload. */
+/** Emit an error log row. A `ProviderError` does not fit `data`: its raw
+ *  body is rejected by the row schema, so pass its `RetryErrorInfo`. */
 export function logErrorData(
   trace: AgentTrace,
   message: string,
-  data: unknown,
+  data: ErrorLogData & { readonly rawErrorBody?: never },
   stageId?: string,
 ): void {
   trace.error(message, {

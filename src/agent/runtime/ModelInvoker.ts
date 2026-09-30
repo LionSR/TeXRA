@@ -104,7 +104,6 @@ import {
 } from './run/requestContext';
 import { dispatchFactsFor } from './run/tools';
 import {
-  redactedForFact,
   retryRow,
   retryRows,
   rowAggregate,
@@ -845,9 +844,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               type: 'request.opened',
               aggregateId,
               requestId,
-              // Committed here, not at the session's door (`openRequest`), so
-              // the door's `rawErrorBody` drop is here: no durable raw body.
-              payload: redactedForFact(payload),
+              payload,
               thread: null,
             },
             ...retryRows(runId, state, pendingRetry('waiting'), {

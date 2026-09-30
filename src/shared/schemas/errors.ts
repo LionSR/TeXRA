@@ -107,11 +107,6 @@ export const ErrorLogDataSchema = ProviderErrorObjectSchema.omit({
   .strict();
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
-/** Canonical provider error with all fields optional for event transport. */
-export const ProviderErrorPartialSchema =
-  ProviderErrorObjectSchema.partial().strict();
-export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
-
 /** Recover the actionable exhaustion reason from the canonical classification. */
 export function getExhaustionReason(
   errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
