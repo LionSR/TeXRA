@@ -458,7 +458,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           `${request.debugName}_response`,
           bound,
         );
-        const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
+        const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           turn,

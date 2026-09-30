@@ -97,8 +97,8 @@ catalogs:
       specifier: ^3.1.1
       version: 3.1.1
     llm-zoo:
-      specifier: ^1.40.1
-      version: 1.40.1
+      specifier: ^1.41.0
+      version: 1.41.0
     lru-cache:
       specifier: ^11.5.3
       version: 11.5.3
@@ -275,7 +275,7 @@ importers:
         version: 3.3.3
       llm-zoo:
         specifier: 'catalog:'
-        version: 1.40.1(zod@4.4.3)
+        version: 1.41.0(zod@4.4.3)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -543,7 +543,7 @@ importers:
         version: 3.1.1
       llm-zoo:
         specifier: 'catalog:'
-        version: 1.40.1(zod@4.4.3)
+        version: 1.41.0(zod@4.4.3)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -4246,8 +4246,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.40.1:
-    resolution: {integrity: sha512-ppUkkz/zVpsEglPoe3PHDHrFDAkfVCWpainfg+7nQJXrlcXvod/kbvCQc6cSIrYLcNipae13yPwh6RxE8nIBSQ==}
+  llm-zoo@1.41.0:
+    resolution: {integrity: sha512-KmbVUIb50nLm4KpdUzbXoDGiqo0TVbQkKUFE9epoPQ6aWjvtdvvbccWOkDx8ezfjJxgan/w/gbI7FKFKQEcf1w==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -9102,7 +9102,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.40.1(zod@4.4.3):
+  llm-zoo@1.41.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 

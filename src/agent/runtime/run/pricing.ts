@@ -4,9 +4,8 @@
  * `response` row beside the dispatch facts (D12), so a resumed run's cost is
  * the sum of its rows and nothing else.
  */
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { requestRates } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
 import type { NormalizedUsage } from '@shared/schemas';
 
 import type { TurnResult } from '@texra-ai/llm/turn';
@@ -26,169 +25,21 @@ const perMillion = (tokens: number, price: number): number =>
   (tokens * price) / 1e6;
 
 /**
- * xAI pricing the llm-zoo catalog cannot express: per-model long-context
- * tiers and the documented cached-token rate, keyed by catalog `fullName`.
- * Source: the models catalog embedded in docs.x.ai, verified 2026-08-14.
- * llm-zoo has no tier field (still true at 1.38.0), and before 1.37.0 its
- * xAI entries inherited the default `cacheDiscountFactor` of 1, which would
- * zero the cache rebate, so both live here until the catalog carries them
- * (#10073).
- * Rates are USD per 1M tokens.
- */
-type DocumentedTierPricing = Readonly<
-  Record<
-    string,
-    {
-      readonly thresholdTokens: number;
-      readonly inputPrice: number;
-      readonly outputPrice: number;
-      readonly cacheDiscountFactor: number;
-    }
-  >
->;
-
-const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
-  'grok-4.3': {
-    thresholdTokens: 200_000,
-    inputPrice: 2.5,
-    outputPrice: 5,
-    cacheDiscountFactor: 0.16,
-  },
-  'grok-4.5': {
-    thresholdTokens: 200_000,
-    inputPrice: 4,
-    outputPrice: 12,
-    cacheDiscountFactor: 0.15,
-  },
-  'grok-4.6': {
-    thresholdTokens: 200_000,
-    inputPrice: 4,
-    outputPrice: 12,
-    cacheDiscountFactor: 0.25,
-  },
-  'grok-4.7': {
-    thresholdTokens: 200_000,
-    inputPrice: 4,
-    outputPrice: 12,
-    cacheDiscountFactor: 0.25,
-  },
-};
-
-/**
- * OpenAI's long-context tier for the GPT-6 family, keyed by catalog
- * `fullName`: a prompt over 272K input tokens bills the whole request at 2x
- * input and cached input and 1.5x output (developers.openai.com pricing).
- * Cached input doubles with input, so the catalog's cache discount carries
- * over unchanged. The tier derives from the catalog rates, so a catalog price
- * change moves it too.
- */
-const OPENAI_LONG_CONTEXT_MODELS: ReadonlySet<string> = new Set([
-  'gpt-6-astra',
-  'gpt-6-sol',
-  'gpt-6.1-sol',
-  'gpt-6-luna',
-]);
-const OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS = 272_001;
-
-/** Lowest documented threshold; the drift tripwire's reference. */
-const LOWEST_XAI_THRESHOLD_TOKENS = Math.min(
-  ...Object.values(XAI_DOCUMENTED_PRICING).map(
-    (documented) => documented.thresholdTokens,
-  ),
-);
-
-/** Models already reported as missing a tier; the warning is once per model. */
-const xaiTierGapWarned = new Set<string>();
-
-/**
- * A live xAI model whose window reaches the lowest documented threshold but
- * which has no row above would silently bill flat rates, so it warns once.
- */
-function warnOnMissingXaiTier(
-  config: ModelConfig,
-  logger: Pick<AgentTrace, 'warn'>,
-): void {
-  if (
-    config.deprecated === true ||
-    config.retired === true ||
-    config.contextWindow < LOWEST_XAI_THRESHOLD_TOKENS ||
-    xaiTierGapWarned.has(config.fullName)
-  ) {
-    return;
-  }
-  xaiTierGapWarned.add(config.fullName);
-  logger.warn(
-    `xAI model ${config.fullName} has no documented long-context pricing ` +
-      'tier; billing flat catalog rates. If xAI publishes a tier for it, ' +
-      'add it to XAI_DOCUMENTED_PRICING in pricing.ts.',
-    {
-      data: {
-        fullName: config.fullName,
-        contextWindow: config.contextWindow,
-      },
-    },
-  );
-}
-
-/**
  * The rates for one turn. A plan route (ChatGPT/Codex, Grok, the GLM coding
  * plan, Kimi Code) is covered by the subscription, so every rate is zero and
- * the run records tokens without spend; an API-key route bills the registry's
- * rates for the bound model.
- *
- * xAI and OpenAI's GPT-6 family have rates that are not flat: once a
- * request's whole prompt — cached tokens included — reaches the model's
- * documented threshold, every token of that request bills at the tier, output
- * included, so the complete tuple switches and the rebate below follows it.
+ * the run records tokens without spend; an API-key route bills the catalog's
+ * rates for the bound model. A model with a documented long-context tier
+ * (OpenAI above 272K, xAI and Gemini Pro above 200K) bills the whole request
+ * at the tier once the prompt, cached tokens included, is above it; llm-zoo's
+ * `requestRates` owns that rule.
  */
 function turnRates(
   bound: BoundModel,
   plan: boolean,
   promptTokens: number,
-  logger: Pick<AgentTrace, 'warn'>,
 ): TurnRates {
-  const { config } = bound;
   if (plan) return { inputPrice: 0, outputPrice: 0, cacheDiscountFactor: 1 };
-  const base = {
-    inputPrice: config.inputPrice,
-    outputPrice: config.outputPrice,
-    cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
-  };
-  if (config.provider === ModelProvider.OPENAI)
-    return OPENAI_LONG_CONTEXT_MODELS.has(config.fullName) &&
-      promptTokens >= OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS
-      ? {
-          ...base,
-          inputPrice: base.inputPrice * 2,
-          outputPrice: base.outputPrice * 1.5,
-        }
-      : base;
-  if (config.provider !== ModelProvider.XAI) return base;
-  const documented = XAI_DOCUMENTED_PRICING[config.fullName];
-  if (documented === undefined) {
-    warnOnMissingXaiTier(config, logger);
-    return base;
-  }
-  return tieredRates(base, documented, promptTokens);
-}
-
-/**
- * The documented tier's full tuple once the prompt reaches its threshold;
- * below it, the catalog rates with the documented cache discount.
- */
-function tieredRates(
-  base: TurnRates,
-  documented: DocumentedTierPricing[string],
-  promptTokens: number,
-): TurnRates {
-  const { cacheDiscountFactor } = documented;
-  return promptTokens >= documented.thresholdTokens
-    ? {
-        inputPrice: documented.inputPrice,
-        outputPrice: documented.outputPrice,
-        cacheDiscountFactor,
-      }
-    : { ...base, cacheDiscountFactor };
+  return requestRates(bound.config, promptTokens);
 }
 
 /**
@@ -262,7 +113,6 @@ export function priceTurnUsage(
   bound: BoundModel,
   usage: TurnResult['usage'],
   responseTimeMs: number,
-  logger: Pick<AgentTrace, 'warn'>,
 ): NormalizedUsage | null {
   if (usage === null) return null;
   const provider = usage.providerUsage;
@@ -271,7 +121,7 @@ export function priceTurnUsage(
   const cached = usage.cachedInputTokens ?? undefined;
   const reasoning = usage.reasoningTokens ?? undefined;
   const plan = bound.usageRoute !== 'api-key';
-  const rates = turnRates(bound, plan, inputTokens, logger);
+  const rates = turnRates(bound, plan, inputTokens);
   let cost: number;
   let cacheCreationTokens: number | undefined;
   let toolUsePromptTokens: number | undefined;
