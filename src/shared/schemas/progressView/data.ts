@@ -68,7 +68,6 @@ export const ToolUseLogSchema = z.object({
   toolName: z.string().optional(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
-  spillPath: z.string().optional(),
   summary: z.string().optional(),
   error: z.string().optional(),
   userInstruction: z.string().optional(),

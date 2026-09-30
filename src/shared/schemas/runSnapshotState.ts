@@ -57,8 +57,6 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
   reasoningTokens: TokenCountSchema.optional(),
   /** Tokens consumed by tool use prompts (Google) */
   toolUsePromptTokens: TokenCountSchema.optional(),
-  /** Number of server-side tool executions (Anthropic web search) */
-  serverToolRequests: TokenCountSchema.optional(),
   /** Canonical route used for usage display and telemetry. */
   usageRoute: UsageRouteSchema.optional(),
   /** The route's subscription plan, when it names one; display-only. */
@@ -96,8 +94,6 @@ export function addTurnUsage(
       totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
     totalToolUsePromptTokens:
       totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
-    totalServerToolRequests:
-      totals.totalServerToolRequests + (usage.serverToolRequests ?? 0),
   };
 }
 
