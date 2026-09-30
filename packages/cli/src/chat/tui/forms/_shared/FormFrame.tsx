@@ -11,9 +11,9 @@ import {
 } from '@cli/tui/ui/BorderedPanel';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import { clamp } from '@utils/core';
 
-const FORM_FRAME_MAX_WIDTH = 80;
+// Before Ink reports a size (a non-TTY render), frame at a classic 80 columns.
+const FORM_FRAME_FALLBACK_WIDTH = 80;
 
 interface FormFrameProps {
   /** Border/title color. Defaults to the palette's informational hint —
@@ -29,12 +29,11 @@ interface FormFrameProps {
   readonly showCloseHint?: boolean;
 }
 
+/** Forms span the terminal's full width, like the readers and modals. */
 function formFrameWidth(columns: number | undefined): number {
-  const normalized =
-    columns != null && Number.isFinite(columns) && columns > 0
-      ? Math.floor(columns)
-      : FORM_FRAME_MAX_WIDTH;
-  return clamp(normalized, 1, FORM_FRAME_MAX_WIDTH);
+  return columns != null && Number.isFinite(columns) && columns > 0
+    ? Math.floor(columns)
+    : FORM_FRAME_FALLBACK_WIDTH;
 }
 
 /** Width a form frame's body paints at, inside the border. */

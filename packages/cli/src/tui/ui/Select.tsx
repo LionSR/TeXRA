@@ -9,7 +9,7 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 // Third-party imports
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared utilities
@@ -24,8 +24,6 @@ import { clamp, clampIndex } from '@utils/core';
 // Local imports - TUI input and presentation
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
-
-const SELECT_LABEL_MAX_COLS = 24;
 
 export interface SelectItem<T> {
   readonly value: T;
@@ -273,6 +271,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
   const [highlight, setHighlight] = useState(initial);
   const highlightRef = useRef(initial);
+  const { columns } = useWindowSize();
+  // A label takes 40% of the row, never under 24 columns; the rest is its
+  // description.
+  const labelMaxCols = Math.max(24, Math.floor((columns || 0) * 0.4));
   // Drop input after cancel until React commits the resulting transition. A
   // parent may reuse this Select instance for the destination screen, so the
   // guard must not remain latched across renders.
@@ -458,7 +460,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 </Box>
                 <Box
                   flexShrink={0}
-                  maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
+                  maxWidth={props.labelMaxCols ?? labelMaxCols}
                 >
                   <Text
                     color={focusColor}

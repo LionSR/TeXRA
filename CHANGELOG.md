@@ -1003,6 +1003,11 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **`/` forms span the full terminal width** — `/login`, `/config`, `/agent`
+  and the other slash-command panels were capped at 80 columns and cut their
+  option labels off at 24 ("Prefer ChatGPT subscrip…"). They now fill the
+  terminal like the readers and approval cards, and a label may take up to
+  40% of the row before it is truncated.
 - **No more `DEBUG Runtime event:` lines on stderr** — a run in text
   mode printed `DEBUG Runtime event: requestOpenFile` (and the same for
   `requestEnsureProgressView`) for events that render nothing.
