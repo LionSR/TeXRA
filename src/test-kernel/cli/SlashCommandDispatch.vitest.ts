@@ -387,7 +387,7 @@ describe('handleTuiSlashCommand', () => {
         expect(localEntryPairs()).toEqual([
           { kind: 'user', text: '/unavailable' },
           {
-            kind: 'assistant',
+            kind: 'error',
             text: '/unavailable is registered but is not available in this CLI view yet.',
           },
         ]);
@@ -685,7 +685,8 @@ describe('handleTuiSlashCommand', () => {
         expect(entry).toContain(
           'ChatGPT subscription disabled for Codex models.',
         );
-        expect(entry).not.toContain('\n');
+        // One fact per line, not a single ' · '-joined sentence.
+        expect(entry?.split('\n').length).toBeGreaterThan(2);
       }),
   );
 

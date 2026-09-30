@@ -10,7 +10,6 @@ import type { ApiProvider } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,
@@ -63,7 +62,7 @@ export const applyCliModelAccessSelection = Effect.fn(
     { writeProgress: output.writeProgress },
   );
   bumpCodexPreferenceVersion();
-  output.appendOutcome(collapseWhitespace(access.message));
+  output.appendOutcome(access.message);
 });
 
 /** `/login status`: every sign-in, route preference, and quota in one list. */

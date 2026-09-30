@@ -39,7 +39,6 @@ import {
   RESEARCHER_ACCESS_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -99,7 +98,8 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
   output: SlashCommandOutput,
 ) {
   const accountWarning = githubSelectAccountWarning(args);
-  if (accountWarning) output.writeProgress(accountWarning);
+  if (accountWarning)
+    output.writeProgress(accountWarning, { persistent: true });
 
   const session = args.device
     ? yield* signInCliSupabaseDeviceCode({
@@ -227,5 +227,5 @@ export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
   const lines = yield* logoutLines(target, stores, secrets);
-  output.appendOutcome(collapseWhitespace(lines.join(' · ')));
+  output.appendOutcome(lines.join('\n'));
 });

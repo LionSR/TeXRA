@@ -37,7 +37,7 @@ import {
   setCliSessionModelOverride,
 } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
-import { appendLocalAssistantTranscript } from '../state/transcript';
+import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
@@ -223,7 +223,7 @@ export function registerBuiltinSlashCommands(options: {
                 return Effect.sync(() => {
                   const enabled = !goalAutoApproveAll.get();
                   goalAutoApproveAll.set(enabled);
-                  appendLocalAssistantTranscript(
+                  appendLocalNotice(
                     `Goal mode approves all work: ${enabled ? 'on' : 'off'}`,
                   );
                 });
@@ -385,7 +385,7 @@ export function registerBuiltinSlashCommands(options: {
           name: 'help',
           description: 'Show available slash commands',
           category: 'session',
-          echo: 'never',
+          echo: 'ifPersists',
           handler: () => Effect.sync(showCliSlashCommandHelp),
         },
         {
@@ -499,7 +499,7 @@ export function registerBuiltinSlashCommands(options: {
           name: 'memory',
           description: 'List stored memories',
           category: 'configuration',
-          echo: 'never',
+          echo: 'ifPersists',
           handler: (remainder) =>
             Effect.suspend(() => {
               const roots = options.runtimeSession.roots;
