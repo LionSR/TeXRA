@@ -387,6 +387,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A history file cut short no longer stops TeXRA from opening the
+  workspace.** A session store truncated inside its first page (a copy that
+  stopped part way) failed every open as "database disk image is
+  malformed"; it is now moved aside to `texra.db.corrupt-<time>`, as a file
+  that is not a database at all already was, and a fresh store opens.
 - **Long prompts are priced at the provider's long-context rate.** OpenAI's
   1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
   bill a whole request at 2x input and 1.5x output once the prompt passes

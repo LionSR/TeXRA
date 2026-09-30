@@ -1,0 +1,8 @@
+name: golden_park
+description: The golden store's parked run, killed at an open model call.
+settings:
+  agentCategory: toolUse
+  tools: []
+prompts:
+  systemPrompt: 'GOLDEN-PARK: wait for release.'
+  userRequest: '{{ INSTRUCTION }}'

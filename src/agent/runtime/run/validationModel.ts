@@ -19,7 +19,7 @@
  * workflow-script switch) go through the ambient Effect `ConfigProvider`
  * (`envVar`), read when the program runs, never at module load.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { Effect, Stream } from 'effect';
@@ -66,6 +66,108 @@ const results = yield* all([
   attempt(agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema })),
 ])
 return { solutions: results.map((result) => result._tag === 'Success' ? result.value.structured : null) }`;
+
+/** The golden store's workflow script: one attempt of one agent, so its
+ *  child runs alone and its rows commit in one order. */
+const GOLDEN_WORKFLOW_SOURCE = `export const meta = {
+  name: 'golden-workflow',
+  description: 'One child through the workflow runner',
+  phases: [{ title: 'Solve' }],
+  tasks: [{ id: 'child', label: 'Answer the child task', phase: 'Solve' }],
+}
+phase('Solve')
+const schema = { type: 'object', additionalProperties: false, required: ['answer'], properties: { answer: { type: 'string' } } }
+const result = yield* attempt(agent('Answer the workflow child task.', { id: 'child', agentName: 'golden_child', schema }))
+return { outcome: result._tag }`;
+
+/**
+ * The scripted conversation of the golden 1.0 store
+ * (`packages/cli/scripts/generate-golden-store.mjs`): each agent's system
+ * prompt names its part, and a part's step is the count of tool results its
+ * history holds. The parked part's call is held until `golden-park.release`
+ * exists beside the flag file: the generator kills the process holding it
+ * instead, and the conformance suite creates the file before it resumes
+ * the run.
+ */
+function goldenTurn(
+  turn: ResolvedTurn,
+  flagPath: string,
+  call: (name: string, input: unknown) => TurnResult['content'][number],
+): Effect.Effect<TurnResult['content'] | null> {
+  const text = (value: string): TurnResult['content'] => [
+    { kind: 'message', content: [{ kind: 'text', text: value }] },
+  ];
+  const gate = (name: string) =>
+    Effect.gen(function* () {
+      const file = path.join(path.dirname(flagPath), name);
+      while (!existsSync(file)) yield* Effect.sleep('20 millis');
+    });
+  const system = turn.system ?? '';
+  const tools = new Set(turn.tools.map((tool) => tool.name));
+  const results = turn.messages.filter((m) => m.role === 'tool');
+  const said = JSON.stringify(turn.messages);
+  if (system.includes('GOLDEN-PARK'))
+    return gate('golden-park.release').pipe(
+      Effect.as(text('Parked run released.')),
+    );
+  if (system.includes('GOLDEN-CHILD')) {
+    if (tools.has('submit_output'))
+      return Effect.succeed(
+        results.length === 0
+          ? [call('submit_output', { answer: 'Workflow child answer.' })]
+          : text('Workflow child done.'),
+      );
+    // The delegated child looks its parent up and messages it while the
+    // parent waits on the delegation: a follow-up queued on a live run.
+    if (!said.includes('Answer the delegated child task'))
+      return Effect.succeed(text('Child result.'));
+    if (results.length === 0)
+      return Effect.succeed([
+        call('executions', {
+          path: '/executions',
+          action: 'query',
+          sql: "SELECT id FROM runs WHERE name = 'golden_parent'",
+        }),
+      ]);
+    const page = results[0]?.results
+      .flatMap((result) => result.content)
+      .map((part) => (part.kind === 'text' ? part.text : ''))
+      .join('\n');
+    const parent = /^([0-9a-f]{12})$/m.exec(page ?? '')?.[1];
+    return Effect.succeed(
+      results.length === 1 && parent !== undefined
+        ? [
+            call('executions', {
+              path: `/executions/${parent}`,
+              action: 'send',
+              message: 'The delegated child has a note for its parent.',
+            }),
+          ]
+        : text('Child result.'),
+    );
+  }
+  if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
+  const steps = [
+    () => call('read_file', { path: 'notes.tex' }),
+    () =>
+      call('plan', {
+        command: 'update',
+        objective: 'Read the notes, run the workflow, and ask a child.',
+      }),
+    () =>
+      call('delegate_multi_agents', {
+        agent: 'correct',
+        script: GOLDEN_WORKFLOW_SOURCE,
+      }),
+    () =>
+      call('delegate_agent', {
+        agent: 'golden_child',
+        instruction: 'Answer the delegated child task.',
+      }),
+  ];
+  const step = steps[results.length];
+  return Effect.succeed(step === undefined ? text('Parent done.') : [step()]);
+}
 
 function mathematicalValidationOutput(prompt: string): {
   answer: string;
@@ -156,25 +258,27 @@ export function validationModel(config: ModelConfig): {
     },
   });
   let responses = 0;
+  const call = (name: string, input: unknown) =>
+    ({
+      kind: 'local-call',
+      providerCallId: `validation-${name}-${responses}`,
+      name,
+      argumentsText: JSON.stringify(input),
+    }) as const;
   const complete = (
     turn: ResolvedTurn,
     workflowScript: boolean,
     historyQuery: boolean,
+    golden: TurnResult['content'] | null,
   ): TurnResult => {
-    responses += 1;
     const toolNames = new Set(turn.tools.map((tool) => tool.name));
     const hasToolResult = turn.messages.some(
       (message) => message.role === 'tool',
     );
-    const call = (name: string, input: unknown) =>
-      ({
-        kind: 'local-call',
-        providerCallId: `validation-${name}-${responses}`,
-        name,
-        argumentsText: JSON.stringify(input),
-      }) as const;
     let content: TurnResult['content'];
-    if (workflowScript && toolNames.has('submit_output')) {
+    if (golden !== null) {
+      content = golden;
+    } else if (workflowScript && toolNames.has('submit_output')) {
       content = [
         call(
           'submit_output',
@@ -273,14 +377,26 @@ export function validationModel(config: ModelConfig): {
   // them between turns.
   const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.fromEffect(
-      Effect.all([
-        envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'),
-        envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
-      ]).pipe(
-        Effect.map(([workflowScript, historyQuery]) =>
-          complete(turn, workflowScript === '1', historyQuery === '1'),
-        ),
-      ),
+      Effect.gen(function* () {
+        responses += 1;
+        const [workflowScript, historyQuery, golden, flagPath] =
+          yield* Effect.all([
+            envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'),
+            envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
+            envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
+            envVar(
+              process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '',
+            ),
+          ]);
+        return complete(
+          turn,
+          workflowScript === '1',
+          historyQuery === '1',
+          golden === '1' && flagPath
+            ? yield* goldenTurn(turn, flagPath, call)
+            : null,
+        );
+      }),
     ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
   return { origin, model: { prepareTurn, streamTurn } };
 }

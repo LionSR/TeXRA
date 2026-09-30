@@ -13,7 +13,7 @@
  *
  * This module knows no row kind and no payload field.
  */
-import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
+import { Cause, Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
@@ -385,11 +385,19 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
         ),
       ),
     );
-  // A file the probe cannot open (none yet) is the store's open to create.
+  // A file the probe cannot open (none yet) is the store's open to create,
+  // and one whose first read SQLite reports damaged (a store cut short
+  // inside its first page) is the attempt's below to move aside.
   if (mode === 'persistent')
     yield* Effect.scoped(
       Effect.flatMap(probe, (sql) => refuseUnowned(sql, path)),
-    ).pipe(Effect.catchDefect(() => Effect.void));
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasDies(cause) || isDamaged(cause)
+          ? Effect.void
+          : Effect.failCause(cause),
+      ),
+    );
   const outer = yield* Effect.scope;
   const first = yield* Scope.fork(outer, 'sequential');
   const attempt = yield* connect.pipe(
