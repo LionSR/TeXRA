@@ -7,8 +7,7 @@
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
- * The transcript fold maps every domain `key` here onto a TeXRA
- * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
+ * The transcript fold renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
 // Third-party imports
@@ -29,7 +28,6 @@ import {
   type FileListEntry,
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
-  toJsonValue,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -160,7 +158,7 @@ export function logUserMessage(
   });
 }
 
-// ─── Domain events ──────────────────────────────────────────────────────
+// ─── Category rows ──────────────────────────────────────────────────────
 
 /**
  * Emit a context-management event. Its producers (the output-budget clamp in
@@ -174,7 +172,11 @@ export function logContextManagementEvent(
   data?: ContextManagementData,
   stageId?: string,
 ): void {
-  trace.emit({ type: 'domain', key: 'contextManagement', text, data, stageId });
+  trace.info(text, {
+    messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+    data,
+    stageId,
+  });
 }
 
 export function logWebSearch(
@@ -182,26 +184,18 @@ export function logWebSearch(
   data: unknown,
   stageId?: string,
 ): void {
-  trace.emit({
-    type: 'domain',
-    key: 'webSearch',
-    data: toJsonValue(data),
-    stageId,
-  });
+  trace.info('', { messageType: MESSAGE_TYPES.WEB_SEARCH, data, stageId });
 }
 
 /** Files-loaded card with full {@link FileListEntry} entries. */
 export function logFilesLoaded(
   trace: AgentTrace,
-  category: string,
   entries: readonly FileListEntry[],
   stageId?: string,
 ): void {
-  trace.emit({
-    type: 'domain',
-    key: 'filesLoaded',
-    data: toJsonValue({ category, entries }),
-    text: category,
+  trace.info('', {
+    messageType: MESSAGE_TYPES.FILE_LIST,
+    data: entries,
     stageId,
   });
 }
@@ -223,5 +217,5 @@ export function logFileCategory(
     source: category,
     sourceDisplay: category,
   }));
-  logFilesLoaded(trace, category, entries, stageId);
+  logFilesLoaded(trace, entries, stageId);
 }

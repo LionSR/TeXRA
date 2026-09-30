@@ -115,11 +115,6 @@ export function applyCompactionActivityEvent(
   if (event.type === 'tool.start' || event.type === 'tool.end') {
     return interruptRunningBlocks(projection, position, at);
   }
-  if (event.type === 'domain') {
-    return event.key === 'contextManagement'
-      ? applyFreed(projection, event.data)
-      : [];
-  }
   if (event.type !== 'log') return [];
   switch (event.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE:

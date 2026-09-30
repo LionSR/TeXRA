@@ -418,7 +418,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
           readCompletedRunConversation(PARENT_RUN_ID, session),
         );
         expect(
-          transcript.conversation?.filter(
+          transcript.filter(
             (row) =>
               row.kind === 'assistant-text' &&
               row.text !== 'Parent noted progress.',
@@ -712,7 +712,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           runId,
           session,
         );
-        expect(archivedChild.conversation).toEqual([
+        expect(archivedChild).toEqual([
           expect.objectContaining({ kind: 'user-message' }),
           { kind: 'assistant-text', text: 'Result A.' },
           {
@@ -731,10 +731,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           session,
         );
-        const parentText = JSON.stringify(archivedParent.conversation);
+        const parentText = JSON.stringify(archivedParent);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
         expect(parentText.match(/Result B\./g)).toHaveLength(1);
-        expect(archivedParent.conversation).toEqual(
+        expect(archivedParent).toEqual(
           expect.arrayContaining([
             { kind: 'assistant-text', text: 'Parent received result A.' },
             { kind: 'assistant-text', text: 'Parent received result B.' },
@@ -749,9 +749,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           session,
         );
-        expect(
-          JSON.stringify(afterStop.conversation).match(/Result B\./g),
-        ).toHaveLength(1);
+        expect(JSON.stringify(afterStop).match(/Result B\./g)).toHaveLength(1);
         childTurns.push({ text: 'Recovered result C.' });
         parentTurns.push({ text: 'Parent received recovered result C.' });
         yield* queueRecovery(runId, 'Continue after restart.');
@@ -892,7 +890,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           session,
         );
         // Turn 2 added the user instruction but no new assistant row.
-        expect(archivedChild.conversation).toEqual([
+        expect(archivedChild).toEqual([
           expect.objectContaining({ kind: 'user-message' }),
           { kind: 'assistant-text', text: 'Result A.' },
           {
@@ -910,7 +908,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           session,
         );
-        const parentText = JSON.stringify(archivedParent.conversation);
+        const parentText = JSON.stringify(archivedParent);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
         expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
@@ -974,7 +972,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               const archived = await Effect.runPromise(
                 readCompletedRunConversation(runId, session),
               );
-              const nodes = archived.conversation ?? [];
+              const nodes = archived;
               const text = JSON.stringify(nodes);
               expect(text).toContain('second assertion');
               expect(text).toContain('third assertion');
@@ -1012,7 +1010,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           session,
         );
-        const parentText = JSON.stringify(archivedParent.conversation);
+        const parentText = JSON.stringify(archivedParent);
         for (const result of results) {
           expect(childText.split(result)).toHaveLength(2);
           expect(parentText.split(result)).toHaveLength(2);
@@ -1077,8 +1075,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         }
         yield* session.settlePublications();
         const afterReplay = JSON.stringify(
-          (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
-            .conversation,
+          yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
         expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
         expect(resumedRuns).toEqual([]);
@@ -1096,8 +1093,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(2);
         yield* session.settlePublications();
         const afterDistinct = JSON.stringify(
-          (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
-            .conversation,
+          yield* readCompletedRunConversation(PARENT_RUN_ID, session),
         );
         expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
         expect(resumedRuns).toEqual([]);
@@ -1330,7 +1326,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               const transcript = await Effect.runPromise(
                 readCompletedRunConversation(PARENT_RUN_ID, session),
               );
-              expect(transcript.conversation).toContainEqual({
+              expect(transcript).toContainEqual({
                 kind: 'assistant-text',
                 text: 'Parent received the workflow result.',
               });

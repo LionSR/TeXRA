@@ -39,10 +39,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
-import {
-  hasCompletedRunConversationEvidence,
-  readCompletedRunConversation,
-} from '@transcript';
+import { readCompletedRunConversation } from '@transcript';
 import { assertNever, unique } from '@utils/core';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
@@ -551,19 +548,15 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     limit: number,
   ) {
     const records = getRunRecords(context.session, runId);
-    const conversationResult = yield* readCompletedRunConversation(
+    const conversation = yield* readCompletedRunConversation(
       runId,
       context.session,
     ).pipe(Effect.orDie);
-    const { conversation } = conversationResult;
 
-    if (!conversation) {
+    if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
       // the run's aggregate.
-      const exists =
-        (yield* records.exists()) ||
-        hasCompletedRunConversationEvidence(conversationResult);
-      if (!exists) {
+      if (!(yield* records.exists())) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
       }
       return executed(

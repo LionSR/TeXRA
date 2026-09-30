@@ -80,7 +80,7 @@ vi.mock('@transcript', async () => {
                 typeof actual.readCompletedRunConversation
               >),
             )
-          : { conversation };
+          : conversation;
       }),
     ),
   };

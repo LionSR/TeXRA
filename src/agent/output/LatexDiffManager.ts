@@ -9,6 +9,7 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  MESSAGE_TYPES,
   fileLocationDisplayPath,
   type DiffResult,
   type RunId,
@@ -279,10 +280,8 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.emit({
-          type: 'domain',
-          key: 'latexdiff',
-          text: `Latexdiff results: ${aggregated.length}`,
+        this.logger.info(`Latexdiff results: ${aggregated.length}`, {
+          messageType: MESSAGE_TYPES.LATEXDIFF,
           data: aggregated,
         });
       } else {

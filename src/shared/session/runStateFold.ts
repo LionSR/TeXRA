@@ -234,7 +234,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'context.state': true,
   'stream.start': true,
   'response.finalized': true,
-  domain: true,
   'run.report': true,
   'run.result': true,
   'followup.closed': true,

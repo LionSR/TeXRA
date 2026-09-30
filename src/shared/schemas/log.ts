@@ -29,7 +29,7 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-const MessageTypeSchema = z.enum(MESSAGE_TYPES);
+export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 

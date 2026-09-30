@@ -71,7 +71,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'stream.start': V1,
   'stream.end': V1,
   'response.finalized': V1,
-  domain: V1,
   'run.report': V1,
   'run.result': V1,
   'followup.closed': V1,

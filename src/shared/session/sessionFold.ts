@@ -940,7 +940,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
-    case 'domain':
     case 'run.start':
     case 'approval.policy':
     case 'inquiryThreadUpdated':
