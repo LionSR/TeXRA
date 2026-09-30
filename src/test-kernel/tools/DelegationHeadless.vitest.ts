@@ -160,7 +160,10 @@ function parentRunContext(
     run: {
       runId: overrides.runId ?? PARENT_RUN_ID,
       session,
-      config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'deepseek/deepseek-v4-flash',
+      }),
       toolPolicy: {
         stopAfterCycle,
         approvalPromptsUnavailable:
@@ -271,7 +274,7 @@ function delegationOptions(
     configPayload: {
       agent: 'review',
       agentCategory: AgentCategory.ToolUse,
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
     },
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
@@ -495,7 +498,7 @@ describe('headless delegation', () => {
     mocks.readModelAvailabilityInputs.mockReturnValue(
       Effect.succeed([
         {
-          value: 'deepseekT',
+          value: 'deepseek/deepseek-v4-flash',
           label: 'DeepSeek',
           availability: 'provider-key',
         },
@@ -544,7 +547,7 @@ describe('headless delegation', () => {
             agent: 'review',
             agentSource: 'plugin',
             agentCategory: AgentCategory.Workflow,
-            model: 'deepseekT',
+            model: 'deepseek/deepseek-v4-flash',
           },
         });
         const prepared = options;
@@ -615,7 +618,7 @@ describe('headless delegation', () => {
             agent: 'review',
             agentCategory: AgentCategory.ToolUse,
             instruction: expect.stringContaining('Check the proof.'),
-            model: 'deepseekT',
+            model: 'deepseek/deepseek-v4-flash',
           }),
         }),
         expect.any(String),
@@ -1061,17 +1064,17 @@ describe('headless delegation', () => {
     'rejects an approved model override unavailable in the active API mode',
     () =>
       Effect.gen(function* () {
-        // Only deepseekT is available (see beforeEach); gpt5 is not, so the
+        // Only DeepSeek V4 Flash is available (see beforeEach); GPT-5 is not, so the
         // override must be rejected synchronously, mirroring the initial delegate
         // path's availability gate.
         const result = yield* delegateWithProposalDecision({
           action: 'approve',
-          model: 'gpt5',
+          model: 'openai/gpt-5-2025-08-07',
         });
 
         expect(result.status).toBe('error');
         expect(result.summary).toBe(
-          "Approved model override 'gpt5' is not available",
+          "Approved model override 'openai/gpt-5-2025-08-07' is not available",
         );
         expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),

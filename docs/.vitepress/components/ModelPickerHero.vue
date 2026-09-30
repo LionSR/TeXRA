@@ -7,15 +7,16 @@
 import StatusPill from './StatusPill.vue';
 
 const items = [
-  { id: 'opus55', thinking: true },
+  { id: 'anthropic/claude-opus-5-5', thinking: true },
   {
-    id: 'sonnet55',
+    id: 'anthropic/claude-sonnet-5-5',
     thinking: true,
     hovered: true,
-    tip: { context: '1M', input: '$2', output: '$10', mode: 'Thinking' },
+    tip: { context: '1M', input: '$3', output: '$15', mode: 'Thinking' },
   },
-  { id: 'haiku45T', thinking: true },
-  { id: 'haiku45', thinking: false },
+  { id: 'anthropic/claude-sonnet-5-5@none', thinking: false },
+  { id: 'anthropic/claude-haiku-4-5-20251001', thinking: true },
+  { id: 'anthropic/claude-haiku-4-5-20251001@none', thinking: false },
 ];
 </script>
 
@@ -24,7 +25,7 @@ const items = [
     <span class="mp-label">Model</span>
     <div class="mp-control">
       <wa-icon class="mp-cv-ic" library="texra" name="cpu"></wa-icon>
-      <span class="mp-value">sonnet55</span>
+      <span class="mp-value">sonnet5T</span>
       <wa-icon class="mp-caret" library="texra" name="chevron-down"></wa-icon>
     </div>
     <div class="mp-menu">

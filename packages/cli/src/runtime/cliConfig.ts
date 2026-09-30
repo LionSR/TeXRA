@@ -3,7 +3,12 @@ import path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  formatModelRef,
+  parseModelRef,
+} from 'llm-zoo';
 
 // Local imports - platform
 import {
@@ -21,6 +26,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
+import { modelConfig } from '@shared/model/modelSelection';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
@@ -50,7 +56,7 @@ import { isObject } from '@utils/core';
  * `texra.chat.model` / `texra.run.model` rows all outrank it, and a model this
  * machine cannot run falls back to an available one with a notice.
  */
-export const CLI_CHEAP_START_MODEL = 'deepseekproT';
+export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
 /** The `texra.*` command sections whose members are `agent` and `model`. */
 const COMMAND_ROLES = ['chat', 'run'] as const;
@@ -69,7 +75,7 @@ export interface CliCommandDefaults {
 }
 
 export function isCliSupportedModelId(model: string): boolean {
-  const config = MODEL_CONFIGS[model];
+  const config = modelConfig(model);
   return config != null && config.provider !== ModelProvider.COPILOT;
 }
 
@@ -85,16 +91,26 @@ function normalizeCliModelLookupKey(value: string): string {
 }
 
 function modelLookupKeys(id: string): string[] {
-  const config = MODEL_CONFIGS[id];
-  return [id, config?.name, config?.fullName, config?.label].filter(
+  const config = modelConfig(id);
+  return [id, config?.id, config?.label].filter(
     (value): value is string => typeof value === 'string' && value.length > 0,
   );
 }
 
+/**
+ * The model string a CLI argument names: a model reference with optional
+ * `@effort`/`+pro` as given, an llm-zoo 1.x key as the reference it stands
+ * for, or an unambiguous spelling of a model's API id or label
+ * (`grok-4.7`, `Opus 5.5`).
+ */
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  if (isCliSupportedModelId(trimmed)) return trimmed;
+  const selection = parseModelRef(trimmed);
+  if (selection && isCliSupportedModelId(selection.ref)) {
+    // `thinking: false` has no string form, so such a 1.x key stays as typed.
+    return selection.thinking === false ? trimmed : formatModelRef(selection);
+  }
 
   const lower = trimmed.toLowerCase();
   const ids = knownCliModelIds();

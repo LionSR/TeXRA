@@ -27,14 +27,14 @@ type SubscriptionsTabElement = HTMLElement & {
 // Copilot routes are keyed by the canonical base model id (#9635); the
 // section renders route status, never picker rows of its own.
 const consentRoute: CopilotRouteInfo = {
-  name: 'sonnet46',
+  name: 'anthropic/claude-sonnet-4-6@none',
   label: 'Claude Sonnet 4.6',
   access: 'consent-required',
   preferred: false,
 };
 
 const allowedRoute: CopilotRouteInfo = {
-  name: 'gpt55',
+  name: 'openai/gpt-5.5-2026-04-23',
   label: 'GPT-5.5',
   access: 'allowed',
   preferred: false,
@@ -75,7 +75,10 @@ describe('Copilot model access settings', () => {
 
     section?.querySelector<HTMLElement>('wa-button')?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
+      [
+        SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+        { modelName: 'anthropic/claude-sonnet-4-6@none' },
+      ],
     ]);
   });
 
@@ -91,7 +94,10 @@ describe('Copilot model access settings', () => {
 
     button?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE, { modelName: 'gpt55' }],
+      [
+        SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
+        { modelName: 'openai/gpt-5.5-2026-04-23' },
+      ],
     ]);
   });
 

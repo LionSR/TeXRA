@@ -30,7 +30,7 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 const selectCliRunnableModelMock = vi.mocked(selectCliRunnableModel);
 
-const KNOWN_MODEL = 'gpt5';
+const KNOWN_MODEL = 'openai/gpt-5-2025-08-07';
 const OTHER_MODEL = 'claudeSonnet';
 
 function makeContext(partial: Partial<CliContext> = {}): CliContext {
@@ -77,7 +77,7 @@ describe('selectCliRunModel precedence', () => {
   });
 
   it('passes the full run-model candidate list to model access', async () => {
-    await withRunModel('deepseekR');
+    await withRunModel('deepseek/deepseek-reasoner');
     const stores = storesOf();
     const context = makeContext({ envModel: OTHER_MODEL });
 
@@ -87,7 +87,7 @@ describe('selectCliRunModel precedence', () => {
       [
         { model: KNOWN_MODEL, reason: 'explicit-override' },
         { model: OTHER_MODEL, reason: 'environment' },
-        { model: 'deepseekR', reason: 'command-config' },
+        { model: 'deepseek/deepseek-reasoner', reason: 'command-config' },
         { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
       ],
       { stores },
@@ -95,23 +95,23 @@ describe('selectCliRunModel precedence', () => {
   });
 
   it('does not fall back from an explicit unavailable model', async () => {
-    await withRunModel('deepseekT');
+    await withRunModel('deepseek/deepseek-v4-flash');
     const stores = storesOf();
     const context = makeContext();
     selectCliRunnableModelMock.mockReturnValueOnce(
       Effect.fail(
         new Error(
-          'Model "opus48T" is not available (missing key). Available models: deepseekT.',
+          'Model "anthropic/claude-opus-4-8" is not available (missing key). Available models: deepseek/deepseek-v4-flash.',
         ),
       ),
     );
 
-    await expect(runSelect(context, 'opus48T', 'run', stores)).rejects.toThrow(
-      CliUsageError,
-    );
+    await expect(
+      runSelect(context, 'anthropic/claude-opus-4-8', 'run', stores),
+    ).rejects.toThrow(CliUsageError);
     expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
       expect.arrayContaining([
-        { model: 'opus48T', reason: 'explicit-override' },
+        { model: 'anthropic/claude-opus-4-8', reason: 'explicit-override' },
       ]),
       { stores },
     );

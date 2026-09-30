@@ -218,9 +218,10 @@ describe('claude_agent tool launch and resume fallback', () => {
           prompt: 'start Claude',
           logger: createFakeAgentCliChildRun(childRunId).logger,
           signal,
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5-5',
           permissionMode: 'acceptEdits',
           effort: 'high',
+          thinking: { type: 'adaptive' },
           cwd: undefined,
           additionalDirectories: undefined,
           env: {},
@@ -322,6 +323,80 @@ describe('claude_agent tool launch and resume fallback', () => {
           }),
         ),
       ),
+  );
+
+  it.live(
+    'sends the selected model id, its effort and adaptive thinking to the SDK',
+    () =>
+      Effect.gen(function* () {
+        mocks.query.mockReturnValue(
+          (async function* () {
+            yield {
+              type: 'result',
+              subtype: 'success',
+              session_id: 'model-session',
+              result: 'Done.',
+              modelUsage: {},
+              total_cost_usd: 0,
+            };
+          })(),
+        );
+
+        const result = yield* ClaudeAgentTool.call({
+          prompt: 'review the proof',
+          model: 'anthropic/claude-opus-5-5@high',
+        });
+        expect(result).toMatchObject({ status: 'executed' });
+
+        const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
+          { strategy: ChildRunStrategy<unknown> },
+        ];
+        yield* loopParams.strategy.launch(
+          fakePorts(),
+          new AbortController().signal,
+          { turnPermit: (turn) => turn, onTurnBoundary: () => Effect.void },
+        );
+        const [callArgs] = mocks.query.mock.calls[0] as [
+          { options: { model?: string; effort?: string; thinking?: unknown } },
+        ];
+        expect(callArgs.options).toMatchObject({
+          model: 'claude-opus-5-5',
+          effort: 'high',
+          thinking: { type: 'adaptive' },
+        });
+        // The run's ledger label is the model's reference.
+        expect(mocks.registerRun.mock.calls[0]?.[2]).toMatchObject({
+          model: 'anthropic/claude-opus-5-5',
+        });
+      }).pipe(
+        Effect.provide(
+          toolLayer({
+            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+          }),
+        ),
+      ),
+  );
+
+  it.live('refuses a model Claude Code cannot run before launching', () =>
+    Effect.gen(function* () {
+      const result = yield* ClaudeAgentTool.call({
+        prompt: 'review the proof',
+        model: 'openai/gpt-6.1-sol',
+      });
+
+      expect(result).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining('Claude Code cannot run'),
+      });
+      expect(mocks.registerRun).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(
+        toolLayer({
+          run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+        }),
+      ),
+    ),
   );
 
   it.live('preserves legacy usage when a result has no modelUsage', () =>

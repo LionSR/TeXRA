@@ -85,3 +85,8 @@ patchedDependencies:
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
 # reviewed bumps land immediately.
 minimumReleaseAge: 0
+
+# Local development against the llm-zoo 2.0 checkout (model references). Remove
+# once llm-zoo 2.0 is published and the catalog entry above is bumped to it.
+overrides:
+  llm-zoo: 'link:../../my-texra-ai/llm-zoo'

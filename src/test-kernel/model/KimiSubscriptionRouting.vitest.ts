@@ -16,14 +16,14 @@ import type { ModelConfig } from 'llm-zoo';
 const dual = {
   provider: ModelProvider.MOONSHOT,
   kimiSubscription: true,
-  fullName: 'kimi-k3',
+  id: 'kimi-k3',
 } as const;
 
 const exclusive = {
   provider: ModelProvider.MOONSHOT,
   kimiSubscription: true,
   baseUrl: KIMI_CODE_BASE_URL,
-  fullName: 'kimi-for-coding',
+  id: 'kimi-for-coding',
 } as const;
 
 describe('isKimiSubscriptionEligible', () => {
@@ -95,7 +95,7 @@ describe('routeConfig on Kimi Code', () => {
       const config = asConfig({
         provider: ModelProvider.MOONSHOT,
         kimiSubscription: true,
-        fullName: 'kimi-k3',
+        id: 'kimi-k3',
         shortName: 'kimi-k3',
         contextWindow: 1_048_576,
       });
@@ -108,7 +108,7 @@ describe('routeConfig on Kimi Code', () => {
           preferKimiCode: true,
         }),
       );
-      expect(runtime.fullName).toBe('k3');
+      expect(runtime.id).toBe('k3');
       expect(runtime.shortName).toBe('k3');
       expect(runtime.contextWindow).toBe(262_144);
       // The route, not a pinned baseUrl, names the coding endpoint.

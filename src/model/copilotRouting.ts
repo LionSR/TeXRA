@@ -1,6 +1,6 @@
 import { Effect, Result } from 'effect';
 import { z } from 'zod';
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
 /**
  * Copilot routing: the per-model preference for serving a canonical base
  * model through the editor's GitHub Copilot language-model access instead of
@@ -26,6 +26,7 @@ import {
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { modelConfig } from '@shared/model/modelSelection';
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
 
 /**
@@ -62,12 +63,7 @@ function matchingBaseModel(info: LanguageModelInfo): string | undefined {
           nativeNames.has(name.trim().toLowerCase()),
         ),
     )
-    .toSorted(([, left], [, right]) => {
-      const byReasoning =
-        Number(left.capabilities.supportsReasoning) -
-        Number(right.capabilities.supportsReasoning);
-      return byReasoning || left.name.localeCompare(right.name);
-    })
+    .toSorted(([left], [right]) => left.localeCompare(right))
     .at(0)?.[0];
 }
 
@@ -93,7 +89,8 @@ export const discoverCopilotRoutes = Effect.fn(
     right.version.localeCompare(left.version),
   )) {
     const baseModel = matchingBaseModel(info);
-    if (!baseModel || entries.has(baseModel)) continue;
+    const base = baseModel && lookup(baseModel);
+    if (!baseModel || !base || entries.has(baseModel)) continue;
     entries.set(baseModel, {
       access: info.access,
       reference: {
@@ -102,16 +99,11 @@ export const discoverCopilotRoutes = Effect.fn(
       },
       version: info.version,
       effectiveConfig: {
-        ...MODEL_CONFIGS[baseModel],
+        ...base,
         ...zeroCostAccessOverrides(info.maxInputTokens),
-        capabilities: {
-          ...MODEL_CONFIGS[baseModel].capabilities,
-          // VS Code's LM route chooses the model's own reasoning behavior and
-          // exposes no per-request effort control.
-          supportsReasoningEffort: false,
-          maxReasoningEffort: undefined,
-          supportedReasoningEfforts: undefined,
-        },
+        // VS Code's LM route chooses the model's own reasoning behavior and
+        // exposes no per-request effort control.
+        reasoning: base.reasoning && { efforts: [] },
       },
     });
   }
@@ -207,7 +199,7 @@ export function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
 ): CopilotDirectFallback | undefined {
-  const config = MODEL_CONFIGS[model];
+  const config = modelConfig(model);
   if (!config) return undefined;
   // The replacement run declines every subscription route and Copilot.
   const route = decideModelRoute(config, {

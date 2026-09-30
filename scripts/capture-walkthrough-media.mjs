@@ -63,7 +63,7 @@ const providers = [
 const modelOptions = [
   {
     label: 'Gemini 3.1 Pro',
-    value: 'gemini31p',
+    value: 'google/gemini-3.1-pro-preview',
     provider: 'google',
     context: '1M',
     cost: '$$',
@@ -79,7 +79,7 @@ const modelOptions = [
   },
   {
     label: 'DeepSeek V4 Flash',
-    value: 'deepseekT',
+    value: 'deepseek/deepseek-flash',
     provider: 'deepseek',
     context: '128k',
     cost: '$',
@@ -136,7 +136,7 @@ const host = {
 };
 const launch = {
   sessionType: 'workflow',
-  model: 'gemini31p',
+  model: 'google/gemini-3.1-pro-preview',
   inputFiles: ['main.tex', 'sections/introduction.tex', 'appendix.tex'],
   contextFiles: [
     'references.bib',
@@ -204,10 +204,10 @@ const webviewViews = [
             true,
           ),
           modelSelection('openai', 'gpt-5.5', 'GPT-5.5', false),
-          modelSelection('google', 'gemini31p', 'Gemini 3.1 Pro', true),
-          modelSelection('deepseek', 'deepseekT', 'DeepSeek V4 Flash', true),
+          modelSelection('google', 'google/gemini-3.1-pro-preview', 'Gemini 3.1 Pro', true),
+          modelSelection('deepseek', 'deepseek/deepseek-flash', 'DeepSeek V4 Flash', true),
         ],
-        helperModel: 'gemini31p',
+        helperModel: 'google/gemini-3.1-pro-preview',
         preferShortModelNames: false,
       },
     ],

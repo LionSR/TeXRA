@@ -337,7 +337,7 @@ function workflowSnapshot(
   return {
     family: 'toolUse',
     runtime: {
-      modelId: 'deepseekT',
+      modelId: 'deepseek/deepseek-v4-flash',
       modelCompatibilityKey: null,
       lastError: null,
       declinedRoutes: [],
@@ -470,7 +470,7 @@ describe('CLI run command, workflow agents', () => {
     );
     mocks.selectCliRunModel.mockImplementation(
       (_context: CliContext, model: string | undefined) =>
-        Effect.succeed(model ?? 'deepseekT'),
+        Effect.succeed(model ?? 'deepseek/deepseek-v4-flash'),
     );
     mocks.withExpandedRunInputs.mockImplementation(
       (
@@ -599,7 +599,7 @@ describe('CLI run command, workflow agents', () => {
 
           const exitCode = yield* workflowProgram(
             {
-              model: 'deepseekT',
+              model: 'deepseek/deepseek-v4-flash',
               instruction: 'Then keep the final response concise.',
               instructionFile: 'prompt.md',
             },
@@ -1482,7 +1482,7 @@ describe('CLI run command, workflow agents', () => {
         const exitCode = yield* executeCliWorkflowConfig(
           {
             agent: 'polish',
-            model: 'deepseekT',
+            model: 'deepseek/deepseek-v4-flash',
             workingDirectory: persistedWorkspace,
             agentCategory: AgentCategory.Workflow,
           },
@@ -1534,7 +1534,7 @@ describe('CLI run command, workflow agents', () => {
         const exitCode = yield* executeCliWorkflowConfig(
           {
             agent: 'polish',
-            model: 'deepseekT',
+            model: 'deepseek/deepseek-v4-flash',
             workingDirectory: stableWorkspace,
             agentCategory: AgentCategory.Workflow,
           },

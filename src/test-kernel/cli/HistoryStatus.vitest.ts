@@ -39,7 +39,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   instruction: 'Continue the session.',
   agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
@@ -62,7 +62,7 @@ beforeEach(async () => {
 });
 
 const SNAPSHOT_RUNTIME = {
-  modelId: 'deepseekT',
+  modelId: 'deepseek/deepseek-v4-flash',
   modelCompatibilityKey: null,
   lastError: null,
   declinedRoutes: [],

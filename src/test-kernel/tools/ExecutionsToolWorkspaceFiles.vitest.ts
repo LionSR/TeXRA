@@ -106,7 +106,7 @@ vi.mock('@agent/storage/runRecords', async () => {
 
 const config = {
   agent: 'chat',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
   agentCategory: 'toolUse',
   inputFiles: [],

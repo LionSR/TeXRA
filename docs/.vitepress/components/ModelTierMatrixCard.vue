@@ -17,19 +17,19 @@ const tiers = [
     icon: 'bolt',
     kind: 'Simple',
     cue: 'Corrections, quick edits',
-    models: ['gpt6--', 'deepseek41', 'haiku45'],
+    models: ['openai/gpt-6-luna', 'deepseek/deepseek-flash@none', 'anthropic/claude-haiku-4-5-20251001@none'],
   },
   {
     icon: 'sparkle',
     kind: 'Complex',
     cue: 'Transformations, rewrites',
-    models: ['fable51', 'opus55', 'gpt61-', 'gemini31p'],
+    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-opus-5-5', 'openai/gpt-6.1-sol', 'google/gemini-3.1-pro-preview'],
   },
   {
     icon: 'lightbulb',
     kind: 'Reasoning-heavy',
     cue: 'Deep, multi-step thinking',
-    models: ['fable51', 'sonnet55', 'opus55', 'deepseek41T'],
+    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-sonnet-5-5', 'anthropic/claude-opus-5-5', 'deepseek/deepseek-flash'],
   },
 ];
 </script>

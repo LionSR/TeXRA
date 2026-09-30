@@ -12,31 +12,31 @@ const rows = [
     icon: 'bolt',
     use: 'Simple tasks',
     note: 'Fast, cheap models',
-    models: ['gpt6--', 'deepseek41', 'haiku45'],
+    models: ['openai/gpt-6-luna', 'deepseek/deepseek-flash@none', 'anthropic/claude-haiku-4-5-20251001@none'],
   },
   {
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['fable51', 'opus55', 'gpt61-', 'gemini31p'],
+    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-opus-5-5', 'openai/gpt-6.1-sol', 'google/gemini-3.1-pro-preview'],
   },
   {
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['opus55', 'sonnet55', 'gpt61-'],
+    models: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5', 'openai/gpt-6.1-sol'],
   },
   {
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable51', 'opus55', 'sonnet55', 'deepseek41T', 'kimi3'],
+    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5', 'deepseek/deepseek-flash', 'moonshot/kimi-k3'],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'fable51', 'sonnet55', 'opus55'],
+    models: ['google/gemini-3.1-pro-preview', 'anthropic/claude-fable-5-1', 'anthropic/claude-sonnet-5-5@none', 'anthropic/claude-opus-5-5'],
   },
 ];
 </script>

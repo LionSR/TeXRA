@@ -1,7 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 import { describe } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   CHATGPT_SETUP_MODEL,
@@ -9,6 +8,7 @@ import {
 } from '@model/setupModelDefaults';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 import { API_PROVIDERS } from '@model/apiProviders';
+import { modelConfig } from '@shared/model/modelSelection';
 
 /**
  * The setup pins are literal data. An llm-zoo bump that retires or deprecates
@@ -18,7 +18,7 @@ import { API_PROVIDERS } from '@model/apiProviders';
 describe('SETUP_MODEL_BY_PROVIDER', () => {
   it('pins every provider to a live, non-deprecated, directly reachable model', () => {
     for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      const config = MODEL_CONFIGS[model];
+      const config = modelConfig(model);
       assert.ok(config, `${provider} pins unknown model "${model}"`);
       assert.equal(
         config.retired ?? false,
@@ -39,8 +39,10 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     // CHATGPT_SETUP_MODEL proves ChatGPT subscription access, which only a
     // Codex-eligible model id can.
     assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
+    const chatgptSetup = modelConfig(CHATGPT_SETUP_MODEL);
+    assert.ok(chatgptSetup);
     assert.equal(
-      decideModelRoute(MODEL_CONFIGS[CHATGPT_SETUP_MODEL], {
+      decideModelRoute(chatgptSetup, {
         ...OWN_KEY_ROUTE_FACTS,
         chatgptSubscription: true,
       }).kind,

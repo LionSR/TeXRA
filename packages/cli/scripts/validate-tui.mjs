@@ -104,7 +104,7 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'presenter',
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
-const TWO_OPENAI_MODELS = ['gpt55', 'gpt55pro'].join('||');
+const TWO_OPENAI_MODELS = ['openai/gpt-5.5-2026-04-23', 'openai/gpt-5.5-pro-2026-04-23'].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -806,7 +806,7 @@ const SCENARIOS = [
     env: {
       ANTHROPIC_API_KEY: 'harness-anthropic-key',
       HARNESS_CAN_SELECT_MODEL: '1',
-      HARNESS_DISABLED_MODEL_SWITCHES: 'sonnet46T',
+      HARNESS_DISABLED_MODEL_SWITCHES: 'anthropic/claude-sonnet-4-6',
       HARNESS_ENTRIES: '4',
       HARNESS_VISIBLE_MODELS: 'sonnet46T||gpt56',
       OPENAI_API_KEY: 'harness-openai-key',

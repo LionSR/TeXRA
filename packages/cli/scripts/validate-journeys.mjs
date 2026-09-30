@@ -41,7 +41,7 @@ const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 
 /**
  * The cheap models the journeys fund, and the env var each is served through
- * (`glm53flash` is OpenRouter-only in the catalog).
+ * (`glm/glm-5.3-flash` is OpenRouter-only in the catalog).
  */
 const MODEL_KEYS = {
   deepseek41T: 'DEEPSEEK_API_KEY',
@@ -251,7 +251,7 @@ function runJourney(name, model, outDir) {
 
 const { values } = parseArgs({
   options: {
-    model: { type: 'string', default: 'deepseek41T' },
+    model: { type: 'string', default: 'deepseek/deepseek-flash' },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },

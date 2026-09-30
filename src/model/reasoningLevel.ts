@@ -1,19 +1,23 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
-import {
-  ModelProvider,
-  ReasoningEffort,
-  type ModelCapabilities,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ReasoningEffort, type ModelConfig } from 'llm-zoo';
+
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import type { StateStore } from '@platform/interfaces';
+import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
+import {
+  chooseReasoning,
+  defaultReasoningLevel,
+  type ReasoningRequest,
+} from './reasoningChoice';
 
 /**
- * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary.
+ * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
+ * keyed by model reference (`provider/id`).
  *
  * This is the one boundary between the persisted `texra.reasoningLevels`
  * record and the runtime: the stored strings are parsed here, so no caller
@@ -47,36 +51,68 @@ export function reasoningEffortOverrides(state: StateStore) {
   });
 }
 
-/** Whether the model exposes a genuine user-selectable effort range. */
-function hasConfigurableReasoningEffort(
-  capabilities: ModelCapabilities,
-): boolean {
-  if (!capabilities.supportsReasoningEffort) return false;
-
-  const exactEfforts = capabilities.supportedReasoningEfforts;
-  if (exactEfforts?.length) {
-    return new Set(exactEfforts).size > 1;
-  }
-
-  return !(
-    capabilities.reasoningEffort === ReasoningEffort.MAX &&
-    capabilities.maxReasoningEffort === undefined
-  );
+/**
+ * The levels a user can pick for a model: `none` where thinking can be turned
+ * off, then the levels it accepts while thinking. Empty or single-valued means
+ * there is nothing to choose.
+ */
+export function selectableReasoningLevels(
+  config: Pick<ModelConfig, 'reasoning'>,
+): ReasoningEffort[] {
+  const { reasoning } = config;
+  if (reasoning === undefined) return [];
+  return [
+    ...(reasoning.off === undefined ? [] : [ReasoningEffort.NONE]),
+    ...reasoning.efforts,
+  ];
 }
 
 /**
  * Whether the model exposes a user-selectable reasoning level. This is the one
- * definition behind both the model binding and the model choices, so the controls and the runtime share the same definition.
- *
- * DeepSeek is the extra term: its models declare `supportsReasoning` without a
- * configurable effort range, yet still honour a level override.
+ * definition behind both the model binding and the model choices.
  */
 export function supportsReasoningLevel(
-  config: Pick<ModelConfig, 'provider' | 'capabilities'>,
+  config: Pick<ModelConfig, 'reasoning'>,
 ): boolean {
-  return (
-    hasConfigurableReasoningEffort(config.capabilities) ||
-    (config.provider === ModelProvider.DEEPSEEK &&
-      config.capabilities.supportsReasoning)
-  );
+  return selectableReasoningLevels(config).length > 1;
+}
+
+/**
+ * The run's reasoning decision: the model string's own request, else the
+ * user's saved level for the model, else the default; a route ceiling (the
+ * Codex subscription backend) narrows the levels. A level the model lacks is
+ * substituted and logged; a request it cannot run fails the bind.
+ */
+export const reasoningFor = Effect.fn('reasoningFor')(function* (
+  config: ModelConfig,
+  request: ReasoningRequest,
+  globalState: StateStore,
+  routeEfforts?: readonly ReasoningEffort[],
+) {
+  const userEffort = (yield* reasoningEffortOverrides(globalState))[config.ref];
+  const choice = yield* Effect.try({
+    try: () => chooseReasoning(config, request, { userEffort, routeEfforts }),
+    catch: ensureError,
+  });
+  if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
+  return choice;
+});
+
+/**
+ * The reasoning column of a model row: the user's saved level, else the
+ * default a run uses; `(fixed)` where the model offers no choice; nothing for
+ * a model that never thinks.
+ */
+export function reasoningLevelLabel(
+  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
+  saved: ReasoningEffort | undefined,
+): string | undefined {
+  if (config.reasoning === undefined) return undefined;
+  const fallback = defaultReasoningLevel(config);
+  if (fallback === undefined) return 'Default';
+  const defaultLevel = REASONING_LEVEL_LABELS[fallback];
+  if (!supportsReasoningLevel(config)) return `${defaultLevel} (fixed)`;
+  return saved === undefined
+    ? `Default (${defaultLevel})`
+    : REASONING_LEVEL_LABELS[saved];
 }

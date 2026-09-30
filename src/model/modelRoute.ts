@@ -21,7 +21,7 @@
  *    differs (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 import { Effect } from 'effect';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import {
   isPreferSubscription,
@@ -75,6 +75,8 @@ export interface RouteFacts {
   readonly copilotRoute: CopilotModelRoute | undefined;
   /** The OpenRouter choice: the live toggle, or a resumed format's. */
   readonly useOpenRouter: boolean;
+  /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
+  readonly mode?: ReasoningMode;
   /** ChatGPT subscription preferred, signed in, and not declined. */
   readonly chatgptSubscription: boolean;
   /** Grok subscription preferred, signed in, and not declined. */
@@ -156,12 +158,14 @@ export function decideModelRoute(
   if (facts.prefersCopilot || config.provider === ModelProvider.COPILOT) {
     return { kind: 'copilot', route: facts.copilotRoute };
   }
-  if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter)) {
+  if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter, facts.mode)) {
     return { kind: 'openrouter-unsupported' };
   }
   // The subscriptions are preferences: signed out, the model takes its key.
+  // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
   if (
     facts.chatgptSubscription &&
+    facts.mode === undefined &&
     !shouldRouteModelThroughOpenRouter(config, facts.useOpenRouter) &&
     isCodexSubscriptionEligible(config)
   ) {
@@ -363,8 +367,8 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
 });
 
 /**
- * Open-platform `fullName` to coding-endpoint wire ID. Exclusive plan aliases
- * already use their wire ID as `fullName` and pass through unchanged.
+ * Open-platform `id` to coding-endpoint wire ID. Exclusive plan aliases
+ * already use their wire ID as `id` and pass through unchanged.
  */
 const KIMI_CODE_WIRE_MODEL_IDS: Readonly<Record<string, string>> = {
   'kimi-k3': 'k3',
@@ -420,11 +424,10 @@ export const routeConfig = Effect.fn('routeConfig')(function* (
       if (route.provider !== 'kimiCode' || isKimiCodeExclusiveModel(config)) {
         return config;
       }
-      const wireId =
-        KIMI_CODE_WIRE_MODEL_IDS[config.fullName] ?? config.fullName;
+      const wireId = KIMI_CODE_WIRE_MODEL_IDS[config.id] ?? config.id;
       return {
         ...config,
-        fullName: wireId,
+        id: wireId,
         shortName: wireId,
         ...zeroCostAccessOverrides(
           Math.min(KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW, config.contextWindow),

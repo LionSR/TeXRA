@@ -12,9 +12,9 @@ import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
   return {
-    name: 'test-model',
+    ref: 'openai/gpt-test',
     label: 'Test Model',
-    fullName: 'gpt-test',
+    id: 'gpt-test',
     shortName: 'gpt-test',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 128_000,
@@ -45,12 +45,12 @@ describe('codex model eligibility', () => {
       // top-tier heuristic misrouted to the API-key path.
       name: 'accepts a flagged model regardless of reasoning-effort tier',
       overrides: {
-        fullName: 'gpt-5.6-sol',
+        id: 'gpt-5.6-sol',
         shortName: 'gpt-5.6',
         codexSubscription: true,
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          reasoningEffort: ReasoningEffort.MEDIUM,
+        reasoning: {
+          efforts: [ReasoningEffort.MEDIUM],
+          providerDefault: ReasoningEffort.MEDIUM,
         },
       },
       eligible: true,
@@ -60,11 +60,11 @@ describe('codex model eligibility', () => {
       // trusted. Absent the registry flag, it must not route to Codex.
       name: 'rejects an unflagged model even when every old-heuristic proxy matches',
       overrides: {
-        fullName: 'gpt-5.9-codex',
+        id: 'gpt-5.9-codex',
         shortName: 'gpt-5.9-codex',
-        capabilities: {
-          ...DEFAULT_MODEL_CAPABILITIES,
-          reasoningEffort: ReasoningEffort.MAX,
+        reasoning: {
+          efforts: [ReasoningEffort.MAX],
+          providerDefault: ReasoningEffort.MAX,
         },
       },
       eligible: false,
@@ -76,7 +76,7 @@ describe('codex model eligibility', () => {
       name: 'rejects a non-OpenAI model even when flagged',
       overrides: {
         provider: ModelProvider.ANTHROPIC,
-        fullName: 'claude-codex-lookalike',
+        id: 'claude-codex-lookalike',
         shortName: 'claude-codex-lookalike',
         codexSubscription: true,
       },

@@ -46,6 +46,7 @@ const boundAnthropic: BoundModel = {
     outputPrice: OUTPUT_PRICE,
     capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
   }),
+  reasoning: { thinking: false, effort: null, mode: null },
   compatibilityKey: 'Anthropic',
   model: unusedModel,
   origin: {
@@ -115,7 +116,7 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
   const boundSol: BoundModel = {
     ...boundAnthropic,
     config: buildTestModelConfig({
-      fullName: 'gpt-6-sol',
+      id: 'gpt-6-sol',
       inputPrice: 2,
       outputPrice: 10,
       longContextPricing: {

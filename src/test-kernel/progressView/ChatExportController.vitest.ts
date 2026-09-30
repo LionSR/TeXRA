@@ -71,7 +71,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     outputFiles: [],
     editedFile: null,
     agent: 'orchestrator',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
     agentCategory: AgentCategory.ToolUse,
     editedFiles: [],
@@ -130,7 +130,10 @@ describe('ChatExportController.exportAsHtml', () => {
       Effect.gen(function* () {
         const templatePath = yield* Effect.promise(writeTemplate);
         const runId = 'eec001' as RunId;
-        const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+        const runConfigRecord = config({
+          agent: 'review',
+          model: 'anthropic/claude-sonnet-4-6',
+        });
         publishTestRunStart(session, runId);
         yield* settlePublications;
         yield* seedRunRecord(session, runId, runConfigRecord);

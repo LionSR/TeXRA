@@ -37,7 +37,7 @@ function normalizeProviderEndpoint(input: string): string {
 
 export function resolveRouteEndpoint(
   stores: SettingsStores,
-  config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
+  config: Pick<ModelConfig, 'provider' | 'baseUrl'>,
   route: Extract<ModelRoute, { kind: 'openrouter' | 'api-key' }>,
 ): Effect.Effect<string, StateReadFailed> {
   return Effect.gen(function* () {
@@ -51,7 +51,7 @@ export function resolveRouteEndpoint(
     if (baseUrl == null) {
       return yield* Effect.die(
         new Error(
-          `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+          `No HTTP endpoint is configured for provider ${config.provider}.`,
         ),
       );
     }

@@ -80,7 +80,7 @@ const FRESH_RUN_ID = 'f1e501' as RunId;
 
 const config = AgentConfigSchema.parse({
   agent: 'chat',
-  model: 'gpt55',
+  model: 'openai/gpt-5.5-2026-04-23',
   agentCategory: AgentCategory.ToolUse,
 });
 
@@ -335,7 +335,7 @@ describe('native agent launch activation', () => {
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const described = AgentConfigSchema.parse({
           agent: 'chat',
-          model: 'gpt55',
+          model: 'openai/gpt-5.5-2026-04-23',
           agentCategory: AgentCategory.ToolUse,
           instruction: 'Fix grammar.',
         });

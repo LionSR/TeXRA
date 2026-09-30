@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
-import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
   getCatalogLoadFailure,
@@ -38,6 +38,7 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
+import { selectModel } from '@shared/model/modelSelection';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -155,8 +156,8 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     modelName: string,
     interactions: Pick<SessionHostInteractions, 'emit'>,
   ) {
-    const modelConfig = MODEL_CONFIGS[modelName];
-    if (modelConfig) return modelConfig;
+    const selected = selectModel(modelName);
+    if (selected) return selected.config;
 
     return yield* presentLaunchError(
       interactions,

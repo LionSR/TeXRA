@@ -13,15 +13,15 @@
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
-  { id: 'fable51', label: 'Claude Fable 5.1', status: 'api key set' },
-  { id: 'opus55', label: 'Opus 5.5', status: 'api key set' },
+  { id: 'anthropic/claude-fable-5-1', label: 'Claude Fable 5.1', status: 'api key set' },
+  { id: 'anthropic/claude-opus-5-5', label: 'Opus 5.5', status: 'api key set' },
   {
-    id: 'sonnet55',
-    label: 'Sonnet 5.5',
+    id: 'anthropic/claude-sonnet-5-5',
+    label: 'Sonnet 5 (Thinking)',
     status: 'api key set',
   },
   {
-    id: 'deepseek41T',
+    id: 'deepseek/deepseek-flash',
     label: 'DeepSeek V4 Flash (Thinking)',
     status: 'api key set',
   },

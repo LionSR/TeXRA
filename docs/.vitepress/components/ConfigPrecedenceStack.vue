@@ -43,7 +43,7 @@ const layers = [
     rank: '4',
     title: 'Built-in default',
     sub: 'lowest priority',
-    chip: 'deepseek41T',
+    chip: 'deepseek/deepseek-flash',
   },
 ];
 </script>

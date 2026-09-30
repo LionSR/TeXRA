@@ -126,7 +126,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   instruction: 'Polish the introduction.',
   agentCategory: 'workflow',
   inputFiles: ['chapters/intro.tex'],
@@ -781,7 +781,7 @@ describe('CLI history runtime', () => {
               description: 'Polish pass',
               config: {
                 agent: 'correct',
-                model: 'deepseekT',
+                model: 'deepseek/deepseek-v4-flash',
                 instruction: 'Polish the introduction.',
                 inputFiles: ['chapters/intro.tex'],
                 mediaFiles: [],

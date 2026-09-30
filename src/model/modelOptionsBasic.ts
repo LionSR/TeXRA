@@ -1,4 +1,4 @@
-import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
+import { hint, type ModelConfig } from 'llm-zoo';
 
 import type { ModelOptionData } from '@shared/schemas';
 import {
@@ -8,17 +8,18 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
+import { modelConfig } from '@shared/model/modelSelection';
 import { formatCostUsd } from '@utils/text/stringUtils';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
-  return MODEL_CONFIGS[model]?.deprecated ?? false;
+  return modelConfig(model)?.deprecated ?? false;
 }
 
 /** Return whether the registry marks a model as no longer served. */
 export function isRetiredModel(model: string): boolean {
-  return MODEL_CONFIGS[model]?.retired ?? false;
+  return modelConfig(model)?.retired ?? false;
 }
 
 /**
@@ -31,22 +32,22 @@ export const DEFAULT_MODELS: readonly string[] = [
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
   DEFAULT_AGENT_MODEL,
-  'gpt56-',
-  'gpt6--',
-  'sonnet55',
-  'opus55',
-  'fable51',
-  'gemini38f',
-  'gemini31p',
+  'openai/gpt-5.6-terra',
+  'openai/gpt-6-luna',
+  'anthropic/claude-sonnet-5-5',
+  'anthropic/claude-opus-5-5',
+  'anthropic/claude-fable-5-1',
+  'google/gemini-3.8-flash',
+  'google/gemini-3.1-pro-preview',
 
-  'deepseek41T',
-  'deepseekproT',
-  'kimi3',
+  'deepseek/deepseek-flash',
+  'deepseek/deepseek-v4-pro',
+  'moonshot/kimi-k3',
   // Current non-retired GLM flagships.
-  'glm53',
+  'glm/glm-5.3',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
-  'grok47',
-  'musespark13',
+  'xai/grok-4.7',
+  'meta/muse-spark-1.3',
 ];
 
 const MILLION = 1_000_000;

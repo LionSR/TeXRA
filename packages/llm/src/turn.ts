@@ -119,7 +119,7 @@ const EffortSchema = ReasoningEffortSchema.unwrap()
   .exclude(['none', 'minimal'])
   .nullable();
 const CacheSchema = z.enum(['disabled', '5m']);
-const ThinkingLevelSchema = z.enum(['low', 'medium', 'high']);
+const ThinkingLevelSchema = z.enum(['minimal', 'low', 'medium', 'high']);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */
 export const TurnRequestSchema = z

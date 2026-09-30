@@ -120,7 +120,7 @@ describe('CLI run command, tool-use agents', () => {
     );
     mocks.selectCliRunModel.mockImplementation(
       (_context: CliContext, model: string | undefined) =>
-        Effect.succeed(model ?? 'gpt54'),
+        Effect.succeed(model ?? 'openai/gpt-5.4-2026-03-05'),
     );
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
@@ -146,7 +146,7 @@ describe('CLI run command, tool-use agents', () => {
           agent: 'chat',
           inputFiles: ['problem.md'],
           contextFiles: ['notes.md'],
-          model: 'gpt54',
+          model: 'openai/gpt-5.4-2026-03-05',
           instruction: 'Assess the proof concisely.',
         });
 
@@ -226,7 +226,7 @@ describe('CLI run command, tool-use agents', () => {
           agent: 'chat',
           inputFiles: ['-'],
           contextFiles: [],
-          model: 'gpt54',
+          model: 'openai/gpt-5.4-2026-03-05',
           instruction: 'Assess the proof.',
         });
 
@@ -269,7 +269,7 @@ describe('CLI run command, tool-use agents', () => {
           agent: 'chat',
           inputFiles: ['problem.md'],
           contextFiles: [],
-          model: 'gpt54',
+          model: 'openai/gpt-5.4-2026-03-05',
           instruction: '',
         }),
       );

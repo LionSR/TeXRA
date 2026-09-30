@@ -306,7 +306,7 @@ phase('Investigate')
 yield* agent('Extract', {
   id: 'claims',
   agentName: 'researcher',
-  model: 'gpt56',
+  model: 'openai/gpt-5.6-sol',
   schema: { type: 'object', properties: { claims: { type: 'array' } } },
 })
 phase('Revise')
@@ -325,7 +325,7 @@ return yield* agent('Rewrite', {
               Effect.sync(function () {
                 invocation.report({
                   agent: invocation.options.agentName,
-                  model: invocation.options.model ?? 'gemini37f',
+                  model: invocation.options.model ?? 'google/gemini-3.7-flash',
                 });
                 return 'done';
               }),
@@ -346,7 +346,7 @@ return yield* agent('Rewrite', {
         ).toMatchObject({
           kind: 'structured',
           agent: 'researcher',
-          model: 'gpt56',
+          model: 'openai/gpt-5.6-sol',
           files: { input: [], context: [], media: [] },
         });
         // The host-resolved model lands on the card once the runner reports it.
@@ -358,7 +358,7 @@ return yield* agent('Rewrite', {
           status: 'completed',
           kind: 'document',
           agent: 'polish',
-          model: 'gemini37f',
+          model: 'google/gemini-3.7-flash',
           files: {
             input: ['introduction.tex'],
             context: ['main.tex'],

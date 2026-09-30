@@ -26,6 +26,7 @@ import {
 import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, describe, expect, vi } from 'vitest';
 import {
@@ -57,6 +58,7 @@ import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
+import { chooseReasoning } from '@model/reasoningChoice';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -88,6 +90,8 @@ import {
   seedActiveRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
+
+const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
 const RETRY_BACKOFF_MS = 1000;
@@ -223,14 +227,15 @@ function boundModel(
   overrides: Partial<BoundModel> = {},
 ): BoundModel {
   return {
-    modelId: 'gpt54',
-    config: MODEL_CONFIGS.gpt54,
+    modelId: GPT54,
+    config: MODEL_CONFIGS[GPT54],
+    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
+    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
@@ -240,7 +245,7 @@ function boundModel(
       'openai',
       'api-key',
       ORIGIN.requestedModel,
-      'gpt54',
+      GPT54,
     ]),
     backgroundCapable: false,
     persistentConnection: false,
@@ -265,7 +270,7 @@ function retryRunId(): RunId {
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'assistant',
-  model: 'gpt54',
+  model: GPT54,
   agentCategory: AgentCategory.ToolUse,
 });
 
@@ -286,7 +291,7 @@ function agentRun(
 const freshState = (): RunState => ({
   ...freshRunState(0),
   family: 'toolUse',
-  modelId: 'gpt54',
+  modelId: GPT54,
   modelCompatibilityKey: 'OpenAI',
 });
 
@@ -806,7 +811,7 @@ describe('ModelInvoker retry', () => {
         data: expect.objectContaining({
           runId,
           operation: 'Model request',
-          model: 'gpt54',
+          model: GPT54,
         }),
       });
       // The permit is retired by the response it admitted: a resumed run

@@ -23,7 +23,7 @@ setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
 const config = {
   agent: 'correct',
   agentCategory: 'workflow',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
 } as AgentConfig;
 
 /** A failed workflow row: the one shape whose snapshot is still read. */

@@ -92,7 +92,7 @@ function actionButtonIds(element: RetryRequestPanel): (string | null)[] {
 describe('retry-request-panel', () => {
   it('does not offer the API-key switch when the run carried no offer', async () => {
     const element = await mountPanel({
-      model: 'kimiCoding',
+      model: 'moonshot/kimi-for-coding',
       errorDetails: {
         classification: { kind: 'kimi-code-subscription' },
         userRetryable: true,
@@ -105,7 +105,7 @@ describe('retry-request-panel', () => {
 
   it('offers the API-key switch the run carried', async () => {
     const element = await mountPanel({
-      model: 'kimiCoding',
+      model: 'moonshot/kimi-for-coding',
       errorDetails: {
         classification: { kind: 'upstream-credit' },
         userRetryable: true,

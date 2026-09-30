@@ -219,7 +219,7 @@ function createContext(
     runtime: testRuntime(),
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
-    initialModel: 'deepseekT',
+    initialModel: 'deepseek/deepseek-v4-flash',
     requestInputExit: vi.fn(),
     getApprovalPolicy: () => approvalPolicy,
     setApprovalPolicy: (policy) => {
@@ -895,7 +895,7 @@ describe('handleTuiSlashCommand', () => {
         const session = createSession();
         const runId = '5eacce' as RunId;
         focusRun(runId);
-        patchSessionMeta({ model: 'gpt55' });
+        patchSessionMeta({ model: 'openai/gpt-5.5-2026-04-23' });
         // The access route comes off the fold's cumulative usage for the stream.
         ensureRun(runId, {
           status: RUN_PHASE.WAITING,

@@ -35,6 +35,7 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   CodexApprovalPolicy,
@@ -422,9 +423,10 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(roots.workspace, workingDir)
       : {};
-  // Probe Extra High support only when that tier is selected so other
-  // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = yield* config.getCodexCliReasoningEffort(roots);
+  const run = yield* config.codexRun(roots, codexPath);
+  if (run.note) {
+    yield* Effect.logInfo(run.note).pipe(withLogChannel(CODEX_AGENT_NAME));
+  }
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
@@ -432,24 +434,19 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       roots,
       WorkspaceStateKey.CODEX_APPROVAL_POLICY,
     ),
-    model: config.CODEX_CLI_MODEL,
-    modelReasoningEffort:
-      requestedEffort === 'xhigh'
-        ? config.toCodexCliReasoningEffort(
-            requestedEffort,
-            yield* config.codexBinarySupportsXhigh(codexPath),
-          )
-        : requestedEffort,
+    model: run.slug,
+    ...(run.effort && { modelReasoningEffort: run.effort }),
     skipGitRepoCheck: true as const,
   };
   // The Codex SDK's own thread constructors, which answer synchronously.
-  return yield* Effect.try({
+  const thread = yield* Effect.try({
     try: (): Thread =>
       input.thread_id
         ? codex.resumeThread(input.thread_id, threadOptions)
         : codex.startThread(threadOptions),
     catch: ensureError,
   });
+  return { thread, run };
 });
 
 // ============================================================================
@@ -517,19 +514,22 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   ToolCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = yield* ToolCall;
-  const thread = yield* createCodexThread(
+  const { thread, run } = yield* createCodexThread(
     input,
     sandboxMode,
     roots,
     context.parentWorkingDirectory,
-  ).pipe(Effect.orDie);
+  ).pipe(
+    Effect.catch((error) =>
+      error instanceof ToolError ? Effect.fail(error) : Effect.die(error),
+    ),
+  );
   // Synthetic run metadata for the child run: Codex runs outside the normal
-  // run loop, so the tool-use category and a stable Codex model label are
-  // stated here rather than inherited from the generic AgentConfig defaults.
+  // run loop, so the tool-use category and the model's reference are stated
+  // here rather than inherited from the generic AgentConfig defaults.
   const config = buildSyntheticToolUseConfig({
     agent: CODEX_AGENT_NAME,
-    // Fabricated label, not a routed model: Codex drives its own model.
-    model: 'gpt55',
+    model: run.ref,
     instruction: input.prompt,
   });
   const preview = previewLabel(input.prompt);
@@ -553,7 +553,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         registry: context.registry,
       }),
     summary: `Launched Codex: ${preview}`,
-    launchedLine: `Codex agent launched (sandbox: ${sandboxMode}).`,
+    launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
   });
 });
