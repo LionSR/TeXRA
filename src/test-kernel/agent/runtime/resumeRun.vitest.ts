@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import type { ToolUseRunEndResult } from '@agent/runtime/RunEndResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -70,7 +71,7 @@ function snapshot() {
 }
 
 const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
-  session: ReturnType<typeof createTestSession>,
+  session: SessionHandle,
   ...texts: string[]
 ) {
   const flow = session.followUps.claimLive(RUN, 'loop')!;
@@ -85,7 +86,7 @@ const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
 });
 
 /** The text of each follow-up the run's rows still queue. */
-const queuedTexts = (session: ReturnType<typeof createTestSession>) =>
+const queuedTexts = (session: SessionHandle) =>
   Effect.map(queuedFollowUps(session, RUN), (followUps) =>
     followUps.map((followUp) => followUp.text),
   );
@@ -97,7 +98,7 @@ const taken: string[] = [];
  * The resumed flow's side of the queue: attach to the recovery owner's
  * input and take what the rows still queue.
  */
-const resumedFlowTakes = (session: ReturnType<typeof createTestSession>) =>
+const resumedFlowTakes = (session: SessionHandle) =>
   Effect.gen(function* () {
     const input = session.followUps.attachInput(RUN)!;
     const batch = input.hasQueued() ? yield* input.take : null;
@@ -114,7 +115,7 @@ const resumedFlowTakes = (session: ReturnType<typeof createTestSession>) =>
     }
   });
 
-const sessions: ReturnType<typeof createTestSession>[] = [];
+const sessions: SessionHandle[] = [];
 
 afterEach(async () => {
   for (const session of sessions.splice(0)) {
@@ -124,7 +125,7 @@ afterEach(async () => {
 
 /** A session holding the run, its `run.start` landed. */
 const createSession = Effect.fn('test.createSession')(function* () {
-  const session = createTestSession();
+  const session = yield* createTestSession();
   publishTestRunStart(session, RUN);
   sessions.push(session);
   yield* session.settlePublications();
@@ -154,7 +155,7 @@ describe('resumeRun tool-use queue ownership', () => {
       (
         _resume: unknown,
         options: ResumeToolUseFromResumeDataOptions & {
-          session: ReturnType<typeof createTestSession>;
+          session: SessionHandle;
         },
       ) => resumedFlowTakes(options.session).pipe(Effect.as(completed)),
     );

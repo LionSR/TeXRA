@@ -103,7 +103,7 @@ function createApprovalFixture(
     const modules = yield* Effect.tryPromise(() =>
       loadApprovalModules(options.workspacePath),
     );
-    const session = createTestSession();
+    const session = yield* createTestSession();
     yield* Effect.addFinalizer(() => closeSessionOf(session));
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
       spawn: (program) => {

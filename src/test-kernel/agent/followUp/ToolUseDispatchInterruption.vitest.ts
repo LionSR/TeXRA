@@ -339,7 +339,7 @@ describe('tool dispatch interrupted mid-turn', () => {
     'leaves no half-delivered tool turn in history, and resume pairs every call',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         // The person answers "Skip": the model is told the call was skipped
@@ -432,7 +432,7 @@ describe('tool dispatch interrupted mid-turn', () => {
    */
   it.effect('skips an outcome-unknown barrier the policy denies', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions({ emit: () => {} });
+      const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       const asked = askedQuestions(session, () => ({
@@ -492,7 +492,7 @@ describe('tool dispatch interrupted mid-turn', () => {
     'asks before re-running a parallel-safe call that is not replay-safe',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const asked = askedQuestions(session, (question) => ({
@@ -543,7 +543,7 @@ describe('tool dispatch interrupted mid-turn', () => {
    */
   it.effect('delivers a follow-up to a stopped response with its results', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions({ emit: () => {} });
+      const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       askedQuestions(session, () => ({ action: 'deny', reason: 'yolo' }));
@@ -620,7 +620,7 @@ describe('tool dispatch interrupted mid-turn', () => {
           action: 'cancel',
           cause: 'Run interrupted.',
         });
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const asked = askedQuestions(session, (question) => answer(question));

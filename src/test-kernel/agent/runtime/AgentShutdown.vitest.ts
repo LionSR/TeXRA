@@ -19,8 +19,8 @@ describe('agent shutdown', () => {
 
   it.effect("drains every live session's background processes once", () =>
     Effect.gen(function* () {
-      const firstSession = createTestSession();
-      const secondSession = createTestSession();
+      const firstSession = yield* createTestSession();
+      const secondSession = yield* createTestSession();
       yield* Effect.addFinalizer(() =>
         closeSessionOf(firstSession).pipe(
           Effect.andThen(closeSessionOf(secondSession)),

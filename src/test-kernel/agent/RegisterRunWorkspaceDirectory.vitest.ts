@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { getRunRecords } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -26,7 +27,7 @@ const options = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'nativeInteractive',
 } as const;
-let session: ReturnType<typeof createTestSession>;
+let session: SessionHandle;
 const register = (workingDirectory?: string) =>
   registerRun(
     session,
@@ -38,9 +39,9 @@ const register = (workingDirectory?: string) =>
     options,
   );
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.restoreAllMocks();
-  session = createTestSession();
+  session = await Effect.runPromise(createTestSession());
 });
 
 describe('run registration and finalization', () => {

@@ -419,9 +419,8 @@ function goalSession(
   });
 }
 
-function quietSession(overrides: Record<string, unknown> = {}): SessionHandle {
-  return sessionWithInteractions({ emit: () => {}, ...overrides });
-}
+const quietSession = (overrides: Record<string, unknown> = {}) =>
+  sessionWithInteractions({ emit: () => {}, ...overrides });
 
 function startedRun(session: SessionHandle): RunId {
   const runId = generateRunId();
@@ -542,7 +541,7 @@ describe('a parked child run', () => {
     'keeps the child live across its input wait (input queued: %s)',
     (queued) =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         if (queued) {
           yield* enqueue(session, runId, [
@@ -567,7 +566,7 @@ describe('a parked child run', () => {
     'delivers a follow-up its rows still queue exactly once, with the message it becomes (C3)',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const parentRunId = generateRunId();
         const asked = 'state where finiteness is used';
@@ -632,7 +631,7 @@ describe('a parked child run', () => {
     Effect.gen(function* () {
       // A subagent that waited here would wait for a follow-up its
       // orchestrator was never told to send.
-      const session = quietSession();
+      const session = yield* quietSession();
       const { result } = yield* runLoop({
         runId: startedRun(session),
         session,
@@ -650,7 +649,7 @@ describe('a parked root run', () => {
     'reports idle at the turn boundary, before it waits for input',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const onIdle = vi.fn();
         yield* enqueue(session, runId, [
@@ -676,7 +675,7 @@ describe('a parked root run', () => {
     'stops instead of waiting when the launch asked for one cycle',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const { result, requests } = yield* runLoop({
           runId: startedRun(session),
           session,
@@ -691,7 +690,7 @@ describe('a parked root run', () => {
 
   it.effect('releases its follow-up owner when the halt write fails', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const writeFailed = new DatabaseWriteFailed({
         path: ':memory:',
@@ -722,7 +721,7 @@ describe('a parked root run', () => {
 
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const { result, requests } = yield* runLoop({
         runId: startedRun(session),
         session,
@@ -740,7 +739,7 @@ describe('a parked root run', () => {
     'replays a recovered text response through the final-turn policy',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         yield* seedCommittedResponse(session, runId, 'the prose answer');
 
@@ -768,7 +767,7 @@ describe('a parked root run', () => {
 
   it.effect('waits while parked and runs again once input arrives', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const recorded = recordSessionEvents(session);
 
@@ -800,7 +799,7 @@ describe('a parked root run', () => {
 
   it.effect('restores its park when a resume consumes only stale notices', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const first = yield* forkLoop({
         runId,
@@ -852,7 +851,7 @@ describe('a parked root run', () => {
 
   it.effect('answers a follow-up consumed just before the loop exited', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const first = yield* forkLoop({
         runId,
@@ -889,7 +888,7 @@ describe('a parked root run', () => {
 
   it.effect('parks a run a retry cancelled, rather than leaving it there', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       yield* Effect.promise(() =>
         seedTerminalRun(session, runId, RUN_OUTCOME.CANCELLED),
@@ -924,7 +923,7 @@ describe('the batch a parked run consumes', () => {
     'enters the conversation as one user turn carrying every queued item',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const reporter = publishTestRunStart(session, undefined, {
           parent: runId,
@@ -1025,7 +1024,7 @@ describe('the batch a parked run consumes', () => {
         errorCause: null,
       };
       const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const child = publishTestRunStart(session, undefined, { parent: runId });
       const logger = new TraceEmitter();
@@ -1062,7 +1061,7 @@ describe('the batch a parked run consumes', () => {
     'warns and drops media the model cannot read, attaching nothing',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
@@ -1104,7 +1103,7 @@ describe('the batch a parked run consumes', () => {
         // A failed follow-up append (corrupt or oversized media, a provider
         // validation error) must still leave a record of what the user asked
         // for, and must not acknowledge input that never reached the model.
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
@@ -1304,7 +1303,7 @@ describe('the host wiring a run attaches', () => {
     'interrupts opening preparation and releases the follow-up lease',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const runId = startedRun(session);
         const processFs = yield* FileSystem.FileSystem;
         const entered = yield* Deferred.make<void>();
@@ -1367,7 +1366,7 @@ describe('the host wiring a run attaches', () => {
   // value the callback never got to return.
   it.effect('detaches a host whose attach threw after wiring itself up', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const attachFailure = new Error('host wiring failed');
       const detached: RunControls[] = [];

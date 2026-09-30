@@ -66,7 +66,7 @@ describe('requestBashApproval queueing', () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           yield* Effect.addFinalizer(() => closeSessionOf(session));
           session.setApprovalPolicy('ask');
           const keys = [
@@ -117,7 +117,7 @@ describe('requestBashApproval queueing', () => {
   it.effect('lets never override a run bypass at the shared boundary', () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const runId = generateRunId();
         let policyDenials = 0;
@@ -160,7 +160,7 @@ describe('requestBashApproval queueing', () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           yield* Effect.addFinalizer(() => closeSessionOf(session));
           const runId = generateRunId();
           publishTestRunStart(session, runId);

@@ -126,7 +126,7 @@ describe('desktop preview host', () => {
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const session = createTestSession();
+        const session = yield* createTestSession();
         const present = vi.fn<(...args: unknown[]) => void>(() => {});
         const detachPresentation = yield* session.interactions.use({
           emit: present,

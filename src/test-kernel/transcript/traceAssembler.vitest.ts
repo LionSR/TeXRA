@@ -6,6 +6,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
   emptyRunEndOutput,
@@ -31,7 +32,7 @@ import { seedRunRecord } from '@test/support/runRecordSeeds';
 import { assembleTrace } from '@transcript';
 
 const tempDirs = useTempDirs();
-let session: ReturnType<typeof createTestSession>;
+let session: SessionHandle;
 
 /** Populate the transcript input consumed by the export. */
 async function appendLogEntry(runId: RunId, text: string): Promise<void> {
@@ -96,8 +97,10 @@ function unwrapOk(result: AssembleTraceResult) {
 describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
-  beforeEach(() => {
-    session = createTestSession({ roots: testWorkspaceRoots() });
+  beforeEach(async () => {
+    session = await Effect.runPromise(
+      createTestSession({ roots: testWorkspaceRoots() }),
+    );
   });
 
   afterEach(async () => {

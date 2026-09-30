@@ -51,7 +51,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
       const runId = 'abc12345' as RunId;
       const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
 
-      const session = createTestSession();
+      const session = yield* createTestSession();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
       yield* seedRunRecord(session, runId, runConfigRecord);

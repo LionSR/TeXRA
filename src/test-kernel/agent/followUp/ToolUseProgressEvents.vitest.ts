@@ -354,9 +354,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   return { result, requests, state };
 });
 
-function quietSession(): SessionHandle {
-  return sessionWithInteractions({ emit: () => {} });
-}
+const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
 function startedRun(session: SessionHandle): RunId {
   const runId = generateRunId();
@@ -392,7 +390,7 @@ describe('the tool-use turn', () => {
     'finalizes the response of a turn that ends with text, and not of one that continues with tools',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const finalized: string[] = [];
         const logger = new TraceEmitter((event) => {
           if (event.type === 'response.finalized') finalized.push(event.text);
@@ -420,7 +418,7 @@ describe('the tool-use turn', () => {
     'asks once more when the model returns a blank turn after a tool result, and does not repeat it',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
@@ -446,7 +444,7 @@ describe('the tool-use turn', () => {
     'forces one terminal-tool turn only where the provider can force it (%s)',
     (supportsForcedToolChoice) =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
           session,
@@ -473,7 +471,7 @@ describe('the tool-use turn', () => {
 
   it.effect('returns the text that accompanied the terminal tool', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const structured: { value: JsonValue | undefined } = { value: undefined };
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
@@ -517,7 +515,7 @@ describe('the tool-use turn', () => {
       Effect.gen(function* () {
         // A failed run still reports what the model had said: the text that
         // accompanied the tool calls is the run's response, beside the error.
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { result } = yield* runScript({
           runId: startedRun(session),
@@ -549,7 +547,7 @@ describe('the tool-use turn', () => {
     'keeps the fresh response when a compaction replaces the whole conversation',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { result, state } = yield* runScript({
           runId: startedRun(session),
@@ -595,7 +593,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
         // validation error) must still leave a record of what the user asked
         // for, or the transcript's opening row vanishes for exactly the runs
         // most likely to need debugging.
-        const session = quietSession();
+        const session = yield* quietSession();
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
 
@@ -620,7 +618,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
 
   it.effect('logs nothing when the launch had no transcript row to write', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
 
@@ -663,7 +661,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
     },
   ])('persists a $name turn as one structural session stage', (scenario) =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const recorder = createTestRunTrace(runId);
       const logger = recorder.trace;

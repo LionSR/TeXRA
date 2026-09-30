@@ -70,7 +70,7 @@ async function stampRun(runId: RunId): Promise<void> {
   }
 }
 
-let taskSession: ReturnType<typeof createTestSession>;
+let taskSession: SessionHandle;
 const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
 /** The run's task list as every surface reads it: off the session fold. */
@@ -213,11 +213,8 @@ describe('completedRunArchive facade', () => {
         // Both sessions close on every exit of this test, interruption
         // included; a close failure is the defect the old `finally` threw.
         const papers = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            ['first-paper', 'second-paper'].map((label) => ({
-              label,
-              session: createTestSession(),
-            })),
+          Effect.forEach(['first-paper', 'second-paper'], (label) =>
+            Effect.map(createTestSession(), (session) => ({ label, session })),
           ),
           (open) =>
             Effect.forEach(open, ({ session }) => closeTestSession(session), {

@@ -77,8 +77,6 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { RunRegistry } from '@agent/runtime/runRegistry';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -383,12 +381,8 @@ function installSession(overrides: Record<string, unknown> = {}): void {
  * Installs a session whose interaction, event, status, and run surfaces
  * are the real runtime objects rather than per-mock stubs.
  */
-function installOwnerSession(): {
-  readonly session: SessionHandle;
-  readonly runs: RunRegistry;
-  readonly interactions: SessionHostInteractions;
-} {
-  const session = createTestSession();
+const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
+  const session = yield* createTestSession();
   // The real session's request handler admits only runs the fold holds;
   // these cases track runs directly, so the stop request lands on the
   // registry the way the handler would land it.
@@ -417,7 +411,7 @@ function installOwnerSession(): {
     runs: session.runs,
     interactions: session.interactions,
   };
-}
+});
 /**
  * A stop lands only on a run the fold holds, so a test that stops one states
  * it in the view first.
@@ -448,7 +442,7 @@ describe('CLI terminal outcome resolution', () => {
   // record store is stubbed.
   it.effect('prefers the persisted post-shutdown outcome', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const runId = '5d0001' as RunId;
       publishTestRunStart(session, runId);
       session.publish([
@@ -478,7 +472,7 @@ describe('CLI terminal outcome resolution', () => {
     'reports an outcome read failure and retains the completed run',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         const runId = 'b0f001' as RunId;
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
@@ -601,7 +595,7 @@ describe('createChatSessionController', () => {
     () =>
       Effect.gen(function* () {
         const childRun = 'c00001' as RunId;
-        const { session: runtimeSession, runs } = installOwnerSession();
+        const { session: runtimeSession, runs } = yield* installOwnerSession();
         const disposeAdapter = vi.fn();
         const presentationHost = {
           emit: vi.fn(),
@@ -669,6 +663,9 @@ describe('createChatSessionController', () => {
           vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
         );
 
+        // The launch's `run.start` rows are detached publishes: the stop
+        // claims the child's aggregate, so they commit first.
+        yield* runtimeSession.settlePublications();
         // The stop Ctrl-C sends under "Keep subagents running": the root
         // stops and its live children detach.
         const owner = mocks.sessionStub() as SessionHandle;

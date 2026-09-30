@@ -3,6 +3,7 @@ import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
   AgentConfigFieldsSchema,
@@ -15,12 +16,12 @@ import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
-let session: ReturnType<typeof createTestSession>;
+let session: SessionHandle;
 const run = <A, E>(effect: Effect.Effect<A, E>) =>
   testRuntime().runPromise(effect);
 
 beforeEach(async () => {
-  session = createTestSession();
+  session = await Effect.runPromise(createTestSession());
   await run(
     session.commit([
       {

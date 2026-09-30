@@ -26,8 +26,8 @@ import { formatConversation } from '@tools/executions/conversationFormat';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 let session: SessionHandle;
-beforeEach(() => {
-  session = createTestSession();
+beforeEach(async () => {
+  session = await Effect.runPromise(createTestSession());
 });
 
 /** Run a status read on the suite session's runs. */

@@ -8,6 +8,7 @@ import { describe, expect, vi } from 'vitest';
 
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -50,15 +51,11 @@ vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
     await importOriginal<typeof import('@agent/storage/runLifecycle')>();
   return {
     ...actual,
-    finalizeRun: vi.fn(
-      (
-        session: ReturnType<typeof createTestSession>,
-        input: { runId: string },
-      ) =>
-        Effect.sync(() => {
-          storageMocks.settledUnder.set(input.runId, session.roots.storage);
-          return { ok: true, outcome: 'cancelled' };
-        }),
+    finalizeRun: vi.fn((session: SessionHandle, input: { runId: string }) =>
+      Effect.sync(() => {
+        storageMocks.settledUnder.set(input.runId, session.roots.storage);
+        return { ok: true, outcome: 'cancelled' };
+      }),
     ),
   };
 });
@@ -74,8 +71,8 @@ describe('session isolation', () => {
         workspacePath: fakePath('papers/b'),
         storagePath: fakePath('storage/b'),
       });
-      const sessionA = createTestSession({ roots: paperA });
-      const sessionB = createTestSession({ roots: paperB });
+      const sessionA = yield* createTestSession({ roots: paperA });
+      const sessionB = yield* createTestSession({ roots: paperB });
       yield* Effect.addFinalizer(() =>
         closeSessionOf(sessionA).pipe(Effect.andThen(closeSessionOf(sessionB))),
       );
@@ -107,14 +104,14 @@ describe('session isolation', () => {
     'the host-exit drain settles each session under its own root, outside any scope',
     () =>
       Effect.gen(function* () {
-        const sessionA = createTestSession({
+        const sessionA = yield* createTestSession({
           roots: createFakeWorkspaceRoots({
             workspacePath: fakePath('papers/a'),
             storagePath: fakePath('storage/a'),
           }),
         });
         yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
-        const sessionB = createTestSession({
+        const sessionB = yield* createTestSession({
           roots: createFakeWorkspaceRoots({
             workspacePath: fakePath('papers/b'),
             storagePath: fakePath('storage/b'),
@@ -190,7 +187,7 @@ describe('session isolation', () => {
           workspacePath: fakePath('papers/contended'),
           storagePath: fakePath('storage/contended'),
         });
-        const session = createTestSession({ roots: project });
+        const session = yield* createTestSession({ roots: project });
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         // Job 1: enqueued on the session's one publisher from the process
         // context, the shape the desktop has.
@@ -220,7 +217,7 @@ describe('session isolation', () => {
 
   it.effect('a run stop lands in the run session only', () =>
     Effect.gen(function* () {
-      const sessionB = createTestSession();
+      const sessionB = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
       const runId = generateRunId();
       const interrupt = vi.fn();
@@ -249,7 +246,7 @@ describe('session isolation', () => {
           }),
         );
         const runId = 'e15001' as RunId;
-        const sessionB = createTestSession();
+        const sessionB = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const ctx = createTestLaunchContext({
           runId,

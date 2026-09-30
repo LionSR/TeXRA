@@ -95,7 +95,7 @@ let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIp
 
 const liveScopes: Scope.Closeable[] = [];
 
-function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
+async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
     globalState = new FakeStateStore(),
     workspaceState = new FakeStateStore(),
@@ -105,16 +105,18 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   } = overrides;
   // The paper's three setting slots reach the body through its session's
   // roots, as the desktop passes them.
-  const session = createTestSession({
-    roots: {
-      ...testWorkspaceRoots(),
-      storage: '/workspace/settings-ipc/storage',
-      config,
-      workspaceState,
-      repoState,
-      globalState,
-    },
-  });
+  const session = await Effect.runPromise(
+    createTestSession({
+      roots: {
+        ...testWorkspaceRoots(),
+        storage: '/workspace/settings-ipc/storage',
+        config,
+        workspaceState,
+        repoState,
+        globalState,
+      },
+    }),
+  );
   // One root holds one session: released at test end, or the next fixture
   // over this root would get this test's session and its workspace state.
   onTestFinished(() => Effect.runPromise(closeSessionOf(session)));
@@ -160,11 +162,11 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   return { globalState, session, settings, workspaceState };
 }
 
-function createCapturedSettingsFixture(
+async function createCapturedSettingsFixture(
   overrides: Omit<SettingsFixtureOverrides, 'postToRenderer'> = {},
 ) {
   const posted: RendererMessage[] = [];
-  const fixture = createSettingsFixture({
+  const fixture = await createSettingsFixture({
     ...overrides,
     postToRenderer: (message) => posted.push(message),
   });
@@ -199,9 +201,9 @@ function latexSnapshotCount(posted: readonly RendererMessage[]): number {
   return posted.filter((message) => isSnapshot(message, 'latex')).length;
 }
 
-function createFailureReportingFixture(workspaceState: FakeStateStore) {
+async function createFailureReportingFixture(workspaceState: FakeStateStore) {
   const showErrorMessage = vi.fn(() => Effect.void);
-  const { settings, posted } = createCapturedSettingsFixture({
+  const { settings, posted } = await createCapturedSettingsFixture({
     workspaceState,
     bindings: {
       notify: { showInfoMessage: () => Effect.void, showErrorMessage },
@@ -234,7 +236,7 @@ describe('desktop settings IPC', () => {
       [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
     });
 
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       repoState,
     });
 
@@ -258,7 +260,7 @@ describe('desktop settings IPC', () => {
   }, 15_000);
 
   it('loads usage only for the subscription command and rejects malformed refresh payloads', async () => {
-    const { settings, posted } = createCapturedSettingsFixture();
+    const { settings, posted } = await createCapturedSettingsFixture();
     const usagePosts = () =>
       posted.filter(
         (message) =>
@@ -294,9 +296,11 @@ describe('desktop settings IPC', () => {
       Effect.gen(function* () {
         const repoState = new FakeStateStore();
 
-        const { settings, posted } = createCapturedSettingsFixture({
-          repoState,
-        });
+        const { settings, posted } = yield* Effect.promise(() =>
+          createCapturedSettingsFixture({
+            repoState,
+          }),
+        );
 
         expect(
           settings.handleMessage({
@@ -354,9 +358,11 @@ describe('desktop settings IPC', () => {
   it.live('round-trips tool path protection through workspace state', () =>
     Effect.gen(function* () {
       const workspaceState = new FakeStateStore();
-      const { settings, posted } = createCapturedSettingsFixture({
-        workspaceState,
-      });
+      const { settings, posted } = yield* Effect.promise(() =>
+        createCapturedSettingsFixture({
+          workspaceState,
+        }),
+      );
 
       expect(
         settings.handleMessage({
@@ -388,9 +394,11 @@ describe('desktop settings IPC', () => {
     () =>
       Effect.gen(function* () {
         const globalState = new FakeStateStore();
-        const { settings, posted } = createCapturedSettingsFixture({
-          globalState,
-        });
+        const { settings, posted } = yield* Effect.promise(() =>
+          createCapturedSettingsFixture({
+            globalState,
+          }),
+        );
 
         expect(
           settings.handleMessage({
@@ -418,7 +426,7 @@ describe('desktop settings IPC', () => {
   it('shows unsupported-command reasons without reporting an error', async () => {
     const showInfoMessage = vi.fn(() => Effect.void);
     const showErrorMessage = vi.fn(() => Effect.void);
-    const { settings } = createSettingsFixture({
+    const { settings } = await createSettingsFixture({
       bindings: { notify: { showInfoMessage, showErrorMessage } },
     });
 
@@ -439,8 +447,9 @@ describe('desktop settings IPC', () => {
     'round-trips the LaTeX formatter through workspace state and refreshes config values',
     () =>
       Effect.gen(function* () {
-        const { settings, workspaceState, posted } =
-          createCapturedSettingsFixture();
+        const { settings, workspaceState, posted } = yield* Effect.promise(() =>
+          createCapturedSettingsFixture(),
+        );
 
         expect(
           settings.handleMessage({
@@ -490,14 +499,16 @@ describe('desktop settings IPC', () => {
 
       const showErrorMessage = vi.fn(() => Effect.void);
       const refreshCatalogs = vi.fn(() => Effect.void);
-      const { settings, posted } = createCapturedSettingsFixture({
-        workspaceState,
-        globalState,
-        bindings: {
-          refreshCatalogs,
-          notify: { showInfoMessage: () => Effect.void, showErrorMessage },
-        },
-      });
+      const { settings, posted } = yield* Effect.promise(() =>
+        createCapturedSettingsFixture({
+          workspaceState,
+          globalState,
+          bindings: {
+            refreshCatalogs,
+            notify: { showInfoMessage: () => Effect.void, showErrorMessage },
+          },
+        }),
+      );
 
       expect(
         settings.handleMessage({
@@ -558,7 +569,7 @@ describe('desktop settings IPC', () => {
     });
     const config = new FakeScopedConfigProvider();
     config.seedWorkspace('texra.toolUse.requireBashApproval', false);
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       repoState,
       config,
     });
@@ -608,7 +619,7 @@ describe('desktop settings IPC', () => {
   it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
     const config = new FakeScopedConfigProvider();
 
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       config,
     });
 
@@ -647,7 +658,7 @@ describe('desktop settings IPC', () => {
       Effect.fail(failure),
     );
     const { settings, showErrorMessage, posted } =
-      createFailureReportingFixture(workspaceState);
+      await createFailureReportingFixture(workspaceState);
 
     expect(
       settings.handleMessage({
@@ -668,7 +679,7 @@ describe('desktop settings IPC', () => {
     const workspaceState = new FakeStateStore();
     const update = vi.spyOn(workspaceState, 'update');
     const { settings, showErrorMessage, posted } =
-      createFailureReportingFixture(workspaceState);
+      await createFailureReportingFixture(workspaceState);
 
     expect(
       settings.handleMessage({
@@ -689,7 +700,7 @@ describe('desktop settings IPC', () => {
   it('writes the agent-skills toggle and returns the skills settings', async () => {
     const config = new FakeScopedConfigProvider();
 
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       config,
     });
 
@@ -718,7 +729,7 @@ describe('desktop settings IPC', () => {
   it('keeps a workspace-scoped row unwritten while no folder is open', async () => {
     const config = new FakeScopedConfigProvider();
     const showInfoMessage = vi.fn(() => Effect.void);
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       config,
       bindings: {
         requiresOpenWorkspace: () => true,
@@ -743,7 +754,7 @@ describe('desktop settings IPC', () => {
 
   it('requires UI confirmation before deleting memory', async () => {
     const confirm = vi.fn(() => Effect.succeed(false));
-    const { settings, posted } = createCapturedSettingsFixture({
+    const { settings, posted } = await createCapturedSettingsFixture({
       bindings: {
         prompt: { ...createStubSettingsBindings().prompt, confirm },
       },
@@ -766,7 +777,7 @@ describe('desktop settings IPC', () => {
   });
 
   it('ignores unsupported or malformed settings messages', async () => {
-    const { settings, posted } = createCapturedSettingsFixture();
+    const { settings, posted } = await createCapturedSettingsFixture();
 
     expect(settings.handleMessage({ command: 'unknown' })).toBe(false);
     // Missing the required `key` — the inbound schema rejects it, so the

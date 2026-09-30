@@ -66,7 +66,7 @@ function withSession<A, E, R>(
   fn: (session: SessionHandle) => Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> {
   return Effect.acquireUseRelease(
-    Effect.sync(createTestSession),
+    createTestSession().pipe(Effect.orDie),
     fn,
     (session) => closeSessionOf(session),
   );

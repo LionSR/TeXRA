@@ -118,15 +118,13 @@ describe('desktop composition root and launch environment', () => {
           const opener = vi
             .spyOn(agentRuntime, 'openSessionEffect')
             .mockImplementation((init) =>
-              Effect.sync(() =>
-                createTestSession({
-                  ...init,
-                  transcriptMode: {
-                    kind: 'ephemeral',
-                    reason: 'project close regression',
-                  },
-                }),
-              ),
+              createTestSession({
+                ...init,
+                transcriptMode: {
+                  kind: 'ephemeral',
+                  reason: 'project close regression',
+                },
+              }),
             );
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => opener.mockRestore()),
@@ -214,15 +212,13 @@ describe('desktop composition root and launch environment', () => {
         const opener = vi
           .spyOn(agentRuntime, 'openSessionEffect')
           .mockImplementation((init) =>
-            Effect.sync(() =>
-              createTestSession({
-                ...init,
-                transcriptMode: {
-                  kind: 'ephemeral',
-                  reason: 'project disposal regression',
-                },
-              }),
-            ),
+            createTestSession({
+              ...init,
+              transcriptMode: {
+                kind: 'ephemeral',
+                reason: 'project disposal regression',
+              },
+            }),
           );
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => opener.mockRestore()),

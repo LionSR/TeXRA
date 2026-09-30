@@ -191,7 +191,7 @@ describe('attachCliSessionProgressProjection', () => {
     'writes every display row as a progress record carrying the row verbatim',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         publishTestRunStart(session, runId);
         publishTestRunStart(session, childRunId, { parent: runId });
         // The projection attaches at the current ordinal: settle the seeded
@@ -216,7 +216,7 @@ describe('attachCliSessionProgressProjection', () => {
     'carries the parent edge on run.start and the terminal fact on run.end',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
         const { records, publish, detach } = yield* projectionOver(session);
@@ -267,7 +267,7 @@ describe('attachCliSessionProgressProjection', () => {
     'attaches at the current ordinal: a recorded session resumes with one activation line and no replayed history',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         // The recorded history: a launch that ran and stopped before this
         // process attached its projection.
         session.publish([
@@ -338,7 +338,7 @@ describe('attachCliSessionProgressProjection', () => {
     'derives the child roster from the fold, one run.children record per change',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
         const { all, publish, detach } = yield* projectionOver(session);
@@ -424,7 +424,7 @@ describe('attachCliSessionProgressProjection', () => {
 
   it.effect('writes nothing after detach', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
       const { writeRecord, publish, detach } = yield* projectionOver(session);
