@@ -9,7 +9,6 @@ import {
   getSharedLocalResourceRoots,
 } from '@common/webview';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
@@ -71,13 +70,6 @@ export class SettingsViewProvider {
       session,
       progressView,
     );
-
-    // Listen for auth state changes to refresh all data
-    onTexraAuthSessionsChanged(context, () => {
-      if (this._view) {
-        this.runtime.runFork(this.messageHandler.refreshAfterAuthChange());
-      }
-    });
   }
 
   /** Sign in to a subscription provider from a command, not the webview. */

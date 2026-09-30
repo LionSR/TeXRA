@@ -3,12 +3,9 @@
  * PRD, R1 and R7): one error for the host ports those programs call, the
  * serialized-write lane the coordinators share, and the settle-fold a host
  * boundary applies when it runs one of those programs on its own runtime.
- * Nothing here runs an Effect: a host entry runs the program it composes, and
- * the `SupabaseAuth` plane runs its GoTrue storage callbacks on the services
- * it captured when it was built.
+ * Nothing here runs an Effect: a host entry runs the program it composes.
  */
 import { Cause, Data, Deferred, Effect, Option, Semaphore } from 'effect';
-import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * A host port (secret storage), an SDK call, or a provider policy rejected.
@@ -19,16 +16,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 export class AuthPortError extends Data.TaggedError('AuthPortError')<{
   readonly cause: unknown;
 }> {}
-
-/** Adapt one Promise port call; its rejection becomes an {@link AuthPortError}. */
-export function callPort<A>(
-  call: () => Promise<A>,
-): Effect.Effect<A, AuthPortError> {
-  return Effect.tryPromise({
-    try: call,
-    catch: (cause) => new AuthPortError({ cause }),
-  });
-}
 
 /**
  * Serialized storage writes with an idle barrier — what a coordinator's
@@ -101,12 +88,8 @@ export class SerializedWrites {
   });
 }
 
-/** Re-mint an {@link AuthPortError} as the port's own error. */
-export const unwrapAuthPortCause = (error: AuthPortError): Error =>
-  ensureError(error.cause);
-
-// Preserve the port's original rejection value. `unwrapAuthPortCause`
-// would mint an `Error` from a non-`Error` cause and break its identity.
+// Preserve the port's original rejection value: minting an `Error` from a
+// non-`Error` cause would break its identity.
 const settleExpected = (error: unknown): unknown =>
   error instanceof AuthPortError ? error.cause : error;
 

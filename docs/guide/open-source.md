@@ -43,11 +43,11 @@ npm install llm-zoo
 import { lookup, cost, from, cheapest, ModelProvider } from 'llm-zoo';
 
 // Look up a model
-const claude = lookup('sonnet5');
+const claude = lookup('sonnet55');
 console.log(claude.contextWindow); // 1000000
 
 // Calculate cost
-const price = cost('sonnet5', { input: 1000, output: 500 }); // 0.007
+const price = cost('sonnet55', { input: 1000, output: 500 }); // 0.007
 
 // Find the cheapest model with vision support
 const model = cheapest({ supportsVision: true });

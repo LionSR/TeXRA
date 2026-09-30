@@ -55,7 +55,6 @@
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@openai/codex-sdk": "catalog:",
     "@openrouter/sdk": "catalog:",
-    "@supabase/supabase-js": "catalog:",
     "acorn": "catalog:",
     "acorn-walk": "catalog:",
     "arxiv-client": "catalog:",

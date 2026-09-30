@@ -5,15 +5,12 @@
  * the CLI account & access surfaces, slash-command descriptions, login
  * handlers, the extension's subscription settings section, and the
  * auth-failure hints that quote a toggle by name cannot paraphrase each
- * other. "TeXRA account" itself is owned by `onboarding.ts` — this module
- * imports it rather than restating the name.
+ * other.
  *
- * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
+ * Wire identifiers (`chatgpt`, `grok`) stay internal.
  */
 
 import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
-
-import { RESEARCHER_ACCESS } from './onboarding';
 
 /** Shared device-code option description for any account picker. */
 export const DEVICE_CODE_DESCRIPTION =
@@ -80,33 +77,4 @@ export const ACCOUNT_OUTCOME = {
     reason: string,
   ): string =>
     `${ACCOUNT_OUTCOME.signOutFailed(providerDisplayName)}: ${reason}`,
-} as const;
-
-/**
- * TeXRA account fields that only the account surfaces need. The account
- * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
- */
-export const RESEARCHER_ACCESS_AUTH = {
-  signInLabel: `Sign in to your ${RESEARCHER_ACCESS.label}`,
-  signInExample: `sign in to your ${RESEARCHER_ACCESS.label}`,
-  deviceSignInExample: `sign in to your ${RESEARCHER_ACCESS.label} over SSH`,
-  credentialsOnlyExample: `sign in to your ${RESEARCHER_ACCESS.label} (credentials only)`,
-  loginDescription: `Sign in to your ${RESEARCHER_ACCESS.label}`,
-  deviceCodeLabel: `Sign in to ${RESEARCHER_ACCESS.label} with a code`,
-  signOutDescription: `Sign out of your ${RESEARCHER_ACCESS.label}`,
-  statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,
-  statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
-  authDescription: `Sign in with ${CHATGPT_AUTH.label} or ${GROK_AUTH.label}, or sign in to your ${RESEARCHER_ACCESS.label}; check status`,
-  /** `/login` slash-command description. */
-  chatLoginDescription: `manage ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, and your ${RESEARCHER_ACCESS.label} sign-ins`,
-  startingDevice: `Starting device-code sign-in to your ${RESEARCHER_ACCESS.label}.`,
-  startingNoBrowser: (provider: string): string =>
-    `Starting ${provider} sign-in to your ${RESEARCHER_ACCESS.label}.`,
-  startingBrowser: (provider: string): string =>
-    `Opening browser for ${provider} sign-in to your ${RESEARCHER_ACCESS.label}...`,
-  signedIn: (accountLabel: string): string =>
-    `Signed in to your ${RESEARCHER_ACCESS.label} as ${accountLabel}.`,
-  signedOut: `Signed out of your ${RESEARCHER_ACCESS.label}.`,
-  signOutFailedWithReason: (reason: string): string =>
-    ACCOUNT_OUTCOME.signOutFailedWithReason(RESEARCHER_ACCESS.label, reason),
 } as const;

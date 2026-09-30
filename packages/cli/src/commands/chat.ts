@@ -1,7 +1,5 @@
 import { Effect } from 'effect';
 
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
-
 import { CliUsageError } from '../runtime/cliContext';
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {
@@ -80,7 +78,7 @@ export const chatCommand = withUsageSections(
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
         ['/approval', 'set approval policy and session auto-approvals'],
-        ['/login', RESEARCHER_ACCESS_AUTH.chatLoginDescription],
+        ['/login', 'manage ChatGPT and Grok sign-ins'],
         [
           'Ctrl-T',
           "open the focused run's full output in a scrollable reader (PgUp/PgDn pages)",

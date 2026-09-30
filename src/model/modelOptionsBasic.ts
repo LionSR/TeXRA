@@ -33,7 +33,7 @@ export const DEFAULT_MODELS: readonly string[] = [
   DEFAULT_AGENT_MODEL,
   'gpt56-',
   'gpt6--',
-  'sonnet5T',
+  'sonnet55',
   'opus55',
   'fable51',
   'gemini38f',

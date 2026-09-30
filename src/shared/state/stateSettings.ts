@@ -586,8 +586,8 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
     title: 'Share usage telemetry',
     description:
-      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
-    category: 'account',
+      'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
+    category: 'privacy',
     configTarget: 'global',
     surfaces: { settingsView: 'telemetry' },
   },
@@ -872,7 +872,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
     slot: 'repoState',
-    enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
+    enumLabels: ['Sonnet 5.5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
   surfacedSetting({

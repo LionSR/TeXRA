@@ -20,6 +20,22 @@ All notable changes to this project will be documented in this file.
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **TeXRA sign-in is removed from every host.** `texra login`, `texra logout`,
+  `texra auth status` and `/login texra` are gone, as are the VS Code sign-in,
+  sign-out and account commands, the Account tab (the General page now opens on
+  **Privacy**, which keeps the telemetry switch), the desktop sign-in dialog and
+  the `texra://` callback handler. Nothing needed the account: every agent ships
+  bundled and model calls run on your own credential. Provider sign-ins are
+  unchanged (`texra auth chatgpt login`, `texra auth grok login`, `/login` in a
+  chat, GitHub and Copilot).
+- **Usage logging is anonymous and needs no account.** When on, each batch
+  carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
+  sign-in token; the body is unchanged and never has prompts, paths or
+  document text. Each host shows a one-time notice. Opt out with
+  `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
+  (or VS Code's telemetry setting); the ID is one row in
+  `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
+  resets it. A custom agent is reported only as "custom". `texra doctor` shows the usage-logging row.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,
   Mathematician, and Computer Scientist teams now work fully offline with no
   TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
@@ -196,6 +212,15 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
+  (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
+  $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats
+  and the OpenAI setup pick; Sonnet 5.5 replaces Sonnet 5 in the default
+  model list and as the OpenRouter setup pick. Sonnet 5 (`sonnet5`,
+  `sonnet5T`) and GPT-6 Sol (`gpt6-`) are deprecated. GLM-5.3 Flash is
+  now billed at its list price, since the promotional price ended. The Claude
+  Code integration offers Sonnet 5.5 (`claude-sonnet-5-5`) in place of
+  Sonnet 5 and uses it by default; a saved Sonnet 5 choice falls back to it.
 - **Delete a conversation from the desktop sidebar.** Hovering or focusing
   a finished conversation under a project shows an ×; clicking it removes
   the conversation and its run folder at once. The conversation menu's

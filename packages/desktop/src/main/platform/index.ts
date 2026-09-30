@@ -3,7 +3,6 @@ import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
 import { AgentDirectoryService } from '@agent/index';
-import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   appStateStoreFromDatabase,
@@ -62,8 +61,6 @@ interface ElectronPlatformInitResult {
    */
   globalState: StateStore;
   secrets: PlatformSecrets;
-  /** The account plane served as `SupabaseAuth`, built beside `secrets`. */
-  supabaseAuth: SupabaseAuthShape;
   agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
@@ -100,8 +97,8 @@ export const initializeElectronPlatform = Effect.fn(
   const globalStorage = resolveGlobalStoragePath(dataRoot);
   // Secrets precede the runtime; the process identity and application state
   // are acquired by its own layers, over the spawner and database it serves.
-  const { mainDir, resourcesPath, configStores, secrets, supabaseAuth } =
-    yield* Effect.gen(function* () {
+  const { mainDir, resourcesPath, configStores, secrets } = yield* Effect.gen(
+    function* () {
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
       const resourcesPath = yield* resolveResourcesPath(mainDir);
       const [configStores, secretsStore] = yield* Effect.all(
@@ -125,11 +122,9 @@ export const initializeElectronPlatform = Effect.fn(
               }),
           }),
       });
-      const supabaseAuth = yield* createSupabaseAuth({ secrets });
-      return { mainDir, resourcesPath, configStores, secrets, supabaseAuth };
-    }).pipe(
-      Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),
-    );
+      return { mainDir, resourcesPath, configStores, secrets };
+    },
+  ).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
@@ -160,11 +155,10 @@ export const initializeElectronPlatform = Effect.fn(
         appStateStoreFromDatabase(globalStorage, database.values),
       ),
     ),
-    auth: supabaseAuth,
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer,
-    // Desktop model traffic goes to the same Supabase usage log the extension
+    // Desktop model traffic goes to the same anonymous usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
     // The runtime's disposal drains the queue, so a queue shorter than one
     // batch is not lost at quit.
@@ -216,7 +210,6 @@ export const initializeElectronPlatform = Effect.fn(
       globalConfigStore: configStores.global,
       globalState: globalStateStore,
       secrets,
-      supabaseAuth,
       agentDirectories,
       dataRoot,
       resourcesPath,

@@ -999,10 +999,14 @@ scratch only. Format work belongs to the storage lanes.
 **Ruling.** Approval settings are never read from the committed project
 config file, so a repository cannot grant its own approvals; users keep
 project scope through a user-level override (D6).
-`web_fetch` prompts per host with a shipped allowlist; SSRF and redirect
-hardening ships regardless (D7).
+`web_fetch` has no per-host prompt, grant or allowlist (D7, reversed
+2026-09-30: over-built for a small team). SSRF and redirect hardening, which
+refuses non-public addresses on every hop, is the whole of its posture.
 
 **Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
+For D7, a concrete exfiltration incident through `web_fetch`; any prompt then
+belongs to a network guard kind on `ToolGuard` (D8) under the existing approval
+policy, not to a per-host grant of its own.
 
 ### The `defineTool` freeze admits guard kinds (D8)
 
@@ -1070,7 +1074,7 @@ specified.
   `InstalledPlugin.enabled` from the trust record it shares a row with.
   Reopen: a switch family is needed for a reason other than tidiness and can
   keep enable and trust in one row.
-- **An effects taxonomy.** D7 ships as a network member on the existing
-  `ToolGuard` (D8) with a shipped host allowlist, and memory-write gating is
-  dropped, so nothing reads a taxonomy. Reopen: a tool family needs an effect
+- **An effects taxonomy.** D7 ships as SSRF and redirect hardening only (no
+  per-host prompt or allowlist), and memory-write gating is dropped, so nothing
+  reads a taxonomy. Reopen: a tool family needs an effect
   class no guard kind can express.

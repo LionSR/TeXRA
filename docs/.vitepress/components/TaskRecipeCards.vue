@@ -14,7 +14,7 @@ const recipes = [
     title: 'Fix grammar & typos',
     agent: 'correct',
     model: 'gemini37f',
-    alts: 'deepseek, gpt6--, sonnet5',
+    alts: 'deepseek, gpt6--, sonnet55',
     instruction:
       'Fix grammatical errors and typos without changing the content or technical terminology.',
   },
@@ -22,8 +22,8 @@ const recipes = [
     icon: 'file-export',
     title: 'Paper to slides',
     agent: 'paper2slide',
-    model: 'sonnet5T',
-    alts: 'opus55, gpt6-',
+    model: 'sonnet55',
+    alts: 'opus55, gpt61-',
     instruction:
       'Convert this paper into presentation slides using the beamer template. Create approximately 12–15 slides highlighting the key points, methodology, and results.',
   },
@@ -32,7 +32,7 @@ const recipes = [
     title: 'Polish writing style',
     agent: 'polish',
     model: 'opus55',
-    alts: 'sonnet5T',
+    alts: 'sonnet55',
     instruction:
       'Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content.',
   },

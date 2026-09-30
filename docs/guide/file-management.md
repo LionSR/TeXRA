@@ -169,7 +169,7 @@ For example:
 
 - Input: `paper.tex`
 - Agent: `polish`
-- Model: `sonnet5`
+- Model: `sonnet55`
 - Output: `r0/paper.tex`
 
 When the agent definition includes reflection rounds, you may also see:

@@ -13,7 +13,6 @@ import * as path from 'node:path';
 import { Effect, Scope, Stream } from 'effect';
 
 // Local imports
-import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   type AgentDirectoriesPort,
@@ -418,9 +417,6 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
     /** The language-model port, as `FakeHost` holds it. */
     readonly languageModel?: LanguageModelPort;
     readonly setup?: SetupPlatformShape;
-    /** The account plane the host's `SupabaseAuth` service reads. Absent hosts
-     *  answer signed-out. */
-    readonly auth?: SupabaseAuthShape;
   };
 
 /** The workspace roots a fake host installs beside its platform. */

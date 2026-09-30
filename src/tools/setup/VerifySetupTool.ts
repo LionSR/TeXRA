@@ -93,7 +93,7 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
     { concurrency: 'unbounded' },
   );
 
-  const { auth, missingCore, latexWorkshopInstalled } = core;
+  const { missingCore, latexWorkshopInstalled } = core;
 
   const lines: string[] = [];
   if (missingCore.length === 0) {
@@ -106,19 +106,15 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
       ? 'LaTeX Workshop extension: not applicable outside VS Code.'
       : `LaTeX Workshop extension: ${latexWorkshopInstalled ? 'installed' : 'NOT installed'}.`,
   );
-  // A usable model credential can be a direct provider key or a provider
-  // subscription. A bare auth.authenticated is NOT a working credential,
-  // so we don't let it count toward "ready".
-  let credSummary: string;
-  if (hasUsableCredential) {
-    credSummary = 'usable model credential available';
-  } else if (auth.authenticated) {
-    credSummary =
-      'signed in but no provider API key is configured. Add one to run models';
-  } else {
-    credSummary = 'NONE: need an API key or sign-in';
-  }
-  lines.push(`Credentials: ${credSummary}.`);
+  // A usable model credential is a direct provider key or a provider
+  // subscription.
+  lines.push(
+    `Credentials: ${
+      hasUsableCredential
+        ? 'usable model credential available'
+        : 'NONE: need an API key or sign-in'
+    }.`,
+  );
 
   const ready =
     missingCore.length === 0 &&

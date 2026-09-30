@@ -59,7 +59,6 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
-import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { withLogChannel } from '@logger/effectLog';
 import {
   effectDiagnosticsLayer,
@@ -1008,13 +1007,6 @@ interface ProcessRuntimeOptions {
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
   /**
-   * The root's account plane, served as `SupabaseAuth`. Every shipped host
-   * builds one from its secrets; a composition with no TeXRA account plane (the
-   * agent package serving an embedder) serves `unavailableSupabaseAuth()`,
-   * whose probes answer signed-out.
-   */
-  readonly auth: SupabaseAuthShape;
-  /**
    * The host's editor language-model bridge, served as `LanguageModel`. Every
    * host has a value for it: the VS Code extension's bridge to the editor's
    * language-model API, or `UNAVAILABLE_LANGUAGE_MODEL_PORT` elsewhere, where
@@ -1049,7 +1041,7 @@ interface ProcessRuntimeOptions {
   readonly usageLog: Layer.Layer<
     UsageLog,
     never,
-    HttpClient.HttpClient | SupabaseAuth
+    HttpClient.HttpClient | AppState
   >;
   /**
    * The process's handle on the global storage root —
@@ -1086,7 +1078,6 @@ export function installProcessRuntime({
   pluginLayers,
   secrets,
   appState,
-  auth,
   languageModel,
   agentDirectories,
   toolMissingReporter,
@@ -1112,7 +1103,6 @@ export function installProcessRuntime({
     inquiryRecordsLayer,
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
-    SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     Layer.provideMerge(agentCatalogFollower, agentDirectories),
     toolMissingReporter === undefined
@@ -1145,8 +1135,8 @@ export function installProcessRuntime({
       Sessions.layer(held).pipe(
         Layer.provideMerge(projectDatabaseLayer),
         // The usage log's own lifetime: its sender and ticker run with this
-        // runtime, its finalizer drains the queue while the account plane is
-        // up, and it is ahead of `services` so that plane and HTTP reach it.
+        // runtime, its finalizer drains the queue while HTTP is up, and it
+        // is ahead of `services` so HTTP reaches it.
         Layer.provideMerge(usageLog),
         // Its probes read the Lean port and the services below.
         Layer.provideMerge(toolAvailability),

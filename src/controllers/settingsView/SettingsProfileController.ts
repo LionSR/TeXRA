@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { API_PROVIDERS } from '@model/apiProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { modelsTabSettings } from '@shared/state/stateSettings';
@@ -39,58 +38,16 @@ interface SettingsProfileControllerDeps {
 export class SettingsProfileController {
   constructor(private readonly deps: SettingsProfileControllerDeps) {}
 
-  /**
-   * Assemble the canonical `UPDATE_PROFILE` message for either host. The host
-   * settles it on its process runtime, which provides `SupabaseAuth`.
-   *
-   * Profile-metadata reads degrade gracefully: a transient failure keeps the
-   * user signed in with fallback values rather than failing the whole refresh.
-   */
+  /** Assemble the canonical `UPDATE_PROFILE` message for either host. */
   readonly buildProfileMessage = Effect.fn(
     'SettingsProfileController.buildProfileMessage',
   )(function* (
     this: SettingsProfileController,
-  ): Effect.fn.Return<UpdateProfileMessage, Error, SupabaseAuth> {
-    const auth = yield* SupabaseAuth;
-    const [storedSessionState, secretStatuses] = yield* Effect.all(
-      [auth.storedSessionState, this.deps.loadProviderKeyStatuses],
-      { concurrency: 'unbounded' },
-    );
-    const base = {
+  ): Effect.fn.Return<UpdateProfileMessage, Error> {
+    const secretStatuses = yield* this.deps.loadProviderKeyStatuses;
+    return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
       providerKeyStatuses: yield* this.providerKeyStatuses(secretStatuses),
-    };
-
-    // Preserve the distinction between an authoritatively rejected refresh
-    // credential and a transient transport/service failure. Both have a stored
-    // account but require different user guidance.
-    const hasStoredSession = storedSessionState !== 'none';
-    let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
-    if (storedSessionState === 'invalid') {
-      sessionProblem = 'expired';
-    } else if (storedSessionState === 'transient') {
-      sessionProblem = 'unavailable';
-    }
-    const storedEmail = hasStoredSession
-      ? yield* auth.storedAccountLabel
-      : null;
-
-    if (storedSessionState !== 'authenticated') {
-      return {
-        ...base,
-        authenticated: false,
-        user: storedEmail ? { email: storedEmail } : null,
-        sessionProblem,
-      };
-    }
-
-    const user = yield* auth.user;
-
-    return {
-      ...base,
-      authenticated: true,
-      user: { email: user?.email ?? storedEmail ?? '' },
-      sessionProblem,
     };
   });
 

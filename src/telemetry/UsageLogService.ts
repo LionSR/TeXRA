@@ -16,11 +16,9 @@ import {
   HttpClientRequest,
 } from 'effect/unstable/http';
 
-import { SupabaseAuth } from '@auth/SupabaseAuth';
-import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { AppState, ConfigProvider } from '@platform/interfaces';
 import {
   TELEMETRY_ENABLED_DEFAULT,
   TELEMETRY_ENABLED_KEY,
@@ -31,6 +29,7 @@ import type {
   UsageLogBatch,
   UsageLogResponse,
 } from '@shared/usageLog';
+import { readOrCreateInstallId } from '@telemetry/installId';
 import {
   extractErrorMessage,
   toErrorMessage,
@@ -40,7 +39,7 @@ import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
 
-const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
+const USAGE_LOG_ENDPOINT = 'https://remote.texra.ai/functions/v1/log-usage';
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
@@ -176,9 +175,17 @@ class UsageLogServiceImpl {
   /** Coalesce triggers before they wait for the lane; failed sends wait for
    *  a later trigger instead of being retried by already waiting callers. */
   private backgroundFlushActive = false;
+  private warnedUndelivered = false;
+  private warnedRejected = false;
   private config: UsageLogConfig = { ...DEFAULT_CONFIG };
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
+  private hostTelemetryEnabled: () => boolean = () => true;
+
+  /** The host's own switch (VS Code's telemetry setting) and the user's opt-outs, read live. */
+  private allowed(config: ConfigProvider): boolean {
+    return this.hostTelemetryEnabled() && isTelemetryEnabledBySetting(config);
+  }
 
   /** Start this instance's sender and ticker, then register its final drain. */
   readonly start = Effect.fn('UsageLogService.start')(function* (
@@ -188,6 +195,7 @@ class UsageLogServiceImpl {
     this.config = { ...DEFAULT_CONFIG, ...options.config };
     this.extensionVersion = options.version;
     this.editorType = options.editorType;
+    this.hostTelemetryEnabled = options.hostTelemetryEnabled ?? (() => true);
     const triggers = yield* Queue.make<void>({
       capacity: 1,
       strategy: 'dropping',
@@ -212,7 +220,7 @@ class UsageLogServiceImpl {
     // Added after the forks, so it runs before their interruption: finalizers
     // unwind last-first, and the drain must finish while the sender is still
     // alive. It carries this build's context, which is where its HTTP client
-    // and account plane come from.
+    // and app state come from.
     yield* Effect.addFinalizer(() => this.drainAndStop());
 
     if (telemetryOptOutEnvVar()) {
@@ -234,7 +242,7 @@ class UsageLogServiceImpl {
     config: ConfigProvider,
   ): void {
     if (!this.config.enabled) return;
-    if (!isTelemetryEnabledBySetting(config)) return;
+    if (!this.allowed(config)) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       // `log` is synchronous (the invoker's usage report): its lines go straight to the sink.
@@ -279,7 +287,13 @@ class UsageLogServiceImpl {
             if (error.requeue) this.retryBatch = error.requeue;
             const requeuedMessage =
               requeued > 0 ? `; requeued ${requeued} entries` : '';
-            return Effect.logWarning(
+            // The endpoint may reject anonymous batches until it accepts them:
+            // say so once at warn, then keep later failures at debug.
+            const log = this.warnedUndelivered
+              ? Effect.logDebug
+              : Effect.logWarning;
+            this.warnedUndelivered = true;
+            return log(
               `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
             ).pipe(withLogChannel(CHANNEL), Effect.as(false));
           }),
@@ -316,17 +330,6 @@ class UsageLogServiceImpl {
   /** True means this batch is settled; false pauses draining until a later trigger. */
   private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
     function* (this: UsageLogServiceImpl) {
-      const token = yield* Effect.flatMap(
-        SupabaseAuth,
-        (auth) => auth.accessToken,
-      );
-      if (!token) {
-        yield* Effect.logDebug('Skipping flush - user not authenticated').pipe(
-          withLogChannel(CHANNEL),
-        );
-        return false;
-      }
-
       let batch = this.retryBatch;
       if (batch) {
         this.retryBatch = null;
@@ -341,16 +344,13 @@ class UsageLogServiceImpl {
         };
       }
 
-      // Re-read each entry's consent here rather than on entry: the token
-      // lookup above is asynchronous, so a user who opts out while it is in
-      // flight would otherwise have this continuation ship the batch anyway.
-      // Applied after the batch is taken so it also drops rounds
+      // Re-read each entry's consent here rather than on entry, so a user who
+      // opts out after queueing never has the batch shipped. Applied after
+      // the batch is taken so it also drops rounds
       // queued before the opt-out instead of leaving the timer to send them,
       // and read from the workspace each entry was recorded in, since this
       // flush runs outside any run.
-      const kept = batch.entries.filter(({ config }) =>
-        isTelemetryEnabledBySetting(config),
-      );
+      const kept = batch.entries.filter(({ config }) => this.allowed(config));
       const dropped = batch.entries.length - kept.length;
       if (dropped > 0) {
         yield* Effect.logDebug(
@@ -366,7 +366,18 @@ class UsageLogServiceImpl {
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
       ).pipe(withLogChannel(CHANNEL));
 
-      const response = yield* this.sendBatch(batch, token);
+      // The install ID is created only here, after every opt-out has passed.
+      const pending = batch;
+      const installId = yield* readOrCreateInstallId().pipe(
+        Effect.mapError(
+          (error) =>
+            new UsageBatchUndelivered({
+              reason: `install ID unavailable: ${toErrorMessage(error)}`,
+              requeue: pending,
+            }),
+        ),
+      );
+      const response = yield* this.sendBatch(batch, installId);
       if (!response.success) {
         yield* this.reportPermanentRejection(
           batch,
@@ -385,7 +396,9 @@ class UsageLogServiceImpl {
     batch: RetryBatch,
     reason: string,
   ): Effect.Effect<void> {
-    return Effect.logError(
+    const log = this.warnedRejected ? Effect.logDebug : Effect.logError;
+    this.warnedRejected = true;
+    return log(
       `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
     ).pipe(
       Effect.annotateLogs({
@@ -405,7 +418,7 @@ class UsageLogServiceImpl {
    * everything else is {@link UsageBatchUndelivered} with the batch to keep.
    */
   private readonly sendBatch = Effect.fn('UsageLogService.sendBatch')(
-    function* (batch: RetryBatch, token: string) {
+    function* (batch: RetryBatch, installId: string) {
       const undelivered = (reason: string) =>
         new UsageBatchUndelivered({ reason, requeue: batch });
       const wire: UsageLogBatch = {
@@ -422,8 +435,10 @@ class UsageLogServiceImpl {
       // A non-2xx status is not a failure here: the endpoint answers a
       // rejection with a body the acknowledgement checks below read.
       const { status, data } = yield* Effect.gen(function* () {
+        // The random install ID rides a header, lowercase UUIDv4, with no
+        // Authorization: the endpoint keys anonymous usage on it.
         const request = yield* HttpClientRequest.post(USAGE_LOG_ENDPOINT, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { 'X-TeXRA-Install-Id': installId },
         }).pipe(HttpClientRequest.bodyJson(wire));
         const response = yield* HttpClient.withScope(client).execute(request);
         const data = yield* response.json;
@@ -525,6 +540,9 @@ export interface UsageLogOptions {
   /** The editor this process runs in: the CLI, the desktop app, or the
    *  editor's own name on the extension host. */
   readonly editorType: string | undefined;
+  /** The host's own telemetry switch, read live on each queue and send: the
+   *  extension passes `vscode.env.isTelemetryEnabled`. */
+  readonly hostTelemetryEnabled?: () => boolean;
   /** Batch size, flush cadence and the host-side off switch; the shipped
    *  defaults stand where a caller passes nothing. */
   readonly config?: Partial<UsageLogConfig>;
@@ -533,7 +551,7 @@ export interface UsageLogOptions {
 /** Allocate and drain one queue for this layer's lifetime. */
 export const usageLogLayer = (
   options: UsageLogOptions,
-): Layer.Layer<UsageLog, never, HttpClient.HttpClient | SupabaseAuth> =>
+): Layer.Layer<UsageLog, never, HttpClient.HttpClient | AppState> =>
   Layer.effect(
     UsageLog,
     Effect.gen(function* () {

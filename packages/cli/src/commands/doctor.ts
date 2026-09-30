@@ -16,7 +16,6 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
 import { getCliModelAccessList } from '../runtime/modelAccess';
-import { getCliAuthProfile } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -57,7 +56,6 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
       services.runtime,
       buildDoctorReport(context, {
         kind: 'ready',
-        authProfile: getCliAuthProfile(),
         modelAccessList: withProcessServices(
           services.runtime,
           getCliModelAccessList({ stores: services }),

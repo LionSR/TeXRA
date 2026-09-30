@@ -11,7 +11,7 @@ import {
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
-import { getSetupAuthStatus, type SetupPlatformShape } from './platform';
+import type { SetupPlatformShape } from './platform';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Installation status of one probed tool, with its path when discoverable. */
@@ -64,14 +64,12 @@ function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
 
 /**
  * The core-setup status shared by `probe_environment` and `verify_setup`:
- * auth status, core-tool probing results, and LaTeX Workshop extension
- * presence. One definition so the two tools can't drift on what "core setup"
+ * core-tool probing results and LaTeX Workshop extension presence. One definition so the two tools can't drift on what "core setup"
  * means. Each tool's divergent credential/optional-tool handling stays in the
  * tool.
  */
 export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
   function* (platform: SetupPlatformShape) {
-    const auth = yield* getSetupAuthStatus();
     const coreTools = yield* Effect.all(
       PROBED_LATEX_TOOLS.map((name) => locateTool(name)),
       { concurrency: 'unbounded' },
@@ -80,6 +78,6 @@ export const collectCoreSetupStatus = Effect.fn('collectCoreSetupStatus')(
     const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,
     );
-    return { auth, coreTools, missingCore, latexWorkshopInstalled };
+    return { coreTools, missingCore, latexWorkshopInstalled };
   },
 );

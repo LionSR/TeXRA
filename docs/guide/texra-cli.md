@@ -46,7 +46,7 @@ preset such as Lean Project, led by its orchestrator); `/agent` stays
 available until your first message in any new chat.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
-(TeXRA account, ChatGPT subscription, or an API key), checks your
+(a ChatGPT or Grok subscription, or an API key), checks your
 environment, shows your agents, and starts your first task:
 
 ```bash
@@ -155,8 +155,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 ## Authentication
 
 Model calls run on your own provider API keys, or on a provider subscription
-you already pay for. Signing in to TeXRA is a separate, optional step: every
-agent ships bundled, so no agent needs it.
+you already pay for. There is no TeXRA account: every agent ships bundled.
 
 **Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -186,44 +185,25 @@ or out and sets which subscription serves each provider's models, and
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
-**Sign in to your TeXRA account** if you use account features. Sign-in does
-not supply model access, and no agent needs it; runs use the credentials
-above.
+Subscriptions sign in through `texra auth <provider> login`:
 
 ```bash
-texra login                 # pick GitHub or Google, then sign in via browser
-texra login github          # choose the OAuth provider explicitly
-texra login --no-browser    # print the loopback sign-in URL
-texra login --device        # device code: approve from a browser on any device
+texra auth chatgpt login              # browser sign-in
+texra auth chatgpt login --no-browser # print the loopback sign-in URL
+texra auth chatgpt login --device     # device code: approve from a browser on any device
+texra auth chatgpt status
+texra auth chatgpt logout
 ```
 
-When run interactively, a bare `texra login` asks which provider to use instead of
-silently defaulting. If you use multiple accounts, `--select-account` forces
-the OAuth account chooser and `--login-hint <email>` suggests which account to
-use.
+`grok` takes the same verbs. `--no-browser` still uses a local callback server.
+Open the printed URL in a browser that can reach the terminal session; SSH and
+container sessions may need callback port forwarding. `--device` needs no
+callback at all: the CLI prints a short code and a verification URL. Open the
+URL in a browser on any device, including your phone, and approve the code.
+This is the recommended path on SSH, WSL2, and containers.
 
-`--no-browser` still uses a local callback server. Open the printed URL in a
-browser that can reach the terminal session; SSH and container sessions may need
-callback port forwarding.
-
-`--device` needs no callback at all: the CLI prints a short code and a
-verification URL. Open the URL in a browser on any device, including your
-phone, sign in, and approve the code. This is the recommended path on SSH,
-WSL2, and containers. The interactive pickers offer it automatically when they
-detect a remote session.
-
-```bash
-texra auth                  # same as `texra auth status`
-texra auth status           # who am I signed in as?
-texra logout
-```
-
-`texra auth` on its own reports your account status and accepts the same flags
-as `texra auth status`, such as `--output-format json`.
-
-Run `texra doctor` at any time to see which dependencies are detected, who you
-are signed in as, and which models the CLI can reach with the current
-credentials.
+Run `texra doctor` at any time to see which dependencies are detected and which
+models the CLI can reach with the current credentials.
 
 ## Interactive chat
 

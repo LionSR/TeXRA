@@ -432,13 +432,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     postLatexStatus: toolsPage.postLatexStatus,
     reported,
     signInSubscription,
-    /** A TeXRA account change: the profile and the models it unlocks. */
-    refreshAfterAuthChange: (): HostEffect =>
-      allSettledVoid<Error, ProcessServices>([
-        postProfile,
-        postModelSelection,
-        bindings.refreshCatalogs(),
-      ]),
     /** Settle a repaint nobody awaits, reported as a message's would be. */
     settle,
     /** The Tools page following its workspace's availability results, for

@@ -11,11 +11,9 @@ import {
 import {
   CHATGPT_AUTH,
   GROK_AUTH,
-  RESEARCHER_ACCESS_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
-import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
 // Kept to one rendered row: the /login form and the account panel both
 // budget a single line for this description (75 columns at most).
@@ -46,13 +44,7 @@ export interface CliModelAccessStatus {
   readonly codingPlans: Readonly<
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
-  readonly texraSignedIn?: boolean;
-  readonly texraAccountLabel?: string;
 }
-
-export type CliAccountStatus = CliModelAccessStatus & {
-  readonly texraSignedIn: boolean;
-};
 
 interface CliModelAccessItem {
   readonly value: CliModelAccessSelection;
@@ -206,7 +198,7 @@ export function buildCliModelAccessItems(
 }
 
 export interface CliAccountAccessRow {
-  readonly provider: SubscriptionAuthStatus['provider'] | 'texra';
+  readonly provider: SubscriptionAuthStatus['provider'];
   readonly operation: 'sign-in' | 'sign-out';
   readonly label: string;
   readonly description: string;
@@ -218,9 +210,7 @@ export interface CliAccountAccessRow {
  * exactly one sign-out row. A signed-out one gets a browser sign-in row only
  * when its preference is still 'on' (an expired or revoked session blocking
  * the preference) — with the preference 'off' the toggle row is already the
- * sign-in path, and a second row would be two controls for one action. TeXRA
- * has no toggle, so it gets a sign-out row whenever it is signed in; its
- * sign-in rows stay surface-specific.
+ * sign-in path, and a second row would be two controls for one action.
  */
 export function buildCliAccountAccessRows(
   status: CliModelAccessStatus,
@@ -245,14 +235,6 @@ export function buildCliAccountAccessRows(
         description: copy.signInDescription,
       });
     }
-  }
-  if (status.texraSignedIn === true) {
-    rows.push({
-      provider: 'texra',
-      operation: 'sign-out',
-      label: RESEARCHER_ACCESS_AUTH.signOutDescription,
-      description: status.texraAccountLabel ?? RESEARCHER_ACCESS.label,
-    });
   }
   return rows;
 }

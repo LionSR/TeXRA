@@ -23,9 +23,7 @@ function makeActions(): ExtensionCommandActions {
     showSettings: asyncNoop(),
     newTask: asyncNoop(),
     cleanBuild: asyncNoop(),
-    signIn: vi.fn(() => Effect.succeed(false)),
     signInChatGpt: asyncNoop(),
-    signOut: asyncNoop(),
     runSetupAssistant: asyncNoop(),
     openGettingStarted: asyncNoop(),
     createSampleProject: asyncNoop(),
@@ -90,7 +88,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   // surface that same rejection to VS Code's `executeCommand` callers.
   describe('async rejection propagation (regression guard for #3782)', () => {
     it.each([
-      ['texra.auth.signIn', 'signIn'],
       ['texra.showMemory', 'showSettings'],
       ['texra.cloneOverleafProject', 'cloneOverleafProject'],
     ] as const)('%s rejection bubbles up', async (id, actionKey) => {
