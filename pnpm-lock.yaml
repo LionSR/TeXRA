@@ -121,8 +121,8 @@ catalogs:
       specifier: ^2.0.3
       version: 2.0.3
     postal-mime:
-      specifier: ^3.0.1
-      version: 3.0.1
+      specifier: ^4.0.0
+      version: 4.0.0
     pretty-ms:
       specifier: ^9.3.1
       version: 9.3.1
@@ -311,7 +311,7 @@ importers:
         version: 2.0.3
       postal-mime:
         specifier: 'catalog:'
-        version: 3.0.1
+        version: 4.0.0
       pretty-ms:
         specifier: 'catalog:'
         version: 9.3.1
@@ -573,7 +573,7 @@ importers:
         version: 2.0.3
       postal-mime:
         specifier: 'catalog:'
-        version: 3.0.1
+        version: 4.0.0
       pretty-ms:
         specifier: 'catalog:'
         version: 9.3.1
@@ -4774,8 +4774,9 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  postal-mime@3.0.1:
-    resolution: {integrity: sha512-N86EnYOxZjW1uHQIgSXnnRdnJz+wxmtDsnk3C4R/9rQ1utj8A2znauXZ3Q3+stCHxG5ckY4/NrO09WiPU6rcdQ==}
+  postal-mime@4.0.0:
+    resolution: {integrity: sha512-pmAD50GSuJ6Njf7oa4bleSsYrPy8UYxTRmxVFFwysOm2p8t4C3DFEmP+j7tkvQzPdFUT0X1PuzJvrnb2Sx40BA==}
+    engines: {node: '>=20'}
 
   postcss@8.5.28:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
@@ -9613,7 +9614,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  postal-mime@3.0.1: {}
+  postal-mime@4.0.0: {}
 
   postcss@8.5.28:
     dependencies:
