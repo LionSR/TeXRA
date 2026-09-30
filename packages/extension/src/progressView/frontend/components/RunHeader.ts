@@ -1,5 +1,12 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -237,6 +244,16 @@ export class RunHeader extends LitElement {
 
   /** The delete item was chosen; the row asks before it acts. */
   @state() private confirmingDelete: RunId | null = null;
+
+  protected override updated(changed: PropertyValues): void {
+    // The menu hands focus back to its trigger; the confirmation takes it,
+    // so Escape (heard on the callout) and Tab land on the question.
+    if (changed.has('confirmingDelete') && this.confirmingDelete !== null) {
+      this.renderRoot
+        .querySelector<HTMLElement>('.delete-confirm-cancel')
+        ?.focus();
+    }
+  }
 
   private readonly width = new WideHeaderController(this);
 

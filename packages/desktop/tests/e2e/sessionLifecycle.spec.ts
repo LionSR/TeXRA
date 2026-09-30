@@ -250,6 +250,10 @@ test('the rail deletes a finished conversation after asking, and it stays delete
     await dismissOnboarding(currentLaunch.page);
     await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
     await expect(railRow(currentLaunch, WAITING_RUN)).toHaveCount(0);
+    // The artifact: the relaunched rail without the deleted conversation.
+    await currentLaunch.page.screenshot({
+      path: test.info().outputPath('rail-after-delete.png'),
+    });
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
     cleanupDirectory(workspacePath);
