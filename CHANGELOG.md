@@ -361,6 +361,9 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A failed model request shows the provider's error again.** It had
+  shown "Malformed error payload" with a schema complaint about
+  `rawErrorBody` instead of the actual failure.
 - **Auto-compaction and the context gauge measure the whole conversation.**
   A tool-use run compacted on the text of its messages alone, so the
   provider's own token count (which includes the system prompt and tool

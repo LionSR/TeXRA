@@ -833,7 +833,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             credentialSwitch,
           };
           const payload = { kind: 'retry', data: request } as const;
-          logErrorData(logger, 'Model request failed', recorded);
+          logErrorData(logger, 'Model request failed', info);
           if (automatic !== null) {
             logProgressStatus(
               logger,
@@ -1105,7 +1105,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             logErrorData(
               logger,
               'Model request failed (no retry available)',
-              failure.formatted,
+              failure.info,
             );
             // The invoker is the one writer of the run's failure fact.
             const failed = yield* cell.append((state) =>
