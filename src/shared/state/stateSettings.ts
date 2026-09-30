@@ -182,10 +182,7 @@ export interface StateSettingEntry {
   readonly category?: string;
   /** Where the value is stored, the same on every host. */
   readonly slot: SettingStore;
-  /**
-   * Persistence target for config-backed settings; workspace when omitted.
-   * `global` and `local` rows are never read from the project file.
-   */
+  /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
   readonly configTarget?: 'global' | 'workspace' | 'local';
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
@@ -394,16 +391,13 @@ const CORE_SETTING_ROWS: Record<
     category: 'multi-agent',
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  // The provider toggles below are `configTarget: 'global'`:
-  // they describe how you talk to a provider, not a property of one project,
-  // and that is the scope they were written at before the catalog collapse
-  // routed them through the shared write path. The target restores global
-  // writes and exempts them from the extension's open-workspace write guard,
-  // while Models-tab and runtime reads both keep merged-config semantics. A
-  // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173. Only
-  // server-side state is a choice a user makes (it decides data retention);
-  // the transport knobs have no settings-view row and are set in
+  // The provider toggles below are `configTarget: 'global'`: they describe how
+  // you talk to a provider, not a property of one project. The target routes
+  // writes to the global file and exempts them from the extension's
+  // open-workspace write guard, while reads keep merged-config semantics, so a
+  // workspace override stays visible and honored (stranded values: #11173).
+  // Only server-side state is a choice a user makes (it decides data
+  // retention); the transport knobs have no settings-view row and are set in
   // `.texra/config.json`.
   'model.gpt5ReasoningSummary': {
     schema: z.boolean().prefault(false),
