@@ -10,10 +10,12 @@ import { Effect, FileSystem } from 'effect';
 
 import {
   agentSourceDirectory,
+  changedBuiltInOf,
   createWorkspaceAgentRosterController,
   getAgent,
   getAgentsByCategory,
   getCustomAgentScanIssues,
+  keepCustomAgent,
   refresh,
 } from '@agent/index';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
@@ -62,6 +64,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     repoState: ports.roots.repoState,
     roster,
     getAgents: getAgentsByCategory,
+    newerBuiltInOf: (entry) => changedBuiltInOf(entry)?.source,
   });
   const customDirectory = AgentDirectories.use((directories) =>
     directories.custom(),
@@ -170,6 +173,18 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to delete custom agent',
         actions.deleteCustomAgent(message),
+      ),
+    keepCustomAgent: (message) =>
+      present.reported(
+        'Failed to keep the custom agent',
+        Effect.gen(function* () {
+          if (!(yield* keepCustomAgent(message.agentName))) {
+            return yield* present.alert(
+              `${message.agentName} has no newer built-in version to dismiss.`,
+            );
+          }
+          yield* refreshAfterAgentMutation();
+        }),
       ),
     revealAgentFile: (message) =>
       present.reported(

@@ -250,6 +250,12 @@ Verify the agent registered, then smoke-test it in one go:
 
 <p class="hero-caption"><code>agents show</code> confirms the registration (<code>source: custom</code> plus the file it loaded), and a one-shot <code>texra run</code> proves the prompts work before you polish the YAML further.</p>
 
+### <wa-icon library="texra" name="sync"></wa-icon> Customized built-in agents and updates
+
+Built-in agents ship with TeXRA and update when TeXRA does. A custom agent with the same name as a built-in overrides it. **Customize** in the Agents tab (or `texra agents customize <name>`) copies the built-in into your custom agents folder and records which version it copied in a `basedOn:` line at the end of the file.
+
+When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` settle it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
+
 ### <wa-icon library="texra" name="shield"></wa-icon> Strict XML extraction
 
 TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename does not match, extraction fails and no files are saved. Check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
