@@ -3,7 +3,7 @@ import { Cause, Effect } from 'effect';
 import { resolveAgentForLaunch, type AgentRosterStores } from '@agent/index';
 import { checkCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
+import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -72,7 +72,7 @@ export function applyInitialCliAgentSelection(
       agent: nextAgent,
       agentSource: entry.source,
       teamName: undefined,
-      cliMultiAgentPresetId: undefined,
+      cliTeamId: undefined,
       delegationAgentScope: undefined,
     });
     appendLocalNotice(`Root agent set to ${nextAgent}.`);
@@ -124,7 +124,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       setTransientNotice(fixedTeamNotice);
       return;
     }
-    const teamName = yield* readCliMultiAgentPresetName(
+    const teamName = yield* readCliTeamName(
       context.runtimeSession.roots.repoState,
       fields.cli.multiAgentPresetId,
     );
@@ -132,7 +132,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       agent: fields.agent,
       agentSource: entry.source,
       teamName,
-      cliMultiAgentPresetId: fields.cli.multiAgentPresetId,
+      cliTeamId: fields.cli.multiAgentPresetId,
       delegationAgentScope: fields.delegationAgentScope,
     });
     appendLocalNotice(

@@ -27,15 +27,15 @@ type CliAgentLaunchMode = 'chat' | 'workflowResume';
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.';
-const MULTI_AGENT_PRESET_LOOKUP_HINT =
-  'Use `texra multi-agent list` for available teams, then run `texra multi-agent show <team>` to check a team before launch.';
+const TEAM_LOOKUP_HINT =
+  'Use `texra team list` for available teams, then run `texra team show <team>` to check a team before launch.';
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
     requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
+      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra team run <preset>\` for teams.`,
   },
   workflowResume: {
     requiredCategory: AgentCategory.Workflow,
@@ -84,8 +84,8 @@ export function missingToolUseAgentMessage(name: string): string {
   return `Tool-use agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
 }
 
-export function missingMultiAgentPresetMessage(name: string): string {
-  return `Team not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
+export function missingTeamMessage(name: string): string {
+  return `Team not found: ${name}. ${TEAM_LOOKUP_HINT}`;
 }
 
 /**

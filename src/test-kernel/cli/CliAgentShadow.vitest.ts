@@ -249,7 +249,7 @@ describe('CLI agent validation with a shadowed name', () => {
       Effect.gen(function* () {
         patchSessionMeta({
           teamName: 'Physicist',
-          cliMultiAgentPresetId: 'physicist',
+          cliTeamId: 'physicist',
           delegationAgentScope: {
             workflow: ['builtInWorkflow:polish'],
             toolUse: ['builtInToolUse:assistant'],
@@ -270,7 +270,7 @@ describe('CLI agent validation with a shadowed name', () => {
 
         expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
         expect(sessionMeta.get().teamName).toBeUndefined();
-        expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+        expect(sessionMeta.get().cliTeamId).toBeUndefined();
         expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
       }),
   );

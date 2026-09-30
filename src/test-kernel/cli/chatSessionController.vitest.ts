@@ -143,7 +143,7 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// reads (the multi-agent preset name) take the session's own roots, which this
+// reads (the team name) take the session's own roots, which this
 // file's stub takes from the installed host, and the kernel's setup file
 // installs a host before this file's mocks are registered.
 setupPlatform(
@@ -808,7 +808,7 @@ describe('createChatSessionController', () => {
 
     expect(sessionMeta.get()).toMatchObject({
       teamName: 'Physicist',
-      cliMultiAgentPresetId: 'physicist',
+      cliTeamId: 'physicist',
       delegationAgentScope: config.delegationAgentScope,
     });
   });
@@ -822,7 +822,7 @@ describe('createChatSessionController', () => {
         model: 'current-model',
         modelSource: 'explicit-override',
         teamName: 'Mathematician',
-        cliMultiAgentPresetId: 'mathematician',
+        cliTeamId: 'mathematician',
         delegationAgentScope: {
           workflow: ['custom:current'],
           toolUse: ['custom:current'],

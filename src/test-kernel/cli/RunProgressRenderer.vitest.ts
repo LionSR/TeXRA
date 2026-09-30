@@ -714,7 +714,7 @@ describe('CLI run progress renderer', () => {
     await handleRunDescription(
       renderer,
       'root-stream',
-      'Running Mathematician multi-agent preset',
+      'Running Mathematician team',
     );
     await handleRound(renderer, 'root-stream', 2);
     await handleConversationProgress(renderer, 'root-stream', {

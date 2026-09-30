@@ -212,6 +212,6 @@ printf '%s\\n' "\${COMPREPLY[@]}"
     expect(flagsFor('chat')).not.toContain('output-format');
     expect(flagsFor('run')).toContain('print');
     expect(flagsFor('run')).toContain('output-format');
-    expect(flagsFor('multi-agent run')).toContain('instruction-file');
+    expect(flagsFor('team run')).toContain('instruction-file');
   });
 });

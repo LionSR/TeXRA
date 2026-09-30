@@ -279,7 +279,7 @@ describe('CLI root argument routing', () => {
       ['run', 'polish', '-mdeepseekT', '--no-color'],
       ['setup', '--no-input'],
       ['resume', 'abc123', '--print'],
-      ['multi-agent', 'run', 'mathematician', '--instruction-file=prompt.md'],
+      ['team', 'run', 'mathematician', '--instruction-file=prompt.md'],
       ['run', 'polish', '--input', 'paper.tex', '--instruction-file=prompt.md'],
     ]) {
       await expect(

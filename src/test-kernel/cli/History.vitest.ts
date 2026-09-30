@@ -414,7 +414,7 @@ describe('CLI history runtime', () => {
     expect(entries.map((entry) => entry.id)).toEqual(['root']);
   });
 
-  it('labels multi-agent team runs by preset in history lists', async () => {
+  it('labels team runs by preset in history lists', async () => {
     const teamConfig = toolUseAgentConfig({
       agent: 'engineer',
       cli: { multiAgentPresetId: ' software-engineer ' },

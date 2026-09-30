@@ -1,4 +1,4 @@
-/** Agent proposal card: "Delegate a task to reviewer" / "Start a multi-agent run: …". */
+/** Agent proposal card: "Delegate a task to reviewer" / "Start a team run: …". */
 
 // Third-party imports
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
@@ -96,7 +96,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
     if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
-      return html`Start a multi-agent run:
+      return html`Start a team run:
         <strong>${data.workflowScript.name}</strong> with ${data.agent} on
         ${getModelLabel(data.model)}`;
     }

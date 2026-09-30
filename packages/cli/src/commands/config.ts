@@ -173,7 +173,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   const record = yield* readCliAgentRoster(roots);
   emitCliResult(context, {
     json: record,
-    ndjson: { kind: 'agent-roster', roster: record },
+    ndjson: { kind: 'workspace-agents', agents: record },
     text: formatCliAgentRoster(record),
   });
   return CliExitCode.Success;

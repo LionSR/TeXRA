@@ -5,37 +5,37 @@ import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
 
-import { missingMultiAgentPresetMessage } from './agents';
+import { missingTeamMessage } from './agents';
 import { CliUsageError } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import {
-  formatCliMultiAgentPresetRunWarnings,
-  readCliMultiAgentPresets,
-  type CliMultiAgentPresetRunPlan,
-} from './multiAgentPresets';
+  formatCliTeamRunWarnings,
+  readCliTeams,
+  type CliTeamRunPlan,
+} from './cliTeams';
 
-interface MultiAgentRunPlanInit {
+interface TeamRunPlanInit {
   readonly preset: string;
   readonly agent?: string;
 }
 
 /**
  * Resolve a preset's run plan against the loaded catalog. Headless
- * `multi-agent run` routes through this runtime helper so command entrypoints
+ * `team run` routes through this runtime helper so command entrypoints
  * cannot drift.
  */
-export function loadCliMultiAgentRunPlan(
-  init: MultiAgentRunPlanInit,
+export function loadCliTeamRunPlan(
+  init: TeamRunPlanInit,
   repoState: StateStore,
 ) {
   return Effect.gen(function* () {
     const preset = findTeamPreset(
-      yield* readCliMultiAgentPresets(repoState),
+      yield* readCliTeams(repoState),
       init.preset,
     );
     if (!preset) {
       return yield* Effect.fail(
-        new CliUsageError(missingMultiAgentPresetMessage(init.preset)),
+        new CliUsageError(missingTeamMessage(init.preset)),
       );
     }
     return planTeamRun(preset, {
@@ -46,9 +46,9 @@ export function loadCliMultiAgentRunPlan(
 }
 
 export function writeMissingPresetAgents(
-  plan: CliMultiAgentPresetRunPlan,
+  plan: CliTeamRunPlan,
 ): void {
-  for (const warning of formatCliMultiAgentPresetRunWarnings(plan)) {
+  for (const warning of formatCliTeamRunWarnings(plan)) {
     writeTextStderr(warning);
   }
 }

@@ -2,7 +2,7 @@
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
 import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
-import CliMultiAgentHero from '../.vitepress/components/CliMultiAgentHero.vue';
+import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
 
@@ -146,7 +146,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `agentName`, and `status` — the run phase, or `ready` before the child's
   first activation. A child that reached a terminal outcome leaves the
   list; its `run.end` record carries the outcome.
-- `kind: "agent-result"`, `kind: "result"`, and `kind: "multi-agent-result"`
+- `kind: "agent-result"`, `kind: "result"`, and `kind: "team-result"`
   carry the run result described above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) spell a terminal
   outcome as `completed`, `interrupted`, or `error`; `resumable` and
@@ -267,9 +267,9 @@ extension's Teams settings tab: Lean Project, Physicist, Mathematician,
 Computer Scientist, and Software Engineer.
 
 ```bash
-texra multi-agent list
-texra multi-agent show software-engineer
-texra multi-agent run software-engineer --instruction "Profile and speed up scripts/simulate.py"
+texra team list
+texra team show software-engineer
+texra team run software-engineer --instruction "Profile and speed up scripts/simulate.py"
 ```
 
 `run` starts the team's orchestrator, which plans the work and delegates to its
@@ -282,10 +282,10 @@ When the work splits cleanly, the lead can fan it out as a scripted
 
 `run` is the way to start a team from a terminal. For an interactive session,
 open a chat and use `/agent` to pick the team's lead by name, such as
-`engineer` or `orchestrator`; team scoping applies to `multi-agent run` and to
+`engineer` or `orchestrator`; team scoping applies to `team run` and to
 resumed team sessions.
 
-<CliMultiAgentHero />
+<CliTeamHero />
 
 <p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
@@ -520,7 +520,7 @@ texra config agents --workflow correct,polish --tool-use assistant,review
 texra config agents --default-agent builtInToolUse:assistant
 ```
 
-`texra agents list` and `texra multi-agent list|show|run` keep narrower
+`texra agents list` and `texra team list|show|run` keep narrower
 responsibilities: they inspect or run agents and teams, but do not alter the
 workspace agents. `texra init` writes initial command defaults and likewise
 does not change agent visibility.

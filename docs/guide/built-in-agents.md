@@ -525,7 +525,7 @@ An end-of-session reviewer. It looks at what was just done and, when the session
 
 Teams are predefined collections of agents for a discipline. Pick one from the
 **Teams** tab in Settings, or run one from the CLI with
-`texra multi-agent run <team>`:
+`texra team run <team>`:
 
 | Team               | For                                                                                                                   | Lead agent         |
 | :----------------- | :-------------------------------------------------------------------------------------------------------------------- | :----------------- |

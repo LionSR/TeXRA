@@ -170,8 +170,8 @@ export function registerBuiltinSlashCommands(options: {
         runtime={runtime}
         stores={stores}
         currentAgent={meta.agent}
-        {...(meta.cliMultiAgentPresetId !== undefined
-          ? { currentTeamId: meta.cliMultiAgentPresetId }
+        {...(meta.cliTeamId !== undefined
+          ? { currentTeamId: meta.cliTeamId }
           : {})}
         availableRows={props.availableRows}
         selectable={selectable}

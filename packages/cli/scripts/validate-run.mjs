@@ -284,7 +284,7 @@ function validateBinarySmoke() {
   );
 }
 
-function validateMultiAgentListAvailability() {
+function validateTeamListAvailability() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-cwd-'));
   const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-home-'));
   try {
@@ -294,7 +294,7 @@ function validateMultiAgentListAvailability() {
         process.execPath,
         [
           binaryPath,
-          'multi-agent',
+          'team',
           'list',
           '--cwd',
           cwd,
@@ -308,13 +308,13 @@ function validateMultiAgentListAvailability() {
       );
 
     const text = runList();
-    assertSuccess(text, 'texra multi-agent list');
+    assertSuccess(text, 'texra team list');
     const leanProjectLine = text.stdout
       .split('\n')
       .find((line) => line.includes('\tlean-project\t'));
     assert(
       leanProjectLine != null,
-      `multi-agent list should include lean-project\nstdout:\n${text.stdout}`,
+      `team list should include lean-project\nstdout:\n${text.stdout}`,
     );
     // The Lean agents ship bundled (#13080), so the preset is whole without
     // any sign-in: a full count and no degraded/unavailable marker.
@@ -324,7 +324,7 @@ function validateMultiAgentListAvailability() {
     );
 
     const json = runList(['--output-format', 'json']);
-    assertSuccess(json, 'texra multi-agent list JSON');
+    assertSuccess(json, 'texra team list JSON');
     const jsonRecords = JSON.parse(json.stdout);
     const leanProjectJson = jsonRecords.find(
       (record) => record.id === 'lean-project',
@@ -332,7 +332,7 @@ function validateMultiAgentListAvailability() {
     const leanProjectAvailability = leanProjectJson?.availability;
     assert(
       leanProjectAvailability?.agents?.toolUse?.label != null,
-      `multi-agent list JSON should include planned availability\nstdout:\n${json.stdout}`,
+      `team list JSON should include planned availability\nstdout:\n${json.stdout}`,
     );
     const leanProjectToolUse = leanProjectAvailability?.agents?.toolUse;
     assert(
@@ -344,14 +344,14 @@ function validateMultiAgentListAvailability() {
     );
 
     const ndjson = runList(['--output-format', 'ndjson']);
-    assertSuccess(ndjson, 'texra multi-agent list NDJSON');
+    assertSuccess(ndjson, 'texra team list NDJSON');
     const leanProjectNdjson = parseNdjson(
       ndjson.stdout,
-      'multi-agent list NDJSON',
+      'team list NDJSON',
     ).find((record) => record.preset?.id === 'lean-project');
     assert(
       leanProjectNdjson?.preset?.availability?.agents?.toolUse?.label != null,
-      `multi-agent list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
+      `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -473,13 +473,13 @@ function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [
       binaryPath,
-      'multi-agent',
+      'team',
       'run',
       'mathematician',
       '--input',
       '--print',
     ]),
-    'texra multi-agent run missing --input value',
+    'texra team run missing --input value',
     'Missing value for --input',
   );
 }
@@ -1090,8 +1090,8 @@ prompts:
   }
 }
 
-function validateMultiAgentRunCommand() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
+function validateTeamRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-team-run-'));
   // A preset whose members are all tool-use agents keeps this check cheap.
   const validationPreset = 'software-engineer';
   try {
@@ -1105,7 +1105,7 @@ function validateMultiAgentRunCommand() {
 
     const baseArgs = [
       binaryPath,
-      'multi-agent',
+      'team',
       'run',
       validationPreset,
       '--input',
@@ -1122,33 +1122,33 @@ function validateMultiAgentRunCommand() {
       [...baseArgs, '--output-format', 'json'],
       { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
-    assertSuccess(json, 'texra multi-agent run JSON');
+    assertSuccess(json, 'texra team run JSON');
     const jsonResult = JSON.parse(json.stdout);
     assert(
       jsonResult.preset?.id === validationPreset,
-      'multi-agent JSON output should identify the preset',
+      'team JSON output should identify the preset',
     );
     assert(
       typeof jsonResult.rootAgent === 'string' &&
         jsonResult.rootAgent.length > 0,
-      'multi-agent run should select an available preset root agent',
+      'team run should select an available preset root agent',
     );
     assert(
       jsonResult.result?.output?.category === 'toolUse',
-      'multi-agent JSON output should serialize the tool-use result',
+      'team JSON output should serialize the tool-use result',
     );
     assert(
       String(jsonResult.result?.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
-      'multi-agent run should return the validation model response',
+      'team run should return the validation model response',
     );
 
     const inlineInstruction = run(
       process.execPath,
       [
         binaryPath,
-        'multi-agent',
+        'team',
         'run',
         validationPreset,
         '--instruction',
@@ -1163,21 +1163,21 @@ function validateMultiAgentRunCommand() {
       ],
       { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
-    assertSuccess(inlineInstruction, 'texra multi-agent instruction-only JSON');
+    assertSuccess(inlineInstruction, 'texra team instruction-only JSON');
     const inlineJsonResult = JSON.parse(inlineInstruction.stdout);
     assert(
       inlineJsonResult.preset?.id === validationPreset,
-      'instruction-only multi-agent JSON output should identify the preset',
+      'instruction-only team JSON output should identify the preset',
     );
     assert(
       inlineJsonResult.result?.output?.category === 'toolUse',
-      'instruction-only multi-agent JSON output should serialize the tool-use result',
+      'instruction-only team JSON output should serialize the tool-use result',
     );
     assert(
       String(inlineJsonResult.result?.output?.response ?? '').includes(
         'Validated CLI Runtime',
       ),
-      'instruction-only multi-agent run should return the validation model response',
+      'instruction-only team run should return the validation model response',
     );
 
     const ndjson = run(
@@ -1185,15 +1185,15 @@ function validateMultiAgentRunCommand() {
       [...baseArgs, '--output-format', 'ndjson'],
       { cwd: repoRoot, validationModel: true, validationFlagPath },
     );
-    assertSuccess(ndjson, 'texra multi-agent run NDJSON');
+    assertSuccess(ndjson, 'texra team run NDJSON');
     assert(
-      parseNdjson(ndjson.stdout, 'multi-agent run NDJSON').some(
+      parseNdjson(ndjson.stdout, 'team run NDJSON').some(
         (record) =>
-          record.kind === 'multi-agent-result' &&
+          record.kind === 'team-result' &&
           record.preset?.id === validationPreset &&
           record.rootAgent === jsonResult.rootAgent,
       ),
-      'multi-agent run NDJSON should include a preset result record with the selected root agent',
+      'team run NDJSON should include a preset result record with the selected root agent',
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -1207,7 +1207,7 @@ async function validateCliRunArtifacts(options = {}) {
     buildValidationBundle();
   }
   validateBinarySmoke();
-  validateMultiAgentListAvailability();
+  validateTeamListAvailability();
   validateToolsCommand();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
@@ -1215,7 +1215,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   validateWorkflowScriptAgentRunCommand();
-  validateMultiAgentRunCommand();
+  validateTeamRunCommand();
   console.log('CLI run validation passed');
 }
 

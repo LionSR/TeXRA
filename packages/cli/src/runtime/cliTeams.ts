@@ -24,27 +24,27 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNullish } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-export type CliMultiAgentPresetRunPlan = TeamRunPlan<AgentEntry>;
+export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 
-interface CliMultiAgentTeamLaunchBlockMessageOptions {
+interface CliTeamLaunchBlockMessageOptions {
   readonly requestedPreset?: string;
   readonly followUpAdvice?: string;
 }
 
 /**
- * Machine-readable `multi-agent list` record. It preserves the raw preset
+ * Machine-readable `team list` record. It preserves the raw preset
  * fields so existing consumers still see a preset-shaped object, while adding
- * the planned availability that list output needs. (`multi-agent show` instead
+ * the planned availability that list output needs. (`team show` instead
  * loads the agent registry and emits the resolved run plan as
- * `multi-agent-preset-inspection`.)
+ * `team-inspection`.)
  */
-interface CliMultiAgentPresetListRecord extends TeamPreset {
+interface CliTeamListRecord extends TeamPreset {
   readonly availability: TeamAvailability;
 }
 
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
 const MULTI_AGENT_SHOW_HINT =
-  'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable teams.';
+  'Hint: run `texra team show <team-id>` to see missing agents for degraded or unavailable teams.';
 
 /**
  * The team presets of the workspace whose state the caller holds: the built-in
@@ -52,7 +52,7 @@ const MULTI_AGENT_SHOW_HINT =
  * the surface that opened it (a command's installed roots, the chat session's
  * roots) rather than being read off the calling context.
  */
-export function readCliMultiAgentPresets(repoState: StateStore) {
+export function readCliTeams(repoState: StateStore) {
   return Effect.gen(function* () {
     const customRaw = yield* repoState.get(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
@@ -62,27 +62,27 @@ export function readCliMultiAgentPresets(repoState: StateStore) {
 }
 
 /** Resolve the current display name for a persisted team identity. */
-export function readCliMultiAgentPresetName(
+export function readCliTeamName(
   repoState: StateStore,
   presetId: string | undefined,
 ) {
   return Effect.gen(function* () {
     if (!presetId) return undefined;
-    return findTeamPreset(yield* readCliMultiAgentPresets(repoState), presetId)
+    return findTeamPreset(yield* readCliTeams(repoState), presetId)
       ?.name;
   });
 }
 
-function cliMultiAgentPresetAvailabilityParts(
-  plan: CliMultiAgentPresetRunPlan,
+function cliTeamAvailabilityParts(
+  plan: CliTeamRunPlan,
 ): string[] {
   const availability = teamAvailability(plan);
   const parts = [
-    formatCliMultiAgentPresetAvailabilityPart(
+    formatCliTeamAvailabilityPart(
       'workflow',
       availability.agents.workflow,
     ),
-    formatCliMultiAgentPresetAvailabilityPart(
+    formatCliTeamAvailabilityPart(
       'tool-use',
       availability.agents.toolUse,
     ),
@@ -91,7 +91,7 @@ function cliMultiAgentPresetAvailabilityParts(
   return parts;
 }
 
-function formatCliMultiAgentPresetAvailabilityPart(
+function formatCliTeamAvailabilityPart(
   kind: 'workflow' | 'tool-use',
   availability: TeamAgentAvailability,
 ): string | undefined {
@@ -99,8 +99,8 @@ function formatCliMultiAgentPresetAvailabilityPart(
   return `${kind}:${availability.label}`;
 }
 
-export function formatCliMultiAgentPresetList(
-  plans: readonly CliMultiAgentPresetRunPlan[],
+export function formatCliTeamList(
+  plans: readonly CliTeamRunPlan[],
 ): string {
   if (plans.length === 0) return 'No teams found.';
 
@@ -109,7 +109,7 @@ export function formatCliMultiAgentPresetList(
       plan.preset.source,
       plan.preset.id,
       plan.preset.name,
-      ...cliMultiAgentPresetAvailabilityParts(plan),
+      ...cliTeamAvailabilityParts(plan),
     ].join('\t'),
   );
 
@@ -118,8 +118,8 @@ export function formatCliMultiAgentPresetList(
     : rows.join('\n');
 }
 
-export function formatCliMultiAgentPresetInspection(
-  plan: CliMultiAgentPresetRunPlan,
+export function formatCliTeamInspection(
+  plan: CliTeamRunPlan,
 ): string {
   const availableWorkflowAgents = availablePresetAgents(
     plan.preset.agents.workflow,
@@ -147,20 +147,20 @@ export function formatCliMultiAgentPresetInspection(
   ].join('\n');
 }
 
-export function cliMultiAgentPresetNdjsonRecords(
-  plans: readonly CliMultiAgentPresetRunPlan[],
+export function cliTeamNdjsonRecords(
+  plans: readonly CliTeamRunPlan[],
 ): CliNdjsonRecord[] {
   const ts = new Date().toISOString();
   return plans.map((plan) => ({
-    kind: 'multi-agent-preset',
+    kind: 'team',
     ts,
-    preset: cliMultiAgentPresetListRecord(plan),
+    preset: cliTeamListRecord(plan),
   }));
 }
 
-export function formatCliMultiAgentTeamLaunchBlockMessage(
-  plan: CliMultiAgentPresetRunPlan,
-  options: CliMultiAgentTeamLaunchBlockMessageOptions = {},
+export function formatCliTeamLaunchBlockMessage(
+  plan: CliTeamRunPlan,
+  options: CliTeamLaunchBlockMessageOptions = {},
 ): string {
   const preset = options.requestedPreset ?? plan.preset.id;
   const reason = teamLaunchBlockReason(plan);
@@ -171,14 +171,14 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   }
   const parts = [
     `Team "${preset}" cannot start: ${reason}.`,
-    `Run \`texra multi-agent show ${plan.preset.id}\` to see missing agents.`,
+    `Run \`texra team show ${plan.preset.id}\` to see missing agents.`,
     options.followUpAdvice,
   ];
   return parts.filter((part): part is string => !!part).join(' ');
 }
 
-export function formatCliMultiAgentPresetRunWarnings(
-  plan: CliMultiAgentPresetRunPlan,
+export function formatCliTeamRunWarnings(
+  plan: CliTeamRunPlan,
 ): readonly string[] {
   const missing = [
     ...plan.missingAgents.workflow.map((agent) => `workflow:${agent}`),
@@ -203,9 +203,9 @@ export function formatCliMultiAgentPresetRunWarnings(
   return warnings;
 }
 
-export function cliMultiAgentPresetListRecord(
-  plan: CliMultiAgentPresetRunPlan,
-): CliMultiAgentPresetListRecord {
+export function cliTeamListRecord(
+  plan: CliTeamRunPlan,
+): CliTeamListRecord {
   return {
     ...plan.preset,
     availability: teamAvailability(plan),

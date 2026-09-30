@@ -15,7 +15,7 @@ function dynamicListSource(source: CompletionSource): string {
 }
 
 const TOP_LEVEL_RUN_CONDITION =
-  "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent'";
+  "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from team'";
 
 // Positional agent/model completions, in emission order. Each source-backed
 // path resolves its listing source from POSITIONAL_COMPLETION_SOURCES.

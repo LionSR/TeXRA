@@ -8,10 +8,10 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index';
 import {
-  cliMultiAgentPresetListRecord,
-  formatCliMultiAgentTeamLaunchBlockMessage,
-  type CliMultiAgentPresetRunPlan,
-} from '@cli/runtime/multiAgentPresets';
+  cliTeamListRecord,
+  formatCliTeamLaunchBlockMessage,
+  type CliTeamRunPlan,
+} from '@cli/runtime/cliTeams';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
@@ -42,7 +42,7 @@ function findPreset(id: string) {
 }
 
 // `AgentEntry`-pinned so the derived parameter/return types below match
-// `CliMultiAgentPresetRunPlan` instead of the unpinned `TeamCatalogAgent` bound.
+// `CliTeamRunPlan` instead of the unpinned `TeamCatalogAgent` bound.
 const planTeamRunForAgentEntry = planTeamRun<AgentEntry>;
 type TeamPreset = Parameters<typeof planTeamRunForAgentEntry>[0];
 
@@ -70,7 +70,7 @@ function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
 }
 
 // The lean-project team with two of its seven members and no delegating root.
-function partialLeanProjectPlan(): CliMultiAgentPresetRunPlan {
+function partialLeanProjectPlan(): CliTeamRunPlan {
   return planRun(findPreset('lean-project'), {
     toolUse: [
       agent('lean', AgentCategory.ToolUse),
@@ -80,7 +80,7 @@ function partialLeanProjectPlan(): CliMultiAgentPresetRunPlan {
 }
 
 // The physicist team with two workflows and the root-plus-review tool pair.
-function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
+function partialPhysicistPlan(): CliTeamRunPlan {
   return planRun(findPreset('physicist'), {
     workflow: [
       agent('correct', AgentCategory.Workflow),
@@ -93,7 +93,7 @@ function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
   });
 }
 
-describe('CLI multi-agent presets', () => {
+describe('CLI teams', () => {
   it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
     const preset = findPreset('mathematician');
     const plan = planRun(preset, {
@@ -101,14 +101,14 @@ describe('CLI multi-agent presets', () => {
       agentOverride: 'lean',
     });
 
-    const message = formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+    const message = formatCliTeamLaunchBlockMessage(plan, {
       requestedPreset: 'mathematician',
       followUpAdvice:
         'Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     });
 
     expect(message).toBe(
-      'Team "mathematician" cannot start: team root lean is not a delegating agent. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+      'Team "mathematician" cannot start: team root lean is not a delegating agent. Run `texra team show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     );
     expect(message).not.toContain('cannot delegate');
   });
@@ -119,14 +119,14 @@ describe('CLI multi-agent presets', () => {
       toolUse: toolUseTeam(preset, 'leanOrchestrator'),
     });
 
-    expect(() => formatCliMultiAgentTeamLaunchBlockMessage(plan)).toThrow(
+    expect(() => formatCliTeamLaunchBlockMessage(plan)).toThrow(
       /launchable team "lean-project"/,
     );
   });
 
   it('serializes planned availability for machine-readable list output', () => {
     const preset = findPreset('lean-project');
-    const record = cliMultiAgentPresetListRecord(partialLeanProjectPlan());
+    const record = cliTeamListRecord(partialLeanProjectPlan());
 
     expect(record.id).toBe('lean-project');
     expect(record.agents.toolUse).toEqual(preset.agents.toolUse);
