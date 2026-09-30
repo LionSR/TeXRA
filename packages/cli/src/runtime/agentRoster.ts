@@ -57,8 +57,8 @@ export function formatCliAgentRoster(record: CliAgentRosterRecord): string {
   const formatCategory = (selection: AgentRosterCategorySelection): string =>
     selection === 'all' ? 'all' : selection.join(', ') || '(none)';
   const lines = [
-    `Workspace roster: ${formatSelection(record.selection)}`,
-    `Effective roster: ${formatSelection(record.effectiveSelection)}`,
+    `Workspace agents: ${formatSelection(record.selection)}`,
+    `Effective agents: ${formatSelection(record.effectiveSelection)}`,
     `Default team: ${record.defaultTeamId ?? '(none)'}`,
     `Default chat agent: ${record.defaultChatAgent ?? '(automatic)'}`,
     `Workflow agents: ${formatCategory(record.agentKeys.workflow)}`,

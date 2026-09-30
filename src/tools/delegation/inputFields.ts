@@ -108,7 +108,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' on the Multi-Agent settings tab).";
+  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
 
 /**
  * The `working_directory` gate, over the settings of the project the call

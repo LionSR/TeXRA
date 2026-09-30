@@ -147,7 +147,7 @@ describe('apply_team', () => {
 
       expect(result.status).toBe('executed');
       expect(result.output).not.toMatch(/Not installed yet/);
-      expect(result.summary).toMatch(/Applied the Physicist roster/);
+      expect(result.summary).toMatch(/Applied the Physicist team/);
       expect(yield* workspaceRoster()).toEqual({
         kind: 'team',
         teamId: 'physicist',

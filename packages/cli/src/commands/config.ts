@@ -111,7 +111,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   ].filter(Boolean).length;
   if (workspaceChoices > 1) {
     return yield* failUsage(
-      'Choose one workspace roster: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
+      'Choose one set of workspace agents: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
     );
   }
   if (input.defaultTeam && input.clearDefault) {
@@ -161,7 +161,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     if (!selected) {
       const names = available.map((agent) => agent.name).join(', ');
       return yield* failUsage(
-        `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
+        `Default chat agent "${input.defaultAgent}" is not in the workspace agents. Available agents: ${names || '(none)'}.`,
       );
     }
     yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
@@ -182,7 +182,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
 const configAgentsCommand = defineCliCommand({
   meta: {
     name: 'agents',
-    description: 'Show or change the workspace agent roster',
+    description: 'Show or change the workspace agents',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -192,7 +192,7 @@ const configAgentsCommand = defineCliCommand({
     },
     all: {
       type: 'boolean',
-      description: 'Set this workspace roster to every agent',
+      description: 'Set the workspace agents to every agent',
     },
     team: { type: 'string', description: 'Use a built-in or saved team id' },
     workflow: {
