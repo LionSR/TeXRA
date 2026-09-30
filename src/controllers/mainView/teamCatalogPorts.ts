@@ -13,9 +13,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 export function createTeamCatalogPorts(repoState: StateStore) {
   return Effect.gen(function* () {
     return {
-      customPresetsRaw: yield* repoState.get(
-        WorkspaceStateKey.CUSTOM_TEAMS,
-      ),
+      customPresetsRaw: yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       resolveAgent: getCategoryAgent,
     };
   });

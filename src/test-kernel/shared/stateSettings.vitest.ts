@@ -108,7 +108,7 @@ describe('catalog-derived settings snapshots', () => {
         'git-author': true,
         skills: true,
         telemetry: true,
-        'agents': true,
+        agents: true,
         latex: true,
         memory: true,
       } satisfies Record<DerivedSettingsSnapshot, true>;

@@ -54,9 +54,7 @@ const MULTI_AGENT_SHOW_HINT =
  */
 export function readCliTeams(repoState: StateStore) {
   return Effect.gen(function* () {
-    const customRaw = yield* repoState.get(
-      WorkspaceStateKey.CUSTOM_TEAMS,
-    );
+    const customRaw = yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS);
     return launchableTeamPresets(customRaw);
   });
 }
@@ -68,24 +66,15 @@ export function readCliTeamName(
 ) {
   return Effect.gen(function* () {
     if (!presetId) return undefined;
-    return findTeamPreset(yield* readCliTeams(repoState), presetId)
-      ?.name;
+    return findTeamPreset(yield* readCliTeams(repoState), presetId)?.name;
   });
 }
 
-function cliTeamAvailabilityParts(
-  plan: CliTeamRunPlan,
-): string[] {
+function cliTeamAvailabilityParts(plan: CliTeamRunPlan): string[] {
   const availability = teamAvailability(plan);
   const parts = [
-    formatCliTeamAvailabilityPart(
-      'workflow',
-      availability.agents.workflow,
-    ),
-    formatCliTeamAvailabilityPart(
-      'tool-use',
-      availability.agents.toolUse,
-    ),
+    formatCliTeamAvailabilityPart('workflow', availability.agents.workflow),
+    formatCliTeamAvailabilityPart('tool-use', availability.agents.toolUse),
   ].filter(filterNotNullish);
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
@@ -99,9 +88,7 @@ function formatCliTeamAvailabilityPart(
   return `${kind}:${availability.label}`;
 }
 
-export function formatCliTeamList(
-  plans: readonly CliTeamRunPlan[],
-): string {
+export function formatCliTeamList(plans: readonly CliTeamRunPlan[]): string {
   if (plans.length === 0) return 'No teams found.';
 
   const rows = plans.map((plan) =>
@@ -118,9 +105,7 @@ export function formatCliTeamList(
     : rows.join('\n');
 }
 
-export function formatCliTeamInspection(
-  plan: CliTeamRunPlan,
-): string {
+export function formatCliTeamInspection(plan: CliTeamRunPlan): string {
   const availableWorkflowAgents = availablePresetAgents(
     plan.preset.agents.workflow,
     plan.missingAgents.workflow,
@@ -203,9 +188,7 @@ export function formatCliTeamRunWarnings(
   return warnings;
 }
 
-export function cliTeamListRecord(
-  plan: CliTeamRunPlan,
-): CliTeamListRecord {
+export function cliTeamListRecord(plan: CliTeamRunPlan): CliTeamListRecord {
   return {
     ...plan.preset,
     availability: teamAvailability(plan),

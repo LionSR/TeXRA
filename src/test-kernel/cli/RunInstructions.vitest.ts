@@ -12,9 +12,7 @@ const preset = {
   source: 'built-in',
 };
 
-type TeamRunOptions = Parameters<
-  typeof formatTeamRunInstruction
->[1];
+type TeamRunOptions = Parameters<typeof formatTeamRunInstruction>[1];
 
 function teamInstruction(
   overrides: Partial<TeamRunOptions> = {},

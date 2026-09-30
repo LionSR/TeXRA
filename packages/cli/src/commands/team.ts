@@ -85,10 +85,9 @@ const runTeamList = Effect.fn('runTeamList')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const plans = planTeamRuns(
-    yield* readCliTeams(services.repoState),
-    { resolveAgent: getCategoryAgent },
-  );
+  const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
+    resolveAgent: getCategoryAgent,
+  });
 
   emitCliResult(context, {
     json: plans.map(cliTeamListRecord),

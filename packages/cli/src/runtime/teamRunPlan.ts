@@ -29,10 +29,7 @@ export function loadCliTeamRunPlan(
   repoState: StateStore,
 ) {
   return Effect.gen(function* () {
-    const preset = findTeamPreset(
-      yield* readCliTeams(repoState),
-      init.preset,
-    );
+    const preset = findTeamPreset(yield* readCliTeams(repoState), init.preset);
     if (!preset) {
       return yield* Effect.fail(
         new CliUsageError(missingTeamMessage(init.preset)),
@@ -45,9 +42,7 @@ export function loadCliTeamRunPlan(
   });
 }
 
-export function writeMissingPresetAgents(
-  plan: CliTeamRunPlan,
-): void {
+export function writeMissingPresetAgents(plan: CliTeamRunPlan): void {
   for (const warning of formatCliTeamRunWarnings(plan)) {
     writeTextStderr(warning);
   }

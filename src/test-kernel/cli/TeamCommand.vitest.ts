@@ -53,10 +53,8 @@ vi.mock('@cli/runtime/cliTeams', () => ({
   cliTeamNdjsonRecords: vi.fn(() => []),
   formatCliTeamInspection: vi.fn(() => ''),
   formatCliTeamList: vi.fn(() => ''),
-  formatCliTeamRunWarnings:
-    mocks.formatCliTeamRunWarnings,
-  formatCliTeamLaunchBlockMessage:
-    mocks.formatCliTeamLaunchBlockMessage,
+  formatCliTeamRunWarnings: mocks.formatCliTeamRunWarnings,
+  formatCliTeamLaunchBlockMessage: mocks.formatCliTeamLaunchBlockMessage,
   readCliTeams: vi.fn(() => Effect.succeed([])),
 }));
 
@@ -122,8 +120,7 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
 // queue answers signed-out. Installed on the fake host per test below.
 let authProbes: boolean[] = [];
 
-const { runTeam: nativeRun } =
-  await import('@cli/commands/team');
+const { runTeam: nativeRun } = await import('@cli/commands/team');
 
 type TeamRunInit = Parameters<typeof nativeRun>[1];
 
@@ -191,9 +188,7 @@ async function expectBlockedLaunch(options: {
   readonly unexpectedWarning: string;
 }): Promise<void> {
   mocks.canLaunchTeam.mockReturnValueOnce(false);
-  mocks.formatCliTeamLaunchBlockMessage.mockReturnValueOnce(
-    options.message,
-  );
+  mocks.formatCliTeamLaunchBlockMessage.mockReturnValueOnce(options.message);
   mocks.planTeamRun.mockReturnValue(options.plan);
 
   const exitCode = await runPreset({
