@@ -1,7 +1,7 @@
 /**
  * The extension's half of the settings view: the shared settings body
  * (`createSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
- * the commands only VS Code answers (the TeXRA account commands, the Copilot
+ * the commands only VS Code answers (the Copilot
  * routes, installing extensions and writing VS Code's LaTeX settings).
  */
 import * as path from 'node:path';

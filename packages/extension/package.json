@@ -28,12 +28,6 @@
     }
   },
   "contributes": {
-    "authentication": [
-      {
-        "id": "texra-supabase",
-        "label": "TeXRA"
-      }
-    ],
     "languageModelTools": [
       {
         "name": "texra_arxiv_search",

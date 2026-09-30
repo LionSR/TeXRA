@@ -41,7 +41,6 @@ import { attachSessionHost } from '@controllers/session/attachSessionHost';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
@@ -69,7 +68,6 @@ import type {
   DownMessage,
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
-import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
@@ -420,20 +418,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );
-    onTexraAuthSessionsChanged(this.context, () => {
-      this.runtime.runFork(this.refreshAfterCredentialChange());
-    });
-  }
-
-  /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
-  private refreshAfterCredentialChange() {
-    return Effect.gen({ self: this }, function* () {
-      // Let every surface finish repainting even when another one fails.
-      yield* allSettledVoid<
-        StateReadFailed | StateWriteFailed,
-        ProcessServices
-      >([this.snapshot.refreshCatalogs, this.refreshApiKeyStatus]);
-    });
   }
 
   /** The agent, team, and model catalogs. */
