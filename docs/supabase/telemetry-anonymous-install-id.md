@@ -1,6 +1,7 @@
 # Anonymous install-id usage logging (runbook)
 
-Internal. Lets TeXRA clients without an account send usage batches to the
+Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
+below); function deploy and smoke test (steps 3-4) still pending. Lets TeXRA clients without an account send usage batches to the
 `log-usage` edge function, identified by a random install ID instead of a
 login. Nothing here is applied until the owner runs the checklist below.
 
@@ -36,7 +37,7 @@ CREATE UNIQUE INDEX usage_logs_install_stream_key
   ON public.usage_logs (install_id, stream_id)
   WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
 CREATE UNIQUE INDEX subscription_usage_logs_install_stream_key
-  ON public.subscription_usage_logs (install_id, stream_id)
+  ON public.subscription_usage_logs (install_id, source, stream_id)
   WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
 
 -- Batch dedup lookup (the function filters by install_id and batch_id).
@@ -58,9 +59,13 @@ owner:
 install_id IS NOT NULL AND stream_id IS NOT NULL`, with the same aggregation
   (`DO UPDATE`) expressions as the user path.
 
-**The RPC bodies are not in this repo and the drafter never saw them. Write the
-new bodies from the live definitions (`\sf public.usage_logs_upsert`, same for
-the subscription one), not from this description.** A `p_rows` batch holds one
+**Applied.** The live bodies were rewritten from `pg_get_functiondef` of the
+then-current definitions: each keeps its parse/aggregate CTEs and its `DO UPDATE`
+expressions, adds `install_id` to the parse, group and insert lists, and runs
+two data-modifying CTEs over one materialized `agg` (user rows on the
+`(user_id[, source], stream_id)` key, install rows on the
+`(install_id[, source], stream_id)` key); the return value is the sum of both
+upserts. The subscription table's key includes `source`, so its install index does too. A `p_rows` batch holds one
 owner (the function builds it from one request), but rows without a
 `stream_id` must keep whatever plain-insert behavior the live bodies have.
 
