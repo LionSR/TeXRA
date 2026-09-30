@@ -1001,7 +1001,9 @@ config file, so a repository cannot grant its own approvals; users keep
 project scope through a user-level override (D6).
 `web_fetch` has no per-host prompt, grant or allowlist (D7, reversed
 2026-09-30: over-built for a small team). SSRF and redirect hardening, which
-refuses non-public addresses on every hop, is the whole of its posture.
+refuses non-public addresses on every hop, is the whole of its posture. Under
+a configured `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only
+IP-literal hosts are refused and name resolution is the proxy's to police.
 
 **Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
 For D7, a concrete exfiltration incident through `web_fetch`; any prompt then
