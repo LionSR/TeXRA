@@ -20,6 +20,7 @@ npm run test:pure         # the shared-registry tier (~30s), architecture ratche
 npm run test:watch        # the dev loop: reruns what a save reaches
 npm run lint
 npm run format
+npm run gate            # the static CI jobs as one command: invariants, typecheck + format, lint
 npm run check:dead-code-ratchet
 ```
 
