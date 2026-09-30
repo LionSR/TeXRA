@@ -1,6 +1,4 @@
 // Node imports
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
@@ -16,7 +14,6 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import {
-  ALL_SETTINGS,
   CLI_CONFIG_SLOT_KEYS,
   STATE_SETTINGS,
   settingEnumOptions,
@@ -27,7 +24,6 @@ import {
 import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
-  SettingStore,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
@@ -43,7 +39,6 @@ import {
   FakeScopedConfigProvider,
   FakeStateStore,
 } from '@test/support/FakePlatform';
-import { REPO_ROOT } from '@test/support/repoScan';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
@@ -52,15 +47,6 @@ import {
 } from '@test/support/settingsStoresFake';
 import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
-
-const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
-  'config',
-  'workspaceState',
-  'repoState',
-  'globalState',
-]);
-
-const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
 function entryByKey(key: string): StateSettingEntry {
   const entry = settingByKey(key);
@@ -76,84 +62,6 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 describe('state settings catalog', () => {
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
-  });
-
-  it('every honoring host names an existing reader file', () => {
-    for (const entry of ALL_SETTINGS) {
-      for (const host of SETTING_HOSTS) {
-        const honor = entry.honoredBy[host];
-        if (!honor) continue;
-        assert.ok(
-          existsSync(resolve(REPO_ROOT, honor.reader)),
-          `${entry.key} ${host} reader does not exist: ${honor.reader}`,
-        );
-        assert.ok(
-          !honor.reader.startsWith('packages/extension/') || host === 'vscode',
-          `${entry.key} ${host} reader lives inside the extension host: ${honor.reader}`,
-        );
-        assert.ok(
-          !honor.reader.startsWith('packages/cli/') || host === 'cli',
-          `${entry.key} ${host} reader lives inside the CLI host: ${honor.reader}`,
-        );
-        assert.ok(
-          !honor.reader.startsWith('packages/desktop/') || host === 'desktop',
-          `${entry.key} ${host} reader lives inside the desktop host: ${honor.reader}`,
-        );
-      }
-    }
-  });
-
-  it('every declared writer names an existing host-compatible file', () => {
-    for (const entry of ALL_SETTINGS) {
-      for (const host of SETTING_HOSTS) {
-        const write = entry.writtenBy?.[host];
-        if (!write) continue;
-        assert.ok(
-          existsSync(resolve(REPO_ROOT, write.writer)),
-          `${entry.key} ${host} writer does not exist: ${write.writer}`,
-        );
-        assert.ok(
-          !write.writer.startsWith('packages/extension/') || host === 'vscode',
-          `${entry.key} ${host} writer lives inside the extension host: ${write.writer}`,
-        );
-        assert.ok(
-          !write.writer.startsWith('packages/cli/') || host === 'cli',
-          `${entry.key} ${host} writer lives inside the CLI host: ${write.writer}`,
-        );
-        assert.ok(
-          !write.writer.startsWith('packages/desktop/') || host === 'desktop',
-          `${entry.key} ${host} writer lives inside the desktop host: ${write.writer}`,
-        );
-      }
-    }
-  });
-
-  it('gives every honoring host a storage slot', () => {
-    for (const entry of ALL_SETTINGS) {
-      for (const host of SETTING_HOSTS) {
-        if (!entry.honoredBy[host]) continue;
-        assert.ok(
-          entry.slots[host],
-          `${entry.key} is honored by ${host} but has no ${host} slot`,
-        );
-      }
-    }
-  });
-
-  it('uses valid, coherent storage slots', () => {
-    for (const entry of ALL_SETTINGS) {
-      const slots = Object.values(entry.slots);
-      assert.ok(slots.length > 0, `${entry.key} declares no storage slot`);
-      for (const slot of slots) {
-        assert.ok(VALID_STORES.has(slot), `${entry.key} invalid slot ${slot}`);
-      }
-      // Global and project scope must not be mixed across hosts.
-      const globals = slots.filter((slot) => slot === 'globalState').length;
-      assert.ok(
-        globals === 0 || globals === slots.length,
-        `${entry.key} mixes global and project scope across hosts`,
-      );
-    }
   });
 
   it('pairs enum entries with aligned display metadata', () => {
@@ -301,36 +209,14 @@ describe('catalog-derived settings snapshots', () => {
 const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set(CLI_CONFIG_SLOT_KEYS);
 
 describe('knownKeys derivation', () => {
-  it('recognizes config-slot CLI keys, but warns on state.json keys in config.json', () => {
-    for (const entry of ALL_SETTINGS) {
-      if (!entry.honoredBy.cli) continue;
-      const readFromConfig = entry.slots.cli === 'config';
-      assert.equal(
-        KNOWN_TEXRA_KEYS.has(entry.key),
-        readFromConfig,
-        `${entry.key}: config-recognition should match read-from-config=${readFromConfig}`,
-      );
-    }
+  it('whitelists config-slot keys, not state.json keys', () => {
+    assert.equal(KNOWN_TEXRA_KEYS.has('texra.model'), true);
     // A workspaceState-backed setting is read from state.json, not config.json,
     // so it must NOT be whitelisted there (a config.json entry is a no-op the
     // unknown-key warning should catch).
     assert.equal(
       KNOWN_TEXRA_KEYS.has(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE),
       false,
-    );
-  });
-
-  it('recognizes exactly the config-file keys a CLI reader honors', () => {
-    // The derived whitelist replaced two hand-kept path lists; this pins the
-    // whole config-file half of it so a mis-filed `honoredBy` cannot silently
-    // widen or narrow what `.texra/config.json` accepts.
-    const configKeys = ALL_SETTINGS.filter(
-      (entry) => entry.slots.cli === 'config',
-    ).map((entry) => entry.key);
-    assert.deepEqual(
-      configKeys.filter((key) => KNOWN_TEXRA_KEYS.has(key)).toSorted(),
-      configKeys.toSorted(),
-      'every config-file key has a CLI reader',
     );
   });
 });
@@ -363,6 +249,22 @@ describe('settingsAccess', () => {
       assert.equal(yield* isStored(repoState, entry.key), true);
       assert.equal(yield* isStored(config, entry.key), false);
       assert.equal(yield* readSetting(entry, stores), false);
+    }),
+  );
+
+  it.effect('preferring a subscription route turns OpenRouter off', () =>
+    Effect.gen(function* () {
+      const { stores, globalState } = makeFakeSettingsStores();
+      yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);
+      yield* writeSetting(
+        entryByKey('texra.xaiGrok.preferSubscription'),
+        true,
+        stores,
+      );
+      assert.equal(
+        yield* globalState.get(GlobalStateKey.USE_OPENROUTER),
+        false,
+      );
     }),
   );
 

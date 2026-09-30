@@ -21,7 +21,7 @@ import {
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 import { stripPrefix } from '@shared/config/configKeys';
-import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
+import { settingDefault } from '@shared/config/settingsAccess';
 
 import {
   buildConfigCategoryItems,
@@ -101,11 +101,6 @@ function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-/** The store the CLI reads/writes this setting from (`entry.slots.cli`). */
-function settingStoreLabel(entry: SurfacedSettingEntry): string {
-  return settingSlot(entry, 'cli');
-}
-
 function settingDisplayName(entry: SurfacedSettingEntry): string {
   return entry.title ?? stripPrefix(entry.key);
 }
@@ -116,14 +111,13 @@ function buildConfigListItems(
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
-    const store = settingStoreLabel(entry);
     const valueText =
       kind === 'form' ? 'open' : formatSettingValue(readValue(entry));
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
       label: settingDisplayName(entry),
-      description: `${valueText} · ${store}${suffix}`,
+      description: `${valueText} · ${entry.slot}${suffix}`,
       disabled: kind === 'readonly',
     };
   });

@@ -11,7 +11,6 @@
  */
 import { Effect } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
 import type {
   StateReadFailed,
   StateStore,
@@ -31,10 +30,9 @@ import {
   HiddenCustomAgentKeysSchema,
   INHERITED_AGENT_ROSTER,
 } from '@shared/schemas';
+import { readState } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-
-const CHANNEL = 'AgentRosterController';
 
 /**
  * One write at a time per store, module-wide. The roster's write is a
@@ -61,17 +59,11 @@ export function serializeWorkspaceWrite<A, E>(
  * every durable write.
  */
 export function readAgentRosterSelection(repoState: StateStore) {
-  return Effect.gen(function* () {
-    const raw = yield* repoState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION);
-    if (raw === undefined) return INHERITED_AGENT_ROSTER;
-    const parsed = AgentRosterSelectionSchema.safeParse(raw);
-    if (parsed.success) return parsed.data;
-    yield* Effect.logWarning(
-      `Ignoring malformed roster selection; falling back to ` +
-        `the inherited roster: ${parsed.error.message}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return INHERITED_AGENT_ROSTER;
-  });
+  return readState(
+    repoState,
+    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+  );
 }
 
 interface RosterEntry {
@@ -84,16 +76,14 @@ interface RosterEntry {
 function readHidden(
   repoState: StateStore,
 ): Effect.Effect<Set<string>, StateReadFailed> {
-  return Effect.gen(function* () {
-    const raw = yield* repoState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS);
-    if (raw === undefined) return new Set<string>();
-    const parsed = HiddenCustomAgentKeysSchema.safeParse(raw);
-    if (parsed.success) return new Set(parsed.data);
-    yield* Effect.logWarning(
-      `Ignoring malformed hidden custom agents; showing every custom agent: ${parsed.error.message}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return new Set<string>();
-  });
+  return Effect.map(
+    readState(
+      repoState,
+      WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
+      HiddenCustomAgentKeysSchema.prefault([]),
+    ),
+    (hidden) => new Set(hidden),
+  );
 }
 
 /** Whether a stored list names `entry`, by the roster's identity rule: a

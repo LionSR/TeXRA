@@ -7,11 +7,10 @@ import {
   updateCliModelAccess,
 } from '@cli/runtime/modelAccessSelection';
 import { buildCliModelAccessItems } from '@cli/runtime/modelAccessRoute';
-import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
@@ -26,7 +25,6 @@ const mocks = vi.hoisted(() => ({
   setPreferXaiSubscription: vi.fn(),
   shouldUseSubscriptionDeviceCode: vi.fn(),
   signInCliSubscription: vi.fn(),
-  updateGlobalState: vi.fn(),
   hasUsableApiKey: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getPreferKimiCode: vi.fn(),
@@ -35,20 +33,8 @@ const mocks = vi.hoisted(() => ({
   writeSettingTo: vi.fn(),
 }));
 
-/** A global state store whose writes the suite observes. */
-class ObservedStateStore extends FakeStateStore {
-  override update(
-    key: string,
-    value: unknown,
-  ): Effect.Effect<void, StateWriteFailed> {
-    mocks.updateGlobalState(key, value);
-    return super.update(key, value);
-  }
-}
-
 const secrets = new FakeSecrets();
 const stores = makeFakeSettingsStores('cli').stores;
-const appState = new ObservedStateStore();
 
 /**
  * The process services these programs took from the process runtime before
@@ -58,7 +44,6 @@ const withServices = Effect.provide(
   Layer.mergeAll(
     testHttpClientLayer,
     Secrets.layer(secrets),
-    AppState.layer(appState),
     // Sign-in is mocked, so nothing is spawned.
     scriptedSpawnerLayer(() => ({})).layer,
   ),
@@ -271,7 +256,6 @@ describe('CLI model access routes', () => {
         expect(mocks.writeSettingTo).not.toHaveBeenCalled();
         expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
-        expect(mocks.updateGlobalState).not.toHaveBeenCalled();
         expect(result).toEqual({
           message:
             'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
@@ -306,10 +290,6 @@ describe('CLI model access routes', () => {
       expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(
         stores,
         true,
-      );
-      expect(mocks.updateGlobalState).toHaveBeenCalledWith(
-        'texra.useOpenRouter',
-        false,
       );
       expect(result.message).toBe(
         'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
