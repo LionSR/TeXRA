@@ -3,8 +3,8 @@
 // import that resolves to that file, through the `@agent/*` alias or a
 // relative path, loads a stand-in instead: its gate is an Effect of `false`
 // (matching the real module's Effect-returning gate) and its canned model
-// throws. The CLI, desktop main and extension builds all install it, so no
-// shipped bundle carries the canned output or a gate the environment can open.
+// throws. The CLI, desktop main, extension host and agent SDK builds install
+// it, so none carries the canned output or a gate the environment can open.
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,5 +42,12 @@ export const stubInternalValidationModel = {
       { filter: /.*/, namespace: 'internal-validation-model' },
       () => ({ contents: STUB, loader: 'js', resolveDir: dirname(realModule) }),
     );
+    // An import the redirect missed fails the build instead of shipping the
+    // real module.
+    build.onLoad({ filter: /[\\/]validationModel\.ts$/ }, (args) => {
+      throw new Error(
+        `${args.path} reached the bundle past the validation-model stub.`,
+      );
+    });
   },
 };

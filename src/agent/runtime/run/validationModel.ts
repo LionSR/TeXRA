@@ -13,7 +13,8 @@
  * property access (never computed keys) so esbuild's `define`
  * (`packages/cli/scripts/build-bundle.mjs`) inlines them at bundle time; only
  * the CLI's package-validation build defines them non-empty. Every shipped
- * bundle (the default CLI, the desktop main process and the extension host)
+ * bundle (the default CLI, the desktop main process, the extension host and
+ * the agent SDK)
  * loads a stub in place of this module
  * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
  * environment-opened gate ships. The
