@@ -54,7 +54,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -972,8 +971,6 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
         const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
-        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-        const detachResult = session.onResult(onResult);
 
         try {
           session.publish([
@@ -1036,16 +1033,7 @@ describe('Sessions owner', () => {
           session.publish([
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce()),
-          );
-          expect(onResult.mock.calls[0][0]).toMatchObject({
-            type: 'run.end',
-            runId: OLDER,
-            outcome: 'completed',
-            seq: 3,
-            commit: 5,
-          });
+          yield* session.settlePublications();
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
@@ -1061,9 +1049,7 @@ describe('Sessions owner', () => {
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(sweep).toHaveBeenCalledOnce();
-          expect(onResult).toHaveBeenCalledOnce();
         } finally {
-          detachResult();
           sweep.mockRestore();
           yield* closeSessionOf(session);
         }

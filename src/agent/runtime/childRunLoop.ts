@@ -805,13 +805,8 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
 
     const attemptId = randomUUID();
     // Progress reaches the parent as queued follow-ups. The port is
-    // synchronous, so it admits each one where it is reported (the target and
-    // the admission decided then) and one drainer the loop's body owns writes
-    // the rows in that order.
-    const notices = yield* Queue.unbounded<
-      Effect.Effect<void, Error>,
-      Cause.Done
-    >();
+    // synchronous, so each is enqueued on the session's publisher where it is
+    // reported and commits ahead of the result row `deliverTurn` enqueues later.
     const ports: ChildRunPorts = {
       notify: (update) => {
         if (params.notify) {
@@ -822,26 +817,15 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
           return;
         const targetRunId = parent.current ?? undefined;
         if (!targetRunId) return;
-        // The target and the admission are decided where the progress is
-        // reported; the queued effect writes the row, and nothing is queued
-        // when no session holds the run.
+        // Nothing is queued when no session holds the run.
         if (
           runSession.runs.getToolUseFollowUpTarget(targetRunId).kind !==
           'no_session'
         ) {
-          Queue.offerUnsafe(
-            notices,
-            Effect.asVoid(
-              runSession.followUps.submit(
-                targetRunId,
-                {
-                  text: formatSubagentProgress(runId, agentName, update),
-                  from: { kind: 'run', runId },
-                },
-                'live_owner',
-              ),
-            ),
-          );
+          runSession.followUps.submitDetached(targetRunId, {
+            text: formatSubagentProgress(runId, agentName, update),
+            from: { kind: 'run', runId },
+          });
         }
       },
     };
@@ -904,41 +888,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
               );
             input = runSession.followUps.attachInput(runId, queueLease)!;
           }
-          const runNotice = (notice: Effect.Effect<void, Error>) =>
-            notice.pipe(
-              Effect.catch((error) =>
-                loopLog(trace, 'warn', 'Child progress was not queued', {
-                  runId,
-                  error,
-                }),
-              ),
-            );
-          const drainer = yield* Effect.forkScoped(
-            Effect.gen(function* () {
-              for (;;) {
-                const notice = yield* Queue.take(notices).pipe(
-                  Effect.catchTag('Done', () => Effect.succeed(null)),
-                );
-                if (notice === null) return;
-                yield* runNotice(notice);
-              }
-            }),
-          );
-          // Notices await SQLite admission. Offer a sentinel so the
-          // drainer finishes every progress job already queued before a
-          // parent result can commit (otherwise the result is a separate
-          // stale model turn).
-          const drainNotices = Effect.gen(function* () {
-            const done = yield* Deferred.make<void>();
-            yield* Queue.offer(notices, Deferred.succeed(done, undefined));
-            yield* Deferred.await(done);
-          });
-          yield* Effect.addFinalizer(() =>
-            Queue.end(notices).pipe(
-              Effect.andThen(Fiber.await(drainer)),
-              Effect.asVoid,
-            ),
-          );
           let consumed: readonly QueuedFollowUp[] = [];
           let turnStart = yield* Clock.currentTimeMillis;
           const beginTurn = Effect.gen(function* () {
@@ -962,11 +911,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 strategy.publishUsage?.(turn);
               }
 
-              // Progress notices are admitted on the forked drainer and can
-              // lag the turn; deliverTurn persists the report and admits the
-              // parent row, so drain first or the result commits ahead of
-              // progress the parent then receives as a separate stale turn.
-              yield* drainNotices;
               return yield* deliverTurn({
                 session: runSession,
                 strategy,

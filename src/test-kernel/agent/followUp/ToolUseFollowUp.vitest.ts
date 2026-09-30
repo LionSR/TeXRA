@@ -187,7 +187,6 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
         ),
     },
     runView: () => ({}),
-    onResult: () => () => {},
     interactions: { emit: () => Effect.void },
     readRunRecords: () => Effect.succeed([]),
     // No database behind this fixture, so the claim read fails and the
