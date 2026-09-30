@@ -106,6 +106,11 @@ first kind on the two central primitives.
 The continuation policy is still chosen once, when the loop is set up, from
 the plugins switched on then.
 
+**Ruled 2026-09-30 (ledger, "Plugin gating, presets..." and "SDK and typed
+RPC"):** the extension mechanism is hooks and data plugins. Typed-RPC code
+plugins, `History.writer`, an open schema registry and a `PluginModule`
+interface are not built until a named plugin cannot be MCP + hooks + data.
+
 ## Loadable plugins: MCP servers
 
 Local stdio MCP servers from `~/.texra/mcp.json` are the first loadable plugin
@@ -155,8 +160,9 @@ unregister) now covers:
   scope, so a contribution cannot choose one. `ToolPlugin.skills: true` lets a
   tool plugin ship skills: lean4's five Lean skills live in
   `packages/extension/resources/plugins/lean4/skills/`, passed to
-  `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Plugin
-  skills are not gated by the plugin's switch.
+  `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Ruled
+  2026-09-30 (D9): plugin skills and agents are gated by the plugin's switch;
+  until that lands, they are not.
 - **Bundled agent directories.** `ToolPlugin.agents: true` lets a tool plugin
   ship bundled tool-use agents: lean4's five Lean agents live in
   `packages/extension/resources/plugins/lean4/agents/`. The host bootstrap

@@ -86,7 +86,7 @@ Five built-in presets cover the most common research disciplines:
 | **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
 Pick a team in **Settings → Agents → Teams**, or with `texra multi-agent
-run <preset>`. Or define your own roster in YAML.
+run <preset>`. Or define your own team in YAML.
 
 ## Agents
 
@@ -100,11 +100,11 @@ access: `research`, `numerics`, `review`, `presenter`, `latexFixer`,
 software-engineering line — `engineer`, `coder`, `codeReviewer`,
 `testEngineer`, `codeSimplifier`.
 
-**Hosted specialists** (signed-in users): `orchestrator`, `search`,
-`simplifier`, `criticize`, `firstread`, `logic`, `notation`, `enhance`,
-`elevate`, `humanize`, `devise`, `apply`, `verifyFix`, `generic`,
-`progressCheck`, and the Lean line — `leanOrchestrator`,
-`leanBlueprint`, `leanSearch`, `leanSimplifier`.
+**Other bundled agents**: the workflow passes `apply`, `criticize`,
+`devise`, `enhance`, `firstread`, `generic`, `logic` and `notation`, the
+tool-use agents `orchestrator`, `search`, `simplifier`, `prover` and
+`progressCheck`, and the Lean line, `leanOrchestrator`, `leanBlueprint`,
+`leanSearch` and `leanSimplifier`.
 
 Every tool call is gated by per-stream approval. Optional YOLO mode
 skips approval for autonomous runs.

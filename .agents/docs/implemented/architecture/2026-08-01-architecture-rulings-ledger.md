@@ -390,45 +390,6 @@ propose renaming the edge function's `stream_id` column, and do not delete
 `AgentPlatform`'s two fields on the grounds that `Platform` no longer has
 them.
 
-## The process-roots holder is the one named ambient singleton, and it retires with `SessionHandleInit.roots` (ruled 2026-09-19)
-
-**Question.** [#12774](https://github.com/LionSR/TeXRA/pull/12774) deleted the
-workspace-roots `AsyncLocalStorage` carrier, `runInSession`, `RunContext.ts`
-and the `inScope` re-entry on `AgentRun`/`ToolCall`, so production holds no
-`new AsyncLocalStorage`. Four reads of a process-wide roots holder survived.
-Are they debt to be cleared by the next lane, or a named exception?
-
-**Ruling.** A named exception, with one exit. `initProcessWorkspaceRoots` /
-`processWorkspaceRoots` / `tryProcessWorkspaceRoots`
-(`src/platform/workspaceRoots.ts`) stay as the campaign's one ambient
-singleton, tracked by the `ambient:asyncLocalStorage` row of
-`config/ratchets/effect-migration-baseline.json` at its floor of three files
-and four sites. It retires when `SessionHandleInit.roots` becomes required,
-which removes the last fallback read; the row is then deleted rather than
-zeroed.
-
-**Evidence.** The four sites each precede any caller that could hold roots.
-`createSessionHandle` reads `init.roots ?? processWorkspaceRoots()`
-(`src/agent/runtime/sessionGraph.ts`), so the fallback exists only for the
-roots the four composition roots and about ten kernel support files do not yet
-pass; `sessionGraph.ts` also reads `tryProcessWorkspaceRoots()` for the
-graph-level lookup. `getConfigBeforePlatformInit`
-(`src/utils/config/configUtils.ts`) serves a logger write that can precede any
-session, and its own doc comment records that there is no caller to take a
-configuration from. `processSettingsStores`
-(`src/utils/config/platformSettings.ts`) has the two callers AGENTS.md already
-documents as the standing exception: the CLI composition root
-(`packages/cli/src/runtime/initPlatform.ts`) and the delegation tools'
-`working_directory` Zod transform (`src/tools/delegation/inputFields.ts`),
-which the tool facade parses before any per-call value exists.
-
-**Forbids.** A new reader of the holder, in production or in a host; a second
-ambient carrier reintroduced to avoid threading a parameter; widening the
-ratchet row. Making `SessionHandleInit.roots` optional again after it is
-required. Moving the `working_directory` gate into `execute` as a way to drop
-the read: that turns a schema rejection into a tool error and is a behavior
-decision of its own, not a threading change.
-
 ## Settings dispatch has one native execution boundary (revised 2026-09-22)
 
 **Question.** The 2026-09-19 ruling retained Promise-shaped registry arms
@@ -821,45 +782,6 @@ catalog, and a plugin's layer is one refcounted `RcMap` entry shared by the
 generations that hold it. "Plugins may own layers" stands, and the entry
 below it ("Plugins own typed tables at their seams") records where they live.
 
-**Question.** The plugin architecture (the owner decision of 2026-09-23 in the
-`defineTool` amendment above) makes a run's toolset a composition value
-(`src/tools/composition.ts`). How long does a composition live, who holds
-it, and where may a plugin's resources live?
-
-**Ruling.** A composition is a fourth lifetime, carried by one process
-service: `Compositions` (`src/tools/compositions.ts`), a `LayerMap` keyed by
-composition hash and provided with the `ToolRegistry` by
-`installProcessRuntime`. A run pins its composition in its own layer scope
-(`resolveAgentTools`, from `AgentRun`) and holds it for its lifetime; a
-delegated child (LLM delegation, workflow-script `agent()`, the native
-subagent strategy) joins the key its parent pinned, passed through the
-child's launch options beside the approval gate, instead of resolving the
-switches again. A resumed run resolves its own under the recorded-toolset
-rule. A composition whose switches differ builds beside the one in use; an
-entry closes when the last run holding it ends (reference counting, no idle
-retention); a failed build caches nothing. An entry holds the plugin table
-restricted to the composition's plugins and the services of those plugins'
-layers, which reach the run's tool calls. A plugin that owns resources
-declares `layer` in the manifest and its layer is one object in the
-`@tools/registry` table, so every entry builds through the map's one
-`MemoMap` and compositions that share a plugin share one build of its layer.
-
-**Evidence.** The prototype check built one plugin layer once across two
-compositions, rebuilt only the changed plugin on a new key, and closed each
-plugin layer with the last composition holding it. The toolsets offered by
-every shipped tool-use agent across hosts, switches, the approval gate and
-both families were unchanged by the move (the behavior dump in the PR that
-landed it). The Lean
-server pool stays a process service: its port differs by host (the VS Code
-bridge against the direct pool), the Tools dashboard and the lean4 probe read
-it outside any run, and the probe decides whether lean4 is in a composition
-at all, so the pool cannot live inside the entries it gates.
-
-**Forbids.** A second composition cache, an idle-time-to-live on the map
-standing in for the holders' count, `Layer.fresh` on a plugin layer, a
-plugin layer constructed per composition (its identity is what makes it
-shared), and a child re-resolving its parent's plugin set.
-
 ---
 
 ## Plugins own typed tables at their seams; the SDK's setup platform is core's empty one (ruled 2026-09-28)
@@ -920,3 +842,127 @@ plugin owner. Inquiry and workflow-checkpoint rows are aggregate kinds the core
 `SessionRequests` and resume paths read, and `InquiryRecords` stays core. The
 SDK's plugin set (`TexraProcessOptions.plugins`) lands with the process layer
 graph (move 4).
+
+---
+
+## Ten rulings from the 2026-09-30 decision board (ruled 2026-09-30)
+
+The owner took every decision on the board as recommended. Each entry below
+is closed; its reopen trigger names the one event that reopens it.
+
+### 1.0 identity, account and telemetry (D1-D3)
+
+**Ruling.** 1.0 is a self-improving harness with a theorist bundle. The
+theorist is the first plugin bundle (agents, skills, presets, hooks); the
+software-engineering surface ships as a separate bundle; the CLI and SDK are
+the primary headless host.
+
+- **D1.** TeXRA sign-in is removed from all three hosts (the Account tab,
+  `texra login`, the host sign-in UI). Provider OAuth (ChatGPT/Codex
+  subscription, xAI, OpenRouter) is not the TeXRA account and stays. The
+  hosted server stays until its sunset.
+- **D2.** Telemetry is anonymous metadata, on by default, with a random
+  install ID: a UUIDv4 persisted in each host's global state, never derived
+  from hardware, hostname, account, email or a provider login, not created or
+  sent while any opt-out is active, and reset by deleting the state key.
+  A one-time first-run notice says an anonymous install ID is sent. Opt-out
+  is the setting, `TEXRA_NO_TELEMETRY`, `DO_NOT_TRACK` (already honoured) and,
+  in the extension, `vscode.env.isTelemetryEnabled`. Metadata only: agent,
+  model id, token counts, outcome, duration, host and version, from the
+  run-end summary; no content, paths or error text.
+- **D3.** No OpenTelemetry export in 1.0.
+
+**Why.** The account gated nothing the bundled agents needed, and a sign-in
+surface on three hosts is a fourth owner of identity. Usage counts still
+answer which agents and models get used. Peers use a random install uuid
+(aider, Goose, Zed) or a machine id (Cline); a random ID carries no hardware
+identity, which is why the owner chose it over a machine id.
+
+**Reopen.** A named consumer needs a TeXRA identity (billing, sync), or a
+stable ID becomes derivable from something other than the random key.
+
+### No daemon; several processes on one store (D4)
+
+**Ruling.** There is no daemon. The CLI or SDK process is the unattended
+runner. The permanent shape is several processes on one store, each aggregate
+held by one claim (single owner).
+
+**Why.** A daemon moves the run loop out of every host and calls host-only
+capabilities back across a process boundary
+(`2026-09-26-session-database-off-host-thread.md` §6); claims and the
+`data_version` poll already give three hosts one store.
+
+**Reopen.** A run that must outlive every host process and cannot be a CLI
+or SDK process.
+
+### Run directory contents (D5)
+
+**Ruling.** A run's retained outputs live in SQLite. Files hold compiler
+scratch only. Format work belongs to the storage lanes.
+
+**Reopen.** A retained output that measurably cannot live in a row or blob.
+
+### Approval rows and web_fetch posture (D6-D7)
+
+**Ruling.** Approval settings are never read from the committed project
+config file, so a repository cannot grant its own approvals; users keep
+project scope through a user-level override (D6).
+`web_fetch` prompts per host with a shipped allowlist; SSRF and redirect
+hardening ships regardless (D7).
+
+**Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
+
+### The `defineTool` freeze admits guard kinds (D8)
+
+**Ruling.** Amends the freeze entry above ("`defineTool`'s default `R` is
+frozen SDK surface"): the tool contract may carry guard kinds for network,
+process and MCP calls, so external tool calls stop being approved as shell.
+The rest of the freeze stands; move 9 of the session-core note records it.
+
+**Reopen.** A guard kind is proposed that no tool family needs.
+
+### Plugin gating, presets with an optional root, no "roster" (D9-D10)
+
+**Ruling.** Plugin skills and agents are gated by the plugin switch (D9),
+reversing the plugin note's "not gated" line once the code lands. Custom
+teams stay presets: saved switches plus an optional root agent, because one
+switch should hide everything a plugin contributes and a second team concept
+is a dual system. The words
+"roster" and "multi-agent preset" retire (D10).
+
+**Reopen.** A team needs state a preset cannot hold.
+
+### SDK and typed-RPC deferral (D11)
+
+**Ruling.** Hooks and data plugins are the extension mechanism. Typed-RPC
+code plugins, `History.writer`, the open schema registry and `PluginModule`
+are not built until a named plugin cannot be MCP + hooks + data. The SDK is
+not advertised until a consumer is named.
+
+**Reopen.** That named plugin or consumer exists.
+
+### `config.json` is additive-only (D12)
+
+**Ruling.** From 1.0 a key may be added and a released key keeps its meaning.
+No retired-key list, no rewrite of old files (AGENTS.md "Compatibility and
+format retirement").
+
+**Reopen.** A released key cannot keep its meaning without a security cost.
+
+### Context overflow and journey checks (D13-D14)
+
+**Ruling.** A context overflow in a tool-use run becomes a forced compaction
+retry, not a failed run (D13). Nightly and label-triggered journey checks run
+on cheap models only, `deepseek41T` and `glm53flash` (D14).
+
+**Reopen.** A forced retry loops without shrinking the context (D13); a
+journey needs a model the cheap tier cannot drive (D14).
+
+### Considered and refused
+
+The survey's four candidates are refused; do not re-propose them as
+specified.
+
+- **The daemon build**, for the reasons under D4.
+- **A merge queue**, **the C2 switch-table merge** and **an effects
+  taxonomy**, each refused on the board on the survey's reasons.

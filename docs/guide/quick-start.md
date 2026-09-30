@@ -6,13 +6,13 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # Quick start guide
 
-Whether tackling open theoretical problems or refining an existing manuscript, you can get TeXRA running in under five minutes. On a fresh install, the **setup assistant** guides you through this initial loop in a single conversational session; this page serves as the ongoing reference for the Launcher.
+Whether tackling open theoretical problems or refining an existing manuscript, you can get TeXRA running in under five minutes. On a fresh install, the **setup assistant** guides you through this initial loop in a single conversational session; this page serves as the ongoing reference for the New task view.
 
 The shortest path is: choose a credential, run setup once, then let the orchestrator handle the daily research work.
 
 <QuickStartHero />
 
-<p class="hero-caption">The Launcher tab: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
+<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and press Execute.</p>
 
 ## Overview
 
@@ -78,9 +78,9 @@ environment, agent roster, and first task. Read the
 Haven't run an agent yet? [First run](./first-run.md) walks through the
 whole loop (sample file, one `polish` run, read the diff) in five
 minutes, side by side for the extension and the CLI. The sections below
-cover the Launcher controls you'll use beyond that.
+cover the New task controls you'll use beyond that.
 
-## The Launcher in detail
+## The New task view in detail
 
 Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
 (`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
@@ -90,7 +90,7 @@ Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Tas
 The **Input** and **Context** sections appear once you pick a document-pass
 agent such as `polish` or `correct`, because only those agents read them. An
 interactive agent (the orchestrator, the assistant) gets your instruction and
-any attachments, so the Launcher shows only **Media** for it.
+any attachments, so the New task view shows only **Media** for it.
 
 1. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files**; it appends every editor tab whose extension matches.
 2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
@@ -307,7 +307,7 @@ sign-in, workspace defaults, and headless output formats.
 
 ## Common quick tasks
 
-Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line instruction in the Launcher footer:
+Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line instruction in the New task footer:
 
 <TaskRecipeCards />
 
