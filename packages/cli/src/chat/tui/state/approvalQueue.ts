@@ -33,7 +33,7 @@ import { assertNever, groupBy } from '@utils/core';
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
   appendLocalRequestRefusal,
   reportRequestDefect,
 } from './transcript';
@@ -399,7 +399,7 @@ function issue(
         // filtering it out and the run waits with no UI.
         reopen();
         return Effect.map(reportRequestDefect(cause), (message) =>
-          appendLocalAssistantTranscript(message, runId),
+          appendLocalErrorTranscript(message, runId),
         );
       }),
     ),

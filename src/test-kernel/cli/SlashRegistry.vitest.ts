@@ -410,7 +410,7 @@ describe('slashRegistry', () => {
     await settleFormSelection();
 
     expect(errors).toEqual([
-      'Sign-in failed · Open https://example.test/manual',
+      'Sign-in failed\nOpen https://example.test/manual',
     ]);
     expect(formProgress.get()).toMatchObject({
       status: 'failed',
