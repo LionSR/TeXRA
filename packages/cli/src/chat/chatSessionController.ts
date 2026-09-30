@@ -359,7 +359,7 @@ export function createChatSessionController(
     modelSource?: 'history',
   ) =>
     Effect.gen(function* () {
-      const cliTeamId = config.cli?.multiAgentPresetId ?? undefined;
+      const cliTeamId = config.cli?.teamId ?? undefined;
       const teamName = yield* readCliTeamName(
         runtimeSession.roots.repoState,
         cliTeamId,
@@ -809,9 +809,7 @@ export function createChatSessionController(
             agentCategory: AgentCategory.ToolUse,
             workingDirectory: cwd,
             ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-            ...(meta.cliTeamId
-              ? { cli: { multiAgentPresetId: meta.cliTeamId } }
-              : {}),
+            ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
             ...(meta.delegationAgentScope
               ? { delegationAgentScope: meta.delegationAgentScope }
               : {}),

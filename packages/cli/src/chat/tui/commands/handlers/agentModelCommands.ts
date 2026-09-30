@@ -129,13 +129,13 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
     }
     const teamName = yield* readCliTeamName(
       context.runtimeSession.roots.repoState,
-      fields.cli.multiAgentPresetId,
+      fields.cli.teamId,
     );
     patchSessionMeta({
       agent: fields.agent,
       agentSource: entry.source,
       teamName,
-      cliTeamId: fields.cli.multiAgentPresetId,
+      cliTeamId: fields.cli.teamId,
       delegationAgentScope: fields.delegationAgentScope,
     });
     appendLocalNotice(

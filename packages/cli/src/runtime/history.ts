@@ -571,5 +571,5 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
 });
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
-  return config?.cli?.multiAgentPresetId?.trim() || undefined;
+  return config?.cli?.teamId?.trim() || undefined;
 }

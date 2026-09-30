@@ -793,7 +793,7 @@ describe('createChatSessionController', () => {
 
   it('retains the configuration of a manually resumed conversation', async () => {
     const config = makeResumeConfig({
-      cli: { multiAgentPresetId: 'physicist' },
+      cli: { teamId: 'physicist' },
       delegationAgentScope: {
         workflow: ['builtInWorkflow:physicsReviewer'],
         toolUse: ['builtInToolUse:orchestrator'],
@@ -829,9 +829,7 @@ describe('createChatSessionController', () => {
         },
       });
       const previousMetadata = sessionMeta.get();
-      installResumeRunStore(
-        makeResumeConfig({ cli: { multiAgentPresetId: 'physicist' } }),
-      );
+      installResumeRunStore(makeResumeConfig({ cli: { teamId: 'physicist' } }));
       // Both runtime refusals precede the hook that adopts the target run.
       mocks.resumeRun.mockReturnValueOnce(Effect.succeed({ failed: failure }));
       const ctrl = createChatSessionController(makeInit({ session }));
