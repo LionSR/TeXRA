@@ -662,7 +662,14 @@ describe('SubscriptionUsageService', () => {
   ])(
     'maps %s HTTP %s to invalid credentials without exposing details',
     async (provider, status) => {
-      stubCodexSession();
+      let accessToken = 'chatgpt-secret';
+      stubCodexSession({
+        getFreshSession: () => Effect.sync(() => ({ accessToken })),
+        refreshRejected: () =>
+          Effect.sync(() => {
+            accessToken = 'chatgpt-refreshed';
+          }),
+      });
       const http = vi.fn<UsageFetch>(async () =>
         jsonResponse({ secret: 'must not escape' }, status),
       );
@@ -673,8 +680,15 @@ describe('SubscriptionUsageService', () => {
         reason: 'invalid_credentials',
       });
       expect(JSON.stringify(snapshot)).not.toContain('secret');
-      // A ChatGPT 401 forces one token refresh and one retry, no more.
-      expect(http).toHaveBeenCalledTimes(provider === 'chatgpt' ? 2 : 1);
+      // A ChatGPT 401 is retried once, on the refreshed token.
+      if (provider === 'chatgpt') {
+        expect(
+          http.mock.calls.map(
+            ([, init]) =>
+              (init.headers as Record<string, string>).authorization,
+          ),
+        ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
+      }
     },
   );
 
