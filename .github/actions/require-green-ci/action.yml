@@ -1,0 +1,26 @@
+name: Require green CI
+description: Fail unless the CI workflow's `validate` check is green on the commit being released.
+
+inputs:
+  token:
+    description: Token that can read this repository's check runs (the checks read permission).
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Require a green validate check on the commit
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      # The newest `validate` run decides, so a red run followed by a green
+      # rerun passes and the reverse fails. A commit CI never ran on (a tag off
+      # a side branch) has no run and fails closed: dispatch CI on that ref
+      # first.
+      run: |
+        conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=validate" \
+          --jq '(.check_runs | sort_by(.started_at) | last | .conclusion) // "none"')"
+        if [ "$conclusion" != success ]; then
+          echo "::error::CI 'validate' on $GITHUB_SHA is '$conclusion', not 'success'. Wait for CI (or dispatch it on this ref), then re-run this workflow."
+          exit 1
+        fi

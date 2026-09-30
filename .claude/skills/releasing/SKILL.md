@@ -31,6 +31,11 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    git push origin vX.Y.Z cli-vX.Y.Z
    ```
 
+   Both publish jobs and the desktop publish job refuse to run unless CI's
+   `validate` check is green on that commit (`.github/actions/require-green-ci`).
+   Wait for the push-to-`main` CI run first; a red or missing run fails the
+   release job, and re-running it after CI is green publishes.
+
 3. **GitHub Releases.** Create two, body = the changelog section for that
    version (extract with e.g.
    `awk '/^## \[X.Y.Z\]/{f=1} /^## \[PREV\]/{f=0} f' CHANGELOG.md`):

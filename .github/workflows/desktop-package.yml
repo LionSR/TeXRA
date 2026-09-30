@@ -237,6 +237,7 @@ jobs:
       - desktop-windows-artifact
     permissions:
       contents: read
+      checks: read
     env:
       DESKTOP_RELEASE_REPO: texra-ai/texra-desktop-releases
       GH_TOKEN: ${{ secrets.DESKTOP_RELEASES_TOKEN }}
@@ -259,6 +260,13 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      # The job's GH_TOKEN is the releases-repo token; this check reads this
+      # repository's checks.
+      - name: Require green CI on the dispatched commit
+        uses: ./.github/actions/require-green-ci
+        with:
+          token: ${{ github.token }}
 
       - name: Download desktop installer artifacts
         uses: actions/download-artifact@v7
