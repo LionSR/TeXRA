@@ -4,8 +4,12 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import { UsageLog } from '@shared/usageLog';
+import {
+  AGENT_SOURCE,
+  AgentCategory,
+  TELEMETRY_ENABLED_KEY,
+} from '@shared/schemas';
+import { UsageLog, usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
   type UsageLogOptions,
@@ -532,5 +536,19 @@ describe('UsageLogService', () => {
           expect(batches).toEqual([]);
         }),
     );
+  });
+
+  it('sends only a bundled agent id; any other agent name is "custom"', () => {
+    expect(usageAgentName('orchestrator', AGENT_SOURCE.BUILT_IN_TOOL_USE)).toBe(
+      'orchestrator',
+    );
+    expect(usageAgentName('polish', AGENT_SOURCE.BUILT_IN_WORKFLOW)).toBe(
+      'polish',
+    );
+    expect(usageAgentName('my-thesis-notes', AGENT_SOURCE.CUSTOM)).toBe(
+      'custom',
+    );
+    expect(usageAgentName('acme:secret', AGENT_SOURCE.PLUGIN)).toBe('custom');
+    expect(usageAgentName('unsourced', undefined)).toBe('custom');
   });
 });
