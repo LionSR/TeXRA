@@ -179,7 +179,7 @@ All notable changes to this project will be documented in this file.
 
 - **Session history takes several times less disk** — long tool output,
   attached images and PDFs, and long prompts are stored compressed and
-  only once per workspace: the same image attached in two runs, or a file's
+  only once per project: the same image attached in two runs, or a file's
   text in both a tool's result and the conversation, is kept once, and an
   attachment takes about its own size on disk instead of several times it.
   Deleting a run frees what only it used.
