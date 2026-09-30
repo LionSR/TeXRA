@@ -155,9 +155,7 @@ describe('createLanguageModelPort', () => {
         const port = createPort();
 
         expect(port.isAvailable()).toBe(true);
-        expect(
-          yield* port.selectModels({ vendor: 'copilot', version: '2026-07' }),
-        ).toEqual([
+        expect(yield* port.selectModels({ vendor: 'copilot' })).toEqual([
           {
             id: 'copilot-gpt-4o',
             name: 'GPT-4o',
@@ -170,7 +168,6 @@ describe('createLanguageModelPort', () => {
         ]);
         expect(mocks.selectChatModels).toHaveBeenCalledWith({
           vendor: 'copilot',
-          version: '2026-07',
         });
         expect(mocks.canSendRequest).toHaveBeenCalledWith(
           expect.objectContaining({ id: 'copilot-gpt-4o' }),

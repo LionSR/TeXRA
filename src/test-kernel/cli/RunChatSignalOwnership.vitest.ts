@@ -78,7 +78,6 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 
 vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
-    normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => Effect.succeed(text),
   }),
 }));

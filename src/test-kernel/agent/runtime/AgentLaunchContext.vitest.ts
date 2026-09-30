@@ -452,7 +452,6 @@ describe('AgentLaunchContext', () => {
       const failure = new Error('user vars unavailable');
       const postProcessResponse = vi.fn((text: string) => Effect.succeed(text));
       const responseTextProcessing = {
-        normalizeResponseText: (text: string) => text,
         postProcessResponse,
       };
       const session = createTestSession({
