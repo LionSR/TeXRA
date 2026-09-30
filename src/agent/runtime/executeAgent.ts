@@ -22,7 +22,6 @@ import {
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 
 import {
   buildAgentLaunchContext,
@@ -381,8 +380,7 @@ export function executeAgent(
           // This run's lineage, derived once, from the live handle the
           // registry admitted: the caller's own parent.
           const parentRunId = handle.parent ?? undefined;
-          // Pre-run UI setup (RUNNING is set by runWithLifecycle)
-          yield* ensureRunDirUnder(runSession.roots.storage, runId);
+          // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             withLogChannel(CHANNEL),
           );
