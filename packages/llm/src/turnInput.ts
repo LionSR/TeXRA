@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 // Local imports - canonical model contract
 import {
   TurnRequestSchema,
+  type AnthropicMessagesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from './turn.js';
@@ -46,4 +47,23 @@ export function initialTextInput(turn: {
     return undefined;
   const text = message.content.filter((part) => part.kind === 'text');
   return text.length === message.content.length ? text : undefined;
+}
+
+/**
+ * An Anthropic request's output limit and the thinking that fits below it: a
+ * manual budget at or above a smaller requested limit (a summary sized to
+ * the context left) is left off that request rather than refused.
+ */
+export function fitLimit(
+  defaults: AnthropicMessagesConfiguration['defaults'],
+  requested: number | undefined,
+) {
+  const maxOutputTokens = requested ?? defaults.maxOutputTokens;
+  const { thinking } = defaults;
+  const fits =
+    thinking.mode !== 'enabled' || thinking.budgetTokens < maxOutputTokens;
+  return {
+    maxOutputTokens,
+    thinking: fits ? thinking : ({ mode: 'disabled' } as const),
+  };
 }
