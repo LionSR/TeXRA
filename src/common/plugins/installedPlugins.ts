@@ -28,6 +28,7 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
+import { pluginDataDir } from './pluginHooks';
 import { checkoutDetached, fetchPinned } from './pluginGit';
 import {
   ioError,
@@ -338,7 +339,7 @@ export function installPlugins(
  * record), then delete its managed directory. A local plugin is only
  * forgotten; its directory is the user's. A removal whose delete failed is
  * finished by removing again: with no record left, the leftover managed
- * directory is deleted. What the plugin wrote to history stays there, kept
+ * directory is deleted. Its `plugin-data/<name>` goes with it. What the plugin wrote to history stays there, kept
  * unread while it is absent.
  */
 export function removePlugin(name: string, env: PluginEnv) {
@@ -368,10 +369,12 @@ export function removePlugin(name: string, env: PluginEnv) {
           }),
         );
       yield* removeDir(dir);
+      yield* removeDir(pluginDataDir(env.globalStorage, name));
       return { name, path: dir, local: false, leftover: true };
     }
     const local = plugin.commit === undefined;
     if (!local) yield* removeDir(dir);
+    yield* removeDir(pluginDataDir(env.globalStorage, name));
     return { name, path: plugin.path, local, leftover: false };
   });
 }
