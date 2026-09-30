@@ -18,7 +18,7 @@ import {
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { AppState, ConfigProvider } from '@platform/interfaces';
 import {
   TELEMETRY_ENABLED_DEFAULT,
   TELEMETRY_ENABLED_KEY,
@@ -29,6 +29,7 @@ import type {
   UsageLogBatch,
   UsageLogResponse,
 } from '@shared/usageLog';
+import { readOrCreateInstallId } from '@telemetry/installId';
 import {
   extractErrorMessage,
   toErrorMessage,
