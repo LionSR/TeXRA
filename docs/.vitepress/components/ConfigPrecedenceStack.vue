@@ -10,7 +10,7 @@
 //
 // Frameless and .mockup-scoped, so it inherits the shared --mk-* tokens and
 // flips cleanly between the docs light / dark themes. The "winning" value
-// (deepseek41T, set highest) is highlighted via the --mk-accent token.
+// (deepseek/deepseek-flash, set highest) is highlighted via the --mk-accent token.
 import StatusPill from './StatusPill.vue';
 
 // Top = highest priority. The first layer wins, so its chip is accented.
@@ -20,7 +20,7 @@ const layers = [
     rank: '1',
     title: 'CLI flags',
     sub: 'highest priority',
-    chip: '--model deepseek41T',
+    chip: '--model deepseek/deepseek-flash',
     wins: true,
   },
   {
@@ -43,7 +43,7 @@ const layers = [
     rank: '4',
     title: 'Built-in default',
     sub: 'lowest priority',
-    chip: 'deepseek/deepseek-flash',
+    chip: 'deepseek/deepseek-v4-pro',
   },
 ];
 </script>

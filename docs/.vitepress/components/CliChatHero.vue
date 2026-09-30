@@ -47,7 +47,9 @@ const calls = [
         <span class="cc-meta">v0.38.8</span>
         <span class="cc-meta">API keys</span>
       </div>
-      <div class="cc-identity">agent: research · model: deepseek41T</div>
+      <div class="cc-identity">
+        agent: research · model: deepseek/deepseek-flash
+      </div>
     </div>
 
     <!-- User turn: reverse-video band with the `› ` chevron, no name chip -->

@@ -75,7 +75,7 @@ EOF
 1. Open `draft.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
 3. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `draft.tex` from the file picker.
-4. Pick **polish** under Agent. Pick **sonnet55** under Model (or any
+4. Pick **polish** under Agent. Pick **anthropic/claude-sonnet-5-5** under Model (or any
    available model).
 5. Type an instruction:
    > Tighten the prose. Preserve all math and citations.

@@ -14,7 +14,7 @@ const recipes = [
     title: 'Fix grammar & typos',
     agent: 'correct',
     model: 'google/gemini-3.8-flash',
-    alts: 'deepseek, gpt6--, sonnet5',
+    alts: 'deepseek/deepseek-flash, openai/gpt-6-luna, anthropic/claude-sonnet-5-5',
     instruction:
       'Fix grammatical errors and typos without changing the content or technical terminology.',
   },
@@ -23,7 +23,7 @@ const recipes = [
     title: 'Paper to slides',
     agent: 'paper2slide',
     model: 'anthropic/claude-sonnet-5-5',
-    alts: 'opus55, gpt6-',
+    alts: 'anthropic/claude-opus-5-5, openai/gpt-6.1-sol',
     instruction:
       'Convert this paper into presentation slides using the beamer template. Create approximately 12–15 slides highlighting the key points, methodology, and results.',
   },

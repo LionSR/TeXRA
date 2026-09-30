@@ -12,6 +12,7 @@
 
 // Local imports
 import { agentFileName } from '@shared/schemas';
+import { modelFileName } from '@shared/model/modelSelection';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
@@ -76,5 +77,5 @@ export function workflowOutputCopyStem(params: {
   model: string;
   round: number;
 }): string {
-  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${params.model}`;
+  return `${params.base}_${getAgentFirstNameChunk(params.agent)}_r${params.round}_${modelFileName(params.model)}`;
 }

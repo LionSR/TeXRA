@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { agentFileName, type FileOpResult } from '@shared/schemas';
+import { modelFileName } from '@shared/model/modelSelection';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 
 // Local file imports
@@ -82,7 +83,7 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
       path.join(
         inputDir,
         HISTORY_DIR,
-        `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
+        `${generateTimestamp()}_${baseName}_${cleanAgent}_${modelFileName(model)}`,
       );
 
     const outputSide = yield* filesystemFor(workspaceFs, resolvedOutputFolder);
@@ -151,7 +152,7 @@ export const runPackMultiple = Effect.fn('housekeeping.runPackMultiple')(
     const commonOutputFolder = path.join(
       outputDir,
       HISTORY_DIR,
-      `${generateTimestamp()}_${baseName}_multiple_${cleanAgent}_${model}`,
+      `${generateTimestamp()}_${baseName}_multiple_${cleanAgent}_${modelFileName(model)}`,
     );
 
     const allFilesToPack = [inputFile, ...inputFiles];

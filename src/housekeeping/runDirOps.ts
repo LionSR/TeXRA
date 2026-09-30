@@ -9,6 +9,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import { agentFileName, mergeRunDirAndWorkspaceResult } from '@shared/schemas';
+import { modelFileName } from '@shared/model/modelSelection';
 import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -72,7 +73,7 @@ const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
     const idFragment = runId.replaceAll('-', '').slice(0, 8);
     const destinationRelative = path.join(
       HISTORY_DIR,
-      `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}_${idFragment}`,
+      `${generateTimestamp()}_${baseName}_${cleanAgent}_${modelFileName(model)}_${idFragment}`,
     );
 
     const source = yield* storageFs.resolve(runDirRelative);

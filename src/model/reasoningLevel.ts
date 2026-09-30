@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { z } from 'zod';
-import { ReasoningEffort, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
@@ -78,20 +78,69 @@ export function supportsReasoningLevel(
 }
 
 /**
+ * The Codex subscription backend runs every turn synchronously on one
+ * connection, so an effort above medium risks the client timing out before
+ * it answers: a route ceiling, applied through the one reasoning policy.
+ */
+export const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+];
+
+/** The route a request is bound on, as far as reasoning is concerned. */
+export interface ReasoningRoute {
+  readonly protocol: string;
+  readonly codexSubscription: boolean;
+}
+
+/**
+ * The model's reasoning as this route can control it. Gemini's Interactions
+ * request and Kimi's Responses request have no switch that turns thinking
+ * off; DashScope's has none that turns Qwen's thinking on. The policy then
+ * refuses a request the route cannot carry and records what really happens.
+ */
+export function routeReasoning(
+  config: ModelConfig,
+  route: ReasoningRoute,
+): Pick<ModelConfig, 'label' | 'reasoning' | 'modes'> {
+  const { reasoning } = config;
+  if (reasoning === undefined) return config;
+  const responses = route.protocol === 'openai-responses';
+  if (responses && config.provider === ModelProvider.DASHSCOPE) {
+    return { ...config, reasoning: undefined };
+  }
+  if (
+    route.protocol === 'google-interactions' ||
+    (responses && config.provider === ModelProvider.MOONSHOT)
+  ) {
+    return { ...config, reasoning: { ...reasoning, off: undefined } };
+  }
+  return config;
+}
+
+/**
  * The run's reasoning decision: the model string's own request, else the
- * user's saved level for the model, else the default; a route ceiling (the
- * Codex subscription backend) narrows the levels. A level the model lacks is
- * substituted and logged; a request it cannot run fails the bind.
+ * user's saved level for the model, else the default, for the reasoning the
+ * route can control; the Codex subscription narrows the levels. A level the
+ * model lacks is substituted and logged; a request it cannot run fails the
+ * bind.
  */
 export const reasoningFor = Effect.fn('reasoningFor')(function* (
   config: ModelConfig,
   request: ReasoningRequest,
   globalState: StateStore,
-  routeEfforts?: readonly ReasoningEffort[],
+  route: ReasoningRoute,
 ) {
   const userEffort = (yield* reasoningEffortOverrides(globalState))[config.ref];
+  const routeEfforts = route.codexSubscription
+    ? CODEX_ROUTE_EFFORTS
+    : undefined;
   const choice = yield* Effect.try({
-    try: () => chooseReasoning(config, request, { userEffort, routeEfforts }),
+    try: () =>
+      chooseReasoning(routeReasoning(config, route), request, {
+        userEffort,
+        routeEfforts,
+      }),
     catch: ensureError,
   });
   if (choice.note !== undefined) yield* Effect.logInfo(choice.note);

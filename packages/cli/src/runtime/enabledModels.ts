@@ -19,7 +19,7 @@ import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
-import { modelConfig } from '@shared/model/modelSelection';
+import { modelConfig, modelRefOf } from '@shared/model/modelSelection';
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {
@@ -79,7 +79,9 @@ export function setCliModelEnabled(
   StateWriteFailed | StateReadFailed
 > {
   return Effect.suspend(() => {
-    const model = resolveKnownCliModelId(modelInput);
+    // Enablement belongs to the model, not to an effort or mode suffix.
+    const resolved = resolveKnownCliModelId(modelInput);
+    const model = resolved && (modelRefOf(resolved) ?? resolved);
     if (!model) {
       // A refusal in the channel this signature declares, not a defect: the
       // caller shows it to the user, and a defect would reach that caller as a

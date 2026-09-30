@@ -38,7 +38,7 @@ import {
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
 import { type ModelOptionStores } from '@model/computeModelOptions';
-import { reasoningFor } from '@model/reasoningLevel';
+import { CODEX_ROUTE_EFFORTS, reasoningFor } from '@model/reasoningLevel';
 import {
   acceptedEfforts,
   wireEffort,
@@ -196,16 +196,6 @@ function anthropicThinking(
 
 /** Instructions the Codex backend requires when the request carries none. */
 const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
-
-/**
- * The Codex backend runs every turn synchronously on one connection, so an
- * effort above medium risks the client timing out before it answers. A route
- * ceiling, applied through the one reasoning policy.
- */
-const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
-  ReasoningEffort.LOW,
-  ReasoningEffort.MEDIUM,
-];
 
 type ResponsesAuthentication = Parameters<
   typeof openaiResponsesWebSocketModel
@@ -821,8 +811,12 @@ export const bindModel = Effect.fn('bindModel')(function* (
     );
   }
   const request: ReasoningRequest = selected?.request ?? {};
-  // The wire identity the preference promises, applied to the bound config.
-  const requested = yield* withShortModelName(catalog, input.stores);
+  // The wire identity the preference promises, applied to the bound config;
+  // a request in a provider mode (OpenAI `pro`) keeps the pinned id.
+  const requested =
+    request.mode === undefined
+      ? yield* withShortModelName(catalog, input.stores)
+      : catalog;
   const route = yield* resolveModelRoute(input.stores, requested, {
     ...input,
     mode: request.mode,
@@ -841,7 +835,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
       input.modelId,
       compatibilityKey,
       route.route,
-      yield* reasoningFor(requested, request, input.stores.globalState),
+      yield* reasoningFor(requested, request, input.stores.globalState, {
+        protocol,
+        codexSubscription: false,
+      }),
     );
   }
   if (protocol === 'validation') {
@@ -853,6 +850,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         requested,
         request,
         input.stores.globalState,
+        { protocol, codexSubscription: false },
       ),
       compatibilityKey,
       model: bound.model,
@@ -898,9 +896,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     config,
     request,
     input.stores.globalState,
-    credential.route === 'chatgpt-subscription'
-      ? CODEX_ROUTE_EFFORTS
-      : undefined,
+    {
+      protocol,
+      codexSubscription: credential.route === 'chatgpt-subscription',
+    },
   );
   const configuration = yield* configurationFor(
     protocol,

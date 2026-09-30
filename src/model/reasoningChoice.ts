@@ -152,10 +152,13 @@ export function chooseReasoning(
     if (wanted === ReasoningEffort.NONE || reasoning.off.length === 0) {
       return { thinking: false, effort: null, mode };
     }
+    const offAccepted = options.routeEfforts
+      ? reasoning.off.filter((effort) => options.routeEfforts?.includes(effort))
+      : reasoning.off;
     return {
       thinking: false,
       mode,
-      ...snapped(reasoning.off, wanted, `${label} without thinking`, strict),
+      ...snapped(offAccepted, wanted, `${label} without thinking`, strict),
     };
   }
 

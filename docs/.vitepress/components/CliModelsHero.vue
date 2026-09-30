@@ -4,7 +4,7 @@
 // `<value>\t<label>\t<status>` row per model the current credentials can run
 // (packages/cli/src/runtime/modelAccess.ts); `models show <id>` prints
 // `id:` / `label:` / `provider:` / `status:` detail lines
-// (formatCliModelDetails). Short ids are exactly what `--model` takes; labels
+// (formatCliModelDetails). Model references are exactly what `--model` takes; labels
 // are the literal llm-zoo MODEL_CONFIGS labels the command prints; the status
 // column is the lowercased availability label from
 // src/model/computeModelOptions.ts — 'api key set' / 'openrouter key' /
@@ -13,16 +13,20 @@
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
-  { id: 'anthropic/claude-fable-5-1', label: 'Claude Fable 5.1', status: 'api key set' },
+  {
+    id: 'anthropic/claude-fable-5-1',
+    label: 'Claude Fable 5.1',
+    status: 'api key set',
+  },
   { id: 'anthropic/claude-opus-5-5', label: 'Opus 5.5', status: 'api key set' },
   {
     id: 'anthropic/claude-sonnet-5-5',
-    label: 'Sonnet 5 (Thinking)',
+    label: 'Sonnet 5.5',
     status: 'api key set',
   },
   {
     id: 'deepseek/deepseek-flash',
-    label: 'DeepSeek V4 Flash (Thinking)',
+    label: 'DeepSeek V4.1 Flash',
     status: 'api key set',
   },
 ];
@@ -48,10 +52,12 @@ const rows = [
       <!-- Beat 2: one model's details -->
       <div class="mk-term-prompt cmo-show">
         <span class="mk-term-sigil">$</span>
-        <span class="mk-term-cmd">texra models show fable51</span>
+        <span class="mk-term-cmd"
+          >texra models show anthropic/claude-fable-5-1</span
+        >
       </div>
       <div class="cmo-details">
-        <div><span class="cmo-k">id:</span> fable51</div>
+        <div><span class="cmo-k">id:</span> anthropic/claude-fable-5-1</div>
         <div><span class="cmo-k">label:</span> Claude Fable 5.1</div>
         <div><span class="cmo-k">provider:</span> anthropic</div>
         <div><span class="cmo-k">status:</span> api key set</div>
@@ -72,7 +78,7 @@ const rows = [
 }
 .cmo-row {
   display: grid;
-  grid-template-columns: 0.7fr 2fr 0.7fr;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   min-width: var(--mk-size-420);
   gap: var(--mk-space-10);
   padding: var(--mk-space-3) 0;

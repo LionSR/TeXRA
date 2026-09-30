@@ -23,7 +23,9 @@
       >
     </div>
 
-    <div class="csr-identity">agent: search · model: deepseek41T</div>
+    <div class="csr-identity">
+      agent: search · model: deepseek/deepseek-flash
+    </div>
 
     <div class="csr-user">
       <span class="csr-chevron">›</span>
