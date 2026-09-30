@@ -1,6 +1,6 @@
 // One run row of the run list: its title, status glyph, rollup and the
-// row actions (expand, resume, and, where the list offers a `menu`, the run
-// menu on `⋯` and right-click). `run-tabs` lays the rows out.
+// row actions (expand, resume, and, where the list is `removable`, delete).
+// `run-tabs` lays the rows out.
 import {
   LitElement,
   html,
@@ -12,7 +12,6 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
-import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { RunView } from '@shared/session/sessionView';
 import { designTokens } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
@@ -20,7 +19,6 @@ import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -35,10 +33,6 @@ import {
   deleteSessionConfirmStyles,
   renderDeleteSessionConfirm,
 } from './deleteSessionConfirm';
-import { renderRunMenuItems, selectRunMenuItem } from './runMenu';
-import type WaDropdown from '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], TeXRAIconName> = {
@@ -122,27 +116,25 @@ export class RunTab extends LitElement {
   @property({ type: Boolean }) unseen = false;
   /** Messages queued on the run that it has not read yet. */
   @property({ type: Number }) unread = 0;
-  /** The row offers the run menu, the header's own (the desktop rail). */
-  @property({ type: Boolean }) menu = false;
-  /** The menu's permanent delete was chosen: its question is open. */
+  /** The row offers Delete (the desktop rail); set only on a run whose
+   *  `actions` hold `delete`. */
+  @property({ type: Boolean }) removable = false;
+  /** The Delete confirmation is open under the row. */
   @state() private confirmingDelete = false;
 
   private decorator = getAgentCategoryDecorator('toolUse');
 
-  private readonly copyRunContext = new CopyButtonController(this);
-
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('run')) this.decorator = runDecorator(this.run);
     // A run that stopped taking `delete` (it resumed) drops the question.
-    if (!this.menu || !this.run.actions.includes('delete'))
-      this.confirmingDelete = false;
+    if (!this.removable) this.confirmingDelete = false;
   }
 
   protected override updated(changed: PropertyValues): void {
     // Opening the confirmation moves focus to its safe choice; closing it
-    // took the focused button away, so focus returns to the row. The first
-    // render moves nothing, and neither does a close while focus is
-    // elsewhere.
+    // took the focused button away, so focus returns to the row, which
+    // shows its × again. The first render moves nothing, and neither does
+    // a close while focus is elsewhere.
     if (changed.get('confirmingDelete') === undefined) return;
     if (this.confirmingDelete) {
       this.renderRoot
@@ -156,45 +148,6 @@ export class RunTab extends LitElement {
   private readonly dismissDelete = (): void => {
     this.confirmingDelete = false;
   };
-
-  /** Right-click opens the same menu as the row's `⋯`. */
-  private readonly openMenu = (event: MouseEvent): void => {
-    if (!this.menu) return;
-    event.preventDefault();
-    const dropdown = this.renderRoot.querySelector<WaDropdown>('.tab-menu');
-    if (dropdown) dropdown.open = true;
-  };
-
-  private renderMenu(run: RunView, runTitle: string): TemplateResult {
-    return html`<wa-dropdown
-        class="tab-menu"
-        placement="bottom-end"
-        @wa-select=${(event: WaSelectEvent) => {
-          const { value } = event.detail.item as WaDropdownItem;
-          const chosen = selectRunMenuItem(
-            this,
-            run,
-            value,
-            this.copyRunContext,
-          );
-          if (chosen === 'delete') this.confirmingDelete = true;
-        }}
-      >
-        <wa-button
-          slot="trigger"
-          id="run-tab-menu-button"
-          class="tab-more"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label=${`More actions for ${runTitle}`}
-          >${waIcon('ellipsis')}</wa-button
-        >
-        ${renderRunMenuItems(run, this.copyRunContext)}
-      </wa-dropdown>
-      <wa-tooltip for="run-tab-menu-button">More</wa-tooltip>`;
-  }
 
   override render(): TemplateResult {
     const run = this.run;
@@ -230,7 +183,6 @@ export class RunTab extends LitElement {
           'is-read-only': run.readOnly,
           'is-unseen': this.unseen,
         })}
-        @contextmenu=${this.openMenu}
       >
         ${
           this.expandable
@@ -364,11 +316,30 @@ export class RunTab extends LitElement {
               >`
             : nothing
         }
-        ${this.menu ? this.renderMenu(run, runTitle) : nothing}
+        ${
+          this.removable
+            ? html`<wa-button
+                  id="run-tab-remove-button"
+                  class="tab-remove"
+                  appearance="plain"
+                  variant="neutral"
+                  size="s"
+                  type="button"
+                  aria-label=${`Delete ${runTitle}`}
+                  aria-expanded=${this.confirmingDelete ? 'true' : 'false'}
+                  @click=${() => {
+                    this.confirmingDelete = true;
+                  }}
+                  >${waIcon('xmark')}</wa-button
+                ><wa-tooltip for="run-tab-remove-button"
+                  >Delete session</wa-tooltip
+                >`
+            : nothing
+        }
       </div>
       ${
         this.confirmingDelete
-          ? renderDeleteSessionConfirm(run, this.dismissDelete)
+          ? renderDeleteSessionConfirm(this, run, this.dismissDelete)
           : nothing
       }
     `;

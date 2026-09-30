@@ -196,17 +196,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **Conversations go to the Trash, and come back.** A finished
-  conversation's menu now offers Move to Trash instead of an immediate
-  delete, with no question asked. In the desktop app every sidebar row has
-  the same menu behind a `⋯` (or a right-click), the conversation leaves the
-  sidebar at once, and an Undo toast brings it back. A Trash entry beside
-  Settings lists the trashed conversations of every open project, with
-  Restore, Delete permanently (which still asks first), and Empty Trash. In
-  VS Code, trashed conversations are listed under Trash at the end of the
-  sessions list, and their menu restores or deletes them. The terminal's
-  history no longer lists them. Anything left in the Trash for 30 days is
-  deleted when TeXRA next opens the project.
+- **Delete a conversation from the desktop sidebar.** Hovering or focusing
+  a finished conversation under a project shows an × that asks the same
+  "Delete session" question as the conversation's own menu, then removes it
+  and its run folder. A running conversation shows no × until it is
+  stopped, and deleting the one on screen moves to the project's first
+  remaining conversation.
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.

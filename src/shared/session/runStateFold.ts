@@ -219,7 +219,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.end': true,
   'run.removed': true,
   'run.description': true,
-  'run.trash': true,
   'conversation.progress': true,
   'run.fact': true,
   'child.park': true,
@@ -400,7 +399,9 @@ function foldRow(
     if (verdict.kind === 'unresolved') {
       return outOfOrder(`decision names no request ${verdict.requestId}`);
     }
-    if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
+    if (verdict.kind === 'contradiction') {
+      return outOfOrder(verdict.detail);
+    }
     const state = current ?? freshRunState(commit);
     const at = verdict.rows.at;
     return Result.succeed({

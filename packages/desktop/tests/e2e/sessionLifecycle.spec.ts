@@ -205,54 +205,13 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
   }
 });
 
-test('the rail moves a conversation to the Trash, Undo and Restore bring it back, and Delete permanently asks', async () => {
+test('the rail deletes a finished conversation after asking, and it stays deleted', async () => {
   const { workspacePath, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
   const railRow = (launched: LaunchedApp, runId: RunId) =>
     launched.page
       .locator('.shell-project-runs run-tab')
       .filter({ has: launched.page.locator(`[data-run="${runId}"]`) });
-  const trashDialog = (launched: LaunchedApp) =>
-    launched.page.locator('wa-dialog.desktop-trash');
-  const trashRow = (launched: LaunchedApp, runId: RunId) =>
-    trashDialog(launched).locator(`.desktop-trash-row[data-run="${runId}"]`);
-  // A shot waits for the menu, toast and dialog animations to settle (or be
-  // cancelled by the next one).
-  const shot = async (launched: LaunchedApp, name: string) => {
-    await launched.page.evaluate(() =>
-      Promise.all(
-        document
-          .getAnimations()
-          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-          .map((a) => a.finished.catch(() => undefined)),
-      ),
-    );
-    await launched.page.screenshot({ path: test.info().outputPath(name) });
-  };
-  // The row's own ⋯ (shown on focus as on hover) opens its run menu;
-  // Move to Trash acts at once.
-  const moveToTrash = async (launched: LaunchedApp, runId: RunId) => {
-    const row = railRow(launched, runId);
-    await row.locator('#run-tab-select-button').focus();
-    await row.locator('.tab-more').click();
-    await row.locator('wa-dropdown-item[value="trashSession"]').click();
-    await expect(row).toHaveCount(0);
-  };
-  const relaunch = async (launched: LaunchedApp) => {
-    await closeTexraApp(launched);
-    currentLaunch = undefined;
-    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
-    await dismissOnboarding(currentLaunch.page);
-    await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
-    return currentLaunch;
-  };
-  const openTrash = async (launched: LaunchedApp) => {
-    await launched.page
-      .locator('.shell-sidebar-footer .shell-sidebar-action')
-      .filter({ hasText: 'Trash' })
-      .click();
-    await expect(trashDialog(launched)).toHaveJSProperty('open', true);
-  };
 
   try {
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
@@ -268,81 +227,33 @@ test('the rail moves a conversation to the Trash, Undo and Restore bring it back
 
     currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
     await dismissOnboarding(currentLaunch.page);
-    let launched = currentLaunch;
-    const row = railRow(launched, WAITING_RUN);
+    const row = railRow(currentLaunch, WAITING_RUN);
     await expect(row).toHaveCount(1);
 
-    // Right-click opens the same run menu as the row's ⋯.
-    await row.click({ button: 'right' });
-    await expect(row.locator('wa-dropdown.tab-menu')).toHaveJSProperty(
-      'open',
-      true,
-    );
-    await expect(
-      row.locator('wa-dropdown-item[value="trashSession"]'),
-    ).toBeVisible();
-    await expect(
-      row.locator('wa-dropdown-item[value="openRunStorageBtn"]'),
-    ).toBeVisible();
-    await shot(launched, 'rail-row-menu.png');
-    await launched.page.keyboard.press('Escape');
-    await expect(row.locator('wa-dropdown.tab-menu')).toHaveJSProperty(
-      'open',
-      false,
-    );
+    // Focus reveals the ×; it asks first, and Cancel keeps the row.
+    await row.locator('#run-tab-select-button').focus();
+    await row.locator('.tab-remove').click();
+    await row.locator('.delete-confirm-cancel').click();
+    await expect(row.locator('.delete-confirm')).toHaveCount(0);
+    await expect(row).toHaveCount(1);
+    // Focus came back to the row, so its × is showing again.
+    await expect(row.locator('.tab-remove')).toBeVisible();
 
-    // Move to Trash asks nothing; Undo on its toast brings the row back.
-    await moveToTrash(launched, WAITING_RUN);
-    const toast = launched.page.locator('wa-toast-item.desktop-trash-toast');
-    await expect(toast).toBeVisible();
-    await expect(toast).toContainText('to Trash');
-    await shot(launched, 'trash-undo-toast.png');
-    await toast.locator('.desktop-trash-undo').click();
-    await expect(railRow(launched, WAITING_RUN)).toHaveCount(1);
+    await row.hover();
+    await row.locator('.tab-remove').click();
+    await row.locator('#confirmDeleteSession').click();
+    await expect(row).toHaveCount(0);
+    await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
 
-    // Trashed again, it stays trashed across a relaunch and is listed there.
-    await moveToTrash(launched, WAITING_RUN);
-    launched = await relaunch(launched);
-    await expect(railRow(launched, WAITING_RUN)).toHaveCount(0);
-    await openTrash(launched);
-    await expect(trashRow(launched, WAITING_RUN)).toHaveCount(1);
-    await expect(trashRow(launched, ORPHAN_RUN)).toHaveCount(0);
-    await shot(launched, 'trash-view.png');
-
-    // Restore puts it back in the rail and takes it out of the Trash.
-    await trashRow(launched, WAITING_RUN)
-      .locator('.desktop-trash-restore')
-      .click();
-    await expect(trashRow(launched, WAITING_RUN)).toHaveCount(0);
-    await expect(railRow(launched, WAITING_RUN)).toHaveCount(1);
-    await launched.page.keyboard.press('Escape');
-    await expect(trashDialog(launched)).toHaveJSProperty('open', false);
-
-    // Delete permanently asks first, then removes it for good.
-    await moveToTrash(launched, WAITING_RUN);
-    await openTrash(launched);
-    await trashRow(launched, WAITING_RUN)
-      .locator('.desktop-trash-delete')
-      .click();
-    await expect(
-      trashRow(launched, WAITING_RUN).locator('.delete-confirm'),
-    ).toBeVisible();
-    await shot(launched, 'trash-delete-confirm.png');
-    await trashRow(launched, WAITING_RUN)
-      .locator('#confirmDeleteSession')
-      .click();
-    await expect(trashRow(launched, WAITING_RUN)).toHaveCount(0);
-    await launched.page.keyboard.press('Escape');
-    await expect(trashDialog(launched)).toHaveJSProperty('open', false);
-
-    launched = await relaunch(launched);
-    await expect(railRow(launched, WAITING_RUN)).toHaveCount(0);
-    await openTrash(launched);
-    await expect(
-      trashDialog(launched).locator('.desktop-trash-row'),
-    ).toHaveCount(0);
-    // The artifact: the relaunched Trash, empty, over the rail without it.
-    await shot(launched, 'trash-after-delete.png');
+    await closeTexraApp(currentLaunch);
+    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    await dismissOnboarding(currentLaunch.page);
+    await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
+    await expect(railRow(currentLaunch, WAITING_RUN)).toHaveCount(0);
+    // The artifact: the relaunched rail without the deleted conversation.
+    await currentLaunch.page.screenshot({
+      path: test.info().outputPath('rail-after-delete.png'),
+    });
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
     cleanupDirectory(workspacePath);

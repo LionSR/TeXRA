@@ -22,24 +22,15 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * or spawned and not started yet) can only be stopped; while it works, an
  * agent's run takes approval grants and a tool-use agent's compaction.
  * Nothing that rewrites or removes a run's files or history is offered while
- * it is live. After, a top-level run can be moved to the Trash (a subagent,
- * which lives in its parent's conversation, deleted outright); a trashed run
- * can only be restored or deleted for good. A plain agent's can be resumed
- * (an interrupted one, or a workflow from its saved outputs), run again, or
+ * it is live. After, it can be deleted; a plain agent's can be resumed (an
+ * interrupted one, or a workflow from its saved outputs), run again, or
  * restored into the launcher; a workflow agent's outputs can be diffed,
  * archived, or removed.
  */
 export function runActions(
   run: Pick<
     RunView,
-    | 'readOnly'
-    | 'group'
-    | 'status'
-    | 'substate'
-    | 'identity'
-    | 'category'
-    | 'parentId'
-    | 'trashedAt'
+    'readOnly' | 'group' | 'status' | 'substate' | 'identity' | 'category'
   >,
 ): RunAction[] {
   if (run.readOnly) return inspectActions();
@@ -57,8 +48,7 @@ export function runActions(
       ...inspectActions(),
     ];
   }
-  if (run.trashedAt !== null) return ['untrash', 'delete', ...inspectActions()];
-  const actions: RunAction[] = [run.parentId === null ? 'trash' : 'delete'];
+  const actions: RunAction[] = ['delete'];
   if (isPlainAgentIdentity(run.identity)) {
     if (run.group === 'interrupted' || run.category === AgentCategory.Workflow)
       actions.push('resume');
@@ -92,8 +82,6 @@ const ACTION_LABEL: Record<RunAction, string> = {
   diff: 'Latexdiff of the outputs',
   pack: 'Archiving the outputs',
   clean: 'Deleting the output files',
-  trash: 'Moving to the Trash',
-  untrash: 'Restoring from the Trash',
   delete: 'Deleting the session',
   openRunStorage: 'Opening the run folder',
   export: 'Export',

@@ -9,9 +9,6 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { WORKBENCH_KIND_META } from '../shared/desktopShellState.js';
-import type { RailProject } from './desktopShell';
-
 export interface SubagentsPaneModel {
   readonly view: SessionView;
   readonly surface: Surface;
@@ -56,39 +53,5 @@ export function subagentsPaneTemplate(
         there.
       </div>
     </div>
-  `;
-}
-
-/**
- * The way into the selected conversation's subagents: the Subagents tab
- * holds the tree, so this only opens it. Nothing when the conversation has
- * no children.
- */
-export function subagentsButtonTemplate(
-  project: RailProject | undefined,
-  onOpen: () => void,
-): TemplateResult | typeof nothing {
-  if (!project) return nothing;
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  const rootId = run?.ancestors[0]?.id ?? run?.id;
-  const root = rootId === undefined ? undefined : project.view.runs.get(rootId);
-  if (root === undefined || root.rollup.total === 0) return nothing;
-  const { icon, label } = WORKBENCH_KIND_META.subagents;
-  return html`
-    <wa-button
-      type="button"
-      class="shell-subagents-open btn-secondary"
-      appearance="outlined"
-      size="s"
-      title="Show this task's subagents"
-      @click=${onOpen}
-    >
-      ${waIcon(icon, { slot: 'start' })}
-      <span>${label}</span>
-      <span class="shell-subagents-open-count" slot="end"
-        >${root.rollup.total}</span
-      >
-    </wa-button>
   `;
 }

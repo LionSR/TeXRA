@@ -41,9 +41,6 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
     reason: RunStopReasonSchema,
   }),
   z.object({ kind: z.literal('run.delete'), ...runScoped }),
-  /** Move a top-level run to the Trash, or take it back out: its `run.trash`. */
-  z.object({ kind: z.literal('run.trash'), ...runScoped }),
-  z.object({ kind: z.literal('run.untrash'), ...runScoped }),
   z.object({ kind: z.literal('run.compact'), ...runScoped }),
   z.object({
     kind: z.literal('followUp.send'),

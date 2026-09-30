@@ -4,12 +4,10 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 import { createPdfPane } from '@desktop/renderer/pdfPane.js';
-import {
-  subagentsButtonTemplate,
-  subagentsPaneTemplate,
-} from '@desktop/renderer/subagentsPane.js';
+import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
 import {
   shellSidebarTemplate,
+  subagentsButtonTemplate,
   workbenchTabsTemplate,
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
@@ -147,7 +145,6 @@ const sidebarCallbacks = {
   onProjectAction: noop,
   onToggleProjectCollapsed: noop,
   onOpenSettings: noop,
-  onOpenTrash: noop,
 };
 const workbenchCallbacks = {
   onOpenKind: noop,

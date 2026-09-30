@@ -9,9 +9,9 @@
  * and the same input sequence yields the same view. Incremental in the sense
  * the PRD requires: an event recomputes the arm for its run, walks `parentId`
  * to the root refreshing each ancestor's `childIds`, `rollup`, `approval`,
- * `group`, and `forceExpanded`, then touches `order` (or `trash`) only when a
- * top-level run appeared, moved, or left. O(depth) per event, never a
- * whole-view pass. A text chunk costs the chunk, never the row's text.
+ * `group`, and `forceExpanded`, then touches `order` only when a top-level run
+ * appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
+ * chunk costs the chunk, never the row's text.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
  * fact is ordered by commit within its `(aggregate, listing type)` entry in
@@ -165,8 +165,9 @@ function foldWith(
       if (next.debug === input.enabled) return view;
       return emptySessionView(view.key, 0, input.enabled);
     case 'event': {
-      if (input.read === 'listing')
+      if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);
+      }
       return foldDurable(next, input.event, deferred, input.read) ? next : view;
     }
     case 'chunk':
@@ -323,8 +324,9 @@ function writableMap<K extends ViewMapKey>(
   const copy = new Map(
     current as Iterable<readonly [unknown, unknown]>,
   ) as SessionView[K];
-  if (key === 'runs')
+  if (key === 'runs') {
     SESSION_INDEXES.set(copy as SessionView['runs'], sessionIndexesOf(view));
+  }
   owned.add(copy);
   view[key] = copy;
   return copy;
@@ -371,7 +373,6 @@ function createRun(
     createdAt: event.commit,
     launchedAt: event.at,
     runStartedAt: null,
-    trashedAt: null,
     lastTimestamp: event.at,
     conversationProgress: { toolCallCount: 0 },
     position: null,
@@ -427,16 +428,18 @@ function createRun(
 function setRun(view: SessionView, run: RunView): void {
   const previous = view.runs.get(run.id);
   writableMap(view, 'runs').set(run.id, run);
-  if (previous?.ownerId !== run.ownerId)
+  if (previous?.ownerId !== run.ownerId) {
     reindexOwner(view, run.id, previous?.ownerId ?? null, run.ownerId);
-  countGroups(view, previous, run);
+  }
+  if (previous?.group !== run.group)
+    countGroups(view, previous?.group, run.group);
 }
 
 function dropRun(view: SessionView, run: RunView): void {
   writableMap(view, 'runs').delete(run.id);
   reindexOwner(view, run.id, run.ownerId, null);
   sessionIndexesOf(view).ended.delete(run.id);
-  countGroups(view, run, undefined);
+  countGroups(view, run.group, undefined);
 }
 
 function reindexOwner(
@@ -458,20 +461,22 @@ function reindexOwner(
   }
 }
 
-/** `before` leaves its group and `after` enters its own; `recent` and a run
- *  in the Trash count in none. */
 function countGroups(
   view: SessionView,
-  before: RunView | undefined,
-  after: RunView | undefined,
+  left: RunView['group'] | undefined,
+  entered: RunView['group'] | undefined,
 ): void {
-  const [left, entered] = [before, after].map((run) =>
-    run?.trashedAt === null ? run.group : 'recent',
-  );
-  if (left === entered) return;
   const rollup = { ...view.rollup };
-  if (left !== 'recent') rollup[left] -= 1;
-  if (entered !== 'recent') rollup[entered] += 1;
+  if (left === 'running' || left === 'waiting' || left === 'interrupted') {
+    rollup[left] -= 1;
+  }
+  if (
+    entered === 'running' ||
+    entered === 'waiting' ||
+    entered === 'interrupted'
+  ) {
+    rollup[entered] += 1;
+  }
   view.rollup = rollup;
 }
 
@@ -479,7 +484,10 @@ function countGroups(
 // Ordering and topology
 // ---------------------------------------------------------------------------
 
-function orderingKey(run: RunView) {
+function orderingKey(run: RunView): {
+  name: string;
+  creationTimestamp: number;
+} {
   return { name: run.id, creationTimestamp: run.createdAt };
 }
 
@@ -507,10 +515,6 @@ function insertOrdered(
 function withoutId(ids: readonly RunId[], id: RunId): RunId[] {
   return ids.filter((existing) => existing !== id);
 }
-
-/** The top-level list a run without a parent sits in. */
-const topLevelList = (run: RunView) =>
-  run.trashedAt === null ? 'order' : 'trash';
 
 /** Root first. A parent edge always names a run the view holds: the fold
  *  re-roots a child whose parent it lacks (5.2, `ancestors`). */
@@ -1019,8 +1023,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
       return { ...run, description: event.description };
-    case 'run.trash':
-      return { ...run, trashedAt: event.trashed ? event.at : null };
     case 'run.end':
       // The terminal fact: the phase is its outcome (one run model, section
       // 3.3). The caller records that the run ended.
@@ -1072,8 +1074,9 @@ function applySessionSlices(
       // The initial snapshot rides the existence fact (PRD 6, item 2).
       // `runLifecycle.ts` always stamps it; the trace viewer's synthetic
       // envelope carries none, which is why the field stays optional.
-      if (event.approvalPolicy && runId !== null)
+      if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
+      }
       return;
     case 'approval.policy':
       if (runId !== null)
@@ -1165,8 +1168,9 @@ function projectRequests(view: SessionView, runId: RunId, rows: RunRows) {
  *  this run is left alone: a delete that removes nothing must not copy. */
 function projectFollowUps(view: SessionView, runId: RunId, rows: RunRows) {
   if (rows.followUps.length === 0) {
-    if (view.queuedFollowUps.has(runId))
+    if (view.queuedFollowUps.has(runId)) {
       writableMap(view, 'queuedFollowUps').delete(runId);
+    }
     return;
   }
   writableMap(view, 'queuedFollowUps').set(
@@ -1209,14 +1213,11 @@ function relink(
       childIds: insertOrdered(view, parent.childIds, run.id),
     });
   }
-  // `order` or `trash`, whichever its Trash standing names, never both.
-  for (const list of ['order', 'trash'] as const) {
-    const listed = view[list].includes(run.id);
-    const belongs = !parent && topLevelList(run) === list;
-    if (belongs && !listed)
-      view[list] = insertOrdered(view, view[list], run.id);
-    if (!belongs && listed) view[list] = withoutId(view[list], run.id);
+  const inOrder = view.order.includes(run.id);
+  if (!parent && !inOrder) {
+    view.order = insertOrdered(view, view.order, run.id);
   }
+  if (parent && inOrder) view.order = withoutId(view.order, run.id);
   refreshAncestors(view, run.id);
 }
 
@@ -1289,15 +1290,10 @@ function foldDurable(
   }
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
-  // Moving to or from the Trash is no activity on the run.
-  let next: RunView =
-    event.type === 'run.trash' ? own : { ...own, lastTimestamp: event.at };
+  let next: RunView = { ...own, lastTimestamp: event.at };
   setRun(view, next);
 
-  const moved =
-    next.parentId !== before.parentId ||
-    topLevelList(next) !== topLevelList(before);
-  if (created || moved) {
+  if (created || next.parentId !== before.parentId) {
     relink(view, next, created ? null : before.parentId);
     if (!created) walkUp(view, before.parentId, before.parentId, deferred);
   }
@@ -1381,8 +1377,9 @@ function foldRunRemoved(
   // A map that never held this run is left alone: a delete that removes
   // nothing must not copy the map it publishes.
   if (view.policy.has(run.id)) writableMap(view, 'policy').delete(run.id);
-  if (view.queuedFollowUps.has(run.id))
+  if (view.queuedFollowUps.has(run.id)) {
     writableMap(view, 'queuedFollowUps').delete(run.id);
+  }
   sessionIndexesOf(view).rows.delete(run.id);
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
@@ -1391,7 +1388,7 @@ function foldRunRemoved(
   if (view.inquiries.some((i) => i.parentRunId === run.id)) {
     view.inquiries = view.inquiries.filter((i) => i.parentRunId !== run.id);
   }
-  view[topLevelList(run)] = withoutId(view[topLevelList(run)], run.id);
+  view.order = withoutId(view.order, run.id);
   const parent =
     run.parentId === null ? undefined : view.runs.get(run.parentId);
   if (parent) {
@@ -1402,10 +1399,13 @@ function foldRunRemoved(
     walkUp(view, parent.id, parent.id, deferred);
   }
   // A child whose parent is gone is top-level: no dangling edge, no
-  // ancestors (5.2, `ancestors`); `relink` re-roots it.
+  // ancestors (5.2, `ancestors`).
   for (const childId of run.childIds) {
     const child = view.runs.get(childId);
-    if (child) relink(view, child, null);
+    if (!child) continue;
+    setRun(view, { ...child, parentId: null });
+    view.order = insertOrdered(view, view.order, childId);
+    refreshAncestors(view, childId);
   }
   return true;
 }

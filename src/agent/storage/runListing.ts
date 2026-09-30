@@ -42,8 +42,6 @@ interface RunListingBase {
   status: RunLifecycleStatus;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
-  /** The run is in the Trash (`RunView.trashedAt`). */
-  trashed?: true;
   /** Why this build cannot read the run whole (`RunView.blocked`). */
   blocked?: BlockedAggregate['reason'];
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -97,8 +95,8 @@ function isAgentRunEntry(
  * user started themselves. Excludes non-agent runs (background processes,
  * workflow-script containers — `identity.kind` decides) and runs an agent
  * spawned (delegated subagents, workflow-script children, team members),
- * which belong to their parent's transcript rather than to the history list,
- * and runs in the Trash. A blocked run is kept, as `blocked`.
+ * which belong to their parent's transcript rather than to the history list.
+ * A blocked run is kept, as `blocked`.
  *
  * Every host's history listing must apply this filter. Lookups by explicit id
  * (`texra history show <id>`, export, resume) must not: naming a child run is
@@ -110,8 +108,7 @@ export function isUserVisibleRun(
 ): entry is AgentRunListingEntry | BlockedRunListingEntry {
   return (
     (isAgentRunEntry(entry) || entry.kind === 'blocked') &&
-    entry.parentRunId === undefined &&
-    entry.trashed === undefined
+    entry.parentRunId === undefined
   );
 }
 
@@ -164,7 +161,6 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
-          ...(run.trashedAt !== null && { trashed: true }),
           ...(run.blocked === null ? {} : { blocked: run.blocked }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),

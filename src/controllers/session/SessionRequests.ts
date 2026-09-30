@@ -30,6 +30,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionApprovals,
@@ -42,7 +43,9 @@ import {
 import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
+  DatabaseClaimRefused,
   DatabaseNotOwner,
+  DatabaseWriteFailed,
   type AggregateState,
   type Database,
   type DeletionMode,
@@ -54,19 +57,22 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { approvePendingUnderBypass } from './pendingUnderBypass';
-import {
-  deleteAdmittedRun,
-  setTrashed,
-  type SessionRequestLog,
-} from './runRemoval';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
+
+/** The log's reads, and removal through the session's publisher. */
+type SessionRequestLog = Pick<
+  Context.Service.Shape<typeof Database>,
+  'aggregateState' | 'readAll'
+> &
+  Pick<SessionEventsShape, 'removeRun'>;
 
 /**
  * The session's requests: its approval state and the handler that admits
@@ -144,14 +150,12 @@ export function sessionRequests(
 /** The run action a request performs, where the run's `actions` gates it. */
 const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
   'run.delete': 'delete',
-  'run.trash': 'trash',
-  'run.untrash': 'untrash',
   'run.compact': 'compact',
   'policy.set': 'grant',
 };
 
 /**
- * Refuse a delete, a move to or from the Trash, a compaction or an approval grant the run's current `actions`
+ * Refuse a delete, compaction or approval grant the run's current `actions`
  * no longer holds, with its reason: the host rendered it from an earlier
  * view, and the run may have started or ended since. A run the view has not
  * folded yet, and one another process holds, are left to `admit` and the
@@ -314,6 +318,67 @@ function decide(
   );
 }
 
+/** Delete the admitted lifetime after acquiring its inactive run slot. */
+function deleteAdmittedRun(
+  log: SessionRequestLog,
+  runId: RunId,
+  admitted: AggregateState,
+  mode: DeletionMode,
+): Effect.Effect<Outcome, RequestError, Runs> {
+  const aggregateId = qualifyAggregateId('run', runId);
+  return Effect.gen(function* () {
+    if (admitted.startCommit === null) {
+      return yield* Effect.fail(
+        new Unavailable({
+          runId,
+          reason: 'The run has no recorded start.',
+        }),
+      );
+    }
+    const [start] = yield* log
+      .readAll(admitted.startCommit - 1, admitted.startCommit)
+      .pipe(Effect.orDie);
+    if (start?.type !== 'run.start' || start.aggregateId !== aggregateId) {
+      return yield* Effect.fail(
+        new Unavailable({
+          runId,
+          reason: 'The run start could not be read.',
+        }),
+      );
+    }
+    yield* (yield* Runs)
+      .withInactiveRunStep(
+        runId,
+        log.removeRun(aggregateId, mode, start.commit),
+      )
+      .pipe(
+        Effect.mapError((error): RequestError => {
+          if (error instanceof RunLive)
+            return new Unavailable({
+              runId,
+              reason: 'Stop the run before deleting it.',
+            });
+          if (
+            error instanceof DatabaseWriteFailed &&
+            error.cause instanceof DatabaseClaimRefused
+          ) {
+            return error.cause.verdict === 'alive'
+              ? new NotOwner({ runId })
+              : new Rejected({
+                  reason:
+                    'The current owner could not be verified, so automatic or bulk deletion was refused.',
+                });
+          }
+          return new Unavailable({
+            runId,
+            reason: 'The run could not be removed from the listing.',
+          });
+        }),
+      );
+    return { kind: 'deleted' as const, result: 'deleted' as const };
+  });
+}
+
 function handle(
   session: SessionHandle,
   approvals: SessionApprovals,
@@ -354,9 +419,6 @@ function handle(
       );
     case 'run.delete':
       return deleteAdmittedRun(log, req.runId, admitted, 'single');
-    case 'run.trash':
-    case 'run.untrash':
-      return setTrashed(session, req.runId, req.kind === 'run.trash');
     case 'run.compact':
       return Effect.flatMap(Runs, (runs) => {
         const result = runs.requestManualCompaction(req.runId);
