@@ -26,13 +26,6 @@ type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
   : never;
 
 /**
- * StreamKind identifies what a streaming message represents. Subscribers
- * key on it for render decisions. Generic string so host taxonomies
- * (TeXRA's MessageType) plug in without coupling the SDK.
- */
-export type StreamKind = string;
-
-/**
  * The terminal fact as the runtime hands it to in-process consumers
  * (`SessionHandle.onResult`): the `run.end` row named by
  * its run. Not an {@link AgentEvent} arm: the row is written once by the
@@ -69,7 +62,6 @@ export type AgentEvent =
       | 'stream.start'
       | 'stream.end'
       | 'response.finalized'
-      | 'domain'
     >
   /** Mutable persisted run config changed after run.start. */
   | (TraceArm<'run.config'> & { readonly runId: RunId })

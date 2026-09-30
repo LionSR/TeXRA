@@ -14,7 +14,7 @@ import {
 } from '@agent/output/outputState';
 
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { FileLocation, RunId } from '@shared/schemas';
+import { MESSAGE_TYPES, type FileLocation, type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -1522,10 +1522,10 @@ Appendix.
         );
 
         expectSources(outputs, ['cost.tex']);
-        expect(logger.emit).toHaveBeenCalledWith(
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.any(String),
           expect.objectContaining({
-            type: 'domain',
-            key: 'missingOutputs',
+            messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
             data: expect.objectContaining({ missing: ['arch.tex'] }),
           }),
         );
@@ -1553,10 +1553,10 @@ Appendix.
         );
 
         expectSources(outputs, ['main.tex']);
-        expect(logger.emit).toHaveBeenCalledWith(
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.any(String),
           expect.objectContaining({
-            type: 'domain',
-            key: 'missingOutputs',
+            messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
             data: expect.objectContaining({ missing: ['appendix.tex'] }),
           }),
         );

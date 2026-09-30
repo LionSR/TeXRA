@@ -14,12 +14,13 @@ import {
   RUN_OUTCOME,
   toJsonValue,
   type LogLevel,
+  type MessageType,
   type RunOutcome,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { AgentEvent, StreamKind } from './events';
+import type { AgentEvent } from './events';
 import type {
   AgentTrace,
   AgentTraceSink,
@@ -118,7 +119,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openRun(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
+  openRun(kind: MessageType, options: StreamOptions = {}): StreamHandle {
     const id = generateShortId();
     const emitStart = () => this.emit({ type: 'stream.start', id, kind });
 

@@ -17,54 +17,11 @@ import {
   type LogSink as HostLogSink,
 } from '@logger/logSink';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { LogLevel } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { bestEffortStreamWrite } from './bestEffortStreamWrite';
-
-/**
- * Minimal structured-log primitives. The CLI uses these to format every
- * progress event as either NDJSON or human-readable text on stdout/stderr.
- * Previously lived in `@logger/structuredLogger`; inlined here because the
- * CLI is the only consumer.
- */
-interface LogFields {
-  readonly [key: string]: unknown;
-}
-
-interface LogRecord {
-  readonly ts: string;
-  readonly level: LogLevel;
-  readonly message: string;
-  readonly fields: LogFields;
-}
-
-interface LogSink {
-  write(record: LogRecord): void;
-}
-
-export interface Logger {
-  debug(message: string, fields?: LogFields): void;
-  info(message: string, fields?: LogFields): void;
-  error(message: string, fields?: LogFields): void;
-}
-
-export function createCliLogger(sink: LogSink): Logger {
-  const write = (level: LogLevel, message: string, fields?: LogFields): void =>
-    sink.write({
-      ts: new Date().toISOString(),
-      level,
-      message,
-      fields: fields ?? {},
-    });
-  return {
-    debug: (m, f) => write('debug', m, f),
-    info: (m, f) => write('info', m, f),
-    error: (m, f) => write('error', m, f),
-  };
-}
 
 const closed = { stdout: false, stderr: false };
 
@@ -269,16 +226,6 @@ export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
   },
 });
 
-/** Text mode: the presentation records a run shows the user, in the same
- *  `LEVEL message` shape as the CLI's config warnings. The timestamp stays in
- *  the NDJSON record; on stderr it only made the line read like a log dump
- *  between the progress lines. */
-class StderrTextSink implements LogSink {
-  write(record: LogRecord): void {
-    writeTextStderr(`${record.level.toUpperCase()} ${record.message}`);
-  }
-}
-
 interface NdjsonWritable {
   /**
    * False once the target can no longer accept writes. The target owns this
@@ -307,14 +254,10 @@ const processStdoutTarget: NdjsonWritable = {
  */
 const sinkLanes = new WeakMap<NdjsonStdoutSink, PerKeyLane>();
 
-export class NdjsonStdoutSink implements LogSink {
+export class NdjsonStdoutSink {
   private stdoutClosed = false;
 
   constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
-
-  write(record: LogRecord): void {
-    this.writeRecord({ kind: 'log', ...record });
-  }
 
   writeRecord(unstamped: CliNdjsonRecord): void {
     if (this.isClosed()) return;
@@ -431,11 +374,4 @@ export function writeNdjsonStdout(record: CliNdjsonRecord): void {
 /** Wait until all queued public NDJSON and structured log records are written. */
 export function flushNdjsonStdout(): Effect.Effect<void> {
   return ndjsonStdoutSink.flush();
-}
-
-// CLI logs to stdout/stderr are not redacted — operators are expected to
-// inspect their own terminals. Desktop logs (which can be exported and shared)
-// are redacted in `desktopAppLog.ts` via the shared `redactSecrets` helper.
-export function createCliLogSink(format: string): LogSink {
-  return format === 'ndjson' ? ndjsonStdoutSink : new StderrTextSink();
 }

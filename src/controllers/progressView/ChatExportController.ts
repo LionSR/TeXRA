@@ -33,7 +33,6 @@ import {
 import type { ChatExportInput } from '@agent/export/schemas';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { isNotADirectoryError } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { StorageFs, type WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
@@ -44,7 +43,8 @@ import {
 } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -230,38 +230,26 @@ export class ChatExportController {
       const { trace, record } = traceResult;
 
       // The bundle path is host-supplied and absolute, so it is the process
-      // filesystem's, not a rooted view's. Effect's `FileSystem.exists`
-      // resolves a relative path against cwd, so require an absolute path
-      // here: a relative argument must not silently retarget. A path whose
-      // parent is not a directory is a missing bundle, not a failure:
-      // `FileSystem.exists` reports ENOTDIR as `BadResource`, and the catch
-      // below reads it as absent alongside ENOENT.
+      // filesystem's, not a rooted view's. A relative path would resolve
+      // against cwd, so require an absolute one: a relative argument must not
+      // silently retarget. A missing bundle, or one whose parent is not a
+      // directory, is a rebuild hint, not a failure.
       const fs = yield* FileSystem.FileSystem;
       if (!path.isAbsolute(standaloneTemplatePath)) {
         return yield* bundleFailure(
           `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
         );
       }
-      const exists = yield* fs.exists(standaloneTemplatePath).pipe(
-        Effect.catchIf(
-          (error) =>
-            error.reason._tag === 'BadResource' &&
-            isNotADirectoryError(error.reason.cause),
-          () => Effect.succeed(false),
+      const template = yield* readNormalizedFile(
+        fs,
+        standaloneTemplatePath,
+      ).pipe(
+        Effect.catchIf(absentReason, () =>
+          bundleFailure(
+            `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
+              'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+          ),
         ),
-      );
-      if (!exists) {
-        return yield* bundleFailure(
-          `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
-            'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
-        );
-      }
-      // The bytes are decoded here rather than by `readFileString`, whose
-      // UTF-8 `TextDecoder` would strip a leading BOM, and the line endings
-      // are normalized, matching `readNormalizedFile`.
-      const bytes = yield* fs.readFile(standaloneTemplatePath);
-      const template = normalizeLineEndings(
-        Buffer.from(bytes).toString('utf-8'),
       );
       const html = injectStandaloneTrace(template, trace);
 

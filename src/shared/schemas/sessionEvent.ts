@@ -645,7 +645,6 @@ export function listingTypeOf(
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
-    case 'domain':
     case 'usage':
     case 'model.message':
     case 'model.compaction':

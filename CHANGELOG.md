@@ -991,6 +991,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **No more `DEBUG Runtime event:` lines on stderr** — a run in text
+  mode printed `DEBUG Runtime event: requestOpenFile` (and the same for
+  `requestEnsureProgressView`) for events that render nothing.
 - **An `Esc` number chord no longer types its number** — pressing Esc, a short
   pause, then `1`–`9` focused that session and also put the digit into the
   chat draft, so the next prompt went out as, say, `3In ONE response…`.
