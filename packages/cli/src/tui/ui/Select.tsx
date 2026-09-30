@@ -25,11 +25,6 @@ import { clamp, clampIndex } from '@utils/core';
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
-// A label takes up to this share of the terminal (never under the floor),
-// leaving the rest of the row to its description.
-const SELECT_LABEL_MIN_COLS = 24;
-const SELECT_LABEL_WIDTH_SHARE = 0.4;
-
 export interface SelectItem<T> {
   readonly value: T;
   readonly label: string;
@@ -277,10 +272,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const [highlight, setHighlight] = useState(initial);
   const highlightRef = useRef(initial);
   const { columns } = useWindowSize();
-  const labelMaxCols = Math.max(
-    SELECT_LABEL_MIN_COLS,
-    Math.floor((columns || 0) * SELECT_LABEL_WIDTH_SHARE),
-  );
+  // A label takes 40% of the row, never under 24 columns; the rest is its
+  // description.
+  const labelMaxCols = Math.max(24, Math.floor((columns || 0) * 0.4));
   // Drop input after cancel until React commits the resulting transition. A
   // parent may reuse this Select instance for the destination screen, so the
   // guard must not remain latched across renders.
