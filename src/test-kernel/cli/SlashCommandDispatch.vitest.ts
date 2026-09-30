@@ -411,9 +411,10 @@ describe('handleTuiSlashCommand', () => {
       ]);
 
       yield* dispatchSlash('/custom-form', createContext());
-      const form = activeForm.get()?.render(() => undefined, 20) as {
-        props?: { onPersist?: () => void };
+      const surface = activeForm.get()?.render(() => undefined, 20) as {
+        props?: { children?: { props?: { onPersist?: () => void } } };
       };
+      const form = surface.props?.children;
       expect(localEntries()).toEqual([]);
 
       form.props?.onPersist?.();
