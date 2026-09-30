@@ -357,7 +357,8 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 4. Read `user_version` (`v`).
    - `v > SCHEMA_VERSION`: refuse, with nothing touched (`DatabaseOpenFailed`,
      reason `newer`).
-   - `v` from 1 to 100 (pre-1.0, the never-shipped 100 included): start
+   - `v` below `BASELINE_1_0` (101, fixed for good; a later `SCHEMA_VERSION`
+     never moves it), so 1 to 100, the never-shipped 100 included: start
      fully clean (owner ruling Q3). Nothing in the store is kept,
      `current_value` and `input_history` included.
      Retire it with `retireStore`'s existing pattern:
@@ -380,7 +381,8 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
        0, apply the DDL and stamp `application_id` and `SCHEMA_VERSION`.
      - Of two processes creating at once, the second sees 101 and does
        nothing.
-   - `101 ≤ v < SCHEMA_VERSION` (after 1.0 only): back up with `VACUUM INTO texra.db.schema<v>`
+   - `BASELINE_1_0 ≤ v < SCHEMA_VERSION` (after 1.0 only; until a step
+     exists the open fails loudly and changes nothing): back up with `VACUUM INTO texra.db.schema<v>`
      under the same re-read pattern.
      - Set `PRAGMA foreign_keys = OFF` if any step needs it. The PRAGMA is
        a no-op inside a transaction, so it is set before `BEGIN`.

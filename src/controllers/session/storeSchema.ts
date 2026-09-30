@@ -30,6 +30,9 @@ const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
 const SCHEMA_VERSION = 101;
+/** The first stamp a released build wrote. Fixed for good: a store stamped
+ *  below it is pre-1.0 and moved aside; one at or above it is kept. */
+const BASELINE_1_0 = 101;
 /** `TeXR`: a TeXRA store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
@@ -280,7 +283,7 @@ const prepareStore = Effect.fnUntraced(function* (
       yield* run(sql, 'COMMIT');
       continue;
     }
-    if (stored < SCHEMA_VERSION) {
+    if (stored < BASELINE_1_0) {
       // Off outside the transaction (a no-op inside one): a drop then
       // neither checks nor cascades a foreign key it removes anyway.
       yield* run(sql, 'PRAGMA foreign_keys = OFF');
@@ -305,8 +308,14 @@ const prepareStore = Effect.fnUntraced(function* (
       movedAside = { path, aside, reason: 'pre-1.0' };
       continue;
     }
-    // 101 is the 1.0 baseline: anything above it is a newer build's.
-    return yield* newerStore(path, stored);
+    if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
+    // A released store below this build: it is upgraded by forward steps,
+    // and none exists yet. Never moved aside or wiped.
+    return yield* Effect.fail(
+      new Error(
+        `Session store ${path} has schema ${stored}, and this build has no step from it to schema ${SCHEMA_VERSION}. Nothing in the store was changed.`,
+      ),
+    );
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
   if (mode === 'persistent') {
