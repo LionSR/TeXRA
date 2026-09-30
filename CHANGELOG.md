@@ -20,6 +20,13 @@ All notable changes to this project will be documented in this file.
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **Usage logging is anonymous and needs no account.** When on, each batch
+  carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
+  sign-in token; the body is unchanged and never has prompts, paths or
+  document text. Each host shows a one-time notice. Opt out with
+  `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
+  (or VS Code's telemetry setting); delete the `texra.telemetry.installId`
+  state entry to reset the ID. `texra doctor` shows the usage-logging row.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,
   Mathematician, and Computer Scientist teams now work fully offline with no
   TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow

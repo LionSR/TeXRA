@@ -25,7 +25,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **Memory**: the notes TeXRA keeps across tasks.
-- **General**: **Account** (TeXRA sign-in and telemetry) and **Git** (the
+- **General**: **Account** (telemetry) and **Git** (the
   GitHub token and Git commit attribution).
 
 The desktop app adds a **Shortcuts** page. Commands such as **TeXRA: Agent
@@ -124,10 +124,17 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled and you are signed in, TeXRA records model and
-provider names, agent category, token counts, cost, response time, route,
-stream identifier, version, and host. It does not send prompt text, document
-content, or file names. Turning telemetry off stops all usage reporting.
+When telemetry is enabled, TeXRA records model and provider names, agent
+category, token counts, response time, route, stream identifier, version, and
+host. No account is involved: each install sends a random anonymous install ID
+(a UUID made the first time logging is on) in the `X-TeXRA-Install-Id` request
+header. It does not send prompt text, document content, file paths, or error
+text. Each host tells you this once on first run. Turning telemetry off stops
+all usage reporting and the ID is not created.
+
+To reset the install ID, delete the `texra.telemetry.installId` entry from
+TeXRA's global state (the CLI's global state file, or the extension's or
+desktop app's storage); a new ID is made on the next send.
 
 ## File discovery
 

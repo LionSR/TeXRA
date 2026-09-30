@@ -15,6 +15,15 @@ TeXRA runs on all major operating systems. Minimum requirements:
 - **Operating System**: Windows, macOS, or Linux
 - **Internet Connection**: Required for API access to language models
 
+## Usage logging
+
+A fresh install logs anonymous usage metadata (model, agent, token counts,
+duration, host, version) under a random install ID, and says so once on first
+run. There is no sign-in. Turn it off with `TEXRA_NO_TELEMETRY=1`,
+`DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`; to reset the ID, delete
+the `texra.telemetry.installId` global-state entry. Details:
+[Usage logging](./configuration.md#usage-logging).
+
 ## Installing the extension
 
 ### From extension marketplaces
