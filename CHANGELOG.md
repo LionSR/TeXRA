@@ -188,6 +188,11 @@ show` print the same notice, and the new `texra agents customize`,
   `texra agents reset`, and `texra agents keep` commands make, reset, and
   keep a copy from the terminal. An agent you wrote yourself under a built-in's name
   is never flagged.
+- **Goal mode pauses at a spend cap.** An autonomous goal now stops between
+  turns once the run and its subagents have spent `texra.goal.maxCostUsd`
+  (default $5; `0` removes it; on the Tools page and in `/config`), withdraws
+  its auto-approval, and says why on the transcript. Raise the cap and re-arm
+  the goal to continue.
 - **Session history takes several times less disk** — long tool output,
   attached images and PDFs, and long prompts are stored compressed and
   only once per project: the same image attached in two runs, or a file's

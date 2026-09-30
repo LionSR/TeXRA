@@ -48,6 +48,8 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  GOAL_MAX_COST_SETTING,
+  GoalMaxCostSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -66,12 +68,6 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 export const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
 export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
 
-/** Default for `texra.git.markCommits` when the workspace has never toggled it. */
-const DEFAULT_GIT_MARK_COMMITS = true;
-
-/** Default for `texra.git.worktreeSupport` when the workspace has never toggled it. */
-const DEFAULT_GIT_WORKTREE_SUPPORT = false;
-
 /**
  * Keep file-oriented tools inside the active working directory unless the
  * user explicitly grants them access to arbitrary filesystem paths.
@@ -86,9 +82,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * - **`slot`** — where the value is stored (`config` / `workspaceState` /
  *   `repoState` / `globalState`); the same on every host.
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
- *   CLI `/config`, the Models tab's per-provider controls). Replaces the
- *   display half of the old `hosts` field, `settingsViewSnapshot`, and the
- *   Models tab's own `PROVIDER_SETTINGS` catalog.
+ *   CLI `/config`, the Models tab's per-provider controls).
  * - **`onWrite`** — write-time consequences declared once, so the CLI form and
  *   the webview Models tab cannot enforce different rules (the Kimi Code /
  *   OpenRouter mutual exclusion used to exist on one path only).
@@ -391,17 +385,25 @@ const CORE_SETTING_ROWS: Record<
     category: 'multi-agent',
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  // The provider toggles below are `configTarget: 'global'`:
-  // they describe how you talk to a provider, not a property of one project,
-  // and that is the scope they were written at before the catalog collapse
-  // routed them through the shared write path. The target restores global
-  // writes and exempts them from the extension's open-workspace write guard,
-  // while Models-tab and runtime reads both keep merged-config semantics. A
-  // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173. Only
-  // server-side state is a choice a user makes (it decides data retention);
-  // the transport knobs have no settings-view row and are set in
-  // `.texra/config.json`.
+  // Global: a committed project config must not raise or remove the user's cap.
+  'goal.maxCostUsd': {
+    schema: GoalMaxCostSchema,
+    configTarget: 'global',
+    title: 'Goal spend cap (USD)',
+    description: GOAL_MAX_COST_SETTING.description,
+    category: 'tools',
+    surfaces: { settingsView: 'approval', cliConfig: true },
+  },
+  // The provider toggles below are `configTarget: 'global'`: they describe how
+  // you talk to a provider, not a property of one project, and that is the
+  // scope they were written at before the catalog collapse routed them through
+  // the shared write path. The target restores global writes and exempts them
+  // from the extension's open-workspace write guard, while Models-tab and
+  // runtime reads both keep merged-config semantics. A workspace override
+  // therefore remains visible and honored; cleanup of values stranded by the
+  // regression window is tracked separately in #11173. Only server-side state
+  // is a choice a user makes (it decides data retention); the transport knobs
+  // have no settings-view row and are set in `.texra/config.json`.
   'model.gpt5ReasoningSummary': {
     schema: z.boolean().prefault(false),
     configTarget: 'global',
@@ -447,9 +449,8 @@ const CORE_SETTING_ROWS: Record<
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   },
   // No `configTarget`: both runtime readers resolve the *merged* config value
-  // through `readSettingFrom`, so the row must not narrow itself to the
-  // global scope — a workspace override the runtime honors would then be
-  // invisible in (and unwritable from) the settings view.
+  // through `readSettingFrom`, so narrowing the row to the global scope would
+  // hide (and block writes to) a workspace override the runtime honors.
   'model.compactionThresholdPercent': {
     schema: ModelCompactionThresholdPercentSchema,
     title: 'Compaction threshold',
@@ -726,7 +727,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   surfacedSetting({
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
-    schema: z.boolean().prefault(DEFAULT_GIT_MARK_COMMITS),
+    schema: z.boolean().prefault(true),
     title: 'Mark agent commits',
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
@@ -758,7 +759,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
   surfacedSetting({
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-    schema: z.boolean().prefault(DEFAULT_GIT_WORKTREE_SUPPORT),
+    schema: z.boolean().prefault(false),
     title: 'Subagent worktrees',
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',

@@ -32,6 +32,7 @@ import {
   byCategory,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  GOAL_MAX_COST_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   TELEMETRY_ENABLED_KEY,
@@ -226,6 +227,9 @@ export const editApprovalEnabled = settingSignal<boolean>(
 );
 export const approvalPolicy = settingSignal<TexraApprovalPolicy>(
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+);
+export const goalMaxCostUsd = settingSignal<number>(
+  GOAL_MAX_COST_SETTING.configKey,
 );
 export const toolPathProtectionEnabled = settingSignal<boolean>(
   WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

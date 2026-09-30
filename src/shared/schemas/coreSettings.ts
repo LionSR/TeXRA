@@ -114,6 +114,22 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
     "Maximum number of detached child runs one session may run at once; a workflow script also runs this many agent() calls concurrently (in-band, not counted against the session budget). 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
 } as const);
 
+/**
+ * Bounds, default, and copy for `goal.maxCostUsd`: the run tree's total spend
+ * at which an active goal pauses instead of opening its next turn, and `0`
+ * disables the cap. Read at each idle, so it needs no field on the goal's own
+ * row. Shared by {@link GoalMaxCostSchema}, the goal continuation, and the
+ * settings-view approval row so the three cannot disagree about the range.
+ */
+export const GOAL_MAX_COST_SETTING = Object.freeze({
+  configKey: 'texra.goal.maxCostUsd',
+  defaultValue: 5,
+  min: 0,
+  max: 10_000,
+  description:
+    'Spend in US dollars, across the run and its subagents, at which an autonomous goal pauses instead of starting another turn. Raise it to let the goal continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
+} as const);
+
 export const ModelRetryMaxAttemptsSchema = z
   .int()
   .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
@@ -125,6 +141,12 @@ export const ModelCompactionThresholdPercentSchema = z
   .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
   .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
   .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
+export const GoalMaxCostSchema = z
+  .number()
+  .min(GOAL_MAX_COST_SETTING.min)
+  .max(GOAL_MAX_COST_SETTING.max)
+  .prefault(GOAL_MAX_COST_SETTING.defaultValue);
 
 export const ChatgptCodexContextWindowSchema = z
   .int()
