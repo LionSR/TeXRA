@@ -1,0 +1,68 @@
+name: Live journeys
+
+# The fitness function for the theorist bundle: polish, latexFixer, latexdiff
+# and citations, each run end to end through the real `texra run` headless
+# NDJSON against a cheap model and graded by a LaTeX build of what it leaves
+# behind (`packages/cli/scripts/validate-journeys.mjs`). It spends a few cents
+# and needs the network and a TeX Live, so it is never part of PR validation:
+# it runs nightly, on the `live-journeys` label, or by manual dispatch.
+#
+# A model whose key is not configured skips itself, as `live-llm.yml` does.
+on:
+  schedule:
+    - cron: '43 4 * * *'
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+concurrency:
+  # `labeled` fires for every label; see `live-llm.yml` for why an unrelated one
+  # gets its own group instead of cancelling a paid run.
+  group: live-journeys-${{ github.ref }}${{ (github.event.action == 'labeled' && github.event.label.name != 'live-journeys') && format('-label-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  journeys:
+    name: journeys on ${{ matrix.model }}
+    # Secrets are not exposed to pull_request runs from forks, so a fork PR
+    # carrying the label skips the run rather than leaking anything.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'live-journeys'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [deepseek41T, glm53flash]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      - name: Install TeX Live and latexdiff
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            latexmk latexdiff texlive-latex-recommended
+
+      - name: Run the journeys
+        run: node packages/cli/scripts/validate-journeys.mjs --model ${{ matrix.model }}
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Upload the run NDJSON
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: journeys-${{ matrix.model }}
+          path: packages/cli/dist/journeys
+          retention-days: 14
+          if-no-files-found: ignore
