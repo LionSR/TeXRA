@@ -37,9 +37,12 @@ export const SKIP_CIRCLE = '⊘';
 /** Transcript row prefixes (trailing space included for the gutter). User rows
  *  (and the default fallback) reuse the same chevron as selects (POINTER) so the
  *  look stays consistent; error rows use a bang. Assistant rows carry no prefix
- *  — they render as plain Markdown. */
+ *  — they render as plain Markdown; local notices lead with a dim chevron so
+ *  they cannot pass for them. */
 export const USER_ENTRY_PREFIX = `${POINTER} `;
 export const ERROR_ENTRY_PREFIX = '! ';
+/** Local notice rows (a slash command's result): dim, never model text. */
+export const NOTICE_ENTRY_PREFIX = '» ';
 
 /** Corner glyph that opens each tool-output block. */
 export const TOOL_OUTPUT_CORNER = '⎿';
