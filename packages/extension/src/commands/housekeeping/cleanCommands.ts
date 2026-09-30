@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   findBuildDirectories,
@@ -12,7 +13,6 @@ import { fileOpResultMessage, runCleanRunDir } from '@housekeeping/runDirOps';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { FileOpResult } from '@shared/schemas';
-import { type CleanConfig } from './fileOpSchemas';
 
 const CHANNEL = 'cleanCommands';
 
@@ -31,16 +31,14 @@ const showCleanResult = (
     }
   });
 
-/** Clean removes a run's own storage; without a run there is nothing to clean. */
+/** Clean removes a run's own storage. */
 export const handleClean = Effect.fn('cleanCommands.handleClean')(function* (
-  config: CleanConfig,
+  config: WorkflowFileOperationRequest,
 ) {
   yield* Effect.logDebug(
     `Clean command called with config: ${JSON.stringify(config)}`,
   ).pipe(withLogChannel(CHANNEL));
-  const result: FileOpResult = config.runId
-    ? yield* runCleanRunDir(config.runId)
-    : { status: 'noFiles' };
+  const result = yield* runCleanRunDir(config.runId);
   yield* showCleanResult(result, config.inputFile);
 });
 

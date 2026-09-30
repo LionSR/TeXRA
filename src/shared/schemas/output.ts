@@ -118,7 +118,7 @@ export function isGenericOutputStem(name: string): boolean {
 }
 
 /** Run identity used when accepting an edited file as a postfixed copy. */
-export const AcceptCopyMetaSchema = z.strictObject({
+const AcceptCopyMetaSchema = z.strictObject({
   agent: z.string(),
   model: z.string(),
   round: RoundNumberSchema,

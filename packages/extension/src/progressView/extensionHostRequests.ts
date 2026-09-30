@@ -15,11 +15,25 @@ import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
 import { runAgent, type SessionHandle } from '@agent/runtime';
+import { handleMerge } from '@commands/agent/mergeCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   createFileSelectionPickers,
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
+import { openFile, openLabel } from '@commands/files/openFileCommands';
+import { findCommitInHistory } from '@commands/git/gitCommands';
+import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { handlePack } from '@commands/housekeeping/packCommands';
+import {
+  handleAcceptEdited,
+  handleCompare,
+} from '@commands/latex/compareCommands';
+import {
+  handleLatexdiff,
+  handleLatexdiffCommitAction,
+  handleRunLatexdiff,
+} from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
@@ -32,11 +46,7 @@ import {
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
-import {
-  fromHost,
-  hostFailure,
-  type HostCallFailed,
-} from '@controllers/session/hostCallFailure';
+import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -73,6 +83,11 @@ import {
 } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import {
+  commandVerb,
+  runCommand,
+  runHandler,
+} from '@progressView/hostCommandCalls';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   GETTING_STARTED_COMMANDS,
@@ -84,7 +99,6 @@ import {
   Cancelled,
   Rejected,
   type HostRequestFailure,
-  type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
@@ -147,29 +161,6 @@ interface ExtensionHostRequests {
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
-
-/** A VS Code command lifted once through `fromHost`, named by the command,
- *  with its failure logged before it travels on. */
-function runCommand<T = void>(
-  command: string,
-  ...args: unknown[]
-): Effect.Effect<T | undefined, HostCallFailed | RequestRefusal> {
-  return fromHost(command, () =>
-    vscode.commands.executeCommand<T | undefined>(command, ...args),
-  ).pipe(
-    Effect.tapError((failure) =>
-      Effect.logError(
-        `Command ${command} failed: ${toErrorMessage(failure)}`,
-      ).pipe(withLogChannel(CHANNEL)),
-    ),
-  );
-}
-
-/** A VS Code command as a verb of the shared binding table: lifted once,
- *  named, and with the command's own result discarded. */
-function commandVerb(command: string, ...args: unknown[]) {
-  return Effect.asVoid(runCommand(command, ...args));
-}
 
 /** The typed notification surface the run-action ports, the launch host, and
  *  the transcript export ports take. */
@@ -248,30 +239,29 @@ export function createExtensionHostRequests(
   );
 
   const { runOutputs } = runActions;
+  const at = (file: string) => pathToLocationIn(session.roots.workspace, file);
+  // A file-action port's handler; the process services come from the runtime.
+  const runFileAction = <A, E>(
+    command: string,
+    handler: Effect.Effect<A, E, ProcessServices>,
+  ) => withProcessServices(runtime, runHandler(command, handler));
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
     storageRoot: session.roots.storage,
     host: {
-      // Each VS Code command is a foreign edge: one lift, named, so the
-      // port's failure channel carries a tag and never a bare rejection.
-      compareFiles: (baseFile, editedFile) =>
-        runCommand(
-          'texra.compare',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
+      // Each command is named, so a failure carries a tag, never a rejection.
+      compareFiles: (base, edited) =>
+        runFileAction('compare', handleCompare(at(base), at(edited))),
+      acceptEditedFile: (base, edited, copyMeta) =>
+        runFileAction(
+          'acceptEdited',
+          handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
-      acceptEditedFile: (baseFile, editedFile, copyMeta) =>
-        runCommand<boolean>(
-          'texra.acceptEdited',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
-          copyMeta,
-        ),
-      mergeFile: (baseFile, editedFile) =>
-        runCommand('texra.merge', baseFile, editedFile),
-      latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', baseFile, editedFile),
+      mergeFile: (base, edited) =>
+        runFileAction('merge', handleMerge(session, base, edited)),
+      latexdiffFile: (base, edited) =>
+        runFileAction('latexdiff', handleLatexdiff(session, base, edited)),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -428,9 +418,9 @@ export function createExtensionHostRequests(
       if (request.fileType === 'base') {
         const parsed = parseVersionControlDiffFilename(currentOpenFile);
         if (parsed) {
-          const commitLabel = yield* runCommand<string | null>(
-            'texra.findCommitInHistory',
-            parsed.commitHash,
+          const commitLabel = yield* runHandler(
+            'findCommitInHistory',
+            findCommitInHistory(session, parsed.commitHash),
           );
           if (commitLabel) {
             options.surfaceAction({
@@ -514,22 +504,26 @@ export function createExtensionHostRequests(
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
-    openPath: (file, line) => commandVerb('texra.openFile', file, line),
-    openLabel: (label) =>
-      Effect.map(
-        runCommand<boolean>('texra.openLabel', label),
-        (opened) => opened === true,
-      ),
+    openPath: (file, line) =>
+      runHandler('openFile', openFile(session, file, line)),
+    openLabel: (label) => runHandler('openLabel', openLabel(session, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     showLauncher: Effect.suspend(() => options.showInSidebar()),
-    runWorkflowDiff: (diff) => commandVerb('texra.runLatexdiff', diff),
+    runWorkflowDiff: (diff) =>
+      runHandler('runLatexdiff', handleRunLatexdiff(session, diff)),
     runWorkflowFileOperation: (operation, request) =>
-      commandVerb(`texra.${operation}`, request),
+      runHandler(
+        operation,
+        operation === 'pack' ? handlePack(request) : handleClean(request),
+      ),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      commandVerb(`texra.${action}`, baseFile, commit),
+      runHandler(
+        action,
+        handleLatexdiffCommitAction(session, action, baseFile, commit),
+      ),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');
