@@ -28,7 +28,7 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentModePresetSchema,
-  AgentRosterSelectionSchema,
+  WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -55,7 +55,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
-  INHERITED_AGENT_ROSTER,
+  INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
@@ -108,12 +108,12 @@ export type SettingHost = (typeof SETTING_HOSTS)[number];
 type SettingStore = 'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
+  | 'agents'
   | 'approval'
   | 'git-author'
   | 'latex'
   | 'memory'
   | 'models'
-  | 'multi-agent'
   | 'profile'
   | 'skills'
   | 'telemetry';
@@ -382,8 +382,8 @@ const CORE_SETTING_ROWS: Record<
     schema: ChildRunConcurrencyBudgetSchema,
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
-    category: 'multi-agent',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    category: 'agents',
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   // Global: a committed project config must not raise or remove the user's cap.
   'goal.maxCostUsd': {
@@ -452,14 +452,14 @@ const CORE_SETTING_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'model.retry.maxAttempts': {
     schema: ModelRetryMaxAttemptsSchema,
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
@@ -474,7 +474,7 @@ const CORE_SETTING_ROWS: Record<
     category: 'model',
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
     onWrite: { invalidatesModelOptions: true },
   },
   'xaiGrok.preferSubscription': {
@@ -767,16 +767,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 
-  // --- Agent roster ----------------------------------------------------------
-  // Written and read by the roster and the settings view's agent catalog,
+  // --- Workspace agents ----------------------------------------------------------
+  // Written and read by the agent list and the settings view's agent catalog,
   // which no catalog-driven UI renders.
   {
-    key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    key: WorkspaceStateKey.WORKSPACE_AGENTS,
+    schema: WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
     slot: 'repoState',
   },
   {
-    key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    key: WorkspaceStateKey.CUSTOM_TEAMS,
     schema: z.array(AgentModePresetSchema).prefault([]),
     slot: 'repoState',
   },
@@ -786,7 +786,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slot: 'repoState',
   },
 
-  // --- Multi-agent coordination --------------------------------------------
+  // --- Agent coordination ---------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
   // maintainer ruling (.agents/docs/archived/simplification/2026-08-15-shared-contracts-and-retirement.md
   // §2.1): they describe how *this user* wants child runs handled, not anything
@@ -800,9 +800,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Allow orchestrator cancellation',
     description:
       'Allow the orchestrator to stop subagents that are no longer needed.',
-    category: 'multi-agent',
+    category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   }),
   surfacedSetting({
     key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
@@ -810,9 +810,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Keep subagents running',
     description:
       'Let active subagents continue when the orchestrator is stopped.',
-    category: 'multi-agent',
+    category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   }),
 
   // --- Memory ---------------------------------------------------------------
@@ -1246,7 +1246,7 @@ export function settingsViewSnapshotEntries(
 }
 
 /**
- * The `/config` roster: every row the CLI panel renders, across both catalog
+ * The `/config` catalog: every row the CLI panel renders, across both catalog
  * tiers. `surfaces.cliConfig` is the single predicate.
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =

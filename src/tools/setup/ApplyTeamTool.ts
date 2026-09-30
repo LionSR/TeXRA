@@ -1,12 +1,12 @@
 /**
  * `apply_team` — the setup agent's one-call team application.
  *
- * Applies a discipline roster (an agent team) to the current workspace and
+ * Applies a discipline team (an agent team) to the current workspace and
  * records it as the user-level default team, so fresh workspaces are seeded
- * with the same roster (PRD: agent-native onboarding). The discipline-picker
+ * with the same agent list (PRD: agent-native onboarding). The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
- * The roster write is the same `AgentRosterController.applyTeam` the
+ * The workspace agents write is the same `WorkspaceAgentsController.applyTeam` the
  * Settings "apply team" action calls, so the two can't drift. Members that
  * aren't in the registry yet are reported rather than silently dropped.
  */
@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
-import { createWorkspaceAgentRosterController } from '@agent/index/agentRegistry';
+import { createWorkspaceAgentsController } from '@agent/index/agentRegistry';
 import { teamPresets } from '@common/teams/TeamPresets';
 import { missingMemberNames } from '@common/teams/TeamPlan';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -26,7 +26,7 @@ import { defineTool } from '../core/define';
 
 /**
  * The shared catalog's built-in teams (the setup starter included), so the
- * enum can't drift from the presets the roster accepts.
+ * enum can't drift from the presets the agent list accepts.
  */
 const TEAM_CHOICES = teamPresets(undefined);
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
@@ -52,9 +52,9 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
   const call = yield* ToolCall;
-  const roster = createWorkspaceAgentRosterController(call.roots);
+  const workspaceAgents = createWorkspaceAgentsController(call.roots);
 
-  const result = yield* roster.applyTeam(input.teamId);
+  const result = yield* workspaceAgents.applyTeam(input.teamId);
 
   if (result.status === 'unknown') {
     // The schema gates ids, so this only fires if the enum and the preset
@@ -67,14 +67,14 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   }
 
   const { preset } = result;
-  yield* roster.setDefaultTeam(preset.id);
+  yield* workspaceAgents.setDefaultTeam(preset.id);
   // The setup agent runs this mid-conversation, so an open settings view is
-  // showing a roster this call just replaced.
-  emitAppSignal('agentRosterChanged', undefined);
+  // showing an agent list this call just replaced.
+  emitAppSignal('workspaceAgentsChanged', undefined);
   const { workflow: activeWorkflow, toolUse: activeToolUse } =
     result.resolution.agentKeys;
   // `agentKeys` holds only the agent keys that resolved in the registry. Names
-  // that didn't resolve are not dropped: the roster stores the team
+  // that didn't resolve are not dropped: the agent list stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. Say so instead of letting it read as a
   // silent failure.

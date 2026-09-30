@@ -70,7 +70,7 @@ export const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
   ],
   // One row per settings page that has a command, in nav order. Teams are a
-  // section of Agents, so texra.showMultiAgent gets no row of its own.
+  // section of Agents, so texra.showTeamSettings gets no row of its own.
   [
     'texra.showModels',
     'texra.showAgents',

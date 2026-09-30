@@ -173,7 +173,7 @@ export function prepareSurfaceLaunch(
         case 'ready':
           // The renderer's selected agent is intentionally ignored: the
           // authoritative team plan resolves both the root and delegation
-          // roster at launch time.
+          // agent list at launch time.
           preparation = !launch.model
             ? { valid: false, message: 'Choose a model first.' }
             : buildLaunchRequest(

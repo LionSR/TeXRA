@@ -22,7 +22,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
-import { AgentRosterForm } from './AgentRosterForm';
+import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
 import { ConfigForm } from './ConfigForm';
 import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
@@ -191,7 +191,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       ]}
       formRenderers={{
         agents: (onBack) => (
-          <AgentRosterForm
+          <WorkspaceAgentsForm
             runtime={props.runtime}
             stores={stores}
             workspaceRoot={props.workspaceRoot}

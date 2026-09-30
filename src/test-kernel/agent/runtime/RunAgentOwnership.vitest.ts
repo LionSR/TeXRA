@@ -227,7 +227,7 @@ describe('runAgent run ownership', () => {
     () =>
       Effect.gen(function* () {
         // A real registry: the first launch's admission is its fiber on the
-        // roster, so the duplicate is refused against it wherever the first
+        // run registry, so the duplicate is refused against it wherever the first
         // launch has got to — here, mid-registration.
         const runs = realRunRegistry();
         let finishRegistration!: () => void;

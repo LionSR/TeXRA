@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 
 import { describe, expect } from 'vitest';
 
-import { AgentRosterController } from '@agent/roster/AgentRosterController';
+import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
@@ -20,7 +20,7 @@ import {
 import type { AgentCategory, AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-/** The catalog consumes the native roster and the same entry lookup. */
+/** The catalog consumes the native agent list and the same entry lookup. */
 type SettingsAgentCatalogEntry = ReturnType<
   ConstructorParameters<typeof SettingsAgentCatalogController>[0]['getAgents']
 >[0];
@@ -79,10 +79,10 @@ function createController(options?: {
   now?: number;
 }) {
   const workspaceState = new FakeStateStore({
-    [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: options?.customPresets ?? [],
+    [WorkspaceStateKey.CUSTOM_TEAMS]: options?.customPresets ?? [],
     ...(options?.enabled || options?.visible
       ? {
-          [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          [WorkspaceStateKey.WORKSPACE_AGENTS]: {
             kind: 'custom',
             agentKeys: byCategory(
               (category) =>
@@ -93,7 +93,7 @@ function createController(options?: {
           },
         }
       : {}),
-    // A `visible` roster is the user's choice: the custom agents it leaves out
+    // A `visible` agent list is the user's choice: the custom agents it leaves out
     // were turned off.
     ...(options?.visible
       ? {
@@ -112,7 +112,7 @@ function createController(options?: {
   });
   const getAgents = (category: AgentCategory) =>
     options?.agents?.[category] ?? AGENTS[category];
-  const roster = new AgentRosterController({
+  const workspaceAgents = new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
@@ -122,21 +122,21 @@ function createController(options?: {
       ),
     getPresets: () =>
       workspaceState
-        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
+        .get(WorkspaceStateKey.CUSTOM_TEAMS)
         .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
-    roster,
+    workspaceAgents,
     controller: new SettingsAgentCatalogController({
       repoState: workspaceState,
-      roster,
+      workspaceAgents,
       getAgents,
       newerBuiltInOf: () => undefined,
       now: () => options?.now ?? 123,
     }),
     workspaceState,
     customPresets: workspaceState
-      .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
+      .get(WorkspaceStateKey.CUSTOM_TEAMS)
       .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
   };
 }
@@ -156,11 +156,11 @@ describe('SettingsAgentCatalogController', () => {
             toolUse: ['review', 'missing'],
           },
         };
-        const { roster, workspaceState } = createController({
+        const { workspaceAgents, workspaceState } = createController({
           customPresets: [persistedPreset],
         });
 
-        const resolved = yield* roster.applyTeam('custom-team');
+        const resolved = yield* workspaceAgents.applyTeam('custom-team');
         if (resolved.status !== 'applied')
           throw new Error('expected the preset to apply');
         expect(resolved.preset).toStrictEqual({
@@ -180,9 +180,9 @@ describe('SettingsAgentCatalogController', () => {
         ]);
 
         // The commit stores the team reference, not a frozen key snapshot: the
-        // roster re-resolves it against the catalog on every read.
+        // agent list re-resolves it against the catalog on every read.
         assert.deepEqual(
-          yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          yield* workspaceState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
           { kind: 'team', teamId: 'custom-team' },
         );
       }),

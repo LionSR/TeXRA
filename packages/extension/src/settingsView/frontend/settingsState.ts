@@ -183,11 +183,11 @@ export const agentSubTab = trackedSignal<AgentCategory | undefined>(
 // ---------------------------------------------------------------------------
 export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
 export const orchestratorAgents = trackedSignal<string[]>(() => []);
-/** Team the workspace roster resolves to; null when the roster runs no team. */
+/** Team the workspace agents resolve to; null when they run no team. */
 export const activePresetId = trackedSignal<string | null>(() => null);
 
 // ---------------------------------------------------------------------------
-// Multi-agent coordination state
+// Agents page settings state
 // ---------------------------------------------------------------------------
 export const compactionThresholdPercent = settingSignal<number>(
   MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
@@ -208,13 +208,13 @@ export const childRunConcurrencyBudget = settingSignal<number>(
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
 );
 /**
- * Monotonic acknowledgement generation for the multi-agent payload. Incremented
- * on every outbound multi-agent settings message — including a rebroadcast that
+ * Monotonic acknowledgement generation for the agents payload. Incremented
+ * on every outbound agents settings message — including a rebroadcast that
  * carries the same values after a rejected/failed write — so SettingsApp
- * re-renders the Multi-Agent branch and `live()` can restore the acknowledged
+ * re-renders the Agents branch and `live()` can restore the acknowledged
  * committed value on the number input.
  */
-export const multiAgentSettingsRevision = trackedSignal<number>(() => 0);
+export const agentsSettingsRevision = trackedSignal<number>(() => 0);
 
 // ---------------------------------------------------------------------------
 // Approval and tool-safety settings state

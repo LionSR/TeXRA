@@ -99,13 +99,13 @@ describe('application state on SQLite', () => {
         makeTempDir('texra-app-state-', tempDirs),
       );
       const store = yield* openStore(storage);
-      yield* store.update('texra.customAgentPresets', ['valid']);
+      yield* store.update('texra.customTeams', ['valid']);
       const failure = yield* Effect.flip(
-        store.update('texra.customAgentPresets', () => undefined),
+        store.update('texra.customTeams', () => undefined),
       );
       expect(failure._tag).toBe('StateWriteFailed');
       expect(failure.message).toContain('not JSON');
-      expect(yield* store.get('texra.customAgentPresets')).toEqual(['valid']);
+      expect(yield* store.get('texra.customTeams')).toEqual(['valid']);
     }),
   );
   it.live(

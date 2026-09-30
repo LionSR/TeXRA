@@ -1030,7 +1030,7 @@ describe('childRunLoop E2E fixtures', () => {
         // the loop ends with exactly one delivery.
         yield* settle;
         // The loop is now blocked in its queue wait; its stop target is the
-        // activation its start reserved on the run's roster entry.
+        // activation its start reserved on the run's run registry entry.
         yield* stopChildRun(runId);
 
         const exit = yield* Fiber.await(loop);
@@ -1074,7 +1074,7 @@ describe('childRunLoop E2E fixtures', () => {
         // One macrotask lets the loop reach its queue wait before the stop lands.
         yield* settle;
 
-        // Loop is now between turns; the stop reaches it through its roster
+        // Loop is now between turns; the stop reaches it through its run registry
         // activation and the run's fiber.
         yield* stopChildRun(runId);
 

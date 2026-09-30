@@ -1,5 +1,5 @@
 <script setup>
-// Terminal card for `texra multi-agent run` — the Multi-Agent Teams section of
+// Terminal card for `texra team run` — the Teams section of
 // guide/texra-cli.md. Shows the orchestrator-and-delegates shape the TUI
 // actually renders: the team's lead agent at work, then the subagent panel's
 // numbered child rows (status marker colored by child state, agent label,
@@ -30,14 +30,14 @@ const children = [
 
 <template>
   <TermWindow
-    title="texra multi-agent"
-    aria-label="texra multi-agent run with delegating subagents"
+    title="texra team"
+    aria-label="texra team run with delegating subagents"
   >
     <!-- Prompt line -->
     <div class="mk-term-prompt cma-prompt">
       <span class="mk-term-sigil">$</span>
       <span class="mk-term-cmd"
-        >texra multi-agent run software-engineer
+        >texra team run software-engineer
         <span class="mk-term-flag">--instruction</span> "Profile and speed up
         scripts/simulate.py"</span
       >

@@ -42,7 +42,7 @@ import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
-import { multiAgentCommand } from './multiAgent';
+import { teamCommand } from './team';
 import { pluginCommand } from './plugin';
 import { resumeCommand } from './resume';
 import { setupCommand } from './setup';
@@ -88,7 +88,7 @@ export const rootCommand = withUsageSections(
       skills: skillsCommand,
       plugin: pluginCommand,
       tools: toolsCommand,
-      'multi-agent': multiAgentCommand,
+      team: teamCommand,
       models: modelsCommand,
       // `login`/`logout` are convenience shortcuts; the full auth surface
       // (login, logout, status, usage, token) lives under `auth`.

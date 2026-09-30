@@ -29,7 +29,7 @@ import {
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
+import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -359,10 +359,10 @@ export function createChatSessionController(
     modelSource?: 'history',
   ) =>
     Effect.gen(function* () {
-      const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
-      const teamName = yield* readCliMultiAgentPresetName(
+      const cliTeamId = config.cli?.multiAgentPresetId ?? undefined;
+      const teamName = yield* readCliTeamName(
         runtimeSession.roots.repoState,
-        cliMultiAgentPresetId,
+        cliTeamId,
       );
       patchSessionMeta({
         agent: config.agent,
@@ -370,7 +370,7 @@ export function createChatSessionController(
         model: config.model,
         ...(modelSource ? { modelSource } : {}),
         teamName,
-        cliMultiAgentPresetId,
+        cliTeamId,
         delegationAgentScope: config.delegationAgentScope ?? undefined,
       });
     });
@@ -809,8 +809,8 @@ export function createChatSessionController(
             agentCategory: AgentCategory.ToolUse,
             workingDirectory: cwd,
             ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-            ...(meta.cliMultiAgentPresetId
-              ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
+            ...(meta.cliTeamId
+              ? { cli: { multiAgentPresetId: meta.cliTeamId } }
               : {}),
             ...(meta.delegationAgentScope
               ? { delegationAgentScope: meta.delegationAgentScope }

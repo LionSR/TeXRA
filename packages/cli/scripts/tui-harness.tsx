@@ -389,7 +389,7 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await harnessRuntime.runPromise(
-    harnessRoots.repoState.update(WorkspaceStateKey.AGENT_ROSTER_SELECTION, {
+    harnessRoots.repoState.update(WorkspaceStateKey.WORKSPACE_AGENTS, {
       kind: 'custom',
       agentKeys: {
         workflow:

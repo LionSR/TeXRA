@@ -39,7 +39,7 @@ export interface InlineCommentThreadView {
  * Host-implemented provider for inline comment threads, injected by the
  * extension host and backed by the VS Code CommentController. Hosts without
  * one (CLI / desktop) never reach the tool: its `unavailableHosts` list drops
- * `inline_comment` from their agent rosters.
+ * `inline_comment` from their agent lists.
  *
  * Methods are synchronous because the underlying VS Code API is synchronous.
  */
@@ -71,7 +71,7 @@ export class InlineComments extends Context.Service<
 /**
  * Resolve the host's provider, failing when the host serves none. The failure
  * is intentional: `unavailableHosts` already keeps `inline_comment` out of the
- * CLI and desktop rosters, so reaching the tool without a provider means the
+ * CLI and desktop agent lists, so reaching the tool without a provider means the
  * VS Code host skipped it — a startup bug that must name itself rather than
  * report a plausible no-op back to the agent.
  */

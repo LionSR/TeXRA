@@ -138,7 +138,7 @@ export type CliConfigExecuteResult<C extends AgentCategory | undefined> =
 /**
  * Build and validate a headless CLI run request, then run it. Command
  * handlers own command-specific config construction; this module owns the
- * common request lifecycle so workflow, tool-use, and multi-agent runs cannot
+ * common request lifecycle so workflow, tool-use, and team runs cannot
  * drift on validation, run ids, or category-mismatch status writes.
  */
 export function executeCliConfig<
@@ -240,7 +240,7 @@ export function executeCliToolUseConfig(
 }
 
 /**
- * Shared headless-run skeleton for `run` and `multi-agent run`: stand up a
+ * Shared headless-run skeleton for `run` and `team run`: stand up a
  * runtime host, run the request, always close the host, and resolve the
  * terminal outcome.
  * Centralizing this stops the runners from drifting apart on host

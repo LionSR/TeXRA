@@ -53,7 +53,7 @@ describe('CLI chat defaults', () => {
     );
   });
 
-  it('uses the first visible tool-use agent when assistant is hidden by a roster', async () => {
+  it('uses the first visible tool-use agent when assistant is hidden by the workspace agents', async () => {
     await withConfig({});
 
     await expectChatDefaults(

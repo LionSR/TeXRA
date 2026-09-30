@@ -99,7 +99,7 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
  * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
  * number of live native child model conversations one session runs at once.
  * Shared by {@link ChildRunConcurrencyBudgetSchema}, the runtime reader, and the
- * settings-view Multi-Agent tab so the schema, runtime, and UI cannot disagree
+ * settings-view Agents tab so the schema, runtime, and UI cannot disagree
  * about the range.
  */
 export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({

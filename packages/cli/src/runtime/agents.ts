@@ -6,7 +6,7 @@ import {
   getVisibleAgents,
   resolveAgentForLaunch,
   type AgentEntry,
-  type AgentRosterStores,
+  type WorkspaceAgentsStores,
 } from '@agent/index';
 import { AGENT_CATEGORIES, agentKeyOf, AgentCategory } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -27,15 +27,15 @@ type CliAgentLaunchMode = 'chat' | 'workflowResume';
 
 const AGENT_LOOKUP_HINT =
   'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.';
-const MULTI_AGENT_PRESET_LOOKUP_HINT =
-  'Use `texra multi-agent list` for available teams, then run `texra multi-agent show <team>` to check a team before launch.';
+const TEAM_LOOKUP_HINT =
+  'Use `texra team list` for available teams, then run `texra team show <team>` to check a team before launch.';
 
 const CLI_AGENT_LAUNCH_TARGETS = {
   chat: {
     requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra multi-agent run <preset>\` for teams.`,
+      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra team run <preset>\` for teams.`,
   },
   workflowResume: {
     requiredCategory: AgentCategory.Workflow,
@@ -84,8 +84,8 @@ export function missingToolUseAgentMessage(name: string): string {
   return `Tool-use agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
 }
 
-export function missingMultiAgentPresetMessage(name: string): string {
-  return `Team not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
+export function missingTeamMessage(name: string): string {
+  return `Team not found: ${name}. ${TEAM_LOOKUP_HINT}`;
 }
 
 /**
@@ -96,7 +96,7 @@ export function missingMultiAgentPresetMessage(name: string): string {
  * real fault.
  */
 export function checkCliAgentLaunch(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   name: string,
   agent: AgentEntry | undefined,
   mode: CliAgentLaunchMode,
@@ -128,7 +128,7 @@ export function checkCliAgentLaunch(
  * lookup and stays category-blind.
  */
 export function resolveCliAgent(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   identifier: string,
   category?: AgentCategory,
 ) {
@@ -149,7 +149,10 @@ export function resolveCliAgent(
  * and a source-qualified identifier hits exactly one cache key — a same-source
  * collision is unrepresentable, not merely unhandled.
  */
-export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
+export function resolveCliRunAgent(
+  stores: WorkspaceAgentsStores,
+  name: string,
+) {
   return Effect.gen(function* () {
     const workflow = yield* resolveCliAgent(
       stores,
@@ -187,7 +190,10 @@ function ambiguousRunAgentMessage(
 /**
  * Resolve and validate the workflow agent a `texra resume` continues.
  */
-export function resolveCliResumeAgent(stores: AgentRosterStores, name: string) {
+export function resolveCliResumeAgent(
+  stores: WorkspaceAgentsStores,
+  name: string,
+) {
   return Effect.gen(function* () {
     const resolved = yield* resolveCliAgent(
       stores,
@@ -205,7 +211,7 @@ export function resolveCliResumeAgent(stores: AgentRosterStores, name: string) {
 }
 
 export function loadCliAgentList(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   options: CliAgentListOptions = {},
 ) {
   const includeHidden = options.includeHidden === true;
@@ -316,7 +322,7 @@ function cliAgentCatalogHint(category?: AgentCategory): {
 }
 
 function collectCliAgents(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   source: 'all' | 'visible',
   categoryFilter?: AgentCategory,
 ) {

@@ -1,5 +1,5 @@
 import { Data, Effect } from 'effect';
-import type { AgentRosterController } from '@agent/roster/AgentRosterController';
+import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import {
   formatUnknownTeamMessage,
   missingMemberNames,
@@ -10,22 +10,22 @@ import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-interface SettingsTeamRosterCatalog {
+interface SettingsTeamCatalog {
   getPresetToolUseRoot(
     toolUseAgents: string[],
     presetId?: string,
   ): Effect.Effect<string | undefined, StateReadFailed>;
 }
 
-type SettingsTeamRosterPresentation = Pick<
+type SettingsTeamPresentation = Pick<
   MessageHost,
   'showInfoMessage' | 'showErrorMessage'
 >;
 
-interface SettingsTeamRosterOptions<R> {
-  readonly roster: Pick<AgentRosterController, 'applyTeam'>;
-  readonly catalog: SettingsTeamRosterCatalog;
-  readonly presentation: SettingsTeamRosterPresentation;
+interface SettingsTeamOptions<R> {
+  readonly workspaceAgents: Pick<WorkspaceAgentsController, 'applyTeam'>;
+  readonly catalog: SettingsTeamCatalog;
+  readonly presentation: SettingsTeamPresentation;
   readonly refreshAfterApply: (
     selectedToolUseAgent?: string,
   ) => Effect.Effect<void, Error, R>;
@@ -36,20 +36,18 @@ interface SettingsTeamRosterOptions<R> {
  * rebuilding itself, not a catalog operation, so it is its own answer: the
  * team is already committed when this fails.
  */
-class TeamRosterRefreshFailed extends Data.TaggedError(
-  'TeamRosterRefreshFailed',
-)<{
+class TeamRefreshFailed extends Data.TaggedError('TeamRefreshFailed')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
 /** Apply a settings team and present its outcome consistently across hosts. */
-export function applySettingsTeamRoster<R = never>(
+export function applySettingsTeam<R = never>(
   presetId: string,
-  options: SettingsTeamRosterOptions<R>,
+  options: SettingsTeamOptions<R>,
 ): Effect.Effect<void, Error, R> {
   return Effect.gen(function* () {
-    const result = yield* options.roster.applyTeam(presetId);
+    const result = yield* options.workspaceAgents.applyTeam(presetId);
 
     switch (result.status) {
       case 'unknown':
@@ -66,7 +64,7 @@ export function applySettingsTeamRoster<R = never>(
         yield* options.refreshAfterApply(selectedToolUseAgent).pipe(
           Effect.mapError(
             (cause) =>
-              new TeamRosterRefreshFailed({
+              new TeamRefreshFailed({
                 message: `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
                 cause,
               }),
@@ -82,7 +80,10 @@ export function applySettingsTeamRoster<R = never>(
         return;
       }
       default:
-        return assertNever(result, 'Unhandled settings team roster outcome');
+        return assertNever(
+          result,
+          'Unhandled settings team workspaceAgents outcome',
+        );
     }
   });
 }

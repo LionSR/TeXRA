@@ -2,7 +2,7 @@
 // The FRAMELESS counterpart to MockupFrame. Renders a single focused TeXRA
 // surface — a titled panel or a bare card — WITHOUT the VS Code window chrome
 // (no traffic-light bar, no activity bar). Use it to show ONE component on its
-// own: a tool-call log, a settings control, a roster, a diff hunk.
+// own: a tool-call log, a settings control, an agent list, a diff hunk.
 //
 // The root carries `.mockup`, so it inherits the entire --mk-* token block AND
 // the litStyles alias bridge (--color-*, --brand, --wa-* WebAwesome bridge) that

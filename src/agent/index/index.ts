@@ -1,8 +1,8 @@
 /**
- * Public door onto the agent registry and roster — the agent-catalog
+ * Public door onto the agent registry and agent list — the agent-catalog
  * loading, resolution, and directory-scanning surface hosts reach instead of
  * deep-reaching `./agentRegistry`, `./AgentDirectoryService`, or
- * `../roster/AgentRosterController` by path. Following the same pattern as
+ * `../workspaceAgents/WorkspaceAgentsController` by path. Following the same pattern as
  * `@agent/runtime` (#10011) and `@agent/storage`, this decouples host code
  * from the registry's internal file layout, and the R-b deep-import width
  * ratchet (`config/ratchets/host-agent-import-baseline.json`) collapses each
@@ -22,7 +22,7 @@ export {
 
 export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
-export { InvalidAgentTeamError } from '../roster/AgentRosterController';
+export { InvalidAgentTeamError } from '../workspaceAgents/WorkspaceAgentsController';
 
 export type { AgentEntry } from './agentEntry';
 
@@ -40,7 +40,7 @@ export {
   computeAgentOptionsData,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
 } from './agentRegistry';
 
-export type { AgentRosterStores } from './agentRegistry';
+export type { WorkspaceAgentsStores } from './agentRegistry';

@@ -143,7 +143,7 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// reads (the multi-agent preset name) take the session's own roots, which this
+// reads (the team name) take the session's own roots, which this
 // file's stub takes from the installed host, and the kernel's setup file
 // installs a host before this file's mocks are registered.
 setupPlatform(
@@ -538,9 +538,9 @@ describe('createChatSessionController', () => {
           catch: ensureError,
         }),
     );
-    // Return the caller-provided default (undefined for roster keys) — a
+    // Return the caller-provided default (undefined for workspace agents keys) — a
     // blanket `false` is not a valid persisted value for
-    // AGENT_ROSTER_SELECTION, which agent resolution now reads.
+    // WORKSPACE_AGENTS, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
       (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );
@@ -634,7 +634,7 @@ describe('createChatSessionController', () => {
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
             runs.track(rootHandle);
             runs.track(childHandle);
-            // The root run's stop is its roster fiber's interruption: the
+            // The root run's stop is its registry fiber's interruption: the
             // stop lands there, untracks the root, and the run resolves
             // cancelled through its own result.
             admitInterruptibleRun(runs, runId, () => {
@@ -808,7 +808,7 @@ describe('createChatSessionController', () => {
 
     expect(sessionMeta.get()).toMatchObject({
       teamName: 'Physicist',
-      cliMultiAgentPresetId: 'physicist',
+      cliTeamId: 'physicist',
       delegationAgentScope: config.delegationAgentScope,
     });
   });
@@ -822,7 +822,7 @@ describe('createChatSessionController', () => {
         model: 'current-model',
         modelSource: 'explicit-override',
         teamName: 'Mathematician',
-        cliMultiAgentPresetId: 'mathematician',
+        cliTeamId: 'mathematician',
         delegationAgentScope: {
           workflow: ['custom:current'],
           toolUse: ['custom:current'],

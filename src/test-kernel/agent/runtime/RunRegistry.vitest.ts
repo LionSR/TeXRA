@@ -172,7 +172,7 @@ function recordSessionEvents(events: PublishedEvents): {
 }
 
 /** Tracks a handle whose run a stop reaches the way production stops a run:
- * a live generation fiber on the roster, interrupted by run id. The
+ * a live generation fiber on the run registry, interrupted by run id. The
  * interrupt has observably landed once the stop's settlement resolves. */
 function trackInterruptibleHandle(
   registry: RunRegistry,
@@ -1184,7 +1184,7 @@ it.effect('holds a run against launches without making it a stop target', () =>
   Effect.gen(function* () {
     const claimed = yield* Deferred.make<void>();
     const released = vi.fn();
-    const { registry: roster } = createRegistry({
+    const { registry } = createRegistry({
       borrowRunClaim: () =>
         Effect.acquireRelease(Deferred.await(claimed), () =>
           Effect.sync(released),
@@ -1194,7 +1194,7 @@ it.effect('holds a run against launches without making it a stop target', () =>
     const hold = yield* Effect.forkChild(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* roster.holdInactiveRun(runId);
+          yield* registry.holdInactiveRun(runId);
           yield* Effect.never;
         }),
       ),
@@ -1202,15 +1202,15 @@ it.effect('holds a run against launches without making it a stop target', () =>
     );
     // The hold is registered before its claim lands: a launch while the
     // claim is still in flight is refused, not started beside it.
-    expect(roster.isLive(runId)).toBe(true);
+    expect(registry.isLive(runId)).toBe(true);
     expect(
-      yield* Effect.flip(roster.launchRun(runId, Effect.void)),
+      yield* Effect.flip(registry.launchRun(runId, Effect.void)),
     ).toBeInstanceOf(RunLive);
     // A run only held is not running: a stop by run id reaches nothing.
-    expect(roster.interrupt(runId)).toBe(false);
+    expect(registry.interrupt(runId)).toBe(false);
     yield* Deferred.succeed(claimed, undefined);
     yield* Fiber.interrupt(hold);
     expect(released).toHaveBeenCalledOnce();
-    expect(roster.isLive(runId)).toBe(false);
+    expect(registry.isLive(runId)).toBe(false);
   }),
 );

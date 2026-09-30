@@ -1,6 +1,6 @@
 /**
  * The Agents page of the settings body both GUI hosts answer through: the
- * roster toggles, the agent-file actions, the custom agent directory and the
+ * agent toggles, the agent-file actions, the custom agent directory and the
  * team presets, with the refresh every mutation ends in. The host binds only
  * what it shows its own way (a document, a folder picker, the AI creator).
  */
@@ -11,7 +11,7 @@ import { Effect, FileSystem } from 'effect';
 import {
   agentSourceDirectory,
   changedBuiltInOf,
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
   getAgent,
   getAgentsByCategory,
   getCustomAgentScanIssues,
@@ -26,7 +26,7 @@ import {
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
+import { applySettingsTeam } from '@controllers/settingsView/SettingsTeamController';
 import { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -59,10 +59,10 @@ interface SettingsAgentCommandsPorts {
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
-  const roster = createWorkspaceAgentRosterController(ports.roots);
+  const workspaceAgents = createWorkspaceAgentsController(ports.roots);
   const catalog = new SettingsAgentCatalogController({
     repoState: ports.roots.repoState,
-    roster,
+    workspaceAgents,
     getAgents: getAgentsByCategory,
     newerBuiltInOf: (entry) => changedBuiltInOf(entry)?.source,
   });
@@ -83,12 +83,12 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     buildAgentModePresetsMessage({
       getCustomPresets: () => catalog.getCustomPresets(),
       getOrchestratorAgentNames: () => catalog.getOrchestratorAgentNames(),
-      getActiveTeamId: () => roster.getActiveTeamId(),
+      getActiveTeamId: () => workspaceAgents.getActiveTeamId(),
     }),
   );
 
   /**
-   * Repaint the roster and the team presets, and reload every launcher's
+   * Repaint the agent list and the team presets, and reload every launcher's
    * catalogs. A mutation that moved agent files re-reads the registry first,
    * so nothing below it paints the catalog it replaced. The presets ride
    * along because enabling one agent rewrites the selection as `custom`,
@@ -136,14 +136,14 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     showInfoMessage: present.notice,
     showErrorMessage: present.alert,
     refreshAfterMutation: () => refreshAfterAgentMutation(),
-    forgetDeletedAgent: (name) => roster.forgetDeletedAgent(name),
+    forgetDeletedAgent: (name) => workspaceAgents.forgetDeletedAgent(name),
   });
 
   const handlers = {
     setAgentEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
-        roster
+        workspaceAgents
           .setAgentEnabled({
             category: message.category,
             source: message.agentSource,
@@ -259,8 +259,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     applyAgentModePreset: (message) =>
       present.reported(
         'Failed to apply agent team',
-        applySettingsTeamRoster(message.presetId, {
-          roster,
+        applySettingsTeam(message.presetId, {
+          workspaceAgents,
           catalog,
           presentation: {
             showInfoMessage: present.notice,

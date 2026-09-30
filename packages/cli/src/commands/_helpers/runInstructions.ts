@@ -1,7 +1,7 @@
 /**
  * Run-instruction text builders shared by the CLI's headless run commands:
  * terminal-run guidance, file-attachment framing, approval-unavailability
- * notices, and the tool-use/multi-agent instruction assemblers built on top
+ * notices, and the tool-use/team instruction assemblers built on top
  * of them. Formerly one file per concern under `_helpers/`.
  */
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -81,7 +81,7 @@ const PRIVILEGED_ACTION_GUIDANCE =
 const CLI_APPROVAL_POLICY_GUIDANCE =
   'Valid CLI approval policies are "ask", "never", and "yolo" only. If suggesting a rerun, use --approval-policy yolo for headless auto-approval or an interactive run with --approval-policy ask; do not invent other approval mode names.';
 
-interface MultiAgentInstructionPreset {
+interface TeamInstructionPreset {
   readonly name: string;
   readonly description: string;
 }
@@ -89,8 +89,8 @@ interface MultiAgentInstructionPreset {
 const COMPLETENESS_GUIDANCE =
   'Before claiming a result is complete, internally check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches. Use this as a correctness checklist; do not add a separate checklist or case analysis to the final answer unless the user asks for it, and keep the final answer within the user-requested scope and length.';
 
-export function formatMultiAgentRunInstruction(
-  preset: MultiAgentInstructionPreset,
+export function formatTeamRunInstruction(
+  preset: TeamInstructionPreset,
   init: {
     readonly inputFiles: readonly string[];
     readonly contextFiles: readonly string[];

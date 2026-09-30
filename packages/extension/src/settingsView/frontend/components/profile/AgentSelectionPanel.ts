@@ -459,7 +459,7 @@ export class AgentSelectionPanel extends LitElement {
 
   override render(): TemplateResult {
     // `willUpdate` keeps `selectedKey` pointing at a live row whenever the
-    // roster is non-empty, so a missing agent means an empty roster.
+    // agent list is non-empty, so a missing agent means an empty agent list.
     const agent = this.selectedAgent;
     if (!agent) {
       return html` <em class="text-secondary">No agents available.</em> `;

@@ -63,7 +63,7 @@ vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
 }));
 
 // Delegation resolves targets through the scope resolver; with no active run
-// scope that is the workspace-visible roster, and identity matching is
+// scope that is the workspace-visible agents, and identity matching is
 // agentRegistry's own rule — mirrored here rather than re-implemented.
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
@@ -882,7 +882,7 @@ describe('headless delegation', () => {
     'carries the validated agent source to executeAgent for source-pinned launch',
     () =>
       Effect.gen(function* () {
-        // The delegation validates against the visible roster and must hand the
+        // The delegation validates against the visible agents and must hand the
         // resolved entry's source to executeAgent, so getAgentPath resolves the exact
         // (source, name) key instead of re-resolving the ambiguous bare name.
         yield* callDelegateReview(parentRunContext({ stopAfterCycle: true }));

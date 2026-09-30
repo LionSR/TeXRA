@@ -18,7 +18,7 @@
  * legible in the footer. Full sentences and disabled-input copy still use
  * "background task" when the focused row might not be an agent.
  *
- * Hosts import these strings instead of paraphrasing run-tree or roster
+ * Hosts import these strings instead of paraphrasing run-tree or agent list
  * vocabulary. Wire identifiers (`childRunId`, `parentRun`, …) stay
  * internal and never reach the screen.
  */

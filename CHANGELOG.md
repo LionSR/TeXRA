@@ -89,7 +89,7 @@ All notable changes to this project will be documented in this file.
   and `{% if IS_GOOGLE_MODEL %}` are no longer filled in when an agent's
   prompts are rendered. A prompt that still uses one renders it as empty, so
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
-  and the delegation roster an agent can see is still listed in the
+  and the delegation agents an agent can see is still listed in the
   descriptions of its delegation tools.
 - **Goal mode is a Tools plugin, and its switch replaces the
   `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
@@ -444,8 +444,8 @@ show` print the same notice, and the new `texra agents customize`,
   already waiting leaves that request for you to answer (a headless run
   denies it).
 
-- **A custom agent you turned off stays off under the default roster** —
-  it reappeared in the selector whenever the roster resolved to all agents,
+- **A custom agent you turned off stays off under the default agents** —
+  it reappeared in the selector whenever the workspace agents resolved to all,
   which is the default for a new workspace. Choosing "All agents" still
   shows it again.
 - **Resuming after a vendor deleted its stored response no longer fails.**
@@ -969,8 +969,17 @@ show` print the same notice, and the new `texra agents customize`,
 - **One word for saved teams.** The CLI, settings, setup assistant and guide
   say "team" for a saved set of agents with an optional lead, and "agents" for
   the set a workspace shows; "roster" and "multi-agent preset" are gone from
-  `texra config agents`, `texra multi-agent`, the `/config` form and the docs.
-  Command names are unchanged.
+  `texra config agents`, the `/config` form and the docs. The names under the
+  words changed to match: `texra multi-agent list|show|run` is now
+  `texra team list|show|run` (no alias). Machine-readable NDJSON kinds are
+  renamed: `agent-roster` (field `roster`) is `workspace-agents` (field
+  `agents`), `multi-agent-result` is `team-result`, `multi-agent-preset` is
+  `team`, and `multi-agent-preset-inspection` is `team-inspection`; update any
+  script that reads them. The VS Code command `texra.showMultiAgent` is now
+  `texra.showTeamSettings`, so a custom keybinding on the old id stops
+  working. The saved agent selection and saved custom teams moved to the state
+  keys `texra.workspaceAgents` and `texra.customTeams`; a selection or custom
+  team saved under the old keys is not read, so choose or save it again.
 - **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
   `/login`, whose form already signed you in and out and set subscription
   preferences; `/login status` prints what `/auth` did. The typed
@@ -1025,10 +1034,10 @@ show` print the same notice, and the new `texra agents customize`,
   and prints help when either is not. What the launcher offered lives in that
   session: `/agent` for the root agent, `/model` for its model, `/resume` for
   history, `/login` for sign-in and keys, `/config` for settings. Start a
-  **multi-agent team** with `texra multi-agent run <preset>`; a resumed team
-  session still carries its scoped roster. The launcher's team step was the one
+  **team** with `texra team run <team>`; a resumed team
+  session still carries its scoped agents. The launcher's team step was the one
   way to start a preset-scoped team in the interactive TUI, and that path is
-  removed rather than replaced — use `texra multi-agent run`, or `/agent` in a
+  removed rather than replaced — use `texra team run`, or `/agent` in a
   chat for an unscoped session with the team's lead.
 - **`texra history show --export html` no longer takes `--assets-dir`** — the
   shared-assets export mode, which staged the trace viewer into a directory and
@@ -1188,8 +1197,8 @@ show` print the same notice, and the new `texra agents customize`,
   descriptions, it lists the team presets (Lean Project, Physicist,
   Mathematician, Computer Scientist, Software Engineer and your custom teams)
   with any unavailable members. Picking one sets the team's lead as the root
-  agent with the team's roster, the same way the extension and desktop launch a
-  team. Before, a team could only be started with `texra multi-agent run`.
+  agent with the team's agents, the same way the extension and desktop launch a
+  team. Before, a team could only be started with `texra team run`.
 - `/login` gains an **Add a provider API key** row.
 
 - **GPT-6 Astra is available** — OpenAI's most capable model joins the model

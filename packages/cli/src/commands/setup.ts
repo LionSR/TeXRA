@@ -69,7 +69,7 @@ export function runSetup(context: CliContext) {
       }
     }
     // Credential present (pre-existing or just configured): the setup agent
-    // owns the session — environment checks, agent roster, first task. Same
+    // owns the session — environment checks, workspace agents, first task. Same
     // chat startup path as `texra chat`, with the agent pinned.
     return { chat: { agentOverride: SETUP_AGENT_NAME } };
   });

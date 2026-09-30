@@ -962,40 +962,40 @@ wa-dialog.desktop-onboarding {
   line-height: var(--line-height-normal);
 }
 
-/* Roster confirmation — shows what the chosen team actually enabled, so the
+/* agents confirmation — shows what the chosen team actually enabled, so the
    preset is legible rather than an opaque label. */
-.desktop-onboarding-roster {
+.desktop-onboarding-agents {
   display: flex;
   flex-direction: column;
   gap: var(--wa-space-s);
   margin-top: var(--wa-space-s);
 }
 
-.desktop-onboarding-roster-summary {
+.desktop-onboarding-agents-summary {
   margin: 0;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size);
 }
 
-.desktop-onboarding-roster-group {
+.desktop-onboarding-agents-group {
   display: flex;
   flex-direction: column;
   gap: var(--wa-space-2xs);
 }
 
-.desktop-onboarding-roster-label {
+.desktop-onboarding-agents-label {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
 
-.desktop-onboarding-roster-chips {
+.desktop-onboarding-agents-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--wa-space-2xs);
 }
 
-/* Each chip names one enabled agent, so they read as a brand-tinted roster
+/* Each chip names one enabled agent, so they read as a brand-tinted agent list
    rather than neutral gray tags. */
 .desktop-onboarding-chip {
   padding: 3px var(--wa-space-xs);

@@ -10,7 +10,7 @@ vi.mock('@shared/hostBridge', () => ({
 }));
 
 // Local imports
-import type { MultiAgentTab } from '@settingsView/frontend/tabs/MultiAgentTab';
+import type { TeamsTab } from '@settingsView/frontend/tabs/TeamsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_MODE_PRESETS } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas';
@@ -21,8 +21,8 @@ import {
   useLitComponentTestDom,
 } from './litComponentTestUtils';
 
-function mount(props: Partial<MultiAgentTab> = {}): Promise<MultiAgentTab> {
-  return mountComponent<MultiAgentTab>('multi-agent-tab', props);
+function mount(props: Partial<TeamsTab> = {}): Promise<TeamsTab> {
+  return mountComponent<TeamsTab>('teams-tab', props);
 }
 
 const CUSTOM_PRESET: AgentModePreset = {
@@ -42,10 +42,8 @@ const CUSTOM_PRESET: AgentModePreset = {
  * Keep the apply action on a native button so browser keyboard behavior does
  * not depend on a hand-rolled key handler.
  */
-describe('multi-agent-tab preset card keyboard activation', () => {
-  useLitComponentTestDom(
-    () => import('@settingsView/frontend/tabs/MultiAgentTab'),
-  );
+describe('teams-tab preset card keyboard activation', () => {
+  useLitComponentTestDom(() => import('@settingsView/frontend/tabs/TeamsTab'));
 
   beforeEach(() => {
     mocks.postMessage.mockClear();
@@ -89,10 +87,10 @@ describe('multi-agent-tab preset card keyboard activation', () => {
 
   /**
    * The card previously flipped a local `@state()` on click, so a team the
-   * roster never adopted (cancelled sign-in, unavailable members) still read
+   * workspace agents never adopted (cancelled sign-in, unavailable members) still read
    * as active, and a freshly opened Settings badged nothing at all.
    */
-  it('badges the team the roster reports, not the one last clicked', async () => {
+  it('badges the team the workspace agents report, not the one last clicked', async () => {
     const active = AGENT_MODE_PRESETS[1]!;
     const element = await mount({ activePresetId: active.id });
 

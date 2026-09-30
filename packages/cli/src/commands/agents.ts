@@ -4,7 +4,7 @@ import { Effect, FileSystem } from 'effect';
 import {
   agentSourceDirectory,
   changedBuiltInOf,
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
   customCopyPath,
   getAgent,
   getCustomAgentScanIssues,
@@ -180,9 +180,7 @@ function resetAgent(context: CliContext, name: string) {
     yield* FileSystem.FileSystem.use((fs) =>
       fs.remove(custom.path, { force: true }),
     );
-    yield* createWorkspaceAgentRosterController(services).forgetDeletedAgent(
-      name,
-    );
+    yield* createWorkspaceAgentsController(services).forgetDeletedAgent(name);
     emitCopyResult(context, {
       action: 'reset',
       name,
@@ -290,7 +288,7 @@ const agentsShowCommand = defineCliCommand({
 export const agentsCommand = defineCommand({
   meta: { name: 'agents', description: 'Inspect TeXRA agents' },
   // `show` already prints everything about an agent, so there is no separate
-  // `inspect` verb here (unlike `multi-agent show`, which resolves a team run
+  // `inspect` verb here (unlike `team show`, which resolves a team run
   // plan).
   subCommands: {
     list: agentsListCommand,

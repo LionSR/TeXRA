@@ -30,7 +30,7 @@ describe('CLI implicit default agent policy', () => {
   });
 
   it('prefers the team lead order over registry file order when scoped', () => {
-    // A scoped roster that hides `assistant`: pick the lead by
+    // A scoped agent list that hides `assistant`: pick the lead by
     // PREFERRED_TOOL_USE_AGENTS order (engineer) rather than whichever agent
     // sorts first in the registry's file order (codeReviewer).
     expect(
