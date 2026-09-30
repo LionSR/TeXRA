@@ -1,9 +1,10 @@
 import { type SessionHandle } from '@agent/runtime';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
+import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -53,17 +54,20 @@ export interface SlashCommandContext {
 export interface SlashCommandOutput {
   readonly appendOutcome: (message: string) => void;
   readonly setNotice: (message: string) => void;
-  readonly writeProgress: (
-    message: string,
-    options?: { readonly copyable?: boolean },
-  ) => void;
+  readonly writeProgress: CliSignInProgress;
 }
 
 /** Direct command output remains in the ordinary TUI transcript. */
 export const transcriptSlashCommandOutput: SlashCommandOutput = {
-  appendOutcome: appendLocalAssistantTranscript,
+  appendOutcome: appendLocalNotice,
   setNotice: setTransientNotice,
-  writeProgress: (message) => appendLocalAssistantTranscript(message),
+  // Instructions (a sign-in URL, a device code) and guidance (a hint, a failed
+  // launch) stay in the transcript; a status line ("Opening browser...") is
+  // not a result worth a permanent row.
+  writeProgress: (message, options) =>
+    options?.copyable || options?.persistent
+      ? appendLocalNotice(message)
+      : setTransientNotice(message),
 };
 
 export const CHAT_API_MODE_MODEL_RECOVERY = {

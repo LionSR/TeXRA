@@ -85,6 +85,7 @@ function PlainEntryRows({
       <Text
         bold={entry.kind === 'phase'}
         color={rowColor}
+        dimColor={entry.kind === 'log' && entry.origin === 'local'}
         inverse={entry.kind === 'user'}
       >
         {lines.join('\n')}
@@ -119,6 +120,10 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   switch (entry.kind) {
     case 'assistant':
     case 'log':
+      // A local notice is the TUI's own report, not model text: plain, marked.
+      if (entry.kind === 'log' && entry.origin === 'local') {
+        return <PlainEntryRows entry={entry} layout={layout} />;
+      }
       return (
         <Box
           marginBottom={layout.marginBottomRows}

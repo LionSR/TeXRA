@@ -1003,6 +1003,15 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Slash-command results no longer read as the model speaking.** In the
+  terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)
+  is a dim row led by `»`, failures are red `!` errors instead of plain
+  text, and a refusal that only needs a hint ("Finish the active response
+  before switching models") shows in the notice line instead of the
+  transcript. Sign-out and account results keep one fact per line, and a
+  failed sign-in shows its link on its own line. `/help` and `/memory` echo
+  the command they answer, and a direct `/login chatgpt` no longer leaves
+  a permanent row for each status line.
 - **`/` forms span the full terminal width** — `/login`, `/config`, `/agent`
   and the other slash-command panels were capped at 80 columns and cut their
   option labels off at 24 ("Prefer ChatGPT subscrip…"). They now fill the
