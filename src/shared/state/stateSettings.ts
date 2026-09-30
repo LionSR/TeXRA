@@ -111,8 +111,7 @@ export type SettingHost = (typeof SETTING_HOSTS)[number];
  * database), so a repository has one value on every host and in every
  * worktree.
  */
-type SettingStore =
-  'config' | 'workspaceState' | 'repoState' | 'globalState';
+type SettingStore = 'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
   | 'approval'
