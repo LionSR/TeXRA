@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -31,6 +31,27 @@ describe('WebFetchTool', () => {
 
       expect(result).toMatchObject({ status: 'error' });
       expect(result.error).toMatch(/cannot fetch/i);
+    }),
+  );
+
+  it.effect('rejects a redirect from a public host to a private address', () =>
+    Effect.gen(function* () {
+      // The metadata address a cloud instance serves credentials from.
+      const fetchStub = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: 'http://169.254.169.254/latest/meta-data/' },
+        }),
+      );
+
+      const result = yield* WebFetchTool.call({
+        url: 'http://93.184.216.34/',
+      }).pipe(Effect.provide(nativeToolTestLayer()));
+
+      expect(result).toMatchObject({ status: 'error' });
+      expect(result.error).toMatch(/cannot fetch/i);
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+      fetchStub.mockRestore();
     }),
   );
 });

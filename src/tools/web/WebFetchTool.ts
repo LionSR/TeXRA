@@ -1,5 +1,9 @@
+// Node imports
+import { lookup } from 'node:dns/promises';
+
 // Third-party imports
 import { Effect, Stream } from 'effect';
+import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
 import ipaddr from 'ipaddr.js';
 import { z } from 'zod';
 
@@ -7,7 +11,7 @@ import { z } from 'zod';
 import { ToolError } from '@shared/schemas';
 import {
   retryTransientFetch,
-  scopedOkClient,
+  scopedClient,
   toFetchToolError,
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
@@ -19,6 +23,7 @@ import { formatBytes } from '@utils/text/stringUtils';
 const WEB_FETCH_TIMEOUT_MS = 30_000; // 30 s
 const WEB_FETCH_RETRIES = 2;
 const MAX_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MiB
+const MAX_REDIRECTS = 5;
 
 const WebFetchInputSchema = z.strictObject({
   url: z
@@ -37,8 +42,6 @@ const WebFetchInputSchema = z.strictObject({
 
 type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
 
-const BLOCKED_HOSTNAMES = new Set(['localhost']);
-
 /**
  * Default-deny, not a denylist: `ipaddr.js` classifies every address into a
  * named range (`private`, `loopback`, `carrierGradeNat`, `reserved`, …) with
@@ -48,19 +51,82 @@ const BLOCKED_HOSTNAMES = new Set(['localhost']);
  * range, or an IPv4-mapped IPv6 literal like `::ffff:127.0.0.1` slipping past
  * an IPv6-only prefix check) — `ipaddr.process` normalizes that mapped form to
  * plain IPv4 before classification, so it is covered too.
- *
- * `hostname` is a WHATWG `URL#hostname`, which brackets an IPv6 literal
- * (`[::1]`); `ipaddr.isValid` rejects the bracketed form outright, so an
- * unstripped hostname would fail open on every IPv6 target.
  */
-function isRestrictedIp(hostname: string): boolean {
-  const candidate =
-    hostname.startsWith('[') && hostname.endsWith(']')
-      ? hostname.slice(1, -1)
-      : hostname;
-  if (!ipaddr.isValid(candidate)) return false;
-  return ipaddr.process(candidate).range() !== 'unicast';
+function isRestrictedIp(address: string): boolean {
+  return (
+    ipaddr.isValid(address) && ipaddr.process(address).range() !== 'unicast'
+  );
 }
+
+/**
+ * Refuse a URL whose host is, or resolves to, a non-public address. The name
+ * is resolved here because the host string alone says nothing (`localhost.`,
+ * a public name with a loopback A record); every address it resolves to must
+ * be public, so one private record among several fails the call. `hostname`
+ * is a WHATWG `URL#hostname`, which brackets an IPv6 literal (`[::1]`) and
+ * `ipaddr.isValid` rejects the bracketed form, so the brackets come off first.
+ * The fetch resolves the name again, so this narrows DNS rebinding rather than
+ * closing it.
+ */
+const assertPublicHost = Effect.fn('WebFetchTool.assertPublicHost')(function* (
+  url: URL,
+) {
+  const host = url.hostname.replaceAll(/^\[|\]$/g, '');
+  const addresses = ipaddr.isValid(host)
+    ? [host]
+    : (yield* Effect.tryPromise({
+        try: () => lookup(host, { all: true }),
+        catch: (error) =>
+          new ToolError(`Cannot resolve ${host}: ${toErrorMessage(error)}`),
+      })).map(({ address }) => address);
+  if (addresses.some(isRestrictedIp)) {
+    return yield* Effect.fail(
+      new ToolError(
+        'Cannot fetch localhost or private network addresses. Provide a public URL instead.',
+      ),
+    );
+  }
+});
+
+/**
+ * GET `start`, following redirects by hand so every hop's host passes
+ * {@link assertPublicHost}: the fetch runs with `redirect: 'manual'`, and a
+ * redirect to a private address is the same refusal as asking for it.
+ */
+const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
+  start: string,
+) {
+  const client = HttpClient.filterStatus(
+    yield* scopedClient,
+    (status) => status >= 200 && status < 400,
+  );
+  let target = new URL(start);
+  for (let redirects = 0; ; redirects++) {
+    yield* assertPublicHost(target);
+    const response = yield* client.get(target).pipe(
+      Effect.provideService(FetchHttpClient.RequestInit, {
+        redirect: 'manual',
+      }),
+    );
+    if (response.status < 300) return response;
+    const { location } = response.headers;
+    if (!location || redirects >= MAX_REDIRECTS) {
+      return yield* Effect.fail(
+        new ToolError(
+          location
+            ? `Too many redirects (more than ${MAX_REDIRECTS}).`
+            : `HTTP ${response.status} redirect without a Location header.`,
+        ),
+      );
+    }
+    target = new URL(location, target);
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+      return yield* Effect.fail(
+        new ToolError(`Redirect to a non-HTTP URL: ${target.protocol}`),
+      );
+    }
+  }
+});
 
 /** Fetch `url` with transient retries, as text plus its content type. */
 const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
@@ -68,8 +134,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
     Effect.gen(function* () {
       // One attempt owns headers and body together: the request scope stays
       // open through the body read.
-      const client = yield* scopedOkClient;
-      const response = yield* client.get(url);
+      const response = yield* getPublic(url);
 
       const lengthHeader = response.headers['content-length'];
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
@@ -132,14 +197,16 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
     },
   ).pipe(
     Effect.mapError((error) =>
-      toFetchToolError(error, {
-        timeout:
-          `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
-          `The remote server did not respond in time. Retry the request, or try a different URL.`,
-        http: (status) => `HTTP ${status}: Failed to fetch ${url}`,
-        network: (message) => `Network error fetching ${url}: ${message}`,
-        fallback: (message) => `Failed to fetch ${url}: ${message}`,
-      }),
+      error instanceof ToolError
+        ? error
+        : toFetchToolError(error, {
+            timeout:
+              `Request to ${url} timed out after ${WEB_FETCH_TIMEOUT_MS / 1000}s. ` +
+              `The remote server did not respond in time. Retry the request, or try a different URL.`,
+            http: (status) => `HTTP ${status}: Failed to fetch ${url}`,
+            network: (message) => `Network error fetching ${url}: ${message}`,
+            fallback: (message) => `Failed to fetch ${url}: ${message}`,
+          }),
     ),
   ),
 );
@@ -150,24 +217,6 @@ const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
   url,
   prompt,
 }: WebFetchInput) {
-  const parsedUrl = new URL(url);
-  const hostname = parsedUrl.hostname.toLowerCase();
-  if (BLOCKED_HOSTNAMES.has(hostname)) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Cannot fetch localhost URLs. Provide a public URL instead.',
-      ),
-    );
-  }
-
-  if (isRestrictedIp(hostname)) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Cannot fetch private network IPs. Provide a public URL instead.',
-      ),
-    );
-  }
-
   const { rawBody, contentType } = yield* fetchPage(url);
 
   const ctLower = contentType.toLowerCase();

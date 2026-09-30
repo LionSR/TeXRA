@@ -184,6 +184,12 @@ All notable changes to this project will be documented in this file.
   there needs it set again in the settings view or `/config`. `texra init` no
   longer asks for an approval policy or writes one.
 
+- **`web_fetch` no longer follows a redirect into your network.** It resolves
+  each host and refuses any address that is not public (loopback, private,
+  link-local, cloud metadata), and checks every redirect hop the same way;
+  before, a name that resolves to `127.0.0.1` (such as `localhost.`) or a
+  redirect from a public page to a private address was fetched.
+
 ### Features
 
 - **Session history takes several times less disk** — long tool output,
