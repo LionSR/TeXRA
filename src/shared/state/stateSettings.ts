@@ -1114,7 +1114,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
     model: {
       provider: 'kimiCode',
-      label: 'Prefer Kimi Code',
+      label: 'Kimi Code subscription',
       description:
         'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     },

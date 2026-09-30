@@ -74,7 +74,7 @@ describe('CLI auth command', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Signed out of ChatGPT.');
     expect(stdout).toContain(
-      'ChatGPT subscription preference could not be disabled: Config write failed',
+      'ChatGPT subscription could not be disabled: Config write failed',
     );
     expect(stderr).toBe('');
   });

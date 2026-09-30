@@ -169,7 +169,7 @@ export function buildCliModelAccessItems(
         provider,
         state: subscription?.preferSubscription ? 'off' : 'on',
       },
-      label: SUBSCRIPTION_AUTH_COPY[provider].preferLabel,
+      label: SUBSCRIPTION_AUTH_COPY[provider].subscriptionLabel,
       description: subscription
         ? formatCliSubscriptionPreference(subscription)
         : pendingDescription,

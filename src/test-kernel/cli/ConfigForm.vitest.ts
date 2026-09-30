@@ -475,7 +475,7 @@ describe('/config slash command wiring', () => {
     }),
   );
 
-  it.live('turns OpenRouter off when Prefer Kimi Code is enabled', () =>
+  it.live('turns OpenRouter off when Kimi Code subscription is on', () =>
     Effect.gen(function* () {
       const { stores, globalState } = makeFakeSettingsStores('cli');
       yield* globalState.update(GlobalStateKey.USE_OPENROUTER, true);

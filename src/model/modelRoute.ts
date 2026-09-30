@@ -17,7 +17,7 @@
  *    it), so they take the `kimiCode` key whatever the toggles say;
  *  - **dual-backend** models (`kimi3`) also exist on the Moonshot open
  *    platform; the coding endpoint serves them only with OpenRouter off,
- *    "Prefer Kimi Code" on and a Kimi Code key stored, and their wire ID
+ *    "Kimi Code subscription" on and a Kimi Code key stored, and their wire ID
  *    differs (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
 import { Effect } from 'effect';
@@ -81,7 +81,7 @@ export interface RouteFacts {
   readonly xaiSubscription: boolean;
   /** A Kimi Code console key is stored. */
   readonly kimiCodeKey: boolean;
-  /** "Prefer Kimi Code" is on and not declined. */
+  /** The "Kimi Code subscription" switch is on and not declined. */
   readonly preferKimiCode: boolean;
   /** The GLM Coding Plan is on, not declined, and no dashboard GLM endpoint
    *  outranks its path. */

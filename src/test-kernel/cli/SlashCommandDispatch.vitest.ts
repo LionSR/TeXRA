@@ -621,7 +621,7 @@ describe('handleTuiSlashCommand', () => {
         'glm-secret',
       );
       expect(notice).toBe(
-        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
+        "Tip: the regular GLM endpoint is the default; enable 'GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
       );
     }),
   );
@@ -722,7 +722,7 @@ describe('handleTuiSlashCommand', () => {
         const entry = lastEntryText();
         expect(entry).toContain('Signed out of ChatGPT.');
         expect(entry).toContain(
-          'ChatGPT subscription preference could not be disabled: Config write failed',
+          'ChatGPT subscription could not be disabled: Config write failed',
         );
         expect(entry).not.toContain('ChatGPT sign-out failed');
       }),

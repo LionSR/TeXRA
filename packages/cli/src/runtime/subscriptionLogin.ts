@@ -136,7 +136,7 @@ export function subscriptionSignOutPreferenceMessage(
   const { displayName, modelFamily } = subscriptionProvider(providerId);
   return result.preferenceError === undefined
     ? `${displayName} subscription disabled for ${modelFamily}.`
-    : `${displayName} subscription preference could not be disabled: ${result.preferenceError}`;
+    : `${displayName} subscription could not be disabled: ${result.preferenceError}`;
 }
 
 /**
