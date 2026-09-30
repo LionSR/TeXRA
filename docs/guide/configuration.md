@@ -130,8 +130,8 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 When telemetry is enabled, TeXRA records model and provider names, the agent
 name and category, token counts, response time, route, stream identifier,
-version, and host. A custom agent or custom model is sent under the name you
-gave it, so do not put anything private in those names. No account is
+version, and host. Only a bundled agent's id is sent; a custom or plugin
+agent is reported as `custom`. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
 not send prompt text, document content, file paths, or error text. Each host

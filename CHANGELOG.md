@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
   `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
   (or VS Code's telemetry setting); the ID is one row in
   `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
-  resets it. Custom agent and model names are sent as named. `texra doctor` shows the usage-logging row.
+  resets it. A custom agent is reported only as "custom". `texra doctor` shows the usage-logging row.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,
   Mathematician, and Computer Scientist teams now work fully offline with no
   TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
