@@ -194,7 +194,7 @@ calls `Effect.runPromise`, `runSync`, or `runFork`.
 
 Until 2026-09-21 the root entry rendered these services as Promises and
 AsyncIterables, the boundary kind rule R1 of TeXRA's Effect migration names
-for the published SDK (`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`
+for the published SDK (`2026-08-26-effect-4-runtime-migration.md`
 §7 R1; supersession recorded in the architecture rulings ledger,
 `.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`).
 That ruling is superseded: `effect` was already a mandatory exact-pin peer of

@@ -43,7 +43,7 @@ function with one direction: `meta.outcome` narrows the envelope, never widens
 it to `completed`.
 
 **Home.** The disease this closes is D1 in
-[`2026-06-10-lifecycle-status-ownership.md`](../../archived/architecture/2026-06-10-lifecycle-status-ownership.md).
+`2026-06-10-lifecycle-status-ownership.md`.
 
 ---
 
@@ -236,7 +236,7 @@ unchanged. See the [plugin architecture note](./2026-09-24-plugin-architecture.m
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
 
 **Question.** Decision 8 of the
-[Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification)
+Effect-4 PRD §15
 ratified Effect's best-practice guides, including "one `provide` at the
 process entry". The landed runtime provides services at three lifetimes, not
 one. Is that a deviation to repair?
@@ -306,7 +306,7 @@ Deleting the row (the allowlist is the ruling, and a zeroed row would stop
 naming these four). Building a second internal cancellation tree beside the
 fiber's, which is what converting these to signals-of-signals would produce.
 
-## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers [Effect-4 PRD §15](../../archived/architecture/2026-08-26-effect-4-runtime-migration.md#15-open-decisions-for-ratification) decision 2)
+## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers Effect-4 PRD §15 decision 2)
 
 **Question.** Decision 2 asked whether the host managed runtime belongs
 directly in each composition root or behind one host-neutral
@@ -698,7 +698,7 @@ other than interrupting the fiber that awaits it.
 ## The agent SDK's public surface is Effect; R1 boundary kind (c) is retired (ruled 2026-09-21)
 
 **Question.** Rule R1 of the Effect migration
-(`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`
+(`2026-08-26-effect-4-runtime-migration.md`
 §7) admitted three boundary kinds; kind (c) was "the SDK's public Promise API
 in `packages/agent/src`": the root entry `packages/agent/src/index.ts`
 rendered the package's Effect services as `runAgent` / `closeSession` /

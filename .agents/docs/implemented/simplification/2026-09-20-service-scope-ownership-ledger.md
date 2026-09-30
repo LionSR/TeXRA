@@ -9,7 +9,7 @@ Origin: a `find-simplification` pass over the service-injection map recorded in
 Three investigators, one per scope (session, run and call, process and module
 globals), each holding the standing rules (AGENTS.md "Code quality rules",
 checklist §13 to §15, the "no new carriers" constraint of the
-[2026-08-16 injection audit](../../archived/simplification/2026-08-16-services-injection-audit.md)
+2026-08-16 injection audit
 §4) and the recorded rulings (D5, D26 and the runtime-slot ruling in the
 [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md);
 the `provideAgentEngine` in-file ruling from #10475).
@@ -70,7 +70,7 @@ as the one composition):
 - `GlobalStorageFs` ← `globalStorageFsLayer(globalStorage)`.
 - **`GlobalDatabase` (new)** ← `databaseLayer('persistent')` at the global
   root, beside `GlobalStorageFs`; replaces `withScopedDatabase`. Design in
-  [its own note](../../archived/simplification/2026-09-20-global-database-process-service.md).
+  its own note.
 - `ProcessIdentity` ← `Layer.effect` over `processStart`, provided **outside**
   `Layer.fresh` so it builds once.
 - `Secrets`, `AppState` (required, not optional), `SupabaseAuth`,

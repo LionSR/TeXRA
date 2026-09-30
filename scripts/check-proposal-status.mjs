@@ -162,7 +162,7 @@ if (failures.length > 0) {
     `\n${failures.length} note(s) in the wrong lifecycle directory. Move the note with`,
   );
   console.error(
-    '`git mv`, add the archive marker if it lands in archived/, and update its row in',
+    '`git mv`, or delete it if rejected or superseded, and update its row in',
   );
   console.error(
     '.agents/docs/INDEX.md. Citing a merged PR as evidence or as a prerequisite is not a',

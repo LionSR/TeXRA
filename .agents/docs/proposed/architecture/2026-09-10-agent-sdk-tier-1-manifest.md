@@ -6,7 +6,7 @@ Status: proposed
 > [`2026-09-05-agent-sdk-architecture.md`](./2026-09-05-agent-sdk-architecture.md)
 > §4 names as a deliverable — "The Tier-1 manifest names exact exports and
 > actual consumers" — but never broke out as a file. The
-> [2026-09-09 readiness pass](../../archived/simplification/2026-09-09-agent-sdk-readiness-reverify.md)
+> 2026-09-09 readiness pass
 > §3b flagged that omission as "the one concrete, low-risk artifact still
 > missing," to be extracted if the routine were ever asked to act. It was, on
 > 2026-09-10; this is that extraction.
@@ -15,7 +15,7 @@ Status: proposed
 > 2026-09-15 at `697663eff1`**, after the one-run-model rename (S1, #12222)
 > and the completed Effect-4 cutover (PocketFlow engine deleted in #12314, the
 > `ModelHandler` god-base and `IModelHandler` port retired in #12320). The
-> [2026-09-14 readiness pass](../../archived/simplification/2026-09-14-agent-sdk-readiness-reverify.md)
+> 2026-09-14 readiness pass
 > §5.4 flagged that the first enumeration had drifted from the tree — stale
 > `StreamView`/`ExecutionId` names, `IModelHandler` still treated as live —
 > and called for exactly this re-enumeration. It remains a point-in-time
@@ -259,13 +259,13 @@ and there is no audit transition here.
 
 The readiness passes carried "result-taxonomy documentation" as an open item
 through
-[`-09-02` §5.6](../../archived/simplification/2026-09-02-agent-sdk-readiness-reverify.md)
+`-09-02` §5.6
 ("the single largest 'which result do I get?' clarification the surface
 needs"). It was **closed by the
-[`-09-04` pass §5](../../archived/simplification/2026-09-04-agent-sdk-readiness-reverify.md)**,
+`-09-04` pass §5**,
 which records commit `733b8a4` landing the documentation on the SDK surface and
 the commit message marking `agent-sdk-readiness:S6` complete. The
-[`-09-09` pass](../../archived/simplification/2026-09-09-agent-sdk-readiness-reverify.md)
+`-09-09` pass
 correctly no longer carries it.
 
 The first enumeration re-verified at `cf88d2d` that `packages/agent/README.md`

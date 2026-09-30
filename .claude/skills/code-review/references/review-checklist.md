@@ -108,7 +108,7 @@ Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for
 
 ## 13. Abstraction-cost guardrails (2026-07 calibration)
 
-Standing rules from the 2026-07 tech-debt re-calibration, which found that a run of "reduction" PRs quietly re-accumulated abstraction cost: 22 PRs pitched as reductions netted **+5,046 production LoC**, with 18 of 22 net-positive — the "Refactor-LOC lesson" at scale. Evidence base: [`.agents/docs/archived/simplification/2026-07-03-tech-debt-audit.md`](../../../../.agents/docs/archived/simplification/2026-07-03-tech-debt-audit.md). Apply these whenever a PR adds a port/facade/projector/strategy/template-method, or is titled `refactor:` / `simplify:` / `consolidate` / `dedupe` / `extract`:
+Standing rules from the 2026-07 tech-debt re-calibration, which found that a run of "reduction" PRs quietly re-accumulated abstraction cost: 22 PRs pitched as reductions netted **+5,046 production LoC**, with 18 of 22 net-positive — the "Refactor-LOC lesson" at scale. Evidence base: `2026-07-03-tech-debt-audit.md`. Apply these whenever a PR adds a port/facade/projector/strategy/template-method, or is titled `refactor:` / `simplify:` / `consolidate` / `dedupe` / `extract`:
 
 - **Build implies delete in the same PR.** A new port/facade/projector/strategy/template-method merges only if it deletes the path it replaces in that same PR. Deferral is allowed only with a ledger row **and** a concrete removal-trigger issue that is a merge-blocker for the next stage.
 - **No leapfrogging a migration.** A staged migration may not merge stage N+1 scaffolding while stage N's deletion issue is still open.

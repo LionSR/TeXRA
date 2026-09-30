@@ -43,7 +43,7 @@ export function runSetup(context: CliContext) {
   // so that handler stays live through the whole window below (see
   // `initCliPlatform`).
   //
-  // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
+  // State 0 first (2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped; a subscription sign-in is `texra auth <provider>
   // login`.

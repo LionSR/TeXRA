@@ -239,7 +239,7 @@ VS Code window hosts all its conversations in one process, so the owner's
 same-project case works fully.
 
 The only shape compatible with D1
-(`archived/architecture/2026-08-23-single-owner-sessions.md`) is ledger-mailbox's
+(`2026-08-23-single-owner-sessions.md`) is ledger-mailbox's
 outbox:
 
 - A `message.posted {messageId, to, content}` row goes on an aggregate the
