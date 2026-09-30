@@ -104,6 +104,16 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'presenter',
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
+/**
+ * The picker's row budget is `FORM_FOREGROUND_MAX_ROWS` (18), the five team
+ * presets are always listed, and the workflow section needs three rows
+ * (heading, one workflow, the run hint). So the section renders only when at
+ * most two tool-use agents are visible — and both workflows need a single one.
+ * `agent-form` therefore names one agent, asserting both sections; the
+ * 80-column and compact scenarios keep the five-agent selection, which is what
+ * their windowing and width guards are about.
+ */
+const SINGLE_TOOL_USE_AGENT = 'research';
 const TWO_OPENAI_MODELS = ['gpt55', 'gpt55pro'].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -139,6 +149,10 @@ process.on('exit', () => {
 // --- scenarios (verified against the committed harness) ------------------
 // `smoke: true` marks the subset PR CI runs (`--smoke`). The tag travels
 // with the scenario, so renaming one cannot silently drop it from the gate.
+// An untagged scenario still guards a fix — it is just not run by anything but
+// a developer, so it rots the first time the surface it pins moves. Tag a
+// scenario whose expectation the TUI is not otherwise free to change, and
+// untag one whose frame is only interesting while developing.
 const SCENARIOS = [
   {
     name: 'transcript',
@@ -606,6 +620,7 @@ const SCENARIOS = [
   },
   {
     name: 'slash-palette-esc-retypes-command',
+    smoke: true,
     frame: 'scrollback',
     env: {
       HARNESS_ENTRIES: '4',
@@ -616,10 +631,9 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
-      'Workflows',
-      'correct',
-      'polish',
+      'Tool-use agents, then teams',
+      'research',
+      'Team · Lean Project',
       'Choose an agent, or a team it leads, for this chat.',
     ],
     unexpect: [
@@ -648,24 +662,32 @@ const SCENARIOS = [
   },
   {
     name: 'kitty-shift-enter-newline',
+    smoke: true,
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', KITTY_SHIFT_ENTER, 'second line', '\r'],
     frame: 'viewport',
-    expect: ['Harness received: first line\nsecond line'],
+    // The echo is one notice row whose continuation line is indented under the
+    // row's gutter, so the two lines are asserted through the collapsed frame:
+    // both arrived, and the `unexpect` below proves they were not concatenated.
+    expect: ['Harness received: first line'],
+    expectCollapsed: ['Harness received: first line second line'],
     unexpect: ['first linesecond line', '13;2u', '[13', 'ERROR'],
   },
   {
     name: 'ctrl-j-newline',
+    smoke: true,
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', LF, 'second line', '\r'],
     frame: 'viewport',
-    expect: ['Harness received: first line\nsecond line'],
+    expect: ['Harness received: first line'],
+    expectCollapsed: ['Harness received: first line second line'],
     unexpect: ['first linesecond line', 'ERROR'],
   },
   {
     name: 'agent-form',
+    smoke: true,
     frame: 'scrollback',
     // The harness mirrors `texra chat`: agent selection is open exactly while
     // no root run is pending, so a fixture with no interruptible run gets the
@@ -673,23 +695,25 @@ const SCENARIOS = [
     // read-only `texra chat --agent <name>` hint.
     env: {
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_TOOL_USE_AGENTS: PHYSICIST_LOCAL_TOOL_USE_AGENTS,
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: SINGLE_TOOL_USE_AGENT,
       HARNESS_VISIBLE_WORKFLOW_AGENTS: PHYSICIST_WORKFLOW_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
+      'Tool-use agents, then teams',
       'research',
-      'review',
-      'latexFixer',
+      'Team · Physicist',
+      // The workflow section at this size: its heading, the overflow line for
+      // the workflows the row budget hides (the budget is `agentSelectWindow`'s,
+      // see `SINGLE_TOOL_USE_AGENT`), and the hint naming how to run one.
       'Workflows',
-      'correct',
-      'polish',
+      '… 2 more rows',
+      'Run a workflow with texra run <name> --input=<file>.',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc close',
+      'Esc cancel',
     ],
     unexpect: [
       'Platform not initialized',
@@ -707,6 +731,7 @@ const SCENARIOS = [
   },
   {
     name: 'agent-form-80-cols',
+    smoke: true,
     frame: 'scrollback',
     cols: 80,
     env: {
@@ -722,12 +747,9 @@ const SCENARIOS = [
       'research',
       'review',
       'latexFixer',
-      'Workflows',
-      'correct',
-      'polish',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc close',
+      'Esc cancel',
     ],
     unexpect: [
       'Platform not initialized',
@@ -951,7 +973,7 @@ const SCENARIOS = [
       '/approval',
       'Choose when commands and edits ask first, or toggle an',
       'Ask',
-      'Never',
+      'Block',
       'Auto-approve',
       'Auto-approve commands — Off · this session',
       'Auto-approve edits — Off · this session',
@@ -976,7 +998,8 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval never', '\r', '/status', '\r'],
     expect: [
-      'Approval mode: Deny Bash commands and tool edits.',
+      'Approval mode: Block shell commands and file edits.',
+      'approval: Block shell commands and file edits.',
       'API keys',
       'never',
       '/ commands',
@@ -1088,6 +1111,7 @@ const SCENARIOS = [
   },
   {
     name: 'compact-agent-form',
+    smoke: true,
     rows: 12,
     cols: 80,
     env: {
@@ -1101,8 +1125,11 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
-      'Tool-use agents',
-      '+4 more',
+      // One visible row carries the tool-use list: the picker labels the tail
+      // it hides. Ten items are in the picker (five visible tool-use agents and
+      // the five team presets), so nine are behind this row.
+      'Tool-use agents, then teams',
+      '1. research — +9 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',

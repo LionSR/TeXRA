@@ -5,6 +5,7 @@
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
 import {
+  appendFileSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -20,11 +21,17 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
-import { refresh } from '@agent/index';
+import {
+  computeAgentOptionsData,
+  getAgentsByCategory,
+  getCatalogLoadFailure,
+  refresh,
+} from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { entryChannel, entryMessage, setLogSink } from '@logger/logSink';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -37,6 +44,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   aggregateId as qualifyAggregateId,
+  agentKeyOf,
   AgentCategory,
   AgentConfigFieldsSchema,
   LOG_LEVELS,
@@ -319,6 +327,33 @@ const HARNESS_INPUT_HISTORY: InputHistory | undefined =
         length: () => HARNESS_INPUT_HISTORY_ENTRIES.length,
       };
 
+/**
+ * Where to append the harness's own log lines. The CLI platform installs a
+ * silent sink — a command renders its own output — so a scenario that fails on
+ * a swallowed warning shows only its frame. `HARNESS_LOG_FILE=<path>`
+ * re-installs a sink that appends every entry the harness emits after platform
+ * init, truncated at start, which is how a failure inside the agent catalog or
+ * the model routes becomes readable. Unset means stay silent.
+ */
+const HARNESS_LOG_FILE = process.env.HARNESS_LOG_FILE?.trim();
+
+function installHarnessLogFile(): void {
+  if (!HARNESS_LOG_FILE) return;
+  writeFileSync(HARNESS_LOG_FILE, '');
+  setLogSink(
+    {
+      write(entry) {
+        const channel = entryChannel(entry);
+        appendFileSync(
+          HARNESS_LOG_FILE,
+          `${entry.level}${channel ? ` [${channel}]` : ''} ${entryMessage(entry)}\n`,
+        );
+      },
+    },
+    { trusted: true },
+  );
+}
+
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
@@ -327,6 +362,12 @@ const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
   HARNESS_STORAGE_ROOT,
   {
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
+    // This install wins: `initCliPlatform` below joins the runtime it finds
+    // rather than building a second one, so the root named here is the only
+    // one the process has. Without it the agent directories report no packaged
+    // root, the catalog registers no built-in roots, and `/agent` lists
+    // nothing — silently, since the CLI platform's log sink is silent.
+    resourcesPath: HARNESS_RESOURCES_PATH,
   },
 ).runPromise(
   initCliPlatform({
@@ -343,6 +384,7 @@ const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
     version: '0.0.0-harness',
   }),
 );
+installHarnessLogFile();
 if (RESET_WORKFLOW_SCRIPT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
     setCliToolEnabled(
@@ -415,6 +457,40 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   );
 }
 await harnessRuntime.runPromise(refresh());
+
+/**
+ * What the agent catalog holds and which options `/agent` would list, written
+ * to the log file when one is set: the first thing to read when a picker
+ * scenario fails, since an empty list and an empty catalog look identical in
+ * the frame.
+ */
+async function writeHarnessCatalogDiagnostics(): Promise<void> {
+  if (!HARNESS_LOG_FILE) return;
+  const options = await harnessRuntime.runPromise(
+    computeAgentOptionsData(harnessRoots),
+  );
+  const stored = await harnessRuntime.runPromise(
+    harnessRoots.repoState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
+  );
+  appendFileSync(
+    HARNESS_LOG_FILE,
+    [
+      `catalog load failure: ${getCatalogLoadFailure() ?? 'none'}`,
+      `stored selection: ${JSON.stringify(stored)}`,
+      `catalog toolUse: ${getAgentsByCategory('toolUse')
+        .map((entry) => agentKeyOf(entry))
+        .join(', ')}`,
+      `catalog workflow: ${getAgentsByCategory('workflow')
+        .map((entry) => agentKeyOf(entry))
+        .join(', ')}`,
+      `workflow: ${options.workflow.map((option) => option.value).join(', ')}`,
+      `toolUse: ${options.toolUse.map((option) => option.value).join(', ')}`,
+      '',
+    ].join('\n'),
+  );
+}
+
+await writeHarnessCatalogDiagnostics();
 
 // =========================================================================
 // Fold seeding: every fixture is a session fact

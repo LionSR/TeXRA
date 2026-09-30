@@ -32,7 +32,12 @@ cd packages/desktop && pnpm exec playwright test
 # CLI TUI frame validator — drives the Ink TUI through a PTY and checks the
 # visible terminal frame for chat, slash commands, approvals, subagents, and
 # compact layouts. It fails when the native node-pty dependency is unavailable,
-# so a green run always means frames were exercised.
+# so a green run always means frames were exercised. Without `--smoke` it runs
+# every scenario, including the developer checks PR CI leaves out (`--smoke`
+# runs the tagged subset); a scenario failing only in the untagged tail is a
+# drift to repair, not a build to retry. `HARNESS_LOG_FILE=<path>` writes the
+# harness's own log lines and its agent-catalog dump to that file, which is
+# where a picker failure that renders as an empty list becomes legible.
 corepack pnpm --filter @texra-ai/cli validate:tui
 
 # CLI TUI snapshot report — use this when a PR or issue needs terminal
