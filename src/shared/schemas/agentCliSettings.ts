@@ -42,7 +42,6 @@ export const CODEX_APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 /** Claude Code CLI model options surfaced in the picker. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-5-5',
-  'claude-sonnet-5',
   'claude-fable-5-1',
   'claude-opus-5-5',
   'claude-opus-5',

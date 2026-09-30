@@ -219,8 +219,8 @@ All notable changes to this project will be documented in this file.
   model list and as the OpenRouter setup pick. Sonnet 5 (`sonnet5`,
   `sonnet5T`) and GPT-6 Sol (`gpt6-`) are deprecated. GLM-5.3 Flash is
   now billed at its list price, since the promotional price ended. The Claude
-  Code integration also offers Sonnet 5.5 (`claude-sonnet-5-5`) and uses it
-  by default.
+  Code integration offers Sonnet 5.5 (`claude-sonnet-5-5`) in place of
+  Sonnet 5 and uses it by default; a saved Sonnet 5 choice falls back to it.
 
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
