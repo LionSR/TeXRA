@@ -2,7 +2,7 @@
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
 import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
-import CliMultiAgentHero from '../.vitepress/components/CliMultiAgentHero.vue';
+import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
 
@@ -47,7 +47,7 @@ available until your first message in any new chat.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
 (TeXRA account, ChatGPT subscription, or an API key), checks your
-environment, shows the agent roster, and starts your first task:
+environment, shows your agents, and starts your first task:
 
 ```bash
 texra setup
@@ -141,12 +141,12 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
-  `event: "run.children"`, reports a parent run's live child roster as
+  `event: "run.children"`, reports a parent run's live children as
   `{ runId, children }`, each child carrying its `childRunId`, `identity`,
   `agentName`, and `status` — the run phase, or `ready` before the child's
   first activation. A child that reached a terminal outcome leaves the
-  roster; its `run.end` record carries the outcome.
-- `kind: "agent-result"`, `kind: "result"`, and `kind: "multi-agent-result"`
+  list; its `run.end` record carries the outcome.
+- `kind: "agent-result"`, `kind: "result"`, and `kind: "team-result"`
   carry the run result described above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) spell a terminal
   outcome as `completed`, `interrupted`, or `error`; `resumable` and
@@ -260,16 +260,16 @@ and produces document-oriented outputs. If one name exists in both categories,
 `texra run` refuses it and names both candidates — pass the source-qualified
 form it prints (for example `texra run custom:assistant`) to pick one.
 
-## Multi-agent teams
+## Teams
 
 The CLI can list, show, and run the same built-in teams as the
 extension's Teams settings tab: Lean Project, Physicist, Mathematician,
 Computer Scientist, and Software Engineer.
 
 ```bash
-texra multi-agent list
-texra multi-agent show software-engineer
-texra multi-agent run software-engineer --instruction "Profile and speed up scripts/simulate.py"
+texra team list
+texra team show software-engineer
+texra team run software-engineer --instruction "Profile and speed up scripts/simulate.py"
 ```
 
 `run` starts the team's orchestrator, which plans the work and delegates to its
@@ -282,10 +282,10 @@ When the work splits cleanly, the lead can fan it out as a scripted
 
 `run` is the way to start a team from a terminal. For an interactive session,
 open a chat and use `/agent` to pick the team's lead by name, such as
-`engineer` or `orchestrator`; team scoping applies to `multi-agent run` and to
+`engineer` or `orchestrator`; team scoping applies to `team run` and to
 resumed team sessions.
 
-<CliMultiAgentHero />
+<CliTeamHero />
 
 <p class="hero-caption">The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
@@ -498,11 +498,11 @@ texra memory show memories/<file>
 Run `texra config` in a terminal, or `/config` in a chat, to open the same
 configuration view. Its **Agents** section has three distinct choices:
 
-- **Workspace roster** controls which agents are available in the current
+- **Workspace agents** controls which agents are available in the current
   folder. It may inherit the user default, show all agents, use a named team,
   or store an exact custom selection.
-- **Default team** is a user-level choice used only by workspaces whose roster
-  is set to inherit. With no default team, an inherited workspace shows all
+- **Default team** is a user-level choice used only by workspaces whose agents are
+  set to inherit. With no default team, an inherited workspace shows all
   agents.
 - **Default chat agent** is the root agent selected for new chats in this
   workspace. It is stored under `texra.chat` in `.texra/config.json` and does
@@ -511,7 +511,7 @@ configuration view. Its **Agents** section has three distinct choices:
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                         # inspect the effective roster
+texra config agents                         # inspect the effective agents
 texra config agents --all                   # make every agent visible in this folder
 texra config agents --team lean-project     # use a named team
 texra config agents --inherit               # follow the user default
@@ -520,9 +520,9 @@ texra config agents --workflow correct,polish --tool-use assistant,review
 texra config agents --default-agent builtInToolUse:assistant
 ```
 
-`texra agents list` and `texra multi-agent list|show|run` keep narrower
+`texra agents list` and `texra team list|show|run` keep narrower
 responsibilities: they inspect or run agents and teams, but do not alter the
-workspace roster. `texra init` writes initial command defaults and likewise
+workspace agents. `texra init` writes initial command defaults and likewise
 does not change agent visibility.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
@@ -540,7 +540,6 @@ defaults.
 {
   "texra.model": "deepseekproT",
   "texra.outputFormat": "text",
-  "texra.approvalPolicy": "never",
   "texra.chat": {
     "agent": "assistant",
     "model": "deepseekproT"
@@ -551,11 +550,18 @@ defaults.
 }
 ```
 
-Supported top-level keys are `texra.agent`, `texra.model`,
-`texra.outputFormat`, and `texra.approvalPolicy`; `texra.chat` and `texra.run`
-may set command-specific `agent` and `model` defaults. Shared TeXRA settings
+Supported top-level keys are `texra.agent`, `texra.model`, and
+`texra.outputFormat`; `texra.chat` and `texra.run` may set command-specific
+`agent` and `model` defaults. Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
 built-in CLI model default is `deepseekproT`.
+
+The approval policy (`texra.approvalPolicy`) and the two approval switches
+(`texra.toolUse.requireEditApproval`, `texra.toolUse.requireBashApproval`) are
+never read from `.texra/config.json`, because a repository you clone can
+carry that file. Set them with `/config` or the settings view: they are kept
+in your own storage for the current workspace, and a value in your user
+configuration file is the default for every workspace. A project file that sets one is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run

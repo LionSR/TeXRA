@@ -906,7 +906,7 @@ export class RunRegistry {
    * parent edges and the local relationships standing, so a retry still finds
    * the children to detach. It carries every severed child at once,
    * activations included. The set taken here stays the parent's whole child
-   * roster while the batch commits: the stop marked the parent before reading
+   * run registry while the batch commits: the stop marked the parent before reading
    * it, so no child is admitted under it in the window this covers.
    *
    * Each row lands on its own child's aggregate, which takes an append only
@@ -1002,7 +1002,7 @@ export class RunRegistry {
 
 /**
  * The session's runs: run admission and lanes, the live handles, the child
- * roster of one session. Built by the session layer in the session's scope
+ * run registry of one session. Built by the session layer in the session's scope
  * and disposed when that scope closes (`sessionLayer.ts`); the session record
  * carries the same value (`SessionHandle.runs`) for a host that holds the
  * session. Effect code below a launch takes it from context.

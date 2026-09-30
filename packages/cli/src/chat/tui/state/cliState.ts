@@ -47,7 +47,7 @@ export interface SessionMeta {
   readonly cwd: string;
   readonly approvalPolicy: TexraApprovalPolicy;
   readonly teamName?: string;
-  readonly cliMultiAgentPresetId?: string;
+  readonly cliTeamId?: string;
   readonly delegationAgentScope?: AgentDelegationScope;
   readonly version: string;
 }

@@ -30,7 +30,7 @@ describe('applyStateSettingUpdate', () => {
           kind: 'applied',
           entry: {
             key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            surfaces: { settingsView: 'multi-agent' },
+            surfaces: { settingsView: 'agents' },
           },
         });
         expect(

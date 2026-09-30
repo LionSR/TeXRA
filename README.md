@@ -68,7 +68,7 @@ In the terminal:
 ```sh
 texra chat                                  # interactive tool-use session
 texra run polish --input paper.tex          # one-shot workflow
-texra multi-agent run physicist --instruction "Check this derivation"  # named team
+texra team run physicist --instruction "Check this derivation"  # named team
 ```
 
 Run history and agent settings are shared between both surfaces.
@@ -85,7 +85,7 @@ Five built-in presets cover the most common research disciplines:
 | **Lean Project**       | Mathlib search, tactic simplification, blueprint-driven formalization            |
 | **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
-Pick a team in **Settings → Agents → Teams**, or with `texra multi-agent
+Pick a team in **Settings → Agents → Teams**, or with `texra team
 run <preset>`. Or save the agents you have shown as your own team.
 
 ## Agents

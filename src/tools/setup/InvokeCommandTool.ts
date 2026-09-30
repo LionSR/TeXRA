@@ -33,7 +33,7 @@ const ALLOWED_COMMAND_IDS = [
   'texra.showMemory',
   'texra.showModels',
   'texra.showAgents',
-  'texra.showMultiAgent',
+  'texra.showTeamSettings',
   'texra.showTools',
   'texra.showGitSettings',
   // Workspace bootstrap
@@ -93,7 +93,7 @@ export const InvokeCommandTool = defineTool({
   // Requires VS Code commands.
   unavailableHosts: ['cli', 'desktop', 'sdk'],
   requiresApproval: true,
-  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the TeXRA account sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showMultiAgent / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
+  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the TeXRA account sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
   execute: invokeCommand,
 });

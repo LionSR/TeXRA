@@ -50,10 +50,10 @@
       "name": "runHistoryExport"
     },
     {
-      "file": "packages/cli/src/commands/multiAgent.ts",
+      "file": "packages/cli/src/commands/team.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "runMultiAgentPreset"
+      "name": "runTeam"
     },
     {
       "file": "packages/cli/src/commands/setup.ts",

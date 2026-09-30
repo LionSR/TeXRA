@@ -1,4 +1,4 @@
-/** The team preset catalog every roster, launch and settings path reads. */
+/** The team preset catalog every agent list, launch and settings path reads. */
 import {
   AGENT_MODE_PRESETS,
   parseAgentModePresets,
@@ -10,7 +10,7 @@ type TeamPresetSource = 'built-in' | 'custom';
 
 export interface TeamPreset extends AgentModePreset {
   readonly source: TeamPresetSource;
-  /** The setup starter: a roster a workspace can select, never a launch. */
+  /** The setup starter: an agent list a workspace can select, never a launch. */
   readonly setupOnly?: true;
 }
 

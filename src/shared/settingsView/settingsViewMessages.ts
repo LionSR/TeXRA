@@ -149,11 +149,11 @@ const SetTabMessageSchema = z.object({
  * below or in their own module.
  */
 const DERIVED_SETTINGS_SNAPSHOTS = [
+  'agents',
   'approval',
   'git-author',
   'skills',
   'telemetry',
-  'multi-agent',
   'latex',
   'memory',
 ] as const satisfies readonly SettingsViewSnapshot[];
@@ -210,6 +210,11 @@ const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
+  /**
+   * On a customized copy: the source of the bundled agent it overrides, when
+   * an update changed that agent since the copy was taken.
+   */
+  newerBuiltIn: AgentSourceSchema.optional(),
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
@@ -335,8 +340,8 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    */
   orchestratorAgents: z.array(z.string()).prefault([]),
   /**
-   * The team the workspace roster currently resolves to, or null when it runs
-   * no team. Owned by the roster so a preset card reports the applied team
+   * The team the workspace agents currently resolves to, or null when it runs
+   * no team. Owned by the workspace agents so a preset card reports the applied team
    * rather than the last one the user clicked.
    */
   activePresetId: z.string().nullable().prefault(null),
@@ -658,6 +663,10 @@ const DeleteCustomAgentMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
   agentName: z.string().min(1),
 });
+const KeepCustomAgentMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
+  agentName: z.string().min(1),
+});
 const RevealAgentFileMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
 );
@@ -826,6 +835,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CreateAgentMessageSchema,
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
+    KeepCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
     // Custom agent directory messages
     SetCustomAgentDirMessageSchema,

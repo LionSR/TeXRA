@@ -36,7 +36,7 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
-/** The entry validation accepts: `identifier` within the visible roster. */
+/** The entry validation accepts: `identifier` within the visible agents. */
 function visibleAgent(category: AgentCategory, identifier: string) {
   return getVisibleAgents(hostStores(), category).pipe(
     Effect.map((entries) => findAgentByIdentifier(entries, identifier)),
@@ -54,7 +54,7 @@ function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
 /**
  * A custom *workflow* agent named `assistant` collides with the bundled
  * *tool-use* `assistant`. Validation resolves through the category-aware
- * the visible roster; a category-blind resolver would answer the same name with
+ * the visible agents; a category-blind resolver would answer the same name with
  * the custom workflow entry (source priority: custom > … > builtInToolUse) and
  * the run would fail with a category mismatch. Launch therefore carries the
  * validated entry's *source* and resolves the exact `(source, name)` key, so
@@ -133,7 +133,7 @@ describe('cross-category agent resolution', () => {
     'pins launch to the exact (source, name) entry validation captured',
     () =>
       Effect.gen(function* () {
-        // The tool-use delegation validates via the visible roster and carries the
+        // The tool-use delegation validates via the visible agents and carries the
         // entry's source; launch resolves that exact key — the built-in tool-use
         // entry, never the colliding custom workflow shadow.
         const toolUse = yield* launchAs(
@@ -159,7 +159,7 @@ describe('cross-category agent resolution', () => {
     () =>
       Effect.gen(function* () {
         // A direct launch without a pinned source (e.g. the webview "Run") routes
-        // through the visible roster — the identical lookup validation makes — so it
+        // through the visible agents — the identical lookup validation makes — so it
         // resolves to exactly the entry validation would, never a same-name shadow.
         const toolUse = yield* resolveAgentForLaunch(
           hostStores(),
@@ -221,7 +221,7 @@ describe('cross-category agent resolution', () => {
   );
 
   it.effect(
-    'preserves exact source-qualified roster entries before name deduplication',
+    'preserves exact source-qualified agent list entries before name deduplication',
     () =>
       Effect.gen(function* () {
         // Both source-qualified identifiers must resolve to their own entry

@@ -13,7 +13,7 @@ const view = ref('search');
 
 <template>
   <MockupFrame title="entanglement-paper — texra" class="tall">
-    <!-- Progress sidebar: orchestrator + specialist roster -->
+    <!-- Progress sidebar: orchestrator + specialist list -->
     <aside class="board">
       <div class="board-tabs">
         <span class="bt"

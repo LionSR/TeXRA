@@ -4,18 +4,16 @@
  * with cause `context-limit` (or `context-window` when a turn overflowed the
  * window), from the ledger-retained history and nothing else. The trigger is
  * the compaction threshold setting measured against the bound model's
- * context window (a live input estimate where the provider offers one, a
- * text-length estimate otherwise), a `/compact` request, or an overflow; the
- * replacement is a summary the bound model produces through the invoker's
- * priced `call`, folded back as one user message. Every skip and
+ * context window (the run's `contextTokens`), a `/compact` request, or an
+ * overflow; the replacement is a summary the bound model produces through the
+ * invoker's priced `call`, folded back as one user message. Every skip and
  * every failure is logged and shown as a compaction activity, never silent.
  *
- * The compaction prompts, the summary cap and the token heuristic live here
- * because this is the reader that owns them on the run loop.
+ * The compaction prompts and the summary cap live here because this is the
+ * reader that owns them on the run loop.
  */
 import { Cause, Effect, Exit } from 'effect';
 
-import { sameModelOrigin, type TurnRequest } from '@texra-ai/llm/turn';
 import {
   logContextManagementEvent,
   startCompactionActivity,
@@ -35,7 +33,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { rowAggregate, type Message } from '../loop/rows';
-import { estimateInputTokensOrNull } from './estimateInputTokens';
+import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { BoundModel } from './modelBinding';
@@ -46,21 +44,6 @@ import type { BoundModel } from './modelBinding';
  * marker stays identical across providers.
  */
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
-
-/**
- * Rough chars-per-token ratio for estimating token counts without a
- * tokenizer. ~4 chars/token is the standard approximation for GPT-family
- * models on English and code. Used only where exact counting is unavailable.
- */
-const ESTIMATED_CHARS_PER_TOKEN = 4;
-
-/**
- * Heuristic token estimate for `text` when no tokenizer or counting API is
- * available. Deliberately coarse; callers pair it with a safety buffer.
- */
-function estimateTokensFromText(text: string): number {
-  return Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
-}
 
 /** System prompt used for conversation compaction. */
 const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
@@ -83,7 +66,6 @@ interface LogCompactionEventOptions {
   readonly tokensAfter: number;
   readonly contextWindow: number;
   readonly details: string;
-  readonly tokensAfterIsEstimate?: boolean;
 }
 
 function logCompactionEvent({
@@ -92,16 +74,14 @@ function logCompactionEvent({
   tokensAfter,
   contextWindow,
   details,
-  tokensAfterIsEstimate = false,
 }: LogCompactionEventOptions): void {
   const reduction = tokensBefore - tokensAfter;
   const reductionPercent =
     tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
-  const afterPrefix = tokensAfterIsEstimate ? '~' : '';
 
   logContextManagementEvent(
     logger,
-    `Compacted conversation: ${tokensBefore.toLocaleString()} → ${afterPrefix}${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+    `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
     {
       action: 'compaction',
       tokensBefore,
@@ -114,32 +94,6 @@ function logCompactionEvent({
   );
 }
 
-/** The text of a history, for the estimate a provider cannot give. */
-function historyText(messages: readonly Message[]): string {
-  const pieces: string[] = [];
-  for (const message of messages) {
-    if (message.role === 'system') {
-      pieces.push(message.text);
-      continue;
-    }
-    if (message.role === 'tool') {
-      for (const result of message.results) {
-        for (const part of result.content) {
-          if (part.kind === 'text') pieces.push(part.text);
-        }
-      }
-      continue;
-    }
-    for (const part of message.content) {
-      if (part.kind === 'text') pieces.push(part.text);
-      else if (part.kind === 'message') {
-        for (const piece of part.content) pieces.push(piece.text);
-      }
-    }
-  }
-  return pieces.join('\n');
-}
-
 interface CompactionInput {
   readonly runId: RunId;
   readonly ledger: RunLedger['Service'];
@@ -149,10 +103,6 @@ interface CompactionInput {
   readonly invoker: ModelInvoker['Service'];
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
-  /** The system text and tools of the turn about to be issued: the input
-   *  estimate counts the request as it will be sent. */
-  readonly system: string | undefined;
-  readonly tools: TurnRequest['tools'];
   /**
    * Compact regardless of the threshold: a `/compact` request, or a turn that
    * overflowed the context window (recorded as cause `context-window`, which
@@ -197,53 +147,13 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     return state;
   }
   const contextWindow = bound.contextWindow;
-  let tokensBefore: number;
-  let tokensBeforeIsEstimate = false;
-  if (force !== null) {
-    tokensBefore = estimateTokensFromText(historyText(conversation));
-    tokensBeforeIsEstimate = true;
-  } else {
-    // The live count where the provider offers one, counted on the request as
-    // it will be sent; a count that fails is logged and the text heuristic
-    // decides, so a counting outage never disables the threshold.
-    let counted: number | null = null;
-    if (bound.model.estimateInputTokens && contextWindow > 0) {
-      const prepared = yield* Effect.exit(
-        bound.model.prepareTurn({
-          mode: 'foreground',
-          ...(input.system !== undefined ? { system: input.system } : {}),
-          messages: conversation,
-          ...(input.tools !== undefined ? { tools: input.tools } : {}),
-          // The turn's own rule (`ModelInvoker`): a continuation from another
-          // deployment or codec is dropped, so the count leaves it out too.
-          ...(state.continuation !== null &&
-          sameModelOrigin(state.continuation.origin, bound.origin)
-            ? { continuation: state.continuation }
-            : {}),
-        }),
-      );
-      if (Exit.isFailure(prepared)) {
-        if (Cause.hasInterrupts(prepared.cause)) return yield* Effect.interrupt;
-        logger.debug('Compaction preflight could not prepare the request.', {
-          data: Cause.squash(prepared.cause),
-        });
-      } else if (prepared.value.mode === 'foreground') {
-        counted = yield* estimateInputTokensOrNull(
-          bound.model,
-          prepared.value,
-          logger,
-          'Token counting failed; the compaction threshold uses a text estimate.',
-        );
-      }
-    }
-    if (counted === null) {
-      tokensBefore = estimateTokensFromText(historyText(conversation));
-      tokensBeforeIsEstimate = true;
-    } else {
-      tokensBefore = counted;
-    }
-    const threshold = Math.floor((percent / 100) * contextWindow);
-    if (contextWindow <= 0 || tokensBefore <= threshold) return state;
+  const tokensBefore = contextTokens(state);
+  if (
+    force === null &&
+    (contextWindow <= 0 ||
+      tokensBefore <= Math.floor((percent / 100) * contextWindow))
+  ) {
+    return state;
   }
 
   logger.debug(
@@ -313,10 +223,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     role: 'user',
     content: [{ kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` }],
   };
-  const tokensAfter = Math.max(
-    1,
-    estimateTokensFromText(`${COMPACTION_SUMMARY_PREFIX}${summary}`),
-  );
+  const tokensAfter = Math.max(1, estimateMessageTokens([replacement]));
   // The only row that shortens history: the whole conversation is replaced
   // by the summary, and a provider-side continuation over the old history is
   // dropped with it.
@@ -338,8 +245,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     tokensBefore,
     tokensAfter,
     contextWindow,
-    details: `${conversation.length} messages summarized${tokensBeforeIsEstimate ? ' (estimated input)' : ''}`,
-    tokensAfterIsEstimate: true,
+    details: `${conversation.length} messages summarized`,
   });
   activity.finish('completed');
   return compacted;

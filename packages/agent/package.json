@@ -65,14 +65,12 @@
     "diff": "catalog:",
     "diff-match-patch": "catalog:",
     "escape-string-regexp": "catalog:",
-    "fast-xml-parser": "catalog:",
     "glob": "catalog:",
     "http-status-codes": "catalog:",
     "identifiers-arxiv": "catalog:",
     "ignore": "catalog:",
     "image-size": "catalog:",
     "ipaddr.js": "catalog:",
-    "is-network-error": "catalog:",
     "is-wsl": "catalog:",
     "llm-zoo": "catalog:",
     "lru-cache": "catalog:",
@@ -93,7 +91,7 @@
     "undici": "catalog:",
     "which": "catalog:",
     "write-file-atomic": "catalog:",
-    "ws": "^8.21.3",
+    "ws": "^8.22.0",
     "yaml": "catalog:"
   },
   "peerDependencies": {

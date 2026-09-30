@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   getVisibleAgents: mocks.getVisibleAgents,
   // No test here pins a delegation scope, so this
-  // always falls through to the workspace-visible roster.
+  // always falls through to the workspace-visible agents.
   resolveDelegationScopeAgents: (
     _stores: unknown,
     scope: unknown,
@@ -53,7 +53,7 @@ const { toolTableLayer } = await import('@tools/liveTools');
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Agent selection: choose the most specific agent whose description matches.',
   '',
@@ -63,7 +63,7 @@ const DELEGATE_AGENT_DESCRIPTION = [
 const DELEGATE_WORKFLOW_DESCRIPTION = [
   'Delegate to a workflow agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Pick the agent whose description matches the task.',
 ].join('\n');
@@ -74,7 +74,7 @@ const WORKTREE_PLACEHOLDER =
 const DELEGATE_AGENT_WORKTREE_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
   '',
-  'Available agents: loaded from the active roster at runtime.',
+  'Available agents: loaded from the enabled agents at runtime.',
   '',
   'Available models: loaded from the active API mode at runtime.',
   '',
@@ -100,10 +100,10 @@ const DELEGATE_AGENT_TOOL: ToolInput = {
 const annotationSettings = hostStores();
 
 /**
- * Annotate with the given roster visible and no model list, so only the
+ * Annotate with the given agent list visible and no model list, so only the
  * "Available agents:" block moves.
  */
-function rewriteRoster(
+function rewriteAgents(
   agents: { name: string; description?: string; tools?: string[] }[],
   tool: ToolDefinition = {
     name: 'delegate_agent',
@@ -187,10 +187,10 @@ describe('delegation agent availability', () => {
   });
 
   it.effect(
-    'replaces the placeholder Available agents line with the live roster',
+    'replaces the placeholder Available agents line with the live agent list',
     () =>
       Effect.gen(function* () {
-        const rewritten = yield* rewriteRoster([
+        const rewritten = yield* rewriteAgents([
           { name: 'research', description: 'Derive things.' },
         ]);
 
@@ -198,7 +198,7 @@ describe('delegation agent availability', () => {
           'Available agents:\n- research: Derive things.',
         );
         expect(rewritten.description).not.toContain(
-          'loaded from the active roster at runtime',
+          'loaded from the enabled agents at runtime',
         );
         // Following sections survive the block replacement untouched.
         expect(rewritten.description).toContain(
@@ -214,7 +214,7 @@ describe('delegation agent availability', () => {
     'treats a $ in an agent description as a literal, not a replacement token',
     () =>
       Effect.gen(function* () {
-        const rewritten = yield* rewriteRoster([
+        const rewritten = yield* rewriteAgents([
           { name: 'prover', description: 'Prove $\\forall x$ statements.' },
         ]);
 
@@ -325,11 +325,11 @@ describe('resolveStepTools delegation annotation', () => {
   });
 
   it.effect(
-    'reflects the current roster on each call, not a frozen snapshot',
+    'reflects the current agent list on each call, not a frozen snapshot',
     () =>
       Effect.gen(function* () {
-        // The #6655 regression: the roster was captured once and reused.
-        // Resolving twice with a roster change between calls must yield a
+        // The #6655 regression: the agent list was captured once and reused.
+        // Resolving twice with an agent list change between calls must yield a
         // refreshed list.
         mocks.getVisibleAgents.mockReturnValue(
           Effect.succeed([

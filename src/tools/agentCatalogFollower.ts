@@ -6,7 +6,7 @@
  * edits: after a change to any of them, written by this process or another
  * sharing the global state (`AppState.changes`) or made in the custom
  * directory (`FileSystem.watch`, on every host), the catalog reloads and
- * every roster view repaints (`agentRosterChanged`). No plugin writer
+ * every agent list view repaints (`workspaceAgentsChanged`). No plugin writer
  * refreshes it itself. A saved edit loads after a 300 ms debounce, and a
  * launch inside that window loads it first (`settledCatalog`). The one other
  * reload is a file tool's approved write into the custom agents directory
@@ -90,12 +90,12 @@ export const registerCustomAgentRoot = Effect.flatMap(
     }),
 );
 
-/** Rescan the agent catalog and repaint every roster view. */
+/** Rescan the agent catalog and repaint every agent list view. */
 export const reloadAgentCatalog = Effect.suspend(() =>
   refreshAgentCatalog(),
 ).pipe(
   Effect.andThen(
-    Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
+    Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
   ),
 );
 

@@ -249,14 +249,14 @@ describe('CLI agent validation with a shadowed name', () => {
       Effect.gen(function* () {
         patchSessionMeta({
           teamName: 'Physicist',
-          cliMultiAgentPresetId: 'physicist',
+          cliTeamId: 'physicist',
           delegationAgentScope: {
             workflow: ['builtInWorkflow:polish'],
             toolUse: ['builtInToolUse:assistant'],
           },
         });
         const context = {
-          // The roster slots only gate visibility, which this registry leaves
+          // The workspace agents slots only gate visibility, which this registry leaves
           // unconfigured, so empty chat slots resolve the same names as the host.
           stores: makeFakeSettingsStores('cli').stores,
           session: {
@@ -270,7 +270,7 @@ describe('CLI agent validation with a shadowed name', () => {
 
         expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
         expect(sessionMeta.get().teamName).toBeUndefined();
-        expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+        expect(sessionMeta.get().cliTeamId).toBeUndefined();
         expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
       }),
   );

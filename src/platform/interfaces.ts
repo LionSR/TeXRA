@@ -33,7 +33,13 @@ export interface Disposable {
 // Config
 // ---------------------------------------------------------------------------
 
-export type ConfigTarget = 'global' | 'workspace';
+/**
+ * Where a config write lands. `workspace` is the project's committable
+ * `.texra/config.json`, which a cloned repository controls; `local` is this
+ * user's private file for the workspace, under the storage root and never in
+ * the project; `global` is the user's file for every workspace.
+ */
+export type ConfigTarget = 'global' | 'workspace' | 'local';
 
 export interface ConfigInspection<T = unknown> {
   globalValue?: T;

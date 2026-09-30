@@ -228,7 +228,7 @@ function findCliModelAccessEntry(
 
 /**
  * Output projection for JSON/NDJSON: the model id is addressable under the
- * same key (`.id`) as every other CLI resource (`agents`, `multi-agent`,
+ * same key (`.id`) as every other CLI resource (`agents`, `team`,
  * `history`).
  *
  * The record is the whole of `ModelOptionData`, so it follows that schema: at

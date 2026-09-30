@@ -630,7 +630,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Effect.forkIn(consumerScope),
       );
       // The registry's phase notification rides the fold-gated tail, not the
-      // raw one above: its waiters and child rosters read `RunView.status`
+      // raw one above: its waiters and child lists read `RunView.status`
       // synchronously, so a row reaches them only once the view holds the
       // state it produced.
       yield* Stream.runForEach(session.folded(anchor), (event) =>
@@ -1024,7 +1024,7 @@ interface ProcessRuntimeOptions {
   readonly setup?: SetupPlatformShape;
   /**
    * The host's inline-comment provider, for the one host with a Comments UI.
-   * Absent elsewhere, where the tool is off the roster and a call that
+   * Absent elsewhere, where the tool is off the agent list and a call that
    * reached it anyway fails naming the missing host wiring.
    */
   readonly inlineComments?: InlineCommentProvider;

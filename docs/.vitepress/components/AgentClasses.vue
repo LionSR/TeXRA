@@ -6,7 +6,7 @@
 // dichotomy scannable; each agent becomes a labelled pill.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the theme.
-// Composes StatusPill for the rosters — no bespoke pill CSS.
+// Composes StatusPill for the agent lists — no bespoke pill CSS.
 import StatusPill from './StatusPill.vue';
 
 const workflow = [

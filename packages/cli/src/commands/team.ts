@@ -20,17 +20,17 @@ import {
 } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
-  cliMultiAgentPresetListRecord,
-  cliMultiAgentPresetNdjsonRecords,
-  formatCliMultiAgentTeamLaunchBlockMessage,
-  formatCliMultiAgentPresetInspection,
-  formatCliMultiAgentPresetList,
-  readCliMultiAgentPresets,
-} from '../runtime/multiAgentPresets';
+  cliTeamListRecord,
+  cliTeamNdjsonRecords,
+  formatCliTeamLaunchBlockMessage,
+  formatCliTeamInspection,
+  formatCliTeamList,
+  readCliTeams,
+} from '../runtime/cliTeams';
 import {
-  loadCliMultiAgentRunPlan,
+  loadCliTeamRunPlan,
   writeMissingPresetAgents,
-} from '../runtime/multiAgentRunPlan';
+} from '../runtime/teamRunPlan';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -38,7 +38,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { formatMultiAgentRunInstruction } from './_helpers/runInstructions';
+import { formatTeamRunInstruction } from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
@@ -54,7 +54,7 @@ import {
 import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
-interface MultiAgentRunInit {
+interface TeamRunInit {
   readonly preset: string;
   readonly inputFiles: string[];
   readonly contextFiles: string[];
@@ -64,8 +64,8 @@ interface MultiAgentRunInit {
   readonly instructionFile?: string;
 }
 
-const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
-  'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
+const TEAM_TASK_REQUIRED_MESSAGE =
+  'Provide --input, --instruction, or --instruction-file for the team task. Example: texra team run physicist --instruction "Check this derivation"';
 
 function formatAttachedFileList(
   title: string,
@@ -81,58 +81,57 @@ function formatAttachedFileList(
   ].join('\n');
 }
 
-const runMultiAgentList = Effect.fn('runMultiAgentList')(function* (
+const runTeamList = Effect.fn('runTeamList')(function* (
   context: CliContext,
   services: CliPlatformServices,
 ) {
-  const plans = planTeamRuns(
-    yield* readCliMultiAgentPresets(services.repoState),
-    { resolveAgent: getCategoryAgent },
-  );
+  const plans = planTeamRuns(yield* readCliTeams(services.repoState), {
+    resolveAgent: getCategoryAgent,
+  });
 
   emitCliResult(context, {
-    json: plans.map(cliMultiAgentPresetListRecord),
-    ndjson: cliMultiAgentPresetNdjsonRecords(plans),
-    text: formatCliMultiAgentPresetList(plans),
+    json: plans.map(cliTeamListRecord),
+    ndjson: cliTeamNdjsonRecords(plans),
+    text: formatCliTeamList(plans),
   });
   return CliExitCode.Success;
 });
 
-const runMultiAgentShow = Effect.fn('runMultiAgentShow')(function* (
+const runTeamShow = Effect.fn('runTeamShow')(function* (
   context: CliContext,
   presetIdOrName: string,
   services: CliPlatformServices,
 ) {
-  const plan = yield* loadCliMultiAgentRunPlan(
+  const plan = yield* loadCliTeamRunPlan(
     { preset: presetIdOrName },
     services.repoState,
   );
 
   emitCliResult(context, {
     json: plan,
-    ndjson: { kind: 'multi-agent-preset-inspection', plan },
-    text: formatCliMultiAgentPresetInspection(plan),
+    ndjson: { kind: 'team-inspection', plan },
+    text: formatCliTeamInspection(plan),
   });
   return CliExitCode.Success;
 });
 
-export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
+export const runTeam = Effect.fn('runTeam')(function* (
   context: CliContext,
-  init: MultiAgentRunInit,
+  init: TeamRunInit,
 ): Effect.fn.Return<number, Error, CliRunServices> {
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
-    return yield* failUsage(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
+    return yield* failUsage(TEAM_TASK_REQUIRED_MESSAGE);
   }
   const services = yield* initCliPlatform(context);
 
   const rejectsHeadlessAsk =
     context.mode === 'headless' && context.approvalPolicy === 'ask';
-  const plan = yield* loadCliMultiAgentRunPlan(init, services.repoState);
+  const plan = yield* loadCliTeamRunPlan(init, services.repoState);
   if (rejectsHeadlessAsk) {
     writeTextStderr(
-      `Cannot run multi-agent preset "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+      `Cannot run team "${plan.preset.id}" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
     );
     return CliExitCode.Usage;
   }
@@ -144,9 +143,9 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   if (!canLaunchTeam(plan)) {
     const singleAgentAdvice = plan.rootAgent
       ? `Start a single-agent chat with \`texra chat --agent ${plan.rootAgent.name}\` if that is what you want.`
-      : 'Install or create a runnable team root before launching this preset.';
+      : 'Install or create a runnable team root before launching this team.';
     writeTextStderr(
-      formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+      formatCliTeamLaunchBlockMessage(plan, {
         requestedPreset: init.preset,
         followUpAdvice: singleAgentAdvice,
       }),
@@ -174,7 +173,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
       Effect.gen(function* () {
         if (runContext.approvalPolicy === 'never') {
           writeTextStderr(
-            `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+            `WARN team ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
           );
         }
 
@@ -197,7 +196,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
           model,
           inputFiles,
           contextFiles,
-          instruction: formatMultiAgentRunInstruction(plan.preset, {
+          instruction: formatTeamRunInstruction(plan.preset, {
             inputFiles,
             contextFiles,
             instruction,
@@ -233,7 +232,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
         };
         emitCliResult(runContext, {
           json: payload,
-          ndjson: { kind: 'multi-agent-result', ...payload },
+          ndjson: { kind: 'team-result', ...payload },
           text: toolUseResultText(run.result),
         });
 
@@ -242,47 +241,47 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   );
 });
 
-const multiAgentListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List multi-agent team presets' },
+const teamListCommand = defineCliCommand({
+  meta: { name: 'list', description: 'List teams' },
   args: {
     ...GLOBAL_ARGS,
   },
   run: (context) =>
     Effect.gen(function* () {
       const services = yield* initCliPlatform(context);
-      return yield* runMultiAgentList(context, services);
+      return yield* runTeamList(context, services);
     }),
 });
 
-const multiAgentShowCommand = defineCliCommand({
+const teamShowCommand = defineCliCommand({
   meta: {
     name: 'show',
-    description: 'Show one multi-agent team preset and its resolved agents',
+    description: 'Show one team and its resolved agents',
   },
   args: {
     ...GLOBAL_ARGS,
     preset: {
       type: 'positional',
       required: true,
-      description: 'Preset id or name from `texra multi-agent list`',
+      description: 'Team id or name from `texra team list`',
     },
   },
   run: (context, ctx) =>
     Effect.gen(function* () {
       const services = yield* initCliPlatform(context);
-      return yield* runMultiAgentShow(context, ctx.args.preset, services);
+      return yield* runTeamShow(context, ctx.args.preset, services);
     }),
 });
 
-const multiAgentRunCommand = withUsageSections(
+const teamRunCommand = withUsageSections(
   defineCliCommand({
-    meta: { name: 'run', description: 'Run a multi-agent team preset' },
+    meta: { name: 'run', description: 'Run a team' },
     args: {
       ...AGENT_RUN_GLOBAL_ARGS,
       preset: {
         type: 'positional',
         required: true,
-        description: 'Preset id or name from `texra multi-agent list`',
+        description: 'Team id or name from `texra team list`',
       },
       input: {
         type: 'string',
@@ -300,8 +299,7 @@ const multiAgentRunCommand = withUsageSections(
       },
       agent: {
         type: 'string',
-        description:
-          'Root agent for the team run (defaults to the preset orchestrator)',
+        description: 'Root agent for the team run (defaults to the team lead)',
       },
       model: {
         type: 'string',
@@ -320,7 +318,7 @@ const multiAgentRunCommand = withUsageSections(
       },
     },
     run: (context, ctx) =>
-      runMultiAgentPreset(context, {
+      runTeam(context, {
         preset: ctx.args.preset,
         ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
         agent: optString(ctx.args.agent),
@@ -341,14 +339,14 @@ const multiAgentRunCommand = withUsageSections(
   ],
 );
 
-export const multiAgentCommand = defineCommand({
+export const teamCommand = defineCommand({
   meta: {
-    name: 'multi-agent',
-    description: 'List, show, and run multi-agent team presets',
+    name: 'team',
+    description: 'List, show, and run teams',
   },
   subCommands: {
-    list: multiAgentListCommand,
-    show: multiAgentShowCommand,
-    run: multiAgentRunCommand,
+    list: teamListCommand,
+    show: teamShowCommand,
+    run: teamRunCommand,
   },
 });

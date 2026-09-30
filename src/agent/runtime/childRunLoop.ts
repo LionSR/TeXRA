@@ -259,7 +259,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
 }
 
 /**
- * The child loop's stop, on the run's roster activation for the loop's whole
+ * The child loop's stop, on the run's run registry activation for the loop's whole
  * life, so a stop finds a target in the inter-turn gap too. A process child's
  * turns are reached through `signal` alone (`execa`'s `cancelSignal`, the
  * Codex and Claude Agent SDKs) and its loop fiber survives the abort to
@@ -738,9 +738,9 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
     // other child's driver diagnostics to the process log.
     const trace = childRun?.logger;
     const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
-    // Every child loop reserves its stop target on the run's roster entry for
+    // Every child loop reserves its stop target on the run's run registry entry for
     // its whole life; only a native one retains a terminal parent's
-    // continuation. The parent edge is the roster's shared cell.
+    // continuation. The parent edge is the run registry's shared cell.
     const parent = runs.getHandle(runId)?.parentState ?? {
       current: parentRunId,
     };

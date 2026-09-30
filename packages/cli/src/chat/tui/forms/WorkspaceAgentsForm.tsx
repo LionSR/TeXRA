@@ -3,14 +3,14 @@ import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
   getAgentsByCategory,
   type AgentEntry,
 } from '@agent/index';
 import {
-  readCliAgentRoster,
-  type CliAgentRosterRecord,
-} from '@cli/runtime/agentRoster';
+  readCliWorkspaceAgents,
+  type CliWorkspaceAgentsRecord,
+} from '@cli/runtime/workspaceAgents';
 
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -25,7 +25,7 @@ import {
   STARTER_AGENT_MODE_PRESET,
   type AgentCategory,
   type AgentModePreset,
-  type AgentRosterCategorySelection,
+  type WorkspaceAgentsCategorySelection,
   type ByCategory,
 } from '@shared/schemas';
 
@@ -33,7 +33,7 @@ import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 
-type AgentRosterFormMode =
+type WorkspaceAgentsFormMode =
   | 'overview'
   | 'workspace'
   | 'default'
@@ -41,27 +41,27 @@ type AgentRosterFormMode =
   | 'custom-category'
   | AgentCategory;
 
-interface AgentRosterData {
-  readonly record: CliAgentRosterRecord;
+interface WorkspaceAgentsData {
+  readonly record: CliWorkspaceAgentsRecord;
   readonly presets: readonly AgentModePreset[];
   readonly agents: ByCategory<readonly AgentEntry[]>;
 }
 
-interface AgentRosterFormProps {
-  /** The process runtime the roster read and the default-agent write run on,
+interface WorkspaceAgentsFormProps {
+  /** The process runtime the workspace agents read and the default-agent write run on,
    *  from the config form that owns this one. */
   readonly runtime: ProcessRuntime;
-  /** The settings slots the roster read and every roster write target, from
+  /** The settings slots the workspace agents read and every workspace agents write target, from
    *  the config form that owns this one. */
   readonly stores: SettingsStores;
-  /** The project the process opened, shown beside the workspace roster. */
+  /** The project the process opened, shown beside the workspace agents. */
   readonly workspaceRoot: string | undefined;
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
 }
 
-function selectionLabel(record: CliAgentRosterRecord): string {
+function selectionLabel(record: CliWorkspaceAgentsRecord): string {
   const selection = record.selection;
   if (selection.kind === 'team') return `team: ${selection.teamId}`;
   return selection.kind;
@@ -76,7 +76,7 @@ function buildChatDefaultAgentItems(
     {
       value: '',
       label: 'Automatic',
-      description: 'Choose from the effective workspace roster',
+      description: 'Choose from the workspace agents',
     },
     ...agents
       .filter((agent) => effective.has(agentKeyOf(agent)))
@@ -89,34 +89,36 @@ function buildChatDefaultAgentItems(
 }
 
 function selectedAgentKeys(
-  selection: AgentRosterCategorySelection,
+  selection: WorkspaceAgentsCategorySelection,
   agents: readonly AgentEntry[],
 ): readonly string[] {
   if (selection === 'all') return agents.map(agentKeyOf);
   return selection;
 }
 
-function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
+function selectionSizeLabel(
+  selection: WorkspaceAgentsCategorySelection,
+): string {
   return selection === 'all' ? 'all' : String(selection.length);
 }
 
-export function AgentRosterForm(
-  props: AgentRosterFormProps,
+export function WorkspaceAgentsForm(
+  props: WorkspaceAgentsFormProps,
 ): React.JSX.Element | null {
-  const [mode, setMode] = useState<AgentRosterFormMode>('overview');
-  // The roster read, every roster write and the default chat-agent write
+  const [mode, setMode] = useState<WorkspaceAgentsFormMode>('overview');
+  // The workspace agents read, every workspace agents write and the default chat-agent write
   // below all target the slots this form was handed.
   const roots = props.stores;
   const { data, error, reload, reportError } =
-    useAsyncListForm<AgentRosterData>({
-      // The roster read loads the local agent catalog the lists read.
+    useAsyncListForm<WorkspaceAgentsData>({
+      // The workspace agents read loads the local agent catalog the lists read.
       load: () =>
         Effect.map(
           Effect.all({
-            record: readCliAgentRoster(roots),
-            presets: createWorkspaceAgentRosterController(roots).allPresets(),
+            record: readCliWorkspaceAgents(roots),
+            presets: createWorkspaceAgentsController(roots).allPresets(),
           }),
-          ({ record, presets }): AgentRosterData => ({
+          ({ record, presets }): WorkspaceAgentsData => ({
             record,
             presets,
             agents: byCategory((category) => getAgentsByCategory(category)),
@@ -182,7 +184,7 @@ export function AgentRosterForm(
       [
         {
           value: 'workspace',
-          label: 'Workspace roster',
+          label: 'Workspace agents',
           description: selectionLabel(data.record),
         },
         {
@@ -201,7 +203,7 @@ export function AgentRosterForm(
           description: `${selectionSizeLabel(data.record.agentKeys.workflow)} workflow, ${selectionSizeLabel(data.record.agentKeys.toolUse)} tool-use`,
         },
       ],
-      (value) => setMode(value as AgentRosterFormMode),
+      (value) => setMode(value as WorkspaceAgentsFormMode),
       props.onClose,
     );
   }
@@ -227,11 +229,16 @@ export function AgentRosterForm(
     return frame(
       items,
       (value) => {
-        const roster = createWorkspaceAgentRosterController(roots);
-        if (value === 'inherit') write(() => roster.setInherited(), 'overview');
-        else if (value === 'all') write(() => roster.setAll(), 'overview');
+        const workspaceAgents = createWorkspaceAgentsController(roots);
+        if (value === 'inherit')
+          write(() => workspaceAgents.setInherited(), 'overview');
+        else if (value === 'all')
+          write(() => workspaceAgents.setAll(), 'overview');
         else
-          write(() => roster.setTeam(value.slice('team:'.length)), 'overview');
+          write(
+            () => workspaceAgents.setTeam(value.slice('team:'.length)),
+            'overview',
+          );
       },
       () => setMode('overview'),
     );
@@ -252,10 +259,12 @@ export function AgentRosterForm(
         })),
       ],
       (value) => {
-        const roster = createWorkspaceAgentRosterController(roots);
+        const workspaceAgents = createWorkspaceAgentsController(roots);
         write(
           () =>
-            value ? roster.setDefaultTeam(value) : roster.clearDefaultTeam(),
+            value
+              ? workspaceAgents.setDefaultTeam(value)
+              : workspaceAgents.clearDefaultTeam(),
           'overview',
         );
       },
@@ -323,7 +332,7 @@ export function AgentRosterForm(
       const agent = agents.find((candidate) => agentKeyOf(candidate) === value);
       if (!agent) return;
       write(() =>
-        createWorkspaceAgentRosterController(roots).setAgentEnabled({
+        createWorkspaceAgentsController(roots).setAgentEnabled({
           category: mode,
           source: agent.source,
           name: agent.name,

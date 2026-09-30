@@ -121,7 +121,7 @@ export const WorkflowAgentTool = defineTool({
 
 Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
-Available agents: loaded from the active roster at runtime.
+Available agents: loaded from the enabled agents at runtime.
 
 Pick the agent whose description matches the task. Do not default to the first listed agent.
 
@@ -224,7 +224,7 @@ To send a subagent follow-up instructions, use the executions tool: action "send
 
 Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
-Available agents: loaded from the active roster at runtime.
+Available agents: loaded from the enabled agents at runtime.
 
 Agent selection: choose the most specific agent whose description matches the task.
 

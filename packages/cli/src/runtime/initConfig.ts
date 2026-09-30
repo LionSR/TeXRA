@@ -9,14 +9,12 @@ import path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { CliOutputFormat } from '@shared/schemas';
 import { writeFileAtomic } from '@utils/files/fsDurability';
 
 export interface InitAnswers {
   readonly agent: string;
   readonly model: string;
-  readonly approvalPolicy: TexraApprovalPolicy;
   readonly outputFormat: CliOutputFormat;
 }
 
@@ -24,7 +22,6 @@ export interface InitAnswers {
 export interface InitConfigShape {
   readonly 'texra.model': string;
   readonly 'texra.outputFormat': CliOutputFormat;
-  readonly 'texra.approvalPolicy': TexraApprovalPolicy;
   readonly 'texra.chat': { readonly agent: string; readonly model: string };
 }
 
@@ -33,7 +30,6 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   return {
     'texra.model': answers.model,
     'texra.outputFormat': answers.outputFormat,
-    'texra.approvalPolicy': answers.approvalPolicy,
     'texra.chat': { agent: answers.agent, model: answers.model },
   };
 }

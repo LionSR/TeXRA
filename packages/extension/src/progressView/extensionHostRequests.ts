@@ -569,7 +569,7 @@ export function createExtensionHostRequests(
         handleLatexdiffCommitAction(session, action, baseFile, commit),
       ),
     openSettings: (section) => {
-      if (section === 'teams') return commandVerb('texra.showMultiAgent');
+      if (section === 'teams') return commandVerb('texra.showTeamSettings');
       if (section === 'models') return commandVerb('texra.showModels');
       return commandVerb('texra.showDashboard');
     },

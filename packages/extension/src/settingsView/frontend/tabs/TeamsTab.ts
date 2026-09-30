@@ -20,8 +20,8 @@ import {
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-@customElement('multi-agent-tab')
-export class MultiAgentTab extends LitElement {
+@customElement('teams-tab')
+export class TeamsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -30,7 +30,7 @@ export class MultiAgentTab extends LitElement {
         display: block;
       }
 
-      .multi-agent-container {
+      .teams-container {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
@@ -173,9 +173,9 @@ export class MultiAgentTab extends LitElement {
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
   /**
-   * The applied team, from the backend roster. Deliberately not local state:
+   * The applied team, from the backend. Deliberately not local state:
    * an apply can be cancelled or blocked by unavailable members, and an
-   * optimistic flip would badge a team the roster never adopted.
+   * optimistic flip would badge a team the workspace agents never adopted.
    */
   @property({ attribute: false }) activePresetId: string | null = null;
 
@@ -296,7 +296,7 @@ export class MultiAgentTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="multi-agent-container">
+      <div class="teams-container">
         ${renderSettingsSectionHeading({
           title: 'Teams',
           description:
@@ -323,6 +323,6 @@ export class MultiAgentTab extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'multi-agent-tab': MultiAgentTab;
+    'teams-tab': TeamsTab;
   }
 }

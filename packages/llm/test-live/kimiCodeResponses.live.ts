@@ -18,7 +18,6 @@ liveProtocol({
           credentialScope: 'live',
         },
         background: 'unsupported',
-        supportsInputTokenEstimation: false,
         supportsTemperature: false,
         supportsMaxOutputTokens: true,
         supportsStorage: false,

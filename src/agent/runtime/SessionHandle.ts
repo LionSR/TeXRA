@@ -814,7 +814,7 @@ export class SessionHandle {
 
   /**
    * Publish facts the session authors with no fiber to wait on (PRD 7.1):
-   * a registry's roster change, a policy snapshot. The batch takes its
+   * a registry's agent list change, a policy snapshot. The batch takes its
    * place in the graph's one publication order at this call and commits in
    * that order; {@link settlePublications} waits for it. Durable subscribers
    * read committed facts from the table tail; publication never delivers

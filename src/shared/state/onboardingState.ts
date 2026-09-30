@@ -54,7 +54,7 @@ export function setDefaultTeamId(
   return state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, teamId);
 }
 
-/** Drop the user-level default team, restoring the inherited roster. */
+/** Drop the user-level default team, restoring the inherited agent list. */
 export function clearDefaultTeamId(
   state: StateStore,
 ): Effect.Effect<void, StateWriteFailed> {

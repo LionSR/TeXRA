@@ -884,7 +884,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Agents',
-      'Workspace roster',
+      'Workspace agents',
       'Default team',
       'Default chat agent',
       'Custom selection',

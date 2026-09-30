@@ -76,7 +76,8 @@ const runResultPayload = z.looseObject({
 
 const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('agent'), agent: payload }),
-  z.looseObject({ kind: z.literal('agent-roster'), roster: payload }),
+  z.looseObject({ kind: z.literal('agent-copy'), copy: payload }),
+  z.looseObject({ kind: z.literal('workspace-agents'), agents: payload }),
   z.looseObject({ kind: z.literal('config'), config: payload }),
   z.looseObject({ kind: z.literal('tool-status'), tool: payload }),
   z.looseObject({ kind: z.literal('tool-toggle'), tool: payload }),
@@ -98,10 +99,10 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('history-entry'), entry: payload }),
   z.looseObject({ kind: z.literal('history-detail'), detail: payload }),
   z.looseObject({ kind: z.literal('history-delete'), result: payload }),
-  z.looseObject({ kind: z.literal('multi-agent-result') }),
-  z.looseObject({ kind: z.literal('multi-agent-preset'), preset: payload }),
+  z.looseObject({ kind: z.literal('team-result') }),
+  z.looseObject({ kind: z.literal('team'), preset: payload }),
   z.looseObject({
-    kind: z.literal('multi-agent-preset-inspection'),
+    kind: z.literal('team-inspection'),
     plan: payload,
   }),
   z.looseObject({

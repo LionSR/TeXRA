@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import {
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
   InvalidAgentTeamError,
 } from '@agent/index';
 import { agentKeyOf } from '@shared/schemas';
@@ -17,9 +17,9 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import {
-  formatCliAgentRoster,
-  readCliAgentRoster,
-} from '../runtime/agentRoster';
+  formatCliWorkspaceAgents,
+  readCliWorkspaceAgents,
+} from '../runtime/workspaceAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   initCliPlatform,
@@ -48,7 +48,7 @@ function formatConfigValue(value: unknown): string {
 }
 
 /**
- * The roster refuses an unknown or non-built-in team id in its own right; the
+ * The agent list refuses an unknown or non-built-in team id in its own right; the
  * command reports that refusal as a usage error (exit 2) and leaves every
  * other write failure to the top-level handler.
  */
@@ -63,7 +63,7 @@ const showConfig = Effect.fn('showConfig')(function* (
   services: CliPlatformServices,
 ) {
   const stores = services.roots;
-  const agents = yield* readCliAgentRoster(stores);
+  const agents = yield* readCliWorkspaceAgents(stores);
   const settings = Object.fromEntries(
     yield* Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
       Effect.map(readSetting(entry, stores), (value) => [entry.key, value]),
@@ -78,111 +78,118 @@ const showConfig = Effect.fn('showConfig')(function* (
         ([key, value]) => `${key}: ${formatConfigValue(value)}`,
       ),
       '',
-      formatCliAgentRoster(agents),
+      formatCliWorkspaceAgents(agents),
     ].join('\n'),
   });
   return CliExitCode.Success;
 });
 
-const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
-  context: CliContext,
-  services: CliPlatformServices,
-  input: {
-    readonly inherit: boolean;
-    readonly all: boolean;
-    readonly team?: string;
-    readonly workflow?: string;
-    readonly toolUse?: string;
-    readonly defaultTeam?: string;
-    readonly clearDefault: boolean;
-    readonly defaultAgent?: string;
-    readonly clearDefaultAgent: boolean;
-  },
-) {
-  const roots = services.roots;
-  const roster = createWorkspaceAgentRosterController(roots);
-  const customRequested =
-    input.workflow !== undefined || input.toolUse !== undefined;
-  const workspaceChoices = [
-    input.inherit,
-    input.all,
-    Boolean(input.team),
-    customRequested,
-  ].filter(Boolean).length;
-  if (workspaceChoices > 1) {
-    return yield* failUsage(
-      'Choose one workspace roster: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
-    );
-  }
-  if (input.defaultTeam && input.clearDefault) {
-    return yield* failUsage(
-      'Use either --default-team or --clear-default, not both.',
-    );
-  }
-  if (input.defaultAgent && input.clearDefaultAgent) {
-    return yield* failUsage(
-      'Use either --default-agent or --clear-default-agent, not both.',
-    );
-  }
-
-  if (input.inherit) yield* roster.setInherited();
-  if (input.all) yield* roster.setAll();
-  const teamId = input.team;
-  if (teamId) {
-    yield* roster.setTeam(teamId).pipe(Effect.mapError(asTeamUsageError));
-  }
-  if (input.workflow !== undefined && input.toolUse !== undefined) {
-    yield* roster.setCustom({
-      workflow: parseAgentKeys(input.workflow),
-      toolUse: parseAgentKeys(input.toolUse),
-    });
-  } else if (input.workflow !== undefined) {
-    yield* roster.setEnabledAgentKeys(
-      'workflow',
-      parseAgentKeys(input.workflow),
-    );
-  } else if (input.toolUse !== undefined) {
-    yield* roster.setEnabledAgentKeys('toolUse', parseAgentKeys(input.toolUse));
-  }
-  const defaultTeamId = input.defaultTeam;
-  if (defaultTeamId) {
-    yield* roster
-      .setDefaultTeam(defaultTeamId)
-      .pipe(Effect.mapError(asTeamUsageError));
-  }
-  if (input.clearDefault) yield* roster.clearDefaultTeam();
-  if (input.defaultAgent) {
-    const available = yield* roster.getVisibleAgents('toolUse');
-    const selected = available.find(
-      (agent) =>
-        agent.name === input.defaultAgent ||
-        agentKeyOf(agent) === input.defaultAgent,
-    );
-    if (!selected) {
-      const names = available.map((agent) => agent.name).join(', ');
+const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
+  function* (
+    context: CliContext,
+    services: CliPlatformServices,
+    input: {
+      readonly inherit: boolean;
+      readonly all: boolean;
+      readonly team?: string;
+      readonly workflow?: string;
+      readonly toolUse?: string;
+      readonly defaultTeam?: string;
+      readonly clearDefault: boolean;
+      readonly defaultAgent?: string;
+      readonly clearDefaultAgent: boolean;
+    },
+  ) {
+    const roots = services.roots;
+    const workspaceAgents = createWorkspaceAgentsController(roots);
+    const customRequested =
+      input.workflow !== undefined || input.toolUse !== undefined;
+    const workspaceChoices = [
+      input.inherit,
+      input.all,
+      Boolean(input.team),
+      customRequested,
+    ].filter(Boolean).length;
+    if (workspaceChoices > 1) {
       return yield* failUsage(
-        `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
+        'Choose one set of workspace agents: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
       );
     }
-    yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
-  }
-  if (input.clearDefaultAgent) {
-    yield* setWorkspaceCliChatAgent(roots, undefined);
-  }
+    if (input.defaultTeam && input.clearDefault) {
+      return yield* failUsage(
+        'Use either --default-team or --clear-default, not both.',
+      );
+    }
+    if (input.defaultAgent && input.clearDefaultAgent) {
+      return yield* failUsage(
+        'Use either --default-agent or --clear-default-agent, not both.',
+      );
+    }
 
-  const record = yield* readCliAgentRoster(roots);
-  emitCliResult(context, {
-    json: record,
-    ndjson: { kind: 'agent-roster', roster: record },
-    text: formatCliAgentRoster(record),
-  });
-  return CliExitCode.Success;
-});
+    if (input.inherit) yield* workspaceAgents.setInherited();
+    if (input.all) yield* workspaceAgents.setAll();
+    const teamId = input.team;
+    if (teamId) {
+      yield* workspaceAgents
+        .setTeam(teamId)
+        .pipe(Effect.mapError(asTeamUsageError));
+    }
+    if (input.workflow !== undefined && input.toolUse !== undefined) {
+      yield* workspaceAgents.setCustom({
+        workflow: parseAgentKeys(input.workflow),
+        toolUse: parseAgentKeys(input.toolUse),
+      });
+    } else if (input.workflow !== undefined) {
+      yield* workspaceAgents.setEnabledAgentKeys(
+        'workflow',
+        parseAgentKeys(input.workflow),
+      );
+    } else if (input.toolUse !== undefined) {
+      yield* workspaceAgents.setEnabledAgentKeys(
+        'toolUse',
+        parseAgentKeys(input.toolUse),
+      );
+    }
+    const defaultTeamId = input.defaultTeam;
+    if (defaultTeamId) {
+      yield* workspaceAgents
+        .setDefaultTeam(defaultTeamId)
+        .pipe(Effect.mapError(asTeamUsageError));
+    }
+    if (input.clearDefault) yield* workspaceAgents.clearDefaultTeam();
+    if (input.defaultAgent) {
+      const available = yield* workspaceAgents.getVisibleAgents('toolUse');
+      const selected = available.find(
+        (agent) =>
+          agent.name === input.defaultAgent ||
+          agentKeyOf(agent) === input.defaultAgent,
+      );
+      if (!selected) {
+        const names = available.map((agent) => agent.name).join(', ');
+        return yield* failUsage(
+          `Default chat agent "${input.defaultAgent}" is not in the workspace agents. Available agents: ${names || '(none)'}.`,
+        );
+      }
+      yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
+    }
+    if (input.clearDefaultAgent) {
+      yield* setWorkspaceCliChatAgent(roots, undefined);
+    }
+
+    const record = yield* readCliWorkspaceAgents(roots);
+    emitCliResult(context, {
+      json: record,
+      ndjson: { kind: 'workspace-agents', agents: record },
+      text: formatCliWorkspaceAgents(record),
+    });
+    return CliExitCode.Success;
+  },
+);
 
 const configAgentsCommand = defineCliCommand({
   meta: {
     name: 'agents',
-    description: 'Show or change the workspace agent roster',
+    description: 'Show or change the workspace agents',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -192,7 +199,7 @@ const configAgentsCommand = defineCliCommand({
     },
     all: {
       type: 'boolean',
-      description: 'Set this workspace roster to every agent',
+      description: 'Set the workspace agents to every agent',
     },
     team: { type: 'string', description: 'Use a built-in or saved team id' },
     workflow: {
@@ -225,7 +232,7 @@ const configAgentsCommand = defineCliCommand({
   run: (context, ctx) =>
     Effect.gen(function* () {
       const services = yield* initCliPlatform(context);
-      return yield* configureAgentRoster(context, services, {
+      return yield* configureWorkspaceAgents(context, services, {
         inherit: ctx.args.inherit === true,
         all: ctx.args.all === true,
         team: optString(ctx.args.team),

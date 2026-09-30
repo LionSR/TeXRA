@@ -61,7 +61,7 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly resultOnly?: boolean;
   /**
    * Whether the launched child can take user follow-ups. Decided by the caller
-   * (which also registers the child's roster row with it) so the two can't
+   * (which also registers the child's child row with it) so the two can't
    * disagree about the same run.
    */
   readonly userFollowUpSupport: UserFollowUpSupport;

@@ -114,7 +114,7 @@ const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
-  openMultiAgent: () => settingsDialog.open('agents/teams'),
+  openTeams: () => settingsDialog.open('agents/teams'),
   // Lazy by necessity: the panel is constructed above the accelerator map's
   // declaration (which lands much later at module scope), so an eager or
   // captured read is a TDZ throw. Reading at render time is also what lets a

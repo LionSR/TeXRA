@@ -57,7 +57,7 @@ export function testRunRegistry(): RunRegistry {
 }
 
 /**
- * A run whose generation is live on the roster, the way a real launch
+ * A run whose generation is live on the run registry, the way a real launch
  * admits one: the fiber is the run's stop target, and a stop reaches the
  * run by interrupting it. `onInterrupt` fires from the fiber's own
  * unwinding, so it has observably landed once the stop's settlement (or an

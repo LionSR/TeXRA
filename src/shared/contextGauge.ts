@@ -13,8 +13,8 @@ export function contextGaugeBand(percent: number): ContextGaugeBand {
 
 /**
  * Rounds context-window utilization for display, floored at 1%. Both callers
- * only report a context state once the run has occupied at least one input
- * token (`ModelInvoker` gates `logger.contextState` on `inputTokens > 0`), so
+ * only report a context state once the run has occupied at least one
+ * token (`ModelInvoker` gates the `context.state` event on a positive size), so
  * a reading here is never genuinely empty — only ever rounded down to `0.0`
  * by the 1-decimal precision `roundedUtilizationPercent` stores it at. Floor
  * unconditionally rather than treating that rounding artifact as "0% used".

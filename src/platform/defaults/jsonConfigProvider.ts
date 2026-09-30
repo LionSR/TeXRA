@@ -1,6 +1,9 @@
 import { Effect } from 'effect';
 
-import { getCoreSettingDefault } from '@shared/state/stateSettings';
+import {
+  getCoreSettingDefault,
+  settingByKey,
+} from '@shared/state/stateSettings';
 import { canonicalConfigKey } from '@shared/config/configKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -29,28 +32,42 @@ export interface ConfigStore {
 export interface JsonConfigProviderOptions {
   workspace: ConfigStore;
   global: ConfigStore;
+  /** This user's private store for the workspace; see {@link ConfigTarget}. */
+  local: ConfigStore;
 }
 
 /**
  * Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
  * `texra.*` prefix. Workspace values shadow global values on read and
- * `update()` routes writes by {@link ConfigTarget}.
+ * `update()` routes writes by {@link ConfigTarget}. A row the catalog scopes
+ * to `global` or `local` (the approval settings) is never read from the
+ * project file, so a cloned repository cannot set it: `local` shadows `global`
+ * for `local` rows, and `global` alone answers for `global` rows.
  */
 export class JsonConfigProvider implements ConfigProvider {
   private readonly workspaceStore: ConfigStore;
   private readonly globalStore: ConfigStore;
+  private readonly localStore: ConfigStore;
 
-  constructor({ workspace, global }: JsonConfigProviderOptions) {
+  constructor({ workspace, global, local }: JsonConfigProviderOptions) {
     this.workspaceStore = workspace;
     this.globalStore = global;
+    this.localStore = local;
   }
 
   get<T>(key: string, defaultValue?: T): T {
     const storedKey = canonicalConfigKey(key);
-    const workspaceValue = this.workspaceStore.get<T>(storedKey);
-    if (workspaceValue !== undefined) return workspaceValue;
-    const globalValue = this.globalStore.get<T>(storedKey);
-    if (globalValue !== undefined) return globalValue;
+    // The stores a row reads, first hit wins: the project file answers only
+    // for a row the catalog leaves at the workspace scope.
+    const layers = {
+      workspace: [this.workspaceStore, this.globalStore],
+      local: [this.localStore, this.globalStore],
+      global: [this.globalStore],
+    }[settingByKey(storedKey)?.configTarget ?? 'workspace'];
+    for (const store of layers) {
+      const value = store.get<T>(storedKey);
+      if (value !== undefined) return value;
+    }
     const schemaDefault = getCoreSettingDefault(storedKey) as T | undefined;
     return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
   }
@@ -60,7 +77,11 @@ export class JsonConfigProvider implements ConfigProvider {
     value: T,
     target: ConfigTarget = 'workspace',
   ): Effect.Effect<void, ConfigWriteFailed> {
-    const store = target === 'global' ? this.globalStore : this.workspaceStore;
+    const store = {
+      global: this.globalStore,
+      local: this.localStore,
+      workspace: this.workspaceStore,
+    }[target];
     const storedKey = canonicalConfigKey(key);
     // A store treats `undefined` as a delete.
     return store.set(storedKey, value).pipe(

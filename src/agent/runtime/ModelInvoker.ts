@@ -78,7 +78,6 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
-import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
   backgroundDelivery,
   bindModel,
@@ -94,6 +93,7 @@ import {
   type CallResult,
 } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
+import { contextTokens } from './run/contextTokens';
 import { priceTurnUsage } from './run/pricing';
 import { turnReasoning, turnText } from './run/turnText';
 import {
@@ -460,13 +460,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-        if (usage && usage.inputTokens > 0 && bound.contextWindow > 0) {
-          logger.emit({
-            type: 'context.state',
-            inputTokens: usage.inputTokens,
-            contextWindow: bound.contextWindow,
-          });
-        }
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           turn,
@@ -493,6 +486,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           ...snapshotRow(runId, state, { runtime: { lastError: null } }),
           positionRow(runId, state, 'response.ready'),
         ]);
+        const contextSize = contextTokens(next);
+        if (contextSize > 0 && bound.contextWindow > 0) {
+          logger.emit({
+            type: 'context.state',
+            inputTokens: contextSize,
+            contextWindow: bound.contextWindow,
+          });
+        }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
         return {
           kind: 'response',
@@ -536,65 +537,59 @@ export const modelInvokerLayer = (): Layer.Layer<
           request.debugName,
           bound,
         );
-        // R4: the input estimate where the provider offers one. A count that
-        // fails is logged and the provider enforces its own limit; an input
-        // that alone exceeds the window is refused before it is billed, and an
-        // input that leaves too little room for the requested output shrinks
-        // that output rather than letting the provider reject the request.
+        // R4: the run's context size (`contextTokens`: the last response's
+        // provider-counted usage plus an estimate of what was added since).
+        // An input that alone exceeds the window is refused before it is
+        // billed, and an input that leaves too little room for the requested
+        // output shrinks that output rather than letting the provider reject
+        // the request.
         if (resolved.mode === 'foreground' && bound.contextWindow > 0) {
-          const inputTokens = yield* estimateInputTokensOrNull(
-            bound.model,
-            resolved,
-            logger,
-            'Token counting failed. Proceeding without token adjustment.',
-          );
-          if (inputTokens !== null) {
-            if (inputTokens > bound.contextWindow) {
-              return yield* failAttempt(
-                new ModelError({
-                  kind: 'invalid-request',
-                  message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
-                }),
-                bound,
-              );
-            }
-            const { controls } = resolved;
-            const requested =
-              'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
-            if (
-              requested !== null &&
-              inputTokens + requested > bound.contextWindow
-            ) {
-              const reduced = reducedOutputBudget(
-                bound.contextWindow - inputTokens,
-                run.config.agentCategory === AgentCategory.ToolUse
-                  ? TOOL_USE_SAFETY_BUFFER
-                  : TOKEN_SAFETY_BUFFER,
-              );
-              logContextManagementEvent(
-                logger,
-                `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.contextWindow}). Reducing to ${reduced}.`,
-                {
-                  action: 'max_tokens_reduced',
-                  tokensBefore: inputTokens,
-                  contextWindow: bound.contextWindow,
-                  utilizationBefore: roundedUtilizationPercent(
-                    inputTokens,
-                    bound.contextWindow,
-                  ),
-                  originalMaxTokens: requested,
-                  reducedMaxTokens: reduced,
-                  details: request.debugName,
-                },
-              );
-              // The clamp is part of the request, so the request is prepared
-              // again with it: execution never reapplies defaults over a
-              // resolved turn.
-              resolved = yield* prepareAttempt(bound, {
-                ...turnRequest,
-                maxOutputTokens: reduced,
-              });
-            }
+          const inputTokens = contextTokens(state);
+          if (inputTokens > bound.contextWindow) {
+            return yield* failAttempt(
+              new ModelError({
+                kind: 'invalid-request',
+                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
+              }),
+              bound,
+            );
+          }
+          const { controls } = resolved;
+          const requested =
+            'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
+          if (
+            requested !== null &&
+            inputTokens + requested > bound.contextWindow
+          ) {
+            const reduced = reducedOutputBudget(
+              bound.contextWindow - inputTokens,
+              run.config.agentCategory === AgentCategory.ToolUse
+                ? TOOL_USE_SAFETY_BUFFER
+                : TOKEN_SAFETY_BUFFER,
+            );
+            logContextManagementEvent(
+              logger,
+              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.contextWindow}). Reducing to ${reduced}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow: bound.contextWindow,
+                utilizationBefore: roundedUtilizationPercent(
+                  inputTokens,
+                  bound.contextWindow,
+                ),
+                originalMaxTokens: requested,
+                reducedMaxTokens: reduced,
+                details: request.debugName,
+              },
+            );
+            // The clamp is part of the request, so the request is prepared
+            // again with it: execution never reapplies defaults over a
+            // resolved turn.
+            resolved = yield* prepareAttempt(bound, {
+              ...turnRequest,
+              maxOutputTokens: reduced,
+            });
           }
         }
         // The durable fact before the billed request (F1), with the prepared
