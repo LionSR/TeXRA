@@ -53,18 +53,13 @@ Things the tree won't tell you:
   `config/ratchets/` freeze the remaining edges — `host-agent-import-baseline`
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
-  `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `new AbortController(` and `Effect.run*` boundary
-  calls; a category that reaches zero retires with its counting code, except
-  the `Effect.run*` check, which stays at zero; it admits a new `Effect.run*`
-  file only under `packages/{extension,desktop,cli,agent}/src/` (webview
-  frontends excluded) or a named webview runtime entry in the script's
-  `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
-  `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters). Two more budget the code
-  itself rather than an import edge — `file-size-baseline` (a per-file line
-  budget over 500 lines) and `refuted-candidates` (the costed-and-refused
-  refactors, with their ruling anchors); AGENTS.md "Directory organization"
+  `architecture-edges`, plus `refuted-candidates` (the costed-and-refused
+  refactors, with their ruling anchors). ESLint's `no-restricted-syntax` fails
+  an `Effect.run*` call outside `packages/{extension,desktop,cli,agent}/src/`
+  (webview frontends excluded) or a named runtime entry carved out in
+  `eslint.config.mjs`, and `no-warning-comments` fails on any `@adapter-until`
+  marker, since the owner ruled there are no temporary adapters. AGENTS.md
+  "Directory organization"
   has the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not

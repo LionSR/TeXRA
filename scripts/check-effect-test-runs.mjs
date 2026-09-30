@@ -17,8 +17,8 @@
 // drops zeroed files but never adds one, and it fails rather than guesses
 // when a file has no recorded reason.
 //
-// The counterpart on the production surface is scripts/check-effect-migration-ratchet.mjs
-// (row `Effect.run*`), whose scan roots deliberately exclude src/test-kernel.
+// The counterpart on the production surface is the `Effect.run*`
+// no-restricted-syntax rule in eslint.config.mjs, which skips src/test-kernel.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';

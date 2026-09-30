@@ -911,4 +911,45 @@ export default tseslint.config(
       ],
     },
   },
+
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src)
+  // or at a webview/runtime composition root that owns its runtime (owner
+  // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
+  // entries). Everywhere else a run is below the boundary: convert the file
+  // and its callers so the run moves to a host entry. This block replaces the
+  // `no-restricted-syntax` array above for these files, so it repeats the
+  // <wa-icon> selector.
+  {
+    files: [
+      'src/**/*.{ts,tsx,mts}',
+      'packages/llm/src/**/*.{ts,tsx,mts}',
+      'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
+      'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
+      'packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}',
+    ],
+    ignores: [
+      'src/test-kernel/**',
+      '**/*.vitest.ts',
+      'src/ui/wa/webAwesomeIcons.ts',
+      'packages/extension/src/progressView/frontend/sessionTransport.ts',
+      'src/shared/signals.ts',
+      'src/platform/processRuntime.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
+          message:
+            'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
+        },
+        {
+          selector:
+            'CallExpression[callee.property.name=/^run(Promise|PromiseExit|Sync|Fork|Callback)$/]',
+          message:
+            'Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.',
+        },
+      ],
+    },
+  },
 );
