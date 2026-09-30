@@ -1,5 +1,5 @@
 <script setup>
-// File Management product slice: the Launcher's file-selection section with the
+// File Management product slice: the New task view's file-selection section with the
 // real Input / Context / Media groups (FILE_SELECT_CONFIGS in store.ts). Each
 // group is an ordered list with three header actions — Add opened files, Clear
 // all, Add files.
@@ -11,7 +11,7 @@ import MockupFrame from './MockupFrame.vue';
     <aside class="board">
       <div class="board-tabs">
         <span class="bt bt-on"
-          ><wa-icon library="texra" name="pencil"></wa-icon> Launcher</span
+          ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
         >
         <span class="bt"
           ><wa-icon library="texra" name="robot"></wa-icon> Progress</span

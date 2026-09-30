@@ -516,7 +516,7 @@ Key points for troubleshooting:
 
 1. **Access ProgressBoard**:
    - The ProgressBoard shares the TeXRA view in the Secondary Side Bar with the
-     launcher: select the TeXRA icon, then switch to the Sessions view
+     New task view: select the TeXRA icon, then switch to the Sessions view
    - If it is not visible, open it from the Command Palette: "TeXRA: Show Sessions"
 
 2. **Interpreting logs**: entries are color-coded by severity, and nested

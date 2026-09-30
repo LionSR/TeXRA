@@ -10,10 +10,12 @@ There is no TeXRA hook format. A plugin with LSP servers (`.lsp.json`, the
 manifest's `lspServers`) stays refused.
 
 This revises one point of the core-concepts note
-(`2026-09-26-core-concepts.md`, Trust): that note has code plugins speak a
+(`2026-09-26-core-concepts.md`, Trust): that note had code plugins speak a
 typed Effect RPC schema. The owner ruled that we consume the Claude Code
-layout as it is, so for v1 the boundary is the hooks protocol, typed at our
-edge by Zod. The other Trust and Plugin rulings hold: third-party code never
+layout as it is, so the boundary is the hooks protocol, typed at our edge by
+Zod. On 2026-09-30 the owner deferred typed RPC, `History.writer`, the open
+schema registry and `PluginModule` until a named plugin cannot be MCP, hooks
+and data. The other Trust and Plugin rulings hold: third-party code never
 loads in process, trust is keyed on a content digest, approvals are decided
 in core and recorded, and changes land at step boundaries.
 
@@ -244,6 +246,7 @@ state, so there is no migration.
 
 ## Refused or deferred in v1
 
+- Typed-RPC code plugins (until a named plugin needs them).
 - LSP servers.
 - Every event other than the six above.
 - The `http`, `mcp_tool`, `prompt` and `agent` handler types.

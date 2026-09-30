@@ -14,7 +14,7 @@ const actions = [
   { icon: 'circle-stop', label: 'Stop', desc: 'Abort the running task' },
   { icon: 'play', label: 'Run New', desc: 'Fresh run, same config' },
   { icon: 'forward-step', label: 'Resume', desc: 'Continue saved outputs' },
-  { icon: 'reply', label: 'Restore', desc: 'Load config into Launcher' },
+  { icon: 'reply', label: 'Restore', desc: 'Load config into New task' },
   { icon: 'folder-open', label: 'Open', desc: 'Reveal run storage' },
   { icon: 'copy', label: 'Copy', desc: 'Run context to clipboard' },
   { icon: 'code-compare', label: 'Diff', desc: 'latexdiff vs. base' },

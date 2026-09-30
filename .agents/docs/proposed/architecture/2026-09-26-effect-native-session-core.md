@@ -417,8 +417,9 @@ one-run-program and ledger amendments are recorded in the ledger entry
 "Plugins own typed tables at their seams". Not moved, with the reasons in that
 entry: `run.fact` todos and plan (core loop state, not one plugin's), inquiry
 and workflow-checkpoint rows (core aggregate kinds), the `documents` fold slice
-(PR 5's `RunView` half). Deferred: the SDK's plugin set
-(`TexraProcessOptions.plugins`) waits on move 4, and PR 7 needs owner decisions.
+(PR 5's `RunView` half). The SDK is not advertised until a consumer is named
+(D11, 2026-09-30), so its plugin set (`TexraProcessOptions.plugins`) waits for
+that consumer.
 
 ### Current state
 
@@ -558,8 +559,8 @@ no `@tools` to `@agent` edges.
   its `skills/`, `agents/`, `commands/` and `.mcp.json` become data-table
   entries; it is one plugin on the Registry, so one switch hides everything
   it contributes. That is a data plugin. The other third-party kind is a code
-  plugin, which runs out of process behind the typed RPC boundary with
-  granted capabilities. No third-party code loads in process (decided
+  plugin, which runs out of process (today as hooks; the typed RPC boundary
+  is deferred, 2026-09-30). No third-party code loads in process (decided
   2026-09-27).
 - **The offered surface is recorded per step (#13364).** Each step writes a
   `tools.offered` row before its model request when the offered set or the
@@ -595,7 +596,8 @@ no `@tools` to `@agent` edges.
   process plugin the process did not compose fails to open with a typed
   `PluginNotComposed`, and nothing is dropped silently. Tools and the
   continuation switch at the next step (#13364, #13387). A preset stores
-  switches, nothing else (decided 2026-09-27). The plugin note already
+  switches plus an optional root agent (decided 2026-09-30, superseding
+  "switches, nothing else" of 2026-09-27). The plugin note already
   promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
@@ -621,13 +623,6 @@ no `@tools` to `@agent` edges.
   package files. A change to that content asks again, even when the config
   revision is unchanged. This also answers the deferred project
   `.texra/mcp.json` trust prompt.
-- **Third-party code runs out of process (decided 2026-09-27).** A
-  third-party code plugin runs in a worker or child process and speaks one
-  typed Effect RPC schema; its capabilities are the `R` its RPC surface is
-  granted. No third-party code loads in process; in-process loading is only
-  for built-in plugins. The loader's security review covers the process
-  boundary and the granted capability set. The core-concepts note holds the
-  ruling under Trust.
 - **Self-improvement goes through data.** An approval-gated tool in the
   `setup` plugin installs, enables, trusts and saves presets. A change to
   tools or the continuation takes effect at the next step and is recorded
@@ -647,17 +642,6 @@ no `@tools` to `@agent` edges.
 - An untyped `plugin.fact` envelope needs a second decode site, against
   `RT-corrupt-record-tag`.
 
-### Hot-plug semantics
-
-Superseded by the owner's 2026-09-27 ruling and #13364: a change applies at
-the next step boundary and is recorded as a `tools.offered` row, so only the
-step where something changed pays a prompt-cache miss. A tool call is checked
-against the identity (name, description-free schema, plugin id, plugin
-revision) of the snapshot that offered it, which keeps SDK §8 ("hot
-replacement must not advertise one implementation and execute another").
-Plugin layers come up and go down by refcount, and a child may only narrow
-its parent's step.
-
 ### Stays core
 
 The native driver, which moves into core (decided 2026-09-27), the child-run
@@ -667,12 +651,10 @@ in `src/ui`, because webview frontends cannot import `@tools`.
 
 ### PRs
 
-1. A deterministic availability input to the composition key; LM tools through
-   a pin. First.
-2. `PLUGIN_PROCESS_LAYERS` filled with GitHub (drained by the shutdown
-   protocol, after its session-side reads go through the selected entry). The
-   SDK passes its plugin set, and a real core `SetupPlatform` replaces
-   `PACKAGE_SETUP`, whose `host` throws.
+1. Done (#13364): the composition key is deleted.
+2. Done: `PLUGIN_PROCESS_LAYERS` holds GitHub, drained by the shutdown
+   protocol. The SDK composes no setup platform, and its plugin set waits for a
+   named consumer (D11).
 3. `PLUGIN_SESSION_LAYERS` for the Codex and Claude registries; the goal grant
    computed from rows, WeakMap deleted.
 4. Dropped (2026-09-27): no `PLUGIN_DRIVERS`. Paused children replace it
@@ -682,20 +664,14 @@ in `src/ui`, because webview frontends cannot import `@tools`.
    the category discrimination in `RunView`.
 6. `PLUGIN_PROMPT_SECTIONS` with the `memory-workflow` move.
 7. Installed plugins as loaded data plugins; the prompt digest on the step
-   record; presets; trust per trust revision; then the `setup` tool. Needs
-   owner decisions.
+   record; presets; trust per trust revision; then the `setup` tool. Decided
+   2026-09-30: presets are switches plus an optional root agent, plugin
+   skills and agents follow the plugin switch.
 
 ### Rulings
 
-- **Amend** the plugin note (`2026-09-24-plugin-architecture.md:211-236`):
-  "Plugins own no durable state and no event channel" becomes "static in-tree
-  plugins own arms, with tier and fold slice, in plugin modules of the one
-  closed schema". "Prompt sections are core" becomes "a plugin in the pinned
-  composition may contribute one section".
 - **Keep** "no task kinds" in v1 as written: there is no driver table, and a
   plugin's child is a tool call (2026-09-27).
-- **Amend** one-run-program line 366 for the continuation seam, which already
-  moved to `PLUGIN_CONTINUATIONS`.
 - **Keep** the run-pin ruling, the per-session `LayerMap` ruling (no new
   lifetime), the owner's installed-plugin ruling (one unit, one record, no new
   formats), and SDK §8 (every contribution point is a typed static table).
@@ -840,22 +816,6 @@ Most of the shrunk move had already landed or does not pay.
 - **Owner-id nonce: deferred.** The second-graph guard stays, so nothing
   consumes the nonce yet. Adding it now would also strand a disposed graph's
   leases as `alive` in a live process, where today the same id reclaims them.
-
-### State at plan time (superseded where the re-check above says so)
-
-Five composition roots install the process runtime (extension, desktop, CLI
-`cliProcessRuntime.ts`, the SDK, and the test harness that 79 suites import).
-`bootstrapHost` is a separate step the SDK skips. After #13359 deletes
-`cliSecrets` and serves the extension's `AgentDirectories` as a layer, about
-twelve Node-side module slots live outside the runtime: the `SessionOwner`,
-the `AppSignals` hub (never shut down), the setting host
-(`initProcessSettingHost`), two account probes, skill contributions, plugin
-agent directories, the agent catalog, the `agentDirectories` watcher
-singleton, rate limiters, external roots (two writers) and the CLI log
-runtime. Process-lifetime `forkDetach` fibers outlive `runtime.dispose` (the
-reprobe at `hostBootstrap.ts:112`, the extension's remote catalog and
-welcome, and the watcher's `forkDetach` in `AgentDirectoryManager.ts`). Four
-hand-registered shutdown chains repeat "close sessions first, runtime last".
 
 ### Target
 
@@ -1452,8 +1412,10 @@ in the existing session entry (no new lifetime) and keeps `withPerKeyLane`.
    through `grant`.
 4. One action × resource ruleset instead of one guard kind per tool family
    (#13360's comparison), with delegated children defaulting to `never`, and
-   the `toolCall` request kind. Needs an owner ruling under the `defineTool`
-   freeze amendment. A separate PR (`fix/approval-gates`, in progress) fixes
+   the `toolCall` request kind. Decided 2026-09-30 (D8): the `defineTool`
+   freeze is amended to allow tool guard kinds (network, process, MCP call),
+   so external tool calls stop being approved as shell; the ruleset itself
+   stays a design step. A separate PR (`fix/approval-gates`, in progress) fixes
    the two approval security defects with the smallest change, and will say
    whether it pre-empts decision 9.
 5. `ApprovalState` as a `SubscriptionRef` in the existing session entry.
@@ -1876,7 +1838,7 @@ owner confirms them:
 | 6. The plugin drain                                           | Neither a hook nor a drain layer. As corrected: the edge stays `Sessions` → plugin, and the selected plugin's typed drain runs in the core shutdown protocol. |
 | 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                                                   |
 | 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                                                               |
-| 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                                                        |
+| 9. Guard kinds on the `defineTool` contract                   | Allow (D8, ruled 2026-09-30).                                                                                                                                 |
 | 10. Pin the agent definition in the run's record              | Yes: the log records what the model saw, and resume uses the recorded definition.                                                                             |
 | 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                                                        |
 | 12. One global app-state root on desktop                      | Yes.                                                                                                                                                          |
@@ -1914,7 +1876,7 @@ owner confirms them:
    (`getToolUseFollowUpTarget`), so there is no shared path to converge on.
 9. An action × resource ruleset on the tool contract (move 9 PR 4), in place
    of per-family guard kinds, touches the frozen `defineTool` contract:
-   allowed? `fix/approval-gates` may pre-empt part of it.
+   allowed (D8, 2026-09-30). `fix/approval-gates` may pre-empt part of it.
 10. Does a run pin its agent definition (setting and prompt) the way it pins
     its composition, so resume uses the recorded definition?
 11. Does the creator wizard give way to the cross-host `creator` agent?
@@ -1939,17 +1901,12 @@ The owner delegated these calls and asked for the long-term option each time.
   step records. This deletes `PLUGIN_DRIVERS` and `DriverUnavailable` from
   the plan (move 2): "blocked, not failed" is the step's tool check. The
   native driver moves into core.
-- **Third-party code plugins run out of process by default.** They run in a
-  worker or child process and speak one typed Effect RPC schema, the same
-  wire the hosts use. Capabilities are the `R` the plugin's RPC surface is
-  granted. There are two kinds of third-party plugin: data plugins (the
-  Claude Code / Codex layout) load as data, and code plugins run out of
-  process. No third-party code loads in process; in-process loading is only
-  for built-in plugins. Trust keys on a trust revision that includes a
-  content digest of what runs; the config revision stays for tool identity
-  only. This scopes the loader's
-  security review to the process boundary and the granted capability set,
-  and reopens the RPC rejection in move 5 for this boundary.
+- **Third-party code plugins run out of process by default.** Data plugins
+  (the Claude Code / Codex layout) load as data; code plugins run out of
+  process, today as hooks. No third-party code loads in process. Trust keys on
+  a revision that includes a content digest of what runs; the config revision
+  stays for tool identity only. The typed RPC boundary this ruling first named
+  is not built until a named plugin cannot be MCP + hooks + data (2026-09-30).
 - **Format policy after 1.0: a version per row kind, migrated lazily at the
   read boundary.** Each row kind, plugin-owned kinds included, carries its own
   schema version, and its migrations are registered with its schema. The
@@ -1959,7 +1916,7 @@ The owner delegated these calls and asked for the long-term option each time.
 - **Goal mode after resume** (decision 14): paused until the user re-arms it.
   Done in #13387.
 - **Presets store switches.** A preset is the user's saved selection of
-  switches; availability is resolved when resources are acquired.
+  switches, plus an optional root agent (2026-09-30); availability is resolved when resources are acquired.
 - **Descriptions are not part of tool identity.** Identity is name, input
   schema with descriptions stripped, plugin id and plugin revision; a
   description change is recorded through the offered snapshot's `shown`
@@ -1987,7 +1944,8 @@ Deletion earliest, least churn (the owner's review):
    kinds with fold slices and per-kind versions. Paused children replace the
    dropped driver table, and the native driver moves into core.
 7. Installed plugins as loaded data plugins, the prompt digest on the step
-   record, presets and trust, then the `setup` tool. Needs owner decisions.
+   record, presets and trust, then the `setup` tool (decided 2026-09-30, see
+   PR 7 above).
 8. Anything else (`SessionKernel`, `ProcessLayer`, `SessionPlane`, `RunTrace`,
    and the structural halves of moves 9 to 13) only when a PR shows it deletes
    more than it adds.

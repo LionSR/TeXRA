@@ -1,5 +1,5 @@
 <script setup>
-// Quick Start product slice: the Launcher panel as you'd fill it for a first
+// Quick Start product slice: the New task view as you'd fill it for a first
 // run — session type, an instruction, an agent + model, and Run — beside the
 // open .tex. Mirrors InstructionPanel.ts (session toggle, header actions,
 // instruction textarea, model-selection footer, brand "Run" button).
@@ -11,7 +11,7 @@ import MockupFrame from './MockupFrame.vue';
     <aside class="board">
       <div class="board-tabs">
         <span class="bt bt-on"
-          ><wa-icon library="texra" name="pencil"></wa-icon> Launcher</span
+          ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
         >
         <span class="bt"
           ><wa-icon library="texra" name="robot"></wa-icon> Progress</span
@@ -108,7 +108,7 @@ import MockupFrame from './MockupFrame.vue';
 </template>
 
 <style scoped>
-/* Launcher chrome (lpanel/prompt/footer/run/…) lives in mockup.css, shared
+/* New task chrome (lpanel/prompt/footer/run/…) lives in mockup.css, shared
    with ToolConfigHero. Only the sidebar width is unique to this hero. */
 .board {
   width: var(--mk-size-320);

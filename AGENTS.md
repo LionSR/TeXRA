@@ -553,6 +553,10 @@ kinds carry their own versions (`src/shared/schemas/rowVersions.ts`), read by
 the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
 kind is unreleased and changes with no upcaster and no bump.
 
+`config.json` is additive-only from 1.0 (ruled 2026-09-30): a key may be added,
+and a released key keeps its meaning, so no retired-key list and no rewrite of
+old files is kept.
+
 ### ES2023+ Patterns
 
 Use modern JavaScript features available with ES2022+ target:

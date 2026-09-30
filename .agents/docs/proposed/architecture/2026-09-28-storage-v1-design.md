@@ -755,8 +755,8 @@ interface PluginArm {
     to learn what changed.
   - A socket broadcast between processes is a second channel that can
     drift from the store.
-  - The background server is deferred
-    (`2026-09-26-session-database-off-host-thread.md` §6).
+  - The background server is refused (D4, ruled 2026-09-30): there is no
+    daemon.
 - **Typed failures.** `DatabaseOpenFailed`, `DatabaseReadFailed` and
   `DatabaseWriteFailed` carry
   `reason: 'busy' | 'corrupt' | 'full' | 'readonly' | 'constraint' | 'newer' | 'other'`
@@ -1017,7 +1017,8 @@ CI OSes.
 
 ## 13. Decisions (2026-09-28)
 
-Every question this note raised is decided. None remain open.
+Every question this note raised is decided. None remain open. Q6 and Q7 are
+the owner's 2026-09-30 constraints on the store.
 
 | #   | Question                               | Decision                                                                                                                                             | Where                    |
 | --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
@@ -1026,3 +1027,5 @@ Every question this note raised is decided. None remain open.
 | Q3  | What a pre-1.0 store keeps at the bump | Nothing. The whole store, `current_value` included, moves aside to `.pre1`, and the store starts fully clean.                                        | §3 open sequence; Lane 1 |
 | Q4  | Removing orphaned stores               | Only by an explicit `texra doctor --prune-storage`, never automatically.                                                                             | §7; Lane 3               |
 | Q5  | Moving SQLite to a worker thread       | Deferred past 1.0 (the coordinator's call). It is taken only if Lane 1's event-loop reading shows a stall over the 100 ms budget.                    | §8; Lane 1               |
+| Q6  | A daemon owning the store              | Refused (D4). The CLI or SDK process is the unattended runner; several processes share one store, each aggregate held by one claim.                  | §8; ledger               |
+| Q7  | Where a run's retained outputs live    | SQLite (D5). Files are for compiler scratch only.                                                                                                    | §10; ledger              |

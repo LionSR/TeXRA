@@ -106,6 +106,11 @@ first kind on the two central primitives.
 The continuation policy is still chosen once, when the loop is set up, from
 the plugins switched on then.
 
+**Ruled 2026-09-30 (ledger, "Plugin gating, presets..." and "SDK and typed
+RPC"):** the extension mechanism is hooks and data plugins. Typed-RPC code
+plugins, `History.writer`, an open schema registry and a `PluginModule`
+interface are not built until a named plugin cannot be MCP + hooks + data.
+
 ## Loadable plugins: MCP servers
 
 Local stdio MCP servers from `~/.texra/mcp.json` are the first loadable plugin
@@ -155,8 +160,9 @@ unregister) now covers:
   scope, so a contribution cannot choose one. `ToolPlugin.skills: true` lets a
   tool plugin ship skills: lean4's five Lean skills live in
   `packages/extension/resources/plugins/lean4/skills/`, passed to
-  `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Plugin
-  skills are not gated by the plugin's switch.
+  `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Ruled
+  2026-09-30 (D9): plugin skills and agents are gated by the plugin's switch;
+  until that lands, they are not.
 - **Bundled agent directories.** `ToolPlugin.agents: true` lets a tool plugin
   ship bundled tool-use agents: lean4's five Lean agents live in
   `packages/extension/resources/plugins/lean4/agents/`. The host bootstrap
@@ -235,9 +241,14 @@ Adopted from pi Pico5:
 - resume offers what was recorded and is still available, loudly naming what
   is gone (adapted in #13088 to a model-visible error result).
 
-TeXRA's own ruling, not taken from Pico5: no hooks or task kinds in v1, and
-plugin state only as typed arms of the one event schema. Pico5 has task kinds,
-hooks per kind, and Documents. The continuation policy and the documents
+TeXRA's own ruling, not taken from Pico5: no task kinds, and plugin state
+only as typed arms of the one event schema. Pico5 has task kinds, hooks per
+kind, and Documents. The v1 "no hooks" half is superseded: a third-party code
+plugin's command hooks run out of process over the Claude Code hooks protocol
+(#13481, `2026-09-28-code-plugins-hooks-v1.md`), and the 2026-09-30 ruling
+(D11) makes hooks and data plugins the extension mechanism. That is not a
+task-kind mechanism or per-kind hooks, which stay refused, and `toolUse.ts`
+stays the only run program. The continuation policy and the documents
 plugin's after-turn handler are single-contributor hooks in Pico's terms.
 
 Adopted from deepseek-harness: presets reduced to data (the `Composition`
@@ -255,5 +266,8 @@ Rejected:
 - `@modelcontextprotocol/sdk` (a Promise client inside an Effect layer) and
   `McpSchema` with `RpcClient` (needs a custom stdio protocol and still does
   not answer server requests) for the MCP client (#13092);
-- a manifest file format, runtime register/unregister, and gating plugin
-  skills on the run's composition (left as a separate owner decision).
+- a manifest file format and runtime register/unregister.
+
+Gating plugin skills and agents, left open here as a separate owner decision,
+is ruled (D9, 2026-09-30): they are gated by the plugin's switch, not by a
+run-pinned composition (which #13364 deleted).
