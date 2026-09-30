@@ -97,7 +97,7 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
       yield* started;
       yield* TestClock.adjust('1000 millis');
       const error = yield* Fiber.join(fiber);
-      expect(error._tag).toBe('RequestTimedOut');
+      expect(error._tag).toBe('TimeoutError');
       expect(aborted).toBe(true);
     }),
   );
