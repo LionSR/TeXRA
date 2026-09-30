@@ -9,7 +9,7 @@
 // `1`-`9` for the first nine rows, then `a`-`z` for rows 10-35.
 
 // Third-party imports
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared utilities
@@ -25,7 +25,10 @@ import { clamp, clampIndex } from '@utils/core';
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
 
-const SELECT_LABEL_MAX_COLS = 24;
+// A label takes up to this share of the terminal (never under the floor),
+// leaving the rest of the row to its description.
+const SELECT_LABEL_MIN_COLS = 24;
+const SELECT_LABEL_WIDTH_SHARE = 0.4;
 
 export interface SelectItem<T> {
   readonly value: T;
@@ -273,6 +276,11 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
   const [highlight, setHighlight] = useState(initial);
   const highlightRef = useRef(initial);
+  const { columns } = useWindowSize();
+  const labelMaxCols = Math.max(
+    SELECT_LABEL_MIN_COLS,
+    Math.floor((columns || 0) * SELECT_LABEL_WIDTH_SHARE),
+  );
   // Drop input after cancel until React commits the resulting transition. A
   // parent may reuse this Select instance for the destination screen, so the
   // guard must not remain latched across renders.
@@ -458,7 +466,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 </Box>
                 <Box
                   flexShrink={0}
-                  maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
+                  maxWidth={props.labelMaxCols ?? labelMaxCols}
                 >
                   <Text
                     color={focusColor}
