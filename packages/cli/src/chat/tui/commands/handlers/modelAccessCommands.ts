@@ -37,8 +37,8 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     }
     // The coding-only models route through the subscription automatically;
     // dual-backend K3 needs the opt-in switch, which is only discoverable if
-    // we name it here.
-    return "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Prefer Kimi Code' in /config.";
+    // we name it here — the same name `/config` and `/login` show.
+    return "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Kimi Code subscription' in /config.";
   },
 );
 

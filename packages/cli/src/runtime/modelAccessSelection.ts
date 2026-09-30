@@ -117,13 +117,13 @@ const updateSubscriptionCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setPreferSubscription',
             subscription: providerId,
-            message: `The ${displayName} subscription preference could not be disabled: ${toErrorMessage(cause)}`,
+            message: `${displayName} subscription could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
       ),
     );
     return {
-      message: `Prefer ${displayName} subscription disabled for ${modelFamily}.`,
+      message: `${displayName} subscription disabled for ${modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
   }
 
@@ -147,13 +147,13 @@ const updateSubscriptionCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setPreferSubscription',
           subscription: providerId,
-          message: `The ${displayName} subscription preference could not be enabled: ${toErrorMessage(cause)}`,
+          message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     ),
   );
   return {
-    message: `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
+    message: `${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
   } satisfies CliModelAccessSelectionResult;
 });
 

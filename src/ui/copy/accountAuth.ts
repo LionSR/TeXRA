@@ -7,6 +7,14 @@
  * auth-failure hints that quote a toggle by name cannot paraphrase each
  * other.
  *
+ * The switch that routes eligible models through a subscription is named by
+ * the subscription itself — `subscriptionLabel`, "ChatGPT subscription" — and
+ * never by a verb. It selects a credential rather than expressing a preference
+ * among them: a session that cannot be read fails the run and asks the user to
+ * sign in again, so a "Prefer …" label would promise a fallback to the API key
+ * that routing does not perform. One noun also keeps the switch recognizable
+ * in the row that toggles it and in the hint that quotes it back.
+ *
  * Wire identifiers (`chatgpt`, `grok`) stay internal.
  */
 
@@ -23,7 +31,6 @@ export const CHATGPT_AUTH = {
   signInLabel: 'Sign in with ChatGPT',
   signInDescription: 'Use a ChatGPT subscription',
   signOutLabel: 'Sign out of ChatGPT',
-  preferLabel: 'Prefer ChatGPT subscription',
   deviceCodeLabel: 'Sign in to ChatGPT with a code',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
@@ -39,7 +46,6 @@ export const GROK_AUTH = {
   signInLabel: 'Sign in with Grok',
   signInDescription: 'Use a Grok / SuperGrok subscription',
   signOutLabel: 'Sign out of Grok',
-  preferLabel: 'Prefer Grok subscription',
   deviceCodeLabel: 'Sign in to Grok with a code',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
