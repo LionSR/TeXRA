@@ -449,7 +449,7 @@ export async function runChat(
     // registry's own defaults are exactly these handlers. Only `/login` needs
     // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) =>
-      loginFromChat(value, services, runtime, context, output),
+      loginFromChat(value, services, context, output),
     onMemorySelect: (storagePath) =>
       showCliMemoryPreview(runtimeSession.roots, storagePath),
     onSkillSelect: (selection) =>

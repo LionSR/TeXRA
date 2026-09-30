@@ -12,33 +12,18 @@ import {
 import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import { type CliContext } from '@cli/runtime/cliContext';
 import {
-  githubSelectAccountWarning,
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
   type CliLoginSlashArgs,
   type CliLogoutTarget,
-  type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import {
-  signInCliSupabase,
-  signInCliSupabaseDeviceCode,
-  signOutCliSupabase,
-} from '@cli/runtime/supabaseAuth';
-import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import type {
-  AgentCatalogServices,
-  ProcessRuntime,
-} from '@platform/processRuntime';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
-import {
-  ACCOUNT_OUTCOME,
-  RESEARCHER_ACCESS_AUTH,
-  SUBSCRIPTION_AUTH_COPY,
-} from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -47,29 +32,16 @@ import {
 } from './slashContext';
 
 const CHAT_LOGIN_USAGE = [
-  'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
-  '       /login chatgpt [--no-browser] [--device]',
+  'Usage: /login chatgpt [--no-browser] [--device]',
   '       /login grok [--no-browser] [--device]',
   '       /login status',
 ].join('\n');
 
-function isSubscriptionLogin(
-  args: CliLoginSlashArgs,
-): args is Exclude<CliLoginSlashArgs, CliTexraLoginSlashArgs> {
-  return args.target === 'chatgpt' || args.target === 'grok';
-}
-
 export function loginStartMessage(args: CliLoginSlashArgs): string {
-  if (isSubscriptionLogin(args)) {
-    const copy = SUBSCRIPTION_AUTH_COPY[args.target];
-    if (args.device) return copy.startingDevice;
-    if (args.noBrowser) return copy.startingNoBrowser;
-    return copy.startingBrowser;
-  }
-  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
-  if (args.noBrowser)
-    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
-  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
+  const copy = SUBSCRIPTION_AUTH_COPY[args.target];
+  if (args.device) return copy.startingDevice;
+  if (args.noBrowser) return copy.startingNoBrowser;
+  return copy.startingBrowser;
 }
 
 /**
@@ -92,37 +64,9 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   );
 });
 
-const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
-  runtime: ProcessRuntime,
-  args: CliTexraLoginSlashArgs,
-  output: SlashCommandOutput,
-) {
-  const accountWarning = githubSelectAccountWarning(args);
-  if (accountWarning)
-    output.writeProgress(accountWarning, { persistent: true });
-
-  const session = args.device
-    ? yield* signInCliSupabaseDeviceCode({
-        onDeviceCode: (authorization) => {
-          output.writeProgress(formatCliDeviceAuthMessage(authorization), {
-            copyable: true,
-          });
-        },
-      })
-    : yield* signInCliSupabase(runtime, {
-        provider: args.provider,
-        noBrowser: args.noBrowser,
-        selectAccount: args.selectAccount,
-        loginHint: args.loginHint,
-        writeProgress: output.writeProgress,
-      });
-  output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
-});
-
 export const loginFromChat = Effect.fn('loginFromChat')(function* (
   input: string,
   stores: SettingsStores,
-  runtime: ProcessRuntime,
   context?: CliContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
@@ -132,27 +76,18 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
     return;
   }
 
-  // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
-  // user's parsed flags before subscription paths can auto-resolve `device`.
+  // Reject `--device` + `--no-browser` from the user's parsed flags before
+  // the subscription path can auto-resolve `device`.
   if (hasLoginTransportConflict(args)) {
     output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
     return;
   }
 
-  let loginArgs = args;
-  if (context && isSubscriptionLogin(args)) {
-    loginArgs = {
-      ...args,
-      device: shouldUseSubscriptionDeviceCode(context, args),
-    };
-  }
+  const loginArgs = context
+    ? { ...args, device: shouldUseSubscriptionDeviceCode(context, args) }
+    : args;
   output.writeProgress(loginStartMessage(loginArgs));
-
-  if (isSubscriptionLogin(loginArgs)) {
-    yield* loginToSubscription(stores, loginArgs.target, loginArgs, output);
-    return;
-  }
-  yield* loginToTexraAccount(runtime, loginArgs, output);
+  yield* loginToSubscription(stores, loginArgs.target, loginArgs, output);
 });
 
 /**
@@ -168,20 +103,6 @@ const logoutLines = (
 ): Effect.Effect<readonly string[], never, Secrets | AgentCatalogServices> =>
   Effect.gen(function* () {
     const lines: string[] = [];
-
-    if (target === 'texra' || target === 'all') {
-      lines.push(
-        yield* signOutCliSupabase().pipe(
-          Effect.match({
-            onFailure: (error) =>
-              RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(
-                toErrorMessage(error),
-              ),
-            onSuccess: () => RESEARCHER_ACCESS_AUTH.signedOut,
-          }),
-        ),
-      );
-    }
 
     for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
       if (target !== providerId && target !== 'all') continue;

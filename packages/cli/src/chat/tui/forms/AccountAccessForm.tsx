@@ -16,6 +16,7 @@ import {
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -23,7 +24,6 @@ import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMe
 import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 import {
   DEVICE_CODE_DESCRIPTION,
-  RESEARCHER_ACCESS_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { ListForm } from './_shared/ListForm';
@@ -59,17 +59,14 @@ interface SignInTransport {
   readonly description: string;
 }
 
-type SignInProvider = 'chatgpt' | 'grok' | 'texra';
-
 interface ProviderSignInTransports {
-  readonly provider: SignInProvider;
+  readonly provider: SubscriptionProviderId;
   readonly browser: SignInTransport;
   readonly device: SignInTransport;
-  readonly toggleCoversBrowserSignIn: boolean;
 }
 
-const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
-  ...SUBSCRIPTION_AUTH_PROVIDERS.map((provider) => {
+const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> =
+  SUBSCRIPTION_AUTH_PROVIDERS.map((provider) => {
     const copy = SUBSCRIPTION_AUTH_COPY[provider];
     return {
       provider,
@@ -83,24 +80,8 @@ const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
         label: copy.deviceCodeLabel,
         description: DEVICE_CODE_DESCRIPTION,
       },
-      toggleCoversBrowserSignIn: true,
     };
-  }),
-  {
-    provider: 'texra',
-    browser: {
-      target: 'texra',
-      label: RESEARCHER_ACCESS_AUTH.signInLabel,
-      description: RESEARCHER_ACCESS_AUTH.loginDescription,
-    },
-    device: {
-      target: 'texra --device',
-      label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    },
-    toggleCoversBrowserSignIn: false,
-  },
-];
+  });
 
 function signInItem(
   transport: SignInTransport,
@@ -148,21 +129,15 @@ function buildAccountAccessFormItems(
       label: row.label,
       description: row.description,
     }));
-  const signedIn: Record<SignInProvider, boolean> = {
-    chatgpt: status.subscriptions.chatgpt.signedIn,
-    grok: status.subscriptions.grok.signedIn,
-    texra: status.texraSignedIn ?? false,
-  };
   // Signed-out subscriptions get the one sign-in transport their toggle row
   // lacks (device code); the toggle itself is the browser sign-in path.
   for (const entry of SIGN_IN_TRANSPORTS) {
-    if (signedIn[entry.provider]) continue;
-    if (!entry.toggleCoversBrowserSignIn) {
-      accountItems.push(signInItem(entry.browser));
-    }
+    if (status.subscriptions[entry.provider].signedIn) continue;
     accountItems.push(signInItem(entry.device));
   }
-  const signedInCount = Object.values(signedIn).filter(Boolean).length;
+  const signedInCount = SUBSCRIPTION_AUTH_PROVIDERS.filter(
+    (provider) => status.subscriptions[provider].signedIn,
+  ).length;
   if (signedInCount >= 2) {
     accountItems.push({
       value: { kind: 'logout', target: 'all' },
@@ -177,7 +152,7 @@ function buildAccountAccessFormItems(
  * The first-run panel: only what can connect a model, worded as what it does.
  * Nothing is signed in yet (that is why the panel is open), so each
  * subscription row is the same sign-in-and-prefer action its `/login` toggle
- * runs; account management (TeXRA account, sign-out) stays in `/login`.
+ * runs; account management (sign-out) stays in `/login`.
  */
 const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
   {
@@ -253,10 +228,7 @@ export function AccountAccessForm(
   if (data !== undefined) {
     // The rows already describe each preference and account; the detail block
     // only carries what no row says.
-    detailLines = [
-      `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
-      ...(data.note ? [data.note] : []),
-    ];
+    detailLines = [`Otherwise: ${formatCliModelAccessRoute('api-key')}`];
   } else if (error !== undefined) {
     detailLines = [error];
   }

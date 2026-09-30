@@ -14,7 +14,6 @@
     "packages/cli/src/chat/tui/state/cliState.ts": 510,
     "packages/cli/src/commands/_helpers/dispatch.ts": 635,
     "packages/cli/src/commands/workflow.ts": 513,
-    "packages/cli/src/runtime/doctor.ts": 550,
     "packages/cli/src/runtime/executeCli.ts": 676,
     "packages/cli/src/runtime/history.ts": 575,
     "packages/cli/src/runtime/modelAccess.ts": 529,

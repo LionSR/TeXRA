@@ -960,11 +960,11 @@ describe('CLI root argument routing', () => {
 
   it('formats model list network failures without raw stack traces', () => {
     const error = new Error('fetch failed', {
-      cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
+      cause: new Error('getaddrinfo ENOTFOUND api.example.com'),
     });
 
     expect(formatCliModelListError(error)).toBe(
-      'texra: could not fetch model access metadata from remote.texra.ai: getaddrinfo ENOTFOUND remote.texra.ai',
+      'texra: could not reach the network to list models: getaddrinfo ENOTFOUND api.example.com',
     );
   });
 });

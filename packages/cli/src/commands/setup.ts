@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -32,7 +31,7 @@ export function runSetup(context: CliContext) {
     throw new CliUsageError(
       formatInteractiveTerminalFailure(terminalFailure, {
         headlessMessage:
-          'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra login`.',
+          'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra auth chatgpt login`.',
         dumbTerminalCommand: 'setup',
       }),
     );
@@ -46,8 +45,8 @@ export function runSetup(context: CliContext) {
   //
   // State 0 first (.agents/docs/archived/feature/2026-06-11-agent-native-onboarding.md): a credential is the
   // one step no agent can do for the user. With a credential already in place
-  // the picker is skipped — credentials-only (re)configuration is
-  // `texra login`'s job under the new vocabulary.
+  // the picker is skipped; a subscription sign-in is `texra auth <provider>
+  // login`.
   return Effect.gen(function* () {
     const services = yield* initCliPlatform(context);
     if (
@@ -94,16 +93,9 @@ export const setupCommand = withUsageSections(
       rows: [
         ['texra setup', 'agent-led setup: environment, roster, first task'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
-        ['texra login', RESEARCHER_ACCESS_AUTH.credentialsOnlyExample],
-        ['texra auth status', RESEARCHER_ACCESS_AUTH.statusExample],
-      ],
-    },
-    {
-      title: 'NOTES',
-      rows: [
         [
-          'texra setup',
-          "previously only the credential picker — that's `texra login` now",
+          'texra auth chatgpt status',
+          'show ChatGPT subscription sign-in status',
         ],
       ],
     },

@@ -133,12 +133,6 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // command but `doctor` enters through this one run and hands the resolved
   // context to its builder as a value.
   'packages/cli/src/commands/_helpers/defineCliCommand.ts': 1,
-  // The CLI's account-plane build, the same pre-runtime construction the VS
-  // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
-  // process-runtime install with the plane as one of the values that install
-  // is given, so there is no runtime to borrow yet, and the construction
-  // program reads no service.
-  'packages/cli/src/runtime/supabaseAuth.ts': 1,
   // `texra doctor`, the one command whose whole job is to report on a process
   // whose platform may not have initialized. Its one program builds the
   // context (`contextFromArgs`, which `defineCliCommand` runs for every other
