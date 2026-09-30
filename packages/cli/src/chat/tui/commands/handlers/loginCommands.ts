@@ -98,7 +98,8 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
   output: SlashCommandOutput,
 ) {
   const accountWarning = githubSelectAccountWarning(args);
-  if (accountWarning) output.writeProgress(accountWarning);
+  if (accountWarning)
+    output.writeProgress(accountWarning, { persistent: true });
 
   const session = args.device
     ? yield* signInCliSupabaseDeviceCode({

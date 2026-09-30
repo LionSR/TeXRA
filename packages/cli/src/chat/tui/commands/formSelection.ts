@@ -103,6 +103,11 @@ export function formSelectionHandler<T>({
         writeProgress: (message, options) => {
           const current = currentProgress();
           if (!current) return;
+          // Guidance must outlive the next status line, which replaces it here.
+          if (options?.persistent) {
+            if (echoOnPersist) onPersist?.();
+            appendLocalNotice(message);
+          }
           formProgress.set({
             ...current,
             message,

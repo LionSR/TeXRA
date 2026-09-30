@@ -1,6 +1,7 @@
 import { type SessionHandle } from '@agent/runtime';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/modelAccess';
+import { type CliSignInProgress } from '@cli/runtime/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
@@ -53,20 +54,18 @@ export interface SlashCommandContext {
 export interface SlashCommandOutput {
   readonly appendOutcome: (message: string) => void;
   readonly setNotice: (message: string) => void;
-  readonly writeProgress: (
-    message: string,
-    options?: { readonly copyable?: boolean },
-  ) => void;
+  readonly writeProgress: CliSignInProgress;
 }
 
 /** Direct command output remains in the ordinary TUI transcript. */
 export const transcriptSlashCommandOutput: SlashCommandOutput = {
   appendOutcome: appendLocalNotice,
   setNotice: setTransientNotice,
-  // Instructions (a sign-in URL, a device code) stay in the transcript to copy;
-  // a status line ("Opening browser...") is not a result worth a permanent row.
+  // Instructions (a sign-in URL, a device code) and guidance (a hint, a failed
+  // launch) stay in the transcript; a status line ("Opening browser...") is
+  // not a result worth a permanent row.
   writeProgress: (message, options) =>
-    options?.copyable
+    options?.copyable || options?.persistent
       ? appendLocalNotice(message)
       : setTransientNotice(message),
 };
