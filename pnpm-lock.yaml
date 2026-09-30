@@ -305,7 +305,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.22.0)(zod@4.4.3)
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
@@ -461,8 +461,8 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.1(@noble/hashes@2.2.0))(vite@8.3.1(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1))
       ws:
-        specifier: 8.21.3
-        version: 8.21.3
+        specifier: 8.22.0
+        version: 8.22.0
 
   packages/agent:
     dependencies:
@@ -567,7 +567,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.22.0)(zod@4.4.3)
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
@@ -608,8 +608,8 @@ importers:
         specifier: 'catalog:'
         version: 7.0.1
       ws:
-        specifier: ^8.21.3
-        version: 8.21.3
+        specifier: ^8.22.0
+        version: 8.22.0
       yaml:
         specifier: 'catalog:'
         version: 2.9.1
@@ -790,14 +790,14 @@ importers:
         specifier: 2.24.0
         version: 2.24.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
       '@openrouter/sdk':
-        specifier: 1.3.32
-        version: 1.3.32
+        specifier: 1.3.33
+        version: 1.3.33
       openai:
         specifier: 7.20.0
-        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.21.3)(zod@4.4.3)
+        version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.22.0)(zod@4.4.3)
       ws:
-        specifier: 8.21.3
-        version: 8.21.3
+        specifier: 8.22.0
+        version: 8.22.0
     devDependencies:
       '@types/ws':
         specifier: 8.18.1
@@ -1816,8 +1816,8 @@ packages:
   '@openrouter/sdk@1.3.28':
     resolution: {integrity: sha512-wfZTYHXKbpu0oRH8afkD/iGUqJmG5ZISS6WbMtcZeX3HlnBiGodaDBTRWo/ETqOfYPhS+9iPnRApSl0BzwZtbQ==}
 
-  '@openrouter/sdk@1.3.32':
-    resolution: {integrity: sha512-B6Y3KfevGNHdeohV+Qng+SyFcitFMTdWn0sLsCA+yUouyFPUJrgwDVuQFEueXIMgxtqmTAzHi7uL6N25IoHLnw==}
+  '@openrouter/sdk@1.3.33':
+    resolution: {integrity: sha512-MrrmDSxbHxX5XrhWlT+cfN1yMf8xu078LiQKtelazpQdHwrHSbyPBd+2y7rx77P3Uix+7uj8MTOX5lPrpx7nwQ==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -5597,8 +5597,8 @@ packages:
     resolution: {integrity: sha512-OTIk8iR8/aCRWBqvxrzxR0hgxWpnYBblY1S5hDWBQfk/VFmJwzmJgQFN3WsoUKHISv2eAwe+PpbUzyL1CKTLXg==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  ws@8.21.3:
-    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -6182,7 +6182,7 @@ snapshots:
     dependencies:
       '@types/ws': 8.18.1
       effect: 4.0.0-rc.117
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -6484,7 +6484,7 @@ snapshots:
       google-auth-library: 10.9.1(supports-color@10.2.2)
       p-retry: 4.6.2
       protobufjs: 7.6.6
-      ws: 8.21.3
+      ws: 8.22.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@10.2.2)(zod@4.4.3)
     transitivePeerDependencies:
@@ -6497,7 +6497,7 @@ snapshots:
       google-auth-library: 10.9.1(supports-color@10.2.2)
       p-retry: 4.6.2
       protobufjs: 7.6.6
-      ws: 8.21.3
+      ws: 8.22.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(supports-color@10.2.2)(zod@4.4.3)
     transitivePeerDependencies:
@@ -6753,7 +6753,7 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  '@openrouter/sdk@1.3.32':
+  '@openrouter/sdk@1.3.33':
     dependencies:
       zod: 4.4.3
 
@@ -8871,7 +8871,7 @@ snapshots:
       type-fest: 5.6.0
       widest-line: 6.0.0
       wrap-ansi: 10.0.2
-      ws: 8.21.3
+      ws: 8.22.0
       yoga-layout: 3.2.1
     optionalDependencies:
       '@types/react': 19.3.0
@@ -9447,10 +9447,10 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.21.3)(zod@4.4.3):
+  openai@7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.22.0)(zod@4.4.3):
     optionalDependencies:
       undici: 8.11.2
-      ws: 8.21.3
+      ws: 8.22.0
       zod: 4.4.3
 
   optionator@0.9.4:
@@ -10429,7 +10429,7 @@ snapshots:
     dependencies:
       signal-exit: 4.1.0
 
-  ws@8.21.3: {}
+  ws@8.22.0: {}
 
   wsl-utils@0.1.0:
     dependencies:
