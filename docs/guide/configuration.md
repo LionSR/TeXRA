@@ -136,7 +136,8 @@ agent keep working turn after turn, and auto-approves shell commands (or all
 agent work, if you chose that) until it verifies the objective or needs you.
 On your own API key that has no natural end, so goal mode carries a spend
 cap: `texra.goal.maxCostUsd`, on the **Tools** page and in `/config`,
-defaults to $5. It counts everything the run and its subagents have spent,
+defaults to $5 and is always a user-wide setting, never read from a project
+`.texra/config.json`. It counts everything the run and its subagents have spent,
 including turns before the goal started. When the total reaches the cap at
 the end of a turn, the goal pauses, auto-approval is withdrawn, and the
 transcript says why. Raise the cap and re-arm the goal to continue; `0`

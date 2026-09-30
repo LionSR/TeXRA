@@ -385,24 +385,25 @@ const CORE_SETTING_ROWS: Record<
     category: 'multi-agent',
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
+  // Global: a committed project config must not raise or remove the user's cap.
   'goal.maxCostUsd': {
     schema: GoalMaxCostSchema,
+    configTarget: 'global',
     title: 'Goal spend cap (USD)',
     description: GOAL_MAX_COST_SETTING.description,
     category: 'tools',
     surfaces: { settingsView: 'approval', cliConfig: true },
   },
-  // The provider toggles below are `configTarget: 'global'`:
-  // they describe how you talk to a provider, not a property of one project,
-  // and that is the scope they were written at before the catalog collapse
-  // routed them through the shared write path. The target restores global
-  // writes and exempts them from the extension's open-workspace write guard,
-  // while Models-tab and runtime reads both keep merged-config semantics. A
-  // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173. Only
-  // server-side state is a choice a user makes (it decides data retention);
-  // the transport knobs have no settings-view row and are set in
-  // `.texra/config.json`.
+  // The provider toggles below are `configTarget: 'global'`: they describe how
+  // you talk to a provider, not a property of one project, and that is the
+  // scope they were written at before the catalog collapse routed them through
+  // the shared write path. The target restores global writes and exempts them
+  // from the extension's open-workspace write guard, while Models-tab and
+  // runtime reads both keep merged-config semantics. A workspace override
+  // therefore remains visible and honored; cleanup of values stranded by the
+  // regression window is tracked separately in #11173. Only server-side state
+  // is a choice a user makes (it decides data retention); the transport knobs
+  // have no settings-view row and are set in `.texra/config.json`.
   'model.gpt5ReasoningSummary': {
     schema: z.boolean().prefault(false),
     configTarget: 'global',
@@ -448,9 +449,8 @@ const CORE_SETTING_ROWS: Record<
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   },
   // No `configTarget`: both runtime readers resolve the *merged* config value
-  // through `readSettingFrom`, so the row must not narrow itself to the
-  // global scope — a workspace override the runtime honors would then be
-  // invisible in (and unwritable from) the settings view.
+  // through `readSettingFrom`, so narrowing the row to the global scope would
+  // hide (and block writes to) a workspace override the runtime honors.
   'model.compactionThresholdPercent': {
     schema: ModelCompactionThresholdPercentSchema,
     title: 'Compaction threshold',
