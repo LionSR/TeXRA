@@ -305,7 +305,7 @@ export class AgentRosterController<
     );
   }
 
-  /** {@link applyTeam} refusing an unknown team in the declared channel. */
+  /** {@link applyTeam} refusing an unknown team; matches id, name or slug. */
   setTeam(teamId: string) {
     return this.applyTeam(teamId).pipe(
       Effect.filterOrFail(
