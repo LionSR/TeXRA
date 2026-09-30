@@ -139,15 +139,28 @@ function scenario(root) {
     path.join(project, 'notes.tex'),
     '\\section{Notes}\nThe golden store reads this file.\n',
   );
+  // The caller's environment (Windows needs `SystemRoot` and the like), less
+  // its TeXRA settings and provider keys, with every home the CLI could
+  // resolve (`HOME`, and `USERPROFILE` on Windows) in the temporary root.
   const env = {
-    PATH: process.env.PATH,
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([name]) => !name.startsWith('TEXRA_'),
+      ),
+    ),
     ...Object.fromEntries(PROVIDER_KEYS.map((name) => [name, ''])),
     OPENAI_API_KEY: FAKE_KEY,
     HOME: home,
+    USERPROFILE: home,
+    APPDATA: path.join(home, 'AppData/Roaming'),
+    LOCALAPPDATA: path.join(home, 'AppData/Local'),
     XDG_CONFIG_HOME: path.join(home, '.config'),
     XDG_DATA_HOME: path.join(home, '.local/share'),
     XDG_STATE_HOME: path.join(home, '.local/state'),
     XDG_CACHE_HOME: path.join(home, '.cache'),
+    // The system prompt names the shell (normalized away, but named on
+    // every machine) and dates in this zone.
+    SHELL: '/bin/sh',
     TZ: 'UTC',
     LANG: 'C',
     CI: '1',
@@ -209,13 +222,23 @@ function query(file, sql, params = []) {
   }
 }
 
+/** Poll `check` until it answers, the deadline passes, or `handle` exits. A
+ *  read that fails (a store not created yet, or held by the CLI's write) is
+ *  "not yet", and the last such failure is reported if the wait fails. */
 async function until(label, check, handle, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
+  let lastError = null;
   for (;;) {
-    const value = check();
-    if (value) return value;
+    try {
+      const value = check();
+      if (value) return value;
+    } catch (error) {
+      lastError = error;
+    }
     if (Date.now() > deadline || handle?.done())
-      fail(`timed out waiting for ${label}\n${handle?.output() ?? ''}`);
+      fail(
+        `timed out waiting for ${label}${lastError ? ` (last read: ${lastError.message})` : ''}\n${handle?.output() ?? ''}`,
+      );
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }

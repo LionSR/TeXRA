@@ -125,9 +125,11 @@ import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
- *  `storage`, owned as `owner`, creating `run` and appending `rows`
- *  positions to it, one transaction each. */
+ *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`
+ *  exists, appending `rows` positions to it, one transaction each. */
 const STORE_WRITER = `
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -143,6 +145,7 @@ const append = Effect.gen(function* () {
   yield* db.appendAll([{ type: 'run.start', aggregateId: id,
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
     category: AgentCategory.ToolUse, parent: null }]);
+  while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
   for (let i = 0; i < Number(rows); i += 1)
     yield* db.appendAll([{ type: 'run.position', aggregateId: id,
       payload: { family: 'toolUse', at: 'waiting' } }]);
@@ -2762,11 +2765,15 @@ describe('the C1 event table and the C6 publisher', () => {
       const exited = new Promise<number | null>((done) =>
         child.on('exit', (code) => done(code)),
       );
-      // Start once the child writes, so the two contend for the lock.
-      while ((yield* db.aggregateState([theirs])).length === 0)
+      // The child has opened the store and created its run; both then start
+      // appending at once, so the two contend for the lock.
+      while ((yield* db.aggregateState([theirs])).length === 0) {
+        expect(child.exitCode, 'the writer exited before writing').toBeNull();
         yield* Effect.sleep('5 millis');
+      }
       const delay = monitorEventLoopDelay({ resolution: 5 });
       delay.enable();
+      writeFileSync(join(storage, 'go'), '');
       for (let i = 0; i < ROWS; i += 1) {
         yield* db.appendAll([waiting]);
         yield* db.readAggregate(own, i + 1);
