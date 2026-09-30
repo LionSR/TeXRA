@@ -87,11 +87,11 @@ export interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * The workspace agent roster changed outside a settings round-trip. Keyless
-   * on purpose: every listener re-reads the roster, so which team or agent
+   * The workspace agents changed outside a settings round-trip. Keyless
+   * on purpose: every listener re-reads the agent list, so which team or agent
    * moved carries no information.
    *
-   * Emitted by the in-process roster writers that bypass the settings
+   * Emitted by the in-process workspace agents writers that bypass the settings
    * round-trip: `apply_team`, which the setup agent runs mid-conversation;
    * and by the tool registry (`toolRegistryLayer`) once it has reloaded the agent
    * catalog after a tool switch or the plugin install record changed, in
@@ -100,10 +100,10 @@ export interface AppSignalPayloads {
    * emit.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets. Not the CLI: it reads the roster per command
+   * agent list and team presets. Not the CLI: it reads the agent list per command
    * and has no persistent panel that could go stale.
    */
-  agentRosterChanged: undefined;
+  workspaceAgentsChanged: undefined;
 
   /**
    * The editor's language-model catalogue or access permissions changed.

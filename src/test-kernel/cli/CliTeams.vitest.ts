@@ -62,7 +62,7 @@ function planRun(
   });
 }
 
-// The full tool-use roster of a preset, with only `root` able to delegate.
+// The full tool-use agent list of a preset, with only `root` able to delegate.
 function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
   return preset.agents.toolUse.map((name) =>
     agent(name, AgentCategory.ToolUse, name === root ? ['delegate_agent'] : []),

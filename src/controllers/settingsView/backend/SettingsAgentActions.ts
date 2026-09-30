@@ -68,7 +68,7 @@ interface SettingsAgentActionsOptions {
   readonly showInfoMessage: MessageHost['showInfoMessage'];
   readonly showErrorMessage: MessageHost['showErrorMessage'];
   readonly refreshAfterMutation: () => SettingsActionEffect<void>;
-  /** Drop a deleted custom agent's roster choices (its hidden key). */
+  /** Drop a deleted custom agent's agent choices (its hidden key). */
   readonly forgetDeletedAgent: (name: string) => SettingsActionEffect<void>;
 }
 
@@ -223,7 +223,7 @@ export function createSettingsAgentActions(
           // `force` is the facade's delete: a path already gone is the
           // post-condition, not a failure.
           yield* fs.remove(entryPath, { force: true });
-          // The removal is real only here: the roster forgets its choice.
+          // The removal is real only here: the agent list forgets its choice.
           yield* options.forgetDeletedAgent(message.agentName);
           yield* options.showInfoMessage(
             `Deleted custom agent: ${message.agentName}`,

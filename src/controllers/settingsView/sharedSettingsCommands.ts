@@ -263,7 +263,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     latex: () => postSnapshot('latex'),
     memory: () => postSnapshot('memory'),
     models: () => postModelSelection,
-    'agents': () => postSnapshot('agents'),
+    agents: () => postSnapshot('agents'),
     profile: () => postProfile,
     skills: () => Effect.andThen(postSnapshot('skills'), postSkills),
     telemetry: () => postSnapshot('telemetry'),
@@ -455,7 +455,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
      */
     repaintOn: {
       githubSubscriptionsChanged: () => gitPage.postSubscriptions,
-      agentRosterChanged: () =>
+      workspaceAgentsChanged: () =>
         agents.refreshAfterAgentMutation(undefined, true),
       credentialChanged: ({ key }: { readonly key: string }) => {
         const provider = apiProviderOfSecretName(key);

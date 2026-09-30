@@ -538,7 +538,7 @@ describe('createChatSessionController', () => {
           catch: ensureError,
         }),
     );
-    // Return the caller-provided default (undefined for roster keys) — a
+    // Return the caller-provided default (undefined for workspace agents keys) — a
     // blanket `false` is not a valid persisted value for
     // WORKSPACE_AGENTS, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
@@ -634,7 +634,7 @@ describe('createChatSessionController', () => {
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
             runs.track(rootHandle);
             runs.track(childHandle);
-            // The root run's stop is its roster fiber's interruption: the
+            // The root run's stop is its registry fiber's interruption: the
             // stop lands there, untracks the root, and the run resolves
             // cancelled through its own result.
             admitInterruptibleRun(runs, runId, () => {

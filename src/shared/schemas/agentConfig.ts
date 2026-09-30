@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { AgentCategory, AgentSourceSchema } from './agent';
-import { AgentDelegationScopeSchema } from './agentRoster';
+import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
 import { ToolConfigSchema } from './toolConfig';
 
@@ -57,7 +57,7 @@ const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   workingDirectory: z.string().nullish(),
   /** CLI-only fields, absent for extension/desktop-launched runs. */
   cli: CliOutputFieldsSchema.nullish(),
-  /** Run-scoped delegation roster used by team runs and their children. */
+  /** Run-scoped delegation agent list used by team runs and their children. */
   delegationAgentScope: AgentDelegationScopeSchema.nullish(),
 });
 

@@ -69,7 +69,7 @@ function manualPlan(overrides: Partial<TeamRunPlan> = {}): TeamRunPlan {
   };
 }
 
-/** The list-backed stand-in for the roster resolver the hosts pass. */
+/** The list-backed stand-in for the agent list resolver the hosts pass. */
 function fromCatalog<T extends TeamCatalogAgent>(
   getAgents: (category: AgentCategory) => readonly T[],
 ) {

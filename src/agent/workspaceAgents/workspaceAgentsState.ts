@@ -1,8 +1,8 @@
 /**
- * What the agent roster keeps in workspace state, and the one lane its writes
- * take: the roster selection, and the custom agents the user hid.
+ * What the workspace agents keeps in workspace state, and the one lane its writes
+ * take: the workspace agents selection, and the custom agents the user hid.
  *
- * The one default for a custom agent a roster list does not name: it is
+ * The one default for a custom agent an agent list does not name: it is
  * shown unless the user hid it. A list (a team, or an exact custom
  * selection) is written before the agent exists, so leaving it out is not a
  * choice to hide it; turning the agent off is, and records it here. The
@@ -21,21 +21,21 @@ import {
   AGENT_SOURCE,
   type AgentCategory,
   type AgentModePreset,
-  type AgentRosterCategorySelection,
+  type WorkspaceAgentsCategorySelection,
   agentKeyOf,
   agentMatchesIdentifier,
-  type AgentRosterSelection,
-  AgentRosterSelectionSchema,
+  type WorkspaceAgentsSelection,
+  WorkspaceAgentsSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
-  INHERITED_AGENT_ROSTER,
+  INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import { readState } from '@shared/config/settingsAccess';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 /**
- * One write at a time per store, module-wide. The roster's write is a
+ * One write at a time per store, module-wide. The workspace agents' write is a
  * read-modify-write of one key: two selection changes that interleave would
  * let the second read the selection the first has not stored yet. The lane
  * is the store, and its lifetime is the last fiber holding or waiting on it.
@@ -58,20 +58,20 @@ export function serializeWorkspaceWrite<A, E>(
  * overwrites the selection the mutation just committed. The mutations own
  * every durable write.
  */
-export function readAgentRosterSelection(repoState: StateStore) {
+export function readWorkspaceAgentsSelection(repoState: StateStore) {
   return readState(
     repoState,
     WorkspaceStateKey.WORKSPACE_AGENTS,
-    AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
   );
 }
 
-interface RosterEntry {
+interface WorkspaceAgentEntry {
   readonly name: string;
   readonly source: AgentSource;
 }
 
-/** The hidden keys, read like the roster selection: a malformed value is
+/** The hidden keys, read like the workspace agents selection: a malformed value is
  *  reported and read as none. */
 function readHidden(
   repoState: StateStore,
@@ -86,15 +86,18 @@ function readHidden(
   );
 }
 
-/** Whether a stored list names `entry`, by the roster's identity rule: a
+/** Whether a stored list names `entry`, by the workspace agents' identity rule: a
  *  bare name (as the CLI writes) names it as its source-qualified key does. */
-function listNames(listed: readonly string[], entry: RosterEntry): boolean {
+function listNames(
+  listed: readonly string[],
+  entry: WorkspaceAgentEntry,
+): boolean {
   return listed.some((identifier) => agentMatchesIdentifier(entry, identifier));
 }
 
 /** The custom agents among `entries` that `listed` leaves out and the user
  *  did not hide: shown all the same. */
-export function unlistedCustomAgents<Entry extends RosterEntry>(
+export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
   repoState: StateStore,
   entries: readonly Entry[],
   listed: readonly string[],
@@ -116,13 +119,13 @@ export function unlistedCustomAgents<Entry extends RosterEntry>(
  * now change; every other stored choice stays, a key whose agent is absent
  * included, since absence (a first scan not yet published, a file that no
  * longer parses) is no removal. A deleted agent's key goes where it is
- * deleted ({@link forgetHiddenAgent}). The caller holds the roster's write
+ * deleted ({@link forgetHiddenAgent}). The caller holds the workspace agents' write
  * lane.
  */
 export function recordCustomChoices(
   repoState: StateStore,
-  agentsOf: (category: AgentCategory) => readonly RosterEntry[],
-  selections: Partial<Record<AgentCategory, AgentRosterCategorySelection>>,
+  agentsOf: (category: AgentCategory) => readonly WorkspaceAgentEntry[],
+  selections: Partial<Record<AgentCategory, WorkspaceAgentsCategorySelection>>,
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
     const hidden = yield* readHidden(repoState);
@@ -147,7 +150,7 @@ export function recordCustomChoices(
  * Forget the hidden choice of a custom agent the user deleted: the one
  * place that knows its removal is real. A file removed outside TeXRA keeps
  * its key, which is harmless, until that name is deleted here or recreated
- * and chosen again. Takes the roster's write lane itself.
+ * and chosen again. Takes the workspace agents' write lane itself.
  */
 export function forgetHiddenAgent(
   repoState: StateStore,
@@ -169,7 +172,7 @@ export function forgetHiddenAgent(
 /** The identifiers a selection lists for a category; `undefined` means every
  *  agent. */
 export function selectedIdentifiers(
-  selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
+  selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
   category: AgentCategory,
   presets: readonly AgentModePreset[],
 ): readonly string[] | undefined {
@@ -184,7 +187,7 @@ export function selectedIdentifiers(
 }
 
 /** `entries` less the custom agents the user hid. */
-export function visibleAgents<Entry extends RosterEntry>(
+export function visibleAgents<Entry extends WorkspaceAgentEntry>(
   repoState: StateStore,
   entries: readonly Entry[],
 ): Effect.Effect<Entry[], StateReadFailed> {

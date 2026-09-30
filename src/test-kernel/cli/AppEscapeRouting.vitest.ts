@@ -217,8 +217,8 @@ function runningChild(childRunId: RunId, agentName: string): ChildRow {
   };
 }
 
-// Seed the child rosters and parent edges through the session event fold.
-function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
+// Seed the child lists and parent edges through the session event fold.
+function seedChildRows(parentRunId: RunId, rows: readonly ChildRow[]): void {
   seedRun(parentRunId);
   for (const row of rows) {
     seedRun(row.childRunId, {
@@ -255,8 +255,8 @@ function seedChildHierarchy(): void {
   seedRun(CHILD, { ownedHere: true });
   seedRun(GRANDCHILD, { ownedHere: true });
   markToolUseAgent(CHILD, GRANDCHILD);
-  seedChildRoster(ROOT, [runningChild(CHILD, 'child')]);
-  seedChildRoster(CHILD, [runningChild(GRANDCHILD, 'grandchild')]);
+  seedChildRows(ROOT, [runningChild(CHILD, 'child')]);
+  seedChildRows(CHILD, [runningChild(GRANDCHILD, 'grandchild')]);
   seedParentEdge(CHILD, ROOT);
   seedParentEdge(GRANDCHILD, CHILD);
 }
@@ -398,7 +398,7 @@ describe('App foreground Escape ownership', () => {
     const WORKFLOW = 'escape-workflow' as RunId;
     seedRootRun();
     setRunning(WORKFLOW, CHILD);
-    seedChildRoster(ROOT, [
+    seedChildRows(ROOT, [
       {
         ...runningChild(WORKFLOW, 'workflow'),
         identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
@@ -419,7 +419,7 @@ describe('App foreground Escape ownership', () => {
         }),
       ]),
     });
-    seedChildRoster(WORKFLOW, [runningChild(CHILD, 'inspect')]);
+    seedChildRows(WORKFLOW, [runningChild(CHILD, 'inspect')]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
     const { instance, stdin, stdout } = await renderRoutingApp();

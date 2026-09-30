@@ -635,7 +635,7 @@ describe('session events and view', () => {
       const listed = yield* SubscriptionRef.get(view.ref);
       const older = listed.runs.get(OLDER);
       const newer = listed.runs.get(NEWER);
-      // Distinct commits in the store's order, so the roster keeps the
+      // Distinct commits in the store's order, so the run registry keeps the
       // transcript's creation order rather than falling back to the id.
       expect(older?.createdAt).toBeGreaterThanOrEqual(1);
       expect(newer?.createdAt).toBeGreaterThan(older?.createdAt ?? 0);

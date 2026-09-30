@@ -43,9 +43,7 @@ const CUSTOM_PRESET: AgentModePreset = {
  * not depend on a hand-rolled key handler.
  */
 describe('teams-tab preset card keyboard activation', () => {
-  useLitComponentTestDom(
-    () => import('@settingsView/frontend/tabs/TeamsTab'),
-  );
+  useLitComponentTestDom(() => import('@settingsView/frontend/tabs/TeamsTab'));
 
   beforeEach(() => {
     mocks.postMessage.mockClear();
@@ -89,10 +87,10 @@ describe('teams-tab preset card keyboard activation', () => {
 
   /**
    * The card previously flipped a local `@state()` on click, so a team the
-   * roster never adopted (cancelled sign-in, unavailable members) still read
+   * workspace agents never adopted (cancelled sign-in, unavailable members) still read
    * as active, and a freshly opened Settings badged nothing at all.
    */
-  it('badges the team the roster reports, not the one last clicked', async () => {
+  it('badges the team the workspace agents report, not the one last clicked', async () => {
     const active = AGENT_MODE_PRESETS[1]!;
     const element = await mount({ activePresetId: active.id });
 

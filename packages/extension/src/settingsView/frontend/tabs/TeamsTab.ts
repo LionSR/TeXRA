@@ -173,9 +173,9 @@ export class TeamsTab extends LitElement {
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
   /**
-   * The applied team, from the backend roster. Deliberately not local state:
+   * The applied team, from the backend. Deliberately not local state:
    * an apply can be cancelled or blocked by unavailable members, and an
-   * optimistic flip would badge a team the roster never adopted.
+   * optimistic flip would badge a team the workspace agents never adopted.
    */
   @property({ attribute: false }) activePresetId: string | null = null;
 

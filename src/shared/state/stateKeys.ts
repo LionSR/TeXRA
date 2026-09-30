@@ -14,7 +14,7 @@
 
 export enum WorkspaceStateKey {
   // Agent visibility
-  /** Roster selection; the `custom` member carries a category-keyed record. */
+  /** Workspace agents selection; the `custom` member carries a category-keyed record. */
   WORKSPACE_AGENTS = 'texra.workspaceAgents',
   CUSTOM_TEAMS = 'texra.customTeams',
   /** Custom agents the user turned off; every other custom agent is shown. */

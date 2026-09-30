@@ -30,10 +30,8 @@ import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
-function workspaceRoster() {
-  return testWorkspaceRoots().repoState.get(
-    WorkspaceStateKey.WORKSPACE_AGENTS,
-  );
+function workspaceAgents() {
+  return testWorkspaceRoots().repoState.get(WorkspaceStateKey.WORKSPACE_AGENTS);
 }
 
 function applyTeam(input: Parameters<(typeof ApplyTeamTool)['call']>[0]) {
@@ -41,7 +39,7 @@ function applyTeam(input: Parameters<(typeof ApplyTeamTool)['call']>[0]) {
 }
 
 const expectNoTeamState = Effect.gen(function* () {
-  expect(yield* workspaceRoster()).toBeUndefined();
+  expect(yield* workspaceAgents()).toBeUndefined();
   expect(yield* getDefaultTeamId(hostStores().globalState)).toBeUndefined();
 });
 
@@ -111,7 +109,7 @@ describe('apply_team', () => {
         });
 
         expect(result.status).toBe('executed');
-        expect(yield* workspaceRoster()).toEqual({
+        expect(yield* workspaceAgents()).toEqual({
           kind: 'team',
           teamId: 'starter',
         });
@@ -134,7 +132,7 @@ describe('apply_team', () => {
       });
 
       expect(result.status).toBe('executed');
-      expect(yield* workspaceRoster()).toEqual({
+      expect(yield* workspaceAgents()).toEqual({
         kind: 'team',
         teamId: 'software-engineer',
       });
@@ -148,7 +146,7 @@ describe('apply_team', () => {
       expect(result.status).toBe('executed');
       expect(result.output).not.toMatch(/Not installed yet/);
       expect(result.summary).toMatch(/Applied the Physicist team/);
-      expect(yield* workspaceRoster()).toEqual({
+      expect(yield* workspaceAgents()).toEqual({
         kind: 'team',
         teamId: 'physicist',
       });

@@ -259,7 +259,7 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       null,
     );
     const runs = options.session?.runs;
-    // The launch's stop target is its run's roster fiber; the hanging
+    // The launch's stop target is its run's run registry fiber; the hanging
     // promise is the test's to resolve, as the run's own result is, and the
     // generation ends with it.
     let generation: { interruptUnsafe(): void } | undefined;

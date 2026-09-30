@@ -5,14 +5,14 @@
 // software engineering), each declaring its own workflow agents, tool-use
 // agents, and per-agent tool lists — but that whole system was reachable only
 // through Settings tab index 4, so a new user never saw it and landed on a
-// generic roster. The capability existed; the discoverability didn't.
+// generic agent list. The capability existed; the discoverability didn't.
 //
 // The panel leads with the question that actually configures the app: what
 // kind of work are you doing? The answer selects a team, which is applied
 // through the same `applyAgentModePreset` path the Settings team picker uses —
 // no parallel configuration mechanism.
 //
-// Steps: pick your work → confirm the preset roster → finish (open the
+// Steps: pick your work → confirm the team's agents → finish (open the
 // launcher). It is shown in the task canvas at startup unless the user saves
 // the "don't show" preference.
 
@@ -83,7 +83,7 @@ const WORK_TYPES: ReadonlyArray<{
   },
 ];
 
-type TourStep = 'work' | 'roster' | 'done';
+type TourStep = 'work' | 'agents' | 'done';
 
 // Each panel instance gets a unique heading id for aria-labelledby.
 let panelTitleCounter = 0;
@@ -127,11 +127,11 @@ export function createStartupTeamPanel({
   function chooseWorkType(entry: (typeof VISIBLE_WORK_TYPES)[number]): void {
     chosenWorkType = entry;
     // Apply immediately through the same command the Settings team picker
-    // uses, so the roster is live even if the user dismisses the panel here.
+    // uses, so the agent list is live even if the user dismisses the panel here.
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
       presetId: entry.presetId,
     });
-    goTo('roster');
+    goTo('agents');
   }
 
   function workStepTemplate(): TemplateResult {
@@ -184,10 +184,10 @@ export function createStartupTeamPanel({
     `;
   }
 
-  function rosterStepTemplate(): TemplateResult {
+  function agentsStepTemplate(): TemplateResult {
     // Defensive: chooseWorkType only advances for entries whose preset
     // resolved, so this is unreachable in practice. Bail to the work step
-    // rather than render an empty roster.
+    // rather than render an empty agent list.
     if (!chosenWorkType) {
       return workStepTemplate();
     }
@@ -204,16 +204,16 @@ export function createStartupTeamPanel({
           <p>${preset.description}</p>
         </div>
       </header>
-      <div class="desktop-onboarding-roster">
-        <p class="desktop-onboarding-roster-summary">
+      <div class="desktop-onboarding-agents">
+        <p class="desktop-onboarding-agents-summary">
           ${agentCount} agents enabled, each with its own tools and prompts.
         </p>
         ${
           preset.agents.workflow.length > 0
             ? html`
-                <div class="desktop-onboarding-roster-group">
-                  <span class="desktop-onboarding-roster-label">Workflows</span>
-                  <div class="desktop-onboarding-roster-chips">
+                <div class="desktop-onboarding-agents-group">
+                  <span class="desktop-onboarding-agents-label">Workflows</span>
+                  <div class="desktop-onboarding-agents-chips">
                     ${preset.agents.workflow.map(
                       (name) =>
                         html`<span class="desktop-onboarding-chip"
@@ -225,9 +225,9 @@ export function createStartupTeamPanel({
               `
             : nothing
         }
-        <div class="desktop-onboarding-roster-group">
-          <span class="desktop-onboarding-roster-label">Agents</span>
-          <div class="desktop-onboarding-roster-chips">
+        <div class="desktop-onboarding-agents-group">
+          <span class="desktop-onboarding-agents-label">Agents</span>
+          <div class="desktop-onboarding-agents-chips">
             ${preset.agents.toolUse.map(
               (name) =>
                 html`<span class="desktop-onboarding-chip">${name}</span>`,
@@ -318,7 +318,7 @@ export function createStartupTeamPanel({
           class="btn-secondary"
           appearance="outlined"
           size="s"
-          @click=${() => goTo('roster')}
+          @click=${() => goTo('agents')}
         >
           Back
         </wa-button>
@@ -362,7 +362,7 @@ export function createStartupTeamPanel({
 
   const STEP_TEMPLATES: Record<TourStep, () => TemplateResult> = {
     work: workStepTemplate,
-    roster: rosterStepTemplate,
+    agents: agentsStepTemplate,
     done: doneStepTemplate,
   };
 

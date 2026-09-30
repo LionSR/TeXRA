@@ -21,7 +21,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
-  readCliAgentRoster: vi.fn(),
+  readCliWorkspaceAgents: vi.fn(),
   setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
 }));
 
@@ -35,9 +35,10 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => ({
   disposeCliProcessRuntime: Effect.void,
 }));
 
-vi.mock('@cli/runtime/agentRoster', () => ({
-  formatCliAgentRoster: () => 'Agent roster',
-  readCliAgentRoster: () => Effect.promise(() => mocks.readCliAgentRoster()),
+vi.mock('@cli/runtime/workspaceAgents', () => ({
+  formatCliWorkspaceAgents: () => 'Workspace agents',
+  readCliWorkspaceAgents: () =>
+    Effect.promise(() => mocks.readCliWorkspaceAgents()),
 }));
 
 vi.mock('@cli/runtime/cliConfig', async (importOriginal) => ({
@@ -49,7 +50,7 @@ const { runCli } = await import('@cli/commands/root');
 
 const tempDirs = useTempDirs();
 
-// The roster controller runs real over the bundled catalogs: the installed
+// The workspace agents controller runs real over the bundled catalogs: the installed
 // host's agent directories are the repo's resources, with an empty custom dir
 // standing in for a workspace without custom agents.
 let customAgentsDir: string;
@@ -80,12 +81,10 @@ beforeAll(async () => {
 
 setupPlatform({}, { agentDirectories: bundledAgentDirectories() });
 
-/** The selection the real roster controller last persisted. */
+/** The selection the real workspace agents controller last persisted. */
 function readSelection(): Promise<unknown> {
   return Effect.runPromise(
-    installedHost().roots.repoState.get(
-      WorkspaceStateKey.WORKSPACE_AGENTS,
-    ),
+    installedHost().roots.repoState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
   );
 }
 
@@ -110,7 +109,7 @@ describe('CLI config command', () => {
       Effect.succeed({ runtime: testRuntime(), roots: host.roots }),
     );
     mocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
-    mocks.readCliAgentRoster.mockResolvedValue({
+    mocks.readCliWorkspaceAgents.mockResolvedValue({
       selection: { kind: 'all' },
       effectiveSelection: { kind: 'all' },
       workflowAgentKeys: [],
@@ -182,14 +181,14 @@ describe('CLI config command', () => {
       ]);
 
       expect(result.exitCode).toBe(2);
-      // The real roster controller owns the refusal; its message names the
+      // The real workspace agents controller owns the refusal; its message names the
       // value the command passed through.
       expect(stderr).toContain(message);
       expect(await readSelection()).toBeUndefined();
     },
   );
 
-  it('canonicalizes a default chat agent from the effective roster', async () => {
+  it('canonicalizes a default chat agent from the effective agents', async () => {
     const result = await runCli([
       'config',
       'agents',
@@ -209,7 +208,7 @@ describe('CLI config command', () => {
     );
   });
 
-  it('rejects a default chat agent outside the effective roster', async () => {
+  it('rejects a default chat agent outside the effective agents', async () => {
     const result = await runCli([
       'config',
       'agents',

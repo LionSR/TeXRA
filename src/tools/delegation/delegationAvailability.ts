@@ -1,18 +1,18 @@
 /**
  * Live availability annotations for delegation tool descriptions, and the
- * roster/model resolution behind them.
+ * agent list/model resolution behind them.
  *
  * The delegate_agent / delegate_workflow descriptions ship with placeholder
  * "Available agents:", "Available models:", and "Git worktree support:" lines.
  * All three depend on state the user can change after the tool registry is
- * built (roster visibility, a team swap, model credentials, the
+ * built (agent visibility, a team swap, model credentials, the
  * worktree setting), so each line is resolved per run at the `resolveStepTools`
  * boundary instead of being frozen into the tool definition at first access.
  *
- * Keeping the roster current is what lets the agent-native delegation
+ * Keeping the agent list current is what lets the agent-native delegation
  * convention work: delegating agents (orchestrator, engineer, …) are told to
  * pick from the tool description's "Available agents" list, so a stale list
- * made them attempt agents that are no longer in the roster and discover the
+ * made them attempt agents that are no longer in the agent list and discover the
  * mismatch only via a failed delegate call.
  *
  * Each annotation owns its anchor pattern and copy; they share one injection
@@ -118,7 +118,7 @@ function formatAgentList(
 
 /**
  * Build the "Available agents:" block for a delegation tool's category from the
- * currently visible roster. An empty roster yields a single actionable line
+ * currently visible agents. An empty agent list yields a single actionable line
  * rather than a bare header, mirroring the empty-state messaging on the models
  * line. Annotation runs inside an agent flow that has already loaded the
  * registry, so an empty result means the user genuinely has no visible agents
@@ -132,7 +132,7 @@ function visibleDelegationAgentsBlock(agents: readonly AgentEntry[]): string {
 /**
  * The annotation facts that depend on where the reader is standing: the run's
  * pinned delegation scope, the worktree opt-in, and the slots the durable
- * roster answers from — all of them the calling session's, carried as data so
+ * agent list answers from — all of them the calling session's, carried as data so
  * the annotation itself is pure over them.
  */
 export interface DelegationAnnotationState {
@@ -140,7 +140,7 @@ export interface DelegationAnnotationState {
   readonly agents: Readonly<Record<AgentCategory, readonly AgentEntry[]>>;
 }
 
-/** Resolve the roster and workspace setting before pure annotation. */
+/** Resolve the agent list and workspace setting before pure annotation. */
 export const readDelegationAnnotationState = Effect.fn(
   'readDelegationAnnotationState',
 )(function* (stores: SettingsStores, delegationScope?: AgentDelegationScope) {
@@ -276,12 +276,12 @@ const WORKTREE_DISABLED_LINE =
  * are independent (one keys off the tool name, the other off the whole list),
  * not causally linked.
  *
- * The roster slots, the roster scope and the worktree switch arrive as `state`
+ * The workspace agents slots, the agent list scope and the worktree switch arrive as `state`
  * rather than being read here — see {@link readDelegationAnnotationState} for
  * why the caller resolves them — so everything below is pure over its
  * arguments.
  *
- * The roster block is appended when its anchor is missing; the worktree line is
+ * The agent list block is appended when its anchor is missing; the worktree line is
  * replace-only, because a tool without that line (e.g. delegate_workflow, which
  * has no `working_directory`) takes no working directory and must never be told
  * it does. The tool rejects a `working_directory` it cannot use when it runs
@@ -305,7 +305,7 @@ export function annotateDelegationAvailability(
           () => formatAvailableModelsLine(availableModelNames),
           { appendIfMissing: true },
         );
-  // The replacements no-op without a description, and resolving the roster /
+  // The replacements no-op without a description, and resolving the agent list /
   // worktree state reaches platform state — skip those lookups when there is
   // nothing to annotate (e.g. a tool config that carries only a name).
   if (!withModels.description) return withModels;

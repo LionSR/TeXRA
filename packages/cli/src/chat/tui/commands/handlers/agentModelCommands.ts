@@ -1,6 +1,9 @@
 import { Cause, Effect } from 'effect';
 
-import { resolveAgentForLaunch, type AgentRosterStores } from '@agent/index';
+import {
+  resolveAgentForLaunch,
+  type WorkspaceAgentsStores,
+} from '@agent/index';
 import { checkCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -32,7 +35,7 @@ import {
 
 /** Resolve the chat root agent once: the entry the run pins, or the refusal. */
 export function resolveChatToolUseAgent(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   agentName: string,
 ) {
   return Effect.gen(function* () {

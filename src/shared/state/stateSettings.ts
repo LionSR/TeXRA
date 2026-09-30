@@ -28,7 +28,7 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentModePresetSchema,
-  AgentRosterSelectionSchema,
+  WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -55,7 +55,7 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
-  INHERITED_AGENT_ROSTER,
+  INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
@@ -767,12 +767,12 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 
-  // --- Agent roster ----------------------------------------------------------
-  // Written and read by the roster and the settings view's agent catalog,
+  // --- Workspace agents ----------------------------------------------------------
+  // Written and read by the agent list and the settings view's agent catalog,
   // which no catalog-driven UI renders.
   {
     key: WorkspaceStateKey.WORKSPACE_AGENTS,
-    schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    schema: WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
     slot: 'repoState',
   },
   {
@@ -1246,7 +1246,7 @@ export function settingsViewSnapshotEntries(
 }
 
 /**
- * The `/config` roster: every row the CLI panel renders, across both catalog
+ * The `/config` catalog: every row the CLI panel renders, across both catalog
  * tiers. `surfaces.cliConfig` is the single predicate.
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =

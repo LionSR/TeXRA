@@ -99,7 +99,7 @@ prompts:
          look around, …), and whether anything is already in place (TeX
          installed, an API key, a paper open) so you can skip phases. If
          they name their field (math, physics, CS/ML, Lean, or software),
-         remember it: phase E sets their roster from it without
+         remember it: phase E sets their workspace agents from it without
          re-asking.
       4. Tell them you'll then probe their environment and walk them
          through whatever is missing. Do NOT call any tool yet.
@@ -326,7 +326,7 @@ prompts:
     view takes it from there. Whether they accept or decline, close
     with one hand-off sentence naming the daily driver: from their
     next task they can just talk to the orchestrator in the main view
-    and it routes work across their roster. Do not keep asking
+    and it routes work across their agents. Do not keep asking
     follow-up questions after that.
 
   userRequest: |

@@ -256,7 +256,7 @@ describe('CLI agent validation with a shadowed name', () => {
           },
         });
         const context = {
-          // The roster slots only gate visibility, which this registry leaves
+          // The workspace agents slots only gate visibility, which this registry leaves
           // unconfigured, so empty chat slots resolve the same names as the host.
           stores: makeFakeSettingsStores('cli').stores,
           session: {

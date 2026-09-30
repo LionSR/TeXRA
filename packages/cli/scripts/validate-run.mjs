@@ -292,15 +292,7 @@ function validateTeamListAvailability() {
     const runList = (args = []) =>
       run(
         process.execPath,
-        [
-          binaryPath,
-          'team',
-          'list',
-          '--cwd',
-          cwd,
-          ...args,
-          '--no-color',
-        ],
+        [binaryPath, 'team', 'list', '--cwd', cwd, ...args, '--no-color'],
         {
           cwd: repoRoot,
           env: listEnv,
@@ -1019,7 +1011,7 @@ prompts:
       records.every((record) => record.contract === 2),
       'every NDJSON line should carry the version-2 contract stamp',
     );
-    // A run id is opaque: the workflow-script child is the roster row its
+    // A run id is opaque: the workflow-script child is the child row its
     // parent reports with the workflow identity, never a name parsed out of
     // the id.
     const workflowChildIds = new Set(

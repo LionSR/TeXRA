@@ -4,7 +4,7 @@
 // reminder banner, "Enable memory for chat agents" switch, then a list of
 // memory items with pinned/size/lines/updated/by metadata and a collapsible
 // "Contents" preview. Tab order, icons, and `by <agent>` attributions match
-// SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent roster.
+// SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent list.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
 import MockSwitch from './MockSwitch.vue';

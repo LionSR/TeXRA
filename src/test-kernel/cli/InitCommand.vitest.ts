@@ -126,7 +126,7 @@ describe('CLI init command', () => {
       .mockReset()
       .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
     // The command threads the stores this call hands back into the model
-    // access list and the roster's visibility read, so the mock returns the
+    // access list and the workspace agents' visibility read, so the mock returns the
     // installed host's own stores.
     const host = installedHost();
     mocks.initCliPlatform.mockReset().mockReturnValue(

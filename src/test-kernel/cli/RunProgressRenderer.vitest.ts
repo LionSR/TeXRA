@@ -254,8 +254,8 @@ async function handleRunDescription(
 ): Promise<void> {
   await renderer.set(runId, { description });
 }
-/** The parent's roster as the fold states it, in one view: each named
- *  child is a live child stream, and a child that left the roster has
+/** The parent's child list as the fold states it, in one view: each named
+ *  child is a live child stream, and a child that left the child list has
  *  finished. An unnamed entry has no stream to show. */
 async function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
@@ -606,7 +606,7 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('joins a child description emitted before the active roster', async () => {
+  it('joins a child description emitted before the active child list', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
 
@@ -1020,7 +1020,7 @@ describe('CLI run progress renderer', () => {
             const session = yield* createTestSession();
             publishTestRunStart(session, parentRunId);
             yield* Effect.promise(() => settle());
-            // The roster is the fold's: the parent's `childIds` and the child's own
+            // The child list is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
             const detach = yield* attachCliSessionProgressProjection(session);
             session.publish([

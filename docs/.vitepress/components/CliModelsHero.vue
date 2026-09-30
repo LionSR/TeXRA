@@ -34,7 +34,7 @@ const rows = [
     aria-label="texra models list and show output"
   >
     <div class="cmo-scroll">
-      <!-- Beat 1: the roster the current credentials can run -->
+      <!-- Beat 1: the agents the current credentials can run -->
       <div class="mk-term-prompt cmo-prompt">
         <span class="mk-term-sigil">$</span>
         <span class="mk-term-cmd">texra models list</span>

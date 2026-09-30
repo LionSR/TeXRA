@@ -714,7 +714,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     () =>
       Effect.gen(function* () {
         // After a retry, the re-run registers its child run under an
-        // attempt-specific id (not the logical id) — the id the roster exposes.
+        // attempt-specific id (not the logical id) — the id the run registry exposes.
         // The control bridge must follow that id, not the stale logical one.
         const logicalRunId = grandchildRunId;
         const attemptRunId = 'ccccc0000002' as RunId;
@@ -745,7 +745,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         yield* settle;
         expect(yield* Deferred.isDone(settled)).toBe(false);
 
-        // The attempt-specific id the roster exposes reaches the engine index.
+        // The attempt-specific id the run registry exposes reaches the engine index.
         workflowControls.control(attemptRunId, 'skip');
         const turn = yield* Fiber.join(launch);
         expect(turn.result).toBe('Skipped');

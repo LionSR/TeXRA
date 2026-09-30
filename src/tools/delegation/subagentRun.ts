@@ -177,7 +177,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     });
   }
   const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-  // One decision for the child's follow-up capability: the roster row it
+  // One decision for the child's follow-up capability: the child row it
   // registers under and the run it launches must agree.
   const userFollowUpSupport = isToolUse
     ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE

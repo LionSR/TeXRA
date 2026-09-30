@@ -23,7 +23,7 @@ export const AGENT_CATEGORIES = [
 
 /**
  * One value per agent category. The single generic shape for every
- * category-partitioned fact (rosters, selections, catalogs, form state) —
+ * category-partitioned fact (agent lists, selections, catalogs, form state) —
  * replaces the historical `workflow*`/`toolUse*` field pairs.
  */
 export type ByCategory<T> = Record<AgentCategory, T>;

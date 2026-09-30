@@ -4,7 +4,7 @@ import { Effect, FileSystem } from 'effect';
 import {
   agentSourceDirectory,
   changedBuiltInOf,
-  createWorkspaceAgentRosterController,
+  createWorkspaceAgentsController,
   customCopyPath,
   getAgent,
   getCustomAgentScanIssues,
@@ -180,9 +180,7 @@ function resetAgent(context: CliContext, name: string) {
     yield* FileSystem.FileSystem.use((fs) =>
       fs.remove(custom.path, { force: true }),
     );
-    yield* createWorkspaceAgentRosterController(services).forgetDeletedAgent(
-      name,
-    );
+    yield* createWorkspaceAgentsController(services).forgetDeletedAgent(name);
     emitCopyResult(context, {
       action: 'reset',
       name,
