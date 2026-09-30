@@ -68,11 +68,13 @@ recorded here):
   `supabase/functions/before-user-created/index.ts:7-10,24-26`),
   `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`
   (`supabase/functions/github-app-token-exchange/index.ts:43-48`).
-- Catalog sync: `SUPABASE_DB_URL`, `SUPABASE_PROJECT_REF` (passed to the CLI
-  as `SUPABASE_PROJECT_ID`), `SUPABASE_ACCESS_TOKEN`
-  (`scripts/sync-remote-agents.mjs:266-305`,
-  `.github/workflows/remote-agents-sync.yml`: secret
-  `SUPABASE_ACCESS_TOKEN`, repository variable `SUPABASE_PROJECT_REF`).
+- Catalog sync: the script reads `SUPABASE_DB_URL` and `SUPABASE_PROJECT_REF`
+  (passed to the CLI as `SUPABASE_PROJECT_ID`)
+  (`scripts/sync-remote-agents.mjs:266-305`). The workflow
+  `.github/workflows/remote-agents-sync.yml` supplies the secret
+  `SUPABASE_ACCESS_TOKEN`, which the Supabase CLI reads from the environment
+  (the script never names it), and the repository variable
+  `SUPABASE_PROJECT_REF`.
 - `TEXRA_REMOTE_AGENTS_ROOT` overrides the catalog root for the sync script
   (`scripts/sync-remote-agents.mjs:29`).
 - The project ref itself lives in the GitHub repository variable and in a
@@ -568,11 +570,25 @@ id and no GoTrue user:
 
 - **Client.** Mint a random UUID once per install (stored with the host's
   other state, not in secrets) and send it as `X-TeXRA-Install-Id` with no
-  `Authorization` header. The payload stays the same. The consent gates stay
-  the same.
+  `Authorization` header. The payload stays the same.
+- **Consent.** The existing gates are not enough on their own.
+  `texra.telemetry.enabled` defaults to `true`, but today a signed-out install
+  sends nothing. Minting an install id silently would start reporting for
+  every install that never signed in. The change therefore needs a new consent
+  decision for that cohort. Two options: an explicit opt-in, or a first-run
+  notice that names what is sent and how to turn it off, shown before the
+  first batch leaves. The owner picks the product answer. Either way, the
+  environment opt-outs and the setting keep working as they do now.
 - **`log-usage`.** When there is no bearer token, accept a well-formed
   install id and write rows with `user_id = NULL, install_id = <id>`. Keep the
   JWT path as it is for released clients.
+- **Abuse.** A random UUID identifies an install but does not authenticate
+  it. Anyone could post fabricated batches under chosen ids. Treat
+  install-id rows as unauthenticated analytics, never as accounting. Add rate
+  limits per install id and per IP at the function. If the data must resist
+  forgery, issue a server-signed install credential instead: a small
+  `register-install` function that returns an HMAC over the id, verified by
+  `log-usage`. This is still less machinery than GoTrue anonymous users.
 - **SQL**, applied in the private migrations repository:
   1. add a nullable `install_id uuid` to `usage_logs` and
      `subscription_usage_logs`;
