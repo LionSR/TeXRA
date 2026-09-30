@@ -781,6 +781,7 @@ the run-lifetime pin are deleted: a step pins a generation of the live
 catalog, and a plugin's layer is one refcounted `RcMap` entry shared by the
 generations that hold it. "Plugins may own layers" stands, and the entry
 below it ("Plugins own typed tables at their seams") records where they live.
+Its Forbids clause "a child re-resolving its parent's plugin set" also stands.
 
 ---
 
@@ -859,7 +860,8 @@ the primary headless host.
 
 - **D1.** TeXRA sign-in is removed from all three hosts (the Account tab,
   `texra login`, the host sign-in UI). Provider OAuth (ChatGPT/Codex
-  subscription, xAI, OpenRouter) is not the TeXRA account and stays. The
+  subscription, Grok/xAI) and API-key providers (OpenRouter among them) are
+  not the TeXRA account and stay. The
   hosted server stays until its sunset.
 - **D2.** Telemetry is anonymous metadata, on by default, with a random
   install ID: a UUIDv4 persisted in each host's global state, never derived
@@ -953,7 +955,7 @@ format retirement").
 
 **Ruling.** A context overflow in a tool-use run becomes a forced compaction
 retry, not a failed run (D13). Nightly and label-triggered journey checks run
-on cheap models only, `deepseek41T` and `glm53flash` (D14).
+on cheap models only, `deepseek41T` and `glm53` (D14).
 
 **Reopen.** A forced retry loops without shrinking the context (D13); a
 journey needs a model the cheap tier cannot drive (D14).
