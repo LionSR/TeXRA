@@ -12,6 +12,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import type { ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -109,14 +110,7 @@ export function createSampleProject(
 
     const readmeRelativePath = path.join(destFolder, 'README.md');
     if (yield* workspaceFs.exists(readmeRelativePath)) {
-      const document = yield* Effect.promise(() =>
-        vscode.workspace.openTextDocument(
-          vscode.Uri.file(path.join(destPath, 'README.md')),
-        ),
-      );
-      yield* Effect.promise(() =>
-        vscode.window.showTextDocument(document, { preview: false }),
-      );
+      yield* openFileInEditor(path.join(destPath, 'README.md'));
     }
     // One terminal boundary for the whole creation, as the single
     // `Effect.catch` over the async body it replaces was: a failed workspace

@@ -36,7 +36,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 - **Retry outside `ModelInvoker`** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → the two owners live in the invoker only.
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; route non-agent logging through `@logger/logUtils`.
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
-- **Commands invoking flow factories directly** → must launch via `runAgent` (`src/agent/runtime/runAgent.ts`) so the run gets an `executionId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `executionId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
+- **Commands invoking flow factories directly** → must launch via `runAgent` (`src/agent/runtime/runAgent.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
 
 ## 4. Configuration, storage, files
 
@@ -58,7 +58,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 6. Error handling and logging
 
-- **Ad-hoc `vscode.window.showErrorMessage`** → `logErrorMessage` / `showLoggedErrorMessage` / `showLoggedMessageWithDocs` from `packages/extension/src/frontend/ui/errorHandlingUtils.ts`.
+- **Ad-hoc `vscode.window.showErrorMessage`** → `showLoggedErrorMessage` / `showLoggedMessageWithDocs` from `packages/extension/src/frontend/ui/errorHandlingUtils.ts`.
 - **Swallowed errors** (`catch {}` / `catch (_) {}`) without a comment explaining why.
 - **`instanceof Error`** narrowing where the standard helpers above apply.
 
@@ -131,7 +131,7 @@ Mirrors [`.agents/docs/implemented/process/2026-07-07-fewer-elements.md`](../../
 
 Standing rules from the 2026-07 error-handling audit: 880 catch sites read across six scopes, ~87% legitimate; the 115 masking sites concentrate in silent Zod defaults on persisted data, per-call-site "best-effort" re-derivation, and defaulted reads feeding destructive rewrites. On persisted data this section **overrides** §2's `Schema.catch(default)` idiom. End-state companion: "Catch budget" in [`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`](../../../../.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md). Apply whenever a diff adds `catch`, `.catch(`, a Zod `.catch(`, a `resolve*`/`derive*`/`infer*`/`ensure*`/`fallback*` function, or a `??`/`||`/try-else chain over data sources.
 
-**Taxonomy.** Every new catch/fallback/resolver must classify, stated in the PR or self-evident at the site. Legitimate: **L1** boundary guard (host command/entry handler, run-lifecycle/listener fan-out, process exit); **L2** cleanup (`finally`, dispose-on-error, saga compensation); **L3** documented best-effort side write (comment required, never run-critical); **L4** provider/IO boundary with a single classifier (`withSdkErrorTag`→`normalizeProviderError`, `classifyAgentError`, `invokeToolSafely`); **L5** decide-once precedence owner (`decideRunModel`, `resolveClientCredential`, `deriveResumability`). Masking (flag): **M1** catch-and-continue in core logic; **M2** silent swallow; **M3** Zod silent default on persisted/parsed data; **M4** fallback chain with no decided owner; **M5** re-derive resolver; **M6** defensive wrapper around code that cannot throw.
+**Taxonomy.** Every new catch/fallback/resolver must classify, stated in the PR or self-evident at the site. Legitimate: **L1** boundary guard (host command/entry handler, run-lifecycle/listener fan-out, process exit); **L2** cleanup (`finally`, dispose-on-error, saga compensation); **L3** documented best-effort side write (comment required, never run-critical); **L4** provider/IO boundary with a single classifier (`normalizeProviderError`, `classifyAgentError`); **L5** decide-once precedence owner (`decideRunModel`, `deriveResumability`). Masking (flag): **M1** catch-and-continue in core logic; **M2** silent swallow; **M3** Zod silent default on persisted/parsed data; **M4** fallback chain with no decided owner; **M5** re-derive resolver; **M6** defensive wrapper around code that cannot throw.
 
 - **`catch {}` / `.catch(() => {})` without a best-effort comment is a blocker.** Grep the diff for `catch {`, `catch (_`, `.catch(() =>`. The comment must say why failure is safe to ignore and why it cannot hide a programming error. Precedent: `runToolUseFlow.ts`'s bare `catch { logger.debug('Resume parse failed, starting fresh') }` silently converted a resume into an empty-history run.
 - **New Zod `.catch(default)` on persisted or user-authored data is a blocker** (loud-reads rule, #6966 bullet 5). A malformed present value must fail: propagate the parse failure and surface it with its cause. Defaults are only for genuinely absent data or explicitly non-authoritative view state.
@@ -141,7 +141,7 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 - **A `??`/`||`/try-else chain over >2 sources needs a named single owner** (one function/table owns the precedence; consumers take its output). Display defaults (`?? 'unknown'`) exempt.
 - **No downgrade below `warn` on a resume/persisted-state read failure.** `logger.debug` in a catch that changes run behavior (fresh start, dropped history, zeroed usage) is a blocker.
 - **Fire-and-forget writes get exactly one logging rejection owner.** A chain-keep-alive `.catch(() => {})` on a write queue is legal only paired with one shared observer that logs the rejection.
-- **Cleaner-solutions menu** (the fix names which it uses): parse-at-entry (Zod at the boundary, canonical thereafter); decide-once-carry-as-data; result types (`{ok}|{error}`) in core with one throw boundary; define-errors-out-of-existence (make the invalid state unrepresentable); loud read (warn + surface + `schemaVersion`); single classifier boundary; delete-the-guard (let it crash to an existing L1/L4 boundary).
+- **Cleaner-solutions menu** (the fix names which it uses): parse-at-entry (Zod at the boundary, canonical thereafter); decide-once-carry-as-data; result types (`{ok}|{error}`) in core with one throw boundary; define-errors-out-of-existence (make the invalid state unrepresentable); loud read (warn + surface the cause); single classifier boundary; delete-the-guard (let it crash to an existing L1/L4 boundary).
 
 ## 16. Code quality rules (2026-07 simplification campaign)
 

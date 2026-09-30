@@ -15,7 +15,7 @@ interface ConversationMessageFormatOptions {
 }
 
 export function createConversationPreview(
-  conversation: readonly ExportNode[] | null,
+  conversation: readonly ExportNode[],
 ): CliHistoryConversationPreview | null {
   const transcript = buildConversationMessages(conversation, {
     includeToolUseMarkers: false,
@@ -37,7 +37,7 @@ export function createConversationPreview(
 }
 
 export function createConversationTranscript(
-  conversation: readonly ExportNode[] | null,
+  conversation: readonly ExportNode[],
 ): CliHistoryConversationPreview | null {
   return buildConversationMessages(conversation, {
     includeToolUseMarkers: true,
@@ -45,10 +45,10 @@ export function createConversationTranscript(
 }
 
 function buildConversationMessages(
-  conversation: readonly ExportNode[] | null,
+  conversation: readonly ExportNode[],
   options: ConversationMessageFormatOptions,
 ): CliHistoryConversationPreview | null {
-  if (!conversation?.length) return null;
+  if (conversation.length === 0) return null;
   const messages = conversation
     .map((message, i) => toConversationPreviewMessage(message, i + 1, options))
     .filter((message) => message.content.trim().length > 0);

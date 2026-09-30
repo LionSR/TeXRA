@@ -15,11 +15,25 @@ import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
 import { runAgent, type SessionHandle } from '@agent/runtime';
+import { handleMerge } from '@commands/agent/mergeCommands';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   createFileSelectionPickers,
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
+import { openFile, openLabel } from '@commands/files/openFileCommands';
+import { findCommitInHistory } from '@commands/git/gitCommands';
+import { handleClean } from '@commands/housekeeping/cleanCommands';
+import { handlePack } from '@commands/housekeeping/packCommands';
+import {
+  handleAcceptEdited,
+  handleCompare,
+} from '@commands/latex/compareCommands';
+import {
+  handleLatexdiff,
+  handleLatexdiffCommitAction,
+  handleRunLatexdiff,
+} from '@commands/latex/latexdiffCommands';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@controllers/mainView/MainViewDroppedFilesController';
@@ -52,6 +66,7 @@ import {
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
@@ -148,6 +163,16 @@ interface ExtensionHostRequests {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
+const logCommandFailure =
+  (command: string) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>) => {
+    const log = (failure: unknown) =>
+      Effect.logError(
+        `Command ${command} failed: ${toErrorMessage(failure)}`,
+      ).pipe(withLogChannel(CHANNEL));
+    return self.pipe(Effect.tapError(log), Effect.tapDefect(log));
+  };
+
 /** A VS Code command lifted once through `fromHost`, named by the command,
  *  with its failure logged before it travels on. */
 function runCommand<T = void>(
@@ -156,12 +181,19 @@ function runCommand<T = void>(
 ): Effect.Effect<T | undefined, HostCallFailed | RequestRefusal> {
   return fromHost(command, () =>
     vscode.commands.executeCommand<T | undefined>(command, ...args),
-  ).pipe(
-    Effect.tapError((failure) =>
-      Effect.logError(
-        `Command ${command} failed: ${toErrorMessage(failure)}`,
-      ).pipe(withLogChannel(CHANNEL)),
-    ),
+  ).pipe(logCommandFailure(command));
+}
+
+/** One of this extension's own command handlers, run in the arm's fiber
+ *  rather than through `vscode.commands.executeCommand`: a typed failure or a
+ *  defect is named and logged as a command's is. */
+function runHandler<A, E, R>(
+  command: string,
+  handler: Effect.Effect<A, E, R>,
+): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+  return handler.pipe(
+    Effect.mapError((cause) => hostFailure(command, cause)),
+    logCommandFailure(command),
   );
 }
 
@@ -248,30 +280,29 @@ export function createExtensionHostRequests(
   );
 
   const { runOutputs } = runActions;
+  const at = (file: string) => pathToLocationIn(session.roots.workspace, file);
+  // A file-action port's handler; the process services come from the runtime.
+  const runFileAction = <A, E>(
+    command: string,
+    handler: Effect.Effect<A, E, ProcessServices>,
+  ) => withProcessServices(runtime, runHandler(command, handler));
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
     storageRoot: session.roots.storage,
     host: {
-      // Each VS Code command is a foreign edge: one lift, named, so the
-      // port's failure channel carries a tag and never a bare rejection.
-      compareFiles: (baseFile, editedFile) =>
-        runCommand(
-          'texra.compare',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
+      // Each command is named, so a failure carries a tag, never a rejection.
+      compareFiles: (base, edited) =>
+        runFileAction('compare', handleCompare(at(base), at(edited))),
+      acceptEditedFile: (base, edited, copyMeta) =>
+        runFileAction(
+          'acceptEdited',
+          handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
-      acceptEditedFile: (baseFile, editedFile, copyMeta) =>
-        runCommand<boolean>(
-          'texra.acceptEdited',
-          pathToLocationIn(session.roots.workspace, baseFile),
-          pathToLocationIn(session.roots.workspace, editedFile),
-          copyMeta,
-        ),
-      mergeFile: (baseFile, editedFile) =>
-        runCommand('texra.merge', baseFile, editedFile),
-      latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', baseFile, editedFile),
+      mergeFile: (base, edited) =>
+        runFileAction('merge', handleMerge(session, base, edited)),
+      latexdiffFile: (base, edited) =>
+        runFileAction('latexdiff', handleLatexdiff(session, base, edited)),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -295,29 +326,32 @@ export function createExtensionHostRequests(
   const openExportPath = (
     filePath: string,
     kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, ExternalOpenFailed> =>
-    Effect.tryPromise({
-      try: async () => {
-        const uri = vscode.Uri.file(filePath);
-        if (kind === 'external') {
-          await vscode.env.openExternal(uri);
-          return;
-        }
-        if (kind === 'pdf') {
-          await vscode.commands.executeCommand('vscode.open', uri);
-          return;
-        }
-        const document = await vscode.workspace.openTextDocument(filePath);
-        await vscode.window.showTextDocument(document, { preview: false });
-      },
-      catch: (cause) =>
-        new ExternalOpenFailed({
-          kind: 'path',
-          target: filePath,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    });
+  ): Effect.Effect<void, ExternalOpenFailed> => {
+    const failed = (cause: unknown) =>
+      new ExternalOpenFailed({
+        kind: 'path',
+        target: filePath,
+        message: toErrorMessage(cause),
+        cause,
+      });
+    const uri = vscode.Uri.file(filePath);
+    if (kind === 'external') {
+      return Effect.tryPromise({
+        try: () => vscode.env.openExternal(uri),
+        catch: failed,
+      }).pipe(Effect.asVoid);
+    }
+    if (kind === 'pdf') {
+      return Effect.tryPromise({
+        try: () => vscode.commands.executeCommand('vscode.open', uri),
+        catch: failed,
+      }).pipe(Effect.asVoid);
+    }
+    return openFileInEditor(filePath).pipe(
+      Effect.asVoid,
+      Effect.mapError(failed),
+    );
+  };
 
   /** The transcript export, over the session's rooted filesystems the
    *  dispatch root already provided. */
@@ -428,9 +462,9 @@ export function createExtensionHostRequests(
       if (request.fileType === 'base') {
         const parsed = parseVersionControlDiffFilename(currentOpenFile);
         if (parsed) {
-          const commitLabel = yield* runCommand<string | null>(
-            'texra.findCommitInHistory',
-            parsed.commitHash,
+          const commitLabel = yield* runHandler(
+            'findCommitInHistory',
+            findCommitInHistory(session, parsed.commitHash),
           );
           if (commitLabel) {
             options.surfaceAction({
@@ -514,22 +548,26 @@ export function createExtensionHostRequests(
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
-    openPath: (file, line) => commandVerb('texra.openFile', file, line),
-    openLabel: (label) =>
-      Effect.map(
-        runCommand<boolean>('texra.openLabel', label),
-        (opened) => opened === true,
-      ),
+    openPath: (file, line) =>
+      runHandler('openFile', openFile(session, file, line)),
+    openLabel: (label) => runHandler('openLabel', openLabel(session, label)),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
     surfaceAction: (action) => options.surfaceAction(action),
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     showLauncher: Effect.suspend(() => options.showInSidebar()),
-    runWorkflowDiff: (diff) => commandVerb('texra.runLatexdiff', diff),
+    runWorkflowDiff: (diff) =>
+      runHandler('runLatexdiff', handleRunLatexdiff(session, diff)),
     runWorkflowFileOperation: (operation, request) =>
-      commandVerb(`texra.${operation}`, request),
+      runHandler(
+        operation,
+        operation === 'pack' ? handlePack(request) : handleClean(request),
+      ),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      commandVerb(`texra.${action}`, baseFile, commit),
+      runHandler(
+        action,
+        handleLatexdiffCommitAction(session, action, baseFile, commit),
+      ),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');

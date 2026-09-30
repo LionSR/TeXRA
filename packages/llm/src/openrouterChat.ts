@@ -132,44 +132,10 @@ const canonicalUsage = (
     kind: 'openrouter',
     ...(usage.cost !== undefined ? { cost: usage.cost } : {}),
     ...(usage.isByok !== undefined ? { isByok: usage.isByok } : {}),
-    ...(usage.costDetails !== undefined
-      ? {
-          costDetails: usage.costDetails && {
-            upstreamInferenceCost: usage.costDetails.upstreamInferenceCost,
-            upstreamInferencePromptCost:
-              usage.costDetails.upstreamInferencePromptCost,
-            upstreamInferenceCompletionsCost:
-              usage.costDetails.upstreamInferenceCompletionsCost,
-            serverToolCost: usage.costDetails.serverToolCost,
-          },
-        }
-      : {}),
     ...(usage.promptTokensDetails !== undefined
       ? {
           inputDetails: usage.promptTokensDetails && {
             cacheWriteTokens: usage.promptTokensDetails.cacheWriteTokens,
-            audioTokens: usage.promptTokensDetails.audioTokens,
-            videoTokens: usage.promptTokensDetails.videoTokens,
-          },
-        }
-      : {}),
-    ...(usage.completionTokensDetails !== undefined
-      ? {
-          outputDetails: usage.completionTokensDetails && {
-            audioTokens: usage.completionTokensDetails.audioTokens,
-            acceptedPredictionTokens:
-              usage.completionTokensDetails.acceptedPredictionTokens,
-            rejectedPredictionTokens:
-              usage.completionTokensDetails.rejectedPredictionTokens,
-          },
-        }
-      : {}),
-    ...(usage.serverToolUseDetails !== undefined
-      ? {
-          serverToolUseDetails: usage.serverToolUseDetails && {
-            toolCallsRequested: usage.serverToolUseDetails.toolCallsRequested,
-            toolCallsExecuted: usage.serverToolUseDetails.toolCallsExecuted,
-            webSearchRequests: usage.serverToolUseDetails.webSearchRequests,
           },
         }
       : {}),
@@ -607,7 +573,6 @@ export function openrouterChatModel(
           let fingerprint: string | null = null;
           let finished: (typeof FINISH_REASONS)[number] | undefined;
           let usage: TurnResult['usage'] = null;
-          let serviceTier: string | null | undefined;
           let plain: string | null | undefined;
           let details: Detail[] | undefined;
           let observedIdentity = false;
@@ -637,19 +602,6 @@ export function openrouterChatModel(
                     kind: 'malformed-output',
                     message: 'OpenRouter returned more than one choice.',
                   });
-                if (chunk.serviceTier !== undefined) {
-                  if (
-                    serviceTier != null &&
-                    chunk.serviceTier != null &&
-                    serviceTier !== chunk.serviceTier
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter changed the reported service tier.',
-                    });
-                  if (serviceTier === undefined || chunk.serviceTier !== null)
-                    serviceTier = chunk.serviceTier;
-                }
                 if (chunk.systemFingerprint !== undefined) {
                   if (
                     fingerprint !== null &&
@@ -836,15 +788,6 @@ export function openrouterChatModel(
                   argumentsText: call.arguments,
                 });
               }
-              if (serviceTier !== undefined)
-                usage = {
-                  ...(usage ?? chatUsageCounts({})),
-                  providerUsage: {
-                    ...usage?.providerUsage,
-                    kind: 'openrouter',
-                    serviceTier,
-                  },
-                };
               let finishReason: string = finished;
               if (finished === 'tool_calls') finishReason = 'tool-calls';
               if (finished === 'content_filter')

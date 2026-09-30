@@ -253,7 +253,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     supportsTemperature: z.boolean(),
     supportsMaxOutputTokens: z.boolean(),
     supportsStorage: z.boolean(),
-    supportsResponseChaining: z.boolean(),
     /** The route takes input files; a document is refused locally otherwise. */
     supportsDocumentInput: z.boolean(),
     webSocketStreamParameter: z.enum(['implicit', 'required']),
@@ -458,7 +457,6 @@ const UsageSchema = z
           .strictObject({
             kind: z.literal('xai'),
             costInUsdTicks: z.int().nonnegative().nullable(),
-            serviceTier: z.enum(['default', 'priority']).nullable(),
           })
           .readonly(),
         z
@@ -468,8 +466,6 @@ const UsageSchema = z
             cacheCreationTokens: z.int().nonnegative().nullable(),
             cacheCreation5mTokens: z.int().nonnegative().nullable(),
             cacheCreation1hTokens: z.int().nonnegative().nullable(),
-            serviceTier: z.enum(['standard', 'priority', 'batch']).nullable(),
-            inferenceGeo: z.string().nullable(),
           })
           .readonly(),
         z
@@ -477,55 +473,13 @@ const UsageSchema = z
             kind: z.literal('openrouter'),
             cost: z.number().nullable().optional(),
             isByok: z.boolean().optional(),
-            costDetails: z
-              .strictObject({
-                upstreamInferenceCost: z.number().nullable().optional(),
-                upstreamInferencePromptCost: z.number().nullable().optional(),
-                upstreamInferenceCompletionsCost: z
-                  .number()
-                  .nullable()
-                  .optional(),
-                serverToolCost: z.number().nullable().optional(),
-              })
-              .readonly()
-              .nullable()
-              .optional(),
             inputDetails: z
               .strictObject({
                 cacheWriteTokens: z.int().nonnegative().nullable().optional(),
-                audioTokens: z.int().nonnegative().nullable().optional(),
-                videoTokens: z.int().nonnegative().nullable().optional(),
               })
               .readonly()
               .nullable()
               .optional(),
-            outputDetails: z
-              .strictObject({
-                audioTokens: z.int().nonnegative().nullable().optional(),
-                acceptedPredictionTokens: z
-                  .int()
-                  .nonnegative()
-                  .nullable()
-                  .optional(),
-                rejectedPredictionTokens: z
-                  .int()
-                  .nonnegative()
-                  .nullable()
-                  .optional(),
-              })
-              .readonly()
-              .nullable()
-              .optional(),
-            serverToolUseDetails: z
-              .strictObject({
-                toolCallsRequested: z.int().nonnegative().nullable().optional(),
-                toolCallsExecuted: z.int().nonnegative().nullable().optional(),
-                webSearchRequests: z.int().nonnegative().nullable().optional(),
-              })
-              .readonly()
-              .nullable()
-              .optional(),
-            serviceTier: z.string().nullable().optional(),
           })
           .readonly(),
       ])

@@ -15,6 +15,7 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  MESSAGE_TYPES,
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
@@ -110,10 +111,8 @@ export function reportMissingOutputs(
   },
 ): void {
   const { round, missing, xmlFile } = info;
-  trace.emit({
-    type: 'domain',
-    key: 'missingOutputs',
-    text: `${formatResultCount(missing.length, 'output file')} missing`,
+  trace.info(`${formatResultCount(missing.length, 'output file')} missing`, {
+    messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
     data: { missing, xmlFile },
   });
   ensureRoundData(state, round).missingOutputs = missing;

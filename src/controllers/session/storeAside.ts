@@ -7,7 +7,16 @@
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { type Cause, Clock, Effect, FileSystem, Option } from 'effect';
+import {
+  type Cause,
+  Clock,
+  Duration,
+  Effect,
+  FileSystem,
+  Option,
+  Schedule,
+} from 'effect';
+import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { withLogChannel } from '@logger/effectLog';
 import type * as SqlClient from 'effect/unstable/sql/SqlClient';
 
@@ -19,6 +28,22 @@ export const pragmaValue = (sql: Sql, pragma: string) =>
   sql
     .unsafe<Record<string, unknown>>(`PRAGMA ${pragma}`, [])
     .pipe(Effect.map((rows) => rows[0]?.[pragma]));
+
+/** A busy transaction's retry: from 5 ms, doubling and jittered, each sleep
+ *  at most 250 ms, for at most 5 s. The fiber yields between attempts, so
+ *  a lock another process holds never freezes the host thread. */
+const BUSY_RETRY = Schedule.exponential('5 millis').pipe(
+  Schedule.jittered,
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.millis(250))),
+  ),
+  Schedule.upTo({ duration: '5 seconds' }),
+);
+/** `SQLITE_BUSY` or `SQLITE_LOCKED`: another connection holds the lock. */
+export const isBusy = (error: unknown): boolean =>
+  isSqlError(error) && error.reason._tag === 'LockTimeoutError';
+export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
 /**
  * The first of `base`, `base.2`, `base.3`, … that names no file (with its

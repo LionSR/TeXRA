@@ -118,7 +118,7 @@ export function isGenericOutputStem(name: string): boolean {
 }
 
 /** Run identity used when accepting an edited file as a postfixed copy. */
-export const AcceptCopyMetaSchema = z.strictObject({
+const AcceptCopyMetaSchema = z.strictObject({
   agent: z.string(),
   model: z.string(),
   round: RoundNumberSchema,
@@ -328,8 +328,7 @@ export function roundOutputsToCompileFailureSummaries(
 // `<documents><document name="...">...</document></documents>` — so these
 // are fixed protocol constants, not per-agent configuration. They used to be
 // threaded through as `settings.documentTag` / `settings.endTag`; that
-// configurability is gone (see `AgentDataclass.ts`'s legacy-field strip), and
-// every consumer reads these constants directly instead.
+// configurability is gone, and every consumer reads these constants directly.
 
 /** Outer container tag wrapping every document the model emits. */
 export const OUTPUT_DOCUMENTS_TAG = 'documents';

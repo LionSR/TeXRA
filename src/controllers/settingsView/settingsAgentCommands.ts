@@ -245,6 +245,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to apply agent team',
         applySettingsTeamRoster(message.presetId, {
+          roster,
           catalog,
           presentation: {
             showInfoMessage: present.notice,

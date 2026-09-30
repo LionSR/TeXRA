@@ -305,7 +305,6 @@ export const openaiResponsesContinuation = Effect.fn(
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
-    !parsedConfiguration.data.supportsResponseChaining ||
     !parsedConfiguration.data.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')

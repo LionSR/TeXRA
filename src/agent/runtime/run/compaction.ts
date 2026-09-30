@@ -40,9 +40,6 @@ import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { BoundModel } from './modelBinding';
 
-/** Max tokens for the compaction summary response. */
-const CLIENT_COMPACTION_SUMMARY_MAX_TOKENS = 2000;
-
 /**
  * Prefix prepended to a compaction summary when it is folded back into the
  * conversation as a synthetic user message, so the resumed-conversation
@@ -266,6 +263,9 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   // The summary is a model call like any other: the invoker gates, prices
   // and reports it, and its usage rides the row below. It leaves out the
   // context updates: the next step renders them into the system text anew.
+  // Its output fits what its input leaves of the window, up to the model's
+  // own limit; a limit too small for a manual thinking budget runs without
+  // thinking (the model's rule, not this one's).
   const summarized = yield* Effect.exit(
     input.invoker.call(
       {
@@ -279,7 +279,13 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
           },
         ],
         tools: [],
-        maxOutputTokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
+        maxOutputTokens: Math.max(
+          1,
+          Math.min(
+            bound.config.maxOutputTokens,
+            contextWindow > 0 ? contextWindow - tokensBefore : Infinity,
+          ),
+        ),
       },
       state.declinedRoutes,
     ),

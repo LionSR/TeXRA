@@ -243,7 +243,6 @@ export const RunUsageTotalsSchema = z.object({
   totalCacheCreationInputTokens: TokenCountSchema.prefault(0),
   totalReasoningTokens: TokenCountSchema.prefault(0),
   totalToolUsePromptTokens: TokenCountSchema.prefault(0),
-  totalServerToolRequests: TokenCountSchema.prefault(0),
 });
 
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;

@@ -215,7 +215,7 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
 
   // Emit aggregated file list if any files were loaded
   if (requiredFiles.length > 0) {
-    logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
+    logFilesLoaded(logger, requiredFiles, options.stageId);
   }
 
   return {

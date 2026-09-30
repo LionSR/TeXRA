@@ -526,7 +526,7 @@ describe('session events and view', () => {
           followUpId: 'queued',
           content: { text: 'deliver me', from: { kind: 'user' } },
         },
-        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'text' },
+        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'default' },
       ]);
       expect(events.pendingFollowUps(run)).toHaveLength(1);
       expect(events.openWork(run)).toHaveLength(1);

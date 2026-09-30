@@ -110,7 +110,6 @@ const NO_USAGE = {
   totalCacheCreationInputTokens: 0,
   totalReasoningTokens: 0,
   totalToolUsePromptTokens: 0,
-  totalServerToolRequests: 0,
 };
 
 /** The settle the lane's lease release drains; a case may fail it. */

@@ -339,6 +339,34 @@ export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
     AND e.type NOT IN ('request.opened', 'followup.queued')
   ORDER BY e."commit"`;
 
+/** Aggregates bound as two parallel `json_each(?)` arrays (`aggregateLists`),
+ *  joined in this order: a free planner scans both arrays per aggregate. */
+export const AGGREGATE_LIST = `WITH k(key, value) AS MATERIALIZED
+  (SELECT key, value FROM json_each(?))
+  SELECT s.id FROM json_each(?) l CROSS JOIN k ON k.key = l.key
+  CROSS JOIN event_sequence s ON s.kind = k.value AND s.logical_id = l.value`;
+/** Aggregates' claim state, the list bound as `AGGREGATE_LIST` binds. */
+export const READ_STATE = `
+SELECT s.kind, s.logical_id AS logicalId, s.uid, s.owner_id AS ownerId,
+  s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
+  p.logical_id AS parentLogicalId, s.start_commit AS startCommit
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
+WHERE s.id IN (${AGGREGATE_LIST})
+`;
+
+/** Stored rows a display page reads before it runs on to its batch's end. */
+export const DISPLAY_PAGE_ROWS = 2000;
+/** Where a display page after a commit ends: 2,000 stored rows on, run to
+ *  the end of the batch the last one is in, as a card's `tool.end` and the
+ *  settlement it projects from share one batch (`settleCards`) and a batch's
+ *  rows share one `at`. No row, or a NULL `through`: the page runs to the
+ *  end. Counted in rows, so a stretch of collected commits bounds nothing. */
+export const DISPLAY_PAGE_END = `WITH last AS (SELECT "commit", at FROM event
+    WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1})
+  SELECT (SELECT e."commit" - 1 FROM event e
+    WHERE e."commit" > last."commit" AND e.at <> last.at
+    ORDER BY e."commit" LIMIT 1) AS through FROM last`;
+
 /**
  * The one display union: the `event` rows of the types bound first, every
  * projected row, and an optional further arm, narrowed by `where` over the

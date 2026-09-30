@@ -1,6 +1,6 @@
 /**
- * The `log`-shaped transcript rows: a `log` row, a `usage` row, and a
- * `domain` row each carry a payload keyed by a message type, decoded here
+ * The `log`-shaped transcript rows: a `log` row and a `usage` row each carry
+ * a payload keyed by a message type, decoded here
  * exactly once (`decodeLogPayload`). A payload its schema rejects is written
  * as an error row naming the diagnostic, never dropped or cast.
  */
@@ -16,23 +16,8 @@ import {
   type TranscriptEvent,
 } from '@shared/schemas';
 import type { StreamingTextRow } from '@ui/transcript';
-import { isObject } from '@utils/core';
 
 import { open, write, type Draft } from './transcriptState';
-
-const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
-
-/**
- * Coerce an arbitrary string to a `MessageType`. Unknown values (which an
- * agent-general SDK consumer can produce via `LogOptions.messageType`) fall
- * back to `DEFAULT`.
- */
-export function asMessageType(candidate: string | undefined): MessageType {
-  if (!candidate) return MESSAGE_TYPES.DEFAULT;
-  return KNOWN_MESSAGE_TYPES.has(candidate)
-    ? (candidate as MessageType)
-    : MESSAGE_TYPES.DEFAULT;
-}
 
 /** The three message types whose payload is streaming markdown text. */
 export const STREAMING_TEXT_ROW_KIND: Partial<
@@ -41,17 +26,6 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
   [MESSAGE_TYPES.MODEL_RESPONSE]: 'assistant',
   [MESSAGE_TYPES.THINKING]: 'thinking',
   [MESSAGE_TYPES.SCRATCHPAD]: 'scratchpad',
-};
-
-/**
- * Maps a domain key onto a known MessageType; keys not listed fall back to the
- * DEFAULT bucket.
- */
-const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
-  latexdiff: MESSAGE_TYPES.LATEXDIFF,
-  missingOutputs: MESSAGE_TYPES.MISSING_OUTPUTS,
-  webSearch: MESSAGE_TYPES.WEB_SEARCH,
-  contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
 };
 
 /** A `log`-shaped row: its payload decoded once, and a payload its schema
@@ -102,10 +76,10 @@ function appendLog(
   }
 }
 
-/** One `log`, `usage`, or `domain` event onto the transcript. */
+/** One `log` or `usage` event onto the transcript. */
 export function recordLogRow(
   d: Draft,
-  event: Extract<TranscriptEvent, { type: 'log' | 'usage' | 'domain' }>,
+  event: Extract<TranscriptEvent, { type: 'log' | 'usage' }>,
 ): void {
   switch (event.type) {
     case 'log': {
@@ -113,7 +87,7 @@ export function recordLogRow(
       appendLog(
         d,
         event.stageId,
-        asMessageType(event.messageType),
+        event.messageType ?? MESSAGE_TYPES.DEFAULT,
         event.message,
         event.data,
         event.level,
@@ -135,28 +109,6 @@ export function recordLogRow(
         MESSAGE_TYPES.STATISTICS,
         '',
         runStatistics(d.ix.spend, model?.capabilities),
-      );
-      return;
-    }
-
-    case 'domain': {
-      if (event.key === 'filesLoaded') {
-        const payload = isObject(event.data) ? event.data : {};
-        appendLog(
-          d,
-          event.stageId,
-          MESSAGE_TYPES.FILE_LIST,
-          '',
-          payload.entries ?? [],
-        );
-        return;
-      }
-      appendLog(
-        d,
-        event.stageId,
-        DOMAIN_MESSAGE_TYPE[event.key] ?? MESSAGE_TYPES.DEFAULT,
-        event.text ?? event.key,
-        event.data,
       );
       return;
     }

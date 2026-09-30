@@ -7,10 +7,6 @@ import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
-import { registerOpenFileCommands } from '@commands/files/openFileCommands';
-import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
-import { registerMergeCommands } from '@commands/agent/mergeCommands';
-import { registerGitCommands } from '@commands/git/gitCommands';
 
 // Local imports - components
 import type { StateStore } from '@platform/interfaces';
@@ -27,9 +23,6 @@ export function registerCommands(
   runtime: ProcessRuntime,
   session: SessionHandle,
 ): void {
-  registerLatexdiffCommands(context, runtime, session);
-  registerGitCommands(context, runtime, session);
-  registerMergeCommands(context, runtime, session);
   const settingsViewProvider = new SettingsViewProvider(
     context,
     globalState,
@@ -38,13 +31,8 @@ export function registerCommands(
     session,
     progressViewProvider,
   );
-  registerOpenFileCommands(context, runtime, session);
 
-  // The shared registry owns every command whose handler map lives in
-  // `extensionCommandSurface.ts`, dispatched the same way as the desktop
-  // registry. The per-command registrations above stay separate because
-  // their handlers carry VS Code-specific arguments (TextEditor, Range,
-  // Uri, agent run payloads) or capture VS Code state directly.
+  // The shared registry, dispatched the same way as the desktop registry.
   registerExtensionCommandRegistry(
     context,
     createExtensionCommandActions(

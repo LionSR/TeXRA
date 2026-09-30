@@ -3,12 +3,12 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { type FileOpResult } from '@shared/schemas';
-import { type PackConfig } from './fileOpSchemas';
 
 const CHANNEL = 'packCommands';
 
@@ -46,7 +46,7 @@ const showPackResult = (
   });
 
 export const handlePack = Effect.fn('packCommands.handlePack')(function* (
-  config: PackConfig,
+  config: WorkflowFileOperationRequest,
 ) {
   const workspaceFs = yield* WorkspaceFs;
   const result = yield* packRunOutputs(config);

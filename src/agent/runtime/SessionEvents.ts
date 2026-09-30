@@ -375,7 +375,7 @@ export const sessionEventsLayer = Layer.effect(
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed> =>
       tailFrom(
-        (from) => Stream.fromIterableEffect(log.readDisplay(from)),
+        log.readDisplay,
         {
           get: log.currentCommit,
           changes: SubscriptionRef.changes(log.level),

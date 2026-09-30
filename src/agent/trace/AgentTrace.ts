@@ -11,9 +11,9 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { RunOutcome } from '@shared/schemas';
+import type { MessageType, RunOutcome } from '@shared/schemas';
 
-import type { AgentEvent, StreamKind } from './events';
+import type { AgentEvent } from './events';
 
 /** A sink the trace was built with: it receives every event emitted on the
  *  trace until the trace closes. */
@@ -69,11 +69,8 @@ export interface StreamHandle {
 /** Sugar passed to debug/info/warn/error. */
 export interface LogOptions {
   readonly data?: unknown;
-  /**
-   * Host-specific category (e.g. TeXRA's MessageType taxonomy). Subscribers
-   * may use it to pick a render style; agent-general consumers can ignore.
-   */
-  readonly messageType?: string;
+  /** The row's category; subscribers pick a render style from it. */
+  readonly messageType?: MessageType;
   /**
    * Stage to attach this entry to, for callers that captured a group id
    * earlier. Without one the entry belongs to no stage.
@@ -105,5 +102,5 @@ export interface AgentTrace {
    * signal — so subscribers can surface liveness ("thinking…", "responding…")
    * from the start event alone.
    */
-  openRun(kind: StreamKind, options?: StreamOptions): StreamHandle;
+  openRun(kind: MessageType, options?: StreamOptions): StreamHandle;
 }
