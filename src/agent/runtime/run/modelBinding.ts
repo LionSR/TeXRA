@@ -330,7 +330,6 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     supportsTemperature: fields.supportsTemperature,
     supportsMaxOutputTokens: true,
     supportsStorage: fields.stores,
-    supportsResponseChaining: fields.stores,
     supportsDocumentInput: false,
     webSocketStreamParameter: 'implicit',
     allowedReasoningEfforts: fields.allowedReasoningEfforts,
@@ -502,7 +501,6 @@ const PROTOCOL_DESCRIPTORS: {
           supportsTemperature,
           supportsMaxOutputTokens: false,
           supportsStorage: false,
-          supportsResponseChaining: false,
           supportsDocumentInput: capabilities.supportsNativePdf,
           webSocketStreamParameter: 'required',
           allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
@@ -544,7 +542,6 @@ const PROTOCOL_DESCRIPTORS: {
         supportsTemperature,
         supportsMaxOutputTokens: true,
         supportsStorage: true,
-        supportsResponseChaining: true,
         supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length

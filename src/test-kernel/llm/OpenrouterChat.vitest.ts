@@ -204,7 +204,6 @@ describe('native OpenRouter Chat', () => {
               {
                 ...frame({}, 'tool_calls'),
                 usage: USAGE,
-                service_tier: 'standard',
               },
               receipt({ usage: USAGE }),
             ),
@@ -274,10 +273,7 @@ describe('native OpenRouter Chat', () => {
               kind: 'openrouter',
               cost: 0,
               isByok: false,
-              costDetails: { upstreamInferenceCost: 0.125 },
               inputDetails: { cacheWriteTokens: 4 },
-              outputDetails: { acceptedPredictionTokens: 0 },
-              serviceTier: 'standard',
             },
           },
         });

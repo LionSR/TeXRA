@@ -21,7 +21,6 @@ liveProtocol({
         supportsTemperature: false,
         supportsMaxOutputTokens: true,
         supportsStorage: false,
-        supportsResponseChaining: false,
         supportsDocumentInput: false,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: ['low', 'high', 'max'],

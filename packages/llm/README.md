@@ -1,6 +1,6 @@
 # @texra-ai/llm
 
-TeXRA's own provider layer: one contract over twelve wire protocols. A
+TeXRA's own provider layer: one contract over four HTTP wire protocols and the editor's `vscode-lm`. A
 `Model` is a configured executable value. It owns the wire — lowering a turn,
 decoding the stream, classifying the failure — and nothing else. Conversation,
 retry, pricing, approval, budgets and persistence are the runtime's, and the
@@ -38,8 +38,7 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-Eighteen files, about 8 600 lines. No file exceeds 1 500 lines, and the
-file-size ratchet holds every one of them at or under its current count.
+The file-size ratchet holds every file at or under its current line count.
 
 | File                          | What it owns                                                                                                                                              |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -57,12 +56,12 @@ file-size ratchet holds every one of them at or under its current count.
 | `anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                  |
 | `googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                 |
 | `openrouterChat.ts`           | `openrouterChatModel`                                                                                                                                     |
-| `chatStream.ts`               | the shared Chat SSE decode loop                                                                                                                           |
+| `chatStream.ts`               | the Chat delta accumulator and usage counts `openrouterChat.ts` builds a turn from                                                                        |
 | `uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                           |
 | `prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                       |
 | `openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                |
 
-The twelfth protocol, `vscode-lm`, cannot live here: it is acquired from the
+The `vscode-lm` protocol cannot live here: it is acquired from the
 editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`
 implements the same `Model` contract against `vscode.lm`, captures one
 concrete model with its exact vendor, id and version, and rejects a foreign or
@@ -115,19 +114,18 @@ pin lowering, decoding, ordering and every explicit failure, against fixtures.
 They stay hermetic and free, so no suite in them calls a provider, and they run
 in `npm test`.
 
-`test-live/` is the wire evidence: one key-gated suite per HTTP protocol,
-eleven of the twelve, behind `vitest.live.config.mjs`. Each suite skips itself
-unless its own key is in the environment, so a run with one key exercises one
-protocol and skips the other ten. It is deliberately not part of `npm test`: reach it by name
+`test-live/` is the wire evidence: one key-gated suite per HTTP provider route,
+behind `vitest.live.config.mjs`. Each suite skips itself unless its own key is
+in the environment, so a run with one key exercises one route and skips the
+rest. It is deliberately not part of `npm test`: reach it by name
 (`npm run test:live`) or through the labelled job in
-`.github/workflows/live-llm.yml`. `vscode-lm`, the twelfth protocol, has no
+`.github/workflows/live-llm.yml`. `vscode-lm` has no
 suite there — it is acquired through the extension host's `vscode.lm` API, so
 its live check belongs to an Extension Development Host job.
 
-What the live tier does not claim: the SSE parser's event-size cap is still
-explicitly disabled (`maxEventSize: Number.POSITIVE_INFINITY`), so the package
-makes no bounded-stream-memory claim, and cleanup joins foreign finalizers, so
-it makes no bounded-stop-latency claim either.
+What the live tier does not claim: SSE parsing belongs to the vendor SDKs, so
+the package makes no bounded-stream-memory claim, and cleanup joins foreign
+finalizers, so it makes no bounded-stop-latency claim either.
 
 ## Background
 
