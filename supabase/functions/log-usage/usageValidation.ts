@@ -66,7 +66,9 @@ export const UsageLogEntrySchema = UsageLogEntryInputSchema.transform(
 );
 
 export const UsageBatchSchema = z.object({
-  entries: z.array(UsageLogEntrySchema).min(1),
+  // The client drains at most its 1000-entry queue per flush; callers may now
+  // be anonymous, so a batch is bounded at that size.
+  entries: z.array(UsageLogEntrySchema).min(1).max(1000),
   batchId: z.uuid(),
 });
 
