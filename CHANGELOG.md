@@ -20,6 +20,22 @@ All notable changes to this project will be documented in this file.
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **TeXRA sign-in is removed from every host.** `texra login`, `texra logout`,
+  `texra auth status` and `/login texra` are gone, as are the VS Code sign-in,
+  sign-out and account commands, the Account tab (the General page now opens on
+  **Privacy**, which keeps the telemetry switch), the desktop sign-in dialog and
+  the `texra://` callback handler. Nothing needed the account: every agent ships
+  bundled and model calls run on your own credential. Provider sign-ins are
+  unchanged (`texra auth chatgpt login`, `texra auth grok login`, `/login` in a
+  chat, GitHub and Copilot).
+- **Usage logging is anonymous and needs no account.** When on, each batch
+  carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
+  sign-in token; the body is unchanged and never has prompts, paths or
+  document text. Each host shows a one-time notice. Opt out with
+  `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
+  (or VS Code's telemetry setting); the ID is one row in
+  `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
+  resets it. A custom agent is reported only as "custom". `texra doctor` shows the usage-logging row.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,
   Mathematician, and Computer Scientist teams now work fully offline with no
   TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
@@ -364,6 +380,14 @@ show` print the same notice, and the new `texra agents customize`,
 - **A failed model request shows the provider's error again.** It had
   shown "Malformed error payload" with a schema complaint about
   `rawErrorBody` instead of the actual failure.
+
+- **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
+  a sign-in row in the chat's account menu started the sign-in but left the
+  menu on screen, so the sign-in link, one-time code and `c` copy-link key
+  never appeared. The panel now switches to the sign-in progress as soon as a
+  row is chosen. In VS Code, when browser sign-in can't start, ChatGPT and
+  Grok sign-in offer a one-time code instead of failing.
+
 - **Auto-compaction and the context gauge measure the whole conversation.**
   A tool-use run compacted on the text of its messages alone, so the
   provider's own token count (which includes the system prompt and tool

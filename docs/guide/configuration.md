@@ -25,7 +25,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **Memory**: the notes TeXRA keeps across tasks.
-- **General**: **Account** (TeXRA sign-in and telemetry) and **Git** (the
+- **General**: **Privacy** (telemetry) and **Git** (the
   GitHub token and Git commit attribution).
 
 The desktop app adds a **Shortcuts** page. Commands such as **TeXRA: Agent
@@ -97,9 +97,8 @@ project file that sets one is ignored with a warning naming the key.
 The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
-their provider rows with their usage meters. TeXRA account sign-in is on the
-**General** page. It is optional: it supplies no model access, and every agent
-ships bundled.
+their provider rows with their usage meters. There is no TeXRA account; every
+agent ships bundled.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
@@ -129,10 +128,26 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled and you are signed in, TeXRA records model and
-provider names, agent category, token counts, cost, response time, route,
-stream identifier, version, and host. It does not send prompt text, document
-content, or file names. Turning telemetry off stops all usage reporting.
+When telemetry is enabled, TeXRA records model and provider names, the agent
+name and category, token counts, response time, route, stream identifier,
+version, and host. Only a bundled agent's id is sent; a custom or plugin
+agent is reported as `custom`. No account is
+involved: each install sends a random anonymous install ID (a UUID made the
+first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
+not send prompt text, document content, file paths, or error text. Each host
+tells you this once on first run. Turning telemetry off stops all usage
+reporting and the ID is not created.
+
+The CLI, the extension, and the desktop app share one install ID. It lives in
+the global settings database, `~/.texra/v1/global-storage/texra.db`. To reset
+it, quit every TeXRA host and run:
+
+```bash
+sqlite3 ~/.texra/v1/global-storage/texra.db \
+  "DELETE FROM current_value WHERE family = 'app-state' AND key = 'texra.telemetry.installId'"
+```
+
+A new ID is made on the next send.
 
 ## Goal mode
 

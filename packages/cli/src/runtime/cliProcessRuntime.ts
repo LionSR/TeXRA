@@ -64,7 +64,6 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { readCliVersion } from './cliContext';
 import { CliSecrets, cliSecretsPath } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
-import { ensureCliSupabaseAuth } from './supabaseAuth';
 
 const NO_PLATFORM_APP_STATE =
   'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
@@ -202,8 +201,6 @@ export function installCliProcessRuntime(
   const globalStoragePath = resolveGlobalStoragePath(storageRoot);
   const version = readCliVersion();
   const secrets = new CliSecrets(cliSecretsPath(storageRoot));
-  // The account plane is built beside the runtime that serves it.
-  const auth = ensureCliSupabaseAuth(secrets);
   // The agent directories are a process service the runtime serves, so
   // they are built here, before the install, rather than in the platform
   // init that may join an already-installed runtime. The built-in agent
@@ -236,13 +233,12 @@ export function installCliProcessRuntime(
             appStateStoreFromDatabase(globalStoragePath, database.values),
           ),
         ),
-    auth,
     // A terminal has no editor language models; the CLI's platform installs
     // the same port.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer,
-    // CLI model traffic goes to the same Supabase usage log the extension
-    // writes to, tagged with editorType 'cli' and the CLI version. The
+    // CLI model traffic goes to the same anonymous usage log the other hosts
+    // write to, tagged with editorType 'cli' and the CLI version. The
     // runtime's disposal drains the queue, and that disposal is the last
     // shutdown step of every exit path this process has.
     usageLog: usageLogLayer({ version, editorType: 'cli' }),

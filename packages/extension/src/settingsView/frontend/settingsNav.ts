@@ -91,8 +91,8 @@ const SETTINGS_TAB_METADATA: {
   general: {
     icon: 'gear',
     label: 'General',
-    description: 'TeXRA account, privacy, and Git commit attribution.',
-    sections: { account: 'Account', git: 'Git' },
+    description: 'Privacy and Git commit attribution.',
+    sections: { privacy: 'Privacy', git: 'Git' },
   },
   shortcuts: {
     icon: 'code',

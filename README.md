@@ -46,10 +46,8 @@ GLM Coding Plan subscription.
 Every agent ships bundled, including the workflow agents the
 Physicist, Mathematician and Computer Scientist teams use, so every
 team works offline with no sign-in. Each agent is a YAML file you can
-read, copy into a custom agent and change. Signing in to a TeXRA
-account (GitHub or Google, through the Profile view in VS Code or
-`texra login`) is optional and adds no agents; model calls run on
-your configured model credential.
+read, copy into a custom agent and change. There is no TeXRA account;
+model calls run on your configured model credential.
 
 TeXRA is sustained by the community. If TeXRA helps your
 research, consider supporting it via

@@ -1,12 +1,13 @@
 import { resolve as resolvePath } from 'node:path';
 import { Cause, Effect, Exit, Scope } from 'effect';
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { closeAllSessions } from '@agent/runtime';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { withProcessServices } from '@platform/processRuntime';
+import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DesktopProjectRecords,
@@ -27,8 +28,6 @@ import {
 import { openDesktopWindow } from './desktopWindow.js';
 import { installDesktopBeforeQuitWiring } from './desktopWindowLifecycle.js';
 import { createDesktopWindows, type DesktopWindows } from './desktopWindows.js';
-import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
-import { createDesktopPendingOAuthStore } from './desktopSupabaseAuth.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -43,20 +42,20 @@ if (e2eUserDataPath) {
 }
 
 /**
- * The process's windows, once the startup program has built them. A protocol
- * callback can land before the process runtime exists, so the lifecycle below
- * reads this at the event and finds nothing to focus until then: its router
- * queues the callback and the first window's coordinator adopts it.
+ * The process's windows, once the startup program has built them. A second
+ * launch can land before the process runtime exists, so the handler below
+ * reads this at the event and finds nothing to focus until then.
  */
 let desktopWindows: DesktopWindows | undefined;
 
-const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
-  app,
-  argv: process.argv.slice(1),
-  execPath: process.execPath,
-  devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
-  focusMainWindow: () => desktopWindows?.focus(),
-});
+// One desktop process per profile: a second launch focuses the running window
+// and quits itself.
+const ownsSingleInstanceLock = app.requestSingleInstanceLock();
+if (ownsSingleInstanceLock) {
+  app.on('second-instance', () => desktopWindows?.focus());
+} else {
+  app.quit();
+}
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
 // (codicons/KaTeX). Keep script run locked to app files while allowing
@@ -91,7 +90,7 @@ function installContentSecurityPolicy(): void {
   });
 }
 
-if (protocolLifecycle.ownsSingleInstanceLock) {
+if (ownsSingleInstanceLock) {
   // The desktop entry: one program from Electron's `whenReady` to the wired
   // window. Its fatal report is the one fold, and it runs on the default
   // runner because it is what builds the process runtime.
@@ -200,9 +199,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           );
           yield* registry.activate(registry.list().at(-1)?.root);
 
-          const pendingOAuthStore = createDesktopPendingOAuthStore(
-            platformInit.globalState,
-          );
           installContentSecurityPolicy();
           const windows = createDesktopWindows({
             runtime,
@@ -210,9 +206,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               openDesktopWindow(
                 {
                   projects: registry,
-                  supabaseAuth: platformInit.supabaseAuth,
-                  pendingOAuthStore,
-                  protocolRouter: protocolLifecycle.router,
                   draftRequests,
                   globalState: platformInit.globalState,
                   secrets: platformInit.secrets,
@@ -236,6 +229,18 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             continueAfterWindowClose: windows.continueQuitAfterClose,
           });
           yield* windows.open;
+          // The one-time telemetry notice, shown once the window exists.
+          const notice = yield* telemetryNoticeIfDue(
+            platformInit.processRoots.config,
+          );
+          if (notice) {
+            // A sheet on the window, not an app-modal box: an app-modal one on
+            // a fresh profile keeps the first window from appearing.
+            const parent = windows.window();
+            void (parent
+              ? dialog.showMessageBox(parent, { type: 'info', message: notice })
+              : dialog.showMessageBox({ type: 'info', message: notice }));
+          }
           app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
           });

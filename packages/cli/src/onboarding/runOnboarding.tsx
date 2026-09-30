@@ -87,7 +87,7 @@ const warnOnboardingFailure = (action: string, error: StateWriteFailed) =>
   );
 
 const SKIP_SUMMARY =
-  "Setup skipped — run `texra login` or `texra setup` when you're ready.";
+  "Setup skipped — run `texra auth chatgpt login` or `texra setup` when you're ready.";
 
 // Fits the current 30-column onboarding action labels without truncation.
 const ONBOARDING_SELECT_LABEL_MAX_COLS = 34;
@@ -117,7 +117,7 @@ type CliOnboardingServices = ModelOptionStores & {
  * `texra setup`'s State 0 step: show the picker unconditionally — the command
  * only calls this after checking that no usable credential exists, and then
  * continues into the setup-agent chat once one is configured. Credentials-only
- * (re)configuration is `texra login`'s job. Still TTY-only — the command
+ * (re)configuration is `texra auth <provider> login`'s job. Still TTY-only — the command
  * rejects headless before calling this.
  */
 export const runCliOnboarding = Effect.fn('runCliOnboarding')(function* (

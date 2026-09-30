@@ -11,10 +11,7 @@ import {
   hostStores,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import {
-  getChatGptSubscriptionStatus,
-  getSetupAuthStatus,
-} from '@tools/setup/platform';
+import { getChatGptSubscriptionStatus } from '@tools/setup/platform';
 
 setupPlatform(
   {
@@ -32,14 +29,11 @@ afterEach(() => {
 });
 
 describe('shared setup capabilities', () => {
-  it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
+  it.effect('keeps API-key-only setup usable', () =>
     Effect.gen(function* () {
       expect(
         yield* hasUsableSetupCredential(hostStores(), hostStores().secrets),
       ).toBe(true);
-      expect(yield* getSetupAuthStatus()).toEqual({
-        authenticated: false,
-      });
     }).pipe(Effect.provide(fakeProcessServices())),
   );
 

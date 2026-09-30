@@ -49,7 +49,7 @@ export function formatCliModelListError(error: unknown): string {
       ? toErrorMessage(error.cause)
       : message;
   if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|fetch failed/i.test(detail)) {
-    return `texra: could not fetch model access metadata from remote.texra.ai: ${detail}`;
+    return `texra: could not reach the network to list models: ${detail}`;
   }
   return `texra: could not list models: ${message}`;
 }

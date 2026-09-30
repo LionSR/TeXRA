@@ -95,7 +95,6 @@ const CLI_PROCESS_OUTPUT_BOUNDARY = [
   // the TUI goes through logSinks.
   'packages/cli/src/init/runInitWizard.tsx',
   'packages/cli/src/onboarding/runOnboarding.tsx',
-  'packages/cli/src/commands/loginProviderPicker.tsx',
   'packages/cli/src/config/runConfigTui.tsx',
 ];
 // The chat TUI also hands Ink the real `process.stdin`, so it is both.

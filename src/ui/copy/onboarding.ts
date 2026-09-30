@@ -5,7 +5,7 @@
  * The CLI first-run picker, the extension/desktop welcome card, and the
  * walkthrough import these strings instead of paraphrasing each other, so the
  * choice order can never drift between surfaces.
- * Surface-specific hints (e.g. "run `texra login`" vs. a settings link) stay
+ * Surface-specific hints (e.g. "run `texra auth chatgpt login`" vs. a settings link) stay
  * in the surface that owns them.
  *
  * Where a choice names one of the two ways model calls are paid for, the name
@@ -28,13 +28,6 @@ export const ONBOARDING_CHOICE_CHATGPT = {
   label: 'Use ChatGPT subscription',
   description:
     'OpenAI models through ChatGPT Plus, Pro, or Team; no API key needed',
-} as const;
-
-/**
- * The TeXRA account. Optional: every agent ships bundled.
- */
-export const RESEARCHER_ACCESS = {
-  label: 'TeXRA account',
 } as const;
 
 /**

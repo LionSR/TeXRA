@@ -49,7 +49,6 @@ For the system dependencies TeXRA needs, follow the same setup as the extension:
 On first launch, configure the desktop app explicitly:
 
 - Open the same folder or Git repository you already use for your project.
-- Sign in again if you use TeXRA account features.
 - Add model provider API keys in the Models tab, or configure workspace-local
   `.env` variables.
 - Review agent visibility, tool approval settings, Git integration, and LaTeX
@@ -59,13 +58,12 @@ On first launch, configure the desktop app explicitly:
 
 <FlowSteps :steps="[
   { n: 1, icon: 'folder-open', title: 'Open your project', desc: 'Point the desktop app at the same folder or Git repository you already use for your project.', chips: [{ text: 'folder or repo', variant: 'info', icon: 'folder-tree' }] },
-  { n: 2, icon: 'right-to-bracket', title: 'Sign in', desc: 'Re-authenticate if you use TeXRA account features.', chips: [{ text: 'account features', variant: 'neutral' }] },
-  { n: 3, icon: 'key', title: 'Add API keys', desc: 'Add model provider keys in the Models tab, or set workspace-local .env variables.', chips: [{ text: 'Models tab', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
-  { n: 4, icon: 'gear', title: 'Review settings', desc: 'Check agent visibility, tool approval, Git integration and LaTeX tool paths.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Tools', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }] },
-  { n: 5, icon: 'play', title: 'Run a small task', desc: 'Run a LaTeX or polish task and confirm the output appears in the Sessions view.', chips: [{ text: 'Sessions view', variant: 'success', icon: 'list-check' }] }
+  { n: 2, icon: 'key', title: 'Add API keys', desc: 'Add model provider keys in the Models tab, or set workspace-local .env variables.', chips: [{ text: 'Models tab', variant: 'accent' }, { text: '.env', variant: 'info', icon: 'file-code' }] },
+  { n: 3, icon: 'gear', title: 'Review settings', desc: 'Check agent visibility, tool approval, Git integration and LaTeX tool paths.', chips: [{ text: 'Agents', variant: 'accent' }, { text: 'Tools', variant: 'accent' }, { text: 'LaTeX', variant: 'accent' }] },
+  { n: 4, icon: 'play', title: 'Run a small task', desc: 'Run a LaTeX or polish task and confirm the output appears in the Sessions view.', chips: [{ text: 'Sessions view', variant: 'success', icon: 'list-check' }] }
 ]" />
 
-<p class="hero-caption">First-run setup is explicit: open your project, sign in, add keys, review settings, then confirm a small task lands in the Sessions view.</p>
+<p class="hero-caption">First-run setup is explicit: open your project, add keys, review settings, then confirm a small task lands in the Sessions view.</p>
 
 ### What carries over from the extension and CLI
 

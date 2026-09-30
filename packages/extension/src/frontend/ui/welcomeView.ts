@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
 
-import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
 import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_NARRATIVE,
-  RESEARCHER_ACCESS,
 } from '@ui/copy/onboarding';
 
 /**
@@ -34,7 +32,6 @@ function renderWelcomeHtml(): string {
   const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
   const signInChatGpt = 'command:texra.auth.chatgpt.signIn';
   const setApiKey = `command:${EXTENSION_COMMANDS.SET_API_KEY}`;
-  const signInTexra = `command:${AUTH_COMMANDS.SIGN_IN}`;
   const docs = 'https://texra.ai';
 
   return /* html */ `
@@ -134,11 +131,6 @@ function renderWelcomeHtml(): string {
     <a class="button secondary" href="${signInChatGpt}">${CHATGPT_AUTH.signInLabel}</a>
     <a class="button secondary" href="${setApiKey}">Set API key &mdash; ${ONBOARDING_CHOICE_API_KEY.description}</a>
   </div>
-  <p class="muted">
-    A ${RESEARCHER_ACCESS.label} is optional: every agent ships bundled, the
-    orchestrator included, and none needs one.
-    <a href="${signInTexra}">Sign in to a ${RESEARCHER_ACCESS.label}</a>
-  </p>
   <p class="section-label">Open your project</p>
   <div class="actions">
     <a class="button" href="${openFolder}">Open Folder</a>

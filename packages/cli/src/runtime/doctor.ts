@@ -11,7 +11,6 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
-import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -25,7 +24,6 @@ import {
 import { createCliStyle } from './style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
-import type { CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
@@ -79,9 +77,6 @@ type DoctorInput = DoctorEnvironment &
     | { readonly kind: 'degraded'; readonly initError: Error }
     | {
         readonly kind: 'ready';
-        /** The account read, yielded by the auth check rather than settled
-         *  into a Promise first, as `modelAccessList` is. */
-        readonly authProfile: Effect.Effect<CliAuthProfile, Error>;
         readonly modelAccessList: Effect.Effect<
           readonly CliModelAccess[],
           Error
@@ -116,12 +111,6 @@ function redactEmailDiagnostics(text: string): string {
   return text.replaceAll(EMAIL_LIKE_DIAGNOSTIC_PATTERN, (value) =>
     redactEmailDiagnosticValue(value),
   );
-}
-
-function formatDoctorMessage(check: DoctorCheck): string {
-  return check.id === 'auth'
-    ? check.message
-    : redactEmailDiagnostics(check.message);
 }
 
 function check(
@@ -229,45 +218,6 @@ function checkDirectory(
   );
 }
 
-function checkAuth(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
-  return deps.authProfile.pipe(
-    Effect.map((profile) => {
-      if (profile.authenticated) {
-        const accountLabel = profile.accountLabel || 'unknown';
-        return pass(
-          'auth',
-          RESEARCHER_ACCESS.label,
-          `Signed in as ${accountLabel}.`,
-        );
-      }
-      if (profile.sessionState === 'transient') {
-        return warn(
-          'auth',
-          RESEARCHER_ACCESS.label,
-          'The authentication service is temporarily unavailable.',
-          'Your stored session is intact; retry once the service is reachable rather than signing in again.',
-        );
-      }
-      return warn(
-        'auth',
-        RESEARCHER_ACCESS.label,
-        'Not signed in.',
-        'Optional: no agent needs it. Add a provider API key with `texra setup` to run models.',
-      );
-    }),
-    Effect.catch((error) =>
-      Effect.succeed(
-        failFromError(
-          'auth',
-          RESEARCHER_ACCESS.label,
-          `Could not read ${RESEARCHER_ACCESS.label} sign-in state.`,
-          error,
-        ),
-      ),
-    ),
-  );
-}
-
 function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.modelAccessList.pipe(
     Effect.map((models) => {
@@ -283,7 +233,7 @@ function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'models',
         'Models',
         'No model is currently available.',
-        'Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
+        'Run `texra models list --all` to inspect access, sign in with `texra auth chatgpt login`, or add a provider API key with `texra setup`.',
       );
     }),
     Effect.catch((error) =>
@@ -420,8 +370,8 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'telemetry',
         'Usage logging',
         'pass',
-        'On: model, token counts, and cost per round, sent while signed in. No prompt or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+        'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
+        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
       );
     }),
     Effect.catch((failure) =>
@@ -445,16 +395,12 @@ export function buildDoctorReport(
 ): Effect.Effect<DoctorReport, never, DoctorServices> {
   return Effect.gen(function* () {
     // A platform-init failure takes out every dependency-based check
-    // (auth/models/telemetry), so surface it once here rather than as N
+    // (models/telemetry), so surface it once here rather than as N
     // unrelated-looking failures. The checks that do not need the platform
     // (node, workspace, resources, LaTeX, config) still run.
     const sessionDependentChecks =
       input.kind === 'ready'
-        ? [
-            yield* checkAuth(input),
-            yield* checkModels(input),
-            yield* checkTelemetry(input),
-          ]
+        ? [yield* checkModels(input), yield* checkTelemetry(input)]
         : [
             failFromError(
               'platform',
@@ -499,7 +445,7 @@ function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const head = `${marker[check.status]} ${check.name}: ${formatDoctorMessage(check)}`;
+      const head = `${marker[check.status]} ${check.name}: ${redactEmailDiagnostics(check.message)}`;
       return check.hint
         ? `${head}\n     ${style.muted(redactEmailDiagnostics(check.hint))}`
         : head;

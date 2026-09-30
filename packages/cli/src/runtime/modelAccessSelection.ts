@@ -22,12 +22,10 @@ import {
 } from './subscriptionLogin';
 import {
   formatCliModelAccessRouteInline,
-  type CliAccountStatus,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliContext } from './cliContext';
-import type { CliAuthProfile } from './supabaseAuth';
 
 interface CliModelAccessSelectionResult {
   readonly message: string;
@@ -91,17 +89,6 @@ export const readCliModelAccessStatus = Effect.fn(
     ) as CliModelAccessStatus['codingPlans'],
   } satisfies CliModelAccessStatus;
 });
-
-export function mergeCliTexraAccountStatus(
-  access: CliModelAccessStatus,
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
-): CliAccountStatus {
-  return {
-    ...access,
-    texraSignedIn: profile.authenticated,
-    texraAccountLabel: profile.accountLabel,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // The four subscription arms share two skeletons — an OAuth sign-in flow

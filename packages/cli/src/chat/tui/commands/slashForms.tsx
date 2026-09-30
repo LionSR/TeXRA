@@ -13,6 +13,7 @@ import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { FormFrame, formFrameContentWidth } from '../forms/_shared/FormFrame';
 import { formProgress, type FormProgress } from '../state/cliState';
 import { takeActiveForm } from '../state/formSlot';
+import { useSignal } from '../state/useSignal';
 import { appendLocalUserTranscript } from '../state/transcript';
 
 import {
@@ -108,7 +109,7 @@ function FormBusyFrame(props: {
     props.availableRows !== undefined &&
     requiredRows(liveCopyable) > props.availableRows;
   useLayoutEffect(() => {
-    if (copyableDoesNotFit) progress.archiveCopyable?.();
+    if (copyableDoesNotFit) progress.archiveCopyable();
   }, [copyableDoesNotFit, progress]);
   const spinnerFrozen = liveCopyable !== undefined;
   const displayMessage = copyableDoesNotFit
@@ -139,6 +140,25 @@ function FormBusyFrame(props: {
   );
 }
 
+/**
+ * The busy frame replaces the form while a submission runs. `formProgress` is
+ * read through `useSignal` here, not in the slot's `render` callback: the
+ * host memoizes that callback's output on the slot entry, so a plain `.get()`
+ * there never re-renders when the progress changes and the sign-in URL never
+ * reaches the screen.
+ */
+function RegisteredFormSurface(props: {
+  readonly availableRows: number;
+  readonly children: React.ReactNode;
+}): React.ReactNode {
+  const progress = useSignal(formProgress);
+  return progress ? (
+    <FormBusyFrame progress={progress} availableRows={props.availableRows} />
+  ) : (
+    props.children
+  );
+}
+
 export function openRegisteredCliSlashForm(
   command: SlashCommand,
   remainder: string,
@@ -155,14 +175,8 @@ export function openRegisteredCliSlashForm(
   formProgress.set(undefined);
   takeActiveForm({
     commandName: command.name,
-    render: (close, availableRows) => {
-      const progress = formProgress.get();
-      if (progress) {
-        return (
-          <FormBusyFrame progress={progress} availableRows={availableRows} />
-        );
-      }
-      return (
+    render: (close, availableRows) => (
+      <RegisteredFormSurface availableRows={availableRows}>
         <Form
           availableRows={availableRows}
           remainder={remainder.trimStart()}
@@ -170,8 +184,8 @@ export function openRegisteredCliSlashForm(
           echoOnPersist={command.echo === 'ifPersists'}
           onDone={close}
         />
-      );
-    },
+      </RegisteredFormSurface>
+    ),
   });
   return true;
 }

@@ -143,33 +143,11 @@ export const commandCatalog = [
     category: 'TeXRA',
   },
   {
-    id: 'texra.auth.signIn',
-    extensionRegistry: true,
-    title: 'Sign In to TeXRA Account',
-    category: 'TeXRA',
-    icon: '$(sign-in)',
-  },
-  {
     id: 'texra.auth.chatgpt.signIn',
     extensionRegistry: true,
     title: 'Sign In with ChatGPT Subscription',
     category: 'TeXRA',
     icon: '$(comment-discussion)',
-  },
-  {
-    id: 'texra.auth.signOut',
-    extensionRegistry: true,
-    title: 'Sign Out',
-    category: 'TeXRA',
-    icon: '$(sign-out)',
-  },
-  {
-    id: 'texra.auth.viewProfile',
-    extensionRegistry: true,
-    title: 'Account Settings',
-    category: 'TeXRA',
-    icon: '$(account)',
-    settingsTab: 'general/account',
   },
   {
     id: 'texra.showMemory',

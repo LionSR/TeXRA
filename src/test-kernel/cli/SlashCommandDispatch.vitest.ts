@@ -50,7 +50,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
-import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as subscriptionAccess from '@model/subscriptionAccess';
 import { withProcessServices } from '@platform/processRuntime';
@@ -69,7 +68,6 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 import type { TranscriptRow } from '@ui/transcript';
 import {
   bindTestSessionView,
@@ -189,7 +187,6 @@ function mockModelAccessOverview(): void {
           kimiCode: { preferred: false, keySet: false },
           glmCodingPlan: { preferred: false, keySet: false },
         },
-        texraSignedIn: false,
       },
       lines: ['model access: Your own API keys'],
       note: undefined,
@@ -317,18 +314,14 @@ const started = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-function mockSignOuts(): {
-  signOutSupabase: MockInstance<typeof supabaseAuth.signOutCliSupabase>;
-  signOutChatGpt: MockInstance<typeof subscriptionLogin.signOutCliSubscription>;
-} {
-  const signOutSupabase = vi
-    .spyOn(supabaseAuth, 'signOutCliSupabase')
-    .mockReturnValue(Effect.void);
-  const signOutChatGpt = vi
+function mockSignOuts(): MockInstance<
+  typeof subscriptionLogin.signOutCliSubscription
+> {
+  const signOut = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
     .mockReturnValue(Effect.succeed({}));
   mockModelAccessOverview();
-  return { signOutSupabase, signOutChatGpt };
+  return signOut;
 }
 
 describe('handleTuiSlashCommand', () => {
@@ -411,12 +404,13 @@ describe('handleTuiSlashCommand', () => {
       ]);
 
       yield* dispatchSlash('/custom-form', createContext());
-      const form = activeForm.get()?.render(() => undefined, 20) as {
-        props?: { onPersist?: () => void };
+      const surface = activeForm.get()?.render(() => undefined, 20) as {
+        props?: { children?: { props?: { onPersist?: () => void } } };
       };
+      const form = surface.props?.children;
       expect(localEntries()).toEqual([]);
 
-      form.props?.onPersist?.();
+      form?.props?.onPersist?.();
 
       expect(localEntryPairs()).toEqual([
         { kind: 'user', text: '/custom-form' },
@@ -595,7 +589,6 @@ describe('handleTuiSlashCommand', () => {
             loginFromChat(
               'chatgpt --no-browser',
               services.stores,
-              testRuntime(),
               createCliContext(),
               silentOutput(),
             ),
@@ -663,52 +656,45 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect(
-    'clears TeXRA and ChatGPT credentials when signing out of all',
-    () =>
-      Effect.gen(function* () {
-        registerBuiltinSlashCommands({ ...services });
-        const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+  it.effect('clears ChatGPT and Grok credentials when signing out of all', () =>
+    Effect.gen(function* () {
+      registerBuiltinSlashCommands({ ...services });
+      const signOutChatGpt = mockSignOuts();
 
-        yield* logout('all');
+      yield* logout('all');
 
-        expect(signOutSupabase).toHaveBeenCalledOnce();
-        // The provider ids only: each call also carries the session's setting
-        // stores, and a `ConfigProvider` in an assertion argument breaks the
-        // formatter's own `inspect` probe.
-        expect(
-          signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
-        ).toEqual(['chatgpt', 'grok']);
-        const entry = lastEntryText();
-        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-        expect(entry).toContain('Signed out of ChatGPT.');
-        expect(entry).toContain(
-          'ChatGPT subscription disabled for Codex models.',
-        );
-        // One fact per line, not a single ' · '-joined sentence.
-        expect(entry?.split('\n').length).toBeGreaterThan(2);
-      }),
+      // The provider ids only: each call also carries the session's setting
+      // stores, and a `ConfigProvider` in an assertion argument breaks the
+      // formatter's own `inspect` probe.
+      expect(
+        signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+      ).toEqual(['chatgpt', 'grok']);
+      const entry = lastEntryText();
+      expect(entry).toContain('Signed out of ChatGPT.');
+      expect(entry).toContain(
+        'ChatGPT subscription disabled for Codex models.',
+      );
+      // One fact per line, not a single ' · '-joined sentence.
+      expect(entry?.split('\n').length).toBeGreaterThan(2);
+    }),
   );
 
   it.effect('signs out of only the requested account', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
-      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+      const signOutChatGpt = mockSignOuts();
 
-      yield* logout('texra');
-      expect(signOutSupabase).toHaveBeenCalledOnce();
-      expect(signOutChatGpt).not.toHaveBeenCalled();
+      yield* logout('grok');
+      expect(signOutChatGpt).toHaveBeenCalledOnce();
 
       yield* logout('chatgpt');
-      expect(signOutSupabase).toHaveBeenCalledOnce();
-      expect(signOutChatGpt).toHaveBeenCalledOnce();
+      expect(signOutChatGpt).toHaveBeenCalledTimes(2);
     }),
   );
 
-  it.effect('reports successful TeXRA sign-out when ChatGPT logout fails', () =>
+  it.effect('reports a failed ChatGPT sign-out as a line', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
-      vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(Effect.void);
       vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
         Effect.fail(new Error('Codex logout failed')),
       );
@@ -717,7 +703,6 @@ describe('handleTuiSlashCommand', () => {
       yield* logout('all');
 
       const entry = lastEntryText();
-      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
       expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
     }),
   );
@@ -727,9 +712,6 @@ describe('handleTuiSlashCommand', () => {
     () =>
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
-        vi.spyOn(supabaseAuth, 'signOutCliSupabase').mockReturnValue(
-          Effect.void,
-        );
         vi.spyOn(subscriptionLogin, 'signOutCliSubscription').mockReturnValue(
           Effect.succeed({ preferenceError: 'Config write failed' }),
         );
@@ -738,7 +720,6 @@ describe('handleTuiSlashCommand', () => {
         yield* logout('all');
 
         const entry = lastEntryText();
-        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
         expect(entry).toContain('Signed out of ChatGPT.');
         expect(entry).toContain(
           'ChatGPT subscription preference could not be disabled: Config write failed',

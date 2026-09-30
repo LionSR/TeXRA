@@ -20,10 +20,9 @@ const groups = [
     ],
   },
   {
-    label: 'Runtime & auth',
+    label: 'Runtime',
     rows: [
       { name: 'Node.js', status: 'found', detail: '22.11.0' },
-      { name: 'Authentication', status: 'found', detail: 'signed in' },
       {
         name: 'Models available',
         status: 'found',

@@ -1,7 +1,7 @@
 /**
  * The extension's half of the settings view: the shared settings body
  * (`createSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
- * the commands only VS Code answers (the TeXRA account commands, the Copilot
+ * the commands only VS Code answers (the Copilot
  * routes, installing extensions and writing VS Code's LaTeX settings).
  */
 import * as path from 'node:path';
@@ -11,7 +11,6 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
-import { AUTH_COMMANDS } from '@auth/constants';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
@@ -226,10 +225,6 @@ export class SettingsViewMessageHandler {
     return this.body.signInSubscription(providerId);
   }
 
-  /** Repaint what a TeXRA account change touches. */
-  public readonly refreshAfterAuthChange = () =>
-    this.body.refreshAfterAuthChange();
-
   /** Every page's opening data, posted to the active view. */
   public readonly sendAllData = () => this.body.postAll;
 
@@ -238,10 +233,6 @@ export class SettingsViewMessageHandler {
   ): SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs> {
     return {
       ...this.body.handlers,
-      signIn: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
-      signOut: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>

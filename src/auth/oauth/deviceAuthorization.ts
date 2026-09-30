@@ -1,7 +1,6 @@
 /**
  * Device-authorization polling as one Effect program, shared by the Codex
- * custom JSON flow, the xAI RFC 8628 flow, and the TeXRA (Supabase) CLI
- * device sign-in.
+ * custom JSON flow and the xAI RFC 8628 flow.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
  * the server's interval with RFC 8628 `slow_down` growth folded into the

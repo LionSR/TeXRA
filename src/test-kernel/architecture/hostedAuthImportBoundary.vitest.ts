@@ -97,7 +97,7 @@ describe('hosted auth import boundary', () => {
       findForbiddenAuthImports(
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
-          import { SupabaseClient } from '@auth/SupabaseClient';
+          import { HostedClient } from '@auth/HostedClient';
           const sessionToken = require('@auth/sessionToken');
           const futureProvider = import('@auth/future-provider/oauth');
           const traversedSession = import('@auth/codex/../sessionToken');
@@ -106,7 +106,7 @@ describe('hosted auth import boundary', () => {
         `,
       ),
     ).toEqual([
-      '@auth/SupabaseClient',
+      '@auth/HostedClient',
       '@auth/sessionToken',
       '@auth/future-provider/oauth',
       '@auth/codex/../sessionToken',
@@ -118,12 +118,12 @@ describe('hosted auth import boundary', () => {
       findForbiddenAuthImports(
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
-          import { SupabaseClient } from '../../auth/SupabaseClient';
+          import { HostedClient } from '../../auth/HostedClient';
           const sessionToken = import('../../auth/sessionToken', { with: { type: 'json' } });
           const codex = import('../../auth/codex/oauth');
         `,
       ),
-    ).toEqual(['../../auth/SupabaseClient', '../../auth/sessionToken']);
+    ).toEqual(['../../auth/HostedClient', '../../auth/sessionToken']);
   });
 
   // Regression: the collector this suite shares with the other ratchets grew
@@ -136,12 +136,12 @@ describe('hosted auth import boundary', () => {
       findForbiddenAuthImports(
         resolve(REPO_ROOT, 'src/agent/runtime/fixture.ts'),
         `
-          type Client = typeof import('@auth/SupabaseClient');
+          type Client = typeof import('@auth/HostedClient');
           type Session = import('../../auth/sessionToken').Session;
           type Codex = typeof import('@auth/codex/oauth');
         `,
       ),
-    ).toEqual(['@auth/SupabaseClient', '../../auth/sessionToken']);
+    ).toEqual(['@auth/HostedClient', '../../auth/sessionToken']);
   });
 
   it('rejects asserted module arguments and dynamic imports with options', () => {

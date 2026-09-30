@@ -137,15 +137,16 @@ export function signInWithSubscription(
       () =>
         provider.signIn({
           // Remote windows cannot reach the extension host's loopback port
-          // from the user's local browser.
-          transport: vscode.env.remoteName ? 'device' : 'loopback',
+          // from the user's local browser. Locally, `auto` drops to a device
+          // code when the callback ports are taken (another sign-in holding
+          // them) instead of failing with a bind error.
+          transport: vscode.env.remoteName ? 'device' : 'auto',
           present: vscodePresenter(provider, channel),
         }),
     ).pipe(
-      // A transport defect is reported the same as its typed failure, exactly
-      // as the rejection this replaces was. An interrupt is not: shutdown
-      // cancelling the sign-in is not a sign-in failure, and the
-      // `Effect.tryPromise` this replaces never saw one.
+      // A transport defect is reported the same as its typed failure. An
+      // interrupt is not: shutdown cancelling the sign-in is not a sign-in
+      // failure.
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
