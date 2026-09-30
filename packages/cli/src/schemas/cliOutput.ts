@@ -76,6 +76,7 @@ const runResultPayload = z.looseObject({
 
 const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('agent'), agent: payload }),
+  z.looseObject({ kind: z.literal('agent-copy'), copy: payload }),
   z.looseObject({ kind: z.literal('agent-roster'), roster: payload }),
   z.looseObject({ kind: z.literal('config'), config: payload }),
   z.looseObject({ kind: z.literal('tool-status'), tool: payload }),

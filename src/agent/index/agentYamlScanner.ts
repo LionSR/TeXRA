@@ -20,6 +20,7 @@ import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
 import { AgentCategory } from '@shared/schemas';
 import { groupBy } from '@utils/core';
+import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
@@ -50,6 +51,7 @@ interface ParsedAgentYaml {
   /** The scanned root the file was found under; issues name paths from it. */
   readonly root: string;
   readonly definition: AgentDefinition;
+  readonly digest: string;
 }
 
 /**
@@ -194,6 +196,7 @@ function readYamlDefinition(
         path: yamlPath,
         root: dir,
         definition: parsed.success,
+        digest: truncatedHexId(content, 12),
       });
     }),
     Effect.tapError((error) =>
@@ -324,6 +327,8 @@ function scanYaml(
                 userRequestTemplateCount(prompt.userRequest),
               )
             : undefined,
+        digest: entry.digest,
+        basedOn: entry.definition.basedOn,
         setting,
         prompt,
       };

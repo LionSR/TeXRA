@@ -288,6 +288,10 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
   return lines.join('\n');
 }
 
+export function formatCliNewerBuiltInNotice(name: string): string {
+  return `A newer built-in version of ${name} is available; your custom copy still overrides it. Run \`texra agents reset ${name}\` to use the new version, or \`texra agents keep ${name}\` to keep yours.`;
+}
+
 export function formatCliHiddenAgentsNotice(
   hiddenCount: number,
   category?: AgentCategory,

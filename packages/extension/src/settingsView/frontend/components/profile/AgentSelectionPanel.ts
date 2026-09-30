@@ -23,7 +23,11 @@ import {
   agentKey as agentKeyFromSourceName,
   isPackagedAgentSource,
 } from '@shared/schemas';
-import { commonViewStyles, designTokens } from '@ui/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@ui/styles';
 import {
   renderLabeledActionButton,
   type LabeledActionButtonOptions,
@@ -36,6 +40,7 @@ import { getBasename, groupBy } from '@utils/core';
 // Local imports - shared schemas and events
 import { pluralize } from '@utils/text/stringUtils';
 import { agentSelectionPanelStyles } from './AgentSelectionPanel.styles';
+import { renderNewerBuiltInNotice } from './newerBuiltInNotice';
 
 /** Shorthand: derive the canonical key from an AgentSelectionItem. */
 function agentKey(agent: AgentSelectionItem): string {
@@ -66,6 +71,7 @@ export class AgentSelectionPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     agentSelectionPanelStyles,
   ];
 
@@ -210,6 +216,15 @@ export class AgentSelectionPanel extends LitElement {
         >
           <bdi class="agent-list-item-name" dir="auto">${agent.name}</bdi>
           <span class="agent-list-item-badges">
+            ${
+              agent.newerBuiltIn
+                ? html`<span title="Newer built-in version available"
+                    >${waIcon('arrow-up', {
+                      label: 'Newer built-in version available',
+                    })}</span
+                  >`
+                : nothing
+            }
             ${
               badge
                 ? html`<span title="${badge.label} agent"
@@ -391,6 +406,7 @@ export class AgentSelectionPanel extends LitElement {
           >
         </div>
 
+        ${renderNewerBuiltInNotice(agent, this.category)}
         ${
           agent.description
             ? html`<div class="agent-detail-description" dir="auto">

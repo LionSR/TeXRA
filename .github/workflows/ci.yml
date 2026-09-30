@@ -17,7 +17,7 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-# Validation is split into parallel jobs (checks / test shards / build) so PR
+# Validation is split into parallel jobs (static groups / test shards / build) so PR
 # wall-time is bounded by the slowest job, not the sum of a serial chain. Each
 # job repeats the cheap cached setup (~30s) to buy that parallelism.
 #
@@ -78,13 +78,14 @@ jobs:
             echo "desktop=false" >> "$GITHUB_OUTPUT"
           fi
 
-  checks:
-    name: static checks (linux)
+  # The static gate is `npm run gate` (package.json): invariants, then
+  # typecheck + formatting, then lint. CI runs the same three groups as
+  # parallel jobs, so PR wall-time is the slowest group (lint), not their sum,
+  # and a local `npm run gate` reproduces exactly what these jobs enforce.
+  invariants:
+    name: invariants (linux)
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    # Typecheck, lint, formatting, and the cheap invariant scripts — everything
-    # that needs neither the test runner nor a build. Runs in parallel with the
-    # kernel-test shards and the build job.
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -101,23 +102,13 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      - name: Validate CLI React Compiler
-        run: pnpm --filter @texra-ai/cli smoke:react-compiler
-
-      # Formatting remains a CI gate instead of an auto-committing workflow:
-      # the pre-commit hook formats staged files locally, avoiding a bot push and
-      # its token, retrigger, cancellation, and branch-race complexity.
-      - name: Check formatting
-        run: pnpm run format:check
-
-      - name: Type check
-        run: pnpm run typecheck
-
-      - name: Lint
-        run: pnpm run lint
+      # The ratchets and cheap invariant scripts (`npm run gate:invariants`).
+      - name: Check invariants
+        run: pnpm run gate:invariants
 
       # Every function that owns a deno.json is validated, so a new edge
-      # function cannot ship untested by being omitted from this list.
+      # function cannot ship untested by being omitted from this list. Needs
+      # Deno, so it is CI-only and not part of the local gate.
       - name: Validate edge functions
         run: |
           shopt -s nullglob
@@ -136,34 +127,48 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Check dead-code ratchet
-        run: pnpm run check:dead-code-ratchet
+  typecheck:
+    name: typecheck + format (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Check Effect migration ratchet
-        run: pnpm run check:effect-migration-ratchet
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Check unexecuted Effects
-        run: pnpm run check:unexecuted-effects
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
-      - name: Check Effect-native test bodies
-        run: pnpm run check:effect-test-runs
+      # React Compiler smoke, formatting, then every tsconfig. Formatting
+      # remains a CI gate instead of an auto-committing workflow: the
+      # pre-commit hook formats staged files locally, avoiding a bot push and
+      # its token, retrigger, cancellation, and branch-race complexity.
+      - name: Check types and formatting
+        run: pnpm run gate:typecheck
 
-      - name: Check extension package invariants
-        run: pnpm run check:extension-package-invariants
+  lint:
+    name: lint (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Check extension package contributions
-        run: pnpm run check:package-contributes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Check package NOTICE files match the root NOTICE
-        run: pnpm run check:notice
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
 
-      - name: Check remote-agents catalog generates
-        run: npm run sync:remote-agents
+      - name: Lint
+        run: pnpm run lint
 
   guidance-refs:
     name: guidance references
     # Deliberately ungated: this is the one check that must run on BOTH sides
-    # of the docs/code split. A guidance-only PR (code=false) skips `checks`,
+    # of the docs/code split. A guidance-only PR (code=false) skips the static jobs,
     # and that is exactly the PR most likely to introduce a stale path; a
     # code-only PR can break the prose by renaming what it cites. Every
     # script here imports only Node built-ins, so this job installs nothing.
@@ -469,7 +474,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - changes
-      - checks
+      - invariants
+      - typecheck
+      - lint
       - guidance-refs
       - test
       - build
@@ -482,7 +489,7 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          # On code PRs the checks/test/build/webview-smoke jobs gate; on
+          # On code PRs the static/test/build/webview-smoke jobs gate; on
           # docs-only PRs they are skipped and the lightweight docs
           # build gates instead; on the nightly schedule runtime-validation and
           # the Windows kernel shards run, so a Windows-only suite regression
@@ -504,7 +511,9 @@ jobs:
             exit 1
           fi
           for result in \
-            'checks:${{ needs.checks.result }}' \
+            'invariants:${{ needs.invariants.result }}' \
+            'typecheck:${{ needs.typecheck.result }}' \
+            'lint:${{ needs.lint.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
@@ -518,12 +527,32 @@ jobs:
               exit 1
             fi
           done
+          # Code changes must have run the Linux jobs: "skipped" is only
+          # legitimate for them on a docs-only PR (and, for all but the kernel
+          # shards, on the nightly schedule, which runs only the Windows shards
+          # and runtime validation).
+          if [ '${{ needs.changes.outputs.code }}' = 'true' ]; then
+            for result in \
+              'test:${{ needs.test.result }}' \
+              'invariants:${{ needs.invariants.result }}' \
+              'typecheck:${{ needs.typecheck.result }}' \
+              'lint:${{ needs.lint.result }}' \
+              'build:${{ needs.build.result }}'; do
+              name="${result%%:*}"
+              value="${result#*:}"
+              if [ "$value" = 'skipped' ] && \
+                 { [ "$name" = 'test' ] || [ '${{ github.event_name }}' != 'schedule' ]; }; then
+                echo "${name} was skipped for a code change"
+                exit 1
+              fi
+            done
+          fi
           # Docs-only PRs skip the heavy jobs, so the docs build must have
           # actually succeeded (not merely been skipped). Scoped to
           # pull_request: on the nightly schedule both sides are skipped by
           # design.
           if [ '${{ github.event_name }}' = 'pull_request' ] && \
-             [ '${{ needs.checks.result }}' = 'skipped' ] && \
+             [ '${{ needs.changes.outputs.code }}' != 'true' ] && \
              [ '${{ needs.docs-check.result }}' != 'success' ]; then
             echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
             exit 1

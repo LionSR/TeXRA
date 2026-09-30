@@ -14,6 +14,12 @@ export {
   agentSourceDirectory,
 } from './AgentDirectoryService';
 
+export {
+  customCopyPath,
+  keepCustomAgent,
+  writeStampedCopy,
+} from './customAgentCopy';
+
 export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 export { InvalidAgentTeamError } from '../roster/AgentRosterController';
@@ -21,6 +27,7 @@ export { InvalidAgentTeamError } from '../roster/AgentRosterController';
 export type { AgentEntry } from './agentEntry';
 
 export {
+  changedBuiltInOf,
   getAgent,
   getCategoryAgent,
   resolveAgentForLaunch,

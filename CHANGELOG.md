@@ -196,6 +196,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A customized built-in agent tells you when TeXRA ships a newer version.**
+  Built-in agents already update with the app; a custom copy with the same
+  name used to override the improved version forever without a word.
+  Customize now records which bundled version the copy started from
+  (a `basedOn:` line at the end of the file). When an update changes that
+  agent, the settings Agents page marks the copy and offers View built-in,
+  Reset to built-in, and Keep mine; `texra agents list` and `texra agents
+show` print the same notice, and the new `texra agents customize`,
+  `texra agents reset`, and `texra agents keep` commands make, reset, and
+  keep a copy from the terminal. An agent you wrote yourself under a built-in's name
+  is never flagged.
 - **Session history takes several times less disk** — long tool output,
   attached images and PDFs, and long prompts are stored compressed and
   only once per project: the same image attached in two runs, or a file's
