@@ -115,3 +115,7 @@
 - name: 'live-llm'
   color: 'd93f0b'
   description: 'Run the live provider suites for packages/llm on this PR (paid, real API calls)'
+
+- name: 'live-journeys'
+  color: 'd93f0b'
+  description: 'Run the live theorist journeys (polish, latexFixer, latexdiff, citations) on this PR (paid, real API calls)'
