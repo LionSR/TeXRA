@@ -5,26 +5,12 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import {
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  SynchronizedRef,
-} from 'effect';
+import { Deferred, Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { turnText } from '@agent/runtime/run/turnText';
+import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   appendRow,
   rowAggregate,
@@ -33,19 +19,12 @@ import {
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { RunControls } from '@agent/runtime/RunHandle';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
-import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
-  AgentCategory,
   emptyRunEndOutput,
-  EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -53,16 +32,18 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
-import { untrackRun } from '@test/support/sessionEnd';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
-  nativeToolTestLayer,
-  testRunTools,
-} from '@test/support/nativeToolTestLayer';
-import { hostStores } from '@test/support/setupPlatform';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+  agentRunTestLayer,
+  scriptedInvokerLayer,
+  startedRun,
+  TEST_ORIGIN,
+  textTurn,
+  type ScriptedRunInit,
+  type ScriptedTurn,
+} from '@test/support/scriptedRunLayers';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -75,8 +56,7 @@ import {
   setGoalSessionAutoApproval,
   startGoal,
 } from '@tools/goal';
-import { generateRunId, generateShortId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
+import { generateRunId } from '@utils/core';
 
 import {
   eventsOfType,
@@ -85,8 +65,6 @@ import {
   sessionWithInteractions,
 } from '../progressTestUtils';
 
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
-
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger and the
 // session's real follow-up queue, with the model faked at the `ModelInvoker`
@@ -94,162 +72,9 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // what a parked run does with input is exercised end to end.
 // ---------------------------------------------------------------------------
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'test-model',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'deepseek',
-  },
-} as const;
-
-/**
- * A `Model` the harness never invokes: the invoker seam is faked above it.
- * Compaction still probes the optional token counter, and this model offers
- * none, so that one read answers `undefined` and the text heuristic decides.
- */
-const unusedModel = new Proxy({} as Model, {
-  get(_target, property) {
-    if (property === 'estimateInputTokens') return undefined;
-    throw new Error(`The harness model has no ${String(property)}.`);
-  },
-});
-
-function testBoundModel(supportsVision: boolean): BoundModel {
-  return {
-    modelId: 'test-model',
-    config: buildTestModelConfig({ capabilities: { supportsVision } }),
-    compatibilityKey: 'DeepSeek',
-    model: unusedModel,
-    origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
-    persistentConnection: false,
-  };
-}
-
-function textTurn(text: string): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: randomUUID(),
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
-    usage: null,
-  };
-}
-
-/** What the faked invoker reports for one turn, in script order. */
-type ScriptedTurn = TurnResult | { readonly failWith: RetryErrorInfo };
-
-function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
-  return Layer.effect(
-    ModelInvoker,
-    Effect.gen(function* () {
-      const run = yield* AgentRun;
-      const aggregateId = rowAggregate(run.runId);
-      return {
-        call: () => Effect.die(new Error('No compaction in this scenario.')),
-        invoke: (cell: RunCell, request: InvokeRequest) =>
-          Effect.gen(function* () {
-            const state = yield* cell.current;
-            const scripted = script[seen.length];
-            seen.push(request);
-            if (scripted === undefined) {
-              return yield* Effect.die(
-                new Error('The scenario ran out of model turns.'),
-              );
-            }
-            if ('failWith' in scripted) {
-              // The runtime snapshot the invoker writes on a failed attempt:
-              // the error a resumed run reads back off the fold.
-              const failed = yield* cell.append([
-                ...snapshotRow(run.runId, state, {
-                  runtime: {
-                    lastError: scripted.failWith,
-                    declinedRoutes: [],
-                  },
-                }),
-              ]);
-              return {
-                kind: 'failed' as const,
-                state: failed,
-                error: scripted.failWith,
-              };
-            }
-            const bound = yield* SynchronizedRef.get(run.model);
-            const invocation = { invocationId: randomUUID(), attempt: 1 };
-            const responseId = randomUUID();
-            const next = yield* cell.append([
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'attempt',
-                  request: '0'.repeat(64),
-                  invocation,
-                  origin: bound.origin,
-                  delivery: 'stream',
-                },
-              },
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'response',
-                  responseId,
-                  invocation,
-                  turn: scripted,
-                  calls: dispatchFactsFor(
-                    scripted,
-                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
-                    run.logger,
-                    generateShortId,
-                  ),
-                  usage: null,
-                },
-              },
-              positionRow(run.runId, state, 'response.ready'),
-            ]);
-            return {
-              kind: 'response' as const,
-              state: next,
-              responseId,
-              turn: scripted,
-              text: turnText(scripted),
-              usage: null,
-              responseTimeMs: 1,
-            };
-          }),
-      };
-    }),
-  );
-}
-
-interface LoopInit {
-  readonly runId: RunId;
-  readonly session: SessionHandle;
+interface LoopInit extends ScriptedRunInit {
   readonly script: readonly ScriptedTurn[];
-  /** A child run: its parent owns continuation across its turns. */
-  readonly parentRunId?: RunId | null;
   readonly resume?: boolean;
-  readonly logger?: TraceEmitter;
-  readonly supportsVision?: boolean;
-  readonly stopAfterCycle?: boolean;
-  /** The terminal structured-output tool, when the run has one. */
-  readonly finalToolName?: string;
-  readonly onIdle?: () => void;
   /** The ledger the run writes through; the session's own by default. */
   readonly ledger?: RunLedger['Service'];
   /** Host wiring that is live while the loop can accept an interrupt. */
@@ -257,67 +82,6 @@ interface LoopInit {
     attach(controls: RunControls): void;
     detach(controls: RunControls): void;
   };
-}
-
-function agentRunTestLayer(init: LoopInit) {
-  return Layer.effect(
-    AgentRun,
-    Effect.gen(function* () {
-      const model = yield* SynchronizedRef.make(
-        testBoundModel(init.supportsVision === true),
-      );
-      const logger = init.logger ?? new TraceEmitter();
-      const scope = yield* Effect.scope;
-      const handle = testRunHandle({
-        runId: init.runId,
-        agent: 'chat',
-        parent: init.parentRunId ?? null,
-      });
-      init.session.runs.track(handle);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
-      );
-      return {
-        runId: init.runId,
-        session: init.session,
-        config: AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
-        }),
-        setting: AgentSettingSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
-        }),
-        prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
-        logger,
-        parentStage: logger.openStage('Run: chat'),
-        // The launch stores a real run carries; no fixture reads through them.
-        stores: hostStores(),
-        toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        opening: {
-          inputs: {},
-          activated: [],
-          attachedMemoryMisses: [],
-        },
-        initialUserMessageForTranscript: 'Do the thing.',
-        fileService: new RunFileService(init.runId, init.session.roots),
-        ...testRunTools(hostStores()),
-        finalToolName: init.finalToolName ?? null,
-        structured: { value: undefined },
-        model,
-        swapModel: (next) =>
-          SynchronizedRef.updateAndGetEffect(model, (current) =>
-            Effect.scoped(next(current)),
-          ),
-        scope,
-        declinedRoutes: [],
-        pendingModelSwitch: { value: null },
-        callbacks: {
-          ...(init.onIdle ? { onIdle: init.onIdle } : {}),
-        },
-      } satisfies AgentRunShape;
-    }),
-  );
 }
 
 function loopProgram(
@@ -331,7 +95,7 @@ function loopProgram(
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        invokerLayer(init.script, requests),
+        scriptedInvokerLayer(init.script, requests),
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
@@ -422,12 +186,6 @@ function goalSession(
 const quietSession = (overrides: Record<string, unknown> = {}) =>
   sessionWithInteractions({ emit: () => {}, ...overrides });
 
-function startedRun(session: SessionHandle): RunId {
-  const runId = generateRunId();
-  publishTestRunStart(session, runId);
-  return runId;
-}
-
 /**
  * A run whose rows stop where a crash between a committed text response and
  * its post-response policy would leave them: the response and its step are
@@ -438,39 +196,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
     const ledger = session.ledger;
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
-      commit: 0,
-      lastSnapshot: null,
-      ledgerRows: 0,
+      ...freshRunState(0),
       family: 'toolUse',
-      at: null,
-      outcome: null,
-      phase: null,
-      round: 0,
-      turn: 0,
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
-      lastError: null,
-      pendingRetry: null,
-      declinedRoutes: [],
-      messages: [],
-      continuation: null,
-      openAttempt: null,
-      lastTurn: null,
-      pendingResponse: null,
-      pendingIntents: {},
-      requests: {},
-      usage: EMPTY_RUN_USAGE_TOTALS,
-      loop: null,
-      roundOutputs: [],
-      overflowRecoveredAtTurn: null,
-      offeredTools: null,
-      offeredContinuation: null,
-      offeredSkills: [],
-      offeredSystem: null,
-      offeredContext: null,
-      contents: {},
-      hookOutcomes: {},
-      offeredHooks: [],
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -492,7 +221,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
           kind: 'attempt',
           request: '0'.repeat(64),
           invocation,
-          origin: ORIGIN,
+          origin: TEST_ORIGIN,
           delivery: 'stream',
         },
       },
@@ -1078,7 +807,7 @@ describe('the batch a parked run consumes', () => {
           runId,
           session,
           logger,
-          supportsVision: false,
+          bound: { supportsVision: false },
           script: [textTurn('first'), textTurn('second')],
         });
         yield* park(1);
@@ -1120,7 +849,7 @@ describe('the batch a parked run consumes', () => {
             runId,
             session,
             logger,
-            supportsVision: true,
+            bound: { supportsVision: true },
             script: [textTurn('first')],
           }),
         );
