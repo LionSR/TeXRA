@@ -6,7 +6,9 @@
  * rather than by round. Subscription-backed usage is kept in a separate table
  * from paid relay/API-key usage.
  *
- * Authentication: JWT token in Authorization header (Bearer {jwt})
+ * Authentication: JWT token in Authorization header (Bearer {jwt}) for signed-in
+ * clients, or without one a lowercase UUIDv4 install id in X-TeXRA-Install-Id.
+ * Install rows are written with user_id NULL; exactly one owner per row.
  *
  * Endpoints:
  * - POST /log-usage - Log a batch of usage entries
@@ -28,7 +30,6 @@
  * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
  */
 
-import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
 import {
   adminClient,
@@ -37,6 +38,7 @@ import {
 } from '../_shared/edgeClients.ts';
 import { jsonResponse } from '../_shared/responses.ts';
 import { equivalentListCost } from './equivalentCost.ts';
+import { resolveOwner, type UsageOwner } from './usageOwner.ts';
 import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
@@ -63,11 +65,11 @@ const usageDestinations = [
     accepts: (entry: UsageLogEntry) =>
       subscriptionSourceForUsage(entry) !== undefined,
     toRows: (
-      userId: string,
+      owner: UsageOwner,
       batchId: string,
       entries: readonly UsageLogEntry[],
     ) =>
-      toDbRows(userId, batchId, entries).map((row, index) => {
+      toDbRows(owner, batchId, entries).map((row, index) => {
         const entry = entries[index];
         const source = subscriptionSourceForUsage(entry) ?? 'chatgpt';
         // Subscription rounds arrive with cost 0 (the client prices them
@@ -131,12 +133,13 @@ function errorResponse(
 }
 
 function toDbRows(
-  userId: string,
+  owner: UsageOwner,
   batchId: string,
   entries: readonly UsageLogEntry[],
 ) {
   return entries.map((entry) => ({
-    user_id: userId,
+    user_id: owner.userId,
+    install_id: owner.installId,
     logged_at: entry.timestamp,
     model: entry.model,
     provider: entry.provider,
@@ -158,13 +161,16 @@ function toDbRows(
 
 async function batchExists(
   destination: UsageDestination,
-  userId: string,
+  owner: UsageOwner,
   batchId: string,
 ): Promise<boolean> {
   const { data: existingBatch, error } = await adminClient!
     .from(destination.table)
     .select('id')
-    .eq('user_id', userId)
+    .eq(
+      owner.userId ? 'user_id' : 'install_id',
+      owner.userId ?? owner.installId,
+    )
     .eq('batch_id', batchId)
     .limit(1);
   if (error) {
@@ -216,22 +222,15 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Extract and validate the credential
-    const jwtToken = bearerToken(req);
-    if (!jwtToken) {
-      return errorResponse(req, 'Missing authorization token', 401);
+    // 1. Resolve the owner. CI relay tokens went away with the relay
+    // (2026-08, see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md);
+    // released clients send a signed-in session, current ones an install id.
+    const owner = await resolveOwner(req);
+    if (!owner) {
+      return errorResponse(req, 'Missing or invalid credential', 401);
     }
 
-    // 2. Validate user with Supabase. CI relay tokens went away with the
-    // relay (2026-08, see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md);
-    // only signed-in sessions log usage now.
-    const auth = await authenticateJwt(jwtToken);
-    if (!auth) {
-      return errorResponse(req, 'Invalid or expired token', 401);
-    }
-    const userId = auth.user.id;
-
-    // 3. Parse request body
+    // 2. Parse request body
     let body: unknown;
     try {
       body = await req.json();
@@ -242,7 +241,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 4. Validate the complete batch before any destination write.
+    // 3. Validate the complete batch before any destination write.
     const batchResult = UsageBatchSchema.safeParse(body);
     if (!batchResult.success) {
       // Keep the application-level rejection on HTTP 200 during the rolling
@@ -268,7 +267,7 @@ Deno.serve(async (req: Request) => {
 
     const entries = batch.entries;
 
-    // 5. Check for duplicate batch (idempotency for client retries).
+    // 4. Check for duplicate batch (idempotency for client retries).
     // After per-stream compaction the canonical row keeps only one batch_id
     // out of the inputs that produced it, so this is best-effort: it catches
     // the common case of an immediate retry of an in-flight request. Each
@@ -279,9 +278,9 @@ Deno.serve(async (req: Request) => {
         const destinationEntries = entries.filter(destination.accepts);
         const rows =
           destinationEntries.length === 0 ||
-          (await batchExists(destination, userId, batch.batchId))
+          (await batchExists(destination, owner, batch.batchId))
             ? []
-            : destination.toRows(userId, batch.batchId, destinationEntries);
+            : destination.toRows(owner, batch.batchId, destinationEntries);
         return { destination, rows };
       }),
     );
@@ -294,7 +293,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Server-side aggregation: rows with the same (user_id, stream_id) update
+    // Server-side aggregation: rows with the same (owner, stream_id) update
     // the canonical row instead of producing per-round duplicates.
     const upsertErrors = (
       await Promise.all(
@@ -309,7 +308,7 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Failed to store usage logs', 500);
     }
 
-    // 6. Return success response
+    // 5. Return success response
     return successResponse(req, entries.length);
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
