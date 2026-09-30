@@ -55,9 +55,9 @@ TeXRA panel offers the main access choices:
 
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
-::: tip Signing in to TeXRA
-**TeXRA: Sign In to TeXRA Account** is optional and separate from model access. Every agent, including the
-research-writing agents such as `generic` and `devise`, ships bundled and runs on the credential you configured above.
+::: tip No TeXRA account
+There is no TeXRA sign-in. Every agent, including the research-writing agents such as `generic` and `devise`, ships
+bundled and runs on the credential you configured above.
 :::
 
 Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.

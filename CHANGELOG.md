@@ -20,6 +20,14 @@ All notable changes to this project will be documented in this file.
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **TeXRA sign-in is removed from every host.** `texra login`, `texra logout`,
+  `texra auth status` and `/login texra` are gone, as are the VS Code sign-in,
+  sign-out and account commands, the Account tab (the General page now opens on
+  **Privacy**, which keeps the telemetry switch), the desktop sign-in dialog and
+  the `texra://` callback handler. Nothing needed the account: every agent ships
+  bundled and model calls run on your own credential. Provider sign-ins are
+  unchanged (`texra auth chatgpt login`, `texra auth grok login`, `/login` in a
+  chat, GitHub and Copilot).
 - **Usage logging is anonymous and needs no account.** When on, each batch
   carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
   sign-in token; the body is unchanged and never has prompts, paths or

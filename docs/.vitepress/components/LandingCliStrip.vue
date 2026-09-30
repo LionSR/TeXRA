@@ -8,7 +8,7 @@
 // flips with the docs theme. Believable static strings.
 const lines = [
   { cmd: 'npm install ', flag: '-g', rest: ' @texra-ai/cli' },
-  { cmd: 'texra login', flag: '', rest: '' },
+  { cmd: 'texra auth chatgpt login', flag: '', rest: '' },
   { cmd: 'texra run polish ', flag: '--input', rest: ' paper.tex' },
 ];
 </script>

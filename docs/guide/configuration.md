@@ -25,7 +25,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
   Code, the recommended **VS Code settings**.
 - **Memory**: the notes TeXRA keeps across tasks.
-- **General**: **Account** (telemetry) and **Git** (the
+- **General**: **Privacy** (telemetry) and **Git** (the
   GitHub token and Git commit attribution).
 
 The desktop app adds a **Shortcuts** page. Commands such as **TeXRA: Agent
@@ -92,9 +92,8 @@ them at the intended project or user scope.
 The **Models** page is the single home for model access: provider API keys,
 provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
 visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
-their provider rows with their usage meters. TeXRA account sign-in is on the
-**General** page. It is optional: it supplies no model access, and every agent
-ships bundled.
+their provider rows with their usage meters. There is no TeXRA account; every
+agent ships bundled.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys

@@ -106,7 +106,7 @@ TeXRA needs a few external tools. Only a **LaTeX distribution** is required for 
 <p class="hero-caption">Install only what you need: a LaTeX distribution is the one hard requirement; Perl, GraphicsMagick/ImageMagick, and Ghostscript each unlock a specific optional feature.</p>
 
 ::: tip Check what's detected with `texra doctor`
-Run `texra doctor` to see what TeXRA found: Node.js, the workspace and packaged resources, your TeXRA account and available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the workspace config file. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) are not part of the doctor report; a feature that needs them tells you when they are missing.
+Run `texra doctor` to see what TeXRA found: Node.js, the workspace and packaged resources, available models, usage logging, the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`), and the workspace config file. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) are not part of the doctor report; a feature that needs them tells you when they are missing.
 :::
 
 <DoctorReportCard />
@@ -320,12 +320,12 @@ set -a; . .env; set +a
 texra doctor
 ```
 
-If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models. `texra auth login` separately signs in to your TeXRA account:
+If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models.:
 
 ```bash
 texra auth chatgpt login
 texra auth grok login
-texra auth status
+texra auth chatgpt status
 ```
 
 Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and workspace defaults.
