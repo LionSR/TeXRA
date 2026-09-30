@@ -21,7 +21,6 @@ import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -45,6 +44,10 @@ import {
   renderAutoApproveRow,
   WideHeaderController,
 } from './autoApproveSwitches';
+import {
+  deleteSessionConfirmStyles,
+  renderDeleteSessionConfirm,
+} from './deleteSessionConfirm';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -82,6 +85,7 @@ export class RunHeader extends LitElement {
     designTokens,
     commonViewStyles,
     statusIndicatorStyles,
+    deleteSessionConfirmStyles,
     css`
       :host {
         display: block;
@@ -153,15 +157,6 @@ export class RunHeader extends LitElement {
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         white-space: nowrap;
-      }
-
-      .delete-confirm {
-        margin: var(--wa-space-2xs) 0;
-      }
-      .delete-confirm-actions {
-        display: flex;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
       }
 
       /* The ancestors path, root first, capped at 40% of the row; laid out
@@ -364,7 +359,13 @@ export class RunHeader extends LitElement {
         <slot name="end"></slot>
         ${this.renderMenu(run, statusLabel, progressTitle, canGrant)}
       </div>
-      ${this.confirmingDelete === run.id ? this.renderDeleteConfirm(run) : nothing}
+      ${
+        this.confirmingDelete === run.id
+          ? renderDeleteSessionConfirm(this, run, () => {
+              this.confirmingDelete = null;
+            })
+          : nothing
+      }
     `;
   }
 
@@ -465,39 +466,6 @@ export class RunHeader extends LitElement {
       </wa-dropdown>
       <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
     `;
-  }
-
-  private renderDeleteConfirm(run: RunView): TemplateResult {
-    const cancel = (): void => {
-      this.confirmingDelete = null;
-    };
-    return html`<wa-callout
-      class="delete-confirm"
-      variant="danger"
-      size="small"
-      role="alertdialog"
-      aria-label="Delete session"
-    >
-      ${waIcon('trash', { slot: 'icon' })} Delete “${run.label}”? Its
-      conversation and run folder are removed for good.
-      <div class="delete-confirm-actions">
-        <wa-button
-          id="confirmDeleteSession"
-          variant="danger"
-          size="s"
-          @click=${() => {
-            this.confirmingDelete = null;
-            this.dispatchEvent(
-              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
-            );
-          }}
-          >Delete</wa-button
-        >
-        <wa-button appearance="plain" size="s" @click=${cancel}
-          >Cancel</wa-button
-        >
-      </div>
-    </wa-callout>`;
   }
 
   private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {

@@ -196,6 +196,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Delete a conversation from the desktop sidebar.** Hovering or focusing
+  a finished conversation under a project shows an × that asks the same
+  "Delete session" question as the conversation's own menu, then removes it
+  and its run folder. A running conversation shows no × until it is
+  stopped, and deleting the one on screen moves to the project's first
+  remaining conversation.
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.

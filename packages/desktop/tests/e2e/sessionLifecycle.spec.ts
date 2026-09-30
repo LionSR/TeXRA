@@ -10,6 +10,7 @@ import {
 
 import {
   closeTexraApp,
+  dismissOnboarding,
   findWorkspaceStoragePath,
   launchTexraApp,
   type LaunchedApp,
@@ -197,6 +198,58 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
       }),
     );
     expect(reloaded).toEqual(persisted);
+  } finally {
+    if (currentLaunch) await closeTexraApp(currentLaunch);
+    cleanupDirectory(workspacePath);
+    cleanupDirectory(userDataPath);
+  }
+});
+
+test('the rail deletes a finished conversation after asking, and it stays deleted', async () => {
+  const { workspacePath, userDataPath } = createIsolatedProfile();
+  let currentLaunch: LaunchedApp | undefined;
+  const railRow = (launched: LaunchedApp, runId: RunId) =>
+    launched.page
+      .locator('.shell-project-runs run-tab')
+      .filter({ has: launched.page.locator(`[data-run="${runId}"]`) });
+
+  try {
+    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    await closeTexraApp(currentLaunch);
+    currentLaunch = undefined;
+
+    const storagePath = await findWorkspaceStoragePath({
+      userDataPath,
+      workspacePath,
+    });
+    const fixture = await loadDatabaseFixture(userDataPath);
+    await writeCanonicalRunFixtures(fixture, storagePath);
+
+    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    await dismissOnboarding(currentLaunch.page);
+    const row = railRow(currentLaunch, WAITING_RUN);
+    await expect(row).toHaveCount(1);
+
+    // Focus reveals the ×; it asks first, and Cancel keeps the row.
+    await row.locator('#run-tab-select-button').focus();
+    await row.locator('.tab-remove').click();
+    await row.locator('.delete-confirm-cancel').click();
+    await expect(row.locator('.delete-confirm')).toHaveCount(0);
+    await expect(row).toHaveCount(1);
+    // Focus came back to the row, so its × is showing again.
+    await expect(row.locator('.tab-remove')).toBeVisible();
+
+    await row.hover();
+    await row.locator('.tab-remove').click();
+    await row.locator('#confirmDeleteSession').click();
+    await expect(row).toHaveCount(0);
+    await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
+
+    await closeTexraApp(currentLaunch);
+    currentLaunch = await launchTexraApp({ workspacePath, userDataPath });
+    await dismissOnboarding(currentLaunch.page);
+    await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
+    await expect(railRow(currentLaunch, WAITING_RUN)).toHaveCount(0);
   } finally {
     if (currentLaunch) await closeTexraApp(currentLaunch);
     cleanupDirectory(workspacePath);
