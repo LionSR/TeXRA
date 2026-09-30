@@ -59,28 +59,38 @@ class DoctorProbeFailed extends Data.TaggedError('DoctorProbeFailed')<{
 const probeFailure = (cause: unknown): DoctorProbeFailed =>
   new DoctorProbeFailed({ cause });
 
-interface DoctorDependencies {
+/** The two probes a test overrides; both default to the real ones. */
+interface DoctorEnvironment {
   readonly nodeVersion?: string;
-  /**
-   * The account read the CLI root hands over, yielded by the auth check below
-   * rather than settled into a Promise first, as `modelAccessList` is.
-   */
-  readonly authProfile?: Effect.Effect<CliAuthProfile, Error>;
-  /**
-   * Model availability needs the process stores only the CLI root holds, so
-   * the caller supplies this probe. It is absent exactly when platform init
-   * failed, and `initError` then skips the model check that would read it.
-   */
-  readonly modelAccessList?: Effect.Effect<readonly CliModelAccess[], Error>;
   readonly latexToolchain?: Effect.Effect<
     LatexToolchainProbe,
     DoctorProbeFailed,
     ChildProcessSpawner
   >;
-  readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
-type ResolvedDoctorDependencies = Required<DoctorDependencies>;
+/**
+ * The probes only the CLI root can build: platform init either failed
+ * (`degraded`, which skips the checks that need it) or produced the stores
+ * and runtime they read (`ready`).
+ */
+type DoctorInput = DoctorEnvironment &
+  (
+    | { readonly kind: 'degraded'; readonly initError: Error }
+    | {
+        readonly kind: 'ready';
+        /** The account read, yielded by the auth check rather than settled
+         *  into a Promise first, as `modelAccessList` is. */
+        readonly authProfile: Effect.Effect<CliAuthProfile, Error>;
+        readonly modelAccessList: Effect.Effect<
+          readonly CliModelAccess[],
+          Error
+        >;
+        readonly usageLoggingOptOut: () => UsageLoggingOptOut;
+      }
+  );
+
+type ReadyDoctorInput = Extract<DoctorInput, { kind: 'ready' }>;
 
 const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
@@ -219,9 +229,7 @@ function checkDirectory(
   );
 }
 
-function checkAuth(
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
+function checkAuth(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.authProfile.pipe(
     Effect.map((profile) => {
       if (profile.authenticated) {
@@ -260,9 +268,7 @@ function checkAuth(
   );
 }
 
-function checkModels(
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
+function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.modelAccessList.pipe(
     Effect.map((models) => {
       const available = models.filter((entry) => entry.available);
@@ -294,9 +300,9 @@ function checkModels(
 }
 
 function checkLatex(
-  deps: ResolvedDoctorDependencies,
+  latexToolchain: NonNullable<DoctorEnvironment['latexToolchain']>,
 ): Effect.Effect<DoctorCheck[], never, ChildProcessSpawner> {
-  return deps.latexToolchain.pipe(
+  return latexToolchain.pipe(
     Effect.map((probe) => {
       const checks: DoctorCheck[] = [];
       if (!probe.hasCompiler) {
@@ -390,9 +396,7 @@ function checkConfig(
  * wording states what is in a record and how to switch it off.
  */
 
-function checkTelemetry(
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
+function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return Effect.try({
     try: (): UsageLoggingOptOut => deps.usageLoggingOptOut(),
     catch: probeFailure,
@@ -433,73 +437,34 @@ function checkTelemetry(
   );
 }
 
-/**
- * Stand-in for the one probe this module cannot build for itself. Unreachable:
- * the caller omits `modelAccessList` only when platform init failed, and that
- * sets `initError`, which skips the model check before it is ever called.
- */
-const missingModelAccessProbe: Effect.Effect<never, Error> = Effect.fail(
-  new Error(
-    'Model availability needs the platform stores the CLI root holds; doctor was given neither a model probe nor a platform init error.',
-  ),
-);
-
-/**
- * Same contract for the account read: the CLI root hands over the account
- * program, or reports a platform init error.
- */
-const missingAuthProfileProbe: Effect.Effect<never, Error> = Effect.fail(
-  new Error(
-    'The account check needs the process runtime the CLI root holds; doctor was given neither an auth probe nor a platform init error.',
-  ),
-);
-
-/**
- * Same contract for the telemetry consent read: the CLI root passes the
- * opt-out over its platform roots' config, or a platform init error.
- */
-const missingUsageLoggingOptOut = (): never => {
-  throw new Error(
-    'Telemetry consent needs the workspace configuration the CLI root holds; doctor was given neither a consent probe nor a platform init error.',
-  );
-};
-
 type DoctorServices = FileSystem.FileSystem | ChildProcessSpawner;
 
 export function buildDoctorReport(
   context: CliContext,
-  deps: DoctorDependencies = {},
-  initError?: Error,
+  input: DoctorInput,
 ): Effect.Effect<DoctorReport, never, DoctorServices> {
-  const resolved = {
-    nodeVersion: deps.nodeVersion ?? process.versions.node,
-    authProfile: deps.authProfile ?? missingAuthProfileProbe,
-    modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
-    latexToolchain: deps.latexToolchain ?? probeLatexToolchain(),
-    usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,
-  };
   return Effect.gen(function* () {
     // A platform-init failure takes out every dependency-based check
     // (auth/models/telemetry), so surface it once here rather than as N
     // unrelated-looking failures. The checks that do not need the platform
     // (node, workspace, resources, LaTeX, config) still run.
     const sessionDependentChecks =
-      initError == null
+      input.kind === 'ready'
         ? [
-            yield* checkAuth(resolved),
-            yield* checkModels(resolved),
-            yield* checkTelemetry(resolved),
+            yield* checkAuth(input),
+            yield* checkModels(input),
+            yield* checkTelemetry(input),
           ]
         : [
             failFromError(
               'platform',
               'Platform init',
               'Could not initialize the TeXRA platform.',
-              initError,
+              input.initError,
             ),
           ];
     const checks: DoctorCheck[] = [
-      checkNode(resolved.nodeVersion),
+      checkNode(input.nodeVersion ?? process.versions.node),
       yield* checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
       yield* checkDirectory(
         'resources',
@@ -508,7 +473,7 @@ export function buildDoctorReport(
         'read',
       ),
       ...sessionDependentChecks,
-      ...(yield* checkLatex(resolved)),
+      ...(yield* checkLatex(input.latexToolchain ?? probeLatexToolchain())),
       yield* checkConfig(context),
     ];
     return {

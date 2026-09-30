@@ -284,15 +284,19 @@ export function executeCliRequest(
     };
     const session = yield* options.session;
     session.setApprovalPolicy(runContext.approvalPolicy);
-    const presentationHost = createCliRuntimeHost(options.runtime, runContext);
+    const presentationHost = createCliRuntimeHost(runContext);
+    // Everything the run attaches to the session for its output: closed once,
+    // after the last result read, so the last line is on the wire before the
+    // result record. Finalizers run last-attached first.
+    const presentationScope = yield* Scope.make();
+    yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
     const renderWorkflowPlainProgress =
       runContext.outputFormat === 'text' &&
       runContext.renderRunProgress === true;
-    const detachRunProgressRenderer =
-      presentationHost.attachRunProgressRenderer(session, {
-        runId: request.runId,
-      });
+    yield* presentationHost
+      .attachRunProgressRenderer(session, { runId: request.runId })
+      .pipe(Scope.provide(presentationScope));
     const detachHostInteractions = yield* session.interactions.use(
       createHeadlessCliHostInteractions(session, options.runtime, runContext, {
         beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
@@ -302,17 +306,23 @@ export function executeCliRequest(
         },
       }),
     );
-    const detachSessionProgressProjection =
-      runContext.outputFormat === 'ndjson'
-        ? yield* attachCliSessionProgressProjection(session)
-        : Effect.void;
-    const detachWorkflowPlainOutput = renderWorkflowPlainProgress
-      ? attachWorkflowPlainOutput(options.runtime, session, {
-          runId: request.runId,
-          beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
-          writeLine: writeTextStderr,
-        })
-      : () => undefined;
+    yield* Scope.addFinalizer(
+      presentationScope,
+      Effect.sync(detachHostInteractions),
+    );
+    if (runContext.outputFormat === 'ndjson') {
+      yield* Scope.addFinalizer(
+        presentationScope,
+        yield* attachCliSessionProgressProjection(session),
+      );
+    }
+    if (renderWorkflowPlainProgress) {
+      yield* attachWorkflowPlainOutput(session, {
+        runId: request.runId,
+        beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+        writeLine: writeTextStderr,
+      }).pipe(Scope.provide(presentationScope));
+    }
     const launchRunId = request.runId;
     let ownedRunId: RunId | undefined;
     let shutdownRequested = false;
@@ -560,15 +570,10 @@ export function executeCliRequest(
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
     let refusal: CliUsageError | undefined;
-    // Run exactly once: the early detach below is taken only on a path that
-    // then throws or returns before the success tail that `ensuring`s it.
-    const detachPresentation = Effect.gen(function* () {
-      detachRunProgressRenderer();
-      yield* detachSessionProgressProjection;
-      detachWorkflowPlainOutput();
-      detachHostInteractions();
-      yield* presentationHost.close();
-    });
+    // Closing a closed scope is a no-op: the early close below is taken only
+    // on a path that then throws or returns before the success tail that
+    // `ensuring`s it.
+    const detachPresentation = Scope.close(presentationScope, Exit.void);
     const invocation = yield* Effect.result(
       Effect.suspend(invoke).pipe(
         Effect.catchCause((cause) =>
@@ -629,9 +634,7 @@ export function executeCliRequest(
       cleanupFailures.push(finalization.failure);
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
     if (!runResult.ok || Result.isFailure(finalization)) {
-      const detachment = yield* Effect.result(detachPresentation);
-      if (Result.isFailure(detachment))
-        cleanupFailures.push(detachment.failure);
+      yield* detachPresentation;
     }
     if (cleanupFailures.length > 0) {
       const cleanupFailure = aggregateError(
@@ -665,11 +668,7 @@ export function executeCliRequest(
         outcomePersisted,
         result: { ...runResult.result, outcome },
       };
-    }).pipe(
-      Effect.ensuring(
-        detachPresentation.pipe(Effect.mapError(ensureError), Effect.orDie),
-      ),
-    );
+    }).pipe(Effect.ensuring(detachPresentation));
   }).pipe(
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );

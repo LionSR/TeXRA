@@ -4,16 +4,15 @@
  * printed as their lines change. It reads `SessionHandle.view` and derives
  * nothing the fold already states; it keeps only what it last printed.
  */
-import { SubscriptionRef } from 'effect';
+import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { descendantRuns, type RunView } from '@shared/session/sessionView';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
-import { claimRootRun, followView } from './sessionViewFollow';
+import { claimRootRun } from './sessionViewFollow';
 
 /** The plain workflow output also subscribes the workflow transcripts it
  *  prints, since transcript rows fold only for subscribed aggregates. */
@@ -72,63 +71,64 @@ function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
  * or relabels.
  */
 export function attachWorkflowPlainOutput(
-  runtime: ProcessRuntime,
   session: WorkflowPlainSession,
   options: WorkflowPlainOutputOptions,
-): () => void {
-  const previous = new Map<RunId, ReadonlyMap<string, string>>();
-  let subscribed = '';
-  let rootRunId: RunId | undefined;
-  const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
-  const write = (line: string): void => {
-    options.beforeWrite?.();
-    options.writeLine(line);
-  };
-  const printRun = (run: RunView): void => {
-    const before = previous.get(run.id);
-    const lines = workflowPlainLines(run);
-    previous.set(run.id, lines);
-    for (const [id, line] of lines) {
-      if (before?.get(id) !== line) write(line);
-    }
-  };
-  const detach = followView(runtime, session, (view) => {
-    for (const runId of [...previous.keys()]) {
-      if (!view.runs.has(runId)) previous.delete(runId);
-    }
-    // The view also holds every earlier run hydrated from the transcript
-    // summary; only the launched run's own subtree is this run's output.
-    rootRunId ??= claimRootRun(view, options.runId, attachCursor);
-    const root = rootRunId;
-    const rootedIds =
-      root === undefined
-        ? undefined
-        : new Set(descendantRuns(view, root, { includeRoot: true }));
-    const workflows =
-      rootedIds === undefined
-        ? []
-        : [...view.runs.values()].filter(
-            (run) =>
-              run.identity?.kind === 'multiAgentWorkflow' &&
-              rootedIds.has(run.id),
-          );
-    const key = workflows.map((run) => run.id).join('\0');
-    if (key !== subscribed) {
-      subscribed = key;
-      runtime.runFork(
-        session.setTranscriptSubscriptions(
-          'workflow-plain-output',
-          workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
-        ),
-      );
-    }
-    for (const run of workflows) printRun(run);
-  });
-  return () => {
-    detach();
-    previous.clear();
-    runtime.runFork(
+): Effect.Effect<void, never, Scope.Scope> {
+  return Effect.gen(function* () {
+    const previous = new Map<RunId, ReadonlyMap<string, string>>();
+    let subscribed = '';
+    let rootRunId: RunId | undefined;
+    const attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+    const write = (line: string): void => {
+      options.beforeWrite?.();
+      options.writeLine(line);
+    };
+    const printRun = (run: RunView): void => {
+      const before = previous.get(run.id);
+      const lines = workflowPlainLines(run);
+      previous.set(run.id, lines);
+      for (const [id, line] of lines) {
+        if (before?.get(id) !== line) write(line);
+      }
+    };
+    yield* Effect.addFinalizer(() =>
       session.setTranscriptSubscriptions('workflow-plain-output', []),
     );
-  };
+    yield* Effect.forkScoped(
+      Stream.runForEach(session.viewChanges, (view) =>
+        Effect.gen(function* () {
+          for (const runId of [...previous.keys()]) {
+            if (!view.runs.has(runId)) previous.delete(runId);
+          }
+          // The view also holds every earlier run hydrated from the
+          // transcript summary; only the launched run's own subtree is this
+          // run's output.
+          rootRunId ??= claimRootRun(view, options.runId, attachCursor);
+          const root = rootRunId;
+          const rootedIds =
+            root === undefined
+              ? undefined
+              : new Set(descendantRuns(view, root, { includeRoot: true }));
+          const workflows =
+            rootedIds === undefined
+              ? []
+              : [...view.runs.values()].filter(
+                  (run) =>
+                    run.identity?.kind === 'multiAgentWorkflow' &&
+                    rootedIds.has(run.id),
+                );
+          const key = workflows.map((run) => run.id).join('\0');
+          if (key !== subscribed) {
+            subscribed = key;
+            yield* session.setTranscriptSubscriptions(
+              'workflow-plain-output',
+              workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
+            );
+          }
+          for (const run of workflows) printRun(run);
+        }),
+      ),
+      { startImmediately: true },
+    );
+  });
 }

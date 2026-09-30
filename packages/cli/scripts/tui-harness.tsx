@@ -459,10 +459,8 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, session().view));
 }
 // Approvals go through the session's interaction port with the TUI host
 // attached, exactly as `chatSessionController` wires a live chat.
-const harnessRuntimeHost: CliRuntimeHost = createCliRuntimeHost(
-  harnessRuntime,
-  HARNESS_CLI_CONTEXT,
-);
+const harnessRuntimeHost: CliRuntimeHost =
+  createCliRuntimeHost(HARNESS_CLI_CONTEXT);
 HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
 import {
@@ -8,7 +8,6 @@ import {
   type RuntimePresentationEventPayloads,
   type SessionHandle,
 } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 
@@ -31,21 +30,16 @@ export interface CliRuntimeHost {
   attachRunProgressRenderer(
     session: SessionHandle,
     options?: { readonly runId?: RunId },
-  ): () => void;
+  ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
   close(): Effect.Effect<void>;
 }
 
-/** `runtime` is the process runtime the caller holds: the progress renderer
- *  this host owns forks its view subscription on it for the host's lifetime. */
-export function createCliRuntimeHost(
-  runtime: ProcessRuntime,
-  context: CliContext,
-): CliRuntimeHost {
+export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let logger: Logger | undefined;
   let closed = false;
   const ndjson = context.outputFormat === 'ndjson';
-  const runProgress = createRunProgressRenderer(runtime, context);
+  const runProgress = createRunProgressRenderer(context);
   function ensureLogger(): Logger {
     if (logger) return logger;
     logger = createCliLogger(createCliLogSink(context.outputFormat));
@@ -117,7 +111,7 @@ export function createCliRuntimeHost(
 
   return {
     attachRunProgressRenderer: (session, options) =>
-      runProgress ? runProgress.attach(session, options) : () => undefined,
+      runProgress ? runProgress.attach(session, options) : Effect.void,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emit<K extends RuntimePresentationEvent>(
       event: K,

@@ -4,10 +4,7 @@
  * (`runProgressRenderer.ts`) and the plain-text workflow output
  * (`workflowPlainOutput.ts`), which are otherwise separate renderers.
  */
-import { Effect, Fiber, Stream } from 'effect';
-
 import type { SessionHandle } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 
@@ -32,21 +29,4 @@ export function claimRootRun(
   );
   candidates.sort((a, b) => a.createdAt - b.createdAt);
   return candidates.at(0)?.id;
-}
-
-/** Follow a view level with a callback; returns the detach. The fiber runs on
- *  the runtime the renderer was built with. */
-export function followView(
-  runtime: ProcessRuntime,
-  session: RunProgressSession,
-  onView: (view: SessionView) => void,
-): () => void {
-  const fiber = runtime.runFork(
-    Stream.runForEach(session.viewChanges, (view) =>
-      Effect.sync(() => onView(view)),
-    ),
-  );
-  return () => {
-    runtime.runFork(Fiber.interrupt(fiber));
-  };
 }
