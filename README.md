@@ -86,7 +86,7 @@ Five built-in presets cover the most common research disciplines:
 | **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
 Pick a team in **Settings → Agents → Teams**, or with `texra multi-agent
-run <preset>`. Or define your own team in YAML.
+run <preset>`. Or save the agents you have shown as your own team.
 
 ## Agents
 
