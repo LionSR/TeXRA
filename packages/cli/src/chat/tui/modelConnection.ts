@@ -27,7 +27,10 @@ import {
   setTransientNotice,
 } from './state/cliState';
 import { chatTuiCanStartRootRun } from './state/sessionRunState';
-import { appendLocalAssistantTranscript } from './state/transcript';
+import {
+  appendLocalErrorTranscript,
+  appendLocalNotice,
+} from './state/transcript';
 import type {
   SlashCommandContext,
   SlashCommandEffect,
@@ -114,20 +117,16 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     }),
   );
   if (Exit.isFailure(selection)) {
-    appendLocalAssistantTranscript(
-      toErrorMessage(Cause.squash(selection.cause)),
-    );
+    appendLocalErrorTranscript(toErrorMessage(Cause.squash(selection.cause)));
   } else {
     patchSessionMeta({ model: selection.value.model });
     yield* setCliHelperModel(stores.globalState, selection.value.model);
-    appendLocalAssistantTranscript(
-      `Model connected: ${selection.value.model}.`,
-    );
+    appendLocalNotice(`Model connected: ${selection.value.model}.`);
   }
   const setupAgent = options.firstRunSetupAgent;
   if (setupAgent && chatTuiCanStartRootRun(context.session)) {
     yield* applyInitialCliAgentSelection(setupAgent, context);
-    appendLocalAssistantTranscript(SETUP_AGENT_HANDOFF_NOTICE);
+    appendLocalNotice(SETUP_AGENT_HANDOFF_NOTICE);
   }
   const held = heldMessage;
   heldMessage = undefined;
@@ -138,6 +137,6 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
 // Every step already speaks in the transcript; a failure in one does too.
 function reportInTranscript(cause: Cause.Cause<unknown>) {
   return Effect.sync(() =>
-    appendLocalAssistantTranscript(toErrorMessage(Cause.squash(cause))),
+    appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),
   );
 }

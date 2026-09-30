@@ -34,7 +34,7 @@ export function firstRunSetupAgentOverride(
 
 /**
  * Local transcript notice shown when the setup agent takes over a first-run
- * session. Display-only (appended via `appendLocalAssistantTranscript`) — it
+ * session. Display-only (appended via `appendLocalNotice`) — it
  * is never sent to the model, so the agent stays reactive instead of speaking
  * first on its own. Built from the shared State 1 handoff sentence (same
  * wording as the extension/desktop setup card) plus the CLI's own hint.

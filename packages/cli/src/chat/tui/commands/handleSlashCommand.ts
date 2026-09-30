@@ -4,7 +4,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
-import { appendLocalAssistantTranscript } from '../state/transcript';
+import { appendLocalErrorTranscript } from '../state/transcript';
 import {
   type SlashCommandContext,
   type SlashCommandEffect,
@@ -48,9 +48,7 @@ function runGuardedSlashCommand(
           ? Effect.failCause(cause)
           : Effect.sync(() => {
               echo();
-              appendLocalAssistantTranscript(
-                toErrorMessage(Cause.squash(cause)),
-              );
+              appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause)));
             }),
       ),
     );
