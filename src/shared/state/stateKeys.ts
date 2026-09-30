@@ -117,6 +117,11 @@ export enum GlobalStateKey {
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',
 
+  /** Random anonymous telemetry install ID (UUIDv4); deleting the key resets it. */
+  TELEMETRY_INSTALL_ID = 'texra.telemetry.installId',
+  /** Set once the first-run telemetry notice has been shown on this host. */
+  TELEMETRY_NOTICE_SHOWN = 'texra.telemetry.noticeShown',
+
   // Onboarding funnel (user-scoped; see @shared/state/onboardingState)
   /** Canonical shared key; the CLI-originated spelling is intentionally stable. */
   ONBOARDING_DECLINED = 'texra.cli.onboardingDeclined',

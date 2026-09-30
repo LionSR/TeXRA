@@ -106,6 +106,7 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { GlobalDatabase } from '@shared/session/database';
+import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
@@ -231,6 +232,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     usageLog: usageLogLayer({
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,
+      // VS Code's own telemetry setting, read live: it overrides ours.
+      hostTelemetryEnabled: () => vscode.env.isTelemetryEnabled,
     }),
     // The process's one handle on that same global root: the inquiry
     // threads, the update check and the CLI-shared input history read
@@ -293,6 +296,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           resourcesPath: path.join(context.extensionPath, 'resources'),
         },
       });
+      // The one-time telemetry notice, one information message; VS Code's own
+      // switch being off means nothing is sent, so nothing to announce.
+      const notice = vscode.env.isTelemetryEnabled
+        ? yield* telemetryNoticeIfDue(roots.config)
+        : null;
+      if (notice) void vscode.window.showInformationMessage(notice);
       yield* registerSupabaseAuth(
         context,
         secrets,

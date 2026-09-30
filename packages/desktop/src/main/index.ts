@@ -1,12 +1,13 @@
 import { resolve as resolvePath } from 'node:path';
 import { Cause, Effect, Exit, Scope } from 'effect';
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { closeAllSessions } from '@agent/runtime';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { NotificationFailed } from '@hosts/uiHosts';
 import { withProcessServices } from '@platform/processRuntime';
+import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   DesktopProjectRecords,
@@ -236,6 +237,12 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             continueAfterWindowClose: windows.continueQuitAfterClose,
           });
           yield* windows.open;
+          // The one-time telemetry notice, shown once the window exists.
+          const notice = yield* telemetryNoticeIfDue(
+            platformInit.processRoots.config,
+          );
+          if (notice)
+            void dialog.showMessageBox({ type: 'info', message: notice });
           app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
           });

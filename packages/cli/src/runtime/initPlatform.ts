@@ -36,6 +36,7 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -399,6 +400,13 @@ export function initCliPlatform(
               skillSourceOptions: context.skillSourceOptions,
             },
           });
+
+          // The one-time telemetry notice: a single stderr line, then a state
+          // flag. A quiet run neither prints it nor marks it shown.
+          if (!context.quietLogs) {
+            const notice = yield* telemetryNoticeIfDue(roots.config);
+            if (notice) writeTextStderr(notice);
+          }
 
           // The shutdown is this scope's close, its finalizers run in the
           // reverse of their registration: every session closes first (its

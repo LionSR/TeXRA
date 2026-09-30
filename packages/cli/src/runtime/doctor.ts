@@ -420,8 +420,8 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'telemetry',
         'Usage logging',
         'pass',
-        'On: model, token counts, and cost per round, sent while signed in. No prompt or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+        'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
+        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
       );
     }),
     Effect.catch((failure) =>

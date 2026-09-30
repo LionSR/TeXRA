@@ -1049,7 +1049,7 @@ interface ProcessRuntimeOptions {
   readonly usageLog: Layer.Layer<
     UsageLog,
     never,
-    HttpClient.HttpClient | SupabaseAuth
+    HttpClient.HttpClient | AppState
   >;
   /**
    * The process's handle on the global storage root —
