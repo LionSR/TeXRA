@@ -387,6 +387,10 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A failed model request shows the provider's error again.** It had
+  shown "Malformed error payload" with a schema complaint about
+  `rawErrorBody` instead of the actual failure.
+
 - **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
   a sign-in row in the chat's account menu started the sign-in but left the
   menu on screen, so the sign-in link, one-time code and `c` copy-link key

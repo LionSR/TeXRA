@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import type { ProviderErrorPartial } from '@shared/schemas';
+import type { RetryPermission } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -113,18 +113,13 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   }
 
   private formatRetryDetails(
-    details: ProviderErrorPartial | undefined,
+    details: RetryPermission['errorDetails'],
   ): string | null {
     if (!details) return null;
-
-    const formatBody = (v: unknown) =>
-      typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
 
     const lines = [
       details.provider && `provider: ${details.provider}`,
       details.requestId && `requestId: ${details.requestId}`,
-      details.rawErrorBody != null &&
-        `rawErrorBody: ${formatBody(details.rawErrorBody)}`,
     ].filter(Boolean);
 
     // Show the tail of text that was generated before the failure — useful

@@ -14,7 +14,6 @@ import {
   type PositionAt,
   type RunSnapshotPayload,
   type PendingRetry,
-  type PermissionPayload,
   type RunId,
   type RunOutcome,
   type SessionEventDraft,
@@ -198,19 +197,4 @@ export function displayRow(
   >,
 ): RunLedgerDraft {
   return { ...draft, aggregateId: rowAggregate(runId) };
-}
-
-/**
- * The durable copy of an approval request payload. A retry carries the
- * provider error, whose raw body is dropped before the row is written; the
- * rest of the payload is written as it is. Every writer of a
- * `request.opened` row passes its payload through here, whether the session
- * opens the request or a loop commits it with its recovery binding.
- */
-export function redactedForFact(payload: PermissionPayload): PermissionPayload {
-  if (payload.kind !== 'retry') return payload;
-  const { errorDetails, ...data } = payload.data;
-  if (!errorDetails) return payload;
-  const { rawErrorBody: _dropped, ...details } = errorDetails;
-  return { kind: 'retry', data: { ...data, errorDetails: details } };
 }

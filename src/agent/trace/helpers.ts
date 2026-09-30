@@ -21,12 +21,15 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import {
   MESSAGE_TYPES,
+  toRetryErrorInfo,
   type CompactionActivityData,
   type CompactionActivityOutcome,
   type ContextManagementData,
   type ErrorContext,
+  type ErrorLogData,
   type FileListEntry,
   type MediaAttachmentKind,
+  type ProviderError,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
@@ -45,23 +48,41 @@ export function logSdkError(
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
     logErrorData(trace, message, buildErrorLogData(err, context), stageId);
-    // The provider's raw response body stays out of the stream log, since it
-    // can echo the request; it is a diagnostic for the process log.
-    const body = normalizeProviderError(err).rawErrorBody;
-    return body === undefined
-      ? Effect.void
-      : Effect.logWarning(`${message} (provider response body)`).pipe(
-          Effect.annotateLogs({ data: body }),
-          withLogChannel('agentTrace'),
-        );
+    return logProviderBody(message, normalizeProviderError(err).rawErrorBody);
   });
 }
 
-/** Emit an error log with a pre-serialized data payload. */
-export function logErrorData(
+/** Log a normalized provider failure: its body-free `RetryErrorInfo` on the
+ *  stream log, its raw response body on the process log only. */
+export function logProviderError(
   trace: AgentTrace,
   message: string,
-  data: unknown,
+  error: ProviderError,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    logErrorData(trace, message, toRetryErrorInfo(error));
+    return logProviderBody(message, error.rawErrorBody);
+  });
+}
+
+/** The provider's raw response body stays out of the stream log and every
+ *  session row, since it can echo the request; it is a diagnostic for the
+ *  process log. */
+function logProviderBody(message: string, body: unknown): Effect.Effect<void> {
+  return body === undefined
+    ? Effect.void
+    : Effect.logWarning(`${message} (provider response body)`).pipe(
+        Effect.annotateLogs({ data: body }),
+        withLogChannel('agentTrace'),
+      );
+}
+
+/** Emit an error log row. A `ProviderError` does not fit `data`: its raw
+ *  body is rejected by the row schema, so pass its `RetryErrorInfo`. */
+function logErrorData(
+  trace: AgentTrace,
+  message: string,
+  data: ErrorLogData & { readonly rawErrorBody?: never },
   stageId?: string,
 ): void {
   trace.error(message, {

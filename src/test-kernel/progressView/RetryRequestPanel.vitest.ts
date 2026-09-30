@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
-import type { ProviderErrorPartial, RunId } from '@shared/schemas';
+import type { RetryPermission, RunId } from '@shared/schemas';
 
 // Local file imports
 import {
@@ -47,11 +47,13 @@ function mountPanel(
 // this pure-string-formatting logic doesn't need a full render to verify.
 function formatRetryDetails(
   element: RetryRequestPanel,
-  details: ProviderErrorPartial,
+  details: NonNullable<RetryPermission['errorDetails']>,
 ): string | null {
   const format = (
     element as unknown as {
-      formatRetryDetails: (details: ProviderErrorPartial) => string | null;
+      formatRetryDetails: (
+        details: NonNullable<RetryPermission['errorDetails']>,
+      ) => string | null;
     }
   ).formatRetryDetails;
   return format.call(element, details);
