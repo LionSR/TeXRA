@@ -15,8 +15,7 @@ The design trusts the model. The harness adds only what a model cannot do for it
 
 - reach into another project;
 - be woken later;
-- stay running;
-- be stopped by money.
+- stay running.
 
 Everything else is the model's judgement, stated once in its prompt: how often to check in, what to report, what to dispatch, and how to keep its notes.
 
@@ -29,7 +28,7 @@ Everything else is the model's judgement, stated once in its prompt: how often t
    - A dispatched run is an **ordinary top-level run in that project**, with `origin {sessionRoot, runId}` on its `run.start`. A child's lineage is session-local (`registerRun`, `RunRegistry`, `isOwnedBy`), so no parent link crosses stores.
    - When the run ends, its report is admitted onto the orchestrator's run as `from: {kind:'run', runId, relation:'dispatched'}`, as a subagent report is today (`childRunLoop.ts`).
    - `executions` with `project` reads and acts on the target session, and keeps the caller's session for its own `wait`.
-2. **A `projects` tool** with one command, `list`. For each registered project it returns its root, live and paused runs, pending requests and today's spend, all read from `SessionView` with no model call.
+2. **A `projects` tool** with one command, `list`. For each registered project it returns its root, live and paused runs, pending requests and today's spend (reported, not limited), all read from `SessionView` with no model call.
    - The registry is the desktop's remembered-projects record, moved from `desktop-projects` to a host-neutral `projects` value in `GlobalDatabase`.
    - Desktop and the CLI serve it. VS Code and the SDK do not, and `projects` declares `unavailableHosts: ['vscode', 'sdk']`.
 3. **A `wake` tool:** `wake {at | delay_minutes, message}`, plus `cancel: <id>` and `list: true`.
@@ -50,11 +49,6 @@ Everything else is the model's judgement, stated once in its prompt: how often t
    - The desktop always opens the orchestrator folder at launch. It creates the folder if missing.
    - For a machine without the desktop, `texra orchestrator --stay` opens the same folder and keeps its session open until killed.
    - Existing OS notifications (`desktopAttention.ts`) already cover the orchestrator's session.
-5. **A daily cap.**
-   - The setting is `orchestrator.dailyBudgetUsd`.
-   - Spend counts the orchestrator's turns and those of runs it dispatched (by `origin`) since local midnight, at the model's API rates even on a plan route. `pricing.ts` prices plan turns at zero, which would make the cap unreachable there.
-   - `ModelInvoker` checks the cap before each such model call.
-   - Over the cap, the run stops at a checkpoint and asks: "Today's budget is used. Continue for the rest of today?" The decided request is the record. Nothing is discarded.
 
 ## What stays as it is
 
@@ -80,12 +74,12 @@ Each item is an E2E through the real desktop or `texra` CLI, ending in a diffabl
 - A project agent that sets `project` gets a `ToolError`.
 - A `wake` arrives after TeXRA is restarted before its time.
 - With the desktop's window closed, a woken orchestrator dispatches a proposal and the OS notification appears.
-- With the cap set to $0.01, the next model call stops and asks.
 
 ## Later, separate proposals
 
 - The orchestrator takes over the `setup` agent's job (environment, keys, teams, first task), and `setup.yaml` goes.
 - Recurring or event wakes, if models turn out to forget to reschedule.
+- A spend cap on unattended work, if running it shows one is needed. Note that `pricing.ts` records plan-route turns at $0, so a cap would have to price them at API rates.
 - A reviewer for unattended proposals (the OpenAI Dots auto-review, the Meta Muse Sentinel).
 - One `theorist` agent per project, replacing `prover`, `research`, `numerics`, `review`, `search` and `leanOrchestrator`.
 
@@ -98,4 +92,4 @@ Always-on agents from September 2026:
 - **Manus 2.0:** fresh-context fan-out; users complain about uncapped credit burn.
 - **Meta Muse:** keeps working after the app closes and comes back when something changes or needs approval.
 
-We take the shape they share (it keeps working in the background, comes back to the researcher, and has a spending limit) and leave their machinery.
+We take the shape they share (it keeps working in the background, and comes back to the researcher) and leave their machinery.
