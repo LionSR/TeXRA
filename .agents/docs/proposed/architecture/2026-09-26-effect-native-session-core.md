@@ -596,7 +596,8 @@ no `@tools` to `@agent` edges.
   process plugin the process did not compose fails to open with a typed
   `PluginNotComposed`, and nothing is dropped silently. Tools and the
   continuation switch at the next step (#13364, #13387). A preset stores
-  switches, nothing else (decided 2026-09-27). The plugin note already
+  switches plus an optional root agent (decided 2026-09-30, superseding
+  "switches, nothing else" of 2026-09-27). The plugin note already
   promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
@@ -1915,7 +1916,7 @@ The owner delegated these calls and asked for the long-term option each time.
 - **Goal mode after resume** (decision 14): paused until the user re-arms it.
   Done in #13387.
 - **Presets store switches.** A preset is the user's saved selection of
-  switches; availability is resolved when resources are acquired.
+  switches, plus an optional root agent (2026-09-30); availability is resolved when resources are acquired.
 - **Descriptions are not part of tool identity.** Identity is name, input
   schema with descriptions stripped, plugin id and plugin revision; a
   description change is recorded through the offered snapshot's `shown`

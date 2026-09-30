@@ -65,8 +65,9 @@ in real tools, each producing verifiable output.
 ## Three surfaces, one system
 
 The VS Code extension, the desktop app and the `texra` CLI share the same
-underlying agents, credentials, and run history. A run launched in the CLI
-surfaces live in the extension's Sessions view, and vice versa.
+underlying agents and run history. Credentials stay local to each host, so
+add your API keys in each one you use. A run launched in the CLI surfaces
+live in the extension's Sessions view, and vice versa.
 
 <RunParityHero />
 
