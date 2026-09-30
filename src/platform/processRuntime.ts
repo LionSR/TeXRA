@@ -20,7 +20,6 @@ import {
   type Path,
 } from 'effect';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
-import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
   GlobalDatabase,
@@ -84,7 +83,6 @@ export type ProcessServices =
   | AgentEngine
   | LeanLanguageServices
   | UsageLog
-  | SupabaseAuth
   | ToolRegistry
   | LiveTools
   | ToolAvailability;

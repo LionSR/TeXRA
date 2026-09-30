@@ -12,7 +12,6 @@ import {
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
-import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -168,7 +167,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       : {},
     secrets,
     appState,
-    auth: unavailableSupabaseAuth(),
     // The editor's LM API on the workspace path, unavailable on the
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,

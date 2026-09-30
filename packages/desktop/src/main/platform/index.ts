@@ -3,7 +3,6 @@ import { app } from 'electron';
 import { Effect, Layer, Scope } from 'effect';
 
 import { AgentDirectoryService } from '@agent/index';
-import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
   appStateStoreFromDatabase,
@@ -156,7 +155,6 @@ export const initializeElectronPlatform = Effect.fn(
         appStateStoreFromDatabase(globalStorage, database.values),
       ),
     ),
-    auth: unavailableSupabaseAuth(),
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentDirectories: agentDirectoriesLayer,

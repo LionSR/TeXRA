@@ -102,14 +102,6 @@ const EFFECT_RUN_ROOTS = [
 const EFFECT_RUN_CALL =
   /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
 const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
-  // The account plane's one outbound foreign Promise contract (rulings
-  // ledger, #12720): `@supabase/auth-js` calls the GoTrue storage adapter
-  // through Promise callbacks, and the plane answers them with
-  // `Effect.runPromiseWith` over the services it captured when it was built,
-  // so the PKCE flow-state program runs on the plane's own services rather
-  // than on a process-global run edge. The program is service-free and
-  // recovers every failure to `undefined`.
-  'src/auth/SupabaseAuth.ts': 1,
   // The CLI platform shutdown sequence, which cannot run on the process
   // runtime for the same reason the SDK entry cannot: `cliPlatformShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes

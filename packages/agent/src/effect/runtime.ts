@@ -19,7 +19,6 @@
 import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';
 
 import { closeAllSessions, installedProcessRuntime } from '@agent/runtime';
-import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -173,9 +172,6 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
   const processServices = {
     secrets: platform.secrets,
     appState: AppState.layer(platform.roots.globalState),
-    // The package has no TeXRA account plane of its own: every probe answers
-    // signed-out, as the uninitialized facade did for an embedder.
-    auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
     toolMissingReporter: platform.toolMissingHandler,

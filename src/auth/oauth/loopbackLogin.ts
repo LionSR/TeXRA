@@ -14,10 +14,21 @@
 import http from 'node:http';
 
 import { Deferred, Duration, Effect, Fiber, Result } from 'effect';
-import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
+
+/**
+ * How long an interactive browser sign-in may take before the host stops
+ * waiting for the callback (10 minutes). Generous on purpose: an OAuth
+ * round-trip with 2FA and account switching outlasts a couple of minutes, and
+ * each flow is user-cancellable, so a long deadline only delays the failure
+ * message for attempts nobody is waiting on.
+ *
+ * Device-code flows do not use this: RFC 8628 makes the server's `expires_in`
+ * authoritative there.
+ */
+const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * The loopback route could never be established — the registered callback

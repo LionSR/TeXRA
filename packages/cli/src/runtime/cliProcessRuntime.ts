@@ -40,7 +40,6 @@ import { Effect, Layer, Stream } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';
-import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
@@ -234,7 +233,6 @@ export function installCliProcessRuntime(
             appStateStoreFromDatabase(globalStoragePath, database.values),
           ),
         ),
-    auth: unavailableSupabaseAuth(),
     // A terminal has no editor language models; the CLI's platform installs
     // the same port.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
