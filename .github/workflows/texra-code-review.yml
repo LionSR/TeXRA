@@ -13,7 +13,8 @@ on:
     types: [opened, ready_for_review, labeled]
 
 concurrency:
-  # Irrelevant `labeled` events (any label added right after open) get a unique group so they skip without cancelling an
+  # Irrelevant `labeled` events (e.g. auto-label applying area labels right
+  # after open) get a unique group so they skip without cancelling an
   # in-flight review in the PR's real group.
   group: texra-review-${{ github.event.pull_request.number }}${{ (github.event.action == 'labeled' && github.event.label.name != 're-review') && format('-label-{0}', github.run_id) || '' }}
   cancel-in-progress: true
