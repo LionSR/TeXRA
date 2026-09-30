@@ -18,19 +18,19 @@ const rows = [
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['fable51', 'opus55', 'gpt6-', 'gemini31p'],
+    models: ['fable51', 'opus55', 'gpt61-', 'gemini31p'],
   },
   {
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['opus55', 'sonnet5T', 'gpt6-'],
+    models: ['opus55', 'sonnet55', 'gpt61-'],
   },
   {
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable51', 'opus55', 'sonnet5T', 'deepseek41T', 'kimi3'],
+    models: ['fable51', 'opus55', 'sonnet55', 'deepseek41T', 'kimi3'],
   },
   {
     icon: 'file-lines',

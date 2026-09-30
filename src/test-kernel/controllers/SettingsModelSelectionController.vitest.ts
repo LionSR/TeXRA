@@ -211,15 +211,15 @@ describe('SettingsModelSelectionController', () => {
           stores: {
             ...makeFakeSettingsStores().stores,
             globalState: new FakeStateStore({
-              [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet5'],
+              [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet55'],
             }),
           },
         });
 
         expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
           {
-            name: 'sonnet5',
-            label: MODEL_CONFIGS.sonnet5.label,
+            name: 'sonnet55',
+            label: MODEL_CONFIGS.sonnet55.label,
             access: 'unavailable',
             preferred: true,
           },

@@ -212,6 +212,14 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Claude Sonnet 5.5 and GPT-6.1 Sol** — `llm-zoo` 1.40.1 adds Claude Sonnet
+  5.5 (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
+  $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats
+  and the OpenAI setup pick; Sonnet 5.5 replaces Sonnet 5 in the default
+  model list and as the OpenRouter setup pick. Sonnet 5 (`sonnet5`,
+  `sonnet5T`) and GPT-6 Sol (`gpt6-`) are deprecated. GLM-5.3 Flash is
+  now billed at its list price, since the promotional price ended.
+
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.

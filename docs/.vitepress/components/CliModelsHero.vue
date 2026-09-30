@@ -16,8 +16,8 @@ const rows = [
   { id: 'fable51', label: 'Claude Fable 5.1', status: 'api key set' },
   { id: 'opus55', label: 'Opus 5.5', status: 'api key set' },
   {
-    id: 'sonnet5T',
-    label: 'Sonnet 5 (Thinking)',
+    id: 'sonnet55',
+    label: 'Sonnet 5.5',
     status: 'api key set',
   },
   {
