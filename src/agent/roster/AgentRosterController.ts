@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
-import { teamPresets } from '@common/teams/TeamPresets';
+import { planTeamRun } from '@common/teams/TeamPlan';
+import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import type {
   StateStore,
   StateWriteFailed,
@@ -304,22 +305,36 @@ export class AgentRosterController<
     );
   }
 
+  /** {@link applyTeam} refusing an unknown team in the declared channel. */
   setTeam(teamId: string) {
+    return this.applyTeam(teamId).pipe(
+      Effect.filterOrFail(
+        (result) => result.status === 'applied',
+        () => new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
+      ),
+      Effect.asVoid,
+    );
+  }
+
+  /**
+   * Store the team `presetId` names and report how its members resolve now.
+   * Only the team reference is stored and `preset.agents` re-resolves on read,
+   * so a member missing today activates once it appears; `resolution` is
+   * evidence for the caller's message.
+   */
+  applyTeam(presetId: string) {
     return Effect.gen({ self: this }, function* () {
-      const preset = (yield* this.allPresets()).find(
-        (candidate) => candidate.id === teamId,
-      );
-      if (!preset) {
-        // A refusal in the declared channel, not a synchronous throw. This
-        // method's two production callers are a synchronous TUI select handler
-        // (which would otherwise let the throw escape its Effect recovery) and a
-        // CLI `await` that matches on `instanceof InvalidAgentTeamError` against
-        // the rejection — a defect would break the second one's message.
-        return yield* Effect.fail(
-          new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
-        );
-      }
-      return yield* this.setSelection({ kind: 'team', teamId: preset.id });
+      const preset = findTeamPreset(yield* this.allPresets(), presetId);
+      if (!preset) return { status: 'unknown' as const };
+      yield* this.setSelection({ kind: 'team', teamId: preset.id });
+      return {
+        status: 'applied' as const,
+        preset,
+        resolution: planTeamRun(preset, {
+          resolveAgent: (category, identifier) =>
+            this.deps.resolveAgent(category, identifier),
+        }),
+      };
     });
   }
 
