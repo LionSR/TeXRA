@@ -1,60 +1,36 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { randomUUID } from 'node:crypto';
-
 import { it } from '@effect/vitest';
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { ModelInvoker } from '@agent/runtime/ModelInvoker';
-import { turnText } from '@agent/runtime/run/turnText';
-import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { TraceEmitter } from '@agent/trace';
-import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
-  AgentCategory,
   type RequestDecision,
-  type RunId,
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
-  nativeToolTestLayer,
-  testRunTools,
-} from '@test/support/nativeToolTestLayer';
-import { hostStores } from '@test/support/setupPlatform';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+  agentRunTestLayer,
+  scriptedInvokerLayer,
+  textTurn,
+  toolCallTurn,
+  type ScriptedRunInit,
+} from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { generateRunId, generateShortId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
+import { generateRunId } from '@utils/core';
 
 import {
   autoDecideRequests,
   sessionWithInteractions,
 } from '../progressTestUtils';
 
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
+import type { TurnResult } from '@texra-ai/llm/turn';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with
@@ -63,211 +39,16 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // the durable facts a live turn leaves behind.
 // ---------------------------------------------------------------------------
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'test-model',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'deepseek',
-  },
-} as const;
-
-/**
- * A `Model` the harness never invokes: the invoker seam is faked above it.
- * Compaction still probes the optional token counter, and this model offers
- * none, so that one read answers `undefined` and the text heuristic decides.
- */
-const unusedModel = new Proxy({} as Model, {
-  get(_target, property) {
-    if (property === 'estimateInputTokens') return undefined;
-    throw new Error(`The harness model has no ${String(property)}.`);
-  },
-});
-
-function testBoundModel(): BoundModel {
-  return {
-    modelId: 'test-model',
-    config: buildTestModelConfig(),
-    compatibilityKey: 'DeepSeek',
-    model: unusedModel,
-    origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
-    persistentConnection: false,
-  };
-}
-
-function toolCallTurn(
-  calls: readonly { readonly id: string; readonly name: string }[],
-): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: `resp-${calls.map((call) => call.id).join('-')}`,
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: calls.map((call) => ({
-      kind: 'local-call' as const,
-      providerCallId: call.id,
-      name: call.name,
-      argumentsText: '{}',
-    })),
-    finishReason: 'tool-calls',
-    usage: null,
-  };
-}
-
-function textTurn(text: string): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: `resp-text-${text.length}`,
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
-    usage: null,
-  };
-}
-
-/** The turns a scenario hands the loop, in order. */
-function invokerLayer(turns: readonly TurnResult[]) {
-  return Layer.effect(
-    ModelInvoker,
-    Effect.gen(function* () {
-      const run = yield* AgentRun;
-      const aggregateId = rowAggregate(run.runId);
-      let index = 0;
-      return {
-        call: () => Effect.die(new Error('No compaction in this scenario.')),
-        invoke: (cell: RunCell) =>
-          Effect.gen(function* () {
-            const state = yield* cell.current;
-            const turn = turns[index];
-            index += 1;
-            if (turn === undefined) {
-              return yield* Effect.die(
-                new Error('The scenario ran out of model turns.'),
-              );
-            }
-            const bound = yield* SynchronizedRef.get(run.model);
-            const invocation = { invocationId: randomUUID(), attempt: 1 };
-            const responseId = randomUUID();
-            const next = yield* cell.append([
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'attempt',
-                  request: '0'.repeat(64),
-                  invocation,
-                  origin: bound.origin,
-                  delivery: 'stream',
-                },
-              },
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'response',
-                  responseId,
-                  invocation,
-                  turn,
-                  calls: dispatchFactsFor(
-                    turn,
-                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
-                    run.logger,
-                    generateShortId,
-                  ),
-                  usage: null,
-                },
-              },
-              positionRow(run.runId, state, 'response.ready'),
-            ]);
-            return {
-              kind: 'response' as const,
-              state: next,
-              responseId,
-              turn,
-              text: turnText(turn),
-              usage: null,
-              responseTimeMs: 1,
-            };
-          }),
-      };
-    }),
-  );
-}
-
-interface HarnessInit {
-  readonly runId: RunId;
-  readonly session: SessionHandle;
+interface HarnessInit extends ScriptedRunInit {
   readonly tools: Record<string, ITool>;
   readonly turns: readonly TurnResult[];
-  /** Headless: the run stops after one turn instead of parking for input. */
-  readonly stopAfterCycle?: boolean;
-}
-
-function agentRunTestLayer(init: HarnessInit) {
-  return Layer.effect(
-    AgentRun,
-    Effect.gen(function* () {
-      const model = yield* SynchronizedRef.make(testBoundModel());
-      const scope = yield* Effect.scope;
-      const logger = new TraceEmitter();
-      return {
-        runId: init.runId,
-        session: init.session,
-        config: AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
-        }),
-        setting: AgentSettingSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
-          tools: Object.keys(init.tools).map((name) => ({ name })),
-        }),
-        prompt: AgentPromptSchema.parse({ userRequest: 'Run the tools.' }),
-        logger,
-        parentStage: logger.openStage('Run: chat'),
-        // The launch stores a real run carries; no fixture reads through them.
-        stores: hostStores(),
-        toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        opening: {
-          inputs: {},
-          activated: [],
-          attachedMemoryMisses: [],
-        },
-        initialUserMessageForTranscript: 'Run the tools.',
-        fileService: new RunFileService(init.runId, init.session.roots),
-        ...testRunTools(hostStores(), init.tools),
-        finalToolName: null,
-        structured: { value: undefined },
-        model,
-        swapModel: (next) =>
-          SynchronizedRef.updateAndGetEffect(model, (current) =>
-            Effect.scoped(next(current)),
-          ),
-        scope,
-        declinedRoutes: [],
-        pendingModelSwitch: { value: null },
-        callbacks: {},
-      } satisfies AgentRunShape;
-    }),
-  );
 }
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(invokerLayer(init.turns), nativeToolTestLayer()).pipe(
+  return Layer.mergeAll(
+    scriptedInvokerLayer(init.turns),
+    nativeToolTestLayer(),
+  ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
     Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
   );
@@ -339,7 +120,7 @@ describe('tool dispatch interrupted mid-turn', () => {
     'leaves no half-delivered tool turn in history, and resume pairs every call',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         // The person answers "Skip": the model is told the call was skipped
@@ -432,7 +213,7 @@ describe('tool dispatch interrupted mid-turn', () => {
    */
   it.effect('skips an outcome-unknown barrier the policy denies', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions({ emit: () => {} });
+      const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       const asked = askedQuestions(session, () => ({
@@ -492,7 +273,7 @@ describe('tool dispatch interrupted mid-turn', () => {
     'asks before re-running a parallel-safe call that is not replay-safe',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const asked = askedQuestions(session, (question) => ({
@@ -543,7 +324,7 @@ describe('tool dispatch interrupted mid-turn', () => {
    */
   it.effect('delivers a follow-up to a stopped response with its results', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions({ emit: () => {} });
+      const session = yield* sessionWithInteractions({ emit: () => {} });
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       askedQuestions(session, () => ({ action: 'deny', reason: 'yolo' }));
@@ -620,7 +401,7 @@ describe('tool dispatch interrupted mid-turn', () => {
           action: 'cancel',
           cause: 'Run interrupted.',
         });
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const asked = askedQuestions(session, (question) => answer(question));

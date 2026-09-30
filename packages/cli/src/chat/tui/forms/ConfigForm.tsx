@@ -21,7 +21,7 @@ import {
   type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 import { stripPrefix } from '@shared/config/configKeys';
-import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
+import { settingDefault } from '@shared/config/settingsAccess';
 
 import {
   buildConfigCategoryItems,
@@ -48,7 +48,7 @@ type SettingInputResult =
  * editor, form-backed settings delegate to an existing list form; anything
  * else (e.g. a record) is read-only.
  */
-export function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
+function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
   if (settingIsBoolean(entry)) return 'boolean';
@@ -62,7 +62,7 @@ export function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
  * expects. Invalid numeric input carries the user-facing error that keeps the
  * editor open instead of silently ignoring the submit.
  */
-export function coerceSettingInput(
+function coerceSettingInput(
   raw: string,
   isNumber: boolean,
 ): SettingInputResult {
@@ -78,7 +78,7 @@ export function coerceSettingInput(
 }
 
 /** Coerce text input, then run the setting's own schema before writing. */
-export function validateSettingInput(
+function validateSettingInput(
   entry: SurfacedSettingEntry,
   raw: string,
   isNumber: boolean,
@@ -101,29 +101,23 @@ function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-/** The store the CLI reads/writes this setting from (`entry.slots.cli`). */
-function settingStoreLabel(entry: SurfacedSettingEntry): string {
-  return settingSlot(entry, 'cli');
-}
-
 function settingDisplayName(entry: SurfacedSettingEntry): string {
   return entry.title ?? stripPrefix(entry.key);
 }
 
-export function buildConfigListItems(
+function buildConfigListItems(
   entries: readonly SurfacedSettingEntry[],
   readValue: (entry: SurfacedSettingEntry) => unknown,
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
-    const store = settingStoreLabel(entry);
     const valueText =
       kind === 'form' ? 'open' : formatSettingValue(readValue(entry));
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
       label: settingDisplayName(entry),
-      description: `${valueText} · ${store}${suffix}`,
+      description: `${valueText} · ${entry.slot}${suffix}`,
       disabled: kind === 'readonly',
     };
   });

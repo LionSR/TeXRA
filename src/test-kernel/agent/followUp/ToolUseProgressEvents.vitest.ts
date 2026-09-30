@@ -1,59 +1,31 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { randomUUID } from 'node:crypto';
-
 import { it } from '@effect/vitest';
-import { Effect, Layer, SynchronizedRef } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import {
-  rowAggregate,
-  snapshotRow,
-  positionRow,
-  type Message,
-} from '@agent/runtime/loop/rows';
+import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
-import { dispatchFactsFor } from '@agent/runtime/run/tools';
-import { turnText } from '@agent/runtime/run/turnText';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
-import type { RunCell } from '@agent/runtime/loop/runProgram';
-import {
-  AgentCategory,
-  RUN_OUTCOME,
-  type JsonValue,
-  type RetryErrorInfo,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type JsonValue } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
-  nativeToolTestLayer,
-  testRunTools,
-} from '@test/support/nativeToolTestLayer';
-import { hostStores } from '@test/support/setupPlatform';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import {
-  createTestRunTrace,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { generateRunId, generateShortId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
+  agentRunTestLayer,
+  scriptedInvokerLayer,
+  startedRun,
+  textTurn,
+  toolCallTurn,
+  type ScriptedRunInit,
+  type ScriptedTurn,
+} from '@test/support/scriptedRunLayers';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 import { sessionWithInteractions } from '../progressTestUtils';
-
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session ledger, with
@@ -63,277 +35,8 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // facts a live turn leaves behind.
 // ---------------------------------------------------------------------------
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'test-model',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'deepseek',
-  },
-} as const;
-
-/**
- * A `Model` the harness never invokes: the invoker seam is faked above it.
- * Compaction still probes the optional token counter, and this model offers
- * none, so that one read answers `undefined` and the text heuristic decides.
- */
-const unusedModel = new Proxy({} as Model, {
-  get(_target, property) {
-    if (property === 'estimateInputTokens') return undefined;
-    throw new Error(`The harness model has no ${String(property)}.`);
-  },
-});
-
-function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
-  return {
-    modelId: 'test-model',
-    config: buildTestModelConfig(),
-    compatibilityKey: 'DeepSeek',
-    model: unusedModel,
-    origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
-    persistentConnection: false,
-    ...overrides,
-  };
-}
-
-/** A turn that calls tools, after the text the model wrote alongside them. */
-function toolCallTurn(
-  calls: readonly { readonly id: string; readonly name: string }[],
-  text = '',
-): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: `resp-${calls.map((call) => call.id).join('-')}`,
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [
-      ...(text === ''
-        ? []
-        : [
-            {
-              kind: 'message' as const,
-              content: [{ kind: 'text' as const, text }],
-            },
-          ]),
-      ...calls.map((call) => ({
-        kind: 'local-call' as const,
-        providerCallId: call.id,
-        name: call.name,
-        argumentsText: '{}',
-      })),
-    ],
-    finishReason: 'tool-calls',
-    usage: null,
-  };
-}
-
-function textTurn(text: string): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: randomUUID(),
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content:
-      text === ''
-        ? []
-        : [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
-    usage: null,
-  };
-}
-
-/**
- * What the faked invoker reports for one turn, in script order. A turn may
- * first replace the whole conversation, the way a context-limit compaction
- * does, before its response is committed.
- */
-type ScriptedTurn =
-  | TurnResult
-  | { readonly compactTo: readonly Message[]; readonly turn: TurnResult }
-  | { readonly failWith: RetryErrorInfo }
-  | { readonly cancelled: true };
-
-function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
-  return Layer.effect(
-    ModelInvoker,
-    Effect.gen(function* () {
-      const run = yield* AgentRun;
-      const aggregateId = rowAggregate(run.runId);
-      let index = 0;
-      return {
-        call: () => Effect.die(new Error('No compaction in this scenario.')),
-        invoke: (cell: RunCell, request: InvokeRequest) =>
-          Effect.gen(function* () {
-            const state = yield* cell.current;
-            const scripted = script[index];
-            index += 1;
-            seen.push(request);
-            if (scripted === undefined) {
-              return yield* Effect.die(
-                new Error('The scenario ran out of model turns.'),
-              );
-            }
-            if ('cancelled' in scripted) {
-              return { kind: 'cancelled' as const, state };
-            }
-            if ('failWith' in scripted) {
-              // As the invoker does: the failure commits before it returns.
-              return {
-                kind: 'failed' as const,
-                state: yield* cell.append([
-                  ...snapshotRow(run.runId, state, {
-                    runtime: { lastError: scripted.failWith },
-                  }),
-                ]),
-                error: scripted.failWith,
-              };
-            }
-            const bound = yield* SynchronizedRef.get(run.model);
-            const invocation = { invocationId: randomUUID(), attempt: 1 };
-            const responseId = randomUUID();
-            const turn = 'compactTo' in scripted ? scripted.turn : scripted;
-            const next = yield* cell.append([
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'attempt',
-                  request: '0'.repeat(64),
-                  invocation,
-                  origin: bound.origin,
-                  delivery: 'stream',
-                },
-              },
-              ...('compactTo' in scripted
-                ? [
-                    {
-                      type: 'model.compaction' as const,
-                      aggregateId,
-                      payload: {
-                        keepPrefix: 0,
-                        messages: scripted.compactTo,
-                        cause: 'context-limit' as const,
-                        continuation: null,
-                        usage: null,
-                      },
-                    },
-                  ]
-                : []),
-              {
-                type: 'model.message',
-                aggregateId,
-                payload: {
-                  kind: 'response',
-                  responseId,
-                  invocation,
-                  turn,
-                  calls: dispatchFactsFor(
-                    turn,
-                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
-                    run.logger,
-                    generateShortId,
-                  ),
-                  usage: null,
-                },
-              },
-              positionRow(run.runId, state, 'response.ready'),
-            ]);
-            return {
-              kind: 'response' as const,
-              state: next,
-              responseId,
-              turn,
-              text: turnText(turn),
-              usage: null,
-              responseTimeMs: 1,
-            };
-          }),
-      };
-    }),
-  );
-}
-
-interface LoopInit {
-  readonly runId: RunId;
-  readonly session: SessionHandle;
+interface LoopInit extends ScriptedRunInit {
   readonly script: readonly ScriptedTurn[];
-  readonly tools?: Record<string, ITool>;
-  readonly logger?: TraceEmitter;
-  readonly bound?: Partial<BoundModel>;
-  readonly finalToolName?: string | null;
-  /** The slot the terminal tool captures into, shared with the scenario. */
-  readonly structured?: { value: JsonValue | undefined };
-  readonly mediaFiles?: readonly string[];
-  /** Absent means the launch had no transcript row to write. */
-  readonly initialUserMessageForTranscript?: string | undefined;
-}
-
-function agentRunTestLayer(init: LoopInit) {
-  return Layer.effect(
-    AgentRun,
-    Effect.gen(function* () {
-      const model = yield* SynchronizedRef.make(testBoundModel(init.bound));
-      const logger = init.logger ?? new TraceEmitter();
-      const tools = init.tools ?? {};
-      const scope = yield* Effect.scope;
-      return {
-        runId: init.runId,
-        session: init.session,
-        config: AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'test-model',
-          agentCategory: AgentCategory.ToolUse,
-          ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
-        }),
-        setting: AgentSettingSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
-          tools: Object.keys(tools).map((name) => ({ name })),
-        }),
-        prompt: AgentPromptSchema.parse({ userRequest: 'Do the thing.' }),
-        logger,
-        parentStage: logger.openStage('Run: chat'),
-        // Headless: the turn ends the run instead of parking for input.
-        // The launch stores a real run carries; no fixture reads through them.
-        stores: hostStores(),
-        toolPolicy: { stopAfterCycle: true },
-        opening: {
-          inputs: {},
-          activated: [],
-          attachedMemoryMisses: [],
-        },
-        initialUserMessageForTranscript:
-          'initialUserMessageForTranscript' in init
-            ? init.initialUserMessageForTranscript
-            : 'Do the thing.',
-        fileService: new RunFileService(init.runId, init.session.roots),
-        ...testRunTools(hostStores(), tools),
-        finalToolName: init.finalToolName ?? null,
-        structured: init.structured ?? { value: undefined },
-        model,
-        swapModel: (next) =>
-          SynchronizedRef.updateAndGetEffect(model, (current) =>
-            Effect.scoped(next(current)),
-          ),
-        scope,
-        declinedRoutes: [],
-        pendingModelSwitch: { value: null },
-        callbacks: {},
-      } satisfies AgentRunShape;
-    }),
-  );
 }
 
 /** Run one scripted tool-use run to completion, with what it asked for. */
@@ -342,10 +45,12 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   const result = yield* runToolUse({ resume: false }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        invokerLayer(init.script, requests),
+        scriptedInvokerLayer(init.script, requests),
         nativeToolTestLayer(),
       ).pipe(
-        Layer.provideMerge(agentRunTestLayer(init)),
+        Layer.provideMerge(
+          agentRunTestLayer({ stopAfterCycle: true, ...init }),
+        ),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
       ),
     ),
@@ -354,15 +59,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   return { result, requests, state };
 });
 
-function quietSession(): SessionHandle {
-  return sessionWithInteractions({ emit: () => {} });
-}
-
-function startedRun(session: SessionHandle): RunId {
-  const runId = generateRunId();
-  publishTestRunStart(session, runId);
-  return runId;
-}
+const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
 /** The plain text of every user message the run recorded. */
 function userTexts(state: RunState | null): string[] {
@@ -392,7 +89,7 @@ describe('the tool-use turn', () => {
     'finalizes the response of a turn that ends with text, and not of one that continues with tools',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const finalized: string[] = [];
         const logger = new TraceEmitter((event) => {
           if (event.type === 'response.finalized') finalized.push(event.text);
@@ -420,7 +117,7 @@ describe('the tool-use turn', () => {
     'asks once more when the model returns a blank turn after a tool result, and does not repeat it',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
@@ -446,7 +143,7 @@ describe('the tool-use turn', () => {
     'forces one terminal-tool turn only where the provider can force it (%s)',
     (supportsForcedToolChoice) =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
         const { requests, state } = yield* runScript({
           runId: startedRun(session),
           session,
@@ -473,7 +170,7 @@ describe('the tool-use turn', () => {
 
   it.effect('returns the text that accompanied the terminal tool', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const structured: { value: JsonValue | undefined } = { value: undefined };
       const submitOutput: ITool = {
         definition: { name: 'submit_output' },
@@ -517,7 +214,7 @@ describe('the tool-use turn', () => {
       Effect.gen(function* () {
         // A failed run still reports what the model had said: the text that
         // accompanied the tool calls is the run's response, beside the error.
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { result } = yield* runScript({
           runId: startedRun(session),
@@ -549,7 +246,7 @@ describe('the tool-use turn', () => {
     'keeps the fresh response when a compaction replaces the whole conversation',
     () =>
       Effect.gen(function* () {
-        const session = quietSession();
+        const session = yield* quietSession();
 
         const { result, state } = yield* runScript({
           runId: startedRun(session),
@@ -595,7 +292,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
         // validation error) must still leave a record of what the user asked
         // for, or the transcript's opening row vanishes for exactly the runs
         // most likely to need debugging.
-        const session = quietSession();
+        const session = yield* quietSession();
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
 
@@ -620,7 +317,7 @@ describe('the transcript row of the opening message (regression #7508)', () => {
 
   it.effect('logs nothing when the launch had no transcript row to write', () =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
 
@@ -663,7 +360,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
     },
   ])('persists a $name turn as one structural session stage', (scenario) =>
     Effect.gen(function* () {
-      const session = quietSession();
+      const session = yield* quietSession();
       const runId = startedRun(session);
       const recorder = createTestRunTrace(runId);
       const logger = recorder.trace;

@@ -172,7 +172,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     /**
      * The launch, settling with the run. `onRunCompleted` fires on every
      * settlement, as the old `finally` did — after the launch, including
-     * `setFirstRunDone`. Do not hook session.onResult: that fires from run.end
+     * `setFirstRunDone`. Do not hook the run.end row: it commits
      * inside finalizeTerminal, before the flag write.
      */
     function runValidated(

@@ -14,7 +14,6 @@
 import { Cause, Clock, Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -43,6 +42,7 @@ import {
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
+  type GitHubServices,
 } from './githubClient';
 import {
   AnnotationFetchBudget,
@@ -167,7 +167,7 @@ export interface PRSubscriptionState extends BasePollSubscriptionState {
 }
 
 /** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
-export interface PRCurrentShaState {
+interface PRCurrentShaState {
   sha: string;
   /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
   ciStarted: boolean;
@@ -223,7 +223,7 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, GitHubServices> {
     const key = prKeyToString(input);
     return this.register(key, (now) => initialState(input, now), onEvent).pipe(
       Effect.map((disposable) => {
@@ -272,14 +272,14 @@ export class PRPollingSource extends PollingSourceBase<
   protected override afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
-  ): Effect.Effect<void, PollHookRejected, Secrets> {
+  ): Effect.Effect<void, PollHookRejected, GitHubServices> {
     return this.drainAnnotationQueues(entries, now);
   }
 
   protected pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Effect.Effect<void, Error, Secrets> {
+  ): Effect.Effect<void, Error, GitHubServices> {
     return this.pollPr(key, state);
   }
 

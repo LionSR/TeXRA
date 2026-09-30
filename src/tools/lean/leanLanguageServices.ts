@@ -11,7 +11,7 @@
  * LSP requests).
  */
 
-import { Context, Layer, type Effect } from 'effect';
+import { Context, type Effect } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 
@@ -116,11 +116,4 @@ export interface LeanLanguageServicesShape {
 export class LeanLanguageServices extends Context.Service<
   LeanLanguageServices,
   LeanLanguageServicesShape
->()('@texra/tools/LeanLanguageServices') {
-  /** The port over an already-built adapter (the VS Code bridge). */
-  static layer(
-    services: LeanLanguageServicesShape,
-  ): Layer.Layer<LeanLanguageServices> {
-    return Layer.succeed(LeanLanguageServices)(services);
-  }
-}
+>()('@texra/tools/LeanLanguageServices') {}

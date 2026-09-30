@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -125,7 +126,7 @@ describe('desktop preview host', () => {
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const session = createTestSession();
+        const session = yield* createTestSession();
         const present = vi.fn<(...args: unknown[]) => void>(() => {});
         const detachPresentation = yield* session.interactions.use({
           emit: present,
@@ -401,7 +402,7 @@ describe('desktop preview host', () => {
           expect.objectContaining({
             command: 'desktop:showPdf',
             title: 'paper.pdf',
-            pdfPath,
+            pdfUrl: pathToFileURL(pdfPath).href,
           }),
         );
         expect(shell.openPath).not.toHaveBeenCalled();

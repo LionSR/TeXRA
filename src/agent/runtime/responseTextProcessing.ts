@@ -9,16 +9,8 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
  * text is returned unchanged. TeXRA hosts may inject their LaTeX-specific
  * behavior via the latex-owned factory.
  */
-
-/** Preserve provider text when no host-specific post-processor is supplied. */
-function preserveResponseText(text: string): string {
-  return text;
-}
-
-/** Create neutral package defaults when a host supplies no text policy. */
 export function createNeutralResponseTextProcessing(): ResponseTextProcessing {
   return {
-    normalizeResponseText: preserveResponseText,
     postProcessResponse: (text) => Effect.succeed(text),
   };
 }

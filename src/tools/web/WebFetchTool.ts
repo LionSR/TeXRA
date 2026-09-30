@@ -1,12 +1,15 @@
 // Third-party imports
 import { Effect, Stream } from 'effect';
 import ipaddr from 'ipaddr.js';
-import ky from 'ky';
 import { z } from 'zod';
 
 // Local imports - core
 import { ToolError } from '@shared/schemas';
-import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
+import {
+  retryTransientFetch,
+  scopedOkClient,
+  toFetchToolError,
+} from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,15 +66,12 @@ function isRestrictedIp(hostname: string): boolean {
 const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
   retryTransientFetch(
     Effect.gen(function* () {
-      // One attempt owns headers and body together; its signal must remain
-      // live after ky resolves the response headers.
-      const signal = yield* Effect.abortSignal;
-      const response = yield* Effect.tryPromise({
-        try: () => ky.get(url, { timeout: false, signal, retry: 0 }),
-        catch: ensureError,
-      });
+      // One attempt owns headers and body together: the request scope stays
+      // open through the body read.
+      const client = yield* scopedOkClient;
+      const response = yield* client.get(url);
 
-      const lengthHeader = response.headers.get('content-length');
+      const lengthHeader = response.headers['content-length'];
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
         return yield* Effect.fail(
@@ -81,9 +81,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         );
       }
 
-      const contentType = response.headers.get('content-type') ?? '';
-      const body = response.body;
-      if (!body) return { rawBody: '', contentType };
+      const contentType = response.headers['content-type'] ?? '';
       const charset = /charset=([^\s;]+)/i
         .exec(contentType)?.[1]
         ?.replaceAll(/^["']|["']$/gu, '');
@@ -93,11 +91,13 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         catch: ensureError,
       }).pipe(Effect.orElseSucceed(() => new TextDecoder()));
       let total = 0;
-      const parts = yield* Stream.fromReadableStream({
-        evaluate: () => body,
-        onError: ensureError,
-        releaseLockOnEnd: true,
-      }).pipe(
+      const parts = yield* response.stream.pipe(
+        // A response without a body reads as empty text.
+        Stream.catchReason(
+          'HttpClientError',
+          'EmptyBodyError',
+          () => Stream.empty,
+        ),
         Stream.mapEffect((chunk) => {
           // Count received bytes even when Content-Length is absent or wrong.
           total += chunk.byteLength;

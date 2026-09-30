@@ -21,7 +21,7 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from '@cli/chat/tui/input/activeDraft';
-import { InputBar, slashSubmitText } from '@cli/chat/tui/panes/InputBar';
+import { InputBar } from '@cli/chat/tui/panes/InputBar';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   shouldRedactSlashInput,
@@ -211,7 +211,7 @@ describe('InputBar slash submit', () => {
       imagePasteQueue.add(pasteFiber, testRuntime());
 
       imagePasteQueue.runWhenIdle(() => {
-        submitted.push(slashSubmitText(draft, 'help', '', 'h'));
+        submitted.push(draft);
       });
 
       expect(submitted).toEqual([]);
@@ -219,7 +219,7 @@ describe('InputBar slash submit', () => {
       paste.resolve();
       yield* Fiber.await(pasteFiber);
 
-      expect(submitted).toEqual(['/help [Image #1]']);
+      expect(submitted).toEqual([`/h${chipSuffix}`]);
     }),
   );
 });

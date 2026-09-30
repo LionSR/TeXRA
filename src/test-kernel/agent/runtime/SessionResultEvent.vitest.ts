@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, vi } from 'vitest';
@@ -9,28 +9,18 @@ import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
-import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { aggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeProcessServices,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
-
-/** Let the folded `run.end` row reach the session's `onResult` listeners. */
-const settle = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
 
 /**
  * The lifecycle program over the fake host's process services. The suite runs
@@ -45,41 +35,20 @@ function runLifecycle(...args: Parameters<typeof runWithLifecycle<never>>) {
 }
 
 /**
- * Fresh logger + launch context, with the run's existence fact published and
- * a collector on the session's terminal rows: the `run.end` row the storage
- * finalizer writes is the run's one terminal fact, and `onResult` is how the
- * runtime hands it to in-process consumers.
+ * Fresh logger + launch context, with the run's existence fact published:
+ * the `run.end` row the storage finalizer writes is the run's one terminal
+ * fact ({@link resultsOf} reads it back).
  */
-function setupResultCase(owner?: {
-  session: SessionHandle;
-  parentRunId: RunId;
-}): {
+function setupResultCase(): {
   logger: TraceEmitter;
-  results: ResultEvent[];
   ctx: AgentLaunchContext;
 } {
   const n = counter++;
   const runId = `e${n.toString(16).padStart(5, '0')}` as RunId;
-  // A caller-owned session gets the run's existence fact with the parent
-  // edge it is exercising, then hears the run's trace, as a launched run's
-  // session does.
-  const session = owner?.session;
-  if (owner) {
-    publishTestRunStart(owner.session, runId, { parent: owner.parentRunId });
-  }
-  const logger = owner
-    ? new TraceEmitter((event) => owner.session.publishRunEvent(runId, event))
-    : new TraceEmitter();
-  const ctx = createTestLaunchContext({ runId, logger, session });
-  const runSession = ctx.session;
-  if (!owner) publishTestRunStart(runSession, runId);
-  const results: ResultEvent[] = [];
-  runSession.onResult((event) =>
-    Effect.sync(() => {
-      if (event.runId === runId) results.push(event);
-    }),
-  );
-  return { logger, results, ctx };
+  const logger = new TraceEmitter();
+  const ctx = createTestLaunchContext({ runId, logger });
+  publishTestRunStart(ctx.session, runId);
+  return { logger, ctx };
 }
 
 /** The completed tool-use result a flow returns for the given run. */
@@ -96,19 +65,33 @@ function explodedRun(): Effect.Effect<never, Error> {
   return Effect.fail(new Error('model exploded'));
 }
 
+/** The run's committed `run.end` rows, as results. */
+const resultsOf = (ctx: AgentLaunchContext) =>
+  Effect.gen(function* () {
+    yield* ctx.session.settlePublications();
+    const rows = yield* Stream.runCollect(
+      ctx.session.events.aggregate(aggregateId('run', ctx.runId), 0),
+    );
+    return rows.flatMap((row): ResultEvent[] =>
+      row.type === 'run.end' ? [{ ...row, runId: ctx.runId }] : [],
+    );
+  });
+
 /** Assert the run emitted exactly one result matching the given fields. */
-function expectSingleResult(
-  results: ResultEvent[],
+const expectSingleResult = (
   ctx: AgentLaunchContext,
   expected: Record<string, unknown>,
-): void {
-  expect(results).toHaveLength(1);
-  expect(results[0]).toMatchObject({
-    type: 'run.end',
-    runId: ctx.runId,
-    ...expected,
+) =>
+  Effect.gen(function* () {
+    const results = yield* resultsOf(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      type: 'run.end',
+      runId: ctx.runId,
+      ...expected,
+    });
+    return results[0];
   });
-}
 
 describe('terminal result event', () => {
   setupPlatform({
@@ -117,13 +100,13 @@ describe('terminal result event', () => {
 
   it.effect('emits exactly one completed result on a successful run', () =>
     Effect.gen(function* () {
-      const { ctx, results } = setupResultCase();
+      const { ctx } = setupResultCase();
       yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)));
-      expectSingleResult(results, ctx, {
+      const result = yield* expectSingleResult(ctx, {
         outcome: 'completed',
         output: { category: 'toolUse' },
       });
-      expect(results[0].error).toBeUndefined();
+      expect(result.error).toBeUndefined();
     }),
   );
 
@@ -140,16 +123,14 @@ describe('terminal result event', () => {
     },
   ])('keeps running when onRun $name', ({ onRun }) =>
     Effect.gen(function* () {
-      const { ctx, results } = setupResultCase();
+      const { ctx } = setupResultCase();
       const result = yield* runLifecycle(
         ctx,
         () => Effect.succeed(completedRun(ctx)),
         { onRun },
       );
       expect(result).toMatchObject({ outcome: RUN_OUTCOME.COMPLETED });
-      yield* settle;
-
-      expectSingleResult(results, ctx, { outcome: 'completed' });
+      yield* expectSingleResult(ctx, { outcome: 'completed' });
     }),
   );
 
@@ -185,7 +166,7 @@ describe('terminal result event', () => {
     'emits the failed result even if ending the parent stage throws',
     () =>
       Effect.gen(function* () {
-        const { ctx, results } = setupResultCase();
+        const { ctx } = setupResultCase();
         vi.spyOn(ctx.parentStage, 'end').mockImplementation(() => {
           throw new Error('stage listener boom');
         });
@@ -193,7 +174,7 @@ describe('terminal result event', () => {
         const error = yield* Effect.flip(runLifecycle(ctx, explodedRun));
         expect(error.message).toContain('model exploded');
 
-        expectSingleResult(results, ctx, { outcome: 'failed' });
+        yield* expectSingleResult(ctx, { outcome: 'failed' });
       }),
   );
 
@@ -201,7 +182,7 @@ describe('terminal result event', () => {
     'maps a returned cancellation to a cancelled result (sibling of failed)',
     () =>
       Effect.gen(function* () {
-        const { ctx, results } = setupResultCase();
+        const { ctx } = setupResultCase();
         yield* runLifecycle(ctx, () =>
           Effect.succeed({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -209,43 +190,18 @@ describe('terminal result event', () => {
             output: { category: 'toolUse', response: '', files: [] },
           }),
         );
-        expectSingleResult(results, ctx, { outcome: 'cancelled' });
+        yield* expectSingleResult(ctx, { outcome: 'cancelled' });
       }),
   );
 
   it.effect('emits a cancelled result with kind=abort on a thrown abort', () =>
     Effect.gen(function* () {
-      const { ctx, results } = setupResultCase();
+      const { ctx } = setupResultCase();
       yield* runLifecycle(ctx, () =>
         Effect.fail(new DOMException('Request aborted', 'AbortError')),
       );
-      expectSingleResult(results, ctx, { outcome: 'cancelled' });
-      expect(results[0].error?.kind).toBe('abort');
-    }),
-  );
-
-  it.effect('bridges a child run result to session.onResult', () =>
-    Effect.gen(function* () {
-      const session = createTestSession();
-      const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-      const parentRunId = publishTestRunStart(session);
-      const { logger, ctx } = setupResultCase({ session, parentRunId });
-      session.onResult(onResult);
-      try {
-        yield* runLifecycle(ctx, () => Effect.succeed(completedRun(ctx)), {
-          parentRunId,
-        });
-        yield* session.settlePublications();
-        expect(onResult).toHaveBeenCalledOnce();
-        expect(onResult.mock.calls[0][0]).toMatchObject({
-          type: 'run.end',
-          runId: ctx.runId,
-          outcome: 'completed',
-        });
-      } finally {
-        logger.close();
-        yield* closeSessionOf(session);
-      }
+      const result = yield* expectSingleResult(ctx, { outcome: 'cancelled' });
+      expect(result.error?.kind).toBe('abort');
     }),
   );
 });

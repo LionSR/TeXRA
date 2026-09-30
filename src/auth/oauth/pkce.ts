@@ -29,7 +29,7 @@ export function generateOAuthState(): string {
 }
 
 /** base64url(SHA-256(verifier)), no padding. */
-export function computeCodeChallenge(verifier: string): string {
+function computeCodeChallenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
 }
 

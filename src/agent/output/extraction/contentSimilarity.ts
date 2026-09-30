@@ -27,10 +27,14 @@ const SCRATCHPAD_BLOCK_REGEX = new RegExp(
   'gi',
 );
 
+/** Strip `<scratchpad>` blocks, so tag mentions in the model's reasoning never read as output. */
+export function stripScratchpad(content: string): string {
+  return content.replaceAll(SCRATCHPAD_BLOCK_REGEX, '');
+}
+
 /** Strip `<scratchpad>` blocks, normalize CRLF/CR to LF, and split into lines. */
 export function responseLines(content: string): string[] {
-  return content
-    .replaceAll(SCRATCHPAD_BLOCK_REGEX, '')
+  return stripScratchpad(content)
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .split('\n');

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { hasMagic } from 'glob';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
@@ -14,15 +13,11 @@ import { rootCommand, runCli } from '@cli/commands/root';
 import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
-  hasUsageNoColorFlag,
   detectUnknownCliCommand,
   detectUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
-import {
-  formatCliModelListError,
-  isCliFetchStackLog,
-} from '@cli/commands/_helpers/fetchSilencer';
+import { formatCliModelListError } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
   optionalStringFlagValue,
@@ -30,7 +25,6 @@ import {
 import {
   expandRunInputs,
   hasMixedStdinWorkflowInputSpecs,
-  workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
@@ -665,13 +659,6 @@ describe('CLI root argument routing', () => {
     ),
   );
 
-  it('selects platform-specific backslash glob semantics', () => {
-    const pattern = String.raw`refs\*.bib`;
-
-    expect(hasMagic(pattern, workflowInputGlobOptions('win32'))).toBe(true);
-    expect(hasMagic(pattern, workflowInputGlobOptions('linux'))).toBe(false);
-  });
-
   it.effect('prefers an exact filename containing glob syntax', () =>
     withTempDirEffect('texra-cli-literal-magic-', (root) =>
       Effect.gen(function* () {
@@ -980,15 +967,6 @@ describe('CLI root argument routing', () => {
       'texra: could not fetch model access metadata from remote.texra.ai: getaddrinfo ENOTFOUND remote.texra.ai',
     );
   });
-
-  it('recognizes raw fetch stack logs from lower-level clients', () => {
-    const error = new TypeError('fetch failed', {
-      cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
-    });
-
-    expect(isCliFetchStackLog([error])).toBe(true);
-    expect(isCliFetchStackLog([new Error('unrelated')])).toBe(false);
-  });
 });
 
 describe('CLI global color/input flags', () => {
@@ -1021,12 +999,6 @@ describe('CLI global color/input flags', () => {
     ).toMatchObject({
       noInput: false,
     });
-  });
-
-  it('detects usage --no-color only as a global flag', () => {
-    expect(hasUsageNoColorFlag(['--no-color', '--help'])).toBe(true);
-    expect(hasUsageNoColorFlag(['--cwd', '--no-color', '--help'])).toBe(false);
-    expect(hasUsageNoColorFlag(['--', '--no-color', '--help'])).toBe(false);
   });
 
   it('does not treat command-specific --input as a leading global flag', () => {

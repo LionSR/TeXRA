@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
 import {
@@ -8,16 +8,14 @@ import {
   type RuntimePresentationEventPayloads,
   type SessionHandle,
 } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import type { LogLevel, RunId } from '@shared/schemas';
 import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
 
 // Local imports - CLI runtime
 import {
-  createCliLogger,
-  createCliLogSink,
   flushNdjsonStdout,
-  type Logger,
+  writeNdjsonStdout,
+  writeTextStderr,
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
@@ -31,30 +29,35 @@ export interface CliRuntimeHost {
   attachRunProgressRenderer(
     session: SessionHandle,
     options?: { readonly runId?: RunId },
-  ): () => void;
+  ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
   close(): Effect.Effect<void>;
 }
 
-/** `runtime` is the process runtime the caller holds: the progress renderer
- *  this host owns forks its view subscription on it for the host's lifetime. */
-export function createCliRuntimeHost(
-  runtime: ProcessRuntime,
-  context: CliContext,
-): CliRuntimeHost {
-  let logger: Logger | undefined;
+export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   let closed = false;
   const ndjson = context.outputFormat === 'ndjson';
-  const runProgress = createRunProgressRenderer(runtime, context);
-  function ensureLogger(): Logger {
-    if (logger) return logger;
-    logger = createCliLogger(createCliLogSink(context.outputFormat));
-    return logger;
-  }
+  const runProgress = createRunProgressRenderer(context);
 
-  function logDebugEvent(event: RuntimePresentationEvent): void {
-    if (context.quietLogs) return;
-    ensureLogger().debug(`Runtime event: ${String(event)}`);
+  /** One presentation record. NDJSON: a `kind: 'log'` record on the public
+   *  wire. Text: `LEVEL message` on stderr, the shape of the CLI's config
+   *  warnings; the timestamp and fields stay in the NDJSON record. */
+  function present(
+    level: LogLevel,
+    message: string,
+    fields: { readonly [key: string]: unknown } = {},
+  ): void {
+    if (ndjson) {
+      writeNdjsonStdout({
+        kind: 'log',
+        ts: new Date().toISOString(),
+        level,
+        message,
+        fields,
+      });
+    } else {
+      writeTextStderr(`${level.toUpperCase()} ${message}`);
+    }
   }
 
   /**
@@ -67,9 +70,7 @@ export function createCliRuntimeHost(
    * on rather than a silent fall-through.
    *
    * `requestOpenFile` and `requestEnsureProgressView` have no presentation of
-   * their own in either mode. Their debug line is gated on `!ndjson` because
-   * the NDJSON logger writes to STDOUT, so a debug call there would put a
-   * `kind: 'log'` record on the frozen public wire.
+   * their own in either mode.
    * `RUNTIME_PRESENTATION_NDJSON_CASES` in
    * `src/test-kernel/cli/RunProgressRenderer.vitest.ts` pins the exact record
    * set each event may emit in NDJSON mode.
@@ -82,42 +83,34 @@ export function createCliRuntimeHost(
     {
       requestShowError: (payload) => {
         runProgress?.preserve();
-        ensureLogger().error(payload.message);
+        present('error', payload.message);
         return true;
       },
       requestShowInstruction: (payload) => {
-        // Not gated by quietLogs (unlike the debug fallback): this is an
-        // actionable instruction (e.g. missing API key), not routine progress
-        // noise. The action hint is a text-mode affordance; NDJSON carries the
-        // actions as fields instead, and `StderrTextSink` drops `fields`, so
-        // one call serves both.
+        // An actionable instruction (e.g. missing API key), not routine
+        // progress noise. The action hint is a text-mode affordance; NDJSON
+        // carries the actions as fields instead.
         runProgress?.preserve();
         const hint = ndjson ? '' : formatInstructionActionHint(payload.actions);
-        ensureLogger().info(`${payload.message}${hint}`, {
+        present('info', `${payload.message}${hint}`, {
           key: payload.key,
           actions: payload.actions,
           showSuppress: payload.showSuppress,
         });
         return true;
       },
-      requestOpenFile: () => {
-        if (!ndjson) logDebugEvent('requestOpenFile');
-        return false;
-      },
+      requestOpenFile: () => false,
       showAgentConfigBanner: ({ agentName }) => {
         runProgress?.preserve();
-        ensureLogger().error(missingAgentMessage(agentName));
+        present('error', missingAgentMessage(agentName));
         return true;
       },
-      requestEnsureProgressView: () => {
-        if (!ndjson) logDebugEvent('requestEnsureProgressView');
-        return false;
-      },
+      requestEnsureProgressView: () => false,
     };
 
   return {
     attachRunProgressRenderer: (session, options) =>
-      runProgress ? runProgress.attach(session, options) : () => undefined,
+      runProgress ? runProgress.attach(session, options) : Effect.void,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     emit<K extends RuntimePresentationEvent>(
       event: K,
@@ -130,9 +123,8 @@ export function createCliRuntimeHost(
       return Effect.gen(function* () {
         closed = true;
         runProgress?.clear();
-        // One flush covers this host's own logger too: in NDJSON mode its
-        // sink IS the module-level queue, and the text sink has nothing
-        // buffered.
+        // NDJSON records queue on the module-level stdout serializer; the
+        // text mode writes stderr directly and buffers nothing.
         if (ndjson) yield* flushNdjsonStdout();
       });
     },

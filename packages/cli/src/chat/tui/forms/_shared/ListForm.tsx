@@ -26,7 +26,7 @@ import type { Effect } from 'effect';
 const LIST_FORM_FRAME_ROWS = 3;
 const LIST_FORM_FOOTER_ROWS = 2;
 
-export function listFormSelectWindow(args: {
+function listFormSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
   readonly hasDescription?: boolean;
@@ -199,7 +199,7 @@ function usePendingListFormSelection<T>(args: {
   }, [args]);
 }
 
-export function pendingListFormChoice<T>(args: {
+function pendingListFormChoice<T>(args: {
   readonly input: string;
   readonly items: ReadonlyArray<SelectItem<T>>;
 }): T | undefined {

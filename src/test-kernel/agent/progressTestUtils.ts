@@ -165,8 +165,8 @@ export function createRecordingHost(): {
     presentToolEdit: (request) =>
       events.push({ event: 'presentToolEdit', payload: request.permission }),
   };
-  const host = sessionWithInteractions(undefined)
-    .interactions as SessionHostInteractions & RecordingProgressSink;
+  const host = new SessionHostInteractions() as SessionHostInteractions &
+    RecordingProgressSink;
   Effect.runSync(host.use(interactions));
   return { events, interactions, host };
 }
@@ -299,23 +299,25 @@ export async function seedTerminalRun(
  * `SessionHostInteractions` makes it this session's owner too, so a
  * recording host can be shared across the sessions of one test.
  */
-export function sessionWithInteractions(
-  interactions:
-    | HostInteractions
-    | SessionHostInteractions
-    | Pick<SessionHostInteractions, 'emit'>
-    | undefined,
-): SessionHandle {
-  const session = createTestSession();
-  if (interactions instanceof SessionHostInteractions) {
-    // The session's own approvals stay: they are already bound to its
-    // `publishApprovalPolicy`, the one channel bypass state travels.
-    Object.assign(session, { interactions });
+export const sessionWithInteractions = Effect.fn('sessionWithInteractions')(
+  function* (
+    interactions:
+      | HostInteractions
+      | SessionHostInteractions
+      | Pick<SessionHostInteractions, 'emit'>
+      | undefined,
+  ) {
+    const session = yield* createTestSession();
+    if (interactions instanceof SessionHostInteractions) {
+      // The session's own approvals stay: they are already bound to its
+      // `publishApprovalPolicy`, the one channel bypass state travels.
+      Object.assign(session, { interactions });
+      return session;
+    }
+    if (interactions) yield* session.interactions.use(interactions);
     return session;
-  }
-  if (interactions) Effect.runSync(session.interactions.use(interactions));
-  return session;
-}
+  },
+);
 
 /** The bash permission payload a `request.opened` carries. */
 export function bashApprovalRequest(request: {
@@ -333,20 +335,20 @@ export function bashApprovalRequest(request: {
 }
 
 /** A tool-edit request carrying the prompt the tool boundary prepares. */
-export function toolEditApprovalRequest(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
-  session: SessionHandle = sessionWithInteractions(undefined),
-): ToolEditApprovalRequest {
-  return {
-    ...request,
-    roots: session.roots,
-    permission: prepareToolEditApprovalPrompt(session, {
-      requestId: `approval-${generateShortId()}`,
-      request,
-      relativePath: workspaceRelativePath(
-        session.roots.workspace,
-        request.path,
-      ),
-    }).permission,
-  };
-}
+export const toolEditApprovalRequest = Effect.fn('toolEditApprovalRequest')(
+  function* (request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>) {
+    const session = yield* sessionWithInteractions(undefined);
+    return {
+      ...request,
+      roots: session.roots,
+      permission: prepareToolEditApprovalPrompt(session, {
+        requestId: `approval-${generateShortId()}`,
+        request,
+        relativePath: workspaceRelativePath(
+          session.roots.workspace,
+          request.path,
+        ),
+      }).permission,
+    };
+  },
+);

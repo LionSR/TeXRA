@@ -41,8 +41,8 @@ All notable changes to this project will be documented in this file.
   from the next request. Session history from earlier builds is cleared the
   first time this build opens a workspace.
 - **Session history starts over again with this build.** The first time it
-  opens a workspace, the history an earlier build wrote is moved aside
-  (`texra.db.format<N>`) and TeXRA says so; runs from those builds cannot be
+  opens a workspace, the history an earlier build wrote is moved aside into
+  a backup copy and TeXRA says so; runs from those builds cannot be
   resumed. Project documents and research files are unchanged.
 - **Scripts reading `--output-format ndjson` progress see each model call's
   spend on its own.** A `usage` event now reports one model call rather than
@@ -68,7 +68,7 @@ All notable changes to this project will be documented in this file.
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
   documents and research files are unchanged. History an older build wrote
-  is moved aside (`texra.db.format<N>`) rather than read, and TeXRA says so
+  is moved aside into a backup copy rather than read, and TeXRA says so
   when it happens; a store written by a newer TeXRA is never opened or
   deleted by an older one.
 - **Session history from earlier preview builds starts over** — the first
@@ -177,6 +177,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Session history takes several times less disk** — long tool output,
+  attached images and PDFs, and long prompts are stored compressed and
+  only once per project: the same image attached in two runs, or a file's
+  text in both a tool's result and the conversation, is kept once, and an
+  attachment takes about its own size on disk instead of several times it.
+  Deleting a run frees what only it used.
 - **Enabling a skill or plugin mid-run no longer re-reads the whole
   conversation at full price** — the agent is told what changed, and the
   earlier conversation stays cached. Adding or removing a tool still costs
@@ -187,8 +193,8 @@ All notable changes to this project will be documented in this file.
   folder no longer exists (or, for history no current build has opened,
   that has not changed for 90 days), with its size, and deletes them once
   you confirm, or at once with `--yes`. History another TeXRA window has
-  open is kept. It also lists the `texra.db.format<N>` backup copies earlier
-  builds left behind, and any other backup copy over 30 days old, and
+  open is kept. It also lists the backup copies left by earlier builds, and
+  any other backup copy over 30 days old, and
   deletes them with the same confirmation. Nothing is ever deleted
   automatically: a project on an unplugged drive looks deleted too. Deleting
   runs now also shrinks the history file on disk, backup copies this build
@@ -319,6 +325,29 @@ All notable changes to this project will be documented in this file.
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **Long histories stay usable.** With a few thousand runs in a workspace,
+  starting a session no longer stalls for minutes, and an agent's history
+  query (`executions` on `/executions`) no longer fails with "Invalid string
+  length"; in the copy it queries, a tool input or result longer than 16,384
+  characters is cut there and marked with its full length. Deleting a run
+  no longer holds up other TeXRA windows writing to the same history while
+  the file shrinks. `/compact` works on Claude models with a fixed thinking
+  budget (Claude Haiku 4.5): the summary's length is sized to the context
+  left, and it is written without thinking when that leaves no room for the
+  thinking budget, instead of failing.
+
+- **Desktop: a startup failure or unhandled error now shows one reload prompt.**
+  The "TeXRA could not start" panel and its "Continue without saved secrets"
+  button are gone (the keychain case is handled before the window loads, so the
+  button only re-ran the same render); a failed first render or a rejected promise
+  now asks whether to reload.
+
+- **Preferring a ChatGPT or Grok subscription now turns OpenRouter off in
+  the extension and desktop app too.** Both subscription routes only apply
+  with "Use OpenRouter for all models" off, so signing in with OpenRouter on
+  left the preference doing nothing. The CLI already cleared OpenRouter; the
+  extension, desktop and CLI now share one rule.
 
 - **Stopping a run cancels its background response.** A workflow turn sent
   as an OpenAI or Google background response used to keep running, and
@@ -983,6 +1012,14 @@ All notable changes to this project will be documented in this file.
   failed sign-in shows its link on its own line. `/help` and `/memory` echo
   the command they answer, and a direct `/login chatgpt` no longer leaves
   a permanent row for each status line.
+- **`/` forms span the full terminal width** — `/login`, `/config`, `/agent`
+  and the other slash-command panels were capped at 80 columns and cut their
+  option labels off at 24 ("Prefer ChatGPT subscrip…"). They now fill the
+  terminal like the readers and approval cards, and a label may take up to
+  40% of the row before it is truncated.
+- **No more `DEBUG Runtime event:` lines on stderr** — a run in text
+  mode printed `DEBUG Runtime event: requestOpenFile` (and the same for
+  `requestEnsureProgressView`) for events that render nothing.
 - **An `Esc` number chord no longer types its number** — pressing Esc, a short
   pause, then `1`–`9` focused that session and also put the digit into the
   chat draft, so the next prompt went out as, say, `3In ONE response…`.

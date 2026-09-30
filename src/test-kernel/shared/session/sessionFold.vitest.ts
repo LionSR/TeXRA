@@ -1306,7 +1306,6 @@ const TURN_USAGE = {
   provider: 'openai-responses',
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
-  serverToolRequests: 1,
 };
 const RUNTIME = {
   modelId: 'gpt-test',
@@ -1725,7 +1724,6 @@ describe('foldRunState', () => {
                 ...TURN_USAGE,
                 cost: 0.25,
                 cacheMissInputTokens: 3,
-                serverToolRequests: 2,
               },
             }),
           ),
@@ -1733,7 +1731,6 @@ describe('foldRunState', () => {
         // Each priced response's stamp, and nothing else.
         expect(state?.usage.totalCost).toBe(0.5);
         expect(state?.usage.totalCacheMissInputTokens).toBe(9);
-        expect(state?.usage.totalServerToolRequests).toBe(3);
         expect(state?.usage.firstInputTokens).toBe(10);
         expect(state?.usage.totalInputTokens).toBe(20);
       },

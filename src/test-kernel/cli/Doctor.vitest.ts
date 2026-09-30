@@ -14,7 +14,6 @@ import {
   buildDoctorReport,
   doctorExitCode,
   doctorNdjsonRecords,
-  formatDoctorText,
   type DoctorReport,
   writeDoctorReport,
 } from '@cli/runtime/doctor';
@@ -93,7 +92,10 @@ function captureDoctorStdout(
   return stdout;
 }
 
-type DoctorProbes = NonNullable<Parameters<typeof buildDoctorReport>[1]>;
+type DoctorProbes = Omit<
+  Extract<Parameters<typeof buildDoctorReport>[1], { kind: 'ready' }>,
+  'kind'
+>;
 
 // A signed-in report on supported Node with no model available and a partially
 // installed LaTeX toolchain; tests override only the probes they care about.
@@ -106,6 +108,7 @@ function buildReport(
 ): Promise<DoctorReport> {
   return Effect.runPromise(
     buildDoctorReport(reportContext, {
+      kind: 'ready',
       nodeVersion: '24.15.0',
       authProfile: Effect.succeed({ authenticated: true }),
       modelAccessList: Effect.succeed([]),
@@ -264,7 +267,7 @@ describe('CLI doctor', () => {
 
   it('redacts email-like values outside the auth account message', () => {
     const report: DoctorReport = {
-      ok: false,
+      ok: true,
       checks: [
         {
           id: 'auth',
@@ -282,7 +285,7 @@ describe('CLI doctor', () => {
       ],
     };
 
-    const text = formatDoctorText(report);
+    const text = captureDoctorStdout(context, report);
     const records = doctorNdjsonRecords(report, NDJSON_TS);
 
     expect(text).toContain('Signed in as user@example.edu.');

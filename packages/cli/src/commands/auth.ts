@@ -59,7 +59,7 @@ function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   };
 }
 
-export function assertLoginTransportExclusive(
+function assertLoginTransportExclusive(
   init: Pick<CliLoginInit, 'device' | 'noBrowser'>,
 ): void {
   if (hasLoginTransportConflict(init)) {
@@ -67,7 +67,7 @@ export function assertLoginTransportExclusive(
   }
 }
 
-export function shouldPromptForLoginProvider(
+function shouldPromptForLoginProvider(
   context: Pick<
     CliContext,
     'mode' | 'outputFormat' | 'stdoutIsTty' | 'termIsDumb'

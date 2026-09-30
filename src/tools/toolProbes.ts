@@ -8,7 +8,6 @@
 
 // Third-party imports
 import { Data, Duration, Effect, type FileSystem } from 'effect';
-import { HttpClient } from 'effect/unstable/http';
 
 // Local imports
 import {
@@ -19,6 +18,7 @@ import type { Secrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
+import { scopedClient } from '@tools/timeouts';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
@@ -29,7 +29,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { Cause } from 'effect';
-import type { HttpClientError } from 'effect/unstable/http';
+import type { HttpClient, HttpClientError } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
@@ -147,8 +147,8 @@ function probeLocalhost(
   // interrupts the request itself, so a connection that never returns
   // headers is cut rather than abandoned.
   return Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
-    const response = yield* HttpClient.withScope(client).get(url);
+    const client = yield* scopedClient;
+    const response = yield* client.get(url);
     return {
       ok: response.status >= 200 && response.status < 300,
       status: response.status,

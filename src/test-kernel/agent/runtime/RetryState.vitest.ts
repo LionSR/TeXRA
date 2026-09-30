@@ -44,10 +44,6 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
@@ -67,7 +63,6 @@ import {
 } from '@platform/languageModel';
 import {
   AgentCategory,
-  EMPTY_RUN_USAGE_TOTALS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
@@ -78,15 +73,14 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import { UsageLog } from '@shared/usageLog';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { RunFileService } from '@utils/files/runStorage';
+import { installPlatform } from '@test/support/setupPlatform';
 
 // Local file imports
 import {
@@ -274,9 +268,6 @@ const CONFIG = AgentConfigSchema.parse({
   model: 'gpt54',
   agentCategory: AgentCategory.ToolUse,
 });
-const SETTING = AgentSettingSchema.parse({
-  agentCategory: AgentCategory.ToolUse,
-});
 
 /** The run service the invoker reads: identity, session, trace, binding. */
 function agentRun(
@@ -285,74 +276,18 @@ function agentRun(
   logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
 ): AgentRunShape {
-  return {
-    runId,
-    session,
-    config: CONFIG,
-    setting: SETTING,
-    prompt: AgentPromptSchema.parse({}),
-    logger,
-    parentStage: logger.openStage('Run: assistant'),
-    // The launch stores a real run carries; no fixture reads through them.
-    stores: hostStores(),
-    toolPolicy: {},
-    opening: {
-      inputs: {},
-      activated: [],
-      attachedMemoryMisses: [],
-    },
-    initialUserMessageForTranscript: undefined,
-    fileService: new RunFileService(runId, session.roots),
-    ...testRunTools(hostStores()),
-    finalToolName: null,
-    structured: { value: undefined },
-    model,
-    swapModel: (next) =>
-      SynchronizedRef.updateAndGetEffect(model, (current) =>
-        Effect.scoped(next(current)),
-      ),
-    scope: Scope.makeUnsafe(),
-    declinedRoutes: [],
-    pendingModelSwitch: { value: null },
-    callbacks: {},
-  };
+  return testAgentRun(
+    { runId, session, logger, model, scope: Scope.makeUnsafe() },
+    { config: CONFIG },
+  );
 }
 
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
-  commit: 0,
-  lastSnapshot: null,
-  ledgerRows: 0,
+  ...freshRunState(0),
   family: 'toolUse',
-  at: null,
-  outcome: null,
-  phase: null,
-  round: 0,
-  turn: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
-  lastError: null,
-  pendingRetry: null,
-  declinedRoutes: [],
-  messages: [],
-  continuation: null,
-  openAttempt: null,
-  lastTurn: null,
-  pendingResponse: null,
-  pendingIntents: {},
-  requests: {},
-  usage: EMPTY_RUN_USAGE_TOTALS,
-  loop: null,
-  roundOutputs: [],
-  overflowRecoveredAtTurn: null,
-  offeredTools: null,
-  offeredContinuation: null,
-  offeredSkills: [],
-  offeredSystem: null,
-  offeredContext: null,
-  contents: {},
-  hookOutcomes: {},
-  offeredHooks: [],
 });
 
 interface InvokerKit {
@@ -720,7 +655,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('keeps a delegated call on its own model and run ledger', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const parentModel = stubModel([{ ok: completedTurn('parent') }]);
       const childModel = stubModel([{ ok: completedTurn('child') }]);
       const parent = yield* openRun(session, parentModel.model);
@@ -748,7 +683,7 @@ describe('ModelInvoker retry', () => {
   // the scenario costs no wall time.
   it.effect('repeats an automatic attempt and returns the response', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
@@ -769,7 +704,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const denied = autoDecideRequests(session, () => ({
         action: 'deny',
         reason: 'Denied by TeXRA approval policy.',
@@ -789,7 +724,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('treats a user abort as a cancellation without prompting', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
       }));
@@ -808,7 +743,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('abandons the pending retry when the run is interrupted', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
       const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
@@ -846,7 +781,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
@@ -900,7 +835,7 @@ describe('ModelInvoker retry', () => {
         yield* Effect.promise(() =>
           installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
         );
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
         const requests = autoDecideRequests(session, () => ({
           action: 'retry',
@@ -946,7 +881,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       session.setApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
@@ -977,7 +912,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
         action: 'cancel',
         cause: 'The user declined the retry.',
@@ -1010,7 +945,7 @@ describe('ModelInvoker retry', () => {
           },
         }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'deny',
@@ -1036,7 +971,7 @@ describe('ModelInvoker retry', () => {
     'retries a chained request once without its continuation when the stored response is gone',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
         const chained: boolean[] = [];
         const model: Model = {
@@ -1121,7 +1056,7 @@ describe('ModelInvoker retry', () => {
     'cancels an observed background response on a user stop, never on shutdown',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
         vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
           stopped.get(runId),

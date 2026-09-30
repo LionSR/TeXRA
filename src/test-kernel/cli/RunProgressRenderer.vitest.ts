@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 import type {
   RuntimePresentationEvent,
@@ -28,7 +28,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTestSession,
@@ -128,7 +127,6 @@ type TestRunProgressRenderer = RunProgressRenderer & {
   setMany(
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void>;
-  detach(): void;
 };
 let createdAt = 0;
 /** Let the renderer's fiber observe the latest view before a case reads
@@ -141,10 +139,11 @@ async function settle(): Promise<void> {
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
-  const detach = renderer.attach({
-    view: ref,
-    viewChanges: SubscriptionRef.changes(ref),
-  });
+  Effect.runSync(
+    renderer
+      .attach({ view: ref, viewChanges: SubscriptionRef.changes(ref) })
+      .pipe(Scope.provide(Scope.makeUnsafe())),
+  );
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {
@@ -172,7 +171,6 @@ function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
     runs,
     set: (runId: string, over: Partial<RunView>) => setMany([[runId, over]]),
     setMany,
-    detach,
   });
 }
 type RunConfigOverrides = {
@@ -367,19 +365,15 @@ function plainRenderer(
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
   return attached(
-    createRunProgressRenderer(
-      testRuntime(),
-      context({ stderrColorEnabled: false }),
-      {
-        colorEnabled: false,
-        write: output.write,
-        nowMs: () => 0,
-        // Every view change paints: the cases pin the line, not the throttle.
-        minIntervalMs: 0,
-        plannedRoundsFor,
-        ...init,
-      },
-    )!,
+    createRunProgressRenderer(context({ stderrColorEnabled: false }), {
+      colorEnabled: false,
+      write: output.write,
+      nowMs: () => 0,
+      // Every view change paints: the cases pin the line, not the throttle.
+      minIntervalMs: 0,
+      plannedRoundsFor,
+      ...init,
+    })!,
   );
 }
 
@@ -388,7 +382,7 @@ function ansiRenderer(
   init: Partial<RunProgressRendererInit> = {},
 ): TestRunProgressRenderer {
   return attached(
-    createRunProgressRenderer(testRuntime(), context(), {
+    createRunProgressRenderer(context(), {
       colorEnabled: true,
       write: output.write,
       nowMs: () => 0,
@@ -796,9 +790,8 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
-            testRuntime(),
             context({
               quietLogs: true,
               renderRunProgress: true,
@@ -806,12 +799,15 @@ describe('CLI run progress renderer', () => {
               stderrColorEnabled: false,
             }),
           );
-          const detach = host.attachRunProgressRenderer(session);
+          const scope = yield* Scope.make();
+          yield* host
+            .attachRunProgressRenderer(session)
+            .pipe(Scope.provide(scope));
           // The session's graph is fresh: let its fold subscribe before the
           // facts land, so each fact paints as its own level.
           yield* Effect.promise(() => settle());
           yield* publishRun(session, { runId: 'a1a1a1' });
-          detach();
+          yield* Scope.close(scope, Exit.void);
           yield* host.close();
         }),
       );
@@ -826,16 +822,18 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
-            testRuntime(),
             context({
               stderrColorEnabled: false,
               quietLogs: true,
               renderRunProgress: true,
             }),
           );
-          const detach = host.attachRunProgressRenderer(session);
+          const scope = yield* Scope.make();
+          yield* host
+            .attachRunProgressRenderer(session)
+            .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'b2b2b2' });
           yield* session.settlePublications();
           // The terminal phase is the `run.end` row's fact and nothing else, so
@@ -850,7 +848,7 @@ describe('CLI run progress renderer', () => {
           ]);
           yield* session.settlePublications();
 
-          detach();
+          yield* Scope.close(scope, Exit.void);
           yield* host.close();
         }),
       );
@@ -866,20 +864,22 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
-            testRuntime(),
             context({
               approvalPolicy: 'ask',
               approvalPrompt: () => Effect.succeed('n no review needed'),
             }),
           );
 
-          const detach = host.attachRunProgressRenderer(session);
+          const scope = yield* Scope.make();
+          yield* host
+            .attachRunProgressRenderer(session)
+            .pipe(Scope.provide(scope));
           yield* publishRun(session, { runId: 'c3c3c3' });
           host.prepareInteractivePrompt?.();
           yield* Effect.promise(() => Promise.resolve());
-          detach();
+          yield* Scope.close(scope, Exit.void);
           yield* host.close();
         }),
       );
@@ -897,18 +897,20 @@ describe('CLI run progress renderer', () => {
           stderr = yield* captureStreamWrites(
             process.stderr,
             Effect.gen(function* () {
-              const session = createTestSession();
+              const session = yield* createTestSession();
               const host = createCliRuntimeHost(
-                testRuntime(),
                 context({
                   outputFormat: 'json',
                   stderrColorEnabled: false,
                   renderRunProgress: true,
                 }),
               );
-              const detach = host.attachRunProgressRenderer(session);
+              const scope = yield* Scope.make();
+              yield* host
+                .attachRunProgressRenderer(session)
+                .pipe(Scope.provide(scope));
               yield* publishRun(session, { runId: 'd4d4d4' });
-              detach();
+              yield* Scope.close(scope, Exit.void);
               yield* host.close();
             }),
           );
@@ -928,7 +930,6 @@ describe('CLI run progress renderer', () => {
           process.stderr,
           Effect.gen(function* () {
             const host = createCliRuntimeHost(
-              testRuntime(),
               context({ outputFormat: 'text' }),
             );
 
@@ -963,7 +964,6 @@ describe('CLI run progress renderer', () => {
           process.stderr,
           Effect.gen(function* () {
             const host = createCliRuntimeHost(
-              testRuntime(),
               context({ outputFormat: 'text' }),
             );
 
@@ -991,7 +991,6 @@ describe('CLI run progress renderer', () => {
           process.stderr,
           Effect.gen(function* () {
             const host = createCliRuntimeHost(
-              testRuntime(),
               context({ outputFormat: 'text', quietLogs: true }),
             );
 
@@ -1018,7 +1017,7 @@ describe('CLI run progress renderer', () => {
         const output = yield* captureStreamWrites(
           process.stdout,
           Effect.gen(function* () {
-            const session = createTestSession();
+            const session = yield* createTestSession();
             publishTestRunStart(session, parentRunId);
             yield* Effect.promise(() => settle());
             // The roster is the fold's: the parent's `childIds` and the child's own
@@ -1074,7 +1073,6 @@ describe('CLI run progress renderer', () => {
           process.stdout,
           Effect.gen(function* () {
             const host = createCliRuntimeHost(
-              testRuntime(),
               context({ mode: 'headless', outputFormat: 'ndjson' }),
             );
 

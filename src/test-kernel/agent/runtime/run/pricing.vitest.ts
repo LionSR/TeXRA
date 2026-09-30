@@ -85,8 +85,6 @@ function anthropicUsage(breakdown: {
     providerUsage: {
       kind: 'anthropic',
       uncachedInputTokens: UNCACHED_TOKENS,
-      serviceTier: 'standard',
-      inferenceGeo: null,
       ...breakdown,
     },
   };

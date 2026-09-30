@@ -139,7 +139,7 @@ describe('run-scoped tool resolution', () => {
     'adds the run-scoped tools and submit_output to the model-facing list',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();
@@ -193,7 +193,7 @@ describe('run-scoped tool resolution', () => {
     'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions({ emit: () => {} });
+        const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const warn = vi.fn<typeof noopTrace.warn>();

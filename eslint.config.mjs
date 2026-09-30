@@ -93,7 +93,6 @@ const CLI_PROCESS_OUTPUT_BOUNDARY = [
   'packages/cli/src/runtime/logSinks.ts',
   // Ink mounts onto the real process streams in these launchers; the rest of
   // the TUI goes through logSinks.
-  'packages/cli/src/orchestration/runOrchestrationTui.tsx',
   'packages/cli/src/init/runInitWizard.tsx',
   'packages/cli/src/onboarding/runOnboarding.tsx',
   'packages/cli/src/commands/loginProviderPicker.tsx',

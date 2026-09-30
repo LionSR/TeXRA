@@ -38,7 +38,7 @@ describe('goalContinuation', () => {
 
   beforeEach(async () => {
     await installFakePlatform();
-    session = createTestSession();
+    session = await Effect.runPromise(createTestSession());
     publishTestRunStart(session, RUN_ID);
   });
 

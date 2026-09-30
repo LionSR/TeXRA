@@ -29,7 +29,9 @@ The design does five things:
 - **The store shrinks.** It uses incremental vacuum, a WAL limit, and
   garbage collection of aside copies and orphaned stores.
 
-One physical bump, to `SCHEMA_VERSION` 100, carries all of it.
+One physical bump carries all of it. The 1.0 baseline is `SCHEMA_VERSION`
+101: Lane 1 stamped 100, the blob layout (§2) changed that DDL before any
+release, and 100 never shipped.
 
 ### What gets deleted or collapsed
 
@@ -152,6 +154,36 @@ Both changes narrow the ratchets; neither widens one.
   subqueries. `start_commit` (the commit of seq 1) replaces the correlated
   subquery in `READ_STATE`. The transaction that writes those rows sets
   both.
+- **Large strings live outside the row, compressed, once per store.** The
+  codec replaces every payload string of 4096 characters or more, at any
+  depth, with `{"$b": "<digest>"}` and stores the string once in `blob`:
+  its JSON encoding (`JSON.stringify`, which escapes a lone surrogate that
+  UTF-8 would turn into U+FFFD), zstd level 3 (Node's built-in
+  `zlib.zstdCompressSync`), keyed by the sha256 of that encoding. A
+  payload's own key of the form `$b`, `$$b`, … gains one `$` when stored
+  and loses it when read, so a stored `$b` is always a reference and
+  round-trips are exact.
+  - Every event read selects a row's blobs with it, a correlated
+    `group_concat` over `event_blob` (digest and `hex(value)`), so decoding
+    stays one synchronous call per row. The codec decompresses each
+    reference and checks it hashes to its digest; one missing or failing
+    the check makes the row `Corrupt`. Folds, request rebuild and
+    `StoredTurn` see full strings.
+  - This covers what makes a store large without code for any kind: tool
+    output (in `tool.result` and again in the conversation append), media
+    (attachments are inline base64 in `model.message` and `tool.result`),
+    long prompts, and `context.blob` values, whose canonical JSON text is
+    the string the rule applies to. Duplicates cost one blob.
+  - `event_blob (commit, digest)` records each row's references; it is the
+    reachability collection reads (§7), and it cascades from `event`.
+  - Measured on a generated 1,000-run store (175k rows): 1,038 MB before,
+    324 MB after. Three images and a PDF read with a tool store at 1.00× their
+    raw bytes, once, where the rows held 3.5× before.
+  - zstd is in Node from 22.15 and in Electron's Node 24; the codec throws
+    at load on a runtime without it.
+  - Alternatives: compressing the whole `data` column (no dedup, and every
+    small row pays a frame); a media-specific attachment table (a second
+    mechanism for what the string rule already covers). Rejected.
 
 ### DDL
 
@@ -159,7 +191,7 @@ Both changes narrow the ratchets; neither widens one.
 -- New files only: auto_vacuum must be set before the first table exists.
 PRAGMA auto_vacuum = INCREMENTAL;
 PRAGMA application_id = 1415927890;   -- 0x54655852 'TeXR': identifies a TeXRA store
-PRAGMA user_version = 100;            -- SCHEMA_VERSION
+PRAGMA user_version = 101;            -- SCHEMA_VERSION, the 1.0 baseline
 
 CREATE TABLE event_sequence (
   id           INTEGER PRIMARY KEY,           -- local surrogate; never leaves the file
@@ -175,8 +207,8 @@ CREATE TABLE event_sequence (
 ) STRICT;
 
 CREATE TABLE blob (
-  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the canonical JSON
-  value  TEXT NOT NULL
+  digest TEXT PRIMARY KEY CHECK (length(digest) = 64),  -- sha256 of the string's JSON encoding
+  value  BLOB NOT NULL                                  -- zstd level 3 of that encoding
 ) STRICT;
 
 CREATE TABLE event (
@@ -187,10 +219,16 @@ CREATE TABLE event (
   version   INTEGER NOT NULL CHECK (version >= 1),
   origin    TEXT NOT NULL,
   at        INTEGER NOT NULL,
-  data      TEXT NOT NULL,
-  blob      TEXT REFERENCES blob(digest),               -- set only on context.blob rows
+  data      TEXT NOT NULL,                              -- large strings as {"$b": digest}
   UNIQUE (aggregate, seq)
 ) STRICT;
+
+-- Each row's blob references: what keeps a blob reachable.
+CREATE TABLE event_blob (
+  "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
+  digest   TEXT NOT NULL REFERENCES blob(digest),
+  PRIMARY KEY ("commit", digest)
+) STRICT, WITHOUT ROWID;
 
 -- The highest version of each row kind ever written here (§3, blocking).
 CREATE TABLE stored_kind (
@@ -252,23 +290,23 @@ CREATE TABLE input_history (
 CREATE INDEX event_sequence_parent ON event_sequence(parent_id) WHERE parent_id IS NOT NULL;
 CREATE INDEX event_aggregate_type  ON event(aggregate, type, seq);
 CREATE INDEX event_type_commit     ON event(type, "commit");
-CREATE INDEX event_blob            ON event(blob) WHERE blob IS NOT NULL;
+CREATE INDEX event_blob_digest     ON event_blob(digest);
 CREATE INDEX current_value_at      ON current_value(family, at);
 ```
 
 ### Indexes, each justified by a named query
 
-| Index                                                                      | Query it serves                                                                                                                                       |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `event` PK (`commit`)                                                      | `readAll` and every tail read by commit range; joins from `listing_entry`, `projected_row` and `run_usage`                                            |
-| `UNIQUE (aggregate, seq)`                                                  | `readAggregate(id, fromSeq)`, `readDisplayAggregate`, `readInputBatch`'s per-id arm; seq density; the FK child index for `event.aggregate`            |
-| `event_aggregate_type`                                                     | `readAggregate` with types (`typedRows`), `readRunSnapshot` (latest snapshot), the latest inquiry row inside the inquiry transition                   |
-| `event_type_commit`                                                        | `readDisplay` and `readInputBatch` tails (`type IN … AND commit range`), `readPendingDeletions` (`type = 'run.removed'`), projection catch-up by kind |
-| `event_blob` (partial)                                                     | blob reachability after a collection; the FK check when a blob is deleted                                                                             |
-| `event_sequence_parent` (partial)                                          | the recursive `dependents` CTE (deletion, closure); the FK child index for `parent_id`                                                                |
-| `UNIQUE (kind, logical_id)`                                                | every lookup of an `AggregateId`                                                                                                                      |
-| `current_value_at`                                                         | `values.list(family)`, ordered by `at DESC`                                                                                                           |
-| primary keys of `listing_entry`, `projected_row`, `run_usage`, `run_model` | the listing read, display reads, and the projector's read-modify-write; each is also the table's FK child index                                       |
+| Index                                                                                    | Query it serves                                                                                                                                       |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `event` PK (`commit`)                                                                    | `readAll` and every tail read by commit range; joins from `listing_entry`, `projected_row` and `run_usage`                                            |
+| `UNIQUE (aggregate, seq)`                                                                | `readAggregate(id, fromSeq)`, `readDisplayAggregate`, `readInputBatch`'s per-id arm; seq density; the FK child index for `event.aggregate`            |
+| `event_aggregate_type`                                                                   | `readAggregate` with types (`typedRows`), `readRunSnapshot` (latest snapshot), the latest inquiry row inside the inquiry transition                   |
+| `event_type_commit`                                                                      | `readDisplay` and `readInputBatch` tails (`type IN … AND commit range`), `readPendingDeletions` (`type = 'run.removed'`), projection catch-up by kind |
+| `event_blob_digest`                                                                      | blob reachability after a collection; the FK check when a blob is deleted                                                                             |
+| `event_sequence_parent` (partial)                                                        | the recursive `dependents` CTE (deletion, closure); the FK child index for `parent_id`                                                                |
+| `UNIQUE (kind, logical_id)`                                                              | every lookup of an `AggregateId`                                                                                                                      |
+| `current_value_at`                                                                       | `values.list(family)`, ordered by `at DESC`                                                                                                           |
+| primary keys of `listing_entry`, `projected_row`, `run_usage`, `run_model`, `event_blob` | the listing read, display reads, the projector's read-modify-write, and a collection's references; each is also the table's FK child index            |
 
 Dropped: `event_agg_commit`, which no query in this design needs, and
 `event_snapshot_model`, whose job `run_model` now does.
@@ -292,8 +330,10 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 
 `SCHEMA_VERSION` names the DDL, not the vocabulary.
 
-- **Numbering.** It starts at **100**. Any stamp from 1 to 99 is a pre-1.0
-  `SESSION_EVENT_FORMAT`, so the two numbering schemes cannot collide.
+- **Numbering.** The 1.0 baseline is **101**. Any stamp from 1 to 99 is a
+  pre-1.0 `SESSION_EVENT_FORMAT`, so the two numbering schemes cannot
+  collide; 100 is the pre-release 1.0 store (the single `event.blob`
+  column) that main wrote before the blob layout and no release shipped.
 - **When it bumps.** Only for a change an older build cannot write around: a
   column change or a table rebuild. An additive index or projection table is
   `CREATE … IF NOT EXISTS` and bumps nothing, because projections carry
@@ -317,8 +357,10 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
 4. Read `user_version` (`v`).
    - `v > SCHEMA_VERSION`: refuse, with nothing touched (`DatabaseOpenFailed`,
      reason `newer`).
-   - `v` from 1 to 99 (pre-1.0): start fully clean (owner ruling Q3). Nothing
-     in the store is kept, `current_value` and `input_history` included.
+   - `v` below `BASELINE_1_0` (101, fixed for good; a later `SCHEMA_VERSION`
+     never moves it), so 1 to 100, the never-shipped 100 included: start
+     fully clean (owner ruling Q3). Nothing in the store is kept,
+     `current_value` and `input_history` included.
      Retire it with `retireStore`'s existing pattern:
      - `VACUUM INTO` a staged copy.
      - `BEGIN IMMEDIATE`, then re-read `user_version` and `data_version`
@@ -337,9 +379,10 @@ Dropped: `event_agg_commit`, which no query in this design needs, and
      - `auto_vacuum` first.
      - Then `BEGIN IMMEDIATE`, re-read `user_version`, and, if it is still
        0, apply the DDL and stamp `application_id` and `SCHEMA_VERSION`.
-     - Of two processes creating at once, the second sees 100 and does
+     - Of two processes creating at once, the second sees 101 and does
        nothing.
-   - `100 ≤ v < SCHEMA_VERSION`: back up with `VACUUM INTO texra.db.schema<v>`
+   - `BASELINE_1_0 ≤ v < SCHEMA_VERSION` (after 1.0 only; until a step
+     exists the open fails loudly and changes nothing): back up with `VACUUM INTO texra.db.schema<v>`
      under the same re-read pattern.
      - Set `PRAGMA foreign_keys = OFF` if any step needs it. The PRAGMA is
        a no-op inside a transaction, so it is set before `BEGIN`.
@@ -636,11 +679,13 @@ interface PluginArm {
   - Today the coauthor store is 95% free pages.
 - **Blob collection.** Collection is by reachability, not refcount; a
   counter would be a second truth that drifts on partial paths.
-  - `collectDeletion`'s final transaction reads the digests referenced by
-    the aggregates it collects (`event_blob`).
-  - After the cascade, it deletes those digests that no remaining `event`
-    row references.
-  - The `event.blob` foreign key makes deleting a reachable blob impossible.
+  - `collectDeletion`'s final transaction reads the digests the collected
+    aggregates' rows reference (`event_blob`).
+  - The cascade from `event` removes those references. It then deletes
+    the digests no remaining `event_blob` row names: a blob another run
+    shares survives.
+  - The `event_blob.digest` foreign key makes deleting a reachable blob
+    impossible.
 - **WAL.** `journal_size_limit` is 1 MiB. On scope close, the connection
   runs `PRAGMA wal_checkpoint(TRUNCATE)`. A failure there is logged at
   warn.
@@ -875,8 +920,9 @@ internals.
 
 ## 12. Plan
 
-There are four lanes, and exactly one physical bump: Lane 1, to
-`SCHEMA_VERSION` 100. Everything after Lane 1 changes only unreleased row
+There are four lanes, and exactly one physical bump before 1.0: Lane 1, to
+`SCHEMA_VERSION` 100, which the blob layout moved to 101, the 1.0 baseline,
+before any release. Everything after Lane 1 changes only unreleased row
 versions (§3, the release watermark).
 
 | Lane                | Order                    | Depends on | Effort    | In the 1.0 reader?                                                  |

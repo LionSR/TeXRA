@@ -23,15 +23,15 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
-import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { decodeTurnRequest, initialTextInput, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from './message.js';
-import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
+import { JsonObjectSchema, originOf, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
   parseOutboundToolArguments,
-  pullStream,
+  sdkStream,
 } from './transport.js';
 import { filesApiUploads, type UploadCache } from './uploadCache.js';
 import type { ModelOrigin } from './protocol.js';
@@ -85,8 +85,6 @@ const UsageSchema = z.object({
   output_tokens_details: z
     .object({ thinking_tokens: CountSchema.nullish() })
     .nullish(),
-  service_tier: z.enum(['standard', 'priority', 'batch']).nullish(),
-  inference_geo: z.string().nullish(),
   server_tool_use: z.record(z.string(), CountSchema).nullish(),
 });
 const StopSchema = z.object({
@@ -483,12 +481,7 @@ export function anthropicMessagesModel(
         'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
     });
   }
-  const origin: ModelOrigin = {
-    protocol: 'anthropic-messages',
-    codecVersion: 1,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-  };
+  const origin = originOf(config);
   const client = new Anthropic({
     apiKey: transport.apiKey,
     authToken: null,
@@ -542,12 +535,10 @@ export function anthropicMessagesModel(
       messages: input.messages,
       tools: input.tools ?? [],
       controls: {
-        maxOutputTokens:
-          input.maxOutputTokens ?? config.defaults.maxOutputTokens,
+        ...fitLimit(config.defaults, input.maxOutputTokens),
         temperature: config.defaults.temperature,
         parallelToolCalls: config.defaults.parallelToolCalls,
         toolChoice: input.toolChoice ?? 'auto',
-        thinking: config.defaults.thinking,
         effort: config.defaults.effort,
         cache: config.defaults.cache,
         stopSequences: config.defaults.stopSequences,
@@ -580,15 +571,6 @@ export function anthropicMessagesModel(
             try: () => client.messages.create(body, { signal }),
             catch: sdkFailure,
           });
-          const iterator = yield* Effect.acquireRelease(
-            Effect.sync(() => source[Symbol.asyncIterator]()),
-            (iterator) => {
-              // A queued return cannot release a pending SDK read until its request aborts.
-              source.controller.abort();
-              if (!iterator.return) return Effect.void;
-              return Effect.promise(() => iterator.return!());
-            },
-          );
           const content: Array<TurnResult['content'][number]> = [];
           let open:
             | {
@@ -601,7 +583,7 @@ export function anthropicMessagesModel(
           let stopped = false;
           let stop: z.infer<typeof StopSchema> = {};
           let usage: z.infer<typeof UsageSchema> = {};
-          const chunks = pullStream(() => iterator.next(), sdkFailure);
+          const chunks = yield* sdkStream(source, sdkFailure);
           const progress = chunks.pipe(
             Stream.mapEffect((raw) =>
               Effect.gen(function* (): Effect.fn.Return<
@@ -929,8 +911,6 @@ export function anthropicMessagesModel(
                       usage.cache_creation?.ephemeral_5m_input_tokens ?? null,
                     cacheCreation1hTokens:
                       usage.cache_creation?.ephemeral_1h_input_tokens ?? null,
-                    serviceTier: usage.service_tier ?? null,
-                    inferenceGeo: usage.inference_geo ?? null,
                   },
                 },
               });

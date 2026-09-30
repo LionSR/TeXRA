@@ -38,12 +38,13 @@ let opened = 0;
  * session): it shares a graph with no other test session and not with the
  * process default session.
  */
-export function createTestSession(init: TestSessionInit = {}): SessionHandle {
-  const installed = testWorkspaceRoots();
-  opened += 1;
-  // An ephemeral session's graph builds synchronously.
-  return Effect.runSync(
-    openSessionEffect({
+export const createTestSession = (
+  init: TestSessionInit = {},
+): Effect.Effect<SessionHandle, SessionOpenError> =>
+  Effect.suspend(() => {
+    const installed = testWorkspaceRoots();
+    opened += 1;
+    return openSessionEffect({
       ...init,
       roots: init.roots ?? {
         host: installed.host,
@@ -59,9 +60,8 @@ export function createTestSession(init: TestSessionInit = {}): SessionHandle {
         kind: 'ephemeral',
         reason: 'isolated test session',
       },
-    }),
-  );
-}
+    });
+  });
 
 /**
  * Open a fresh session over the process roots, for a file that seeds or

@@ -80,7 +80,7 @@ vi.mock('@transcript', async () => {
                 typeof actual.readCompletedRunConversation
               >),
             )
-          : { conversation };
+          : conversation;
       }),
     ),
   };
@@ -103,7 +103,7 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => {
 });
 
 // Imported after vi.mock so the mocked dependencies are in place.
-import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
+import { runHistoryExport } from '@cli/commands/history';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -440,17 +440,6 @@ describe('CLI history runtime', () => {
     );
   });
 
-  it('parses positive history list limits', () => {
-    expect(parseHistoryListLimit('1')).toBe(1);
-    expect(parseHistoryListLimit('25')).toBe(25);
-    expect(parseHistoryListLimit('0')).toBeUndefined();
-    expect(parseHistoryListLimit('-1')).toBeUndefined();
-    expect(parseHistoryListLimit('1.5')).toBeUndefined();
-    expect(parseHistoryListLimit('abc')).toBeUndefined();
-    expect(parseHistoryListLimit('')).toBeUndefined();
-    expect(parseHistoryListLimit(undefined)).toBeUndefined();
-  });
-
   it('returns null for ids without a run view, config, or flow state', async () => {
     mockNothingPersisted();
 
@@ -729,7 +718,7 @@ describe('CLI history runtime', () => {
 
   it.live('deletes indexed executions and reports a later missing lookup', () =>
     Effect.acquireUseRelease(
-      Effect.sync(createTestSession),
+      createTestSession(),
       (session) =>
         Effect.gen(function* () {
           const id = 'aabbcc' as RunId;

@@ -1,7 +1,7 @@
 /**
  * The transcript of one run, on the fold's transcript slice. It keeps one
  * `<task-group-list>` per recently shown run so a switch back restores
- * scroll and render windows, and it maps the file, spill, and label links
+ * scroll and render windows, and it maps the file and label links
  * inside rows to `host-request` arms. Group expansion is the surface's
  * (`Surface.groups`): the list reads the run's map and every toggle is
  * dispatched as a `SurfaceAction`, never kept here.

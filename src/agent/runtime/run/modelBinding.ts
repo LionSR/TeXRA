@@ -21,6 +21,7 @@ import {
 } from '@texra-ai/llm/openai-responses';
 import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 import {
+  originOf,
   type Model,
   type ModelConfiguration,
   type ModelOrigin,
@@ -329,7 +330,6 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     supportsTemperature: fields.supportsTemperature,
     supportsMaxOutputTokens: true,
     supportsStorage: fields.stores,
-    supportsResponseChaining: fields.stores,
     supportsDocumentInput: false,
     webSocketStreamParameter: 'implicit',
     allowedReasoningEfforts: fields.allowedReasoningEfforts,
@@ -501,7 +501,6 @@ const PROTOCOL_DESCRIPTORS: {
           supportsTemperature,
           supportsMaxOutputTokens: false,
           supportsStorage: false,
-          supportsResponseChaining: false,
           supportsDocumentInput: capabilities.supportsNativePdf,
           webSocketStreamParameter: 'required',
           allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
@@ -543,7 +542,6 @@ const PROTOCOL_DESCRIPTORS: {
         supportsTemperature,
         supportsMaxOutputTokens: true,
         supportsStorage: true,
-        supportsResponseChaining: true,
         supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length
@@ -968,12 +966,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ),
     );
   }
-  const origin: ModelOrigin = {
-    protocol: configuration.protocol,
-    codecVersion: 1,
-    requestedModel: configuration.requestedModel,
-    deployment: configuration.deployment,
-  } as ModelOrigin;
+  const origin = originOf(configuration);
   return {
     modelId: config.name,
     config,

@@ -167,9 +167,7 @@ describe('MCP server plugins', () => {
         // session's approval authority opens, answered here.
         const runId = 'a99f0000c0d1' as RunId;
         const session = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            sessionWithInteractions(createRecordingHost().interactions),
-          ),
+          sessionWithInteractions(createRecordingHost().interactions),
           (session) => closeSessionOf(session),
         );
         publishTestRunStart(session, runId);

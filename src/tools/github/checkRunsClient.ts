@@ -11,14 +11,17 @@
 
 import { Cause, Effect } from 'effect';
 
-import type { Secrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   AnnotationFetchBudget,
   AnnotationFetchBudgetExhaustedError,
 } from './annotationFetchBudget';
-import { ghGet, type ConditionalResponse } from './githubClient';
+import {
+  ghGet,
+  type ConditionalResponse,
+  type GitHubServices,
+} from './githubClient';
 import type { GhCheckAnnotation, GhCheckRun } from './prTypes';
 
 // GitHub caps the check-runs endpoint at 100 per page.
@@ -133,7 +136,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     repo: string,
     sha: string,
     cache: CheckRunsCache | undefined,
-  ): Effect.fn.Return<FetchAllCheckRunsResult, Error, Secrets> {
+  ): Effect.fn.Return<FetchAllCheckRunsResult, Error, GitHubServices> {
     const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
     // Seed a scratch cache we'll stage on the return value. We rebuild from
@@ -162,7 +165,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
         was304: boolean;
       },
       Error,
-      Secrets
+      GitHubServices
     > {
       const pageEtag = cache?.pages.get(page)?.etag;
       const res = yield* ghGet<{
@@ -342,7 +345,7 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     checkRunId: number,
     budget: AnnotationFetchBudget,
     now?: number,
-  ): Effect.fn.Return<GhCheckAnnotation[], Error, Secrets> {
+  ): Effect.fn.Return<GhCheckAnnotation[], Error, GitHubServices> {
     const annotations: GhCheckAnnotation[] = [];
     for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
       if (!(yield* budget.tryClaim(now))) {

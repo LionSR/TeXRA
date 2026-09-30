@@ -46,7 +46,7 @@ function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
   );
 }
 
-export function planApprovalGoalNoticeLine(
+function planApprovalGoalNoticeLine(
   width: number,
   autoApproveAll = false,
 ): string {
@@ -78,7 +78,7 @@ function planApprovalCompactBodyRowsBudget({
   return Math.max(0, availableRows - chromeRows);
 }
 
-export function isPlanApprovalGoalActionVisible({
+function isPlanApprovalGoalActionVisible({
   compact,
   visibleBodyRows,
 }: {

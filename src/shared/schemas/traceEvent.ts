@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { ContextStateDataSchema } from './contextManagement';
 import { JsonValueSchema } from './jsonValue';
-import { FileListEntrySchema, LogLevelSchema } from './log';
+import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
@@ -28,7 +28,7 @@ export const TranscriptEventSchemas = {
     level: LogLevelSchema,
     message: z.string(),
     data: JsonValueSchema.optional(),
-    messageType: z.string().optional(),
+    messageType: MessageTypeSchema.optional(),
   }),
   stageStart: trace('stage.start', {
     id: z.string(),
@@ -82,7 +82,10 @@ export const TranscriptEventSchemas = {
     inputTokens: ContextStateDataSchema.shape.inputTokens,
     contextWindow: ContextStateDataSchema.shape.contextWindow,
   }),
-  streamStart: trace('stream.start', { id: z.string(), kind: z.string() }),
+  streamStart: trace('stream.start', {
+    id: z.string(),
+    kind: MessageTypeSchema,
+  }),
   streamEnd: trace('stream.end', {
     id: z.string(),
     finalText: z.string().optional(),
@@ -94,11 +97,6 @@ export const TranscriptEventSchemas = {
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
   response: trace('response.finalized', { text: z.string() }),
-  domain: trace('domain', {
-    key: z.string(),
-    data: JsonValueSchema.optional(),
-    text: z.string().optional(),
-  }),
 };
 
 export type TranscriptEvent = z.infer<

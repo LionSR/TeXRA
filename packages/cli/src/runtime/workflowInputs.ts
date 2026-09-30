@@ -30,15 +30,6 @@ export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 export const WORKFLOW_INPUT_REQUIRED_MESSAGE =
   'At least one workflow input file is required.';
 
-export function workflowInputGlobOptions(
-  platform: NodeJS.Platform,
-): Readonly<{ magicalBraces: true; windowsPathsNoEscape: boolean }> {
-  return {
-    magicalBraces: true,
-    windowsPathsNoEscape: platform === 'win32',
-  };
-}
-
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.resolve(cwd, candidate);
 }
@@ -161,7 +152,10 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
     .stat(absolutePath)
     .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
 
-  const globOptions = workflowInputGlobOptions(process.platform);
+  const globOptions = {
+    magicalBraces: true,
+    windowsPathsNoEscape: process.platform === 'win32',
+  };
   if (!stats && hasMagic(trimmed, globOptions)) {
     const isAbsolute = path.isAbsolute(trimmed);
     const matches = yield* Effect.tryPromise({

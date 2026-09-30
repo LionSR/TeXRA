@@ -532,44 +532,6 @@ wa-input.desktop-command-palette-input::part(input) {
   gap: var(--wa-space-s);
 }
 
-.desktop-bootstrap-fallback {
-  display: grid;
-  min-height: 100vh;
-  place-items: center;
-  padding: var(--wa-space-3xl) var(--wa-space-l);
-  background: var(--desktop-canvas-wash);
-}
-
-.desktop-bootstrap-fallback-panel {
-  max-width: 560px;
-  padding: var(--wa-space-2xl) var(--wa-space-xl);
-  border: 1px solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-xl);
-  background: var(--wa-color-surface-lowered);
-  text-align: center;
-  color: var(--wa-color-text-normal);
-}
-
-.desktop-bootstrap-fallback-panel h1 {
-  margin: 0 0 var(--wa-space-m);
-  font-size: var(--font-size-h1);
-  font-weight: var(--wa-font-weight-semibold);
-}
-
-.desktop-bootstrap-fallback-panel p {
-  margin: 0 0 var(--wa-space-s);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-lg);
-  line-height: var(--line-height-relaxed);
-}
-
-.desktop-bootstrap-fallback-actions {
-  display: flex;
-  justify-content: center;
-  gap: var(--wa-space-s);
-  margin-top: var(--wa-space-l);
-}
-
 /* =====================================================================
    Log viewer body (hosted by the Logs tab)
    --------------------------------------------------------------------- */

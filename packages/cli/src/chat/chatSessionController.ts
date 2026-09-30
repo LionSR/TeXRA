@@ -428,7 +428,7 @@ export function createChatSessionController(
   // attachment, so a detached child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
   const sessionContext = getSessionContext();
-  const presentationHost = createCliRuntimeHost(runtime, sessionContext);
+  const presentationHost = createCliRuntimeHost(sessionContext);
   runtime.runSync(
     Scope.addFinalizer(
       shutdownScope,

@@ -52,11 +52,10 @@ describe('tool-use follow-up progress events', () => {
     sessions.clear();
   });
 
-  function trackSession(): SessionHandle {
-    const session = createTestSession({ roots: paperRoots() });
-    sessions.add(session);
-    return session;
-  }
+  const trackSession = () =>
+    createTestSession({ roots: paperRoots() }).pipe(
+      Effect.tap((session) => Effect.sync(() => sessions.add(session))),
+    );
 
   function trackRunControls({
     session,
@@ -79,7 +78,7 @@ describe('tool-use follow-up progress events', () => {
     () =>
       Effect.gen(function* () {
         const run = createRecordingHost();
-        const session = trackSession();
+        const session = yield* trackSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
         const lease = session.followUps.claimLive(runId, 'loop')!;

@@ -5,10 +5,6 @@ import { Effect, Result } from 'effect';
 import type { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import {
-  TeamCatalogPortFailed,
-  type TeamRosterCatalog,
-} from '@common/teams/TeamRoster';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -24,7 +20,6 @@ import { type AgentSelectionItem } from '@shared/settingsView/settingsViewMessag
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName, isObject } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface SettingsAgentCatalogEntry {
   name: string;
@@ -42,7 +37,7 @@ interface SettingsAgentCatalogControllerDeps {
   now?: () => number;
 }
 
-export class SettingsAgentCatalogController implements TeamRosterCatalog {
+export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
   buildSelectionItems() {
@@ -114,40 +109,6 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
             : undefined,
       }).rootAgent?.name;
     });
-  }
-
-  resolvePreset(presetId: string) {
-    return Effect.gen({ self: this }, function* () {
-      const preset = findTeamPreset(
-        yield* this.deps.roster.allPresets(),
-        presetId,
-      );
-      if (!preset)
-        return { ok: false as const, reason: 'unknownPreset' as const };
-      return {
-        ok: true as const,
-        preset,
-        resolution: planTeamRun(preset, {
-          resolveAgent: (category, identifier) =>
-            this.deps.roster.resolveAgent(category, identifier),
-        }),
-      };
-    });
-  }
-
-  /** The team port's own failure: this is `TeamRosterCatalog.commitPreset`. */
-  commitPreset(
-    preset: AgentModePreset,
-  ): Effect.Effect<void, TeamCatalogPortFailed> {
-    return this.deps.roster.setTeam(preset.id).pipe(
-      Effect.mapError(
-        (cause) =>
-          new TeamCatalogPortFailed({
-            message: `The applied team could not be stored: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      ),
-    );
   }
 
   saveCurrentPreset(name: string) {

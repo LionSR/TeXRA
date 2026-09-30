@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
@@ -36,7 +37,7 @@ const TEMPLATE =
   '</head><body></body></html>';
 
 const tempDirs = useTempDirs();
-let session: ReturnType<typeof createTestSession>;
+let session: SessionHandle;
 
 async function installStoragePlatform(): Promise<void> {
   const tempDir = await makeTempDir('texra-html-export-', tempDirs);
@@ -101,7 +102,9 @@ describe('ChatExportController.exportAsHtml', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    session = createTestSession({ roots: testWorkspaceRoots() });
+    session = await Effect.runPromise(
+      createTestSession({ roots: testWorkspaceRoots() }),
+    );
     controller = new ChatExportController({
       latexPreamble: '',
       session,
@@ -158,7 +161,9 @@ describe('ChatExportController.buildExportInput', () => {
 
   beforeEach(async () => {
     await installStoragePlatform();
-    session = createTestSession({ roots: testWorkspaceRoots() });
+    session = await Effect.runPromise(
+      createTestSession({ roots: testWorkspaceRoots() }),
+    );
     controller = new ChatExportController({
       latexPreamble: '',
       session,

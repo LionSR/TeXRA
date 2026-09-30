@@ -10,11 +10,9 @@ import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,
 } from '@model/codingPlanSubscriptions';
-import { AppState, StateWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -163,17 +161,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
           member: 'setPreferSubscription',
           subscription: providerId,
           message: `The ${displayName} subscription preference could not be enabled: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    ),
-  );
-  const appState = yield* AppState;
-  yield* appState.update(GlobalStateKey.USE_OPENROUTER, false).pipe(
-    Effect.mapError(
-      (cause) =>
-        new StateWriteFailed({
-          key: GlobalStateKey.USE_OPENROUTER,
-          message: `The OpenRouter preference could not be cleared: ${toErrorMessage(cause)}`,
           cause,
         }),
     ),

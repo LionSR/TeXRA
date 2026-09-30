@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
@@ -8,6 +8,7 @@ import { Secrets } from '@platform/secrets';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
@@ -95,7 +96,10 @@ function createDrainState(runs: GhCheckRun[]): PRSubscriptionState {
  * The annotation fetch is mocked here, so no member is called; the layer
  * satisfies the requirement the host root provides in production.
  */
-const secretsLayer = Secrets.layer(new FakeSecrets());
+const secretsLayer = Layer.merge(
+  Secrets.layer(new FakeSecrets()),
+  testHttpClientLayer,
+);
 
 /** A source whose subscription states stay active for the whole drain. */
 function createDrainSource(): PRPollingSource {

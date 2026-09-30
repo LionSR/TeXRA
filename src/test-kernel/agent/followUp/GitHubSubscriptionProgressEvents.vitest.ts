@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() => vi.fn());
@@ -25,6 +25,7 @@ import { setLogSink } from '@logger/logSink';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { fakeHostSecrets } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
@@ -45,6 +46,12 @@ import {
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
+
+/** What a source's `subscribe` reads: the token store and the HTTP client. */
+const githubServices = Layer.merge(
+  Secrets.layer(fakeHostSecrets),
+  testHttpClientLayer,
+);
 
 function createTestRegistry(
   source: RegistryTestSource,
@@ -252,13 +259,13 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it.effect('dispose releases every binding and the source-key listener', () =>
     Effect.gen(function* () {
       const source = new RegistryTestSource();
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const registry = createTestRegistry(source);
       yield* Effect.addFinalizer(() => closeSessionOf(session));
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', session)
-        .pipe(Effect.provideService(Secrets, fakeHostSecrets));
+        .pipe(Effect.provide(githubServices));
       expect(source.keyListenerCount()).toBe(1);
 
       registry.dispose();
@@ -277,14 +284,14 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         session.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
 
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
+          .pipe(Effect.provide(githubServices));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -307,9 +314,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const firstSession = createTestSession();
+        const firstSession = yield* createTestSession();
         firstSession.followUps.claimLive(runId, 'loop');
-        const secondSession = createTestSession();
+        const secondSession = yield* createTestSession();
         secondSession.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
@@ -317,10 +324,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         yield* registry
           .bind(runId, 'owner/repo', firstSession)
-          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
+          .pipe(Effect.provide(githubServices));
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
-          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
+          .pipe(Effect.provide(githubServices));
 
         yield* Effect.promise(() =>
           source.emit('owner/repo', 'new github event'),
@@ -343,7 +350,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         const logs = captureLogEntries();
         const registry = createTestRegistry(source);
         const unhandledRejection = vi.fn();
@@ -360,7 +367,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         process.once('unhandledRejection', unhandledRejection);
         yield* registry
           .bind(runId, 'owner/repo', session)
-          .pipe(Effect.provideService(Secrets, fakeHostSecrets));
+          .pipe(Effect.provide(githubServices));
 
         // emit() awaits the delivery program, so the recovery has run by the
         // time it resolves — no settle-and-hope.

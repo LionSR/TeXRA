@@ -24,9 +24,6 @@ export type LanguageModelAccessState =
 
 interface LanguageModelSelector {
   readonly vendor?: string;
-  readonly family?: string;
-  readonly version?: string;
-  readonly id?: string;
 }
 
 /** Stable identity for a model whose id is scoped to its provider. */

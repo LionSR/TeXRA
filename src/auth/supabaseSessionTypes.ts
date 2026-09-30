@@ -5,7 +5,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { AuthPortError } from './authProgram';
 
-export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
+const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 const SupabaseSessionSchema = z.object({
   id: z.string(),

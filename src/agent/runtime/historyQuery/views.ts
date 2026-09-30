@@ -158,6 +158,14 @@ export const HISTORY_SCHEMA_SQL = [
   TODOS,
 ].join('\n');
 
+/** The longest text value the store holds whole: a longer one, a large
+ *  tool output most often, is cut to this many characters and marked with
+ *  its full length, so a long history stays within the store's memory. */
+export const HISTORY_TEXT_LIMIT = 16 * 1024;
+/** The longest row the store holds whole, after its text values are cut: a
+ *  longer one (many values, a large object) keeps only its length. */
+export const HISTORY_ROW_LIMIT = 64 * 1024;
+
 export const HISTORY_INSERT_SQL =
   'INSERT INTO events (run_id, type, at, data) VALUES (?, ?, ?, ?)';
 export const HISTORY_REMOVE_SQL = 'DELETE FROM events WHERE run_id = ?';
@@ -170,4 +178,4 @@ export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category,
 - usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
 - todos(run_id, item, content, status) - each run's current task list.
 - events(position, run_id, type, at, data) - every row above is derived from this: the session's display rows, data as JSON text.
-Times are ISO-8601 UTC text. Order by position for load order.`;
+Times are ISO-8601 UTC text. Order by position for load order. A text value longer than ${HISTORY_TEXT_LIMIT} characters (a large tool input or result, most often) is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a row whose data is still longer than ${HISTORY_ROW_LIMIT} characters is stored as {"cut": N}.`;

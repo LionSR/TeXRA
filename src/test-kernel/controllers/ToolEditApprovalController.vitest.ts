@@ -57,7 +57,7 @@ vi.mock('@tools/approval/latexPreview', async (importOriginal) => {
   return { ...actual, previewProposedLatex: latexPreview.previewProposedLatex };
 });
 
-function approvalRequest(): ToolEditApprovalRequest {
+function approvalRequest() {
   return toolEditApprovalRequest({
     path: '/workspace/paper.tex',
     originalContent: 'old',
@@ -156,7 +156,11 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost);
 
-    const presented = run(controller.present(approvalRequest()));
+    const presented = run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     await run(Deferred.await(testHost.contextReady));
     const requestId = testHost.contextForRequest().requestId;
 
@@ -185,7 +189,11 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost);
 
-    const presented = run(controller.present(approvalRequest()));
+    const presented = run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     await run(Deferred.await(testHost.contextReady));
     const requestId = testHost.contextForRequest().requestId;
 
@@ -223,7 +231,11 @@ describe('tool edit approval controller', () => {
 
     Deferred.doneUnsafe(testHost.staging, Effect.void);
     Deferred.doneUnsafe(testHost.presentation, Effect.void);
-    await run(controller.present(approvalRequest()));
+    await run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     const requestId = testHost.contextForRequest().requestId;
 
     // `dispose` admits a release for every staged request before it waits on
@@ -256,7 +268,11 @@ describe('tool edit approval controller', () => {
 
     Deferred.doneUnsafe(testHost.staging, Effect.void);
     Deferred.doneUnsafe(testHost.presentation, Effect.void);
-    await run(controller.present(approvalRequest()));
+    await run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     const requestId = testHost.contextForRequest().requestId;
     expect(testHost.preview.present).toHaveBeenCalled();
 
@@ -288,7 +304,11 @@ describe('tool edit approval controller', () => {
 
     Deferred.doneUnsafe(testHost.staging, Effect.void);
     Deferred.doneUnsafe(testHost.presentation, Effect.void);
-    await run(controller.present(approvalRequest()));
+    await run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     const requestId = testHost.contextForRequest().requestId;
 
     expect(await run(controller.approveStaged(requestId))).toBe(true);
@@ -364,7 +384,11 @@ describe('tool edit approval controller', () => {
 
     Deferred.doneUnsafe(testHost.staging, Effect.void);
     Deferred.doneUnsafe(testHost.presentation, Effect.void);
-    await run(controller.present(approvalRequest()));
+    await run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     const requestId = testHost.contextForRequest().requestId;
 
     await run(
@@ -398,7 +422,11 @@ describe('tool edit approval controller', () => {
     // A build that fails settles too, so a release joins that one as well
     // rather than hanging, and the failure stays on the program's own error
     // path instead of escaping the display callback.
-    await run(controller.present(approvalRequest()));
+    await run(
+      Effect.flatMap(approvalRequest(), (request) =>
+        controller.present(request),
+      ),
+    );
     const secondRequestId = testHost.contextForRequest().requestId;
     await run(
       controller.handleAction({

@@ -5,6 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -121,7 +122,7 @@ const vscode = await import('vscode');
 const runId = 'f0a1b2c3d4e5' as RunId;
 
 async function emitOutputFiles(
-  session: ReturnType<typeof createTestSession>,
+  session: SessionHandle,
   absolutePath: string,
 ): Promise<void> {
   session.publish([
@@ -190,7 +191,7 @@ describe('output-file run fact frontend subscriptions', () => {
 
   it.live('badges run-fact output files and app-scoped workspace writes', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       publishTestRunStart(session, runId);
       const context = fakeExtensionContext();
       // The listeners are fibers of this scope, as they are of activation's.
@@ -245,7 +246,7 @@ describe('output-file run fact frontend subscriptions', () => {
           ),
         );
 
-        const session = createTestSession();
+        const session = yield* createTestSession();
         publishTestRunStart(session, runId);
         const context = fakeExtensionContext();
         yield* Effect.addFinalizer(() =>

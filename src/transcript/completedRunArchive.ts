@@ -19,19 +19,6 @@ import { readRunTranscript } from './runTranscript';
 // Conversation
 // ============================================================================
 
-export interface CompletedRunConversationReadResult {
-  /** Typed conversation nodes, or `null` when the transcript holds no
-   *  conversation data. */
-  readonly conversation: ExportNode[] | null;
-}
-
-/** Whether completed-run storage proves a conversation or transcript association exists. */
-export function hasCompletedRunConversationEvidence(
-  result: CompletedRunConversationReadResult,
-): boolean {
-  return (result.conversation?.length ?? 0) > 0;
-}
-
 /**
  * Deliberate non-goal (#7508): image blocks inside a tool result are not
  * reconstructed here. `ToolUseLog.output` carries either historical display
@@ -124,16 +111,16 @@ function conversationNodesForRow(
 /**
  * Read a completed run's conversation from the canonical transcript fold as
  * the typed nodes every conversation view (chat export, the ExecutionsTool
- * endpoint, the CLI history views) renders.
+ * endpoint, the CLI history views) renders. Empty when the transcript holds
+ * no conversation.
  */
 export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   runId: RunId,
   session: SessionHandle,
-): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const conversation = (yield* readRunTranscript(session, runId)).rows.flatMap(
+): Effect.fn.Return<ExportNode[], Error> {
+  return (yield* readRunTranscript(session, runId)).rows.flatMap(
     conversationNodesForRow,
   );
-  return { conversation: conversation.length > 0 ? conversation : null };
 });

@@ -71,8 +71,6 @@ export interface WorkflowRunModel {
   readonly phases: readonly WorkflowPhaseModel[];
   /** Every card of the newest attempt, in transcript order. */
   readonly tasks: readonly WorkflowTaskRow[];
-  /** Current-attempt cards issued outside a phase, when any. */
-  readonly unphasedPhase: WorkflowPhaseModel | undefined;
   readonly tally: WorkflowTally;
   /** The run has ended: an unissued plan entry is not run, not planned. */
   readonly settled: boolean;
@@ -352,10 +350,6 @@ export function workflowRunModel(
   return {
     phases: phaseModels,
     tasks,
-    unphasedPhase:
-      unphased === undefined
-        ? undefined
-        : phaseModels[ordered.indexOf(unphased)],
     tally: tallyWorkflowCalls(
       tasks.map((row) => row.call),
       declaredTotal,

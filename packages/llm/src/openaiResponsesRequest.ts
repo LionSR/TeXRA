@@ -128,13 +128,13 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       (!config.supportsTemperature && turn.controls.temperature !== null) ||
       (!config.supportsMaxOutputTokens &&
         turn.controls.maxOutputTokens !== null) ||
-      (!config.supportsStorage && turn.controls.store) ||
+      (!config.supportsStorage &&
+        (turn.controls.store || turn.continuation !== undefined)) ||
       (config.instructions.kind === 'required' && !turn.system?.trim()) ||
       (turn.controls.reasoning?.effort != null &&
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
         )) ||
-      (turn.continuation !== undefined && !config.supportsResponseChaining) ||
       (turn.controls.toolChoice !== 'auto' && !config.supportsForcedToolChoice)
     )
       return yield* new ModelError({
@@ -369,3 +369,20 @@ export function responseAuthentication(
         },
       };
 }
+
+/** The SDK client for one selected Responses deployment: no retries, no ambient organization. */
+export const openaiClient = (
+  endpoint: string,
+  authentication: ReturnType<typeof responseAuthentication>,
+  fetch?: typeof globalThis.fetch,
+) =>
+  new OpenAI({
+    apiKey: authentication.token,
+    defaultHeaders: authentication.headers,
+    baseURL: endpoint,
+    fetch,
+    maxRetries: 0,
+    organization: null,
+    project: null,
+    logLevel: 'off',
+  });

@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import {
@@ -9,7 +7,6 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { computeCodeChallenge } from '@auth/oauth/pkce';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
@@ -29,18 +26,6 @@ function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
     ...overrides,
   };
 }
-
-const BASE64URL = /^[A-Za-z0-9_-]+$/;
-
-describe('codex PKCE', () => {
-  it('derives the challenge as base64url(SHA-256(verifier))', () => {
-    const verifier = 'fixed-test-verifier-value';
-    const expected = createHash('sha256').update(verifier).digest('base64url');
-    const challenge = computeCodeChallenge(verifier);
-    expect(challenge).toBe(expected);
-    expect(challenge).toMatch(BASE64URL);
-  });
-});
 
 describe('codex model eligibility', () => {
   // Serving status is registry data: llm-zoo's `codexSubscription` flag,

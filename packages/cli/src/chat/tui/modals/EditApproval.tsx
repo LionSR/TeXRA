@@ -26,7 +26,7 @@ import type { ToolEditApprovalPayload } from '../state/approvalQueue';
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
-export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
+const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
 
 interface EditApprovalProps {
@@ -35,7 +35,7 @@ interface EditApprovalProps {
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-export function editApprovalDiffRowsBudget({
+function editApprovalDiffRowsBudget({
   availableRows,
   columns,
   feedbackRows = 0,

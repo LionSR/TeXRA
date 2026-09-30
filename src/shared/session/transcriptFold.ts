@@ -31,11 +31,7 @@ import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
 import { isObject } from '@utils/core';
 
-import {
-  asMessageType,
-  recordLogRow,
-  STREAMING_TEXT_ROW_KIND,
-} from './transcriptLogRows';
+import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
 import {
   emptyTranscript,
   indexesOf,
@@ -84,7 +80,6 @@ function record(d: Draft, event: TranscriptEvent): void {
   switch (event.type) {
     case 'log':
     case 'usage':
-    case 'domain':
       recordLogRow(d, event);
       return;
 
@@ -233,7 +228,7 @@ function record(d: Draft, event: TranscriptEvent): void {
 
     case 'stream.start': {
       if (ix.closed) return;
-      const messageType = asMessageType(event.kind);
+      const messageType = event.kind;
       ix.streams.add(event.id);
       if (messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
         ix.pendingModelResponseId = event.id;

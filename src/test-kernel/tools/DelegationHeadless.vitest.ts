@@ -227,7 +227,7 @@ function delegateWithProposalDecision(
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
         decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
@@ -426,7 +426,7 @@ describe('headless delegation', () => {
     vi.clearAllMocks();
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
-    inBandSession = createTestSession();
+    inBandSession = await Effect.runPromise(createTestSession());
     releaseClaim = vi.fn();
     const acquireClaims = inBandSession.acquireClaims.bind(inBandSession);
     vi.spyOn(inBandSession, 'acquireClaims').mockImplementation((id) =>
@@ -990,7 +990,7 @@ describe('headless delegation', () => {
           // front, so a delegation tool that still executes was deliberately offered
           // (delegate_multi_agents). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
             decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
@@ -1021,7 +1021,7 @@ describe('headless delegation', () => {
         Effect.gen(function* () {
           // Failure modes: `never` approves the proposal because the run
           // cannot present prompts, or opens a prompt nobody may answer.
-          const session = createTestSession();
+          const session = yield* createTestSession();
           session.setApprovalPolicy('never');
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
@@ -1042,7 +1042,7 @@ describe('headless delegation', () => {
   it.effect('approves a proposal under the yolo policy without asking', () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         session.setApprovalPolicy('yolo');
         const decider = answerOpenedRequests(session, { action: 'approve' });
         yield* Effect.addFinalizer(() =>

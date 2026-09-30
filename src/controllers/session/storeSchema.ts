@@ -6,9 +6,10 @@
  *
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`, read by `rowCodec.ts`), so it moves
- * only for a change an older build cannot write around. It starts at 100;
- * a stamp from 1 to 99 is a store written before 1.0, which this build
- * never reads and moves aside whole.
+ * only for a change an older build cannot write around. The 1.0 baseline is
+ * 101. A stamp from 1 to 99 is a store written before 1.0, and 100 a
+ * pre-release of the 1.0 store that never shipped; this build reads
+ * neither and moves them aside whole.
  *
  * This module knows no row kind and no payload field.
  */
@@ -20,6 +21,7 @@ import {
   isDamaged,
   pragmaValue,
   removeOldAsides,
+  retryBusy,
   run,
   underCopy,
   type Sql,
@@ -28,7 +30,10 @@ import {
 const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
-const SCHEMA_VERSION = 100;
+const SCHEMA_VERSION = 101;
+/** The first stamp a released build wrote. Fixed for good: a store stamped
+ *  below it is pre-1.0 and moved aside; one at or above it is kept. */
+const BASELINE_1_0 = 101;
 /** `TeXR`: a TeXRA store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
@@ -62,7 +67,7 @@ const TABLES = [
   ) STRICT`,
   `CREATE TABLE IF NOT EXISTS blob (
     digest TEXT PRIMARY KEY CHECK (length(digest) = 64),
-    value  TEXT NOT NULL
+    value  BLOB NOT NULL
   ) STRICT`,
   `CREATE TABLE IF NOT EXISTS event (
     "commit"  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,9 +78,13 @@ const TABLES = [
     origin    TEXT NOT NULL,
     at        INTEGER NOT NULL,
     data      TEXT NOT NULL,
-    blob      TEXT REFERENCES blob(digest),
     UNIQUE (aggregate, seq)
   ) STRICT`,
+  `CREATE TABLE IF NOT EXISTS event_blob (
+    "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
+    digest   TEXT NOT NULL REFERENCES blob(digest),
+    PRIMARY KEY ("commit", digest)
+  ) STRICT, WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS stored_kind (
     type    TEXT PRIMARY KEY,
     version INTEGER NOT NULL
@@ -133,7 +142,7 @@ const ADDITIVE = [
     ON event_sequence(parent_id) WHERE parent_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS event_aggregate_type ON event(aggregate, type, seq)`,
   `CREATE INDEX IF NOT EXISTS event_type_commit ON event(type, "commit")`,
-  `CREATE INDEX IF NOT EXISTS event_blob ON event(blob) WHERE blob IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS event_blob_digest ON event_blob(digest)`,
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
 ];
 
@@ -234,7 +243,8 @@ const refuseUnowned = Effect.fnUntraced(function* (sql: Sql, path: string) {
  * - A foreign `application_id` or a newer `SCHEMA_VERSION` is refused
  *   untouched, and so is any other file below 100 that is not a pre-1.0
  *   TeXRA store by its own tables (`PRE1_SIGNATURE`).
- * - A store written before 1.0 is copied whole to `<file>.pre1` (or the
+ * - A store written before 1.0 (below 101, the never-shipped 100
+ *   included) is copied whole to `<file>.pre1` (or the
  *   first free `.pre1.<n>`), every table is dropped, and the file starts
  *   fresh: nothing in it is kept, current values included.
  * - An empty file gets the schema, under the write lock; of two processes
@@ -274,7 +284,7 @@ const prepareStore = Effect.fnUntraced(function* (
       yield* run(sql, 'COMMIT');
       continue;
     }
-    if (stored < 100) {
+    if (stored < BASELINE_1_0) {
       // Off outside the transaction (a no-op inside one): a drop then
       // neither checks nor cascades a foreign key it removes anyway.
       yield* run(sql, 'PRAGMA foreign_keys = OFF');
@@ -299,8 +309,14 @@ const prepareStore = Effect.fnUntraced(function* (
       movedAside = { path, aside, reason: 'pre-1.0' };
       continue;
     }
-    // 100 is the first schema: anything above it is a newer build's.
-    return yield* newerStore(path, stored);
+    if (stored > SCHEMA_VERSION) return yield* newerStore(path, stored);
+    // A released store below this build: it is upgraded by forward steps,
+    // and none exists yet. Never moved aside or wiped.
+    return yield* Effect.fail(
+      new Error(
+        `Session store ${path} has schema ${stored}, and this build has no step from it to schema ${SCHEMA_VERSION}. Nothing in the store was changed.`,
+      ),
+    );
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
   if (mode === 'persistent') {
@@ -310,17 +326,37 @@ const prepareStore = Effect.fnUntraced(function* (
   return movedAside;
 });
 
+/** Pages one reclaim step frees at most: a few milliseconds of the lock. */
+const RECLAIM_PAGES = 256;
+
 /**
  * Give the pages a collection freed back to the filesystem (the design's
- * §7). `incremental_vacuum` frees one page per step, and the driver steps a
- * statement once, so it runs once per free page.
+ * §7), once it commits, in autocommit steps of `incremental_vacuum(N)`, so
+ * another writer waits on one step, never the whole reclaim. A driver that
+ * steps a statement to its end frees N pages a step, one that steps it once
+ * frees one; either way the steps run until the freelist is empty or stops
+ * shrinking. It is not interrupted, as the collection is not: a session that
+ * closes first would leave the pages. A step that fails ends it, and the
+ * next collection reclaims the rest.
  */
-export const reclaimFreePages = Effect.fnUntraced(function* (sql: Sql) {
-  const free = Number(yield* pragmaValue(sql, 'freelist_count'));
-  yield* Effect.replicateEffect(run(sql, 'PRAGMA incremental_vacuum'), free, {
-    discard: true,
-  });
-});
+export const reclaimFreePages = (sql: Sql, path: string) =>
+  Effect.gen(function* () {
+    const free = () =>
+      pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
+    for (let left = yield* free(); left > 0;) {
+      yield* retryBusy(run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`));
+      const now = yield* free();
+      if (now >= left) return;
+      left = now;
+    }
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Could not return the pages freed in ${path} to the filesystem; the next collection retries.`,
+      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+    ),
+  );
 
 /**
  * Open the store at `filename` through `connect` and prepare it. A file

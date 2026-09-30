@@ -47,7 +47,6 @@ import {
 } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { initializeLatexSupport } from '@frontend/setup';
-import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
@@ -586,7 +585,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       }),
     ),
   );
-  FileLister.initialize(context, runtimeSession);
 
   // The setup pill: shown only while the host snapshot's API-key banner is,
   // the one credential answer the welcome card also reads (a ChatGPT

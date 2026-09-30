@@ -54,7 +54,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -526,7 +525,7 @@ describe('session events and view', () => {
           followUpId: 'queued',
           content: { text: 'deliver me', from: { kind: 'user' } },
         },
-        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'text' },
+        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'default' },
       ]);
       expect(events.pendingFollowUps(run)).toHaveLength(1);
       expect(events.openWork(run)).toHaveLength(1);
@@ -972,8 +971,6 @@ describe('Sessions owner', () => {
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
         const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
-        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-        const detachResult = session.onResult(onResult);
 
         try {
           session.publish([
@@ -1036,16 +1033,7 @@ describe('Sessions owner', () => {
           session.publish([
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
-          yield* Effect.promise(() =>
-            vi.waitFor(() => expect(onResult).toHaveBeenCalledOnce()),
-          );
-          expect(onResult.mock.calls[0][0]).toMatchObject({
-            type: 'run.end',
-            runId: OLDER,
-            outcome: 'completed',
-            seq: 3,
-            commit: 5,
-          });
+          yield* session.settlePublications();
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
@@ -1061,9 +1049,7 @@ describe('Sessions owner', () => {
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(sweep).toHaveBeenCalledOnce();
-          expect(onResult).toHaveBeenCalledOnce();
         } finally {
-          detachResult();
           sweep.mockRestore();
           yield* closeSessionOf(session);
         }
@@ -1371,7 +1357,7 @@ describe('the C1 event table and the C6 publisher', () => {
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 100,
+          user_version: 101,
         });
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
@@ -1652,7 +1638,7 @@ describe('the C1 event table and the C6 publisher', () => {
 
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
-    const format = 101;
+    const format = 102;
     return Effect.gen(function* () {
       yield* storeOfFormat(storage, format);
       const failure = yield* Effect.flip(
@@ -2197,6 +2183,121 @@ describe('the C1 event table and the C6 publisher', () => {
       expect(reopened.next.map((e) => e.commit)).toEqual([3]);
     });
   });
+
+  /**
+   * Outlined strings (the design's §2). Failure modes: a string of 4 KB or
+   * more reads back changed (a lone surrogate among them), or its object's
+   * key order does; a payload's own `$b` or `$$b` key reads as a reference or
+   * loses a `$`; the same string is stored once per row, not once per store;
+   * a damaged blob reads as text instead of blocking its aggregate; deleting
+   * a run collects a blob another run still references, or keeps one nobody
+   * does.
+   */
+  it.effect(
+    'stores a large string once, compressed, and reads it exact',
+    () => {
+      const storage = workspace();
+      const shared = `${'\\frac{a}{b} — ünïcode\n'.repeat(300)}end`;
+      const solo = `\uD800${'y'.repeat(4096)}`;
+      const script = (
+        id: string,
+        run: RunId,
+        args: object,
+      ): SessionEventDraft => ({
+        type: 'workflow.script',
+        aggregateId: qualifyAggregateId('workflow-checkpoint', id),
+        parentRunId: run,
+        script: shared,
+        args: { kind: 'json', value: { ...args, $b: 'mine', $$b: [shared] } },
+        files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+      });
+      const drafts = [
+        runStart,
+        olderStart,
+        script('cp-000000000001', RUN, { solo }),
+        script('cp-000000000002', OLDER, {}),
+      ];
+      const count = (table: string) =>
+        Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            return raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n;
+          } finally {
+            raw.close();
+          }
+        });
+      const remove = (run: RunId) =>
+        Effect.gen(function* () {
+          const db = yield* Database;
+          yield* db.appendAll([
+            {
+              type: 'run.removed',
+              aggregateId: qualifyAggregateId('run', run),
+            },
+          ]);
+          yield* collectPendingDeletions(db, storage);
+        });
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.appendAll(drafts);
+        const scripts = (yield* db.readAll(0)).filter(
+          (event) => event.type === 'workflow.script',
+        );
+        expect(
+          scripts.map(({ script, args }) => JSON.stringify({ script, args })),
+        ).toEqual(
+          drafts.slice(2).map((draft) =>
+            JSON.stringify({
+              script: shared,
+              args: 'args' in draft && draft.args,
+            }),
+          ),
+        );
+        const raw = reader(storage);
+        try {
+          const data = raw
+            .prepare("SELECT data FROM event WHERE type = 'workflow.script'")
+            .all()
+            .map((row) => String(row.data));
+          expect(data.every((text) => !text.includes(shared))).toBe(true);
+          expect(data[0]).toContain('"$$b":"mine","$$$b":[{"$b":"');
+          const sizes = raw
+            .prepare('SELECT length(value) AS n FROM blob ORDER BY n DESC')
+            .all()
+            .map((row) => Number(row.n));
+          expect(sizes).toHaveLength(2);
+          expect(sizes[0]).toBeLessThan(shared.length / 10);
+        } finally {
+          raw.close();
+        }
+        yield* remove(RUN);
+        expect(yield* count('blob')).toBe(1);
+        expect(yield* count('event_blob')).toBe(1);
+        yield* Effect.sync(() => {
+          const raw = reader(storage);
+          try {
+            raw.exec("UPDATE blob SET value = X'28b52ffd0000'");
+          } finally {
+            raw.close();
+          }
+        });
+        const reopened = yield* Effect.gen(function* () {
+          const fresh = yield* Database;
+          return yield* Effect.flip(
+            fresh.readAggregate(
+              qualifyAggregateId('workflow-checkpoint', 'cp-000000000002'),
+              0,
+            ),
+          );
+        }).pipe(Effect.provide(substrate(storage)));
+        expect(reopened).toMatchObject({ cause: { reason: 'corrupt' } });
+        yield* remove(OLDER);
+        expect(yield* count('blob')).toBe(0);
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
+    },
+  );
 
   it.effect(
     'reads bounded history, latest listing facts, and outstanding requests',

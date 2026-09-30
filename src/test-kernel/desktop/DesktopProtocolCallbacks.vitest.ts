@@ -1,11 +1,9 @@
 import { type Mock, describe, expect, it, vi } from 'vitest';
-import {
-  createDesktopProtocolCallbackRouter,
-  type DesktopProtocolApp,
-  findDesktopProtocolUrls,
-  installDesktopProtocolCallbackLifecycle,
-  parseDesktopProtocolCallback,
-} from '@desktop/main/desktopProtocolCallbacks';
+import { installDesktopProtocolCallbackLifecycle } from '@desktop/main/desktopProtocolCallbacks';
+
+type DesktopProtocolApp = Parameters<
+  typeof installDesktopProtocolCallbackLifecycle
+>[0]['app'];
 
 interface ProtocolListeners {
   secondInstance?: (
@@ -55,6 +53,13 @@ function installLifecycle(argv: string[] = []) {
   return { app, focusMainWindow, lifecycle, listener };
 }
 
+/** What the host routes to auth code when the OS opens `url`. */
+function routedCallbacks(url: string): unknown[] {
+  const { app, listener } = installLifecycle();
+  app.listeners.openUrl?.({ preventDefault: vi.fn() }, url);
+  return listener.mock.calls.map(([callback]) => callback);
+}
+
 describe('desktop protocol callbacks', () => {
   it.each([
     {
@@ -81,52 +86,46 @@ describe('desktop protocol callbacks', () => {
       path: '/auth-callback',
       query: 'state=abc',
     },
+    {
+      name: 'accepts extension-auth-callback URLs for shared auth parsing',
+      url: 'texra://extension-auth-callback?code=authorization-code',
+      path: '/extension-auth-callback',
+      query: 'code=authorization-code',
+    },
   ])('$name', ({ url, path, query }) => {
-    expect(parseDesktopProtocolCallback(url)).toEqual({
-      path,
-      query,
-    });
+    expect(routedCallbacks(url)).toEqual([{ path, query }]);
   });
 
-  it('accepts extension-auth-callback URLs for shared auth parsing', () => {
-    expect(
-      parseDesktopProtocolCallback(
-        'texra://extension-auth-callback?code=authorization-code',
-      ),
-    ).toEqual(
-      expect.objectContaining({
-        path: '/extension-auth-callback',
-        query: 'code=authorization-code',
-      }),
-    );
+  it.each([
+    'not a url',
+    'https://texra.ai/auth-callback',
+    'texra://texra-ai.texra/help',
+  ])('ignores malformed, non-texra, and unrelated protocol URL %s', (url) => {
+    expect(routedCallbacks(url)).toEqual([]);
   });
 
-  it('ignores malformed, non-texra, and unrelated protocol URLs', () => {
-    expect(parseDesktopProtocolCallback('not a url')).toBeNull();
-    expect(
-      parseDesktopProtocolCallback('https://texra.ai/auth-callback'),
-    ).toBeNull();
-    expect(
-      parseDesktopProtocolCallback('texra://texra-ai.texra/help'),
-    ).toBeNull();
-  });
+  it('routes only TeXRA callback URLs found in process argv', () => {
+    const { app, listener } = installLifecycle();
 
-  it('finds only TeXRA callback URLs in process argv', () => {
-    expect(
-      findDesktopProtocolUrls([
+    app.listeners.secondInstance?.(
+      {},
+      [
         '--flag',
         'texra://texra-ai.texra/auth-callback?code=1',
         'texra://texra-ai.texra/help',
-      ]),
-    ).toEqual(['texra://texra-ai.texra/auth-callback?code=1']);
+      ],
+      '/tmp',
+    );
+
+    expect(listener.mock.calls).toEqual([
+      [{ path: '/auth-callback', query: 'code=1' }],
+    ]);
   });
 
   it('queues startup callbacks until auth code subscribes', () => {
-    const router = createDesktopProtocolCallbackRouter();
-    router.routeUrl('texra://texra-ai.texra/auth-callback?state=startup');
-
-    const listener = vi.fn();
-    router.subscribe(listener);
+    const { listener } = installLifecycle([
+      'texra://texra-ai.texra/auth-callback?state=startup',
+    ]);
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -54,7 +54,7 @@
         {
           "file": "src/tools/timeouts.ts",
           "symbol": "retryTransientFetch",
-          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E, R>( request: Effect.Effect<T, E, R>, options: RetryTransientFetchOptions, ) => {…}, );"
+          "signature": "export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')( <T, E extends Error, R>( request: Effect.Effect<T, E, R | Scope.Scope>, options: RetryTransientFetchOptions<E>, ) => {…}, );"
         }
       ]
     },

@@ -42,6 +42,7 @@ import {
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -84,7 +85,7 @@ const config = AgentConfigSchema.parse({
 });
 
 interface StartedLaunch {
-  readonly session: ReturnType<typeof createTestSession>;
+  readonly session: SessionHandle;
   /** The creation fact; absent on a resume, which activates an existing
    *  run and mints no `run.start` (decision 9). */
   readonly start: Extract<SessionEvent, { type: 'run.start' }> | undefined;
@@ -99,7 +100,7 @@ interface StartedLaunch {
  */
 const captureStartedLaunch = Effect.fn(function* (
   run: (
-    session: ReturnType<typeof createTestSession>,
+    session: SessionHandle,
   ) => Effect.Effect<unknown, Error, FakeProcessServices>,
   options: {
     /** The launching run, when this launch is a child. */
@@ -109,7 +110,7 @@ const captureStartedLaunch = Effect.fn(function* (
   } = {},
 ) {
   return yield* Effect.acquireUseRelease(
-    Effect.sync(() => createTestSession()),
+    createTestSession(),
     (session) =>
       Effect.gen(function* () {
         if (options.parentRunId) {
@@ -330,7 +331,7 @@ describe('native agent launch activation', () => {
           }),
         );
 
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const described = AgentConfigSchema.parse({
           agent: 'chat',

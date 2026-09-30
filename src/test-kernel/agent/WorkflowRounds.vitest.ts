@@ -17,11 +17,6 @@ import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import {
   rowAggregate,
   snapshotRow,
@@ -29,8 +24,7 @@ import {
 } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { BoundModel } from '@agent/runtime/run/modelBinding';
+import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
@@ -42,7 +36,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import {
-  AgentCategory,
   RUN_OUTCOME,
   type CompileResult,
   type RetryErrorInfo,
@@ -55,18 +48,20 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { testRunTools } from '@test/support/nativeToolTestLayer';
+import {
+  agentRunTestLayer,
+  textTurn,
+  type ScriptedRunInit,
+} from '@test/support/scriptedRunLayers';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   createTestRunTrace,
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import {
-  hostStores,
   installedHost,
   installPlatform,
   setupPlatform,
@@ -78,8 +73,6 @@ import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { createRecordingHost } from './progressTestUtils';
-
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 /**
  * Round mode over a real session ledger: the round loop, the
@@ -209,44 +202,6 @@ setupPlatform({
   },
 });
 
-const ORIGIN = {
-  protocol: 'openai-responses',
-  codecVersion: 1,
-  requestedModel: 'test-model',
-  deployment: {
-    endpoint: 'https://api.example.test/v1',
-    credentialScope: 'deepseek',
-  },
-} as const;
-
-/** A `Model` the harness never reaches: the invoker seam is faked above it. */
-const unusedModel = new Proxy({} as Model, {
-  get(_target, property) {
-    throw new Error(`The harness model has no ${String(property)}.`);
-  },
-});
-
-function testBoundModel(): BoundModel {
-  return {
-    modelId: 'test-model',
-    config: buildTestModelConfig(),
-    compatibilityKey: 'DeepSeek',
-    model: unusedModel,
-    origin: ORIGIN,
-    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
-    usageRoute: 'api-key',
-    contextWindow: 200_000,
-    supportsVision: false,
-    supportsNativePdf: false,
-    supportsNativeAudio: false,
-    supportsForcedToolChoice: true,
-    wireRouteKey: 'test-route',
-    modelRetryRouteKey: 'test-route/test-model',
-    backgroundCapable: false,
-    persistentConnection: false,
-  };
-}
-
 type ScriptedFinish = 'stop' | 'length' | 'context-window-exceeded';
 
 /** What the faked invoker reports for one turn, in script order. */
@@ -255,19 +210,6 @@ type ScriptedTurn =
   | { readonly failWith: RetryErrorInfo };
 
 const COMPLETE: ScriptedTurn = { finish: 'stop' };
-
-function textTurn(text: string, finish: ScriptedFinish): TurnResult {
-  return {
-    kind: 'http',
-    providerResponseId: randomUUID(),
-    requestedOrigin: ORIGIN,
-    returnedModel: null,
-    modelFingerprint: null,
-    content: [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: finish,
-    usage: null,
-  };
-}
 
 function compileFailure(round: number): CompileResult {
   const location = createRunStorageLocation(
@@ -291,12 +233,9 @@ function compileFailure(round: number): CompileResult {
   };
 }
 
-interface LoopInit {
-  readonly runId: RunId;
-  readonly session: SessionHandle;
+interface LoopInit extends ScriptedRunInit {
   readonly rounds: number;
   readonly resume?: boolean;
-  readonly logger?: TraceEmitter;
   /** Turns in call order; the script ends in completed turns. */
   readonly turns?: readonly ScriptedTurn[];
   /** Runs inside the invoker before it answers, for interrupt scenarios. */
@@ -388,55 +327,6 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
             };
           }),
       };
-    }),
-  );
-}
-
-function agentRunTestLayer(init: LoopInit) {
-  return Layer.effect(
-    AgentRun,
-    Effect.gen(function* () {
-      const model = yield* SynchronizedRef.make(testBoundModel());
-      const logger = init.logger ?? new TraceEmitter();
-      const scope = yield* Effect.scope;
-      return {
-        runId: init.runId,
-        session: init.session,
-        config: AgentConfigSchema.parse({
-          agent: 'correct',
-          model: 'test-model',
-          agentCategory: AgentCategory.Workflow,
-        }),
-        setting: AgentSettingSchema.parse({
-          agentCategory: AgentCategory.Workflow,
-          rounds: init.rounds,
-        }),
-        prompt: AgentPromptSchema.parse({ userRequest: 'Write the document.' }),
-        logger,
-        parentStage: logger.openStage('Run: correct'),
-        // The launch stores a real run carries; no fixture reads through them.
-        stores: hostStores(),
-        toolPolicy: { stopAfterCycle: false },
-        opening: {
-          inputs: {},
-          activated: [],
-          attachedMemoryMisses: [],
-        },
-        initialUserMessageForTranscript: 'Write the document.',
-        fileService: new RunFileService(init.runId, init.session.roots),
-        ...testRunTools(hostStores()),
-        finalToolName: null,
-        structured: { value: undefined },
-        model,
-        swapModel: (next) =>
-          SynchronizedRef.updateAndGetEffect(model, (current) =>
-            Effect.scoped(next(current)),
-          ),
-        scope,
-        declinedRoutes: [],
-        pendingModelSwitch: { value: null },
-        callbacks: {},
-      } satisfies AgentRunShape;
     }),
   );
 }

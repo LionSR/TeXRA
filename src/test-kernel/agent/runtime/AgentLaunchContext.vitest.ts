@@ -75,10 +75,7 @@ const settle = Effect.promise(
 const EXECUTION_ID = 'a00101' as RunId;
 
 /** Launches an unresolvable agent, asserting the shared missing-agent failure. */
-const launchWithMissingAgent = (
-  session: ReturnType<typeof createTestSession>,
-  agent = '',
-) =>
+const launchWithMissingAgent = (session: SessionHandle, agent = '') =>
   Effect.gen(function* () {
     const error = yield* Effect.flip(
       buildAgentLaunchContext({
@@ -124,7 +121,7 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         // The banner claims the failure, so the launch catch adds no generic toast.
         const explicit = createRecordingHost();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use(explicit.interactions);
 
@@ -151,8 +148,9 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         // The retained replay renders the targeted banner and no generic toast.
         const recording = createRecordingHost();
-        const session =
-          yield* triggerQueuedMissingAgentFailure(createTestSession());
+        const session = yield* triggerQueuedMissingAgentFailure(
+          yield* createTestSession(),
+        );
         const owner = session.interactions;
 
         yield* owner.use(recording.interactions);
@@ -180,7 +178,7 @@ describe('AgentLaunchContext', () => {
         // down mid-post, #10466) must leave the failure unclaimed: it is
         // pre-registration, so no `result` event exists to present it instead.
         const events: string[] = [];
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use({
           emit: (event) => {
@@ -206,8 +204,9 @@ describe('AgentLaunchContext', () => {
         // The banner was queued (no host attached) and claimed; a host whose
         // replayed post throws must still surface the failure once (#10398).
         const events: string[] = [];
-        const session =
-          yield* triggerQueuedMissingAgentFailure(createTestSession());
+        const session = yield* triggerQueuedMissingAgentFailure(
+          yield* createTestSession(),
+        );
         yield* session.interactions.use({
           emit: (event) => {
             if (event === 'showAgentConfigBanner') {
@@ -230,7 +229,7 @@ describe('AgentLaunchContext', () => {
     () =>
       Effect.gen(function* () {
         const recording = createRecordingHost();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use(recording.interactions);
 
@@ -285,7 +284,7 @@ describe('AgentLaunchContext', () => {
         // Regression: the launch catch used to toast an assembly failure beside
         // the `result` event's own toast, so the user saw the error twice.
         const recording = createRecordingHost();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* session.interactions.use(recording.interactions);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, EXECUTION_ID);
@@ -334,7 +333,7 @@ describe('AgentLaunchContext', () => {
     'commits the activation with creation instead of publishing a reservation',
     () =>
       Effect.gen(function* () {
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
@@ -392,7 +391,7 @@ describe('AgentLaunchContext', () => {
         // approve-for-session grant; its re-stamp overwrites the durable
         // grant with an empty snapshot; a goal's auto-approval comes back
         // on without a human re-arming it.
-        const session = createTestSession();
+        const session = yield* createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const config = AgentConfigSchema.parse({
           agent: 'chat',
@@ -452,10 +451,9 @@ describe('AgentLaunchContext', () => {
       const failure = new Error('user vars unavailable');
       const postProcessResponse = vi.fn((text: string) => Effect.succeed(text));
       const responseTextProcessing = {
-        normalizeResponseText: (text: string) => text,
         postProcessResponse,
       };
-      const session = createTestSession({
+      const session = yield* createTestSession({
         responseTextProcessing,
       });
       yield* Effect.addFinalizer(() => closeSessionOf(session));

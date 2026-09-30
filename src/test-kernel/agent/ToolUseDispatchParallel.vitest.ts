@@ -38,10 +38,6 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { ToolCall } from '@agent/runtime/ToolCall';
@@ -68,23 +64,19 @@ import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
-  EMPTY_RUN_USAGE_TOTALS,
   formatZodIssuesForDiagnostics,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
-import {
-  nativeToolTestLayer,
-  testRunTools,
-} from '@test/support/nativeToolTestLayer';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
-import { RunFileService } from '@utils/files/runStorage';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 import { recordSessionEvents } from './progressTestUtils';
 
@@ -201,39 +193,10 @@ const dispatchRunId = (): RunId =>
 
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
-  commit: 0,
-  lastSnapshot: null,
-  ledgerRows: 0,
+  ...freshRunState(0),
   family: 'toolUse',
-  at: null,
-  outcome: null,
-  phase: null,
-  round: 0,
-  turn: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
-  lastError: null,
-  pendingRetry: null,
-  declinedRoutes: [],
-  messages: [],
-  continuation: null,
-  openAttempt: null,
-  lastTurn: null,
-  pendingResponse: null,
-  pendingIntents: {},
-  requests: {},
-  usage: EMPTY_RUN_USAGE_TOTALS,
-  loop: null,
-  roundOutputs: [],
-  overflowRecoveredAtTurn: null,
-  offeredTools: null,
-  offeredContinuation: null,
-  offeredSkills: [],
-  offeredSystem: null,
-  offeredContext: null,
-  contents: {},
-  hookOutcomes: {},
-  offeredHooks: [],
 });
 
 const INVOCATION = {
@@ -250,46 +213,18 @@ function agentRun(
   rootUserInstruction: string | undefined,
   pendingSwitch: string | null = null,
 ): AgentRunShape {
-  const config = AgentConfigSchema.parse({
-    agent: 'assistant',
-    model: 'gpt54',
-    agentCategory: AgentCategory.ToolUse,
-    ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
-  });
-  const setting = AgentSettingSchema.parse({
-    agentCategory: AgentCategory.ToolUse,
-  });
-  return {
-    runId,
-    session,
-    config,
-    setting,
-    prompt: AgentPromptSchema.parse({}),
-    logger,
-    parentStage: logger.openStage('Run: assistant'),
-    // The launch stores a real run carries; no fixture reads through them.
-    stores: hostStores(),
-    toolPolicy: {},
-    opening: {
-      inputs: {},
-      activated: [],
-      attachedMemoryMisses: [],
+  return testAgentRun(
+    { runId, session, logger, model, scope: Scope.makeUnsafe() },
+    {
+      config: AgentConfigSchema.parse({
+        agent: 'assistant',
+        model: 'gpt54',
+        agentCategory: AgentCategory.ToolUse,
+        ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
+      }),
+      pendingModelSwitch: { value: pendingSwitch },
     },
-    initialUserMessageForTranscript: undefined,
-    fileService: new RunFileService(runId, session.roots),
-    ...testRunTools(hostStores()),
-    finalToolName: null,
-    structured: { value: undefined },
-    model,
-    swapModel: (next) =>
-      SynchronizedRef.updateAndGetEffect(model, (current) =>
-        Effect.scoped(next(current)),
-      ),
-    scope: Scope.makeUnsafe(),
-    declinedRoutes: [],
-    pendingModelSwitch: { value: pendingSwitch },
-    callbacks: {},
-  };
+  );
 }
 
 interface DispatchKit {
@@ -333,7 +268,7 @@ const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
 const openDispatch = Effect.fn('openDispatch')(function* (
   options: HarnessOptions,
 ) {
-  const session = createTestSession();
+  const session = yield* createTestSession();
   const runId = dispatchRunId();
   const logger = options.logger ?? noopTrace;
   const tools = new MapToolRegistry(options.tools);
@@ -593,10 +528,30 @@ describe('tool-use dispatch', () => {
   it.live('runs contiguous parallel-safe calls concurrently, in order', () =>
     Effect.gen(function* () {
       const probe = newProbe();
+      // Neither call completes until both have started: a fixed sleep raced
+      // the second call's intent append, which the 1.0 store made slower
+      // than the sleep. A serial dispatch never opens the latch, and the
+      // deadline only turns that deadlock into a legible failure.
+      const bothStarted = yield* Deferred.make<void>();
+      const awaitSibling = Effect.gen(function* () {
+        if (probe.inFlight === 2)
+          yield* Deferred.succeed(bothStarted, undefined);
+        yield* Deferred.await(bothStarted).pipe(
+          Effect.timeoutOrElse({
+            duration: '10 seconds',
+            orElse: () =>
+              Effect.die(
+                new Error('The parallel-safe calls did not run concurrently.'),
+              ),
+          }),
+        );
+      });
       const kit = yield* openDispatch({
         tools: {
-          grep: probeTool(probe, 'grep', 25, { parallelSafe: true }),
-          read_file: probeTool(probe, 'read_file', 25, { parallelSafe: true }),
+          grep: probeTool(probe, 'grep', awaitSibling, { parallelSafe: true }),
+          read_file: probeTool(probe, 'read_file', awaitSibling, {
+            parallelSafe: true,
+          }),
         },
         calls: [
           makeCall('c1', 'grep', { pattern: 'a' }),

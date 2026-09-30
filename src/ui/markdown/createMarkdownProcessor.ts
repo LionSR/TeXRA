@@ -67,20 +67,7 @@ interface MarkdownProcessorConfig {
   readonly protectLatexMath?: boolean;
 }
 
-/**
- * Test-only telemetry returned alongside the processor. `hits` increments
- * every time the LRU returns a cached value; `misses` every time the
- * renderer runs. Tests assert against these directly so the cache is
- * exercised as a behaviour, not as a string-equality coincidence.
- */
-interface MarkdownProcessorStats {
-  readonly hits: () => number;
-  readonly misses: () => number;
-}
-
-export type MarkdownProcessor = ((content: string) => string) & {
-  readonly stats: MarkdownProcessorStats;
-};
+export type MarkdownProcessor = (content: string) => string;
 
 export interface MarkdownProcessorRenderEnv {
   readonly restoreProtectedLatex?: (content: string) => string;
@@ -160,18 +147,12 @@ export function createMarkdownProcessor(
     maxSize: MAX_CACHE_TOTAL_CHARS,
     sizeCalculation: (value) => value.length,
   });
-  let hitCount = 0;
-  let missCount = 0;
   let environmentProbe: BegEndEnvironmentProbe | undefined;
 
-  const processor = ((content: string): string => {
+  return (content: string): string => {
     const key = hashContent(content);
     const cached = cache.get(key);
-    if (cached !== undefined) {
-      hitCount += 1;
-      return cached;
-    }
-    missCount += 1;
+    if (cached !== undefined) return cached;
 
     // The CLI shield records offsets against the string markdown-it parses.
     // markdown-it core normalizes CRLF / bare CR to LF before block rules run,
@@ -232,14 +213,5 @@ export function createMarkdownProcessor(
     }
 
     return result;
-  }) as MarkdownProcessor;
-
-  Object.defineProperty(processor, 'stats', {
-    value: {
-      hits: () => hitCount,
-      misses: () => missCount,
-    } satisfies MarkdownProcessorStats,
-    enumerable: false,
-  });
-  return processor;
+  };
 }

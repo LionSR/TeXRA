@@ -106,7 +106,7 @@ export function applyStateSettingUpdate<H extends SettingHost>(
     return Effect.succeed({ kind: 'rejected', entry, error: parsed.error });
   }
   if (
-    entry.slots[ports.stores.host] === 'config' &&
+    entry.slot === 'config' &&
     entry.configTarget !== 'global' &&
     ports.requiresOpenWorkspace?.()
   ) {
@@ -150,7 +150,4 @@ export function applyStateSettingUpdate<H extends SettingHost>(
  * `switch`) so a new snapshot variant fails the object-literal check at both
  * call sites instead of silently falling through a `default`.
  */
-export type SettingsSnapshotPosters<T = void | Promise<void>> = Record<
-  SettingsViewSnapshot,
-  () => T
->;
+export type SettingsSnapshotPosters<T> = Record<SettingsViewSnapshot, () => T>;

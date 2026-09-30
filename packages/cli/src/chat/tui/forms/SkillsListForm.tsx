@@ -45,7 +45,7 @@ export interface SkillActivation {
   readonly activationPrompt: string;
 }
 
-export function formatSkillActivationPrompt(skill: SourcedSkill): string {
+function formatSkillActivationPrompt(skill: SourcedSkill): string {
   const activationInstruction = [
     `The user selected the ${escapeText(skill.skill.name)} skill.`,
     'Use these instructions for the next substantive user request.',

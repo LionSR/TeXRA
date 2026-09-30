@@ -4,13 +4,12 @@
  * Uses the Loogle API at https://loogle.lean-lang.org/
  */
 
-import { Effect } from 'effect';
-import ky from 'ky';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
 import { ToolResult } from '@shared/schemas';
-import { retryTransientFetch } from '@tools/timeouts';
+import { retryTransientFetch, scopedOkClient } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -19,7 +18,6 @@ import {
   formatResultCount,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
@@ -114,19 +112,13 @@ const LOOGLE_API_URL = 'https://loogle.lean-lang.org/json';
 const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
   retryTransientFetch(
     Effect.gen(function* () {
-      const raw = yield* Effect.tryPromise({
-        try: (signal) =>
-          ky
-            .get(LOOGLE_API_URL, {
-              searchParams: { q: query },
-              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-              timeout: false,
-              signal,
-              retry: 0,
-            })
-            .json<unknown>(),
-        catch: ensureError,
+      const client = yield* scopedOkClient;
+      const response = yield* client.get(LOOGLE_API_URL, {
+        urlParams: { q: query },
+        headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+        acceptJson: true,
       });
+      const raw = yield* response.json;
       // Validate the body at the boundary. A malformed shape is not
       // transient, so it is not retried; searchOne surfaces it as a tool
       // error.
@@ -203,7 +195,7 @@ const searchOne = Effect.fn('LoogleTool.searchOne')((
     }),
     Effect.catch((error) =>
       Effect.succeed(
-        error._tag === 'RequestTimedOut'
+        Cause.isTimeoutError(error)
           ? fail(
               errorResult(
                 `Loogle API request timed out after ${LOOGLE_TIMEOUT_MS / 1000}s. ` +
@@ -287,10 +279,8 @@ Returns: name, type signature, module (for imports), and documentation.
 
 Useful for finding the right lemma when you know roughly what type it should have.`,
   schema: LeanLoogleInputSchema,
-  execute: (input: LeanLoogleInput): Effect.Effect<ToolResult, Error> => {
-    // The owning agent run's cancellation enters here as interruption —
-    // parallel batches must be able to abort in-flight Loogle requests and
-    // their retry backoff.
-    return searchLoogle(input);
-  },
+  // The owning agent run's cancellation enters here as interruption —
+  // parallel batches must be able to abort in-flight Loogle requests and
+  // their retry backoff.
+  execute: searchLoogle,
 });

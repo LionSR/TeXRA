@@ -16,7 +16,7 @@ import {
   systemUpdateText,
   type Continuation,
 } from './message.js';
-import { sameModelOrigin } from './protocol.js';
+import { originOf, sameModelOrigin } from './protocol.js';
 import { ModelError } from './errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
 import {
@@ -294,10 +294,7 @@ export const openaiResponsesContinuation = Effect.fn(
     !parsedResult.success ||
     parsedResult.data.providerResponseId === null ||
     !sameModelOrigin(turn, parsedResult.data.requestedOrigin) ||
-    !sameModelOrigin(turn, {
-      ...parsedConfiguration.data,
-      codecVersion: 1,
-    })
+    !sameModelOrigin(turn, originOf(parsedConfiguration.data))
   )
     return yield* new ModelError({
       kind: 'invalid-request',
@@ -308,7 +305,6 @@ export const openaiResponsesContinuation = Effect.fn(
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
-    !parsedConfiguration.data.supportsResponseChaining ||
     !parsedConfiguration.data.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')

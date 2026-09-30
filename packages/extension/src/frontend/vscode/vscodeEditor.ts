@@ -82,6 +82,7 @@ function showDocument(
   uri: vscode.Uri,
   existingEditor: vscode.TextEditor | undefined,
   preserveFocus: boolean,
+  preview: boolean,
 ): Effect.Effect<vscode.TextEditor, EditorOpenFailed> {
   if (existingEditor) {
     return showTextDocument(uri, existingEditor.document, {
@@ -101,7 +102,7 @@ function showDocument(
         }),
     });
     return yield* showTextDocument(uri, document, {
-      preview: false,
+      preview,
       preserveFocus,
     });
   });
@@ -121,6 +122,8 @@ export function openFileInEditor(
   options: {
     line?: number;
     preserveFocus?: boolean;
+    /** Open a fresh document in the preview tab, not a permanent one. */
+    preview?: boolean;
     save?: boolean;
     /** Reuse an already-visible editor without re-showing it. */
     reuseVisible?: boolean;
@@ -138,7 +141,12 @@ export function openFileInEditor(
     const editor =
       reuseVisible && existingEditor && preserveFocus
         ? existingEditor
-        : yield* showDocument(uri, existingEditor, preserveFocus);
+        : yield* showDocument(
+            uri,
+            existingEditor,
+            preserveFocus,
+            options.preview ?? false,
+          );
 
     if (line !== undefined) {
       const position = new vscode.Position(toZeroBasedLine(line), 0);

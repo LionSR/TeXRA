@@ -244,7 +244,7 @@ describe('session framer', () => {
 
   it.live('preserves run subscription keys across the webview bridge', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       // Registered first, so it runs last: the bridge's ports release their
       // transcript sets through the session before it goes.
       yield* Effect.addFinalizer(() => closeSessionOf(session));
@@ -277,7 +277,7 @@ describe('session framer', () => {
   );
   it.live('holds host actions until the port first subscribes', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const bridge = yield* SessionBridge.make({
         session,
@@ -316,7 +316,7 @@ describe('session framer', () => {
       if (options.logLevel === 'Error') errors.push(options.message);
     });
     return Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       vi.spyOn(session, 'inputs').mockReturnValue(
         Stream.die(new Error('replay read failed')),
@@ -340,7 +340,7 @@ describe('session framer', () => {
   });
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();

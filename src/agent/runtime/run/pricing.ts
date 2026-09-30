@@ -29,7 +29,7 @@ const perMillion = (tokens: number, price: number): number =>
  * xAI pricing the llm-zoo catalog cannot express: per-model long-context
  * tiers and the documented cached-token rate, keyed by catalog `fullName`.
  * Source: the models catalog embedded in docs.x.ai, verified 2026-08-14.
- * llm-zoo has no tier field (still true at 1.37.0), and before 1.37.0 its
+ * llm-zoo has no tier field (still true at 1.38.0), and before 1.37.0 its
  * xAI entries inherited the default `cacheDiscountFactor` of 1, which would
  * zero the cache rebate, so both live here until the catalog carries them
  * (#10073).
@@ -78,29 +78,16 @@ const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
  * OpenAI's long-context tier for the GPT-6 family, keyed by catalog
  * `fullName`: a prompt over 272K input tokens bills the whole request at 2x
  * input and cached input and 1.5x output (developers.openai.com pricing).
- * Cached input doubles with input, so the cache discount keeps its catalog
- * ratio. llm-zoo has no tier field (#10073).
+ * Cached input doubles with input, so the catalog's cache discount carries
+ * over unchanged. The tier derives from the catalog rates, so a catalog price
+ * change moves it too.
  */
-const OPENAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
-  'gpt-6-astra': {
-    thresholdTokens: 272_001,
-    inputPrice: 20,
-    outputPrice: 75,
-    cacheDiscountFactor: 0.1,
-  },
-  'gpt-6-sol': {
-    thresholdTokens: 272_001,
-    inputPrice: 4,
-    outputPrice: 15,
-    cacheDiscountFactor: 0.1,
-  },
-  'gpt-6-luna': {
-    thresholdTokens: 272_001,
-    inputPrice: 0.2,
-    outputPrice: 0.75,
-    cacheDiscountFactor: 0.1,
-  },
-};
+const OPENAI_LONG_CONTEXT_MODELS: ReadonlySet<string> = new Set([
+  'gpt-6-astra',
+  'gpt-6-sol',
+  'gpt-6-luna',
+]);
+const OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS = 272_001;
 
 /** Lowest documented threshold; the drift tripwire's reference. */
 const LOWEST_XAI_THRESHOLD_TOKENS = Math.min(
@@ -166,12 +153,15 @@ function turnRates(
     outputPrice: config.outputPrice,
     cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
   };
-  if (config.provider === ModelProvider.OPENAI) {
-    const documented = OPENAI_DOCUMENTED_PRICING[config.fullName];
-    return documented === undefined
-      ? base
-      : tieredRates(base, documented, promptTokens);
-  }
+  if (config.provider === ModelProvider.OPENAI)
+    return OPENAI_LONG_CONTEXT_MODELS.has(config.fullName) &&
+      promptTokens >= OPENAI_LONG_CONTEXT_THRESHOLD_TOKENS
+      ? {
+          ...base,
+          inputPrice: base.inputPrice * 2,
+          outputPrice: base.outputPrice * 1.5,
+        }
+      : base;
   if (config.provider !== ModelProvider.XAI) return base;
   const documented = XAI_DOCUMENTED_PRICING[config.fullName];
   if (documented === undefined) {

@@ -27,10 +27,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
 import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import {
-  hasCompletedRunConversationEvidence,
-  readCompletedRunConversation,
-} from '@transcript';
+import { readCompletedRunConversation } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -59,31 +56,9 @@ export class ChatExportInputUnreadable extends Data.TaggedError(
 export interface ChatExportLoadResult {
   readonly run: RunView | null;
   readonly config: AgentConfig | null;
-  /** Normalized: `null` when absent *or* empty — an empty array never counts
-   *  as "a conversation is present" (see module doc). */
-  readonly conversation: readonly ExportNode[] | null;
-  /** Host-neutral storage evidence used to distinguish incomplete from absent. */
-  readonly hasTranscriptEvidence: boolean;
+  /** Empty when the run holds no conversation. */
+  readonly conversation: readonly ExportNode[];
   readonly exportInput: ChatExportInput | null;
-}
-
-/**
- * A stored conversation is only "present" when it has at least one message.
- * The archive facade already normalizes an empty read to `null`, so this
- * check is defensive rather than the primary fix — but it keeps the
- * "non-empty array only" contract explicit for this module's callers (and
- * for tests, which mock the facade directly and can return `[]` without
- * going through that normalization). Without it, a plain truthiness check
- * (`!conversation`) would treat `[]` as "present" — `![]` is `false` in JS —
- * and every existence check downstream (this module's `exportInput`, and
- * each host's own not-found/incomplete classification) would disagree with
- * `readCliHistoryDetails`, which builds no preview from an empty array
- * either.
- */
-function hasConversationMessages(
-  conversation: readonly ExportNode[] | null,
-): conversation is readonly ExportNode[] {
-  return Array.isArray(conversation) && conversation.length > 0;
 }
 
 function unreadable(
@@ -101,7 +76,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ChatExportLoadResult, ChatExportInputUnreadable> {
-  const [config, conversationResult, view] = yield* Effect.all(
+  const [config, conversation, view] = yield* Effect.all(
     [
       getRunRecords(session, id)
         .readConfig()
@@ -114,27 +89,15 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
     { concurrency: 3 },
   );
   const run = view.runs.get(id) ?? null;
-  const conversation = hasConversationMessages(conversationResult.conversation)
-    ? conversationResult.conversation
-    : null;
-  const hasTranscriptEvidence =
-    hasCompletedRunConversationEvidence(conversationResult);
 
-  if (!config || !conversation) {
-    return {
-      run,
-      config,
-      conversation,
-      hasTranscriptEvidence,
-      exportInput: null,
-    };
+  if (!config || conversation.length === 0) {
+    return { run, config, conversation, exportInput: null };
   }
 
   return {
     run,
     config,
     conversation,
-    hasTranscriptEvidence,
     exportInput: {
       timestamp: run
         ? new Date(run.launchedAt).toISOString()

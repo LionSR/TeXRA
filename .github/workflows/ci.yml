@@ -56,99 +56,26 @@ jobs:
           fi
           base='${{ github.event.pull_request.base.sha }}'
           head='${{ github.event.pull_request.head.sha }}'
-          files="$(git diff --name-only "$base...$head")"
-          # --name-status keeps a rename's source path on the R### line, so a
-          # rename out of code into docs/ still counts as a code change.
-          name_status="$(git diff --name-status "$base...$head")"
+          # --no-renames lists a rename's source and destination as separate
+          # paths, so a rename out of code into docs/ still counts as code.
+          files="$(git diff --no-renames --name-only "$base...$head")"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
-          # Parse --name-status fields explicitly with awk on real tab
-          # separators (GNU grep -E does not treat \t as a tab escape). Field 1
-          # is the status letter; every later field is a path (renames carry
-          # src and dst). A file counts as "code" unless every changed path
-          # lives under docs/ or is a *.md file.
-          code_change_match() {
-            awk -F '\t' '{
-              for (i = 2; i <= NF; i++) {
-                if ($i !~ /\.md$/ && $i !~ /^docs\//) found = 1
-              }
-            }
-            END { exit !found }'
-          }
-
-          # Self-test the classifier before trusting it on real input, so a
-          # shell/awk regression fails CI instead of silently misrouting it.
-          # Keep each positive case in its own invocation so `found` cannot
-          # leak across records. The rename dest-only case is the one that
-          # fails a field-2-only (or rename-skipping) matcher.
-          if ! printf 'M\tdocs/guide.md\nR100\tsrc/foo.ts\tdocs/foo.ts\n' | code_change_match; then
-            echo 'code-change classifier self-test failed (rename into docs)' >&2
-            exit 1
-          fi
-          if ! printf 'R100\tdocs/foo.ts\tsrc/foo.ts\n' | code_change_match; then
-            echo 'code-change classifier self-test failed (rename dest only)' >&2
-            exit 1
-          fi
-          if printf 'M\tdocs/guide.md\n' | code_change_match; then
-            echo 'code-change classifier self-test failed (docs-only)' >&2
-            exit 1
-          fi
-          if printf 'M\tREADME.md\n' | code_change_match; then
-            echo 'code-change classifier self-test failed (markdown outside docs)' >&2
-            exit 1
-          fi
-
-          # The desktop e2e suite runs unless every changed path is out of
-          # the desktop's reach. The window bundles nearly all of src/ and
-          # packages/ (tools, utils, agent and llm included, and the trace
-          # viewer, which ships as its transcript export page), so the reach
-          # is stated as its complement: the CLI, docs, and markdown. Paths come from --name-status, as above, so a rename
-          # out of a reached path still counts.
-          desktop_change_match() {
-            awk -F '\t' '{
-              for (i = 2; i <= NF; i++) {
-                if ($i !~ /^packages\/cli\// && $i !~ /^docs\// &&
-                    $i !~ /\.md$/) found = 1
-              }
-            }
-            END { exit !found }'
-          }
-
-          # A slip in this classifier would silently skip the job it gates, so
-          # it is self-tested the same way.
-          if ! printf 'M\tsrc/tools/bash.ts\n' | desktop_change_match; then
-            echo 'desktop classifier self-test failed (src/tools)' >&2
-            exit 1
-          fi
-          if ! printf 'R100\tsrc/ui/a.ts\tpackages/cli/src/a.ts\n' | desktop_change_match; then
-            echo 'desktop classifier self-test failed (rename out of reach)' >&2
-            exit 1
-          fi
-          if ! printf 'M\t.github/actions/setup-workspace/action.yml\n' | desktop_change_match; then
-            echo 'desktop classifier self-test failed (setup action)' >&2
-            exit 1
-          fi
-          if ! printf 'M\tpackages/trace-viewer/src/main.ts\n' | desktop_change_match; then
-            echo 'desktop classifier self-test failed (trace viewer)' >&2
-            exit 1
-          fi
-          if printf 'M\tpackages/cli/src/app.tsx\nM\tdocs/guide/cli.md\n' | desktop_change_match; then
-            echo 'desktop classifier self-test failed (cli and docs only)' >&2
-            exit 1
-          fi
-
-          if printf '%s\n' "$name_status" | desktop_change_match; then
-            echo "desktop=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "desktop=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if printf '%s\n' "$name_status" | code_change_match; then
+          # Here-strings, not `printf | grep -q`: an early grep exit would
+          # SIGPIPE the writer and pipefail would misread that as no match.
+          # Code = any path outside docs/ and *.md; desktop = the same, minus
+          # the CLI (the window bundles the rest of src/ and packages/).
+          if grep -qvE '^docs/|\.md$' <<<"$files"; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "Docs-only change -> lightweight docs build only."
             echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qvE '^packages/cli/|^docs/|\.md$' <<<"$files"; then
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "desktop=false" >> "$GITHUB_OUTPUT"
           fi
 
   checks:

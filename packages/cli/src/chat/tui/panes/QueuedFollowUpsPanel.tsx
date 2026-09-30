@@ -29,7 +29,7 @@ export function queuedFollowUpPanelRowCount(
   return Math.min(QUEUED_FOLLOW_UP_PANEL_MAX_ROWS, messages.length + 1);
 }
 
-export function queuedFollowUpPanelDisplay({
+function queuedFollowUpPanelDisplay({
   maxRows,
   messages,
   width,

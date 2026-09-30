@@ -443,13 +443,13 @@ function expectNoModelOrInputWork(): void {
 }
 
 describe('CLI run command, workflow agents', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     pendingRunStarts = [];
     seededRunIds.clear();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
-    const session = createTestSession();
+    const session = await Effect.runPromise(createTestSession());
     fixtureSession = session;
     const platform = {
       ...installedHost().platform,
@@ -811,7 +811,7 @@ describe('CLI run command, workflow agents', () => {
           () => import('@test/support/sessionTestUtils'),
         );
         const session = yield* Effect.acquireRelease(
-          Effect.sync(() => createTestSession()),
+          createTestSession(),
           (owned) => closeSessionOf(owned),
         );
         const runId = 'abc123abc123' as RunId;
@@ -1475,7 +1475,7 @@ describe('CLI run command, workflow agents', () => {
         const { createTestSession } = yield* Effect.promise(
           () => import('@test/support/sessionTestUtils'),
         );
-        const session = createTestSession();
+        const session = yield* createTestSession();
         // The mocked launch boundary skips the launch's own `run.start`
         // commit; the session opens the run before finalization writes it.
         yield* seedStartedRun(session, 'abc010');
@@ -1526,7 +1526,7 @@ describe('CLI run command, workflow agents', () => {
         const { createTestSession } = yield* Effect.promise(
           () => import('@test/support/sessionTestUtils'),
         );
-        const session = createTestSession();
+        const session = yield* createTestSession();
         // The hint advertises only a resumable run, so the cancelled run's
         // own checkpoint is what the real resumability read has to find; the
         // launch's `run.start` commit the mock boundary skips rides with it.

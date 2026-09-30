@@ -91,7 +91,7 @@ export interface InputBarHandle {
   readonly appendInput: (input: string) => void;
 }
 
-export function slashSubmitText(
+function slashSubmitText(
   current: string,
   commandName: string,
   remainder: string,

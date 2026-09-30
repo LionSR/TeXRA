@@ -29,7 +29,13 @@ import {
   aggregateId,
   RunSnapshotPayloadSchema,
 } from '@shared/schemas';
-import type { JsonValue, LogLevel, RunId, TodoItem } from '@shared/schemas';
+import type {
+  JsonValue,
+  LogLevel,
+  MessageType,
+  RunId,
+  TodoItem,
+} from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -46,10 +52,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import {
-  hasCompletedRunConversationEvidence,
-  readCompletedRunConversation as readCompletedRunConversationEffect,
-} from '@transcript';
+import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript';
 
 const tempDirs = useTempDirs();
 
@@ -70,7 +73,7 @@ async function stampRun(runId: RunId): Promise<void> {
   }
 }
 
-let taskSession: ReturnType<typeof createTestSession>;
+let taskSession: SessionHandle;
 const readCompletedRunConversation = (id: RunId) =>
   Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
 /** The run's task list as every surface reads it: off the session fold. */
@@ -116,13 +119,13 @@ async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
 /** One `log` fact a fixture publishes. */
 interface LogRow {
   readonly level: LogLevel;
-  readonly messageType: string;
+  readonly messageType: MessageType;
   readonly text?: string;
   readonly data?: JsonValue;
 }
 
 function logRow(
-  messageType: string,
+  messageType: MessageType,
   fields: { text?: string; data?: JsonValue },
 ): LogRow {
   return { level: LOG_LEVELS.INFO, messageType, ...fields };
@@ -213,11 +216,8 @@ describe('completedRunArchive facade', () => {
         // Both sessions close on every exit of this test, interruption
         // included; a close failure is the defect the old `finally` threw.
         const papers = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            ['first-paper', 'second-paper'].map((label) => ({
-              label,
-              session: createTestSession(),
-            })),
+          Effect.forEach(['first-paper', 'second-paper'], (label) =>
+            Effect.map(createTestSession(), (session) => ({ label, session })),
           ),
           (open) =>
             Effect.forEach(open, ({ session }) => closeTestSession(session), {
@@ -293,10 +293,7 @@ describe('completedRunArchive facade', () => {
         const conversationResult = yield* Effect.promise(() =>
           readCompletedRunConversation(runId),
         );
-        expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(
-          true,
-        );
-        expect(conversationResult.conversation).toEqual([
+        expect(conversationResult).toEqual([
           {
             kind: 'user-message',
             parts: [
@@ -320,9 +317,7 @@ describe('completedRunArchive facade', () => {
           loadChatExportInput(runId),
         );
         expect(exportResult.exportInput).not.toBeNull();
-        expect(exportResult.exportInput?.nodes).toEqual(
-          conversationResult.conversation,
-        );
+        expect(exportResult.exportInput?.nodes).toEqual(conversationResult);
 
         expect(yield* Effect.promise(() => completedRunTodos(runId))).toEqual([
           {
@@ -448,20 +443,18 @@ describe('completedRunArchive facade', () => {
           runId,
           session,
         );
-        expect(archived).toEqual({
-          conversation: [
-            {
-              kind: 'user-message',
-              parts: [{ type: 'text', text: 'Prove the first lemma.' }],
-            },
-            { kind: 'assistant-text', text: 'First proof.' },
-            {
-              kind: 'user-message',
-              parts: [{ type: 'text', text: 'Now prove the second lemma.' }],
-            },
-            { kind: 'assistant-text', text: 'Second proof.' },
-          ],
-        });
+        expect(archived).toEqual([
+          {
+            kind: 'user-message',
+            parts: [{ type: 'text', text: 'Prove the first lemma.' }],
+          },
+          { kind: 'assistant-text', text: 'First proof.' },
+          {
+            kind: 'user-message',
+            parts: [{ type: 'text', text: 'Now prove the second lemma.' }],
+          },
+          { kind: 'assistant-text', text: 'Second proof.' },
+        ]);
 
         const toolLayer = nativeToolTestLayer({
           run: { session: taskSession, runId, toolPolicy: {} },
@@ -530,8 +523,7 @@ describe('completedRunArchive facade', () => {
     await stampRun(runId);
 
     const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult).toEqual({ conversation: null });
-    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
+    expect(conversationResult).toEqual([]);
 
     expect(await completedRunTodos(runId)).toEqual([]);
   });
@@ -561,7 +553,7 @@ describe('completedRunArchive facade', () => {
     ]);
 
     const result = await readCompletedRunConversation(runId);
-    expect(result.conversation).toEqual([
+    expect(result).toEqual([
       {
         kind: 'tool-call',
         name: 'write_file',
@@ -592,8 +584,7 @@ describe('completedRunArchive facade', () => {
       const result = yield* Effect.promise(() =>
         readCompletedRunConversation(runId),
       );
-      expect(result).toEqual({ conversation: null });
-      expect(hasCompletedRunConversationEvidence(result)).toBe(false);
+      expect(result).toEqual([]);
 
       const endpoint = yield* ExecutionsTool.call({
         path: `/executions/${runId}/conversation`,

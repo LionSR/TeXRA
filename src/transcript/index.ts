@@ -5,8 +5,5 @@
  */
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
-export {
-  hasCompletedRunConversationEvidence,
-  readCompletedRunConversation,
-} from './completedRunArchive';
+export { readCompletedRunConversation } from './completedRunArchive';
 export { injectStandaloneTrace } from './standaloneTraceHtml';

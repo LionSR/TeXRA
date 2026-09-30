@@ -40,6 +40,8 @@ import {
   HISTORY_INSERT_SQL,
   HISTORY_REMOVE_SQL,
   HISTORY_SCHEMA_SQL,
+  HISTORY_ROW_LIMIT,
+  HISTORY_TEXT_LIMIT,
 } from './views';
 import type { SessionHandle } from '../SessionHandle';
 import type { PlatformError } from 'effect/PlatformError';
@@ -50,6 +52,9 @@ const QUERY_DEADLINE = '5 seconds';
 const HISTORY_QUERY_ROW_CAP = 200;
 /** SQLite's own memory ceiling in the store, rows and sorts together. */
 const STORE_HEAP_LIMIT_BYTES = 1024 * 1024 * 1024;
+/** Rows per append request: each row is capped, so a request is bounded
+ *  however long the history. */
+const APPEND_ROWS = 500;
 
 /** A statement the store will not run, or did not finish: the model's to
  *  correct, so its message is SQLite's own or names the limit it hit. */
@@ -135,12 +140,19 @@ function storeOps(rows: readonly DisplaySessionEvent[]): StoreOp[] {
     const payload = Object.fromEntries(
       Object.entries(row).filter(([key]) => !ENVELOPE_KEYS.has(key)),
     );
+    const data = JSON.stringify(payload, (_key, value: unknown) =>
+      typeof value === 'string' && value.length > HISTORY_TEXT_LIMIT
+        ? `${value.slice(0, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
+        : value,
+    );
     ops.push([
       'insert',
       target.id,
       row.type,
       new Date(row.at).toISOString(),
-      JSON.stringify(payload),
+      data.length > HISTORY_ROW_LIMIT
+        ? JSON.stringify({ cut: data.length })
+        : data,
     ]);
   }
   return ops;
@@ -283,10 +295,12 @@ export class HistoryQuery {
     return this.lane.withPermit(
       this.run(sql, params).pipe(
         Effect.onInterrupt(() => this.discard('its caller was interrupted')),
+        // A failed feed may have appended part of its rows: the next query
+        // rebuilds the store rather than append them twice.
         Effect.tapError((error) =>
-          error._tag === 'HistoryQueryFailed'
-            ? this.discard(error.message)
-            : Effect.void,
+          error._tag === 'HistoryQueryRefused'
+            ? Effect.void
+            : this.discard(error.message),
         ),
       ),
     );
@@ -302,19 +316,22 @@ export class HistoryQuery {
       const store = this.store ?? (yield* openStore(this.scope, this.spawner));
       this.store = store;
       if (target > store.cursor) {
-        const rows = yield* this.readThrough(store.cursor, target);
-        const ops = storeOps(rows);
-        if (ops.length > 0) {
-          yield* request(store, { kind: 'append', ops }).pipe(
-            Effect.flatMap(failedStep('rows')),
-          );
-        }
-        // Not a spread: a first feed can carry more rows than a call takes
-        // arguments.
-        store.cursor = rows.reduce(
-          (cursor, row) => Math.max(cursor, row.commit),
-          target,
+        let cursor = target;
+        yield* this.readThrough(store.cursor, target).pipe(
+          Stream.grouped(APPEND_ROWS),
+          Stream.runForEach((rows) => {
+            // Not a spread: a group can carry more rows than a call takes
+            // arguments.
+            cursor = rows.reduce((at, row) => Math.max(at, row.commit), cursor);
+            const ops = storeOps(rows);
+            return ops.length === 0
+              ? Effect.void
+              : request(store, { kind: 'append', ops }).pipe(
+                  Effect.flatMap(failedStep('rows')),
+                );
+          }),
         );
+        store.cursor = cursor;
       }
       const reply = yield* request(store, {
         kind: 'query',
@@ -348,16 +365,18 @@ export class HistoryQuery {
 
   /** The display rows committed after `from`, through at least `target`. */
   private readThrough(from: CommitOrdinal, target: CommitOrdinal) {
-    return Effect.gen({ self: this }, function* () {
-      const drained = yield* SubscriptionRef.make(from);
-      const reached = SubscriptionRef.changes(drained).pipe(
-        Stream.filter((commit) => commit >= target),
-        Stream.runHead,
-      );
-      return yield* this.session()
-        .events.all(from, drained)
-        .pipe(Stream.interruptWhen(reached), Stream.runCollect);
-    });
+    return Stream.unwrap(
+      Effect.gen({ self: this }, function* () {
+        const drained = yield* SubscriptionRef.make(from);
+        const reached = SubscriptionRef.changes(drained).pipe(
+          Stream.filter((commit) => commit >= target),
+          Stream.runHead,
+        );
+        return this.session()
+          .events.all(from, drained)
+          .pipe(Stream.interruptWhen(reached));
+      }),
+    );
   }
 
   private discard(why: string): Effect.Effect<void> {
