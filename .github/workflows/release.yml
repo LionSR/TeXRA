@@ -31,6 +31,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: release-${{ github.event.release.tag_name }}
@@ -45,6 +46,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Require green CI on the tagged commit
+        uses: ./.github/actions/require-green-ci
 
       - name: Resolve release channel from tag, package version and pre-release flag
         id: channel
@@ -183,10 +187,14 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      checks: read
       id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Require green CI on the tagged commit
+        uses: ./.github/actions/require-green-ci
 
       - name: Resolve npm dist-tag from tag, package version and pre-release flag
         id: channel
