@@ -14,11 +14,10 @@ This revises one point of the core-concepts note
 typed Effect RPC schema. The owner ruled that we consume the Claude Code
 layout as it is, so the boundary is the hooks protocol, typed at our edge by
 Zod. On 2026-09-30 the owner deferred typed RPC, `History.writer`, the open
-schema registry and `PluginModule` until a named plugin cannot be MCP + hooks
-
-- data. The other Trust and Plugin rulings hold: third-party code never
-  loads in process, trust is keyed on a content digest, approvals are decided
-  in core and recorded, and changes land at step boundaries.
+schema registry and `PluginModule` until a named plugin cannot be MCP, hooks
+and data. The other Trust and Plugin rulings hold: third-party code never
+loads in process, trust is keyed on a content digest, approvals are decided
+in core and recorded, and changes land at step boundaries.
 
 ## What is deleted
 

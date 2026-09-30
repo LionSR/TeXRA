@@ -1,13 +1,13 @@
 <script setup>
 // Frameless "Common Quick Tasks" slice: the three starter recipes from
 // guide/quick-start.md, each shown as an agent + model + instruction triple —
-// the same three controls you fill in the Launcher footer. Standalone (no
+// the same three controls you fill in the New task footer. Standalone (no
 // MockupFrame); the root carries `.mockup` so the shared `--mk-*` colour +
 // dimensional tokens resolve and the cards flip with the docs light/dark theme.
 //
 // Names mirror the page exactly: agents correct / paper2slide / polish, with
 // the primary model and its alternatives kept as muted secondary text. Reuses
-// the .select / .s-val / .s-caret chip and the .prompt block from the Launcher.
+// the .select / .s-val / .s-caret chip and the .prompt block from the New task view.
 const recipes = [
   {
     icon: 'check',

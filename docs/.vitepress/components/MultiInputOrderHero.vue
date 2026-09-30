@@ -4,7 +4,7 @@
 // agents, "the expected output filenames are the selected input filenames in
 // the same order" — but never shows the multi-row ordered list itself.
 //
-// This lifts the Launcher's Input file group (the .field/.frow/.f-label +
+// This lifts the New task view's Input file group (the .field/.frow/.f-label +
 // .flist/.fitem vocabulary shared with FileSelectHero) to show three stacked,
 // ordered rows with their position index, the three header actions (Add opened
 // files, Clear all, Add files), and a footer note that order → output order.

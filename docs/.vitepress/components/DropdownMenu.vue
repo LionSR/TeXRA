@@ -1,5 +1,5 @@
 <script setup>
-// Frameless illustration of a TeXRA select + its open menu (the Launcher's
+// Frameless illustration of a TeXRA select + its open menu (the New task view's
 // agent / model pickers, the auto-extract checkbox menu). Renders the closed
 // control on top and a statically-open menu beneath — it is a figure, not a
 // live popover, so it stays inline-flowed and inherits the --mk-* scope.

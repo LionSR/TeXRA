@@ -845,7 +845,7 @@ graph (move 4).
 
 ---
 
-## Ten rulings from the 2026-09-30 decision board (ruled 2026-09-30)
+## Rulings from the 2026-09-30 decision board (ruled 2026-09-30)
 
 The owner took every decision on the board as recommended. Each entry below
 is closed; its reopen trigger names the one event that reopens it.
@@ -964,5 +964,21 @@ The survey's four candidates are refused; do not re-propose them as
 specified.
 
 - **The daemon build**, for the reasons under D4.
-- **A merge queue**, **the C2 switch-table merge** and **an effects
-  taxonomy**, each refused on the board on the survey's reasons.
+- **A merge queue.** Main failed validation twice in 56 completed runs, both
+  the dead-code ratchet after two PRs combined badly, each fixed in about an
+  hour. At about 8 minutes per entry and 50 to 60 merges a day, a queue is
+  about 8 hours of serial time a day, re-runs the macOS jobs billed at 10x
+  Linux, and adds per-PR latency against merge-on-green. Reopen: main breaks
+  from combined merges often enough that the fixes cost more than the queue.
+- **The survey's C2, one plugin switch table (kind, id, scope) replacing the
+  five on/off stores** (`DISABLED_TOOLS`, `DISABLED_SKILLS`,
+  `DISABLED_SKILL_SOURCES`, `INSTALLED_PLUGINS.enabled`,
+  `HIDDEN_CUSTOM_AGENTS`). State keys are already rows in `current_value`, so
+  the merge is a re-layout, not a deletion, and it would split
+  `InstalledPlugin.enabled` from the trust record it shares a row with.
+  Reopen: a switch family is needed for a reason other than tidiness and can
+  keep enable and trust in one row.
+- **An effects taxonomy.** D7 ships as a network member on the existing
+  `ToolGuard` (D8) with a shipped host allowlist, and memory-write gating is
+  dropped, so nothing reads a taxonomy. Reopen: a tool family needs an effect
+  class no guard kind can express.
