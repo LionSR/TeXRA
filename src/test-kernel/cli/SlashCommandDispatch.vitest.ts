@@ -417,7 +417,7 @@ describe('handleTuiSlashCommand', () => {
       const form = surface.props?.children;
       expect(localEntries()).toEqual([]);
 
-      form.props?.onPersist?.();
+      form?.props?.onPersist?.();
 
       expect(localEntryPairs()).toEqual([
         { kind: 'user', text: '/custom-form' },
