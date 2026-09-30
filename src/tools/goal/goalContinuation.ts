@@ -3,17 +3,24 @@
  * conversation opens its next turn itself. A failed turn, or a resume, pauses
  * the goal (its own row) and revokes its auto-approval instead; only a human
  * re-arms it (approving a plan), and a goal armed after the resume stays
- * armed.
+ * armed. An active goal also pauses, with a warning on the transcript, once
+ * the run tree's spend reaches `texra.goal.maxCostUsd`, read at each idle.
  */
-import { Clock, Effect } from 'effect';
+import { Clock, Effect, SubscriptionRef } from 'effect';
 
 import { GOAL_CONTINUATION_TEMPLATE } from '@agent/runtime/bundledPrompts';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { goalElapsedMs } from '@shared/plugins/goal';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  GOAL_MAX_COST_SETTING,
+  type RunId,
+} from '@shared/schemas';
+import { runTreeUsage } from '@shared/session/sessionView';
 import type { Continuation } from '@tools/toolTable';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
-import { formatCompactDuration } from '@utils/text/stringUtils';
+import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import { setGoalSessionAutoApproval } from './goalAutoApproval';
 import { goalOf, pauseGoal } from './goalRows';
@@ -45,6 +52,26 @@ export const goalContinuation: Continuation = {
       return null;
     }
     if (!canContinue) return null;
+    const cap = yield* readSettingFrom<number>(
+      session.roots,
+      GOAL_MAX_COST_SETTING.configKey,
+    );
+    const spent = runTreeUsage(
+      yield* SubscriptionRef.get(session.view),
+      runId,
+    ).cost;
+    if (cap > 0 && spent >= cap) {
+      yield* pauseActive({ session, runId });
+      session.publishRunEvent(runId, {
+        type: 'log',
+        level: 'warn',
+        message:
+          `Goal paused: this run and its subagents have spent ${formatCostUsd(spent)}, ` +
+          `reaching the ${formatCostUsd(cap)} goal cap. Raise ${GOAL_MAX_COST_SETTING.configKey} ` +
+          `(0 removes it), then re-arm the goal.`,
+      });
+      return null;
+    }
     return yield* renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
       objective: goal.objective,
       timeUsed: formatCompactDuration(

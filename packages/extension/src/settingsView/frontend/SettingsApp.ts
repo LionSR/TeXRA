@@ -71,6 +71,7 @@ import {
   gitMarkCommits,
   gitSettingsLoaded,
   gitWorktreeSupport,
+  goalMaxCostUsd,
   helperModel,
   inlineCriticismEnabled,
   latexdiffBetweenRounds,
@@ -376,6 +377,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .approvalPolicy=${approvalPolicy.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
+            .goalMaxCostUsd=${goalMaxCostUsd.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .settingValues=${settingValues}
           ></tools-tab>

@@ -177,6 +177,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Goal mode pauses at a spend cap.** An autonomous goal now stops between
+  turns once the run and its subagents have spent `texra.goal.maxCostUsd`
+  (default $5; `0` removes it; on the Tools page and in `/config`), withdraws
+  its auto-approval, and says why on the transcript. Raise the cap and re-arm
+  the goal to continue.
 - **Session history takes several times less disk** — long tool output,
   attached images and PDFs, and long prompts are stored compressed and
   only once per project: the same image attached in two runs, or a file's
