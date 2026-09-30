@@ -9,7 +9,7 @@ Baseline: `main` at `d38e473` (revised 2026-09-30).
 
 ## Idea
 
-One agent, `orchestrator`, looks after all of a researcher's projects. It lives in its own folder, `~/.texra/orchestrator/`, stays on when no window is open, checks back on its own schedule, and dispatches agents into projects.
+One agent, `orchestrator`, looks after all of a researcher's projects. It lives in a **default project**, the folder `~/.texra/orchestrator/`, which TeXRA creates and pins first. It stays on when no window is open, checks back on its own schedule, and dispatches agents into projects.
 
 The design trusts the model. The harness adds only what a model cannot do for itself:
 
@@ -51,6 +51,14 @@ Everything else is the model's judgement, stated once in its prompt: how often t
    - Existing OS notifications (`desktopAttention.ts`) already cover the orchestrator's session.
 
 ## What stays as it is
+
+- **It is an ordinary project.** Chats, history, agents and settings work there as in any folder.
+- **Models work as they do today.**
+  - You pick the orchestrator's model when you start a chat.
+  - The CLI's `/model` switches a live run to a model with the same conversation format.
+  - To use any other model, start a new chat in the orchestrator project. Its notes and `memory` are in the folder, so the new chat picks up from them.
+  - Wakes set by the old chat are still delivered to the old chat.
+  - A dispatched run takes its own `model`. When that is empty, it uses the target project's default.
 
 - **Approval.** The orchestrator's dispatches follow its run's existing proposal policy: a proposal unless the researcher turned bypass on. A dispatched run follows its project's policy.
   - With nobody attached, requests wait durably, as they do today, and the desktop notifies.
