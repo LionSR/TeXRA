@@ -84,11 +84,11 @@ export interface SubscriptionAccount extends SubscriptionSessionStatus {
 }
 
 /**
- * `'loopback'` and `'device'` pick a transport outright. `'auto'` prefers
+ * `'device'` picks the device-code transport outright. `'auto'` prefers
  * loopback and falls back to device-code when the loopback route cannot be
  * established at all (callback port unbindable, or no reachable browser).
  */
-type SubscriptionTransport = 'loopback' | 'device' | 'auto';
+type SubscriptionTransport = 'device' | 'auto';
 
 interface SubscriptionSignInOptions {
   readonly transport: SubscriptionTransport;
@@ -213,7 +213,6 @@ function defineSubscriptionProvider<
             }).pipe(
               Effect.catchIf(
                 (error): error is LoopbackTransportUnavailableError =>
-                  options.transport === 'auto' &&
                   error instanceof LoopbackTransportUnavailableError,
                 (error) => {
                   const causeMessage =
