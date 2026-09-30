@@ -62,15 +62,16 @@ General-purpose chatbots make this worse, not better:
 TeXRA splits the work across agents, each specialized, each grounded
 in real tools, each producing verifiable output.
 
-## Two surfaces, one system
+## Three surfaces, one system
 
-The VS Code extension and the `texra` CLI share the same underlying
-agents, credentials, and execution history. A run launched in the CLI
-surfaces live in the extension's Sessions view, and vice versa.
+The VS Code extension, the desktop app and the `texra` CLI share the same
+underlying agents and run history. Credentials stay local to each host, so
+add your API keys in each one you use. A run launched in the CLI surfaces
+live in the extension's Sessions view, and vice versa.
 
 <RunParityHero />
 
-<p class="hero-caption">One run, two surfaces: the same execution id lands in the terminal's output and the extension's Sessions view.</p>
+<p class="hero-caption">One run seen from two surfaces: the same execution id lands in the terminal's output and the extension's Sessions view.</p>
 
 ```mermaid
 graph TB

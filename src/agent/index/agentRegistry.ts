@@ -1,7 +1,7 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
 import { Clock, Data, Effect } from 'effect';
-import { AgentRosterController } from '@agent/roster/AgentRosterController';
+import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
@@ -154,6 +154,23 @@ export function getAgent(identifier: string): AgentEntry | undefined {
   return undefined;
 }
 
+/**
+ * The bundled agent a customized copy was made from, when the bundled file
+ * has changed since the copy was taken (an app update shipped a new version).
+ * Only a copy that records `basedOn` can tell; an agent the user wrote from
+ * scratch under a bundled name has no base to compare. A disabled plugin's
+ * agents are not in the catalog, so they never answer here.
+ */
+export function changedBuiltInOf(
+  entry: Pick<AgentEntry, 'name' | 'source' | 'category' | 'basedOn'>,
+): AgentEntry | undefined {
+  if (entry.source !== 'custom' || entry.basedOn == null) return undefined;
+  const builtIn = (['builtInWorkflow', 'builtInToolUse'] as const)
+    .map((source) => cache.get(agentKey(source, entry.name)))
+    .find((candidate) => candidate?.category === entry.category);
+  return builtIn && builtIn.digest !== entry.basedOn ? builtIn : undefined;
+}
+
 /** Get agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   return deduplicateByName(
@@ -224,33 +241,33 @@ export const settledCatalog = Effect.suspend(() =>
 // =============================================================================
 
 /**
- * The two state slots the durable roster resolves against: the repository's
- * selection and the cross-workspace defaults. Every roster read is answered for
+ * The two state slots the workspace agents resolves against: the repository's
+ * selection and the cross-workspace defaults. Every workspace agents read is answered for
  * the workspace whose slots the caller hands over, so a process holding several
- * sessions never answers one paper's question with another's roster.
+ * sessions never answers one paper's question with another's agent list.
  */
-export type AgentRosterStores = Pick<
+export type WorkspaceAgentsStores = Pick<
   WorkspaceRoots,
   'repoState' | 'globalState'
 >;
 
 /**
- * Construct the roster controller over the given workspace's stores. This is
- * the one place the durable roster's dependencies are wired, so every host
+ * Construct the workspace agents controller over the given workspace's stores. This is
+ * the one place the workspace agents' dependencies are wired, so every host
  * reads and writes the same selection through identical resolution rules. The
  * caller passes the roots it holds (a tool call's `call.roots`, a host's
  * session roots) rather than this reading the calling context's scope.
  */
-export function createWorkspaceAgentRosterController(
-  roots: AgentRosterStores,
+export function createWorkspaceAgentsController(
+  roots: WorkspaceAgentsStores,
   getAgents: (category: AgentCategory) => AgentEntry[] = getAgentsByCategory,
-): AgentRosterController<AgentEntry> {
+): WorkspaceAgentsController<AgentEntry> {
   const { repoState, globalState } = roots;
-  return new AgentRosterController({
+  return new WorkspaceAgentsController({
     repoState,
     globalState,
     getAgents,
-    getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
     resolveAgent: getCategoryAgent,
   });
 }
@@ -261,24 +278,22 @@ export function createWorkspaceAgentRosterController(
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   category: AgentCategory,
 ) {
-  return createWorkspaceAgentRosterController(stores).getVisibleAgents(
-    category,
-  );
+  return createWorkspaceAgentsController(stores).getVisibleAgents(category);
 }
 
 /**
  * Resolve delegation targets for a run: the scope's pinned keys when a
- * delegation scope is active, or the workspace-visible roster otherwise. The
+ * delegation scope is active, or the workspace-visible agents otherwise. The
  * single resolver behind both the "Available agents:" tool-description block
  * (`delegationAvailability.ts`) and the delegation tools' agent lookup
  * (`proposalFlow.ts`), so a delegating agent's tool description can never
- * list a different roster from the one its calls are resolved against.
+ * list a different agent list from the one its calls are resolved against.
  */
 export function resolveDelegationScopeAgents(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   scope: AgentDelegationScope | undefined,
   category: AgentCategoryType,
 ) {
@@ -315,7 +330,7 @@ export function findAgentByIdentifier(
 
 /**
  * Resolve an identifier to an agent in a category, ignoring visibility: the
- * one member identity rule the roster, team plans and launch share. A bare
+ * one member identity rule the agent list, team plans and launch share. A bare
  * name matches the category's deduplicated entries; a `source:name` key
  * matches its exact entry, even one a higher-priority source shadows. An
  * entry outside `category` is no match.
@@ -331,7 +346,7 @@ export function getCategoryAgent(
   return entry?.category === category ? entry : undefined;
 }
 
-/** Resolve a launch by pinned source, visible roster, then full category.
+/** Resolve a launch by pinned source, visible agents, then full category.
  * Each tier runs only when the preceding one has no match, preserving the
  * exact agent chosen during validation even when visibility changes. Only an
  * explicit `source` (a run record's decided identity) pins, and that tier is
@@ -341,7 +356,7 @@ export function getCategoryAgent(
  * shadows the name, and never answer with an entry of the other category.
  */
 export function resolveAgentForLaunch(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   category: AgentCategory,
   identifier: string,
   source?: AgentSource | null,
@@ -427,7 +442,7 @@ function sortAgentEntries(
 
 /** Compute typed agent options data for Lit-native rendering. */
 export function computeAgentOptionsData(
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
 ): Effect.Effect<AgentOptionsDataPayload, StateReadFailed> {
   return Effect.gen(function* () {
     return {

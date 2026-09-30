@@ -414,7 +414,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       fileWatcher,
       // The catalog reloads itself on every change to its sources
       // (`agentCatalogFollower`); this launcher repaints what it lists.
-      subscribeAppSignal(this.runtime, 'agentRosterChanged', () =>
+      subscribeAppSignal(this.runtime, 'workspaceAgentsChanged', () =>
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );

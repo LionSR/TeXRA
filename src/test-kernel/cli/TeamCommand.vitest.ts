@@ -41,21 +41,19 @@ const mocks = vi.hoisted(() => ({
     },
     source: 'built-in',
   })),
-  formatCliMultiAgentPresetRunWarnings: vi.fn(),
-  formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
+  formatCliTeamRunWarnings: vi.fn(),
+  formatCliTeamLaunchBlockMessage: vi.fn(),
   planTeamRuns: vi.fn(),
   planTeamRun: vi.fn(),
 }));
 
-vi.mock('@cli/runtime/multiAgentPresets', () => ({
-  cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
-  formatCliMultiAgentPresetInspection: vi.fn(() => ''),
-  formatCliMultiAgentPresetList: vi.fn(() => ''),
-  formatCliMultiAgentPresetRunWarnings:
-    mocks.formatCliMultiAgentPresetRunWarnings,
-  formatCliMultiAgentTeamLaunchBlockMessage:
-    mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-  readCliMultiAgentPresets: vi.fn(() => Effect.succeed([])),
+vi.mock('@cli/runtime/cliTeams', () => ({
+  cliTeamNdjsonRecords: vi.fn(() => []),
+  formatCliTeamInspection: vi.fn(() => ''),
+  formatCliTeamList: vi.fn(() => ''),
+  formatCliTeamRunWarnings: mocks.formatCliTeamRunWarnings,
+  formatCliTeamLaunchBlockMessage: mocks.formatCliTeamLaunchBlockMessage,
+  readCliTeams: vi.fn(() => Effect.succeed([])),
 }));
 
 vi.mock('@common/teams/TeamPlan', async (importOriginal) => {
@@ -116,10 +114,9 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     }),
 }));
 
-const { runMultiAgentPreset: nativeRun } =
-  await import('@cli/commands/multiAgent');
+const { runTeam: nativeRun } = await import('@cli/commands/team');
 
-type MultiAgentRunInit = Parameters<typeof nativeRun>[1];
+type TeamRunInit = Parameters<typeof nativeRun>[1];
 
 const ORCHESTRATOR_AGENT = {
   name: 'orchestrator',
@@ -157,7 +154,7 @@ function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
 }
 
 const preset = (
-  init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
+  init: Partial<TeamRunInit> & Pick<TeamRunInit, 'instruction'>,
   context: CliContext = createRunCommandCliContext(),
 ) =>
   Effect.provide(
@@ -172,7 +169,7 @@ const preset = (
   );
 
 function runPreset(
-  init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
+  init: Partial<TeamRunInit> & Pick<TeamRunInit, 'instruction'>,
   context?: CliContext,
 ): Promise<number> {
   return Effect.runPromise(preset(init, context));
@@ -185,9 +182,7 @@ async function expectBlockedLaunch(options: {
   readonly unexpectedWarning: string;
 }): Promise<void> {
   mocks.canLaunchTeam.mockReturnValueOnce(false);
-  mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValueOnce(
-    options.message,
-  );
+  mocks.formatCliTeamLaunchBlockMessage.mockReturnValueOnce(options.message);
   mocks.planTeamRun.mockReturnValue(options.plan);
 
   const exitCode = await runPreset({
@@ -197,7 +192,7 @@ async function expectBlockedLaunch(options: {
   expect(exitCode).toBe(2);
   expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
   expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(options.message);
-  expect(mocks.formatCliMultiAgentTeamLaunchBlockMessage).toHaveBeenCalledWith(
+  expect(mocks.formatCliTeamLaunchBlockMessage).toHaveBeenCalledWith(
     options.plan,
     {
       requestedPreset: 'mathematician',
@@ -243,10 +238,10 @@ function mockMaterializedStdin(inputFiles: string[]): void {
   );
 }
 
-describe('CLI multi-agent run command', () => {
+describe('CLI team run command', () => {
   const tempDirs = useTempDirs();
   const headlessAskError =
-    'Cannot run multi-agent preset "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+    'Cannot run team "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -261,10 +256,10 @@ describe('CLI multi-agent run command', () => {
       contextFiles: [],
     });
     mocks.canLaunchTeam.mockReturnValue(true);
-    mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValue(
+    mocks.formatCliTeamLaunchBlockMessage.mockReturnValue(
       'blocked preset message',
     );
-    mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValue([]);
+    mocks.formatCliTeamRunWarnings.mockReturnValue([]);
     mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
@@ -349,7 +344,7 @@ describe('CLI multi-agent run command', () => {
       'workingDirectory',
     ]);
     expect(emission?.ndjson).toEqual({
-      kind: 'multi-agent-result',
+      kind: 'team-result',
       ...emission.json,
     });
     expect(emission?.text).toBe('The proof is correct.');
@@ -448,7 +443,7 @@ describe('CLI multi-agent run command', () => {
         : undefined;
       expect(defect).toBeInstanceOf(Error);
       expect((defect as Error).message).toMatch(
-        /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
+        /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra team run physicist --instruction "Check this derivation"/,
       );
       expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     }),
@@ -465,9 +460,9 @@ describe('CLI multi-agent run command', () => {
         agentKeys: { workflow: [], toolUse: ['builtInToolUse:lean'] },
       }),
       message:
-        'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or create a runnable team root before launching this preset.',
+        'Team "mathematician" cannot start: no runnable team root. Run `texra team show mathematician` to see missing agents. Install or create a runnable team root before launching this team.',
       followUpAdvice:
-        'Install or create a runnable team root before launching this preset.',
+        'Install or create a runnable team root before launching this team.',
       unexpectedWarning: 'WARN team delegation unavailable',
     });
   });
@@ -481,7 +476,7 @@ describe('CLI multi-agent run command', () => {
         },
       }),
       message:
-        'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
+        'Team "mathematician" cannot start: no available team members. Run `texra team show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
       followUpAdvice:
         'Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
       unexpectedWarning: 'Enable a delegating team root',

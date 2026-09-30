@@ -1,7 +1,7 @@
 # Multi-agent workflows
 
 <script setup>
-import CliMultiAgentHero from '../.vitepress/components/CliMultiAgentHero.vue';
+import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
 </script>
 
 Certain research challenges exceed what a single agent can coordinate sequentially: systematically verifying every derivation in an extensive calculation, probing a conjecture from multiple complementary angles, or auditing, correcting, and reconciling a multi-file manuscript. A multi-agent workflow allows a team lead to orchestrate these tasks programmatically. Rather than delegating subtasks one by one and waiting for model round-trips, the lead synthesizes a lightweight coordination script. This script specifies which specialists to invoke, which can execute concurrently, and how intermediate artifacts flow into downstream steps. TeXRA executes the script deterministically: fan-out, barrier synchronization, and final aggregation occur directly in code, and interrupted executions resume seamlessly from recorded checkpoints.
@@ -22,12 +22,12 @@ The lead still plans in conversation with you first. It reads the project, propo
 
 ## What a run looks like
 
-1. **A proposal you approve.** Before anything runs, the lead's script is shown as a card headed **Start a multi-agent run:** and the script's name, with its phases, the steps each phase names, the default agent and model, and the files available to the script. The defaults are just that — each call may name its own agent and model. The card also warns that agents may run in parallel, which can cost more than a single run. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this run** (`a`), which also stops asking about later tasks, file edits, and commands in the run. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change. The script itself is saved under `.texra/workflow-scripts/` in your workspace, so you can open it.
+1. **A proposal you approve.** Before anything runs, the lead's script is shown as a card headed **Start a team run:** and the script's name, with its phases, the steps each phase names, the default agent and model, and the files available to the script. The defaults are just that — each call may name its own agent and model. The card also warns that agents may run in parallel, which can cost more than a single run. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this run** (`a`), which also stops asking about later tasks, file edits, and commands in the run. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change. The script itself is saved under `.texra/workflow-scripts/` in your workspace, so you can open it.
 2. **Phases and per-call progress.** The run opens as its own stream. Calls are grouped under the phases the script declared. A declared item appears as a quiet **Not started** row once its phase opens, until the script issues it; from then on the row is a real call and shows what it is — **Document** (a workflow agent editing files) or **Structured** (a tool-use agent returning validated data), the agent and model it runs, and the files it was handed — along with its status: Queued (waiting for a concurrency slot), Running, Finished, Saved result (replayed from an earlier attempt), Skipped, Cancelled, or Failed. Rows running at the same time are the run's real concurrency; sharing a phase does not by itself mean calls run together or depend on each other. When a call finishes, its row adds the elapsed time and what it cost.
 3. **Skip or retry a running call.** In the CLI, focus a running task in the subagent panel and press `s` to skip it or `r` to retry it; `k` kills it. A skipped call fails with `Skipped`: a script that wraps its calls in `attempt()` leaves it out of the synthesis step, and one that does not stops.
 4. **A summary when it finishes.** The lead receives the script's return value, the run log, and a one-line summary: phases run, tasks succeeded out of total, total cost, duration, and every file the run produced with its diff counts. Workflow-agent outputs land in run storage like any other delegated run; the lead reviews them and uses `accept_run_files` to bring them into the workspace.
 
-<CliMultiAgentHero />
+<CliTeamHero />
 
 <p class="hero-caption">A team session in the CLI. A multi-agent workflow's calls appear in this same subagent panel, grouped by phase, each as a focusable stream with its own transcript.</p>
 
@@ -136,7 +136,7 @@ In the CLI, a workflow run resumes headless: `texra resume <id>` continues a sto
 ## Next steps
 
 - [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads can run workflows
-- [TeXRA CLI](./texra-cli.md#multi-agent-teams): running a team from the terminal
+- [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
 - [Workflow agents](./agent-architecture.md): what a single workflow-agent call does
 - [Agent integrations](./agent-integrations.md): the Tools tab and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent the tool

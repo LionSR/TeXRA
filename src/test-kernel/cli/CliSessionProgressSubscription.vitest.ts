@@ -180,7 +180,7 @@ const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
   };
   const all = (): CliNdjsonRecord[] =>
     vi.mocked(writeRecord).mock.calls.map(([record]) => record);
-  /** The event lines alone: the roster is a derivation, asserted apart. */
+  /** The event lines alone: the child list is a derivation, asserted apart. */
   const records = (): CliNdjsonRecord[] =>
     all().filter((record) => record.event !== 'run.children');
   return { writeRecord, all, records, publish, detach };
@@ -290,7 +290,7 @@ describe('attachCliSessionProgressProjection', () => {
             description: 'Recorded before the resume',
           },
           // A child that ran and settled before the resume: its parent's
-          // roster is history too, not a line to replay (#11864).
+          // child list is history too, not a line to replay (#11864).
           {
             type: 'run.start',
             aggregateId: childAggregate,
@@ -335,7 +335,7 @@ describe('attachCliSessionProgressProjection', () => {
   );
 
   it.effect(
-    'derives the child roster from the fold, one run.children record per change',
+    'derives the child list from the fold, one run.children record per change',
     () =>
       Effect.gen(function* () {
         const session = yield* createTestSession();
@@ -343,7 +343,8 @@ describe('attachCliSessionProgressProjection', () => {
         yield* session.settlePublications();
         const { all, publish, detach } = yield* projectionOver(session);
         yield* Effect.addFinalizer(() => detach);
-        const rosters = () => all().filter((r) => r.event === 'run.children');
+        const childLists = () =>
+          all().filter((r) => r.event === 'run.children');
         yield* Effect.promise(() =>
           publish({
             draft: {
@@ -358,7 +359,7 @@ describe('attachCliSessionProgressProjection', () => {
         );
         // The child's own row, under its own names, with the fold's phase:
         // `ready` until its `run.activate` folds.
-        expect(rosters()).toEqual([
+        expect(childLists()).toEqual([
           {
             kind: 'progress',
             event: 'run.children',
@@ -377,7 +378,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
         ]);
 
-        // A row that moves the child's phase rewrites the roster once.
+        // A row that moves the child's phase rewrites the child list once.
         yield* Effect.promise(() =>
           publish({
             draft: {
@@ -387,13 +388,13 @@ describe('attachCliSessionProgressProjection', () => {
             },
           }),
         );
-        expect(rosters()).toHaveLength(2);
-        expect(rosters()[1]?.payload).toMatchObject({
+        expect(childLists()).toHaveLength(2);
+        expect(childLists()[1]?.payload).toMatchObject({
           runId,
           children: [{ childRunId, status: 'running' }],
         });
 
-        // A row that moves nothing on the roster writes no second copy.
+        // A row that moves nothing on the workspace agents write no second copy.
         yield* Effect.promise(() =>
           publish({
             draft: {
@@ -403,9 +404,9 @@ describe('attachCliSessionProgressProjection', () => {
             },
           }),
         );
-        expect(rosters()).toHaveLength(2);
+        expect(childLists()).toHaveLength(2);
 
-        // The ended child leaves the live roster; its own `run.end` line
+        // The ended child leaves the live child list; its own `run.end` line
         // carries the outcome.
         yield* Effect.promise(() =>
           publish({
@@ -417,8 +418,8 @@ describe('attachCliSessionProgressProjection', () => {
             },
           }),
         );
-        expect(rosters()).toHaveLength(3);
-        expect(rosters()[2]?.payload).toEqual({ runId, children: [] });
+        expect(childLists()).toHaveLength(3);
+        expect(childLists()[2]?.payload).toEqual({ runId, children: [] });
       }),
   );
 

@@ -28,6 +28,7 @@ const agentCatalogMock = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
   getCatalogLoadFailure: vi.fn(() => undefined),
   getCustomAgentScanIssues: vi.fn(() => []),
+  changedBuiltInOf: vi.fn(() => undefined),
   // The registry's refresh is an Effect program; the callers under test run
   // it, so the fake must return an Effect, not a promise.
   refresh: vi.fn(() => Effect.void),

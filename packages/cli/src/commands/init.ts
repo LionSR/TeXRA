@@ -43,10 +43,6 @@ function defaultInitAnswers(
     model:
       models.find((model) => model.available)?.model.value ??
       CLI_CHEAP_START_MODEL,
-    // Match the runtime default (see buildCliContext). `ask` prompts in
-    // interactive runs and safely denies in headless ones — unlike `never`,
-    // which silently denies every privileged action.
-    approvalPolicy: 'ask',
     outputFormat: 'text',
   };
 }
@@ -55,7 +51,6 @@ interface InitSummary {
   readonly path: string;
   readonly agent: string;
   readonly model: string;
-  readonly approvalPolicy: InitAnswers['approvalPolicy'];
   readonly outputFormat: InitAnswers['outputFormat'];
   readonly config: InitConfigShape;
   readonly gitignore?: GitignoreOutcome;
@@ -103,7 +98,6 @@ function initTextSummary(summary: InitSummary): string {
     `Wrote ${summary.path}`,
     `  agent: ${summary.agent}`,
     `  model: ${summary.model}`,
-    `  approval: ${summary.approvalPolicy}`,
     `  output: ${summary.outputFormat}`,
   ];
   if (summary.warning) {
@@ -126,7 +120,6 @@ function emitInitSummary(
     path: filePath,
     agent: answers.agent,
     model: answers.model,
-    approvalPolicy: answers.approvalPolicy,
     outputFormat: answers.outputFormat,
     config,
     gitignore,

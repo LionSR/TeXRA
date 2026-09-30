@@ -22,7 +22,7 @@ import {
   type CliNoAvailableModelsRecoveryOptions,
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
-import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
+import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -119,9 +119,9 @@ export interface RunChatInit {
   readonly startupNotice?: string;
   /**
    * Startup resume from `texra resume <id>`, with the run's persisted config.
-   * A resumed multi-agent preset run carries its team identity and delegation
+   * A resumed team run carries its team identity and delegation
    * scope in that config; those are the only fields below still sourced here,
-   * because a team run is started headlessly by `texra multi-agent run`.
+   * because a team run is started headlessly by `texra team run`.
    */
   readonly initialResume?: {
     readonly id: RunId;
@@ -210,8 +210,7 @@ export async function runChat(
       // Both persisted team fields are `.nullish()` on the wire, so a resumed
       // run that never carried a preset lands `null` where `SessionMeta` wants
       // absent.
-      const initialPresetId =
-        initialResume?.config.cli?.multiAgentPresetId ?? undefined;
+      const initialPresetId = initialResume?.config.cli?.teamId ?? undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
         agentSource: agentEntry.source,
@@ -219,11 +218,11 @@ export async function runChat(
         modelSource: defaults.modelSource,
         cwd: context.cwd,
         approvalPolicy: runtimeSession.approvalPolicy,
-        teamName: yield* readCliMultiAgentPresetName(
+        teamName: yield* readCliTeamName(
           runtimeSession.roots.repoState,
           initialPresetId,
         ),
-        cliMultiAgentPresetId: initialPresetId,
+        cliTeamId: initialPresetId,
         delegationAgentScope:
           initialResume?.config.delegationAgentScope ?? undefined,
         version: context.version,

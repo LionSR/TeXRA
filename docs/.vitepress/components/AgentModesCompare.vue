@@ -8,7 +8,7 @@
 //
 // Frameless and .mockup-scoped, so it inherits the shared --mk-* colour +
 // dimensional tokens and flips cleanly between the docs light / dark themes.
-// Composes StatusPill for the example-agent rosters — no bespoke pill CSS.
+// Composes StatusPill for the example-agent lists — no bespoke pill CSS.
 import StatusPill from './StatusPill.vue';
 
 const rows = [

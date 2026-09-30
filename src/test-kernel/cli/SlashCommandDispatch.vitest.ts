@@ -136,7 +136,7 @@ type ChildRow = {
   readonly identity: RunIdentity;
   readonly status?: RunPhase;
 };
-function seedChildRoster(parentRunId: RunId, rows: readonly ChildRow[]): void {
+function seedChildRows(parentRunId: RunId, rows: readonly ChildRow[]): void {
   ensureRun(parentRunId);
   const parent = seeded.get(parentRunId);
   for (const row of rows) {
@@ -404,12 +404,13 @@ describe('handleTuiSlashCommand', () => {
       ]);
 
       yield* dispatchSlash('/custom-form', createContext());
-      const form = activeForm.get()?.render(() => undefined, 20) as {
-        props?: { onPersist?: () => void };
+      const surface = activeForm.get()?.render(() => undefined, 20) as {
+        props?: { children?: { props?: { onPersist?: () => void } } };
       };
+      const form = surface.props?.children;
       expect(localEntries()).toEqual([]);
 
-      form.props?.onPersist?.();
+      form?.props?.onPersist?.();
 
       expect(localEntryPairs()).toEqual([
         { kind: 'user', text: '/custom-form' },
@@ -785,7 +786,7 @@ describe('handleTuiSlashCommand', () => {
         focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
         ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
-        seedChildRoster(rootRunId, [
+        seedChildRows(rootRunId, [
           {
             identity: { kind: 'agent', agent: 'critic' },
             agentName: 'critic',
@@ -823,7 +824,7 @@ describe('handleTuiSlashCommand', () => {
         ensureRun(parentRunId, { status: RUN_PHASE.WAITING });
         ensureRun(runningChildId, { status: RUN_PHASE.RUNNING });
         ensureRun(waitingChildId, { status: RUN_PHASE.WAITING });
-        const rosterRow = (
+        const childRow = (
           childRunId: RunId,
           index: number,
           status: RunPhase,
@@ -834,15 +835,15 @@ describe('handleTuiSlashCommand', () => {
           startedAt: index + 1,
           childRunId,
         });
-        seedChildRoster(rootRunId, [
-          rosterRow(parentRunId, 0, RUN_PHASE.WAITING),
+        seedChildRows(rootRunId, [
+          childRow(parentRunId, 0, RUN_PHASE.WAITING),
           ...rootSiblingIds.map((runId, index) =>
-            rosterRow(runId, index + 1, RUN_PHASE.RUNNING),
+            childRow(runId, index + 1, RUN_PHASE.RUNNING),
           ),
         ]);
-        seedChildRoster(parentRunId, [
-          rosterRow(runningChildId, 3, RUN_PHASE.RUNNING),
-          rosterRow(waitingChildId, 4, RUN_PHASE.WAITING),
+        seedChildRows(parentRunId, [
+          childRow(runningChildId, 3, RUN_PHASE.RUNNING),
+          childRow(waitingChildId, 4, RUN_PHASE.WAITING),
         ]);
 
         yield* dispatchSlash('/status', createContext(session));
@@ -866,7 +867,7 @@ describe('handleTuiSlashCommand', () => {
         for (const runId of [focusedChildId, siblingChildId]) {
           ensureRun(runId, { status: RUN_PHASE.RUNNING });
         }
-        seedChildRoster(
+        seedChildRows(
           rootRunId,
           [focusedChildId, siblingChildId].map((childRunId, index) => ({
             identity: { kind: 'agent' as const, agent: `critic-${index}` },

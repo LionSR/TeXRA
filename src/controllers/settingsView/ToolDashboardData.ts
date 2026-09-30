@@ -84,7 +84,7 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
  * names the host in its `unavailableHosts`, or one whose every tool declares
  * itself unavailable on the asking host, is not
  * shown there and cannot be installed, authed or toggled from it: host
- * exclusion removes those tools from the resolved roster, so they can never
+ * exclusion removes those tools from the resolved agent list, so they can never
  * be called there.
  */
 export function isToolPluginVisible(

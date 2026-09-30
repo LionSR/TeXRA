@@ -182,7 +182,7 @@ export const commandCatalog = [
     settingsTab: 'tools/tools',
   },
   {
-    id: 'texra.showMultiAgent',
+    id: 'texra.showTeamSettings',
     extensionRegistry: true,
     title: 'Agent Team Settings',
     category: 'TeXRA',

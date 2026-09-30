@@ -388,38 +388,36 @@ describe('desktop settings IPC', () => {
     }),
   );
 
-  it.live(
-    'round-trips multi-agent coordination and refreshes its snapshot',
-    () =>
-      Effect.gen(function* () {
-        const globalState = new FakeStateStore();
-        const { settings, posted } = yield* Effect.promise(() =>
-          createCapturedSettingsFixture({
-            globalState,
-          }),
-        );
+  it.live('round-trips agent coordination and refreshes its snapshot', () =>
+    Effect.gen(function* () {
+      const globalState = new FakeStateStore();
+      const { settings, posted } = yield* Effect.promise(() =>
+        createCapturedSettingsFixture({
+          globalState,
+        }),
+      );
 
-        expect(
-          settings.handleMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            value: true,
-          }),
-        ).toBe(true);
-        yield* Effect.promise(() => flushAsyncWork());
+      expect(
+        settings.handleMessage({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+          key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+          value: true,
+        }),
+      ).toBe(true);
+      yield* Effect.promise(() => flushAsyncWork());
 
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
-          ),
-        ).toBe(true);
-        expect(posted.at(-1)).toMatchObject({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-          snapshot: 'multi-agent',
-          values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
-        });
-      }),
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
+        ),
+      ).toBe(true);
+      expect(posted.at(-1)).toMatchObject({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
+        snapshot: 'agents',
+        values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+      });
+    }),
   );
 
   it('shows unsupported-command reasons without reporting an error', async () => {
@@ -615,7 +613,7 @@ describe('desktop settings IPC', () => {
     });
   });
 
-  it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
+  it('writes the bash-approval toggle to the local config scope, not global or the project file', async () => {
     const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = await createCapturedSettingsFixture({
@@ -633,9 +631,10 @@ describe('desktop settings IPC', () => {
 
     expect(config.get('texra.toolUse.requireBashApproval')).toBe(false);
     // Security-adjacent scope pin: a per-workspace approval bypass must never
-    // be written to the global config target (see issue #7085).
+    // be written to the global config target (see issue #7085), nor to the
+    // project file a cloned repository controls.
     expect(config.lastTargetFor('texra.toolUse.requireBashApproval')).toBe(
-      'workspace',
+      'local',
     );
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,

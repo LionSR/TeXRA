@@ -255,7 +255,7 @@ const structuredResult: RunEnd = {
 // as a launch or a resume of that run would, and the hold carries the run's
 // claim, which the stub session answers. One registry stub for every stub
 // session, so sessions compare equal.
-const fenceRoster = () =>
+const fenceLanes = () =>
   new RunRegistry({
     runView: () => undefined,
     commit: () => Effect.void,
@@ -272,7 +272,7 @@ const fenceRoster = () =>
     fork: testRunFork,
     pinPlugins: pinNoPlugins,
   });
-let lanes = fenceRoster();
+let lanes = fenceLanes();
 const runs = {
   holdInactiveRun: (runId: RunId) => lanes.holdInactiveRun(runId),
 };
@@ -438,7 +438,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lanes = fenceRoster();
+    lanes = fenceLanes();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     launchedRows.clear();
@@ -1299,7 +1299,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     Effect.gen(function* () {
       // The logical call identity is a journal key, never a run id: each
       // attempt derives its own, and the one the runner launches is the id its
-      // child stream and roster expose, so a host's skip/retry finds the row.
+      // child stream and run registry expose, so a host's skip/retry finds the row.
       // No `run.result` manifest under the failed row: nothing was delivered,
       // which is the one failed shape another attempt may follow.
       probeAnswers(

@@ -126,7 +126,7 @@ describe('CLI init command', () => {
       .mockReset()
       .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
     // The command threads the stores this call hands back into the model
-    // access list and the roster's visibility read, so the mock returns the
+    // access list and the workspace agents' visibility read, so the mock returns the
     // installed host's own stores.
     const host = installedHost();
     mocks.initCliPlatform.mockReset().mockReturnValue(
@@ -249,7 +249,6 @@ describe('CLI init command', () => {
         readonly path?: string;
         readonly agent?: string;
         readonly model?: string;
-        readonly approvalPolicy?: string;
         readonly outputFormat?: string;
         readonly gitignore?: string;
         readonly config?: unknown;
@@ -261,13 +260,11 @@ describe('CLI init command', () => {
         path: path.join(root, '.texra', 'config.json'),
         agent: 'assistant',
         model: 'deepseekproT',
-        approvalPolicy: 'ask',
         outputFormat: 'text',
         gitignore: 'created',
         config: {
           'texra.model': 'deepseekproT',
           'texra.outputFormat': 'text',
-          'texra.approvalPolicy': 'ask',
           'texra.chat': { agent: 'assistant', model: 'deepseekproT' },
         },
       },

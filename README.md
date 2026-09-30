@@ -66,7 +66,7 @@ In the terminal:
 ```sh
 texra chat                                  # interactive tool-use session
 texra run polish --input paper.tex          # one-shot workflow
-texra multi-agent run physicist --instruction "Check this derivation"  # named team
+texra team run physicist --instruction "Check this derivation"  # named team
 ```
 
 Run history and agent settings are shared between both surfaces.
@@ -83,8 +83,8 @@ Five built-in presets cover the most common research disciplines:
 | **Lean Project**       | Mathlib search, tactic simplification, blueprint-driven formalization            |
 | **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
-Pick a team in **Settings → Agents → Teams**, or with `texra multi-agent
-run <preset>`. Or define your own roster in YAML.
+Pick a team in **Settings → Agents → Teams**, or with `texra team
+run <preset>`. Or save the agents you have shown as your own team.
 
 ## Agents
 
@@ -98,10 +98,11 @@ access: `research`, `numerics`, `review`, `presenter`, `latexFixer`,
 software-engineering line — `engineer`, `coder`, `codeReviewer`,
 `testEngineer`, `codeSimplifier`.
 
-**Specialists**, also bundled: `orchestrator`, `search`, `simplifier`,
-`criticize`, `firstread`, `logic`, `notation`, `enhance`, `devise`, `apply`,
-`generic`, `progressCheck`, and the Lean line — `leanOrchestrator`,
-`leanBlueprint`, `leanSearch`, `leanSimplifier`.
+**Other bundled agents**: the workflow passes `apply`, `criticize`,
+`devise`, `enhance`, `firstread`, `generic`, `logic` and `notation`, the
+tool-use agents `orchestrator`, `search`, `simplifier`, `prover` and
+`progressCheck`, and the Lean line, `leanOrchestrator`, `leanBlueprint`,
+`leanSearch` and `leanSimplifier`.
 
 Every tool call is gated by per-stream approval. Optional YOLO mode
 skips approval for autonomous runs.

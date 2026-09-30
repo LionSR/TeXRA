@@ -69,7 +69,7 @@ function manualPlan(overrides: Partial<TeamRunPlan> = {}): TeamRunPlan {
   };
 }
 
-/** The list-backed stand-in for the roster resolver the hosts pass. */
+/** The list-backed stand-in for the agent list resolver the hosts pass. */
 function fromCatalog<T extends TeamCatalogAgent>(
   getAgents: (category: AgentCategory) => readonly T[],
 ) {
@@ -374,7 +374,7 @@ describe('resolveTeamLaunch', () => {
           workflow: ['builtInWorkflow:writer'],
           toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
-        cli: { multiAgentPresetId: 'custom-team' },
+        cli: { teamId: 'custom-team' },
       },
       missingNames: [],
     });

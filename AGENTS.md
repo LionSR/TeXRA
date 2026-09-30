@@ -163,6 +163,12 @@ is never part of `npm test`. Each suite gates itself on its route's key and
 skips without it; CI runs it only on the `live-llm` label
 (`.github/workflows/live-llm.yml`).
 
+`packages/cli/scripts/validate-journeys.mjs` is the end-to-end sibling: the
+polish, latexFixer, latexdiff and citations journeys run through the real
+`texra run` NDJSON on a cheap model and pass on a LaTeX build of the files they
+leave behind. It runs nightly and on the `live-journeys` label
+(`.github/workflows/live-journeys.yml`), never in `npm test`.
+
 ### Scoping the test run
 
 `npm test` runs every suite under `src/test-kernel/`. It is the gate CI enforces
@@ -546,6 +552,10 @@ never read again, settings included) and refuses one of a newer schema. Row
 kinds carry their own versions (`src/shared/schemas/rowVersions.ts`), read by
 the row codec (`rowCodec.ts`) alone; until the 1.0 release freezes them, every
 kind is unreleased and changes with no upcaster and no bump.
+
+`config.json` is additive-only from 1.0 (ruled 2026-09-30): a key may be added,
+and a released key keeps its meaning, so no retired-key list and no rewrite of
+old files is kept.
 
 ### ES2023+ Patterns
 

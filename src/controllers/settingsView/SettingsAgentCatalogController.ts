@@ -2,7 +2,7 @@
 import { Effect, Result } from 'effect';
 
 // Local imports
-import type { AgentRosterController } from '@agent/roster/AgentRosterController';
+import type { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
@@ -28,12 +28,15 @@ interface SettingsAgentCatalogEntry {
   description?: string;
   path?: string;
   tools?: string[];
+  basedOn?: string;
 }
 
 interface SettingsAgentCatalogControllerDeps {
   repoState: StateStore;
-  roster: AgentRosterController<SettingsAgentCatalogEntry>;
+  workspaceAgents: WorkspaceAgentsController<SettingsAgentCatalogEntry>;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
+  /** The source of the changed bundled agent a customized copy overrides. */
+  newerBuiltInOf(entry: SettingsAgentCatalogEntry): AgentSource | undefined;
   now?: () => number;
 }
 
@@ -51,7 +54,7 @@ export class SettingsAgentCatalogController {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       );
     });
   }
@@ -90,7 +93,10 @@ export class SettingsAgentCatalogController {
   getPresetToolUseRoot(toolUseAgents: string[], presetId?: string) {
     return Effect.gen({ self: this }, function* () {
       const knownPreset = presetId
-        ? findTeamPreset(yield* this.deps.roster.allPresets(), presetId)
+        ? findTeamPreset(
+            yield* this.deps.workspaceAgents.allPresets(),
+            presetId,
+          )
         : undefined;
       const preset: TeamPreset = knownPreset ?? {
         id: 'settings-preview',
@@ -105,7 +111,7 @@ export class SettingsAgentCatalogController {
       return planTeamRun(preset, {
         resolveAgent: (category, identifier) =>
           category === 'toolUse'
-            ? this.deps.roster.resolveAgent(category, identifier)
+            ? this.deps.workspaceAgents.resolveAgent(category, identifier)
             : undefined,
       }).rootAgent?.name;
     });
@@ -115,7 +121,9 @@ export class SettingsAgentCatalogController {
     return Effect.gen({ self: this }, function* () {
       const trimmedName = name.trim();
       const visible = yield* Effect.all(
-        byCategory((category) => this.deps.roster.getVisibleAgents(category)),
+        byCategory((category) =>
+          this.deps.workspaceAgents.getVisibleAgents(category),
+        ),
       );
       const agents = byCategory((category) =>
         visible[category].map((entry) => entry.name),
@@ -129,7 +137,7 @@ export class SettingsAgentCatalogController {
       };
 
       return yield* this.deps.repoState
-        .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+        .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
           Result.succeed([...presetRecords(stored), preset]),
         )
         .pipe(Effect.as(preset));
@@ -141,10 +149,10 @@ export class SettingsAgentCatalogController {
       const target = yield* this.getCustomPreset(presetId);
       if (!target) return null;
 
-      return yield* this.deps.roster
+      return yield* this.deps.workspaceAgents
         .removeTeamPreset(presetId, () =>
           this.deps.repoState
-            .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+            .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
               Result.succeed(
                 presetRecords(stored).filter(
                   (record) => !isObject(record) || record.id !== presetId,
@@ -161,7 +169,7 @@ export class SettingsAgentCatalogController {
    * Enable or disable every agent from one source within a category.
    *
    * The identical-list short-circuit is load-bearing: without it every
-   * "enable all" click writes the same roster back and republishes the
+   * "enable all" click writes the same agent list back and republishes the
    * catalog for no change.
    */
   setAllAgentsEnabled(input: {
@@ -189,7 +197,7 @@ export class SettingsAgentCatalogController {
       ) {
         return;
       }
-      return yield* this.deps.roster.setEnabledAgentKeys(
+      return yield* this.deps.workspaceAgents.setEnabledAgentKeys(
         input.category,
         updated,
       );
@@ -206,13 +214,15 @@ export class SettingsAgentCatalogController {
     });
   }
 
-  /** The enabled keys; an `all` roster enables every visible agent, never a
+  /** The enabled keys; an `all` agent list enables every visible agent, never a
    *  custom agent the user hid. */
   private enabledKeys(category: AgentCategory) {
     return Effect.gen({ self: this }, function* () {
       return (
-        (yield* this.deps.roster.getEnabledAgentKeys(category)) ??
-        (yield* this.deps.roster.getVisibleAgents(category)).map(agentKeyOf)
+        (yield* this.deps.workspaceAgents.getEnabledAgentKeys(category)) ??
+        (yield* this.deps.workspaceAgents.getVisibleAgents(category)).map(
+          agentKeyOf,
+        )
       );
     });
   }
@@ -229,6 +239,7 @@ export class SettingsAgentCatalogController {
       hasPath: Boolean(entry.path),
       filePath: entry.path || undefined,
       tools: entry.tools,
+      newerBuiltIn: this.deps.newerBuiltInOf(entry),
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.

@@ -10,6 +10,7 @@ import {
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
 import { installPlugins, removePlugin } from '@common/plugins/installedPlugins';
+import { pluginDataDir } from '@common/plugins/pluginHooks';
 import {
   disablePlugin,
   enablePlugin,
@@ -385,6 +386,16 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         // A local plugin is referenced in place, so removing it keeps it.
         yield* Effect.promise(() =>
           fs.access(path.join(plugin, 'skills', 'load-paper', 'SKILL.md')),
+        );
+        // A removal whose plugin-data delete failed is finished by removing
+        // again, though the plugin directory is already gone.
+        const orphan = pluginDataDir(env.globalStorage, 'paper-protocol');
+        yield* Effect.promise(() => fs.mkdir(orphan, { recursive: true }));
+        expect(yield* removePlugin('paper-protocol', env)).toMatchObject({
+          leftover: true,
+        });
+        yield* Effect.promise(() =>
+          expect(fs.access(orphan)).rejects.toThrow(),
         );
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );

@@ -28,7 +28,7 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_ENABLED_DEFAULT,
   AgentModePresetSchema,
-  AgentRosterSelectionSchema,
+  WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -48,12 +48,14 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  GOAL_MAX_COST_SETTING,
+  GoalMaxCostSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
   ModelRetryMaxAttemptsSchema,
-  INHERITED_AGENT_ROSTER,
+  INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
@@ -65,12 +67,6 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 export const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
 export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
-
-/** Default for `texra.git.markCommits` when the workspace has never toggled it. */
-const DEFAULT_GIT_MARK_COMMITS = true;
-
-/** Default for `texra.git.worktreeSupport` when the workspace has never toggled it. */
-const DEFAULT_GIT_WORKTREE_SUPPORT = false;
 
 /**
  * Keep file-oriented tools inside the active working directory unless the
@@ -86,9 +82,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * - **`slot`** — where the value is stored (`config` / `workspaceState` /
  *   `repoState` / `globalState`); the same on every host.
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
- *   CLI `/config`, the Models tab's per-provider controls). Replaces the
- *   display half of the old `hosts` field, `settingsViewSnapshot`, and the
- *   Models tab's own `PROVIDER_SETTINGS` catalog.
+ *   CLI `/config`, the Models tab's per-provider controls).
  * - **`onWrite`** — write-time consequences declared once, so the CLI form and
  *   the webview Models tab cannot enforce different rules (the Kimi Code /
  *   OpenRouter mutual exclusion used to exist on one path only).
@@ -114,12 +108,12 @@ export type SettingHost = (typeof SETTING_HOSTS)[number];
 type SettingStore = 'config' | 'workspaceState' | 'repoState' | 'globalState';
 
 export type SettingsViewSnapshot =
+  | 'agents'
   | 'approval'
   | 'git-author'
   | 'latex'
   | 'memory'
   | 'models'
-  | 'multi-agent'
   | 'profile'
   | 'skills'
   | 'telemetry';
@@ -182,8 +176,8 @@ export interface StateSettingEntry {
   readonly category?: string;
   /** Where the value is stored, the same on every host. */
   readonly slot: SettingStore;
-  /** Persistence target for config-backed settings; workspace when omitted. */
-  readonly configTarget?: 'global' | 'workspace';
+  /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
+  readonly configTarget?: 'global' | 'workspace' | 'local';
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -388,20 +382,24 @@ const CORE_SETTING_ROWS: Record<
     schema: ChildRunConcurrencyBudgetSchema,
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
-    category: 'multi-agent',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    category: 'agents',
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
-  // The provider toggles below are `configTarget: 'global'`:
-  // they describe how you talk to a provider, not a property of one project,
-  // and that is the scope they were written at before the catalog collapse
-  // routed them through the shared write path. The target restores global
-  // writes and exempts them from the extension's open-workspace write guard,
-  // while Models-tab and runtime reads both keep merged-config semantics. A
-  // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173. Only
-  // server-side state is a choice a user makes (it decides data retention);
-  // the transport knobs have no settings-view row and are set in
-  // `.texra/config.json`.
+  // Global: a committed project config must not raise or remove the user's cap.
+  'goal.maxCostUsd': {
+    schema: GoalMaxCostSchema,
+    configTarget: 'global',
+    title: 'Goal spend cap (USD)',
+    description: GOAL_MAX_COST_SETTING.description,
+    category: 'tools',
+    surfaces: { settingsView: 'approval', cliConfig: true },
+  },
+  // The provider toggles below are `configTarget: 'global'`: they describe how
+  // you talk to a provider, not a property of one project. Writes go to the
+  // global file past the open-workspace write guard; reads stay merged, so a
+  // workspace override stays honored (stranded values: #11173). Only
+  // server-side state is a user choice (data retention); the transport knobs
+  // have no settings-view row and live in `.texra/config.json`.
   'model.gpt5ReasoningSummary': {
     schema: z.boolean().prefault(false),
     configTarget: 'global',
@@ -447,22 +445,21 @@ const CORE_SETTING_ROWS: Record<
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   },
   // No `configTarget`: both runtime readers resolve the *merged* config value
-  // through `readSettingFrom`, so the row must not narrow itself to the
-  // global scope — a workspace override the runtime honors would then be
-  // invisible in (and unwritable from) the settings view.
+  // through `readSettingFrom`, so narrowing the row to the global scope would
+  // hide (and block writes to) a workspace override the runtime honors.
   'model.compactionThresholdPercent': {
     schema: ModelCompactionThresholdPercentSchema,
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'model.retry.maxAttempts': {
     schema: ModelRetryMaxAttemptsSchema,
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
@@ -477,7 +474,7 @@ const CORE_SETTING_ROWS: Record<
     category: 'model',
     // This bucket controls snapshot/rebroadcast routing, not tab placement;
     // reuse it for the Subscriptions control because no subscriptions bucket exists.
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
     onWrite: { invalidatesModelOptions: true },
   },
   'xaiGrok.preferSubscription': {
@@ -613,6 +610,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
@@ -620,6 +618,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Require approval for shell commands',
     description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
 };
@@ -678,9 +677,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
+      'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slot: 'config',
+    configTarget: 'local',
     enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -726,7 +726,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   surfacedSetting({
     key: WorkspaceStateKey.GIT_MARK_COMMITS,
-    schema: z.boolean().prefault(DEFAULT_GIT_MARK_COMMITS),
+    schema: z.boolean().prefault(true),
     title: 'Mark agent commits',
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
@@ -758,7 +758,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
   surfacedSetting({
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-    schema: z.boolean().prefault(DEFAULT_GIT_WORKTREE_SUPPORT),
+    schema: z.boolean().prefault(false),
     title: 'Subagent worktrees',
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
@@ -767,16 +767,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 
-  // --- Agent roster ----------------------------------------------------------
-  // Written and read by the roster and the settings view's agent catalog,
+  // --- Workspace agents ----------------------------------------------------------
+  // Written and read by the agent list and the settings view's agent catalog,
   // which no catalog-driven UI renders.
   {
-    key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
+    key: WorkspaceStateKey.WORKSPACE_AGENTS,
+    schema: WorkspaceAgentsSelectionSchema.prefault(INHERITED_WORKSPACE_AGENTS),
     slot: 'repoState',
   },
   {
-    key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    key: WorkspaceStateKey.CUSTOM_TEAMS,
     schema: z.array(AgentModePresetSchema).prefault([]),
     slot: 'repoState',
   },
@@ -786,7 +786,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slot: 'repoState',
   },
 
-  // --- Multi-agent coordination --------------------------------------------
+  // --- Agent coordination ---------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
   // maintainer ruling (.agents/docs/archived/simplification/2026-08-15-shared-contracts-and-retirement.md
   // §2.1): they describe how *this user* wants child runs handled, not anything
@@ -800,9 +800,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Allow orchestrator cancellation',
     description:
       'Allow the orchestrator to stop subagents that are no longer needed.',
-    category: 'multi-agent',
+    category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   }),
   surfacedSetting({
     key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
@@ -810,9 +810,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Keep subagents running',
     description:
       'Let active subagents continue when the orchestrator is stopped.',
-    category: 'multi-agent',
+    category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    surfaces: { settingsView: 'agents', cliConfig: true },
   }),
 
   // --- Memory ---------------------------------------------------------------
@@ -1246,7 +1246,7 @@ export function settingsViewSnapshotEntries(
 }
 
 /**
- * The `/config` roster: every row the CLI panel renders, across both catalog
+ * The `/config` catalog: every row the CLI panel renders, across both catalog
  * tiers. `surfaces.cliConfig` is the single predicate.
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =

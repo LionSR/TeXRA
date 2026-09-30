@@ -377,31 +377,33 @@ describe('CliConfigForm API-key status lifecycle', () => {
 // `it.live`, not `it.effect`: mounting the slash-command form polls Ink's
 // stdin listeners with `waitFor`, which needs a clock that actually advances.
 describe('/config slash command wiring', () => {
-  it.live('wires the roster and reads through the injected CLI stores', () =>
-    Effect.gen(function* () {
-      const { stores, repoState } = makeFakeSettingsStores('cli');
-      // Seed the repository slot the CLI reads the git settings from.
-      // Awaited, so the read below cannot race the write.
-      yield* repoState.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
+  it.live(
+    'wires the agent list and reads through the injected CLI stores',
+    () =>
+      Effect.gen(function* () {
+        const { stores, repoState } = makeFakeSettingsStores('cli');
+        // Seed the repository slot the CLI reads the git settings from.
+        // Awaited, so the read below cannot race the write.
+        yield* repoState.update(WorkspaceStateKey.GIT_MARK_COMMITS, false);
 
-      registerBuiltinSlashCommands({
-        secrets: new FakeSecrets(),
-        stores,
-        runtime: testRuntime(),
-        runtimeSession: testDefaultSession(),
-        configStores: stores,
-      });
-      expect(openCliSlashCommandForm('config', '')).toBe(true);
-      expect(activeForm.get()?.commandName).toBe('config');
+        registerBuiltinSlashCommands({
+          secrets: new FakeSecrets(),
+          stores,
+          runtime: testRuntime(),
+          runtimeSession: testDefaultSession(),
+          configStores: stores,
+        });
+        expect(openCliSlashCommandForm('config', '')).toBe(true);
+        expect(activeForm.get()?.commandName).toBe('config');
 
-      const props = yield* Effect.promise(() => renderConfigFormProps());
-      expect(props.entries.map((entry) => entry.key)).toEqual(
-        CLI_STATE_SETTINGS.map((entry) => entry.key),
-      );
+        const props = yield* Effect.promise(() => renderConfigFormProps());
+        expect(props.entries.map((entry) => entry.key)).toEqual(
+          CLI_STATE_SETTINGS.map((entry) => entry.key),
+        );
 
-      const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      expect(props.readValue(markCommits)).toBe(false);
-    }),
+        const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+        expect(props.readValue(markCommits)).toBe(false);
+      }),
   );
 
   // Regression: `/config` used to persist `texra.approvalPolicy` with a bare

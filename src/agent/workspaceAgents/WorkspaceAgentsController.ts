@@ -9,8 +9,8 @@ import type {
 } from '@platform/interfaces';
 import type {
   AgentCategory,
-  AgentRosterCategorySelection,
-  AgentRosterSelection,
+  WorkspaceAgentsCategorySelection,
+  WorkspaceAgentsSelection,
   AgentSource,
   ByCategory,
 } from '@shared/schemas';
@@ -19,9 +19,9 @@ import {
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
-  AgentRosterSelectionSchema,
+  WorkspaceAgentsSelectionSchema,
   byCategory,
-  INHERITED_AGENT_ROSTER,
+  INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import {
   clearDefaultTeamId,
@@ -33,15 +33,15 @@ import { unique } from '@utils/core';
 
 import {
   forgetHiddenAgent,
-  readAgentRosterSelection,
+  readWorkspaceAgentsSelection,
   selectedIdentifiers,
   recordCustomChoices,
   serializeWorkspaceWrite,
   unlistedCustomAgents,
   visibleAgents,
-} from './rosterWorkspaceState';
+} from './workspaceAgentsState';
 
-export interface AgentRosterEntry {
+export interface WorkspaceAgentsEntry {
   readonly name: string;
   readonly source: AgentSource;
   readonly category: AgentCategory;
@@ -49,8 +49,8 @@ export interface AgentRosterEntry {
 
 export class InvalidAgentTeamError extends Error {}
 
-export interface AgentRosterControllerDeps<
-  Entry extends AgentRosterEntry = AgentRosterEntry,
+export interface WorkspaceAgentsControllerDeps<
+  Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
@@ -70,14 +70,14 @@ export interface AgentRosterControllerDeps<
   ) => Entry | undefined;
 }
 
-export class AgentRosterController<
-  Entry extends AgentRosterEntry = AgentRosterEntry,
+export class WorkspaceAgentsController<
+  Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
-  constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
+  constructor(private readonly deps: WorkspaceAgentsControllerDeps<Entry>) {}
 
   /**
    * Every selectable team preset: the shared catalog (`teamPresets`) over the
-   * host's custom presets. The one list roster pickers render and every
+   * host's custom presets. The one list agent pickers render and every
    * preset lookup reads — a form composing its own preset list can drift from
    * what {@link setTeam} accepts.
    */
@@ -89,13 +89,13 @@ export class AgentRosterController<
     });
   }
 
-  /** Resolve one stored identifier by the roster's identity rule. */
+  /** Resolve one stored identifier by the workspace agents' identity rule. */
   resolveAgent(category: AgentCategory, identifier: string) {
     return this.deps.resolveAgent(category, identifier);
   }
 
   private getSelection() {
-    return readAgentRosterSelection(this.deps.repoState);
+    return readWorkspaceAgentsSelection(this.deps.repoState);
   }
 
   getDefaultTeamId() {
@@ -181,7 +181,7 @@ export class AgentRosterController<
   }
 
   private selectionKeys(
-    selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
+    selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
     category: AgentCategory,
   ) {
     return Effect.gen({ self: this }, function* () {
@@ -234,7 +234,7 @@ export class AgentRosterController<
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */
-  private teamIdOf(selection: AgentRosterSelection) {
+  private teamIdOf(selection: WorkspaceAgentsSelection) {
     return Effect.gen({ self: this }, function* () {
       if (selection.kind === 'inherit') {
         return yield* this.getDefaultTeamId();
@@ -254,7 +254,7 @@ export class AgentRosterController<
    * it: what the workspace effectively runs, and — when the selection names a
    * team preset that no longer exists — which team id went missing.
    */
-  private resolveEffectiveSelection(selection: AgentRosterSelection) {
+  private resolveEffectiveSelection(selection: WorkspaceAgentsSelection) {
     return Effect.gen({ self: this }, function* () {
       const teamId = yield* this.teamIdOf(selection);
       if (teamId && !(yield* this.hasPreset(teamId))) {
@@ -287,17 +287,17 @@ export class AgentRosterController<
   }
 
   private writeSelection(
-    selection: AgentRosterSelection,
+    selection: WorkspaceAgentsSelection,
   ): Effect.Effect<void, StateWriteFailed> {
-    const parsed = AgentRosterSelectionSchema.parse(selection);
+    const parsed = WorkspaceAgentsSelectionSchema.parse(selection);
     return this.deps.repoState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      WorkspaceStateKey.WORKSPACE_AGENTS,
       parsed,
     );
   }
 
   private setSelection(
-    selection: AgentRosterSelection,
+    selection: WorkspaceAgentsSelection,
   ): Effect.Effect<void, StateWriteFailed> {
     return serializeWorkspaceWrite(
       this.deps.repoState,
@@ -339,7 +339,7 @@ export class AgentRosterController<
   }
 
   setCustom(
-    agentKeys: ByCategory<AgentRosterCategorySelection>,
+    agentKeys: ByCategory<WorkspaceAgentsCategorySelection>,
   ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.repoState,
@@ -408,7 +408,7 @@ export class AgentRosterController<
   }
 
   setInherited(): Effect.Effect<void, StateWriteFailed> {
-    return this.setSelection(INHERITED_AGENT_ROSTER);
+    return this.setSelection(INHERITED_WORKSPACE_AGENTS);
   }
 
   setAgentEnabled(input: {

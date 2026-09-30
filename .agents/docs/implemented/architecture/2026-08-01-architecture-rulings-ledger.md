@@ -786,6 +786,18 @@ tools.
 
 ## Post-auth cache invalidation is a permanent host boundary; only the sign-out catalog refresh is shared (recorded 2026-09-23; moved here from the deleted `src/auth/authFlowEffects.ts` by [#13054](https://github.com/LionSR/TeXRA/issues/13054))
 
+**Superseded 2026-09-30 by D1** (below, "1.0 identity, account and
+telemetry"): TeXRA sign-in leaves all three hosts, so the TeXRA-account
+transitions this entry rules on go with it, and its one shared step,
+`invalidateRemoteAgentsAfterSignOut`, was already deleted with the remote
+agent catalog (#13442). Provider OAuth (ChatGPT/Codex, Grok/xAI) stays, but
+the code runs no post-sign-in invalidation sequence for it: each host's
+sign-in writes the subscription preference through
+`src/controllers/modelAccess/subscriptionProviders.ts`
+(`setPreferSubscription`) and model options are recomputed from the stores
+on read. Nothing of this boundary survives for provider OAuth. The text
+below is the record.
+
 **Question.** Should the post-sign-in and post-sign-out cache-invalidation
 sequence that each host runs be collapsed into one shared coordinator?
 
@@ -820,6 +832,7 @@ the run-lifetime pin are deleted: a step pins a generation of the live
 catalog, and a plugin's layer is one refcounted `RcMap` entry shared by the
 generations that hold it. "Plugins may own layers" stands, and the entry
 below it ("Plugins own typed tables at their seams") records where they live.
+Its Forbids clause "a child re-resolving its parent's plugin set" also stands.
 
 **Question.** The plugin architecture (the owner decision of 2026-09-23 in the
 `defineTool` amendment above) makes a run's toolset a composition value
@@ -920,3 +933,144 @@ plugin owner. Inquiry and workflow-checkpoint rows are aggregate kinds the core
 `SessionRequests` and resume paths read, and `InquiryRecords` stays core. The
 SDK's plugin set (`TexraProcessOptions.plugins`) lands with the process layer
 graph (move 4).
+
+---
+
+## Rulings from the 2026-09-30 decision board (ruled 2026-09-30)
+
+The owner took every decision on the board as recommended. Each entry below
+is closed; its reopen trigger names the one event that reopens it.
+
+### 1.0 identity, account and telemetry (D1-D3)
+
+**Ruling.** 1.0 is a self-improving harness with a theorist bundle. The
+theorist is the first plugin bundle (agents, skills, presets, hooks); the
+software-engineering surface ships as a separate bundle; the CLI and SDK are
+the primary headless host.
+
+- **D1.** TeXRA sign-in is removed from all three hosts (the Account tab,
+  `texra login`, the host sign-in UI). Provider OAuth (ChatGPT/Codex
+  subscription, Grok/xAI) and API-key providers (OpenRouter among them) are
+  not the TeXRA account and stay. The
+  hosted server stays until its sunset.
+- **D2.** Telemetry is anonymous metadata, on by default, with a random
+  install ID: a UUIDv4 persisted in each host's global state, never derived
+  from hardware, hostname, account, email or a provider login, not created or
+  sent while any opt-out is active, and reset by deleting the state key.
+  A one-time first-run notice says an anonymous install ID is sent. Opt-out
+  is the setting, `TEXRA_NO_TELEMETRY`, `DO_NOT_TRACK` (already honoured) and,
+  in the extension, `vscode.env.isTelemetryEnabled`. Metadata only: agent,
+  model id, token counts, outcome, duration, host and version, from the
+  run-end summary; no content, paths or error text.
+- **D3.** No OpenTelemetry export in 1.0.
+
+**Why.** The account gated nothing the bundled agents needed, and a sign-in
+surface on three hosts is a fourth owner of identity. Usage counts still
+answer which agents and models get used. Peers use a random install uuid
+(aider, Goose, Zed) or a machine id (Cline); a random ID carries no hardware
+identity, which is why the owner chose it over a machine id.
+
+**Reopen.** A named consumer needs a TeXRA identity (billing, sync), or a
+stable ID becomes derivable from something other than the random key.
+
+### No daemon; several processes on one store (D4)
+
+**Ruling.** There is no daemon. The CLI or SDK process is the unattended
+runner. The permanent shape is several processes on one store, each aggregate
+held by one claim (single owner).
+
+**Why.** A daemon moves the run loop out of every host and calls host-only
+capabilities back across a process boundary
+(`2026-09-26-session-database-off-host-thread.md` §6); claims and the
+`data_version` poll already give three hosts one store.
+
+**Reopen.** A run that must outlive every host process and cannot be a CLI
+or SDK process.
+
+### Run directory contents (D5)
+
+**Ruling.** A run's retained outputs live in SQLite. Files hold compiler
+scratch only. Format work belongs to the storage lanes.
+
+**Reopen.** A retained output that measurably cannot live in a row or blob.
+
+### Approval rows and web_fetch posture (D6-D7)
+
+**Ruling.** Approval settings are never read from the committed project
+config file, so a repository cannot grant its own approvals; users keep
+project scope through a user-level override (D6).
+`web_fetch` prompts per host with a shipped allowlist; SSRF and redirect
+hardening ships regardless (D7).
+
+**Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
+
+### The `defineTool` freeze admits guard kinds (D8)
+
+**Ruling.** Amends the freeze entry above ("`defineTool`'s default `R` is
+frozen SDK surface"): the tool contract may carry guard kinds for network,
+process and MCP calls, so external tool calls stop being approved as shell.
+The rest of the freeze stands; move 9 of the session-core note records it.
+
+**Reopen.** A guard kind is proposed that no tool family needs.
+
+### Plugin gating, presets with an optional root, no "roster" (D9-D10)
+
+**Ruling.** Plugin skills and agents are gated by the plugin switch (D9),
+reversing the plugin note's "not gated" line once the code lands. Custom
+teams stay presets: saved switches plus an optional root agent, because one
+switch should hide everything a plugin contributes and a second team concept
+is a dual system. The words
+"roster" and "multi-agent preset" retire (D10).
+
+**Reopen.** A team needs state a preset cannot hold.
+
+### SDK and typed-RPC deferral (D11)
+
+**Ruling.** Hooks and data plugins are the extension mechanism. Typed-RPC
+code plugins, `History.writer`, the open schema registry and `PluginModule`
+are not built until a named plugin cannot be MCP + hooks + data. The SDK is
+not advertised until a consumer is named.
+
+**Reopen.** That named plugin or consumer exists.
+
+### `config.json` is additive-only (D12)
+
+**Ruling.** From 1.0 a key may be added and a released key keeps its meaning.
+No retired-key list, no rewrite of old files (AGENTS.md "Compatibility and
+format retirement").
+
+**Reopen.** A released key cannot keep its meaning without a security cost.
+
+### Context overflow and journey checks (D13-D14)
+
+**Ruling.** A context overflow in a tool-use run becomes a forced compaction
+retry, not a failed run (D13). Nightly and label-triggered journey checks run
+on cheap models only, `deepseek41T` and `glm53` (D14).
+
+**Reopen.** A forced retry loops without shrinking the context (D13); a
+journey needs a model the cheap tier cannot drive (D14).
+
+### Considered and refused
+
+The survey's four candidates are refused; do not re-propose them as
+specified.
+
+- **The daemon build**, for the reasons under D4.
+- **A merge queue.** Main failed validation twice in 56 completed runs, both
+  the dead-code ratchet after two PRs combined badly, each fixed in about an
+  hour. At about 8 minutes per entry and 50 to 60 merges a day, a queue is
+  about 8 hours of serial time a day, re-runs the macOS jobs billed at 10x
+  Linux, and adds per-PR latency against merge-on-green. Reopen: main breaks
+  from combined merges often enough that the fixes cost more than the queue.
+- **The survey's C2, one plugin switch table (kind, id, scope) replacing the
+  five on/off stores** (`DISABLED_TOOLS`, `DISABLED_SKILLS`,
+  `DISABLED_SKILL_SOURCES`, `INSTALLED_PLUGINS.enabled`,
+  `HIDDEN_CUSTOM_AGENTS`). State keys are already rows in `current_value`, so
+  the merge is a re-layout, not a deletion, and it would split
+  `InstalledPlugin.enabled` from the trust record it shares a row with.
+  Reopen: a switch family is needed for a reason other than tidiness and can
+  keep enable and trust in one row.
+- **An effects taxonomy.** D7 ships as a network member on the existing
+  `ToolGuard` (D8) with a shipped host allowlist, and memory-write gating is
+  dropped, so nothing reads a taxonomy. Reopen: a tool family needs an effect
+  class no guard kind can express.

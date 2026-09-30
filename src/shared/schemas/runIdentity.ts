@@ -6,7 +6,7 @@ import { agentName } from './agent';
 /**
  * What kind of thing a run is, declared once at the launch site and carried
  * on `run.start`. The struct itself travels: on `run.start`, on `RunView`,
- * on roster rows, and hosts add display fields beside it, never
+ * on child rows, and hosts add display fields beside it, never
  * re-encodings of it.
  *
  * This is NOT `AgentCategory`: category is the agent's run-mode fact

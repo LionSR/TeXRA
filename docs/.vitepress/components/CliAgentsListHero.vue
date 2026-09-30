@@ -8,7 +8,7 @@
 // width (the real command prints them in full).
 //
 // Built on <TermWindow>; .mockup-scoped and token-only, so it flips with the
-// docs theme. A believable static slice of the catalog, not the full roster.
+// docs theme. A believable static slice of the catalog, not the full list.
 const rows = [
   {
     category: 'workflow',

@@ -56,7 +56,7 @@ interface HostSnapshotSourceOptions {
   root: string | undefined;
   /**
    * The owning session's three setting slots: its workspace-scoped team and
-   * roster state, its configuration, and the process global state. The model
+   * agent list state, its configuration, and the process global state. The model
    * catalog's availability read resolves the routing switches and the two
    * "prefer my subscription" preferences against these, so a host with several
    * open projects in one process answers for the project this source belongs
@@ -101,7 +101,7 @@ export interface HostSnapshotSource {
     never,
     AgentCatalogServices | LanguageModel | ChildProcessSpawner
   >;
-  /** The agent, team, and model catalogs changed (a roster edit, a
+  /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,

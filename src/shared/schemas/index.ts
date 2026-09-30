@@ -4,7 +4,7 @@ export * from './jsonValue';
 export * from './agent';
 export * from './agentConfig';
 export * from './runIdentity';
-export * from './agentRoster';
+export * from './workspaceAgents';
 export * from './agentCliSettings';
 export * from './fileFields';
 export * from './fileTypes';

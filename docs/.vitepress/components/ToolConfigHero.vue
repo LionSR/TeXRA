@@ -17,7 +17,7 @@ import MockupFrame from './MockupFrame.vue';
     <aside class="board">
       <div class="board-tabs">
         <span class="bt bt-on"
-          ><wa-icon library="texra" name="pencil"></wa-icon> Launcher</span
+          ><wa-icon library="texra" name="pencil"></wa-icon> New task</span
         >
         <span class="bt"
           ><wa-icon library="texra" name="robot"></wa-icon> Progress</span

@@ -35,6 +35,7 @@ export class MemoryConfigProvider extends JsonConfigProvider {
     super({
       workspace: new MemoryConfigStore(),
       global: new MemoryConfigStore(),
+      local: new MemoryConfigStore(),
     });
   }
 }

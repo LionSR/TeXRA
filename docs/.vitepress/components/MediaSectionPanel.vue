@@ -1,5 +1,5 @@
 <script setup>
-// Frameless slice of the Launcher's Media file group (FILE_SELECT_CONFIGS in
+// Frameless slice of the New task view's Media file group (FILE_SELECT_CONFIGS in
 // store.ts), lifted out of FileSelectHero's MockupFrame so the figure focuses
 // on just the Media surface: the uppercase MEDIA label with its inline wand
 // "Auto-extract options" button, the right-aligned three-action toolbar (Add

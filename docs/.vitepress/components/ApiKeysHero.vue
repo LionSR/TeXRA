@@ -33,9 +33,6 @@ const rows = [
           ><wa-icon library="texra" name="robot"></wa-icon> Agents</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="users"></wa-icon> Multi-Agent</span
-        >
-        <span class="dt"
           ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon>
           Tools</span
         >

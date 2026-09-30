@@ -33,12 +33,12 @@ export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
       const denial =
         `Killing subagents is denied: the stored "Allow orchestrator cancellation" ` +
         `setting (${GlobalStateKey.ALLOW_ORCHESTRATOR_KILL}) is invalid ` +
-        `(${policy.cause}). Set it again in Settings > Multi-Agent.`;
+        `(${policy.cause}). Set it again in Settings > Agents > Advanced.`;
       yield* Effect.logWarning(denial).pipe(withLogChannel(CHANNEL));
       return denial;
     }
     return policy.value
       ? undefined
-      : 'Killing subagents is disabled. Enable it in Settings > Multi-Agent.';
+      : 'Killing subagents is disabled. Enable it in Settings > Agents > Advanced.';
   },
 );

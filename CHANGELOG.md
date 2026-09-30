@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
   Context shared by several runs is stored once per workspace, and another
   TeXRA process holding the history no longer freezes the window while it
   waits. Repository settings (the git commit identity, subagent worktrees,
-  the Codex and Claude Code controls, and the agent roster and teams) are
+  the Codex and Claude Code controls, and the enabled agents and teams) are
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
@@ -105,7 +105,7 @@ All notable changes to this project will be documented in this file.
   and `{% if IS_GOOGLE_MODEL %}` are no longer filled in when an agent's
   prompts are rendered. A prompt that still uses one renders it as empty, so
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
-  and the delegation roster an agent can see is still listed in the
+  and the delegation agents an agent can see is still listed in the
   descriptions of its delegation tools.
 - **Goal mode is a Tools plugin, and its switch replaces the
   `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
@@ -191,8 +191,43 @@ All notable changes to this project will be documented in this file.
   Saved session history from an earlier build is cleared once, since the
   stored shape of a model reply changed.
 
+- **A cloned repository can no longer loosen your approvals.** The approval
+  policy and the two approval switches (edits, shell commands) are now read
+  only from your own settings: per workspace, in your TeXRA storage, with a
+  value in your user configuration file as the default for every workspace. A
+  `.texra/config.json` that sets one of them is ignored, and each time the
+  project opens the host says so naming the key (a warning dialog in VS Code
+  and the desktop app, a message on stderr and in `texra doctor` in the
+  terminal), so a project that set `texra.approvalPolicy` (or a switch) there
+  needs it set again in the settings view or `/config`. `texra init` no longer
+  asks for an approval policy or writes one.
+
+- **`web_fetch` no longer follows a redirect into your network.** The
+  connection itself refuses any address that is not public (loopback, private,
+  link-local, cloud metadata), for the first request and every redirect hop;
+  before, a name that resolves to `127.0.0.1` (such as `localhost.`) or a
+  redirect from a public page to a private address was fetched. Behind an
+  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
+  address is refused.
+
 ### Features
 
+- **A customized built-in agent tells you when TeXRA ships a newer version.**
+  Built-in agents already update with the app; a custom copy with the same
+  name used to override the improved version forever without a word.
+  Customize now records which bundled version the copy started from
+  (a `basedOn:` line at the end of the file). When an update changes that
+  agent, the settings Agents page marks the copy and offers View built-in,
+  Reset to built-in, and Keep mine; `texra agents list` and `texra agents
+show` print the same notice, and the new `texra agents customize`,
+  `texra agents reset`, and `texra agents keep` commands make, reset, and
+  keep a copy from the terminal. An agent you wrote yourself under a built-in's name
+  is never flagged.
+- **Goal mode pauses at a spend cap.** An autonomous goal now stops between
+  turns once the run and its subagents have spent `texra.goal.maxCostUsd`
+  (default $5; `0` removes it; on the Tools page and in `/config`), withdraws
+  its auto-approval, and says why on the transcript. Raise the cap and re-arm
+  the goal to continue.
 - **Session history takes several times less disk** — long tool output,
   attached images and PDFs, and long prompts are stored compressed and
   only once per project: the same image attached in two runs, or a file's
@@ -342,6 +377,21 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
+  a sign-in row in the chat's account menu started the sign-in but left the
+  menu on screen, so the sign-in link, one-time code and `c` copy-link key
+  never appeared. The panel now switches to the sign-in progress as soon as a
+  row is chosen. In VS Code, when browser sign-in can't start, ChatGPT and
+  Grok sign-in offer a one-time code instead of failing.
+
+- **Auto-compaction and the context gauge measure the whole conversation.**
+  A tool-use run compacted on the text of its messages alone, so the
+  provider's own token count (which includes the system prompt and tool
+  definitions) never reached the compaction trigger; the trigger, the context
+  gauge and the output-length limit now all read the last response's reported
+  input plus output tokens and add an estimate for what was added since. The
+  gauge therefore counts the model's reply too.
+
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history
   query (`executions` on `/executions`) no longer fails with "Invalid string
@@ -417,8 +467,8 @@ All notable changes to this project will be documented in this file.
   already waiting leaves that request for you to answer (a headless run
   denies it).
 
-- **A custom agent you turned off stays off under the default roster** —
-  it reappeared in the selector whenever the roster resolved to all agents,
+- **A custom agent you turned off stays off under the default agents** —
+  it reappeared in the selector whenever the workspace agents resolved to all,
   which is the default for a new workspace. Choosing "All agents" still
   shows it again.
 - **Resuming after a vendor deleted its stored response no longer fails.**
@@ -939,6 +989,20 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **One word for saved teams.** The CLI, settings, setup assistant and guide
+  say "team" for a saved set of agents with an optional lead, and "agents" for
+  the set a workspace shows; "roster" and "multi-agent preset" are gone from
+  `texra config agents`, the `/config` form and the docs. The names under the
+  words changed to match: `texra multi-agent list|show|run` is now
+  `texra team list|show|run` (no alias). Machine-readable NDJSON kinds are
+  renamed: `agent-roster` (field `roster`) is `workspace-agents` (field
+  `agents`), `multi-agent-result` is `team-result`, `multi-agent-preset` is
+  `team`, and `multi-agent-preset-inspection` is `team-inspection`; update any
+  script that reads them. The VS Code command `texra.showMultiAgent` is now
+  `texra.showTeamSettings`, so a custom keybinding on the old id stops
+  working. The saved agent selection and saved custom teams moved to the state
+  keys `texra.workspaceAgents` and `texra.customTeams`; a selection or custom
+  team saved under the old keys is not read, so choose or save it again.
 - **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
   `/login`, whose form already signed you in and out and set subscription
   preferences; `/login status` prints what `/auth` did. The typed
@@ -993,10 +1057,10 @@ All notable changes to this project will be documented in this file.
   and prints help when either is not. What the launcher offered lives in that
   session: `/agent` for the root agent, `/model` for its model, `/resume` for
   history, `/login` for sign-in and keys, `/config` for settings. Start a
-  **multi-agent team** with `texra multi-agent run <preset>`; a resumed team
-  session still carries its scoped roster. The launcher's team step was the one
+  **team** with `texra team run <team>`; a resumed team
+  session still carries its scoped agents. The launcher's team step was the one
   way to start a preset-scoped team in the interactive TUI, and that path is
-  removed rather than replaced — use `texra multi-agent run`, or `/agent` in a
+  removed rather than replaced — use `texra team run`, or `/agent` in a
   chat for an unscoped session with the team's lead.
 - **`texra history show --export html` no longer takes `--assets-dir`** — the
   shared-assets export mode, which staged the trace viewer into a directory and
@@ -1156,8 +1220,8 @@ All notable changes to this project will be documented in this file.
   descriptions, it lists the team presets (Lean Project, Physicist,
   Mathematician, Computer Scientist, Software Engineer and your custom teams)
   with any unavailable members. Picking one sets the team's lead as the root
-  agent with the team's roster, the same way the extension and desktop launch a
-  team. Before, a team could only be started with `texra multi-agent run`.
+  agent with the team's agents, the same way the extension and desktop launch a
+  team. Before, a team could only be started with `texra team run`.
 - `/login` gains an **Add a provider API key** row.
 
 - **GPT-6 Astra is available** — OpenAI's most capable model joins the model

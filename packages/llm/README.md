@@ -28,11 +28,10 @@ request is admitted or rejected: an unsupported control, an unrepresentable
 history or an unsupported media part fails there, before transport. Execution
 never rewrites an admitted request.
 
-Four optional members, present only where the binding serves them:
+Three optional members, present only where the binding serves them:
 `uploadFile` / `releaseUploads` (provider file ids, held in the model's memory
-only and never persisted), `estimateInputTokens` (a counted scope, not a bill
-or an allowance), and `background` (`submit`, `observe`, `cancel`) for the
-protocols with remote execution. `observe` takes the admitted turn back
+only and never persisted) and `background` (`submit`, `observe`, `cancel`) for
+the protocols with remote execution. `observe` takes the admitted turn back
 because a completion's continuation anchors to the exact history prefix it
 covers, which the operation handle deliberately does not copy.
 
@@ -51,7 +50,7 @@ The file-size ratchet holds every file at or under its current line count.
 | `openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                             |
 | `openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                               |
 | `openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                |
-| `openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification, the input estimate                                                                            |
+| `openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                |
 | `openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                      |
 | `anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                  |
 | `googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                 |

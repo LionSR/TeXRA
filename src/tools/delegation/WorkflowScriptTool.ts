@@ -617,8 +617,8 @@ function executeWorkflowScriptTool(
 export const WorkflowScriptTool = defineTool({
   name: DELEGATE_MULTI_AGENTS_TOOL_NAME,
   // The script runner is bi-categorical (plain agent() calls use the workflow
-  // roster; structured calls name tool-use agents explicitly). The workflow
-  // roster is what the description advertises.
+  // agent list; structured calls name tool-use agents explicitly). The workflow
+  // agent list is what the description advertises.
   availabilityCategory: 'workflow',
   slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via (yield* agent(...)).structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.

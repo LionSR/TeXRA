@@ -39,7 +39,7 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
 }
 
 /**
- * The roster's member identity rule (`getCategoryAgent` in production): a bare
+ * The workspace agents' member identity rule (`getCategoryAgent` in production): a bare
  * name matches within the category, a `source:name` key matches exactly.
  */
 type TeamAgentResolver<T> = (
@@ -175,14 +175,14 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
-  cli: { multiAgentPresetId: string };
+  cli: { teamId: string };
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: byCategory((category) => [
       ...plan.agentKeys[category],
     ]),
-    cli: { multiAgentPresetId: plan.preset.id },
+    cli: { teamId: plan.preset.id },
   };
 }
 

@@ -147,7 +147,7 @@ The setup commands drive the Lean 4 extension's installers, so they only work in
 
 **Diagnostics look stale**: ask the agent to run `lean_file` with `restart`, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
 
-**The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your current team's roster may hide them. Select the **Lean Project** team, or show them one by one from the **Agents** tab.
+**The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your current team may hide them. Select the **Lean Project** team, or show them one by one from the **Agents** tab.
 
 ## Next steps
 

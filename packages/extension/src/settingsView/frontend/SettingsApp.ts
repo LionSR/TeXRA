@@ -34,7 +34,7 @@ import './tabs/PrivacyTab';
 import './tabs/SubscriptionsTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
-import './tabs/MultiAgentTab';
+import './tabs/TeamsTab';
 import './tabs/ToolsTab';
 import './tabs/SkillsTab';
 import './tabs/GitTab';
@@ -62,7 +62,7 @@ import {
   disabledSkills,
   disabledSkillSources,
   installedPlugins,
-  multiAgentSettingsRevision,
+  agentsSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
   gitAuthorName,
@@ -70,6 +70,7 @@ import {
   gitMarkCommits,
   gitSettingsLoaded,
   gitWorktreeSupport,
+  goalMaxCostUsd,
   helperModel,
   inlineCriticismEnabled,
   latexdiffBetweenRounds,
@@ -308,7 +309,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           >
             <subscriptions-tab
               slot="subscriptions"
-              .ackGeneration=${multiAgentSettingsRevision.get()}
+              .ackGeneration=${agentsSettingsRevision.get()}
               .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
               .subscriptionAuth=${subscriptionAuth.get()}
               .usage=${subscriptionUsage.get()}
@@ -320,8 +321,8 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         // Touch the acknowledgement generation so a same-value rebroadcast
         // after a rejected/failed write still re-renders this branch and lets
         // live() restore the committed number-row value: the Advanced rows
-        // ride the multi-agent snapshot.
-        const ackGeneration = multiAgentSettingsRevision.get();
+        // ride the agents snapshot.
+        const ackGeneration = agentsSettingsRevision.get();
         return html`
           <agents-tab
             .section=${section}
@@ -338,12 +339,12 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
             .worktreeSupport=${gitWorktreeSupport.get()}
           >
-            <multi-agent-tab
+            <teams-tab
               slot="teams"
               .activePresetId=${activePresetId.get()}
               .customPresets=${customPresets.get()}
               .orchestratorAgents=${orchestratorAgents.get()}
-            ></multi-agent-tab>
+            ></teams-tab>
             <skills-tab
               slot="skills"
               .masterEnabled=${agentSkillsEnabled.get()}
@@ -373,6 +374,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .approvalPolicy=${approvalPolicy.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
+            .goalMaxCostUsd=${goalMaxCostUsd.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .settingValues=${settingValues}
           ></tools-tab>

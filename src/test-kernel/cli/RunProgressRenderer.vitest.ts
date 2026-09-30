@@ -107,7 +107,7 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
       kind: 'log',
       level: 'error',
       message:
-        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team preset.',
+        'Agent not found: polish. Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.',
       fields: {},
     },
   },
@@ -254,8 +254,8 @@ async function handleRunDescription(
 ): Promise<void> {
   await renderer.set(runId, { description });
 }
-/** The parent's roster as the fold states it, in one view: each named
- *  child is a live child stream, and a child that left the roster has
+/** The parent's child list as the fold states it, in one view: each named
+ *  child is a live child stream, and a child that left the child list has
  *  finished. An unnamed entry has no stream to show. */
 async function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
@@ -606,7 +606,7 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('joins a child description emitted before the active roster', async () => {
+  it('joins a child description emitted before the active child list', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
 
@@ -714,7 +714,7 @@ describe('CLI run progress renderer', () => {
     await handleRunDescription(
       renderer,
       'root-stream',
-      'Running Mathematician multi-agent preset',
+      'Running Mathematician team',
     );
     await handleRound(renderer, 'root-stream', 2);
     await handleConversationProgress(renderer, 'root-stream', {
@@ -1020,7 +1020,7 @@ describe('CLI run progress renderer', () => {
             const session = yield* createTestSession();
             publishTestRunStart(session, parentRunId);
             yield* Effect.promise(() => settle());
-            // The roster is the fold's: the parent's `childIds` and the child's own
+            // The child list is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
             const detach = yield* attachCliSessionProgressProjection(session);
             session.publish([

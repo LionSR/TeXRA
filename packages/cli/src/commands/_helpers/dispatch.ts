@@ -133,8 +133,8 @@ interface ResolvedCliCommand {
  *
  * Stops at the first positional that doesn't match a child subcommand. Returns
  * the matched command, immediate parent, and the full command path so usage can
- * render `texra multi-agent run` rather than citty's immediate-parent fallback
- * of `multi-agent run`.
+ * render `texra team run` rather than citty's immediate-parent fallback
+ * of `team run`.
  */
 export async function resolveDeepestSubCommand(
   cmd: AnyCommand,

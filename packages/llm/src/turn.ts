@@ -243,13 +243,11 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
   BindingSchema.extend({
     protocol: z.literal('google-interactions'),
     background: BackgroundCapabilitySchema,
-    supportsInputTokenEstimation: z.boolean(),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-responses'),
     background: BackgroundCapabilitySchema,
-    supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsMaxOutputTokens: z.boolean(),
     supportsStorage: z.boolean(),
@@ -339,7 +337,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
   BindingSchema.extend({
     protocol: z.literal('anthropic-messages'),
-    supportsInputTokenEstimation: z.boolean(),
     supportsTemperature: z.boolean(),
     supportsForcedToolChoice: z.boolean(),
     /** The model takes mid-conversation `role: "system"` messages. */
@@ -761,19 +758,6 @@ export const ObservationPolicySchema = z
   })
   .readonly();
 
-/** An input estimate with its counted scope, not generation usage. */
-export const InputTokenEstimateSchema = z
-  .strictObject({
-    inputTokens: z.int().nonnegative(),
-    coverage: z.enum([
-      'google-converted-content',
-      'anthropic-message-input',
-      'responses-input',
-    ]),
-  })
-  .readonly();
-export type InputTokenEstimate = z.infer<typeof InputTokenEstimateSchema>;
-
 /** The bytes an upload takes. */
 export const FileUploadSchema = z
   .strictObject({
@@ -821,10 +805,6 @@ export interface Model {
    * Never fails: what could not be confirmed deleted is returned.
    */
   releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>;
-  /** Estimate supported prepared input and report the counted scope. */
-  estimateInputTokens?(
-    turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
-  ): Effect.Effect<InputTokenEstimate, ModelError>;
   readonly background?: {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,

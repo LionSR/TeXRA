@@ -28,6 +28,7 @@ import {
   type PluginEnv,
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
+import { pluginDataDir } from './pluginHooks';
 import { checkoutDetached, fetchPinned } from './pluginGit';
 import {
   ioError,
@@ -338,12 +339,13 @@ export function installPlugins(
  * record), then delete its managed directory. A local plugin is only
  * forgotten; its directory is the user's. A removal whose delete failed is
  * finished by removing again: with no record left, the leftover managed
- * directory is deleted. What the plugin wrote to history stays there, kept
- * unread while it is absent.
+ * directory or `plugin-data/<name>` is deleted. What the plugin wrote to
+ * history stays there, kept unread while it is absent.
  */
 export function removePlugin(name: string, env: PluginEnv) {
   return Effect.gen(function* () {
     const dir = path.join(pluginsDir(env), name);
+    const dataDir = pluginDataDir(env.globalStorage, name);
     const plugin = yield* modifyInstalled(env, (current) => {
       const found = current.find((entry) => entry.name === name);
       return Result.succeed([
@@ -358,7 +360,10 @@ export function removePlugin(name: string, env: PluginEnv) {
       // `notes ` is not the directory `notes`.
       const leftover =
         SkillNameSchema.safeParse(name).data === name &&
-        (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, dir)).pipe(
+        (yield* FileSystem.FileSystem.use((fs) =>
+          Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)]),
+        ).pipe(
+          Effect.map((found) => found.some(Boolean)),
           Effect.mapError(ioError),
         ));
       if (!leftover)
@@ -367,12 +372,14 @@ export function removePlugin(name: string, env: PluginEnv) {
             message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
           }),
         );
-      yield* removeDir(dir);
-      return { name, path: dir, local: false, leftover: true };
     }
-    const local = plugin.commit === undefined;
+    // A local plugin's directory is the user's; a leftover one is managed.
+    const local = plugin !== undefined && plugin.commit === undefined;
     if (!local) yield* removeDir(dir);
-    return { name, path: plugin.path, local, leftover: false };
+    yield* removeDir(dataDir);
+    return plugin === undefined
+      ? { name, path: dir, local, leftover: true }
+      : { name, path: plugin.path, local, leftover: false };
   });
 }
 

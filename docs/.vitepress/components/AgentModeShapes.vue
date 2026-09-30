@@ -3,7 +3,7 @@
 // SHAPES behind every built-in agent. Tool-use = a loop (instruction → read ·
 // edit · run tool → repeat → done); Workflow = a linear pipeline (input file →
 // edit → versioned diff). The agent-picker dropdown above already shows the
-// ROSTER; this shows WHY the categories behave differently — why `chat`/
+// LIST; this shows WHY the categories behave differently — why `chat`/
 // `research` feel conversational while `polish`/`correct` hand back a diff.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the docs

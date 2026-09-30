@@ -419,7 +419,7 @@
   font-size: var(--mk-space-12);
 }
 
-/* Form controls (labeled dropdowns in the Launcher + LaTeXDiffs panels) */
+/* Form controls (labeled dropdowns in the New task view + LaTeXDiffs panels) */
 .mockup .field {
   display: flex;
   flex-direction: column;
@@ -841,7 +841,7 @@
   font-size: var(--mk-space-11);
 }
 
-/* Code-line surface rows (Launcher / file-selection editor panes) */
+/* Code-line surface rows (New task / file-selection editor panes) */
 .mockup .cl {
   white-space: pre-wrap;
   min-height: var(--mk-space-1-4em);
@@ -852,7 +852,7 @@
 
 /* ============================================
    LAUNCHER INSTRUCTION PANEL
-   Shared by QuickStartHero + ToolConfigHero — the Launcher's instruction
+   Shared by QuickStartHero + ToolConfigHero — the New task view's instruction
    composer: session toggle, header actions, prompt, the agent/model select
    footer, and the brand Run/Execute button. Each hero sets only its own
    `.board` width and any panel-unique extras (e.g. the tool-config menus).

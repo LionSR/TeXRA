@@ -38,7 +38,8 @@ It deliberately does **not** propose OpenCode's background-server design
 (one daemon owning the database, with every host as a thin HTTP client). That
 is the complete answer to "three hosts at once", but it moves the run loop out
 of every host and needs host-only capabilities called back across a process
-boundary. §6 records why it is deferred and which part of A1 it would reuse.
+boundary. §6 records why it was deferred; the owner has since refused it
+(D4, 2026-09-30).
 
 ## 1. What runs on the host thread today
 
@@ -292,7 +293,13 @@ Rough size: 1–3 weeks of focused work across Stages 1 and 2, most of it
 bundling and the four pieces in §5.3. This is an estimate from structure, not
 a measured plan.
 
-## 6. Considered and deferred: one background server (OpenCode V2's shape)
+## 6. Considered and refused: one background server (OpenCode V2's shape)
+
+**Refused 2026-09-30 (D4 in the rulings ledger, "No daemon; several
+processes on one store").** There is no daemon; the CLI or SDK process is
+the unattended runner and several processes share one store. The reasons
+below are the ones D4 cites. Reopen only on D4's trigger: a run that must
+outlive every host process and cannot be a CLI or SDK process.
 
 OpenCode runs one detached `opencode serve --register` process per user state
 directory. It records `{ id, version, url, pid }` in `server.json`, and
@@ -307,7 +314,8 @@ one process ever opens it.
 
 It would give TeXRA what A0 and A1 cannot: no cross-process lock waits at all,
 live cross-host views without the 250 ms poll, and handing a run from the TUI
-to desktop without waiting for the owner to die. It is deferred because:
+to desktop without waiting for the owner to die. It was deferred, and is now
+refused, because:
 
 - TeXRA's hosts run the agent loop in-process and serve host-only
   capabilities as in-process ports: VS Code editor diffs and diagnostics,
@@ -319,7 +327,7 @@ to desktop without waiting for the owner to die. It is deferred because:
 - Lifecycle (discovery, start race, version replacement, crash, local auth)
   is new surface with no current owner.
 
-What carries over if it is ever taken: A1's RPC group is a list of the
+What would carry over if D4 were reopened: A1's RPC group is a list of the
 `Database` operations as request/response pairs. A server would serve the
 same group over a socket instead of a worker port. Nothing in A0 or A1
 needs to be undone to get there.

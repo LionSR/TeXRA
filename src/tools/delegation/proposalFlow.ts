@@ -12,7 +12,7 @@ import { Cause, Effect, Exit } from 'effect';
 import {
   findAgentByIdentifier,
   resolveDelegationScopeAgents,
-  type AgentRosterStores,
+  type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
@@ -71,7 +71,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
  * exact `(source, name)` entry instead of re-resolving the bare name.
  */
 export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   category: AgentCategory,
   name: string,
   scope?: AgentDelegationScope,
@@ -86,11 +86,11 @@ export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   );
 });
 
-/** Resolve either category from the current roster, reporting both on failure. */
+/** Resolve either category from the current agent list, reporting both on failure. */
 export const requireWorkflowOrToolUseAgent = Effect.fn(
   'requireWorkflowOrToolUseAgent',
 )(function* (
-  stores: AgentRosterStores,
+  stores: WorkspaceAgentsStores,
   name: string,
   scope?: AgentDelegationScope,
 ) {

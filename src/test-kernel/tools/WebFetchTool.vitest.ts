@@ -2,10 +2,19 @@ import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { describe, expect, vi } from 'vitest';
+
+import { fetch as undiciFetch } from 'undici';
 
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
+
+// The tool connects through undici's own `fetch`; the real one stays the
+// default, and a test stubs one response.
+vi.mock('undici', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: vi.fn(actual.fetch) };
+});
 
 describe('WebFetchTool', () => {
   it.effect.each([
@@ -22,6 +31,8 @@ describe('WebFetchTool', () => {
       url: 'http://[::ffff:127.0.0.1]/',
       name: 'bracketed IPv4-mapped IPv6 loopback',
     },
+    // DNS64/NAT64 wraps an IPv4 address; the wrapped address decides.
+    { url: 'http://[64:ff9b::7f00:1]/', name: 'NAT64-wrapped IPv4 loopback' },
     { url: 'http://localhost/', name: 'the localhost hostname' },
   ])('rejects a fetch to $name', ({ url }) =>
     Effect.gen(function* () {
@@ -31,6 +42,27 @@ describe('WebFetchTool', () => {
 
       expect(result).toMatchObject({ status: 'error' });
       expect(result.error).toMatch(/cannot fetch/i);
+    }),
+  );
+
+  it.effect('rejects a redirect from a public host to a private address', () =>
+    Effect.gen(function* () {
+      // The metadata address a cloud instance serves credentials from.
+      const fetchStub = vi.mocked(undiciFetch).mockClear();
+      fetchStub.mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: 'http://169.254.169.254/latest/meta-data/' },
+        }) as unknown as Awaited<ReturnType<typeof undiciFetch>>,
+      );
+
+      const result = yield* WebFetchTool.call({
+        url: 'http://93.184.216.34/',
+      }).pipe(Effect.provide(nativeToolTestLayer()));
+
+      expect(result).toMatchObject({ status: 'error' });
+      expect(result.error).toMatch(/cannot fetch/i);
+      expect(fetchStub).toHaveBeenCalledTimes(1);
     }),
   );
 });

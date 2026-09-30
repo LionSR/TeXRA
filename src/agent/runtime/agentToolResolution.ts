@@ -93,14 +93,14 @@ export interface StepToolInputs {
   readonly injectInstalled: boolean;
   /**
    * The run's stores: the injections' settings, the delegation annotation's
-   * worktree opt-in and the delegation roster's model availability read
+   * worktree opt-in and the delegation scope's model availability read
    * them.
    */
   readonly stores: ModelOptionStores;
   /** The run's workspace root: the tool-availability probes answer per
    *  workspace. */
   readonly workspaceRoot: string | undefined;
-  /** The run's pinned delegation roster scope, when this is a delegated run. */
+  /** The run's pinned delegation agent list scope, when this is a delegated run. */
   readonly delegationScope?: AgentDelegationScope;
   /** What the parent's step offered, when this is a delegated child. */
   readonly parentOffered?: readonly OfferedTool[];

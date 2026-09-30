@@ -79,13 +79,18 @@ The JSON files use flat `texra.*` keys. For example:
 {
   "texra.skills.enabled": true,
   "texra.telemetry.enabled": false,
-  "texra.toolUse.requireEditApproval": true,
   "texra.model.retry.maxAttempts": 2
 }
 ```
 
 Prefer the settings views for ordinary changes: they validate values and place
 them at the intended project or user scope.
+
+Approval settings (the approval policy and the two approval switches) are the
+exception to the project scope: a project file can be supplied by a repository
+you clone, so TeXRA never reads them from it. They are kept per workspace in
+your own storage, and a value in your user file applies to every workspace. A
+project file that sets one is ignored with a warning naming the key.
 
 ## Model access and credentials
 
@@ -143,6 +148,21 @@ sqlite3 ~/.texra/v1/global-storage/texra.db \
 ```
 
 A new ID is made on the next send.
+
+## Goal mode
+
+Approving a plan with **Run as goal** (press `r` in the terminal) lets the
+agent keep working turn after turn, and auto-approves shell commands (or all
+agent work, if you chose that) until it verifies the objective or needs you.
+On your own API key that has no natural end, so goal mode carries a spend
+cap: `texra.goal.maxCostUsd`, on the **Tools** page and in `/config`,
+defaults to $5 and is always a user-wide setting, never read from a project
+`.texra/config.json`. It counts everything the run and its subagents have spent,
+including turns before the goal started. When the total reaches the cap at
+the end of a turn, the goal pauses, auto-approval is withdrawn, and the
+transcript says why. Raise the cap and re-arm the goal to continue; `0`
+removes the cap. The cap is checked between turns, so a single long turn can
+overshoot it. Goal mode has no time or turn limit.
 
 ## File discovery
 

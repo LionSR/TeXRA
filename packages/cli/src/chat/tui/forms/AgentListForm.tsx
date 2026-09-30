@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import {
   computeAgentOptionsData,
   getCategoryAgent,
-  type AgentRosterStores,
+  type WorkspaceAgentsStores,
 } from '@agent/index';
 import { moreRowsText } from '@cli/tui/overflowText';
 import { Select } from '@cli/tui/ui/Select';
@@ -34,9 +34,9 @@ interface AgentListFormProps {
   /** The process runtime the catalog read runs on, from the surface that
    *  registered this form. */
   readonly runtime: ProcessRuntime;
-  /** The roster slots of this chat's project, from the surface that registered
+  /** The workspace agents slots of this chat's project, from the surface that registered
    *  this form: the list shows that project's visible agents. */
-  readonly stores: AgentRosterStores;
+  readonly stores: WorkspaceAgentsStores;
   readonly currentAgent: string;
   /** The team leading this chat, when one was chosen. */
   readonly currentTeamId?: string;
