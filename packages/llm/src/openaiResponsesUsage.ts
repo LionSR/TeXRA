@@ -22,12 +22,11 @@ export const ResponsesUsageSchema = z.object({
 });
 
 /**
- * The canonical usage of one receipt. A receipt carrying xAI's cost keeps it,
- * with the response's service tier, as `xai` provider evidence.
+ * The canonical usage of one receipt. A receipt carrying xAI's cost keeps it
+ * as `xai` provider evidence.
  */
 export function responsesUsage(
   usage: z.infer<typeof ResponsesUsageSchema>,
-  serviceTier: string | null | undefined,
 ): NonNullable<TurnResult['usage']> {
   return {
     inputTokens: usage.input_tokens,
@@ -40,10 +39,6 @@ export function responsesUsage(
           providerUsage: {
             kind: 'xai',
             costInUsdTicks: usage.cost_in_usd_ticks,
-            serviceTier:
-              serviceTier === 'default' || serviceTier === 'priority'
-                ? serviceTier
-                : null,
           },
         }
       : {}),

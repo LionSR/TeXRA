@@ -171,7 +171,6 @@ export const ResponseSchema = z.object({
   ]),
   output: z.array(OutputItemSchema),
   usage: ResponsesUsageSchema.nullish(),
-  service_tier: z.string().nullish(),
   error: z.object({ code: z.string(), message: z.string() }).nullish(),
   incomplete_details: z
     .object({ reason: z.enum(['max_output_tokens', 'content_filter']) })
@@ -296,9 +295,7 @@ export const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
         status: response.status,
         incompleteReason: response.incomplete_details?.reason ?? null,
       },
-      usage: response.usage
-        ? responsesUsage(response.usage, response.service_tier)
-        : null,
+      usage: response.usage ? responsesUsage(response.usage) : null,
     });
     if (!result.success || result.data.providerResponseId === null) {
       return yield* new ModelError({

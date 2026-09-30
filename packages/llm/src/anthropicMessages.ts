@@ -85,8 +85,6 @@ const UsageSchema = z.object({
   output_tokens_details: z
     .object({ thinking_tokens: CountSchema.nullish() })
     .nullish(),
-  service_tier: z.enum(['standard', 'priority', 'batch']).nullish(),
-  inference_geo: z.string().nullish(),
   server_tool_use: z.record(z.string(), CountSchema).nullish(),
 });
 const StopSchema = z.object({
@@ -915,8 +913,6 @@ export function anthropicMessagesModel(
                       usage.cache_creation?.ephemeral_5m_input_tokens ?? null,
                     cacheCreation1hTokens:
                       usage.cache_creation?.ephemeral_1h_input_tokens ?? null,
-                    serviceTier: usage.service_tier ?? null,
-                    inferenceGeo: usage.inference_geo ?? null,
                   },
                 },
               });
