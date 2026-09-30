@@ -1,5 +1,12 @@
 // Third-party imports
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
@@ -83,6 +90,43 @@ export class RunTabs extends LitElement {
   @property({ type: Boolean }) removable = false;
   /** The subtree to show instead of `view.order`: the Subagents pane. */
   @property({ attribute: false }) root: RunId | null = null;
+
+  /** Deletes sent from a row's ×, still in flight: another click on the
+   *  same row sends nothing. An id leaves once its row is gone from the
+   *  view or the surface records the refusal. */
+  private readonly deleting = new Set<RunId>();
+  /** The row to focus once the deleted row, which held focus, is gone. */
+  private focusAfterDelete: { runId: RunId; next: RunTab | undefined } | null =
+    null;
+
+  protected override willUpdate(changed: PropertyValues): void {
+    if (!changed.has('view') && !changed.has('surface')) return;
+    for (const runId of this.deleting) {
+      if (!this.view?.runs.has(runId) || this.surface?.rejected.has(runId)) {
+        this.deleting.delete(runId);
+      }
+    }
+  }
+
+  protected override updated(): void {
+    const pending = this.focusAfterDelete;
+    if (pending === null || this.deleting.has(pending.runId)) return;
+    this.focusAfterDelete = null;
+    if (!this.view?.runs.has(pending.runId) && pending.next?.isConnected) {
+      pending.next.focus();
+    }
+  }
+
+  private deleteRun(tab: RunTab, runId: RunId): void {
+    if (this.deleting.has(runId)) return;
+    this.deleting.add(runId);
+    if (tab.matches(':focus-within')) {
+      const rows = [...this.renderRoot.querySelectorAll<RunTab>('run-tab')];
+      const at = rows.indexOf(tab);
+      this.focusAfterDelete = { runId, next: rows[at + 1] ?? rows[at - 1] };
+    }
+    this.dispatchEvent(SessionUiEvents.runtime({ kind: 'run.delete', runId }));
+  }
 
   private runOfEvent(id: RunId): RunView | undefined {
     return this.view?.runs.get(id);
@@ -212,13 +256,16 @@ export class RunTabs extends LitElement {
     // is the typed view: the id is read from it, never re-parsed from the DOM.
     const tab = getComposedPathElement<RunTab>(event, 'run-tab');
     const run = tab?.run;
-    if (!run) return;
+    if (!tab || !run) return;
     const runId = run.id;
     const { action } = actionElement.dataset;
 
     switch (action) {
       case 'select':
         this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
+        break;
+      case 'delete':
+        this.deleteRun(tab, runId);
         break;
       case 'resume':
         this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId }));

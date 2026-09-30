@@ -13,7 +13,6 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import type { RunView } from '@shared/session/sessionView';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
@@ -113,6 +112,14 @@ export class RunTab extends LitElement {
   @property({ type: Boolean }) removable = false;
 
   private decorator = getAgentCategoryDecorator('toolUse');
+
+  /** Focus lands on the row's select button: `run-tabs` hands focus to a
+   *  neighbour after deleting the focused row. */
+  override focus(options?: FocusOptions): void {
+    this.renderRoot
+      .querySelector<HTMLElement>('#run-tab-select-button')
+      ?.focus(options);
+  }
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('run')) this.decorator = runDecorator(this.run);
@@ -295,13 +302,8 @@ export class RunTab extends LitElement {
                   size="s"
                   type="button"
                   aria-label=${`Delete ${runTitle}`}
-                  @click=${() =>
-                    this.dispatchEvent(
-                      SessionUiEvents.runtime({
-                        kind: 'run.delete',
-                        runId: run.id,
-                      }),
-                    )}
+                  data-run=${run.id}
+                  data-action="delete"
                   >${waIcon('xmark')}</wa-button
                 ><wa-tooltip for="run-tab-remove-button"
                   >Delete session</wa-tooltip
