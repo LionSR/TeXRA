@@ -1,7 +1,5 @@
 import { defineCommand, runCommand } from 'citty';
 
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
-
 import {
   readCliAmbientState,
   readCliArgv,
@@ -30,7 +28,7 @@ import { getExitCode, setExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
-import { authCommand, loginCommand, logoutCommand } from './auth';
+import { authCommand } from './auth';
 import { chatCommand } from './chat';
 import { cloneCommand } from './clone';
 import { completionCommand } from './completion';
@@ -90,10 +88,6 @@ export const rootCommand = withUsageSections(
       tools: toolsCommand,
       team: teamCommand,
       models: modelsCommand,
-      // `login`/`logout` are convenience shortcuts; the full auth surface
-      // (login, logout, status, usage, token) lives under `auth`.
-      login: loginCommand,
-      logout: logoutCommand,
       auth: authCommand,
       doctor: doctorCommand,
       completion: completionCommand,
@@ -112,7 +106,6 @@ export const rootCommand = withUsageSections(
         ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
-        ['texra login', RESEARCHER_ACCESS_AUTH.signInExample],
         ['texra chat', 'start an interactive tool-use session'],
         [
           'texra clone <project> --cwd ./paper',

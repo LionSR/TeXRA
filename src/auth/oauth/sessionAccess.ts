@@ -28,7 +28,7 @@ export interface SessionSecretStore {
  * {@link SecretsFailed} travels as {@link AuthPortError} — the failure shape
  * the coordinators match on for any port rejection.
  */
-export function secretBackedSessionStorage(
+function secretBackedSessionStorage(
   secrets: SessionSecretStore,
   key: string,
 ): SubscriptionSessionStorage {

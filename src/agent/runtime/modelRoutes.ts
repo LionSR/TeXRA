@@ -120,7 +120,7 @@ function subscriptionAuthFailure(
   copy: (typeof SUBSCRIPTION_AUTH_COPY)[keyof typeof SUBSCRIPTION_AUTH_COPY],
 ): Error {
   if (!(error instanceof SubscriptionOAuthError)) return error;
-  const turnOff = `turn off "${copy.preferLabel}".`;
+  const turnOff = `turn off "${copy.subscriptionLabel}".`;
   const action = error.needsReauth
     ? `${copy.signInLabel} again, or ${turnOff}`
     : `Try again in a moment, or ${turnOff}`;

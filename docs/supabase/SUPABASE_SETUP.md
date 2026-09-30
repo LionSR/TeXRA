@@ -416,7 +416,7 @@ npm run sync:remote-agents -- --apply
 
 Needs a `supabase link`ed checkout, or `SUPABASE_DB_URL`, or `SUPABASE_ACCESS_TOKEN` plus `SUPABASE_PROJECT_REF`. With `SUPABASE_PROJECT_REF` the script passes that ref to the CLI through `SUPABASE_PROJECT_ID`, leaving the checkout's linked project untouched.
 
-`--apply` requires Supabase CLI **v2.79.0 or newer**: v2.79.0 added `supabase db query`, whose `--linked` mode resolves the target project from `SUPABASE_PROJECT_ID` before the checkout's link file. Older CLIs lack `db query` entirely, so a too-old CLI fails loudly with an `unknown command` error before touching any project instead of silently retargeting the run. Check your local version with `supabase --version`; CI pins 2.106.0 (`.github/workflows/remote-agents-sync.yml`).
+`--apply` requires Supabase CLI **v2.79.0 or newer**: v2.79.0 added `supabase db query`, whose `--linked` mode resolves the target project from `SUPABASE_PROJECT_ID` before the checkout's link file. Older CLIs lack `db query` entirely, so a too-old CLI fails loudly with an `unknown command` error before touching any project instead of silently retargeting the run. Check your local version with `supabase --version`.
 
 Before writing any metadata, `--apply` verifies that every catalog `storage_path` already exists as an object in the `agent-configs` bucket; if any are missing it aborts and lists them, and no metadata is published. The preflight checks object existence, not freshness, so a green preflight does not prove the uploaded bodies are current. YAML bodies are still uploaded separately from metadata, so upload new, moved, or changed agents **before** applying (or before merging to `main`):
 
@@ -431,7 +431,7 @@ Before writing any metadata, `--apply` verifies that every catalog `storage_path
 supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```
 
-The same apply command (including the storage check) runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
+Run `npm run sync:remote-agents` (generate only) to preview; the apply step is manual.
 
 The sync only upserts the agents it finds under `prompts/agents/remote/`; it never deletes a row. When an agent leaves the remote catalog (for example because it now ships bundled in `packages/extension/resources/tool_use_agents/`), its `remote_agents` row and `agent-configs` object stay behind. They are harmless: the registry ranks the bundled sources above `remote` for the same name, so signed-in users resolve the bundled copy. Deleting them by hand is cleanup only.
 

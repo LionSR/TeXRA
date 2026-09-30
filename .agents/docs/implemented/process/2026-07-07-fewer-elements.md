@@ -7,9 +7,9 @@ Status: implemented
 > dissection, a staged-deletion inventory measured file-by-file in the current
 > tree, a test-growth audit, an element census of the runtime/interaction/
 > progress planes, and a cost accounting of the migration middle. Companion to
-> [`2026-07-03-tech-debt-audit.md`](../../archived/simplification/2026-07-03-tech-debt-audit.md),
-> [`2026-07-03-session-scoped-runtime-architecture.md`](../../archived/architecture/2026-07-03-session-scoped-runtime-architecture.md),
-> [`2026-07-05-architecture-checkpoints.md`](../../archived/process/2026-07-05-architecture-checkpoints.md), and
+> `2026-07-03-tech-debt-audit.md`,
+> `2026-07-03-session-scoped-runtime-architecture.md`,
+> `2026-07-05-architecture-checkpoints.md`, and
 > trackers #6951 / #6968 / #6981. The rulings in §7 extend #6951's
 > single-ownership section and bind future campaign PRs; the PR that merges
 > this doc mirrors R1 and R5-R8 into the code-review checklist (§14) so the

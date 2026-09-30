@@ -6,7 +6,7 @@
  * waits for the redirect to deliver the authorization code.
  *
  * Worked exemplar for the Effect 4 runtime PRD
- * (`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`): the server is a
+ * (`2026-08-26-effect-4-runtime-migration.md`): the server is a
  * scoped resource, the callback wait is a `Deferred` under a timeout, and
  * cancellation is fiber interruption, delivered by the host that runs the
  * program at its own edge. Error identities and HTTP responses are unchanged.
@@ -14,10 +14,21 @@
 import http from 'node:http';
 
 import { Deferred, Duration, Effect, Fiber, Result } from 'effect';
-import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
+
+/**
+ * How long an interactive browser sign-in may take before the host stops
+ * waiting for the callback (10 minutes). Generous on purpose: an OAuth
+ * round-trip with 2FA and account switching outlasts a couple of minutes, and
+ * each flow is user-cancellable, so a long deadline only delays the failure
+ * message for attempts nobody is waiting on.
+ *
+ * Device-code flows do not use this: RFC 8628 makes the server's `expires_in`
+ * authoritative there.
+ */
+const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * The loopback route could never be established — the registered callback

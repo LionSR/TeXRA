@@ -57,7 +57,7 @@ export type RunPhase = z.infer<typeof RunPhaseSchema>;
  * populated from `GROUP_START`/`GROUP_END` transcript rows — #7993 step 3).
  * No `WAITING`: task groups have no waiting concept, only running and the
  * three terminal `RunOutcome` values (§8.2's group-end mapping table,
- * .agents/docs/archived/architecture/2026-07-03-session-scoped-runtime-architecture.md). Using the
+ * 2026-07-03-session-scoped-runtime-architecture.md). Using the
  * native vocabulary keeps the completed/cancelled distinction §8.2 writes to
  * the transcript row visible in the rendered value.
  */

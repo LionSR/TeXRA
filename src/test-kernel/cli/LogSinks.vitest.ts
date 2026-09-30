@@ -127,7 +127,7 @@ describe('NdjsonStdoutSink', () => {
         sink.writeRecord({ kind: 'version', version: '1.0.0' });
         sink.writeRecord({ kind: 'doctor-summary', ok: true });
         emit(event);
-        sink.writeRecord({ kind: 'auth-status', authenticated: false });
+        sink.writeRecord({ kind: 'chatgpt-auth-status', authenticated: false });
         yield* sink.flush();
 
         expect(lines.map((line) => JSON.parse(line).kind)).toEqual(['version']);

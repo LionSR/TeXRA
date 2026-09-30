@@ -52,6 +52,7 @@ export interface SubscriptionSectionProvider {
   readonly description: string;
   /** Caveat shown under the heading (client registration, …). */
   readonly note?: string;
+  /** The routing switch's label: the subscription's own name, verbless. */
   readonly preferLabel: string;
   readonly preferDescription: string;
   /** Account-row label while signed out. */
@@ -223,7 +224,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-    preferLabel: CHATGPT_AUTH.preferLabel,
+    preferLabel: CHATGPT_AUTH.subscriptionLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',
     accountTitle: 'ChatGPT account',
     connectDescription:
@@ -245,7 +246,7 @@ export const GROK_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     description:
       'Use xAI Grok models through your SuperGrok / xAI account. No xAI API key is needed.',
     note: 'Uses the public Grok CLI OAuth client. xAI may change or revoke that registration without notice.',
-    preferLabel: GROK_AUTH.preferLabel,
+    preferLabel: GROK_AUTH.subscriptionLabel,
     preferDescription: 'Use the subscription instead of an xAI API key.',
     accountTitle: 'Grok account',
     connectDescription:

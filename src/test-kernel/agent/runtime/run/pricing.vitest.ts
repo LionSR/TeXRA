@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
-import { noopTrace } from '@test/support/noopTrace';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm/turn';
@@ -101,7 +100,6 @@ describe('priceTurnUsage on an Anthropic turn', () => {
       boundAnthropic,
       anthropicUsage(breakdown),
       1234,
-      noopTrace,
     );
 
     // 600 in the 5m bucket plus the 100 the breakdown left unattributed.
@@ -120,6 +118,12 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
       fullName: 'gpt-6-sol',
       inputPrice: 2,
       outputPrice: 10,
+      longContextPricing: {
+        aboveInputTokens: 272_000,
+        inputPrice: 4,
+        outputPrice: 15,
+        cacheDiscountFactor: 0.1,
+      },
       capabilities: { cacheDiscountFactor: 0.1 },
     }),
   };
@@ -133,8 +137,8 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
   });
 
   it('bills the whole request at the long-context tier above 272K', () => {
-    const below = priceTurnUsage(boundSol, usageAt(272_000), 1, noopTrace);
-    const above = priceTurnUsage(boundSol, usageAt(272_001), 1, noopTrace);
+    const below = priceTurnUsage(boundSol, usageAt(272_000), 1);
+    const above = priceTurnUsage(boundSol, usageAt(272_001), 1);
 
     expect(below?.cost).toBeCloseTo(
       (172_000 * 2 + 100_000 * 0.2 + 1000 * 10) / 1e6,

@@ -53,11 +53,6 @@ export interface DesktopSettingsIpcOptions {
       productName: string,
     ): Effect.Effect<void, Error>;
   };
-  /** The TeXRA account behind the settings view's Sign in button. */
-  readonly auth: {
-    signIn(): Effect.Effect<void, Error>;
-    signOut(): Effect.Effect<void, Error>;
-  };
   /** The session of the paper this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
@@ -78,7 +73,7 @@ export const SETTINGS_VIEW_INBOUND_COMMANDS =
 
 export interface DesktopSettingsIpc extends Pick<
   SettingsViewBody,
-  'refreshAfterAuthChange' | 'signInSubscription'
+  'signInSubscription'
 > {
   /** The one route every inbound settings command runs. */
   readonly route: DesktopCommandRoute;
@@ -192,9 +187,6 @@ export function createDesktopSettingsIpc(
     ProcessServices | StorageFs
   > = {
     ...body.handlers,
-    // The settings view's Sign in button is a host entry.
-    signIn: () => options.auth.signIn(),
-    signOut: () => options.auth.signOut(),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     installToolExtension: unsupported(NO_EXTENSION_HOSTING),
@@ -233,7 +225,6 @@ export function createDesktopSettingsIpc(
   ];
 
   const settingsIpc: DesktopSettingsIpc = {
-    refreshAfterAuthChange: body.refreshAfterAuthChange,
     signInSubscription: body.signInSubscription,
     route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
       body.handleMessage(message, registry),

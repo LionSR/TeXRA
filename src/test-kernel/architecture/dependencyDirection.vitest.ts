@@ -87,7 +87,7 @@ const HOST_LAYER_IMPORT_PREFIXES = [
 ] as const;
 
 /**
- * Effect run boundary (PRD R1, .agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md
+ * Effect run boundary (PRD R1, 2026-08-26-effect-4-runtime-migration.md
  * "Execution strategy" rule 3): production code enters Effect through the
  * runtime its composition root holds and threads to it, the SDK public
  * entry, and the composition roots that open a store the runtime they are
@@ -102,14 +102,6 @@ const EFFECT_RUN_ROOTS = [
 const EFFECT_RUN_CALL =
   /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
 const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
-  // The account plane's one outbound foreign Promise contract (rulings
-  // ledger, #12720): `@supabase/auth-js` calls the GoTrue storage adapter
-  // through Promise callbacks, and the plane answers them with
-  // `Effect.runPromiseWith` over the services it captured when it was built,
-  // so the PKCE flow-state program runs on the plane's own services rather
-  // than on a process-global run edge. The program is service-free and
-  // recovers every failure to `undefined`.
-  'src/auth/SupabaseAuth.ts': 1,
   // The CLI platform shutdown sequence, which cannot run on the process
   // runtime for the same reason the SDK entry cannot: `cliPlatformShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes
@@ -133,12 +125,6 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // command but `doctor` enters through this one run and hands the resolved
   // context to its builder as a value.
   'packages/cli/src/commands/_helpers/defineCliCommand.ts': 1,
-  // The CLI's account-plane build, the same pre-runtime construction the VS
-  // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
-  // process-runtime install with the plane as one of the values that install
-  // is given, so there is no runtime to borrow yet, and the construction
-  // program reads no service.
-  'packages/cli/src/runtime/supabaseAuth.ts': 1,
   // `texra doctor`, the one command whose whole job is to report on a process
   // whose platform may not have initialized. Its one program builds the
   // context (`contextFromArgs`, which `defineCliCommand` runs for every other
@@ -158,13 +144,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // the process runtime — so the quit follows it on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
-  // which builds the process runtime (its stores and account plane resolve
-  // before `installProcessRuntime`, being the values that install is given)
+  // which builds the process runtime (its stores resolve before
+  // `installProcessRuntime`, being the values that install is given)
   // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
   // The VS Code entry: one program from `activate` to the last registration,
-  // which builds the process runtime (its account plane resolves before
-  // `installProcessRuntime`, being a value that install is given) and
+  // which builds the process runtime and
   // closes its scope when activation fails; and `deactivate`, which closes
   // that same scope. The scope's finalizer is the shutdown drain that
   // disposes the process runtime, so neither can settle on it. Every other

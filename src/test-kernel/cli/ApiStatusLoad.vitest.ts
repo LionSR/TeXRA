@@ -8,7 +8,6 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 const mocks = vi.hoisted(() => ({
-  getCliAuthProfile: vi.fn(),
   readCliModelAccessStatus: vi.fn(),
   lookupApiKeyOrigin: vi.fn(),
   getSubscriptionUsage: vi.fn(),
@@ -23,20 +22,8 @@ vi.mock(
   }),
 );
 
-vi.mock('@cli/runtime/supabaseAuth', () => ({
-  getCliAuthProfile: mocks.getCliAuthProfile,
-}));
-
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
   readCliModelAccessStatus: mocks.readCliModelAccessStatus,
-  mergeCliTexraAccountStatus: (
-    access: Record<string, unknown>,
-    profile: { authenticated: boolean; accountLabel?: string },
-  ) => ({
-    ...access,
-    texraSignedIn: profile.authenticated,
-    texraAccountLabel: profile.accountLabel,
-  }),
 }));
 
 vi.mock('@model/apiProviders', () => ({
@@ -134,11 +121,6 @@ function renderPreferenceRoute(
 
 describe('CLI model-access status lines', () => {
   beforeEach(() => {
-    mocks.getCliAuthProfile.mockReset().mockReturnValue(
-      Effect.succeed({
-        authenticated: false,
-      }),
-    );
     mocks.readCliModelAccessStatus.mockReset().mockReturnValue(
       Effect.succeed({
         subscriptions: subscriptions({
@@ -175,12 +157,6 @@ describe('CLI model-access status lines', () => {
           email: 'chatgpt@example.com',
         }),
         codingPlans: codingPlans(true, true),
-      }),
-    );
-    mocks.getCliAuthProfile.mockReturnValue(
-      Effect.succeed({
-        authenticated: true,
-        accountLabel: 'texra@example.com',
       }),
     );
     setPersonalKeys('deepseek', 'glm', 'kimiCode');
@@ -359,12 +335,6 @@ describe('CLI model-access status lines', () => {
             codingPlans: codingPlans(),
           }),
         );
-        mocks.getCliAuthProfile.mockReturnValue(
-          Effect.succeed({
-            authenticated: true,
-            accountLabel: 'texra@example.com',
-          }),
-        );
         mocks.lookupApiKeyOrigin.mockReturnValue(
           Effect.fail(new Error('keychain offline')),
         );
@@ -377,8 +347,6 @@ describe('CLI model-access status lines', () => {
               email: 'chatgpt@example.com',
             }),
             codingPlans: codingPlans(),
-            texraSignedIn: true,
-            texraAccountLabel: 'texra@example.com',
           },
           lines: [
             'ChatGPT preference: On · chatgpt@example.com',
@@ -386,7 +354,6 @@ describe('CLI model-access status lines', () => {
             'Kimi Code preference: Off · key required to enable',
             'GLM Coding Plan preference: Off · key required to enable',
             'Otherwise: Your own API keys',
-            'TeXRA account: signed in as texra@example.com',
           ],
         });
         expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();

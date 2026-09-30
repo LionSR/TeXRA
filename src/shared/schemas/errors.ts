@@ -10,27 +10,26 @@ const ExhaustionReasonSchema = z.enum([
    *  the user has IS the broken one, so a new key is required. */
   'upstream-credit',
   /** A ChatGPT-subscription (Codex) request was rejected because the plan's
-   *  usage quota is exhausted; accepting the switch disables the "prefer
-   *  ChatGPT subscription" preference.
-   *  Remark: permanently flipping prefer-off is not always ideal — when the
-   *  quota later resets, the user may forget to turn the preference back on. */
+   *  usage quota is exhausted; accepting the switch turns off "ChatGPT
+   *  subscription" so the retry uses the OpenAI API key.
+   *  Remark: permanently flipping it off is not always ideal — when the
+   *  quota later resets, the user may forget to turn it back on. */
   'chatgpt-subscription',
   /** A GitHub Copilot request was rejected because the subscription quota is
    *  exhausted. */
   'copilot-subscription',
   /** A Kimi Code (Moonshot coding-subscription) request was rejected because
-   *  the membership's usage quota is exhausted; accepting the switch disables
-   *  the "Prefer Kimi Code" preference so dual-backend Kimi models re-route
-   *  through the Moonshot open-platform API key. */
+   *  the membership's usage quota is exhausted; accepting the switch turns off
+   *  "Kimi Code subscription" so dual-backend Kimi models re-route through the
+   *  Moonshot open-platform API key. */
   'kimi-code-subscription',
   /** A GLM Coding Plan request was rejected because the plan's usage quota is
    *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
    *  requests route through the regular pay-as-you-go endpoint. */
   'glm-coding-plan',
   /** A Grok (xAI SuperGrok) subscription request was rejected because the
-   *  plan's usage quota is exhausted; accepting the switch disables the
-   *  "prefer Grok subscription" preference so xAI models re-route through
-   *  the stored xAI API key. */
+   *  plan's usage quota is exhausted; accepting the switch turns off "Grok
+   *  subscription" so xAI models re-route through the stored xAI API key. */
   'xai-subscription',
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
@@ -106,11 +105,6 @@ export const ErrorLogDataSchema = ProviderErrorObjectSchema.omit({
   })
   .strict();
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
-
-/** Canonical provider error with all fields optional for event transport. */
-export const ProviderErrorPartialSchema =
-  ProviderErrorObjectSchema.partial().strict();
-export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
 /** Recover the actionable exhaustion reason from the canonical classification. */
 export function getExhaustionReason(

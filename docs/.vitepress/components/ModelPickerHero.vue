@@ -9,12 +9,11 @@ import StatusPill from './StatusPill.vue';
 const items = [
   { id: 'opus55', thinking: true },
   {
-    id: 'sonnet5T',
+    id: 'sonnet55',
     thinking: true,
     hovered: true,
-    tip: { context: '1M', input: '$3', output: '$15', mode: 'Thinking' },
+    tip: { context: '1M', input: '$2', output: '$10', mode: 'Thinking' },
   },
-  { id: 'sonnet5', thinking: false },
   { id: 'haiku45T', thinking: true },
   { id: 'haiku45', thinking: false },
 ];
@@ -25,7 +24,7 @@ const items = [
     <span class="mp-label">Model</span>
     <div class="mp-control">
       <wa-icon class="mp-cv-ic" library="texra" name="cpu"></wa-icon>
-      <span class="mp-value">sonnet5T</span>
+      <span class="mp-value">sonnet55</span>
       <wa-icon class="mp-caret" library="texra" name="chevron-down"></wa-icon>
     </div>
     <div class="mp-menu">

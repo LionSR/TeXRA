@@ -20,7 +20,6 @@ import {
   type Path,
 } from 'effect';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
-import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
   GlobalDatabase,
@@ -49,7 +48,7 @@ import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the account plane, the
+ * cohort-A tags beside the records, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
@@ -84,7 +83,6 @@ export type ProcessServices =
   | AgentEngine
   | LeanLanguageServices
   | UsageLog
-  | SupabaseAuth
   | ToolRegistry
   | LiveTools
   | ToolAvailability;

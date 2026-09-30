@@ -13,7 +13,7 @@
  *
  * The root entry used to render these services as Promises and
  * AsyncIterables, the boundary the Effect migration's rule R1 names
- * (`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md`,
+ * (`2026-08-26-effect-4-runtime-migration.md`,
  * §7 R1, boundary kind 3: the published SDK speaks Promises). That ruling is
  * superseded (2026-09-21): `effect` is a mandatory exact-pin peer dependency
  * of the whole package, the package has no external consumers, and TeXRA 1.0

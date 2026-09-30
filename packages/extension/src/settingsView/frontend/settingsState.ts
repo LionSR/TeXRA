@@ -149,11 +149,6 @@ export const memoryEnabled = settingSignal<boolean>(
 // ---------------------------------------------------------------------------
 // Profile state
 // ---------------------------------------------------------------------------
-export const authenticated = trackedSignal(() => false);
-export const userEmail = trackedSignal(() => '');
-export const sessionProblem = trackedSignal<'expired' | 'unavailable' | null>(
-  () => null,
-);
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 // ---------------------------------------------------------------------------
 // Model selection state

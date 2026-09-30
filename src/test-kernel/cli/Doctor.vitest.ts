@@ -110,7 +110,6 @@ function buildReport(
     buildDoctorReport(reportContext, {
       kind: 'ready',
       nodeVersion: '24.15.0',
-      authProfile: Effect.succeed({ authenticated: true }),
       modelAccessList: Effect.succeed([]),
       latexToolchain: Effect.succeed(latexProbe),
       usageLoggingOptOut: () => null,
@@ -130,14 +129,12 @@ function buildReport(
 }
 
 // The same report with one available model and a fully installed LaTeX
-// toolchain; only the auth profile (and optional context) vary.
+// toolchain; only the optional context varies.
 function buildReadyReport(
-  authProfile: DoctorProbes['authProfile'],
   reportContext: CliContext = context,
 ): Promise<DoctorReport> {
   return buildReport(
     {
-      authProfile,
       modelAccessList: Effect.succeed(availableModels),
       latexToolchain: Effect.succeed(allInstalledLatexProbe),
     },
@@ -186,7 +183,6 @@ describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
     const report = await buildReport({
       nodeVersion: '20.1.0',
-      authProfile: Effect.succeed({ authenticated: false }),
     });
 
     expect(report.ok).toBe(false);
@@ -265,16 +261,10 @@ describe('CLI doctor', () => {
     }
   });
 
-  it('redacts email-like values outside the auth account message', () => {
+  it('redacts email-like values in check messages and hints', () => {
     const report: DoctorReport = {
       ok: true,
       checks: [
-        {
-          id: 'auth',
-          name: 'TeXRA account',
-          status: 'pass',
-          message: 'Signed in as user@example.edu.',
-        },
         {
           id: 'config',
           name: 'Config',
@@ -288,7 +278,6 @@ describe('CLI doctor', () => {
     const text = captureDoctorStdout(context, report);
     const records = doctorNdjsonRecords(report, NDJSON_TS);
 
-    expect(text).toContain('Signed in as user@example.edu.');
     expect(text).toContain('Workspace config references o***@e***.edu.');
     expect(text).toContain('Ask a***@e***.edu to update it.');
     expect(text).not.toContain('owner@example.edu');
@@ -303,9 +292,7 @@ describe('CLI doctor', () => {
   });
 
   it('emits stable ndjson record kinds', async () => {
-    const report = await buildReadyReport(
-      Effect.succeed({ authenticated: true, accountLabel: 'Ada' }),
-    );
+    const report = await buildReadyReport();
 
     const records = doctorNdjsonRecords(report, NDJSON_TS);
 

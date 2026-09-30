@@ -106,7 +106,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
     compatibilityKey: 'OpenAI',
-    setupModel: 'gpt6-',
+    setupModel: 'gpt61-',
     modelSource: true,
   },
   {
@@ -285,7 +285,7 @@ const MANIFEST = [
     displayName: 'OpenRouter',
     keyUrl: 'https://openrouter.ai/keys',
     apiKey: true,
-    setupModel: 'sonnet5T',
+    setupModel: 'sonnet55',
   },
   {
     id: 'kimiCode',

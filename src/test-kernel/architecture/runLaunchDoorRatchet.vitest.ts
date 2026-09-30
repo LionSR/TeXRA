@@ -50,7 +50,6 @@ const SERVICE_OPTION = /\bEffect\.serviceOption\(\s*([A-Za-z_$][\w$]*)/g;
 
 const OPTIONAL_PROCESS_PORTS = new Set([
   'InlineComments',
-  'SupabaseAuth',
   'ToolMissingReporter',
 ]);
 

@@ -102,7 +102,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
     { concurrency: 'unbounded' },
   );
 
-  const { auth, coreTools, missingCore, latexWorkshopInstalled } = core;
+  const { coreTools, missingCore, latexWorkshopInstalled } = core;
 
   const summary = {
     host: roots.host,
@@ -126,23 +126,16 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
     credentials: {
       // `anyApiKeySet` is literal — only true if at least one
       // per-provider API key is present (matches the `apiKeys`
-      // array below). A TeXRA-account-only user would have
-      // had this come out true under the previous adapter-backed
-      // check, which contradicted the per-provider detail and
-      // misled credential planning.
+      // array below).
       anyApiKeySet: apiKeys.some(
         (key) => key.origin === 'secret' || key.origin === 'env',
       ),
       // `hasAnyUsableCredential` is the broader "can setup launch a
-      // model right now" signal — direct key, ChatGPT subscription,
-      // or server-side TeXRA account. Kept as a separate field
-      // so the agent can reason about API keys separately.
+      // model right now" signal — direct key or provider subscription.
+      // Kept as a separate field so the agent can reason about API keys
+      // separately.
       hasAnyUsableCredential,
       apiKeys,
-      researcherAccess: {
-        authenticated: auth.authenticated,
-        email: auth.authenticated ? auth.email : undefined,
-      },
       chatGptSubscription: chatGptStatus,
       githubToken,
     },
@@ -165,10 +158,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
     origins.has('env') && 'provider API key in environment',
     origins.has('unknown') && 'provider API key status unavailable',
     credentials.chatGptSubscription.enabled && 'ChatGPT subscription enabled',
-    credentials.researcherAccess.authenticated && 'signed in',
     credentials.hasAnyUsableCredential &&
       !credentials.anyApiKeySet &&
-      !credentials.researcherAccess.authenticated &&
       !credentials.chatGptSubscription.enabled &&
       'usable credential',
   ].filter((cred): cred is string => typeof cred === 'string');
@@ -189,13 +180,13 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
  *
  * Returns a single structured JSON document covering OS, PATH, package
  * manager, core TeXRA dependencies, LaTeX Workshop extension, usable API-key
- * origins, broader usable credential status, and TeXRA account status.
+ * origins, and broader usable credential status.
  * No approval gate — purely read-only, akin to `ls` / `glob`.
  */
 export const ProbeEnvironmentTool = defineTool({
   name: 'probe_environment',
   replay: 'safe',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, ${IMAGE_TOOL_LABEL}, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, and broader usable credential status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
   execute: (_input: ProbeInput) => probe(),
 });

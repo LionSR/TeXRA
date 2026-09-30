@@ -9,7 +9,7 @@ Research tools benefit from community collaboration. TeXRA's client software is 
 [![GitHub](https://img.shields.io/github/stars/LionSR/TeXRA)](https://github.com/LionSR/TeXRA)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
 
-TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted service (TeXRA accounts) remains governed by its Terms of Service.
+TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted services that earlier versions used (TeXRA accounts, the remote-agent catalog, the account-linked usage reporting) remain governed by the Terms of Service.
 
 [TeXRA on GitHub](https://github.com/LionSR/TeXRA)
 
@@ -43,11 +43,11 @@ npm install llm-zoo
 import { lookup, cost, from, cheapest, ModelProvider } from 'llm-zoo';
 
 // Look up a model
-const claude = lookup('sonnet5');
+const claude = lookup('sonnet55');
 console.log(claude.contextWindow); // 1000000
 
 // Calculate cost
-const price = cost('sonnet5', { input: 1000, output: 500 }); // 0.007
+const price = cost('sonnet55', { input: 1000, output: 500 }); // 0.007
 
 // Find the cheapest model with vision support
 const model = cheapest({ supportsVision: true });

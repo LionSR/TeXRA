@@ -37,8 +37,6 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-The file-size ratchet holds every file at or under its current line count.
-
 | File                          | What it owns                                                                                                                                              |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `turn.ts`                     | the subpath's public entry: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn` |

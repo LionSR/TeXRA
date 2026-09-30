@@ -49,20 +49,20 @@ practice; users are theorists, so the unit of work is a paper.
 **Lineage.** This PRD consolidates three proposals written on 2026-09-03
 after two survey passes, five audits, three critique agents, and eight
 adversarial attacks:
-`.agents/docs/archived/architecture/2026-09-03-conversation-shell-directions.md` (the shell
+`2026-09-03-conversation-shell-directions.md` (the shell
 design and its boards),
 `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md` (the state
 rule, version 2, with the Effect shape in its section 12), and
-`.agents/docs/archived/architecture/2026-09-03-projection-adapter-ledger.md` (every layer
+`2026-09-03-projection-adapter-ledger.md` (every layer
 classified). Where this PRD and those documents differ, this PRD governs.
 Its companion is the persistence decision
-`.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md` (the event
+`2026-09-03-persistence-substrate-decision.md` (the event
 table as the only persisted truth), written by the persistence cutover owner
 after two rounds of alignment with this program. That document has since
 landed and sits in the tree at that path, so every "agreed with the
 substrate owner" claim below is checkable against it. This
 PRD follows the governing rules of
-`.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
+`2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
 
 ---
 
@@ -856,7 +856,7 @@ in `src/shared/copy/`.
 ## 6. Events
 
 The only contract between this PRD and the persistence cutover is section
-6.1 of `.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md`
+6.1 of `2026-09-03-persistence-substrate-decision.md`
 (clauses C1 to C10, jointly owned, changes land there first); this document
 references its clauses and does not restate them. That document lands in its
 owner's pull request, not this one; until it merges, the clause numbers here
@@ -3025,7 +3025,7 @@ consumes is Zod under `src/shared/schemas`, so `src/shared` gains no
 ## Appendix C. Evidence index
 
 Layers and duals with their locations, as classified on 2026-09-03; the
-full ledger with verdicts is `.agents/docs/archived/architecture/2026-09-03-projection-adapter-ledger.md`.
+full ledger with verdicts is `2026-09-03-projection-adapter-ledger.md`.
 
 - Session read path:
   - `src/controllers/progressView/backend/LitSessionRenderer.ts:47, 142, 211, 460, 503`
@@ -3130,4 +3130,4 @@ full ledger with verdicts is `.agents/docs/archived/architecture/2026-09-03-proj
   - `ProgressApp.ts:109-135, 138-200, 243, 268-272`
   - `packages/desktop/src/renderer/taskShell.css:9-135, 466-540, 706-800`
   - `taskShell.ts:40-200`
-  - `.agents/docs/archived/feature/2026-05-08-electron-shell-layout.md` sections 6, 12
+  - `2026-05-08-electron-shell-layout.md` sections 6, 12

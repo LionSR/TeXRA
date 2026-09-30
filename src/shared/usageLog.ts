@@ -3,7 +3,27 @@ import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 import type { ConfigProvider } from '@platform/interfaces';
-import { AgentCategory, UsageRouteSchema } from '@shared/schemas';
+import {
+  AGENT_SOURCE,
+  AgentCategory,
+  UsageRouteSchema,
+  type AgentSource,
+} from '@shared/schemas';
+
+/**
+ * The agent name a usage entry may carry. Telemetry is metadata only, and a
+ * user-authored (or plugin) agent's name can be any private string, so only a
+ * bundled agent's id goes out; every other agent is the literal `custom`.
+ */
+export function usageAgentName(
+  name: string,
+  source: AgentSource | null | undefined,
+): string {
+  return source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
+    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
+    ? name
+    : 'custom';
+}
 
 const UsageLogMetadataSchema = z.object({
   model: z.string(),

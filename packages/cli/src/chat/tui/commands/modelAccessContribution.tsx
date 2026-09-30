@@ -89,8 +89,7 @@ export function modelAccessContribution(deps: {
     ((provider, key) => applyCliProviderApiKey(secrets, stores, provider, key));
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     deps.onLoginSelect ??
-    ((value, output) =>
-      loginFromChat(value, stores, runtime, undefined, output));
+    ((value, output) => loginFromChat(value, stores, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     deps.onLogoutSelect ??
     ((value, output) => logoutFromChat(value, stores, secrets, output));
@@ -208,12 +207,9 @@ export function modelAccessContribution(deps: {
         handler: (remainder, context) =>
           remainder.trim().toLowerCase() === 'status'
             ? showCliAccountStatus(stores, secrets)
-            : loginFromChat(
-                remainder,
-                stores,
-                runtime,
-                context.cliContext,
-              ).pipe(Effect.andThen(recheck)),
+            : loginFromChat(remainder, stores, context.cliContext).pipe(
+                Effect.andThen(recheck),
+              ),
         formComponent: AccountAccessFormAdapter,
       },
     ],

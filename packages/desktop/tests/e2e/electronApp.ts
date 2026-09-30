@@ -99,6 +99,8 @@ export async function launchTexraApp(
       ...process.env,
       // Hint to platform/secrets layer to avoid the macOS keychain prompt.
       TEXRA_DISABLE_KEYCHAIN: '1',
+      // Test runs never report usage (and never raise the first-run notice).
+      TEXRA_NO_TELEMETRY: '1',
       TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,
       NODE_ENV: 'production',
       ...options.env,

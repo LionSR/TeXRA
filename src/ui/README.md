@@ -79,5 +79,5 @@ two halves:
   - One name per concept across hosts.
   - No internal identifiers (run ids, camelCase agent names, "child") on
     the main surface.
-- **Budgets hold.** New UI lands as its own component, not as growth in a
-  file on `config/ratchets/file-size-baseline.json`.
+- **Keep files small.** New UI lands as its own component, not as growth in
+  an already large file.

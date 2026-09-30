@@ -33,11 +33,7 @@ import {
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from '@shared/state/stateSettings';
-import {
-  SignInMessageSchema,
-  SignOutMessageSchema,
-  UpdateProfileMessageSchema,
-} from './profileViewMessages';
+import { UpdateProfileMessageSchema } from './profileViewMessages';
 import {
   DeleteMemoryMessageSchema,
   GetMemoryDataMessageSchema,
@@ -62,7 +58,6 @@ export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 export {
   type ProviderKeyStatus,
   type ProviderSetting,
-  type SessionProblem,
   type UpdateProfileMessage,
 } from './profileViewMessages';
 
@@ -102,7 +97,7 @@ export const SETTINGS_PAGE_SECTIONS = {
   tools: ['approval', 'tools', 'integrations'],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
-  general: ['account', 'git'],
+  general: ['privacy', 'git'],
   shortcuts: [],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
@@ -816,8 +811,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     PinMemoryMessageSchema,
     UnpinMemoryMessageSchema,
     // Profile messages
-    SignInMessageSchema,
-    SignOutMessageSchema,
     SetProviderKeyMessageSchema,
     RemoveProviderKeyMessageSchema,
     OpenProviderKeyUrlMessageSchema,

@@ -20,6 +20,22 @@ All notable changes to this project will be documented in this file.
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
+- **TeXRA sign-in is removed from every host.** `texra login`, `texra logout`,
+  `texra auth status` and `/login texra` are gone, as are the VS Code sign-in,
+  sign-out and account commands, the Account tab (the General page now opens on
+  **Privacy**, which keeps the telemetry switch), the desktop sign-in dialog and
+  the `texra://` callback handler. Nothing needed the account: every agent ships
+  bundled and model calls run on your own credential. Provider sign-ins are
+  unchanged (`texra auth chatgpt login`, `texra auth grok login`, `/login` in a
+  chat, GitHub and Copilot).
+- **Usage logging is anonymous and needs no account.** When on, each batch
+  carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
+  sign-in token; the body is unchanged and never has prompts, paths or
+  document text. Each host shows a one-time notice. Opt out with
+  `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
+  (or VS Code's telemetry setting); the ID is one row in
+  `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
+  resets it. A custom agent is reported only as "custom". `texra doctor` shows the usage-logging row.
 - **Every agent ships bundled; hosted agents are gone.** The Physicist,
   Mathematician, and Computer Scientist teams now work fully offline with no
   TeXRA sign-in: their `generic`, `devise`, `apply`, and `criticize` workflow
@@ -196,6 +212,16 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
+  (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
+  $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats
+  and the OpenAI setup pick; Sonnet 5.5 replaces Sonnet 5 in the default
+  model list and as the OpenRouter setup pick. Sonnet 5 (`sonnet5`,
+  `sonnet5T`) and GPT-6 Sol (`gpt6-`) are deprecated. GLM-5.3 Flash is
+  now billed at its list price, since the promotional price ended. The Claude
+  Code integration offers Sonnet 5.5 (`claude-sonnet-5-5`) in place of
+  Sonnet 5 and uses it by default; a saved Sonnet 5 choice falls back to it.
+
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.
@@ -365,6 +391,29 @@ show` print the same notice, and the new `texra agents customize`,
   run no longer fails with "token is expired" while Settings says the
   subscription is ready; when the sign-in cannot be renewed, the run asks you
   to sign in again and the account shows as signed out.
+
+- **Long prompts are priced at the provider's long-context rate.** OpenAI's
+  1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
+  bill a whole request at 2x input and 1.5x output once the prompt passes
+  272K tokens, and Gemini 3.1 Pro and 2.5 Pro do the same past 200K; a run's
+  cost now counts that, where it had billed only GPT-6 and Grok at the higher
+  rate. Cached input on Gemini 3.1 Pro, 3.1 Flash-Lite, 2.5 Pro and 2.5 Flash
+  is priced at 10% of input, as Google charges, instead of 25%.
+
+- **A failed model request shows the provider's error again.** It had
+  shown "Malformed error payload" with a schema complaint about
+  `rawErrorBody` instead of the actual failure.
+
+- **Subscription switches are named for the account they route.** The four
+  routing switches now read "ChatGPT subscription", "Grok subscription", "Kimi
+  Code subscription" and "GLM Coding Plan" in the chat's `/login` menu, in
+  `/config` and in the settings view. `/login` called them "Prefer ChatGPT
+  subscription", "Prefer Grok subscription", "Prefer Kimi Code subscription"
+  and "Prefer GLM Coding Plan", and the Kimi switch also read "Prefer Kimi
+  Code" in `/config` and the settings view. The names also stop promising a
+  preference: a session that cannot be used fails the run and asks you to sign
+  in again, rather than falling back to your API key.
+
 - **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
   a sign-in row in the chat's account menu started the sign-in but left the
   menu on screen, so the sign-in link, one-time code and `c` copy-link key

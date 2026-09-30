@@ -77,7 +77,6 @@ import {
   appendRow,
   bindingRow,
   displayRow,
-  redactedForFact,
   rowAggregate,
   snapshotRow,
   positionRow,
@@ -648,9 +647,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           type: 'request.opened',
           aggregateId,
           requestId,
-          // The one door every durable request payload passes, whether the
-          // session opens the request or the loop commits it.
-          payload: redactedForFact(payload),
+          payload,
           thread: null,
         },
         bindingRow(runId, {

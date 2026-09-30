@@ -22,12 +22,10 @@ import {
 } from './subscriptionLogin';
 import {
   formatCliModelAccessRouteInline,
-  type CliAccountStatus,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliContext } from './cliContext';
-import type { CliAuthProfile } from './supabaseAuth';
 
 interface CliModelAccessSelectionResult {
   readonly message: string;
@@ -92,17 +90,6 @@ export const readCliModelAccessStatus = Effect.fn(
   } satisfies CliModelAccessStatus;
 });
 
-export function mergeCliTexraAccountStatus(
-  access: CliModelAccessStatus,
-  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
-): CliAccountStatus {
-  return {
-    ...access,
-    texraSignedIn: profile.authenticated,
-    texraAccountLabel: profile.accountLabel,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // The four subscription arms share two skeletons — an OAuth sign-in flow
 // (Grok/ChatGPT, driven by the shared provider catalog) and a key-credential
@@ -130,13 +117,13 @@ const updateSubscriptionCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setPreferSubscription',
             subscription: providerId,
-            message: `The ${displayName} subscription preference could not be disabled: ${toErrorMessage(cause)}`,
+            message: `${displayName} subscription could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
       ),
     );
     return {
-      message: `Prefer ${displayName} subscription disabled for ${modelFamily}.`,
+      message: `${displayName} subscription disabled for ${modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
   }
 
@@ -160,13 +147,13 @@ const updateSubscriptionCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setPreferSubscription',
           subscription: providerId,
-          message: `The ${displayName} subscription preference could not be enabled: ${toErrorMessage(cause)}`,
+          message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     ),
   );
   return {
-    message: `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
+    message: `${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
   } satisfies CliModelAccessSelectionResult;
 });
 

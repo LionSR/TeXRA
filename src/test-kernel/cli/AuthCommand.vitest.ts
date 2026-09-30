@@ -5,7 +5,6 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const mocks = vi.hoisted(() => ({
-  getCliAuthProfile: vi.fn(),
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
   signOutCliSubscription: vi.fn(),
@@ -23,15 +22,6 @@ vi.mock('@cli/runtime/cliProcessRuntime', async () => {
   };
 });
 
-vi.mock('@cli/runtime/supabaseAuth', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@cli/runtime/supabaseAuth')>();
-  return {
-    ...actual,
-    getCliAuthProfile: mocks.getCliAuthProfile,
-  };
-});
-
 vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@cli/runtime/subscriptionLogin')>();
@@ -43,12 +33,6 @@ vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
 
 const { runCli } = await import('@cli/commands/root');
 
-const SIGNED_IN_PROFILE = {
-  authenticated: true,
-  accountLabel: 'user@example.edu',
-  tier: 'Max',
-};
-
 describe('CLI auth command', () => {
   let stdout = '';
   let stderr = '';
@@ -58,11 +42,6 @@ describe('CLI auth command', () => {
   beforeEach(() => {
     stdout = '';
     stderr = '';
-    mocks.getCliAuthProfile.mockReset().mockReturnValue(
-      Effect.succeed({
-        authenticated: false,
-      }),
-    );
     mocks.initCliPlatform
       .mockReset()
       .mockReturnValue(Effect.succeed({ runtime: testRuntime() }));
@@ -85,46 +64,6 @@ describe('CLI auth command', () => {
     stderrSpy.mockRestore();
   });
 
-  it('defaults bare auth to status while accepting global flags', async () => {
-    const result = await runCli(['auth', '--no-color']);
-
-    expect(result.exitCode).toBe(0);
-    expect(stdout.trim()).toBe('Not signed in.');
-    expect(stderr).toBe('');
-    expect(mocks.initCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ quietLogs: false }),
-    );
-  });
-
-  it('explains an auth-service outage instead of inviting a re-login', async () => {
-    mocks.getCliAuthProfile.mockReturnValueOnce(
-      Effect.succeed({
-        authenticated: false,
-        sessionState: 'transient',
-      }),
-    );
-
-    const result = await runCli(['auth', '--no-color']);
-
-    expect(result.exitCode).toBe(0);
-    expect(stdout.trim()).toBe(
-      'The authentication service is temporarily unavailable. Your stored session is intact; try again later.',
-    );
-    expect(stderr).toBe('');
-  });
-
-  it('forwards group-level global flags to explicit auth subcommands', async () => {
-    mocks.getCliAuthProfile.mockReturnValueOnce(
-      Effect.succeed(SIGNED_IN_PROFILE),
-    );
-
-    const result = await runCli(['auth', '--output-format', 'json', 'status']);
-
-    expect(result.exitCode).toBe(0);
-    expect(JSON.parse(stdout)).toEqual(SIGNED_IN_PROFILE);
-    expect(stderr).toBe('');
-  });
-
   it('reports ChatGPT logout success when preference cleanup fails', async () => {
     mocks.signOutCliSubscription.mockReturnValueOnce(
       Effect.succeed({ preferenceError: 'Config write failed' }),
@@ -135,7 +74,7 @@ describe('CLI auth command', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Signed out of ChatGPT.');
     expect(stdout).toContain(
-      'ChatGPT subscription preference could not be disabled: Config write failed',
+      'ChatGPT subscription could not be disabled: Config write failed',
     );
     expect(stderr).toBe('');
   });

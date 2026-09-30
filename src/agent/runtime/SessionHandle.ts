@@ -91,7 +91,6 @@ import {
   SessionHostInteractions,
   type HostInteractions,
 } from './HostInteractions';
-import { redactedForFact } from './loop/rows';
 import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
@@ -720,7 +719,7 @@ export class SessionHandle {
           type: 'request.opened',
           aggregateId,
           requestId,
-          payload: redactedForFact(payload),
+          payload,
           thread: options.thread ?? null,
         },
         ...policyDecidedRows(this, runId, payload),

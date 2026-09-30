@@ -4,10 +4,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import {
-  signIn as authSignIn,
-  signOut as authSignOut,
-} from '@commands/auth/authCommands';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
@@ -59,9 +55,7 @@ export function createExtensionCommandActions(
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
-    signIn: () => authSignIn,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
-    signOut: () => authSignOut,
     runSetupAssistant: () =>
       Effect.asVoid(
         launchSetupAssistant(secrets, session, (runId) =>

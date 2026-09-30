@@ -43,8 +43,8 @@ import {
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import {
   logContextManagementEvent,
-  logErrorData,
   logProgressStatus,
+  logProviderError,
   type StreamHandle,
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
@@ -72,7 +72,7 @@ import {
   type RunLedgerRefused,
 } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { UsageLog } from '@shared/usageLog';
+import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -105,7 +105,6 @@ import {
 } from './run/requestContext';
 import { dispatchFactsFor } from './run/tools';
 import {
-  redactedForFact,
   retryRow,
   retryRows,
   rowAggregate,
@@ -243,7 +242,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       type Binders = LanguageModel | HttpClient.HttpClient;
       const binders = yield* Effect.context<Binders>();
       const attribution = {
-        agentName: run.config.agent,
+        agentName: usageAgentName(run.config.agent, run.config.agentSource),
         agentCategory: run.config.agentCategory,
         runId,
       };
@@ -460,7 +459,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           `${request.debugName}_response`,
           bound,
         );
-        const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
+        const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           turn,
@@ -833,7 +832,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             credentialSwitch,
           };
           const payload = { kind: 'retry', data: request } as const;
-          logErrorData(logger, 'Model request failed', recorded);
+          yield* logProviderError(logger, 'Model request failed', recorded);
           if (automatic !== null) {
             logProgressStatus(
               logger,
@@ -845,9 +844,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               type: 'request.opened',
               aggregateId,
               requestId,
-              // Committed here, not at the session's door (`openRequest`), so
-              // the door's `rawErrorBody` drop is here: no durable raw body.
-              payload: redactedForFact(payload),
+              payload,
               thread: null,
             },
             ...retryRows(runId, state, pendingRetry('waiting'), {
@@ -1102,7 +1099,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             !failure.formatted.userRetryable ||
             hasMissingApiKeyErrorMarker(failure.error)
           ) {
-            logErrorData(
+            yield* logProviderError(
               logger,
               'Model request failed (no retry available)',
               failure.formatted,

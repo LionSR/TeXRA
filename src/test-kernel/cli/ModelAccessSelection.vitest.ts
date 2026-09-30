@@ -217,7 +217,7 @@ describe('CLI model access routes', () => {
         );
         expect(result).toEqual({
           message:
-            'Prefer Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
+            'Kimi Code subscription enabled for Kimi models · other models still use your own API keys.',
         });
       }).pipe(withServices),
   );
@@ -258,7 +258,7 @@ describe('CLI model access routes', () => {
         expect(mocks.setPreferXaiSubscription).not.toHaveBeenCalled();
         expect(result).toEqual({
           message:
-            'Prefer GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
+            'GLM Coding Plan enabled for GLM models · other models still use your own API keys.',
         });
       }).pipe(withServices),
   );
@@ -292,7 +292,7 @@ describe('CLI model access routes', () => {
         true,
       );
       expect(result.message).toBe(
-        'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
+        'ChatGPT subscription enabled for Codex models (user@example.com).',
       );
     }).pipe(withServices),
   );
