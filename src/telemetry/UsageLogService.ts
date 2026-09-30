@@ -8,7 +8,6 @@ import {
   Fiber,
   Layer,
   Queue,
-  Result,
   Semaphore,
 } from 'effect';
 import {
@@ -19,12 +18,11 @@ import {
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
-import { AppState, type ConfigProvider } from '@platform/interfaces';
+import type { ConfigProvider } from '@platform/interfaces';
 import {
   TELEMETRY_ENABLED_DEFAULT,
   TELEMETRY_ENABLED_KEY,
 } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {
   UsageLogEntry,
@@ -164,27 +162,6 @@ class UsageBatchUndelivered extends Data.TaggedError('UsageBatchUndelivered')<{
   readonly reason: string;
   readonly requeue: RetryBatch | null;
 }> {}
-
-const INSTALL_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-/**
- * The random anonymous install ID: a UUIDv4 made once in global app state,
- * never derived from the machine, the user or a login. A stored value that
- * is not a UUIDv4 is replaced. Users reset it by deleting the state key.
- */
-const readOrCreateInstallId = Effect.fn('UsageLogService.installId')(
-  function* () {
-    const state = yield* AppState;
-    const isId = (value: unknown): value is string =>
-      typeof value === 'string' && INSTALL_ID_PATTERN.test(value);
-    const stored = yield* state.get(GlobalStateKey.TELEMETRY_INSTALL_ID);
-    if (isId(stored)) return stored;
-    return yield* state.modify(GlobalStateKey.TELEMETRY_INSTALL_ID, (current) =>
-      Result.succeed(isId(current) ? current : randomUUID()),
-    );
-  },
-);
 
 class UsageLogServiceImpl {
   private queue: QueuedUsageEntry[] = [];
