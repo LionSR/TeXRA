@@ -390,7 +390,7 @@ describe('desktop settings IPC', () => {
   );
 
   it.live(
-    'round-trips multi-agent coordination and refreshes its snapshot',
+    'round-trips agent coordination and refreshes its snapshot',
     () =>
       Effect.gen(function* () {
         const globalState = new FakeStateStore();
@@ -417,7 +417,7 @@ describe('desktop settings IPC', () => {
         ).toBe(true);
         expect(posted.at(-1)).toMatchObject({
           command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-          snapshot: 'multi-agent',
+          snapshot: 'agents',
           values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
         });
       }),

@@ -33,7 +33,7 @@ import {
   latexSettingsStatus,
   memoryItems,
   modelSelectionItems,
-  multiAgentSettingsRevision,
+  agentsSettingsRevision,
   orchestratorAgents,
   preferShortModelNames,
   prSubscriptions,
@@ -133,8 +133,8 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
     applySettingsSnapshot(data.values);
     if (data.snapshot === 'git-author') gitSettingsLoaded.set(true);
-    if (data.snapshot === 'multi-agent') {
-      multiAgentSettingsRevision.set(multiAgentSettingsRevision.get() + 1);
+    if (data.snapshot === 'agents') {
+      agentsSettingsRevision.set(agentsSettingsRevision.get() + 1);
     }
   },
 

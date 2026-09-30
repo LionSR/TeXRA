@@ -220,7 +220,7 @@ prompts:
     agent presets, memory toggles, GitHub token, telemetry, …), do NOT
     write them through bash or hand-edit settings.json. Open the right
     UI with `invoke_command`: `texra.showModels`, `texra.showAgents`,
-    `texra.showMultiAgent`, `texra.showMemory`, `texra.showTools`,
+    `texra.showTeamSettings`, `texra.showMemory`, `texra.showTools`,
     `texra.showGitSettings`, or `texra.showDashboard`, and tell the user
     which control to click. The dashboard tabs embed the same UI a
     power user would use: a good moment to point out features they

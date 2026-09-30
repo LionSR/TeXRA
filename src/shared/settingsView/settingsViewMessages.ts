@@ -149,11 +149,11 @@ const SetTabMessageSchema = z.object({
  * below or in their own module.
  */
 const DERIVED_SETTINGS_SNAPSHOTS = [
+  'agents',
   'approval',
   'git-author',
   'skills',
   'telemetry',
-  'multi-agent',
   'latex',
   'memory',
 ] as const satisfies readonly SettingsViewSnapshot[];

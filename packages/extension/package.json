@@ -314,7 +314,7 @@
         "icon": "$(tools)"
       },
       {
-        "command": "texra.showMultiAgent",
+        "command": "texra.showTeamSettings",
         "title": "Agent Team Settings",
         "category": "TeXRA",
         "icon": "$(organization)"
@@ -547,7 +547,7 @@
           "when": "false"
         },
         {
-          "command": "texra.showMultiAgent",
+          "command": "texra.showTeamSettings",
           "when": "false"
         },
         {
