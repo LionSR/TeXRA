@@ -188,8 +188,11 @@ debt to convert, or the webview's own entry?
 **Ruling.** Boundary. A webview owns its own `ManagedRuntime`: `sessionTransport.ts`
 installs and disposes it, so it is that webview's composition root, and `toSignal` is the
 one documented meeting point between Effect and the components, running on the runtime its
-caller passes. Both files are admitted by name in `BOUNDARY_RUNTIME_ENTRIES` in
-`scripts/check-effect-migration-ratchet.mjs`, each with its reason.
+caller passes. Both files, and `src/platform/processRuntime.ts`, are admitted by name in
+the `Effect.run*` lint block of `eslint.config.mjs` (the retired
+`scripts/check-effect-migration-ratchet.mjs` held the list before #13573). The exemption
+is whole-file: that a run is on the entry's own runtime is enforced by review, not by the
+linter.
 
 **Forbids.** Admitting a directory: every other file under the webview frontends stays
 fenced, and the self-tests pin a sibling on each side (`ProgressApp.ts`,
@@ -272,8 +275,9 @@ hash, held by the runs that pinned it (see the composition ruling below).
 It has four files left. Are they debt to convert to fiber interruption, or
 the floor?
 
-**Ruling.** The floor. The four files are the adapters that stay, and the
-row's counts are their allowlist: a fifth file fails as new debt. The reasons
+**Ruling.** The floor. The files are the adapters that stay, and since #13573 the
+allowlist is the ignore list of the `AbortController` selector in `eslint.config.mjs`
+(two files today: `childRunLoop.ts`, `claudeAgent.ts`): a new file fails lint as new debt. The reasons
 are recorded in `scripts/check-effect-migration-ratchet.mjs` beside the row
 and are each a foreign API that takes a controller rather than offering
 cancellation:
