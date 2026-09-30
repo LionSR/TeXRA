@@ -239,9 +239,9 @@ subset of the same files under the same options.
 ### Naming conventions
 
 - **Const object naming**:
-  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `StreamStatusService`, `ModelRegistry`)
-  - Use **camelCase** for simple command/function namespaces (e.g., `agentCommands`, `latexCommands`)
-- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `STREAM_PHASE`)
+  - Use **PascalCase** for service singletons that encapsulate state and behavior (e.g., `SessionEvents`, `ModelInvoker`)
+  - Use **camelCase** for simple command/function namespaces (e.g., `latexCommands`)
+- **Constants**: Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_ERROR_LENGTH`, `SESSION_CLOSE_DEADLINE_MS`)
 
 ### Directory organization
 
@@ -657,7 +657,7 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns a `runId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - Resume a persisted run, tool-use or workflow, via `resumeRun` (`src/agent/runtime/resumeRun.ts`), which continues it with `resumeToolUseFromResumeData`; `runAgent` launches fresh runs only.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
@@ -672,7 +672,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `run.position` for every wait and every halt; a `run.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
 - **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`request.opened` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled. Compaction summaries and helper calls take the invoker's call path (`run/modelCall.ts`): the same gate, automatic batch, pricing and usage report, marked with a `purpose`.
 - **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
-- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes and fails typed (`RunHalted`).
+- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes.
 
 **Webviews and UI**
 
@@ -682,12 +682,12 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 
 **Progress view**
 
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`StreamTabs`, `LogList`, `UsagePanel`, `TaskGroupList`, etc.); they read the `SessionView` fold (`src/shared/session/sessionView.ts`) and the `Surface` record as properties and dispatch typed request events. Augment them rather than manipulating the DOM directly.
+- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`LogList`, `UsagePanel`, `TaskGroupList`, etc.); they read the `SessionView` fold (`src/shared/session/sessionView.ts`) and the `Surface` record as properties and dispatch typed request events. Augment them rather than manipulating the DOM directly.
 - Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
 
 **Error handling and types**
 
-- Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
+- Format and surface errors through `showLoggedErrorMessage` and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
 - Keep shared type definitions colocated with their domains (e.g., `src/agent/core/state`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**

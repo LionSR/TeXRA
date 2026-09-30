@@ -232,8 +232,8 @@ template". Agents are configured by YAML in
 single and multi-document output.
 
 **Launch executions via `runAgent`** (`src/agent/runtime/runAgent.ts`) — it
-assigns an `executionId`, registers the run, and opens workflow output. Use the
-lower-level `executeAgent` only when you already own the `executionId` (subagent
+assigns a `runId`, registers the run, and opens workflow output. Use the
+lower-level `executeAgent` only when you already own the `runId` (subagent
 dispatch). `runAgent` launches fresh runs only: a persisted run of either
 category resumes through `resumeRun`, which continues it with
 `resumeToolUseFromResumeData`. Loop conventions and the
