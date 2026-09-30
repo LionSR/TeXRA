@@ -7,6 +7,7 @@ import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
@@ -238,12 +239,7 @@ const prepareLatexBuild = (
   preserveFocus: boolean,
 ): Effect.Effect<boolean, Error, PreparedFileServices> =>
   Effect.gen(function* () {
-    const doc = yield* vscodeCommand(() =>
-      vscode.workspace.openTextDocument(uri),
-    );
-    yield* vscodeCommand(() =>
-      vscode.window.showTextDocument(doc, { preview: true, preserveFocus }),
-    );
+    yield* openFileInEditor(uri.fsPath, { preview: true, preserveFocus });
 
     if (fileLocation.kind === 'workspace') {
       yield* invokeLatexWorkshopBuild(

@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import type { SessionHandle } from '@agent/runtime';
-import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -20,7 +19,6 @@ import {
 } from '@latex/overleafProject';
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -31,24 +29,7 @@ import { whichOnExtendedPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
 
-export function registerGitCommands(
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: SessionHandle,
-): void {
-  // `findCommitInHistory` returns its `string | null` to `executeCommand`
-  // callers and accepts an optional positional argument, so it keeps its
-  // per-command registration.
-  registerCommandEntries(context, [
-    {
-      id: 'texra.findCommitInHistory',
-      handler: (commitHash: string, rootPath?: string) =>
-        runtime.runPromise(findCommitInHistory(session, commitHash, rootPath)),
-    },
-  ]);
-}
-
-function findCommitInHistory(
+export function findCommitInHistory(
   session: SessionHandle,
   commitHash: string,
   rootPath?: string,

@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
-import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import type { WorkflowDiffRequest } from '@controllers/session/hostRunActions';
 import {
   prepareBuildDisplay,
@@ -18,6 +17,7 @@ import {
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -31,7 +31,6 @@ import {
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -170,19 +169,11 @@ const openLatexdiffResult = Effect.fnUntraced(function* (
 const restorePreparedViewerTarget = (
   diffLocation: FileLocation,
 ): Effect.Effect<boolean> =>
-  Effect.tryPromise({
-    try: async () => {
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(diffLocation.absolutePath),
-      );
-      await vscode.window.showTextDocument(doc, {
-        preview: true,
-        preserveFocus: true,
-      });
-      return true;
-    },
-    catch: ensureError,
+  openFileInEditor(diffLocation.absolutePath, {
+    preview: true,
+    preserveFocus: true,
   }).pipe(
+    Effect.as(true),
     // The original setup error still propagates; a failed restore is a reason
     // to skip the argument-free viewer rather than open a stale/unrelated PDF.
     Effect.catch((err) =>
@@ -302,7 +293,7 @@ const resolveDiffBase = Effect.fnUntraced(function* (baseFile: string) {
   return undefined;
 });
 
-const handleLatexdiff = Effect.fnUntraced(function* (
+export const handleLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
   baseFile: string,
   editedFile: string,
@@ -383,7 +374,23 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
   );
 });
 
-const handleRunLatexdiff = Effect.fnUntraced(function* (
+/** The latexdiff verbs taken against a commit: the diff, and the pack and clean of what it produced. */
+export const handleLatexdiffCommitAction = (
+  session: SessionHandle,
+  action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+  baseFile: string,
+  commitHash: string,
+) =>
+  action === 'latexdiffvc'
+    ? handleLatexdiffvc(session, baseFile, commitHash)
+    : handlePackLatexdiffvc(
+        session,
+        baseFile,
+        commitHash,
+        action === 'cleanLatexdiffvc',
+      );
+
+export const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
   request: WorkflowDiffRequest,
 ) {
@@ -444,42 +451,3 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
     }),
   );
 });
-
-export function registerLatexdiffCommands(
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: SessionHandle,
-): void {
-  registerCommandEntries(context, [
-    {
-      id: 'texra.latexdiff',
-      handler: (baseFile: string, editedFile: string) =>
-        runtime.runPromise(handleLatexdiff(session, baseFile, editedFile)),
-    },
-    {
-      id: 'texra.latexdiffvc',
-      handler: (baseFile: string, commitHash: string) =>
-        runtime.runPromise(handleLatexdiffvc(session, baseFile, commitHash)),
-    },
-    {
-      id: 'texra.packLatexdiffvc',
-      handler: (baseFile: string, commitHash: string) =>
-        runtime.runPromise(
-          handlePackLatexdiffvc(session, baseFile, commitHash, false),
-        ),
-    },
-    {
-      id: 'texra.cleanLatexdiffvc',
-      // Clean is a pack run with `clean` set, and the failure label follows it.
-      handler: (baseFile: string, commitHash: string) =>
-        runtime.runPromise(
-          handlePackLatexdiffvc(session, baseFile, commitHash, true),
-        ),
-    },
-    {
-      id: 'texra.runLatexdiff',
-      handler: (request: WorkflowDiffRequest) =>
-        runtime.runPromise(handleRunLatexdiff(session, request)),
-    },
-  ]);
-}

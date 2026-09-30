@@ -271,7 +271,6 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
   - `frontend/ui/` - Dialog helpers, diff views, message utilities
   - `frontend/editor/` - Active file guards and editor utilities
   - `frontend/agents/` - The extension's agent-directory layer and final-output opener
-  - `frontend/files/` - File lister and discovery utilities
   - `frontend/latex/` - LaTeX build integration, linting
   - `frontend/media/` - Image and audio handling
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
@@ -646,7 +645,7 @@ For good separation of concerns and platform independence, core business logic s
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
   with `@utils/files/pastedImageUtils` so temporary assets map correctly back
   to storage without pulling Node filesystem code into browser bundles.
-- Surface files through the shared frontend utility (`fileLister` in `packages/extension/src/frontend/files/fileLister.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
+- Surface files through the shared listing (`listWorkspaceFilesOfType` in `src/controllers/session/workspaceFileOptions.ts`) and agents through the process catalog (`@agent/index`) instead of duplicating discovery logic.
 
 **Logging and telemetry**
 

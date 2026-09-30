@@ -14,10 +14,7 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Fiber, Result } from 'effect';
 
 import { promptExtensionInstall } from '@frontend/ui/instruction';
-import {
-  EditorOpenFailed,
-  openFileInEditor,
-} from '@frontend/vscode/vscodeEditor';
+import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
@@ -218,38 +215,6 @@ function getDiagnostics(absolutePath: string): LeanDiagnostic[] {
   return [];
 }
 
-/**
- * Open `uri` in an editor, keeping the current focus. Two steps, so a
- * failure says which one VS Code refused.
- */
-function openInEditor(uri: vscode.Uri): Effect.Effect<void, EditorOpenFailed> {
-  return Effect.gen(function* () {
-    const document = yield* Effect.tryPromise({
-      try: () => Promise.resolve(vscode.workspace.openTextDocument(uri)),
-      catch: (cause) =>
-        new EditorOpenFailed({
-          reason: 'document-open-failed',
-          message: `Could not open ${uri.fsPath}: ${toErrorMessage(cause)}`,
-          absolutePath: uri.fsPath,
-          cause,
-        }),
-    });
-    yield* Effect.tryPromise({
-      try: () =>
-        Promise.resolve(
-          vscode.window.showTextDocument(document, { preserveFocus: true }),
-        ),
-      catch: (cause) =>
-        new EditorOpenFailed({
-          reason: 'editor-unavailable',
-          message: `Could not show ${uri.fsPath} in an editor: ${toErrorMessage(cause)}`,
-          absolutePath: uri.fsPath,
-          cause,
-        }),
-    });
-  });
-}
-
 /** Run one of the Lean 4 extension's commands. */
 function executeLeanCommand(
   commandId: string,
@@ -273,7 +238,7 @@ function executeFileCommand(
   filePath: string,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
-    yield* openInEditor(vscode.Uri.file(filePath));
+    yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
     return true;
@@ -362,7 +327,9 @@ function sendPositionRequest<T>(
       return { data: null, error: provider.failure.message };
     }
 
-    const opened = yield* Effect.result(openInEditor(uri));
+    const opened = yield* Effect.result(
+      openFileInEditor(absolutePath, { preview: true, preserveFocus: true }),
+    );
     if (Result.isFailure(opened)) {
       return { data: null, error: opened.failure.message };
     }
