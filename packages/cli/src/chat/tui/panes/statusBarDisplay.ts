@@ -239,9 +239,9 @@ function formatUsage(
     return { ...base, text: formatCompactTokenCount(reported), color: 'dim' };
   }
 
-  // Occupancy is input tokens only — the prompt that fills the window. Output
-  // tokens are the generated response, not part of the context, which is why
-  // the run reports `inputTokens` here.
+  // Occupancy is the run's `contextTokens` (the last response's input plus
+  // output, then an estimate of what was added since), carried in the wire
+  // field named `inputTokens`.
   const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
   const percent = roundedContextPercent(utilizationPercent);
   // Reads the run's own `utilizationPercent`, not a used/contextWindow

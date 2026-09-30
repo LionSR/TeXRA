@@ -67,7 +67,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
 export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
   id: 'starter',
   name: 'Starter',
-  description: 'Balanced default roster for a first project.',
+  description: 'Balanced default team for a first project.',
   icon: 'rocket',
   agents: {
     workflow: ['correct', 'polish'],

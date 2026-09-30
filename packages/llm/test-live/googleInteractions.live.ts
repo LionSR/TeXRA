@@ -18,7 +18,6 @@ liveProtocol({
           credentialScope: 'live',
         },
         background: 'unsupported',
-        supportsInputTokenEstimation: true,
         defaults: {
           maxOutputTokens: 2048,
           store: true,

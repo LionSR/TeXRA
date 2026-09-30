@@ -89,7 +89,7 @@ function replaceDelegationDescriptionBlock(
 const AVAILABLE_AGENTS_BLOCK = /^Available agents:.*(?:\n(?!\n).+)*/m;
 
 const NO_AGENTS_LINE =
-  'Available agents: none are currently in the active roster. Ask the user to enable delegation targets in Settings → Agents before delegating.';
+  'Available agents: none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.';
 
 /**
  * Format an agent list for a delegation tool's "Available agents:" block.
@@ -260,7 +260,7 @@ const WORKTREE_ENABLED_LINE =
   'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.';
 
 const WORKTREE_DISABLED_LINE =
-  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because the call will be rejected when the tool runs. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
+  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because the call will be rejected when the tool runs. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
 
 /* -------------------------------------------------------------------------
  * Annotation

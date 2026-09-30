@@ -22,6 +22,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   BASH_APPROVAL_CONFIG_KEY,
+  GOAL_MAX_COST_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
@@ -34,7 +35,10 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
-import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import {
+  renderSettingsNumberRow,
+  renderSettingsSectionHeading,
+} from '@ui/wa/settingsSection';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -182,6 +186,8 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
+  @property({ type: Number }) goalMaxCostUsd =
+    GOAL_MAX_COST_SETTING.defaultValue;
   /** Current value of every inline setting the cards declare, by catalog
    *  key; `SettingsApp` reads them from the keyed setting signals. */
   @property({ attribute: false }) settingValues: Readonly<
@@ -244,6 +250,16 @@ export class ToolsTab extends LitElement {
                 `
               : nothing
           }
+          ${renderSettingsNumberRow({
+            label: 'Goal spend cap (USD)',
+            description: GOAL_MAX_COST_SETTING.description,
+            value: this.goalMaxCostUsd,
+            min: GOAL_MAX_COST_SETTING.min,
+            max: GOAL_MAX_COST_SETTING.max,
+            step: 0.5,
+            onChange: (value) =>
+              postStateSetting(GOAL_MAX_COST_SETTING.configKey, value),
+          })}
         </div>
       </div>
     `;

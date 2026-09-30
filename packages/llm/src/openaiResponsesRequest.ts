@@ -8,17 +8,14 @@ import { z } from 'zod';
 
 // Local imports - canonical model contract
 import {
-  InputTokenEstimateSchema,
   ResolvedTurnSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from './turn.js';
-import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { decodeTurnRequest } from './turnInput.js';
 import { sameModelOrigin } from './protocol.js';
-import { ModelError, enrichModelError } from './errors.js';
-import { ownedAbortSafeRequest } from './transport.js';
-import { openaiFailure } from './openaiError.js';
+import { ModelError } from './errors.js';
 import { responseInput } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
@@ -223,101 +220,6 @@ export const openaiAbortMatch = (
 ): boolean =>
   cause === signal.reason ||
   (cause instanceof OpenAI.APIUserAbortError && cause.cause === signal.reason);
-
-/** Counts only the initial text input; the caller owns admission and retry policy. */
-export const estimateResponseInput = Effect.fn(
-  'llm.responses.estimateInputTokens',
-)(function* (
-  config: OpenAIResponsesConfiguration,
-  origin: ResponseOrigin,
-  transport: ResponsesTransport,
-  client: OpenAI,
-  input: Extract<ResolvedTurn, { mode: 'foreground' }>,
-) {
-  // Estimation admits a single text message, so no file id can apply.
-  const { turn, parameters } = yield* responseParameters(
-    config,
-    origin,
-    transport,
-    input,
-    'foreground',
-    null,
-  );
-  if (initialTextInput(turn) === undefined)
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message:
-        'Input estimation supports one initial text-only user message without tools or continuation.',
-    });
-
-  let requestId: string | undefined;
-  const enrich = (error: ModelError) =>
-    enrichModelError(error, {
-      requestId: error.requestId ?? requestId,
-      model: error.model ?? origin.requestedModel,
-    });
-  const raw = yield* ownedAbortSafeRequest(
-    (signal) =>
-      client.responses.inputTokens
-        .count(
-          {
-            model: parameters.model,
-            input: parameters.input,
-            ...(parameters.instructions !== undefined
-              ? { instructions: parameters.instructions }
-              : {}),
-            ...(parameters.reasoning !== undefined
-              ? { reasoning: parameters.reasoning }
-              : {}),
-          },
-          { signal, maxRetries: 0 },
-        )
-        .asResponse()
-        .then((response) => {
-          requestId = response.headers.get('x-request-id') ?? undefined;
-          return response.json() as Promise<unknown>;
-        }),
-    (cause) =>
-      enrich(
-        cause instanceof SyntaxError
-          ? new ModelError({
-              kind: 'malformed-output',
-              message: 'The input token count returned malformed JSON.',
-              cause,
-            })
-          : openaiFailure(cause),
-      ),
-    {
-      isAbortMatch: openaiAbortMatch,
-      cleanupFailure: (cause) =>
-        enrich(
-          new ModelError({
-            kind: 'transport',
-            message: 'The input token count failed while joining its request.',
-            cause,
-          }),
-        ),
-    },
-  );
-  const parsed = z
-    .object({
-      object: z.literal('response.input_tokens'),
-      input_tokens: InputTokenEstimateSchema.unwrap().shape.inputTokens,
-    })
-    .safeParse(raw);
-  if (!parsed.success)
-    return yield* enrich(
-      new ModelError({
-        kind: 'malformed-output',
-        message: 'The input token count returned an invalid receipt.',
-        cause: parsed.error,
-      }),
-    );
-  return InputTokenEstimateSchema.parse({
-    inputTokens: parsed.data.input_tokens,
-    coverage: 'responses-input',
-  });
-});
 
 export const ResponseAuthenticationSchema = z.discriminatedUnion('kind', [
   z

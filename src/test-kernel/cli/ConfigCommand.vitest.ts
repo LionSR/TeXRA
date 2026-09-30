@@ -222,7 +222,7 @@ describe('CLI config command', () => {
 
     expect(result.exitCode).toBe(2);
     expect(stderr).toContain(
-      'Default chat agent "missing-agent" is not in the effective workspace roster.',
+      'Default chat agent "missing-agent" is not in the workspace agents.',
     );
     expect(mocks.setWorkspaceCliChatAgent).not.toHaveBeenCalled();
   });
