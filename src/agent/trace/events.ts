@@ -14,9 +14,9 @@
  * not a trace arm: the storage finalizer writes it once, and the in-memory
  * `ResultEvent` below is that row named by its run.
  *
- * Host-specific events that don't belong in the core union (TeXRA's
- * file-list payloads, latexdiff, missing outputs, etc.) use the `domain`
- * escape hatch with a host-chosen `key`.
+ * Host-specific facts that don't belong in the core union (TeXRA's
+ * file-list payloads, latexdiff, missing outputs, etc.) ride a log arm:
+ * `trace.info(text, { messageType, data })`.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 

@@ -80,14 +80,14 @@ there is a single runtime implementation behind both.
 Not every product event needs a named helper. Every other arm of the
 `AgentEvent` union (usage, context state, tool cards, the finalized
 response) is emitted directly with `trace.emit({ type, ... })`, and
-low-traffic, TeXRA-specific facts ride the `domain` arm
-(`trace.emit({ type: 'domain', key, data, text })`) instead of a dedicated
-named helper.
+low-traffic, TeXRA-specific facts ride a log call
+(`trace.info(text, { messageType, data })`) instead of a dedicated named
+helper.
 
 ## Where things live
 
 ```
-src/agent/trace/                  ← agent-general (no MESSAGE_TYPES, no TeXRA)
+src/agent/trace/                  ← agent-general (no TeXRA)
 ├── events.ts                     ← AgentEvent discriminated union
 ├── AgentTrace.ts                 ← lean SDK interface
 ├── TraceEmitter.ts               ← in-process implementation
