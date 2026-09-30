@@ -126,12 +126,6 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
         cacheDiscountFactor: 0.1,
       },
       capabilities: { cacheDiscountFactor: 0.1 },
-      longContextPricing: {
-        aboveInputTokens: 272_000,
-        inputPrice: 4,
-        outputPrice: 15,
-        cacheDiscountFactor: 0.1,
-      },
       tiers: { fast: { inputPrice: 4, outputPrice: 20 } },
     }),
   };
