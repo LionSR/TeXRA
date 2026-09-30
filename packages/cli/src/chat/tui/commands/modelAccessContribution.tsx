@@ -22,7 +22,7 @@ import {
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { modelConnectionNeeded } from '../modelConnection';
 import { setTransientNotice } from '../state/cliState';
-import { appendLocalAssistantTranscript } from '../state/transcript';
+import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
@@ -165,7 +165,7 @@ export function modelAccessContribution(deps: {
         onDone={(provider, modelNotice) => {
           // The shared key controller posts the "key has been set" notice on
           // every host; only the coding-plan tip is this surface's to write.
-          if (modelNotice) appendLocalAssistantTranscript(modelNotice);
+          if (modelNotice) appendLocalNotice(modelNotice);
           props.onDone(provider);
           runtime.runFork(recheck());
         }}

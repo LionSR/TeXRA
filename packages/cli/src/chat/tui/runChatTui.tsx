@@ -71,6 +71,7 @@ import {
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
   sessionMeta as sessionMetaSignal,
+  setTransientNotice,
 } from './state/cliState';
 import {
   bindSessionView,
@@ -82,7 +83,8 @@ import {
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalErrorTranscript,
+  appendLocalNotice,
   paintedRunIds,
 } from './state/transcript';
 import { openCliSlashCommandForm } from './commands/slashForms';
@@ -227,14 +229,14 @@ export async function runChat(
         version: context.version,
       });
       if (modelSelection.notice) {
-        appendLocalAssistantTranscript(modelSelection.notice);
+        appendLocalNotice(modelSelection.notice);
       }
       // First-run handoff explanation: when the setup agent owns this session
       // (decided here for both the bare-`texra` and `texra chat` entries), say
       // so - display-only, so the agent waits for the user's first message.
       const startupNotice = init.startupNotice;
       if (startupNotice) {
-        appendLocalAssistantTranscript(startupNotice);
+        appendLocalNotice(startupNotice);
       }
       return {
         services,
@@ -382,7 +384,7 @@ export async function runChat(
       (isRunPending && activeStatus !== RUN_PHASE.WAITING) ||
       isActivePhase(activeStatus)
     ) {
-      appendLocalAssistantTranscript(
+      setTransientNotice(
         'Wait for the active response to finish, or press Ctrl-C before /clear.',
       );
       return;
@@ -430,9 +432,7 @@ export async function runChat(
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
-      appendLocalAssistantTranscript(
-        `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
-      );
+      appendLocalNotice(`Approval mode: ${formatTexraApprovalPolicy(policy)}`);
     },
     canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,
@@ -457,7 +457,7 @@ export async function runChat(
     onResumeSelect: chatController.resume,
     configStores: runtimeSession.roots,
     onError: (error) => {
-      appendLocalAssistantTranscript(toErrorMessage(error));
+      appendLocalErrorTranscript(toErrorMessage(error));
     },
   });
 

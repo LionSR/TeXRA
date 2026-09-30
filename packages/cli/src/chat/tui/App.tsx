@@ -75,8 +75,8 @@ import {
   sessionListRunIds,
 } from './state/cliState';
 import {
-  appendLocalAssistantTranscript,
-  describeRequestError,
+  appendLocalNotice,
+  appendLocalRequestRefusal,
 } from './state/transcript';
 import {
   INITIAL_CHILD_LIST_SELECTION,
@@ -295,9 +295,7 @@ export function App(props: AppProps): React.JSX.Element {
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
       Effect.catch(props.session.requests.request(req), (error) =>
-        Effect.sync(() =>
-          appendLocalAssistantTranscript(describeRequestError(error)),
-        ),
+        Effect.sync(() => appendLocalRequestRefusal(error)),
       ),
     );
   };
@@ -312,7 +310,7 @@ export function App(props: AppProps): React.JSX.Element {
   const archiveInfoPane = useCallback((lines: readonly string[]) => {
     if (infoPaneSignal.get()?.lines !== lines) return;
     closeInfoPane();
-    appendLocalAssistantTranscript(lines.join('\n'));
+    appendLocalNotice(lines.join('\n'));
   }, []);
   function renderReader(
     reader: NonNullable<typeof foregroundReader>,

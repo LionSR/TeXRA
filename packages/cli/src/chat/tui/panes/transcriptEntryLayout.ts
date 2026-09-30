@@ -12,6 +12,7 @@ import {
 import {
   CROSS,
   ERROR_ENTRY_PREFIX,
+  NOTICE_ENTRY_PREFIX,
   SKIP_CIRCLE,
   STATUS_DIAMOND,
   STATUS_DOT,
@@ -288,6 +289,14 @@ function entryLines(
       ];
     case 'assistant':
     case 'log': {
+      if (row.kind === 'log' && row.origin === 'local') {
+        return wrapWithPrefix(
+          headline,
+          columns,
+          NOTICE_ENTRY_PREFIX,
+          ' '.repeat(NOTICE_ENTRY_PREFIX.length),
+        );
+      }
       if (mode === 'live') {
         return liveAssistantDisplayLines({
           rows: LIVE_TAIL_ROWS,
