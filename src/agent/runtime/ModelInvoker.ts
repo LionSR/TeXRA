@@ -43,8 +43,8 @@ import {
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import {
   logContextManagementEvent,
-  logErrorData,
   logProgressStatus,
+  logProviderError,
   type StreamHandle,
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
@@ -832,7 +832,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             credentialSwitch,
           };
           const payload = { kind: 'retry', data: request } as const;
-          logErrorData(logger, 'Model request failed', info);
+          yield* logProviderError(logger, 'Model request failed', recorded);
           if (automatic !== null) {
             logProgressStatus(
               logger,
@@ -1099,10 +1099,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             !failure.formatted.userRetryable ||
             hasMissingApiKeyErrorMarker(failure.error)
           ) {
-            logErrorData(
+            yield* logProviderError(
               logger,
               'Model request failed (no retry available)',
-              failure.info,
+              failure.formatted,
             );
             // The invoker is the one writer of the run's failure fact.
             const failed = yield* cell.append((state) =>

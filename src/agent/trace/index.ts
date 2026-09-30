@@ -25,7 +25,7 @@ export {
 } from './toolUseHelpers';
 export {
   logSdkError,
-  logErrorData,
+  logProviderError,
   startCompactionActivity,
   logProgressStatus,
   logUserMessage,
