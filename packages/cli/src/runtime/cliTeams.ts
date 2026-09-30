@@ -55,7 +55,7 @@ const MULTI_AGENT_SHOW_HINT =
 export function readCliTeams(repoState: StateStore) {
   return Effect.gen(function* () {
     const customRaw = yield* repoState.get(
-      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+      WorkspaceStateKey.CUSTOM_TEAMS,
     );
     return launchableTeamPresets(customRaw);
   });

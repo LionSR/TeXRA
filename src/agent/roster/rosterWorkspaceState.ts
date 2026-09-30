@@ -61,7 +61,7 @@ export function serializeWorkspaceWrite<A, E>(
 export function readAgentRosterSelection(repoState: StateStore) {
   return readState(
     repoState,
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    WorkspaceStateKey.WORKSPACE_AGENTS,
     AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
   );
 }

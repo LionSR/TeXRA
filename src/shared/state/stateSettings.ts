@@ -771,12 +771,12 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // Written and read by the roster and the settings view's agent catalog,
   // which no catalog-driven UI renders.
   {
-    key: WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    key: WorkspaceStateKey.WORKSPACE_AGENTS,
     schema: AgentRosterSelectionSchema.prefault(INHERITED_AGENT_ROSTER),
     slot: 'repoState',
   },
   {
-    key: WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    key: WorkspaceStateKey.CUSTOM_TEAMS,
     schema: z.array(AgentModePresetSchema).prefault([]),
     slot: 'repoState',
   },

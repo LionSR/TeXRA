@@ -267,7 +267,7 @@ export function createWorkspaceAgentRosterController(
     repoState,
     globalState,
     getAgents,
-    getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
     resolveAgent: getCategoryAgent,
   });
 }

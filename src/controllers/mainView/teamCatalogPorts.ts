@@ -14,7 +14,7 @@ export function createTeamCatalogPorts(repoState: StateStore) {
   return Effect.gen(function* () {
     return {
       customPresetsRaw: yield* repoState.get(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        WorkspaceStateKey.CUSTOM_TEAMS,
       ),
       resolveAgent: getCategoryAgent,
     };

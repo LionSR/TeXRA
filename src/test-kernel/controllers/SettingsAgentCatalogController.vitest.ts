@@ -79,10 +79,10 @@ function createController(options?: {
   now?: number;
 }) {
   const workspaceState = new FakeStateStore({
-    [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: options?.customPresets ?? [],
+    [WorkspaceStateKey.CUSTOM_TEAMS]: options?.customPresets ?? [],
     ...(options?.enabled || options?.visible
       ? {
-          [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          [WorkspaceStateKey.WORKSPACE_AGENTS]: {
             kind: 'custom',
             agentKeys: byCategory(
               (category) =>
@@ -122,7 +122,7 @@ function createController(options?: {
       ),
     getPresets: () =>
       workspaceState
-        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
+        .get(WorkspaceStateKey.CUSTOM_TEAMS)
         .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
@@ -136,7 +136,7 @@ function createController(options?: {
     }),
     workspaceState,
     customPresets: workspaceState
-      .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS)
+      .get(WorkspaceStateKey.CUSTOM_TEAMS)
       .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
   };
 }
@@ -182,7 +182,7 @@ describe('SettingsAgentCatalogController', () => {
         // The commit stores the team reference, not a frozen key snapshot: the
         // roster re-resolves it against the catalog on every read.
         assert.deepEqual(
-          yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          yield* workspaceState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
           { kind: 'team', teamId: 'custom-team' },
         );
       }),

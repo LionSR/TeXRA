@@ -84,7 +84,7 @@ setupPlatform({}, { agentDirectories: bundledAgentDirectories() });
 function readSelection(): Promise<unknown> {
   return Effect.runPromise(
     installedHost().roots.repoState.get(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      WorkspaceStateKey.WORKSPACE_AGENTS,
     ),
   );
 }
@@ -102,7 +102,7 @@ describe('CLI config command', () => {
     const host = installedHost();
     await Effect.runPromise(
       host.roots.repoState.update(
-        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+        WorkspaceStateKey.WORKSPACE_AGENTS,
         undefined,
       ),
     );

@@ -291,7 +291,7 @@ export class AgentRosterController<
   ): Effect.Effect<void, StateWriteFailed> {
     const parsed = AgentRosterSelectionSchema.parse(selection);
     return this.deps.repoState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      WorkspaceStateKey.WORKSPACE_AGENTS,
       parsed,
     );
   }

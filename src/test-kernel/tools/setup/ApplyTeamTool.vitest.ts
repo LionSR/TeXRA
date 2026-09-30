@@ -32,7 +32,7 @@ import { createFakeSetupPlatform } from './fixtures';
 
 function workspaceRoster() {
   return testWorkspaceRoots().repoState.get(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    WorkspaceStateKey.WORKSPACE_AGENTS,
   );
 }
 
@@ -48,7 +48,7 @@ const expectNoTeamState = Effect.gen(function* () {
 async function clearOnboardingState(): Promise<void> {
   await Effect.runPromise(
     testWorkspaceRoots().repoState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+      WorkspaceStateKey.WORKSPACE_AGENTS,
       undefined,
     ),
   );

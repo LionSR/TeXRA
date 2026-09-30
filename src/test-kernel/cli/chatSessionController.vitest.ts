@@ -540,7 +540,7 @@ describe('createChatSessionController', () => {
     );
     // Return the caller-provided default (undefined for roster keys) — a
     // blanket `false` is not a valid persisted value for
-    // AGENT_ROSTER_SELECTION, which agent resolution now reads.
+    // WORKSPACE_AGENTS, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
       (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );

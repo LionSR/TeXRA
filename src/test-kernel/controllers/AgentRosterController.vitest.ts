@@ -163,7 +163,7 @@ describe('AgentRosterController', () => {
           kind: 'inherit',
         });
         expect(
-          yield* inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          yield* inheritedState.get(WorkspaceStateKey.WORKSPACE_AGENTS),
         ).toBeUndefined();
 
         const team = controller(new FakeStateStore());
@@ -236,7 +236,7 @@ describe('AgentRosterController', () => {
   it.effect('falls back to all agents for a missing symbolic team', () =>
     Effect.gen(function* () {
       const workspaceState = new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+        [WorkspaceStateKey.WORKSPACE_AGENTS]: {
           kind: 'team',
           teamId: 'deleted-team',
         },
@@ -291,7 +291,7 @@ describe('AgentRosterController', () => {
         };
         const roster = controller(
           new FakeStateStore({
-            [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+            [WorkspaceStateKey.WORKSPACE_AGENTS]: {
               kind: 'custom',
               agentKeys: {
                 workflow: [],

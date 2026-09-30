@@ -54,7 +54,7 @@ export class SettingsAgentCatalogController {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       );
     });
   }
@@ -132,7 +132,7 @@ export class SettingsAgentCatalogController {
       };
 
       return yield* this.deps.repoState
-        .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+        .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
           Result.succeed([...presetRecords(stored), preset]),
         )
         .pipe(Effect.as(preset));
@@ -147,7 +147,7 @@ export class SettingsAgentCatalogController {
       return yield* this.deps.roster
         .removeTeamPreset(presetId, () =>
           this.deps.repoState
-            .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+            .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
               Result.succeed(
                 presetRecords(stored).filter(
                   (record) => !isObject(record) || record.id !== presetId,
