@@ -91,7 +91,7 @@
     "undici": "catalog:",
     "which": "catalog:",
     "write-file-atomic": "catalog:",
-    "ws": "^8.21.3",
+    "ws": "^8.22.0",
     "yaml": "catalog:"
   },
   "peerDependencies": {
