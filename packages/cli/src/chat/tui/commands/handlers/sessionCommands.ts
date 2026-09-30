@@ -19,7 +19,7 @@ import {
 } from '@cli/chat/tui/state/sessionView';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
@@ -97,7 +97,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       { ...context.stores, secrets: context.secrets },
       model,
     );
-    appendLocalAssistantTranscript(
+    appendLocalNotice(
       formatCliSessionStatus({
         agent: meta.agent || context.initialAgent,
         model,
@@ -135,7 +135,7 @@ function requestCliSessionCompaction(
   return Effect.suspend(() => {
     const runId = selectedRunIdSignal.get();
     if (runId === undefined) {
-      appendLocalAssistantTranscript(
+      setTransientNotice(
         'No active tool-use session found for context compaction.',
       );
       return Effect.void;
@@ -144,7 +144,7 @@ function requestCliSessionCompaction(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => {
-          appendLocalAssistantTranscript(
+          appendLocalNotice(
             'Context compaction requested. The agent will process it on the next model call.',
             runId,
           );
@@ -194,7 +194,7 @@ function sendCliRunMessage(
     const [target = '', ...words] = remainder.trim().split(/\s+/);
     const text = words.join(' ');
     if (!target || !text) {
-      appendLocalAssistantTranscript('Usage: /send <run id> <message>');
+      setTransientNotice('Usage: /send <run id> <message>');
       return Effect.void;
     }
     const ids = [...currentView().runs.keys()];
@@ -202,7 +202,7 @@ function sendCliRunMessage(
       ? [target as RunId]
       : ids.filter((id) => id.startsWith(target));
     if (matches.length !== 1) {
-      appendLocalAssistantTranscript(
+      setTransientNotice(
         matches.length === 0
           ? `No run matches '${target}'. Use /ps to list runs.`
           : `'${target}' matches ${matches.length} runs (${matches.join(', ')}). Type more of the id.`,
@@ -215,8 +215,7 @@ function sendCliRunMessage(
       .pipe(
         Effect.match({
           onFailure: (error) => appendLocalRequestRefusal(error, runId),
-          onSuccess: () =>
-            appendLocalAssistantTranscript(`Message sent to ${runId}.`),
+          onSuccess: () => appendLocalNotice(`Message sent to ${runId}.`),
         }),
       );
   });

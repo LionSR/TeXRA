@@ -16,7 +16,7 @@ import {
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
-import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
@@ -75,7 +75,7 @@ export function applyInitialCliAgentSelection(
       cliMultiAgentPresetId: undefined,
       delegationAgentScope: undefined,
     });
-    appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
+    appendLocalNotice(`Root agent set to ${nextAgent}.`);
   });
 }
 
@@ -135,7 +135,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       cliMultiAgentPresetId: fields.cli.multiAgentPresetId,
       delegationAgentScope: fields.delegationAgentScope,
     });
-    appendLocalAssistantTranscript(
+    appendLocalNotice(
       [
         `Team set to ${teamName ?? teamId}; ${bareAgentName(fields.agent)} leads it.`,
         resolution.missingNames.length > 0
@@ -165,20 +165,18 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       });
       yield* setCliHelperModel(context.stores.globalState, selection.model);
       setCliSessionModelOverride(selection.model);
-      appendLocalAssistantTranscript(`Root model set to ${selection.model}.`);
+      appendLocalNotice(`Root model set to ${selection.model}.`);
       return;
     }
 
     if (!context.session.canSelectModel()) {
-      appendLocalAssistantTranscript(
-        'Finish the active response before switching models.',
-      );
+      setTransientNotice('Finish the active response before switching models.');
       return;
     }
 
     const controls = context.session.activeRunControls();
     if (!controls) {
-      appendLocalAssistantTranscript(
+      setTransientNotice(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
       );
       return;
@@ -192,11 +190,11 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
     yield* setCliHelperModel(context.stores.globalState, nextModel).pipe(
       Effect.matchCause({
         onSuccess: () =>
-          appendLocalAssistantTranscript(
+          appendLocalNotice(
             `Model switched to ${nextModel}. Future turns will use it.`,
           ),
         onFailure: (cause) =>
-          appendLocalAssistantTranscript(
+          appendLocalNotice(
             `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(Cause.squash(cause))}`,
           ),
       }),
