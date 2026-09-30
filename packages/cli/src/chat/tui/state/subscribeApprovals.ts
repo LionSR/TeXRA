@@ -47,7 +47,7 @@ import {
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
-import { appendLocalAssistantTranscript } from './transcript';
+import { appendLocalNotice } from './transcript';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
@@ -201,7 +201,7 @@ export function createTuiHostInteractions(
         yield* Effect.logWarning(
           `The retry could not switch to your own API key: ${reason}`,
         ).pipe(withLogChannel('cli.tui'));
-        appendLocalAssistantTranscript(reason, permission.runId);
+        appendLocalNotice(reason, permission.runId);
         reopenRequest(requestId);
       }),
     );

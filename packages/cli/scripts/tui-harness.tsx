@@ -126,7 +126,7 @@ import {
   createTuiHostInteractions,
 } from '../src/chat/tui/state/subscribeApprovals';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalNotice,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
 } from '../src/chat/tui/state/transcript';
@@ -1511,7 +1511,7 @@ function appendHarnessTranscript(
 ): void {
   switch (role) {
     case 'assistant':
-      appendLocalAssistantTranscript(text, explicitRunId);
+      appendLocalNotice(text, explicitRunId);
       return;
     case 'user':
       appendLocalUserTranscript(text);

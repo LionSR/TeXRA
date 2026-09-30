@@ -19,6 +19,10 @@ export interface AgentEntry {
   description?: string;
   tools?: string[]; // tool names, for display
   rounds?: number; // workflow round count, for display
+  /** Digest of the definition file; absent on a plugin agent. */
+  digest?: string;
+  /** A customized copy's `basedOn`: the bundled file's digest it began from. */
+  basedOn?: string;
   /** The resolved settings and prompts the run starts from. */
   setting: AgentSetting;
   prompt: AgentPrompt;

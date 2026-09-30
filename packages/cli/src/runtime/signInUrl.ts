@@ -14,10 +14,12 @@ const REMOTE_CALLBACK_HINT =
  * Progress sink shared by every sign-in. `copyable` marks the instructions
  * (the URL, the device code) apart from status lines, so a sink that shows
  * only its latest message still keeps the instructions on screen.
+ * `persistent` marks guidance (a hint, a failed launch) that must outlive the
+ * next status line without being styled as text to copy.
  */
 export type CliSignInProgress = (
   message: string,
-  options?: { readonly copyable?: boolean },
+  options?: { readonly copyable?: boolean; readonly persistent?: boolean },
 ) => void;
 
 /**
@@ -39,7 +41,7 @@ export function presentCliSignInUrl(options: {
   return Effect.gen(function* () {
     writeProgress(`${displayName} sign-in URL:\n${url}`, { copyable: true });
     if (noBrowser) {
-      writeProgress(REMOTE_CALLBACK_HINT);
+      writeProgress(REMOTE_CALLBACK_HINT, { persistent: true });
       return;
     }
 
@@ -54,6 +56,7 @@ export function presentCliSignInUrl(options: {
     }
     writeProgress(
       `Automatic browser launch failed; open the sign-in URL above. ${REMOTE_CALLBACK_HINT}`,
+      { persistent: true },
     );
   });
 }

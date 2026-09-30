@@ -154,6 +154,23 @@ export function getAgent(identifier: string): AgentEntry | undefined {
   return undefined;
 }
 
+/**
+ * The bundled agent a customized copy was made from, when the bundled file
+ * has changed since the copy was taken (an app update shipped a new version).
+ * Only a copy that records `basedOn` can tell; an agent the user wrote from
+ * scratch under a bundled name has no base to compare. A disabled plugin's
+ * agents are not in the catalog, so they never answer here.
+ */
+export function changedBuiltInOf(
+  entry: Pick<AgentEntry, 'name' | 'source' | 'category' | 'basedOn'>,
+): AgentEntry | undefined {
+  if (entry.source !== 'custom' || entry.basedOn == null) return undefined;
+  const builtIn = (['builtInWorkflow', 'builtInToolUse'] as const)
+    .map((source) => cache.get(agentKey(source, entry.name)))
+    .find((candidate) => candidate?.category === entry.category);
+  return builtIn && builtIn.digest !== entry.basedOn ? builtIn : undefined;
+}
+
 /** Get agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   return deduplicateByName(

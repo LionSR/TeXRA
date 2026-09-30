@@ -2,9 +2,10 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import {
-  appendLocalAssistantTranscript,
+  appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { APPROVAL_BYPASS_LABEL } from '@cli/chat/tui/forms/ApprovalPolicyForm';
 import {
   formatTexraApprovalPolicy,
@@ -29,14 +30,12 @@ export function applyCliApprovalPolicySelection(
   const normalized = input.trim().toLowerCase();
   const policy = parseTexraApprovalPolicy(normalized);
   if (!policy) {
-    appendLocalAssistantTranscript(APPROVAL_USAGE);
+    setTransientNotice(APPROVAL_USAGE);
     return;
   }
 
   context.setApprovalPolicy(policy);
-  appendLocalAssistantTranscript(
-    `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
-  );
+  appendLocalNotice(`Approval mode: ${formatTexraApprovalPolicy(policy)}`);
 }
 
 /**
@@ -59,7 +58,7 @@ export function setCliRunBypass(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () =>
-          appendLocalAssistantTranscript(
+          appendLocalNotice(
             `${APPROVAL_BYPASS_LABEL[bypass]}: ${enabled ? 'on' : 'off'}`,
           ),
       }),

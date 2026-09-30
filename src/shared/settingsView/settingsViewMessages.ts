@@ -210,6 +210,11 @@ const AgentSelectionItemSchema = AgentMetadataBaseSchema.extend({
   hasPath: z.boolean(),
   filePath: z.string().optional(),
   tools: z.array(z.string()).optional(),
+  /**
+   * On a customized copy: the source of the bundled agent it overrides, when
+   * an update changed that agent since the copy was taken.
+   */
+  newerBuiltIn: AgentSourceSchema.optional(),
   enabled: z.boolean(),
 });
 export type AgentSelectionItem = z.infer<typeof AgentSelectionItemSchema>;
@@ -658,6 +663,10 @@ const DeleteCustomAgentMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
   agentName: z.string().min(1),
 });
+const KeepCustomAgentMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
+  agentName: z.string().min(1),
+});
 const RevealAgentFileMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
 );
@@ -826,6 +835,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     CreateAgentMessageSchema,
     CustomizeAgentMessageSchema,
     DeleteCustomAgentMessageSchema,
+    KeepCustomAgentMessageSchema,
     RevealAgentFileMessageSchema,
     // Custom agent directory messages
     SetCustomAgentDirMessageSchema,

@@ -177,6 +177,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A customized built-in agent tells you when TeXRA ships a newer version.**
+  Built-in agents already update with the app; a custom copy with the same
+  name used to override the improved version forever without a word.
+  Customize now records which bundled version the copy started from
+  (a `basedOn:` line at the end of the file). When an update changes that
+  agent, the settings Agents page marks the copy and offers View built-in,
+  Reset to built-in, and Keep mine; `texra agents list` and `texra agents
+show` print the same notice, and the new `texra agents customize`,
+  `texra agents reset`, and `texra agents keep` commands make, reset, and
+  keep a copy from the terminal. An agent you wrote yourself under a built-in's name
+  is never flagged.
 - **Goal mode pauses at a spend cap.** An autonomous goal now stops between
   turns once the run and its subagents have spent `texra.goal.maxCostUsd`
   (default $5; `0` removes it; on the Tools page and in `/config`), withdraws
@@ -1008,6 +1019,15 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Slash-command results no longer read as the model speaking.** In the
+  terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)
+  is a dim row led by `»`, failures are red `!` errors instead of plain
+  text, and a refusal that only needs a hint ("Finish the active response
+  before switching models") shows in the notice line instead of the
+  transcript. Sign-out and account results keep one fact per line, and a
+  failed sign-in shows its link on its own line. `/help` and `/memory` echo
+  the command they answer, and a direct `/login chatgpt` no longer leaves
+  a permanent row for each status line.
 - **`/` forms span the full terminal width** — `/login`, `/config`, `/agent`
   and the other slash-command panels were capped at 80 columns and cut their
   option labels off at 24 ("Prefer ChatGPT subscrip…"). They now fill the
