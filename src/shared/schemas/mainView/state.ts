@@ -28,7 +28,7 @@ import { ToolConfigFieldsSchema } from '../toolConfig';
 export const SessionTypeSchema = AgentCategorySchema;
 export type SessionType = z.infer<typeof SessionTypeSchema>;
 
-/** Who runs a main-view request: a single agent or a multi-agent team. */
+/** Who runs a main-view request: a single agent or a team. */
 export const LaunchTargetSchema = z.enum(['agent', 'team']);
 
 // ============================================================

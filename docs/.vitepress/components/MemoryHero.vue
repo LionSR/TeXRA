@@ -20,10 +20,10 @@ function toggle(id) {
 <template>
   <MockupFrame title="Dashboard — texra-paper">
     <!-- Settings tab strip. Tab order, panel names, and icons mirror
-         SettingsApp.ts (Memory · History · Models · Agents · Multi-Agent ·
+         SettingsApp.ts (Memory · History · Models · Agents ·
          Tools · Integrations · Git · LaTeX · Goal). The real UI lays them
          out horizontally above the content; this hero stacks them vertically
-         only because ten tabs do not fit horizontally at mockup width. -->
+         only because nine tabs do not fit horizontally at mockup width. -->
     <aside class="board dash-nav">
       <nav class="dash-tabs">
         <span class="dt dt-on"
@@ -38,9 +38,6 @@ function toggle(id) {
         >
         <span class="dt"
           ><wa-icon library="texra" name="robot"></wa-icon> Agents</span
-        >
-        <span class="dt"
-          ><wa-icon library="texra" name="users"></wa-icon> Multi-Agent</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon>

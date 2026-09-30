@@ -38,7 +38,7 @@ interface DesktopStartupTeamPanelOptions {
   onVisibilityChanged(): void;
   showLauncher(): void;
   /** Opens the Settings tab focused on the team picker, for fine-tuning. */
-  openMultiAgent(): void;
+  openTeams(): void;
   /** Returns the current display hint for the Commands shortcut. */
   commandsHint(): string;
 }
@@ -104,7 +104,7 @@ export function createStartupTeamPanel({
   dismiss: postDismissed,
   onVisibilityChanged,
   showLauncher,
-  openMultiAgent,
+  openTeams,
   commandsHint,
 }: DesktopStartupTeamPanelOptions): StartupPanelController {
   const titleId = nextPanelTitleId();
@@ -250,7 +250,7 @@ export function createStartupTeamPanel({
           size="s"
           @click=${() => {
             closePanel();
-            openMultiAgent();
+            openTeams();
           }}
         >
           Customize

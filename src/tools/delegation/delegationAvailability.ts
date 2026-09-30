@@ -5,7 +5,7 @@
  * The delegate_agent / delegate_workflow descriptions ship with placeholder
  * "Available agents:", "Available models:", and "Git worktree support:" lines.
  * All three depend on state the user can change after the tool registry is
- * built (roster visibility, a multi-agent preset swap, model credentials, the
+ * built (roster visibility, a team swap, model credentials, the
  * worktree setting), so each line is resolved per run at the `resolveStepTools`
  * boundary instead of being frozen into the tool definition at first access.
  *

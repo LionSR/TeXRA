@@ -1,5 +1,5 @@
 <script setup>
-// Terminal card for `texra team run` — the Multi-Agent Teams section of
+// Terminal card for `texra team run` — the Teams section of
 // guide/texra-cli.md. Shows the orchestrator-and-delegates shape the TUI
 // actually renders: the team's lead agent at work, then the subagent panel's
 // numbered child rows (status marker colored by child state, agent label,
