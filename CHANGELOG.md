@@ -361,6 +361,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A ChatGPT or Grok sign-in the provider expired early renews itself.**
+  A 401 on a token TeXRA still counted as fresh failed the run with
+  "token is expired" while Settings kept saying the subscription was ready.
+  The request and the plan-usage check now refresh the token once and retry;
+  when the refresh is refused too, the account shows as signed out.
 - **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
   a sign-in row in the chat's account menu started the sign-in but left the
   menu on screen, so the sign-in link, one-time code and `c` copy-link key

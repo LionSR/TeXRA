@@ -279,6 +279,27 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     return Effect.mapError(this.freshSession(), callerFailure);
   }
 
+  /**
+   * Refresh the stored session now, whatever its stored expiry: the provider
+   * rejected its access token early (revoked, or expired server-side). A
+   * fatal refresh clears the session, so the account reads as signed out.
+   */
+  refreshRejected(): Effect.Effect<void, Error, HttpClient.HttpClient> {
+    return Effect.mapError(this.forcedRefresh(), callerFailure);
+  }
+
+  private readonly forcedRefresh = Effect.fn(
+    'SubscriptionOAuthCoordinator.refreshRejected',
+  )(function* (this: SubscriptionOAuthCoordinator<S>) {
+    const { generation, session } = yield* this.stableSession();
+    if (!session) {
+      return yield* Effect.fail(
+        new SubscriptionOAuthError(this.policy.notSignedInMessage, 'expired'),
+      );
+    }
+    yield* this.refresh(session, generation);
+  });
+
   private store(session: S): Effect.Effect<void, AuthPortError> {
     return this.storage.store(JSON.stringify(session));
   }

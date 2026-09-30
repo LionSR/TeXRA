@@ -16,6 +16,7 @@
  * restart; a consumed permit never buys a second billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
+import { StatusCodes } from 'http-status-codes';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
@@ -77,6 +78,7 @@ import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { policyDecidedRows } from './requestPolicy';
+import { refreshRejectedSubscription } from './modelRoutes';
 import { AgentRun } from './run/AgentRun';
 import {
   backgroundDelivery,
@@ -943,6 +945,9 @@ export const modelInvokerLayer = (): Layer.Layer<
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
           ));
         let automaticAttempts = 0;
+        // A subscription token the provider rejects early gets one forced
+        // refresh per invocation; a second 401 fails as usual.
+        let tokenRefreshed = false;
         let sent = request;
         // An open attempt with no response is an invocation the process never
         // saw finish: the next attempt continues its numbering, and its gate
@@ -1083,6 +1088,28 @@ export const modelInvokerLayer = (): Layer.Layer<
           } else automaticAttempts += 1;
           if (isUserAbort(failure.error))
             return { kind: 'cancelled', state: yield* cell.current };
+          if (
+            !tokenRefreshed &&
+            failure.formatted.statusCode === StatusCodes.UNAUTHORIZED &&
+            (bound.usageRoute === 'chatgpt-subscription' ||
+              bound.usageRoute === 'xai-subscription')
+          ) {
+            tokenRefreshed = true;
+            const refreshed = yield* Effect.result(
+              refreshRejectedSubscription(bound.usageRoute, run.stores.secrets),
+            );
+            if (Result.isSuccess(refreshed)) {
+              logger.warn(
+                `Subscription token rejected (${failure.info.message}); refreshed it and retrying.`,
+              );
+              const { declinedRoutes: declined } = yield* cell.current;
+              yield* rebind('configured', bound, declined);
+              continue;
+            }
+            logger.warn(
+              `Subscription token rejected and its refresh failed: ${refreshed.failure.message}`,
+            );
+          }
           if (
             dropChain ||
             (failure.autoRetryable && automaticAttempts < limit)

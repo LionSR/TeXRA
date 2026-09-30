@@ -51,6 +51,7 @@ function stubCodexSession(
   overrides: {
     readonly loadSession?: () => Effect.Effect<unknown, unknown>;
     readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
+    readonly refreshRejected?: () => Effect.Effect<void, unknown>;
   } = {},
 ): void {
   vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
@@ -64,6 +65,7 @@ function stubCodexSession(
           accessToken: 'chatgpt-secret',
           accountId: 'account-123',
         })),
+    refreshRejected: overrides.refreshRejected ?? (() => Effect.void),
   } as never);
 }
 
@@ -671,6 +673,8 @@ describe('SubscriptionUsageService', () => {
         reason: 'invalid_credentials',
       });
       expect(JSON.stringify(snapshot)).not.toContain('secret');
+      // A ChatGPT 401 forces one token refresh and one retry, no more.
+      expect(http).toHaveBeenCalledTimes(provider === 'chatgpt' ? 2 : 1);
     },
   );
 

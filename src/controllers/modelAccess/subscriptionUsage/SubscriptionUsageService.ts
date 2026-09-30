@@ -128,12 +128,31 @@ export class SubscriptionUsageService {
     // `requestTimeoutMs` is the one deadline over the request and body read.
     return Object.freeze({
       chatgpt: {
-        fetch: () =>
-          Effect.flatMap(this.loadChatGptCredential(), (credential) =>
-            credential
-              ? fetchChatGptUsage(credential, this.requestTimeoutMs)
-              : Effect.succeed(null),
-          ),
+        // A 401 on a token its stored expiry still calls fresh forces one
+        // refresh; a refresh the server refuses clears the session, so the
+        // account reads as signed out instead of "ready to use".
+        fetch: () => {
+          const fetchOnce = Effect.flatMap(
+            this.loadChatGptCredential(),
+            (credential) =>
+              credential
+                ? fetchChatGptUsage(credential, this.requestTimeoutMs)
+                : Effect.succeed(null),
+          );
+          return fetchOnce.pipe(
+            Effect.catchIf(
+              (error) =>
+                HttpClientError.isHttpClientError(error) &&
+                error.reason._tag === 'StatusCodeError' &&
+                error.reason.response.status === 401,
+              () =>
+                Effect.andThen(
+                  codexCoordinator(this.secrets).refreshRejected(),
+                  fetchOnce,
+                ),
+            ),
+          );
+        },
       },
       kimiCode: {
         fetch: () =>
