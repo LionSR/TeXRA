@@ -1,13 +1,6 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -51,10 +44,6 @@ import {
   renderAutoApproveRow,
   WideHeaderController,
 } from './autoApproveSwitches';
-import {
-  deleteSessionConfirmStyles,
-  renderDeleteSessionConfirm,
-} from './deleteSessionConfirm';
 import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -67,7 +56,7 @@ export interface HeaderMenuItem {
   readonly activate: () => void;
 }
 
-/** The menu value of the delete item, which asks before it acts. */
+/** The menu value of the delete item. */
 const DELETE_SESSION = 'deleteSession';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
@@ -92,7 +81,6 @@ export class RunHeader extends LitElement {
     designTokens,
     commonViewStyles,
     statusIndicatorStyles,
-    deleteSessionConfirmStyles,
     css`
       :host {
         display: block;
@@ -242,19 +230,6 @@ export class RunHeader extends LitElement {
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
 
-  /** The delete item was chosen; the row asks before it acts. */
-  @state() private confirmingDelete: RunId | null = null;
-
-  protected override updated(changed: PropertyValues): void {
-    // The menu hands focus back to its trigger; the confirmation takes it,
-    // so Escape (heard on the callout) and Tab land on the question.
-    if (changed.has('confirmingDelete') && this.confirmingDelete !== null) {
-      this.renderRoot
-        .querySelector<HTMLElement>('.delete-confirm-cancel')
-        ?.focus();
-    }
-  }
-
   private readonly width = new WideHeaderController(this);
 
   private readonly copyRunContext = new CopyButtonController(this, {
@@ -376,13 +351,6 @@ export class RunHeader extends LitElement {
         <slot name="end"></slot>
         ${this.renderMenu(run, statusLabel, progressTitle, canGrant)}
       </div>
-      ${
-        this.confirmingDelete === run.id
-          ? renderDeleteSessionConfirm(this, run, () => {
-              this.confirmingDelete = null;
-            })
-          : nothing
-      }
     `;
   }
 
@@ -421,7 +389,9 @@ export class RunHeader extends LitElement {
             return;
           }
           if (value === DELETE_SESSION) {
-            this.confirmingDelete = run.id;
+            this.dispatchEvent(
+              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
+            );
             return;
           }
           const action = actions.find((candidate) => candidate.id === value);
@@ -476,7 +446,7 @@ export class RunHeader extends LitElement {
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
                   >${waIcon('trash', { slot: 'icon' })}Delete
-                  session…</wa-dropdown-item
+                  session</wa-dropdown-item
                 >`
             : nothing
         }

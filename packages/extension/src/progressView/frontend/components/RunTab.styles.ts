@@ -241,8 +241,7 @@ export const runTabStyles = css`
     display: none;
   }
 
-  /* The row's Delete: shown on hover or focus, like Resume, and kept while
-     its confirmation is open. */
+  /* The row's Delete: shown on hover or focus, like Resume. */
   .tab-remove {
     flex-shrink: 0;
     color: var(--color-text-muted);
@@ -254,8 +253,7 @@ export const runTabStyles = css`
     background: none;
   }
 
-  .tab-container:not(:hover, :focus-within)
-    .tab-remove:not([aria-expanded='true']) {
+  .tab-container:not(:hover, :focus-within) .tab-remove {
     display: none;
   }
 

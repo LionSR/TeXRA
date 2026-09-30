@@ -79,7 +79,7 @@ export class RunTabs extends LitElement {
   @property({ type: Boolean }) activeOnly = false;
   /** Group headings (Running, Waiting on you, Interrupted, Recent). */
   @property({ type: Boolean }) sections = false;
-  /** Rows offer Delete, behind a confirmation: the desktop rail. */
+  /** Rows offer an immediate Delete: the desktop rail. */
   @property({ type: Boolean }) removable = false;
   /** The subtree to show instead of `view.order`: the Subagents pane. */
   @property({ attribute: false }) root: RunId | null = null;

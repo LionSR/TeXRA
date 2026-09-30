@@ -205,7 +205,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
   }
 });
 
-test('the rail deletes a finished conversation after asking, and it stays deleted', async () => {
+test('the rail deletes a finished conversation at once, and it stays deleted', async () => {
   const { workspacePath, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
   const railRow = (launched: LaunchedApp, runId: RunId) =>
@@ -230,18 +230,13 @@ test('the rail deletes a finished conversation after asking, and it stays delete
     const row = railRow(currentLaunch, WAITING_RUN);
     await expect(row).toHaveCount(1);
 
-    // Focus reveals the ×; it asks first, and Cancel keeps the row.
-    await row.locator('#run-tab-select-button').focus();
-    await row.locator('.tab-remove').click();
-    await row.locator('.delete-confirm-cancel').click();
-    await expect(row.locator('.delete-confirm')).toHaveCount(0);
-    await expect(row).toHaveCount(1);
-    // Focus came back to the row, so its × is showing again.
-    await expect(row.locator('.tab-remove')).toBeVisible();
-
+    // Hover reveals the ×, and it deletes at once: no question asked.
     await row.hover();
+    await expect(row.locator('.tab-remove')).toBeVisible();
+    await currentLaunch.page.screenshot({
+      path: test.info().outputPath('rail-row-hover.png'),
+    });
     await row.locator('.tab-remove').click();
-    await row.locator('#confirmDeleteSession').click();
     await expect(row).toHaveCount(0);
     await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
 
