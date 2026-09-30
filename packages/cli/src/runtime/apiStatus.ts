@@ -11,7 +11,6 @@ import { providerDisplayName } from '@shared/constants/providers';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
-import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
 import {
   formatCliCodingPlanPreference,
@@ -19,54 +18,33 @@ import {
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
   subscriptionAccountLabel,
-  type CliAccountStatus,
+  type CliModelAccessStatus,
 } from './modelAccessRoute';
-import {
-  mergeCliTexraAccountStatus,
-  readCliModelAccessStatus,
-} from './modelAccessSelection';
-import { getCliAuthProfile } from './supabaseAuth';
+import { readCliModelAccessStatus } from './modelAccessSelection';
 
 /** The one method this module needs, derived from the service that owns it —
  *  the same narrowing the desktop credential controller uses. */
 type SubscriptionUsageReader = Pick<SubscriptionUsageService, 'getUsage'>;
-
-/** The auth profile read, typed once for the readers below; the program is
- *  built per read, as each reader asks for the current profile. */
-const readCliAuthProfile = Effect.suspend(getCliAuthProfile);
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
   return `signed in${accountLabel ? ` as ${accountLabel}` : ''}`;
 }
 
-function formatAccountStatusLine(
-  label: string,
-  signedIn: boolean,
-  accountLabel?: string,
-): string {
-  return `${label}: ${formatAccountStatus(signedIn, accountLabel)}`;
-}
-
 interface CliModelAccessOverview {
-  readonly access: CliAccountStatus;
+  readonly access: CliModelAccessStatus;
   readonly lines: readonly string[];
-  /** Stale-metadata warning from the auth profile, when any. */
-  readonly note?: string;
 }
 
 /**
- * Read both account sessions and the effective model-access route. A program,
+ * Read the subscription sessions and the effective model-access route. A program,
  * because the coding-plan key status underneath it is one: the chat surface
  * yields it, and a Promise-facing caller settles it on its own runtime.
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
 )(function* (stores: SettingsStores, secrets: PlatformSecrets) {
-  const [access, profile] = yield* Effect.all(
-    [readCliModelAccessStatus(stores, secrets), readCliAuthProfile] as const,
-    { concurrency: 'unbounded' },
-  );
+  const access = yield* readCliModelAccessStatus(stores, secrets);
   const lines = [
     ...SUBSCRIPTION_AUTH_PROVIDERS.map(
       (provider) =>
@@ -77,18 +55,8 @@ export const loadCliModelAccessOverview = Effect.fn(
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
     `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
-    formatAccountStatusLine(
-      RESEARCHER_ACCESS.label,
-      profile.authenticated,
-      profile.accountLabel,
-    ),
   ];
-  if (profile.note) lines.push(profile.note);
-  return {
-    access: mergeCliTexraAccountStatus(access, profile),
-    lines,
-    note: profile.note,
-  } satisfies CliModelAccessOverview;
+  return { access, lines } satisfies CliModelAccessOverview;
 });
 
 /** Format a neutral personal-key inventory. */
@@ -130,10 +98,9 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     readonly now?: number;
   } = {},
 ) {
-  const [access, profile, providers] = yield* Effect.all(
+  const [access, providers] = yield* Effect.all(
     [
       readCliModelAccessStatus(stores, secrets),
-      readCliAuthProfile,
       configuredApiKeyProviders(secrets),
     ] as const,
     { concurrency: 'unbounded' },
@@ -221,6 +188,5 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     'Other API keys',
   );
   if (otherPersonalKeys) lines.push(otherPersonalKeys);
-  if (profile.note) lines.push(profile.note);
   return lines;
 });

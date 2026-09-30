@@ -19,11 +19,9 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
-import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
   fakeProcessServices,
   type FakeProcessServices,
-  installHostAuth,
   installedHost,
 } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -115,10 +113,6 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
       catch: ensureError,
     }),
 }));
-
-// The account-plane probes the team planner runs, oldest first; an empty
-// queue answers signed-out. Installed on the fake host per test below.
-let authProbes: boolean[] = [];
 
 const { runTeam: nativeRun } = await import('@cli/commands/team');
 
@@ -278,14 +272,6 @@ describe('CLI team run command', () => {
         category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
     );
     mocks.planTeamRun.mockReturnValue(teamPlan());
-    authProbes = [];
-    installHostAuth(
-      fakeSupabaseAuth({
-        authenticated: Effect.suspend(() =>
-          Effect.succeed(authProbes.shift() ?? false),
-        ),
-      }),
-    );
     mocks.executeCliToolUseConfig.mockResolvedValue({
       ok: true,
       result: {

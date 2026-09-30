@@ -66,12 +66,12 @@ describe('list_api_keys tool', () => {
 
   it.effect('redacts other stored secret names', () =>
     Effect.gen(function* () {
-      const result = yield* callWithStoredKeys(['texra.supabase.session']);
+      const result = yield* callWithStoredKeys(['texra.other.secret']);
       assert.match(
         outputOf(result),
         /Other stored secrets: 1 redacted key name/,
       );
-      assert.doesNotMatch(outputOf(result), /texra\.supabase\.session/);
+      assert.doesNotMatch(outputOf(result), /texra\.other\.secret/);
     }),
   );
 });

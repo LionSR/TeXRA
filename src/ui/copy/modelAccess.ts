@@ -5,9 +5,6 @@
  * Settings pickers, compact status labels, and model availability messages
  * import these strings instead of paraphrasing the internal enum values,
  * which stay wire identifiers and never reach the screen.
- *
- * "TeXRA account" is the account you sign in to; that copy lives in
- * `onboarding.ts`.
  */
 
 import type { UsageRoute } from '@shared/schemas';

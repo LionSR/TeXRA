@@ -309,14 +309,7 @@ function readBaseline(): EdgeBaseline {
  * as a new-edge violation of kind `value`. Adding an entry is a ruling, not a
  * refactor.
  */
-const ADMITTED_TYPE_ONLY_EDGES = new Map<string, string>([
-  [
-    'platform->auth',
-    'processRuntime.ts unions the `SupabaseAuth` tag into `ProcessServices` ' +
-      'beside the existing `@agent`/`@tools` service tags: the account plane ' +
-      'is a process-lifetime service every host root installs once.',
-  ],
-]);
+const ADMITTED_TYPE_ONLY_EDGES = new Map<string, string>();
 
 function edgeKey(edge: Pick<SubsystemEdge, 'from' | 'to'>): string {
   return `${edge.from}->${edge.to}`;

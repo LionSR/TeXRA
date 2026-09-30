@@ -11,7 +11,6 @@ import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentDirectories,
   fakeHostAppState,
-  fakeHostAuth,
   fakeHostLanguageModel,
   fakeHostSecrets,
   fakeSetupPlatform,
@@ -59,9 +58,6 @@ const runtime = installProcessRuntime({
   mcpConfigPath: mcpConfigPathOf(globalStorage),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
-  // Suites swap the account plane with their host; the default host's
-  // answers signed-out.
-  auth: fakeHostAuth,
   languageModel: fakeHostLanguageModel,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
   setup: fakeSetupPlatform,

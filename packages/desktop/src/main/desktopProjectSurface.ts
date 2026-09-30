@@ -53,7 +53,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly bindings: ProjectBindings;
     readonly onboarding: DesktopOnboardingIpc;
     readonly promptController: DesktopPromptController;
-    readonly auth: DesktopSettingsIpcOptions['auth'];
     readonly secrets: PlatformSecrets;
     readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
@@ -221,7 +220,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             host.previewHost.openExternal,
           ),
         },
-        auth: options.auth,
         session: project.session,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,

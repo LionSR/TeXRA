@@ -30,7 +30,7 @@ import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
-import './tabs/AccountTab';
+import './tabs/PrivacyTab';
 import './tabs/SubscriptionsTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
@@ -48,7 +48,6 @@ import {
   agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
-  authenticated,
   approvalPolicy,
   bashApprovalEnabled,
   chatgptCodexContextWindow,
@@ -92,7 +91,6 @@ import {
   selectedPanel,
   selectedSections,
   settingSignal,
-  sessionProblem,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
@@ -105,7 +103,6 @@ import {
   workflowAutoCompile,
   workflowAutoOpenPdf,
   workflowRejectOnCompileFailure,
-  userEmail,
 } from './settingsState';
 
 registerTeXRAWebAwesomeIcons();
@@ -420,12 +417,9 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               ></git-tab>
             `
           : html`
-              <account-tab
-                .authenticated=${authenticated.get()}
-                .userEmail=${userEmail.get()}
-                .sessionProblem=${sessionProblem.get()}
+              <privacy-tab
                 .telemetryEnabled=${telemetryEnabled.get()}
-              ></account-tab>
+              ></privacy-tab>
             `;
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;

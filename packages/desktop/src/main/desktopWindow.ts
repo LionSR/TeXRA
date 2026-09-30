@@ -8,8 +8,6 @@ import { Effect, Scope, Semaphore, Stream, SubscriptionRef } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 import { z } from 'zod';
 
-import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { AgentDirectoriesPort, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -50,7 +48,7 @@ import {
   createDesktopShellIpc,
 } from './desktopShellIpc.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
-import { openWindowAccount } from './desktopWindowAccount.js';
+import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
 import { bootstrapDesktopWindowLifecycle } from './desktopWindowLifecycle.js';
 import { getDesktopWindowTitle } from './desktopWindowTitle.js';
@@ -61,7 +59,6 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
-import type { DesktopProtocolCallbackRouter } from './desktopProtocolCallbacks.js';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,
@@ -69,13 +66,6 @@ import type {
 
 export interface DesktopWindowOptions {
   readonly projects: DesktopProjectRegistry;
-  /** The account plane served as `SupabaseAuth`, for the window's direct
-   *  sign-in probes and the OAuth client it drives. */
-  readonly supabaseAuth: SupabaseAuthShape;
-  /** The pending sign-in records, opened before the window so a deep link
-   *  that launched the app can still be claimed. */
-  readonly pendingOAuthStore: PendingOAuthStore;
-  readonly protocolRouter: DesktopProtocolCallbackRouter;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
   /** The process services the composition root built (see
@@ -146,20 +136,16 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 
   // `surface`, `bindings` and `navigation` are declared below and read only
   // inside lazy callbacks; the order cannot flip, since the surface takes the
-  // onboarding this account call returns.
-  const { onboarding, signIn, signOut, refreshFunnelAfterLaunch } =
-    yield* openWindowAccount({
-      host,
-      runtime,
-      projects,
-      supabaseAuth: options.supabaseAuth,
-      pendingOAuthStore: options.pendingOAuthStore,
-      protocolRouter: options.protocolRouter,
-      globalState: options.globalState,
-      secrets: options.secrets,
-      settings: () => surface.settings(),
-      activeRun: () => bindings.active()?.run,
-    });
+  // onboarding this call returns.
+  const { onboarding, refreshFunnelAfterLaunch } = yield* openWindowOnboarding({
+    host,
+    runtime,
+    projects,
+    globalState: options.globalState,
+    secrets: options.secrets,
+    settings: () => surface.settings(),
+    activeRun: () => bindings.active()?.run,
+  });
   yield* refreshFunnelAfterLaunch;
 
   const shellActions = createDesktopShellActions(
@@ -170,7 +156,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
       openPath: previewHost.openPath,
       openWorkspaceFolder: () => navigation.openFolder(),
-      signIn,
       showInfoMessage: dialogs.showInfoMessage,
       showLauncher: () => {
         const attached = surface.attached();
@@ -201,7 +186,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
     onboarding,
     promptController,
-    auth: { signIn, signOut },
     secrets: options.secrets,
     resourcesPath: options.resourcesPath,
   });

@@ -72,7 +72,7 @@ import {
   type RunLedgerRefused,
 } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { UsageLog } from '@shared/usageLog';
+import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
@@ -242,7 +242,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       type Binders = LanguageModel | HttpClient.HttpClient;
       const binders = yield* Effect.context<Binders>();
       const attribution = {
-        agentName: run.config.agent,
+        agentName: usageAgentName(run.config.agent, run.config.agentSource),
         agentCategory: run.config.agentCategory,
         runId,
       };

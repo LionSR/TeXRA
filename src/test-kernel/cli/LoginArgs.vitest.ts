@@ -2,66 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { parseChatLoginSlashArgs } from '@cli/runtime/loginOptions';
 
-describe('CLI login arguments (texra login)', () => {
+describe('CLI in-chat login arguments (/login)', () => {
   it.each<{
     input: string;
     expected: NonNullable<ReturnType<typeof parseChatLoginSlashArgs>>;
   }>([
-    {
-      input: '',
-      expected: {
-        target: 'texra',
-        provider: 'github',
-        noBrowser: false,
-        device: false,
-        selectAccount: false,
-        loginHint: undefined,
-      },
-    },
-    {
-      input: 'google --no-browser --select-account',
-      expected: {
-        target: 'texra',
-        provider: 'google',
-        noBrowser: true,
-        device: false,
-        selectAccount: true,
-        loginHint: undefined,
-      },
-    },
-    {
-      input: '--login-hint user@example.edu',
-      expected: {
-        target: 'texra',
-        provider: 'github',
-        noBrowser: false,
-        device: false,
-        selectAccount: false,
-        loginHint: 'user@example.edu',
-      },
-    },
-    {
-      input: 'github --login-hint=octocat',
-      expected: {
-        target: 'texra',
-        provider: 'github',
-        noBrowser: false,
-        device: false,
-        selectAccount: false,
-        loginHint: 'octocat',
-      },
-    },
-    {
-      input: 'texra github --device',
-      expected: {
-        target: 'texra',
-        provider: 'github',
-        noBrowser: false,
-        device: true,
-        selectAccount: false,
-        loginHint: undefined,
-      },
-    },
     {
       input: 'chatgpt',
       expected: { target: 'chatgpt', noBrowser: false, device: false },
@@ -90,13 +35,11 @@ describe('CLI login arguments (texra login)', () => {
   );
 
   it.each([
+    '',
     'slack',
-    'github google',
-    'chatgpt github',
+    'github',
+    'chatgpt grok',
     'chatgpt --select-account',
-    'chatgpt --login-hint user@example.edu',
-    '--login-hint',
-    '--login-hint --no-browser',
     '--unexpected',
   ])('rejects invalid in-chat login slash command options: "%s"', (input) => {
     expect(parseChatLoginSlashArgs(input)).toBeUndefined();

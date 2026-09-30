@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { AUTH_COMMANDS } from '@auth/constants';
 import { ToolError } from '@shared/schemas';
 import type { CommandId } from '@shared/commands/catalog';
 
@@ -18,16 +17,10 @@ import { assertInSetupAllowlist, SetupPlatform } from './platform';
  * one opens an existing, trusted UI flow). Do NOT add destructive commands
  * (delete, reset, clean) to this list.
  */
-// Intentionally excluded: `AUTH_COMMANDS.SIGN_OUT` — the setup agent's
-// purpose is to *establish* credentials, and signing the user out
-// mid-setup would undo the very credential the assistant just wired up.
-// A user who genuinely wants to sign out has the Profile command for it.
 const ALLOWED_COMMAND_IDS = [
-  // API keys & auth
+  // API keys
   'texra.setApiKey',
   'texra.removeApiKey',
-  AUTH_COMMANDS.SIGN_IN,
-  AUTH_COMMANDS.VIEW_PROFILE,
   // Settings dashboard tabs
   'texra.showDashboard',
   'texra.showMemory',
@@ -93,7 +86,7 @@ export const InvokeCommandTool = defineTool({
   // Requires VS Code commands.
   unavailableHosts: ['cli', 'desktop', 'sdk'],
   requiresApproval: true,
-  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the TeXRA account sign-in (texra.auth.signIn), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
+  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
   execute: invokeCommand,
 });

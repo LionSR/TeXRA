@@ -2,11 +2,14 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
-import { UsageLog } from '@shared/usageLog';
+import {
+  AGENT_SOURCE,
+  AgentCategory,
+  TELEMETRY_ENABLED_KEY,
+} from '@shared/schemas';
+import { UsageLog, usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
   type UsageLogOptions,
@@ -15,12 +18,8 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
-import {
-  jsonResponse,
-  testHttpClientLayer,
-} from '@test/support/fetchTestUtils';
-import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
-import { installHostAuth, setupPlatform } from '@test/support/setupPlatform';
+import { jsonResponse } from '@test/support/fetchTestUtils';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
   return {
@@ -41,10 +40,6 @@ function batchModels(batch: unknown): string[] {
 
 function batchId(batch: unknown): string {
   return (batch as { batchId: string }).batchId;
-}
-
-function stubAccessToken(): void {
-  installHostAuth(fakeSupabaseAuth({ accessToken: Effect.succeed('token') }));
 }
 
 // The Effect fetch client passes (url, init); read each batch body from the
@@ -128,8 +123,6 @@ describe('UsageLogService', () => {
   });
 
   it('drains entries queued while another flush is in flight', async () => {
-    stubAccessToken();
-
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
       createDeferred();
     const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
@@ -152,8 +145,6 @@ describe('UsageLogService', () => {
   });
 
   it('waits for successive active batches during disposal', async () => {
-    stubAccessToken();
-
     const { promise: firstFetchReleased, resolve: releaseFirstFetch } =
       createDeferred();
     const { promise: secondFetchReleased, resolve: releaseSecondFetch } =
@@ -191,7 +182,6 @@ describe('UsageLogService', () => {
   // behind it, not abort the request and lose the batch it had already taken
   // from the queue.
   it('process scope closure joins a timer-driven send before stopping admission', async () => {
-    stubAccessToken();
     const owner = Scope.makeUnsafe();
     await startUsageLog(
       { batchSize: 100, flushIntervalMs: 20, enabled: true },
@@ -245,32 +235,6 @@ describe('UsageLogService', () => {
     expect(handle.hasRef()).toBe(false);
   });
 
-  it('keeps queued entries when the token read answers signed-out', async () => {
-    // The token probe never rejects — an auth outage answers null — so the
-    // outage case is a signed-out read: the flush skips without dequeuing,
-    // and the next timer tick sends once a token exists.
-    let tokenReads = 0;
-    installHostAuth(
-      fakeSupabaseAuth({
-        accessToken: Effect.suspend(() =>
-          Effect.succeed(tokenReads++ === 0 ? null : 'token'),
-        ),
-      }),
-    );
-
-    const { batches, fetchMock } = stubBatchFetch();
-
-    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(batches.map(batchModels)).toEqual([['first']]);
-  });
-
   it.each([
     ['network failure', new Error('network unavailable')],
     ['malformed acknowledgement', { success: true }],
@@ -280,8 +244,6 @@ describe('UsageLogService', () => {
     ],
     ['partial acknowledgement', { success: true, accepted: 0 }],
   ])('requeues entries after a %s', async (_case, firstFailure) => {
-    stubAccessToken();
-
     const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount !== 1) return;
       if (firstFailure instanceof Error) throw firstFailure;
@@ -299,8 +261,6 @@ describe('UsageLogService', () => {
   });
 
   it('discards a permanent rejection and continues with later entries', async () => {
-    stubAccessToken();
-
     const { promise: rejectionReleased, resolve: releaseRejection } =
       createDeferred();
     const { batches, fetchMock } = stubBatchFetch(async (callCount) => {
@@ -336,8 +296,6 @@ describe('UsageLogService', () => {
   });
 
   it('keeps a failed batch id separate from later queued entries', async () => {
-    stubAccessToken();
-
     const { batches, fetchMock } = stubBatchFetch((callCount) => {
       if (callCount === 1) {
         throw new Error('network unavailable');
@@ -380,7 +338,6 @@ describe('UsageLogService', () => {
 
     it.live('sends nothing while the setting is off', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -393,7 +350,6 @@ describe('UsageLogService', () => {
 
     it.live('honours a workspace-scoped telemetry opt-out', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -406,7 +362,6 @@ describe('UsageLogService', () => {
 
     it.live('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -426,7 +381,6 @@ describe('UsageLogService', () => {
     // queued under the old value rather than letting the next flush ship them.
     it.live('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* Effect.promise(() =>
           startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
         );
@@ -449,7 +403,6 @@ describe('UsageLogService', () => {
 
     it.live('resumes sending once the setting is turned back on', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -479,7 +432,6 @@ describe('UsageLogService', () => {
     // a relay spend cap; the relay is gone and nothing reads those totals.
     it.live('drops subscription usage while the setting is off', () =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -499,39 +451,6 @@ describe('UsageLogService', () => {
       }),
     );
 
-    // The token probe is awaited before the batch is sent, so an opt-out
-    // that lands during that await must still take effect.
-    it.live(
-      'honours an opt-out that lands while the token lookup is in flight',
-      () =>
-        Effect.gen(function* () {
-          const { promise: tokenReleased, resolve: releaseToken } =
-            createDeferred();
-          installHostAuth(
-            fakeSupabaseAuth({
-              accessToken: Effect.promise(() => tokenReleased).pipe(
-                Effect.map(() => 'token'),
-              ),
-            }),
-          );
-
-          const { batches, fetchMock } = stubBatchFetch();
-
-          usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
-
-          yield* testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            false,
-            'global',
-          );
-          releaseToken();
-
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-          expect(fetchMock).not.toHaveBeenCalled();
-          expect(batches).toEqual([]);
-        }),
-    );
-
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
@@ -541,7 +460,6 @@ describe('UsageLogService', () => {
       ['DO_NOT_TRACK', '1'],
     ])('sends nothing while %s=%s is set', ([name, value]) =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
@@ -555,7 +473,6 @@ describe('UsageLogService', () => {
 
     it.live.each(['0', 'false', ''])('ignores TEXRA_NO_TELEMETRY=%p', (value) =>
       Effect.gen(function* () {
-        stubAccessToken();
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           true,
@@ -579,7 +496,6 @@ describe('UsageLogService', () => {
       'treats the non-boolean value %p as opted out',
       (value) =>
         Effect.gen(function* () {
-          stubAccessToken();
           yield* testWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             value,
@@ -600,7 +516,6 @@ describe('UsageLogService', () => {
       'fails closed for a malformed workspace value despite a valid global opt-in',
       () =>
         Effect.gen(function* () {
-          stubAccessToken();
           yield* testWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
             true,
@@ -622,36 +537,18 @@ describe('UsageLogService', () => {
         }),
     );
   });
+
+  it('sends only a bundled agent id; any other agent name is "custom"', () => {
+    expect(usageAgentName('orchestrator', AGENT_SOURCE.BUILT_IN_TOOL_USE)).toBe(
+      'orchestrator',
+    );
+    expect(usageAgentName('polish', AGENT_SOURCE.BUILT_IN_WORKFLOW)).toBe(
+      'polish',
+    );
+    expect(usageAgentName('my-thesis-notes', AGENT_SOURCE.CUSTOM)).toBe(
+      'custom',
+    );
+    expect(usageAgentName('acme:secret', AGENT_SOURCE.PLUGIN)).toBe('custom');
+    expect(usageAgentName('unsourced', undefined)).toBe('custom');
+  });
 });
-
-it.live('does not carry unsent usage into a new logger lifetime', () =>
-  Effect.gen(function* () {
-    const { batches } = stubBatchFetch();
-    const record = (model: string, accessToken: string | null) =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const context = yield* Layer.build(
-            usageLogLayer({
-              version: undefined,
-              editorType: undefined,
-              config: { batchSize: 100 },
-            }),
-          );
-          Context.get(context, UsageLog).log(
-            usageEntry(model),
-            testWorkspaceRoots().config,
-          );
-        }),
-      ).pipe(
-        Effect.provideService(
-          SupabaseAuth,
-          fakeSupabaseAuth({ accessToken: Effect.succeed(accessToken) }),
-        ),
-        Effect.provide(testHttpClientLayer),
-      );
-
-    yield* record('unsent', null);
-    yield* record('fresh', 'token');
-    expect(batches.map(batchModels)).toEqual([['fresh']]);
-  }).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllGlobals()))),
-);

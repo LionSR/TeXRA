@@ -205,9 +205,6 @@ prompts:
       - After either model-credential path, re-probe and tell the user
         which credential is now active. If neither ChatGPT subscription
         access nor a usable key is present, do not advance to phase I.
-      - **TeXRA account:** not needed. It provides no model access, does
-        not satisfy phase D, and unlocks no agents: every agent ships
-        bundled. Do not offer it during setup.
 
     ## Touching settings (read first, then update)
 

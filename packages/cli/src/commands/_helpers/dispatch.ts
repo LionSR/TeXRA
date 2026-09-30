@@ -216,8 +216,8 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
 /**
  * Citty repeats the same routing behavior at nested command groups: parent
  * args before an explicit child help find the child but are not forwarded to
- * the child parser. Move known global flags from `texra auth --output-format
- * json status`-style positions to `texra auth status --output-format json`,
+ * the child parser. Move known global flags from `texra history --output-format
+ * json list`-style positions to `texra history list --output-format json`,
  * while leaving default subcommands untouched.
  *
  * The groups are read off the command tree rather than registered by hand: any

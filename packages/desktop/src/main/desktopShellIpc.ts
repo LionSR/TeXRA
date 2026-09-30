@@ -61,7 +61,6 @@ interface DesktopShellActionFactoryOptions extends Pick<
     Error,
     FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
-  signIn(): Effect.Effect<void, Error>;
   /** The shown project's surfaces take the New-task state. */
   showLauncher(): void;
   onAsyncError: (error: unknown) => void;
@@ -74,7 +73,6 @@ interface DesktopShellActionFactoryOptions extends Pick<
  * and the host request arms reach the shell through.
  */
 export interface DesktopShellActions extends DesktopCommandActions {
-  signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
   showInfoMessage(message: string): void;
 }
@@ -149,7 +147,6 @@ export function createDesktopShellActions(
   }
 
   return {
-    signIn: () => runShellAction(onShellFailure(options.signIn())),
     openAgentDirectory,
     openDesktopDocs: () =>
       runShellAction(onShellFailure(options.openExternalUrl(DESKTOP_DOCS_URL))),

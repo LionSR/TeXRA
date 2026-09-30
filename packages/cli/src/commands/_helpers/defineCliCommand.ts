@@ -60,7 +60,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * command that can refuse its arguments without the runtime refuses HERE,
    * in the builder, by throwing `CliUsageError` (`texra clone`'s project
    * parse, `texra history`'s id and limit parses, `texra config edit`'s
-   * terminal check, `texra login`'s transport check), so the refusal opens
+   * terminal check), so the refusal opens
    * nothing under the storage root. A usage error the program raises instead
    * still exits 2: the process entry disposes whatever runtime is installed.
    */

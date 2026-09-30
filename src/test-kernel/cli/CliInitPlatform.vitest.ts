@@ -56,8 +56,6 @@ function spyOnSignalRegistration(): {
 }
 
 const mocks = vi.hoisted(() => ({
-  signInCliSupabase: vi.fn(),
-  authenticated: false,
   createNodeWorkspaceRoots: vi.fn(() => ({
     workspace: '/workspace',
     storage: '/workspace/.texra/storage',
@@ -75,22 +73,6 @@ const mocks = vi.hoisted(() => ({
     changes: () => Stream.succeed(undefined),
   },
 }));
-
-vi.mock('@cli/runtime/supabaseAuth', async () => {
-  const { Effect } = await import('effect');
-  const { fakeSupabaseAuth } = await import('@test/support/fakeSupabaseAuth');
-  return {
-    signInCliSupabase: mocks.signInCliSupabase,
-    // The runtime install's account plane, steerable per test: the probe
-    // reads the flag when it runs, not when the plane is built.
-    ensureCliSupabaseAuth: () =>
-      fakeSupabaseAuth({
-        authenticated: Effect.suspend(() =>
-          Effect.succeed(mocks.authenticated),
-        ),
-      }),
-  };
-});
 
 vi.mock('@logger/logSink', () => ({
   LOG_CHANNEL: 'channel',
@@ -198,7 +180,6 @@ describe('CLI platform init', () => {
     // default is one too; a bare `vi.fn()` returns undefined and `yield*`
     // fails on it.
     mocks.cliGlobalState.update.mockReturnValue(Effect.void);
-    mocks.authenticated = false;
   });
 
   it.effect(

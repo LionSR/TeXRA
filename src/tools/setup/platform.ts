@@ -13,7 +13,6 @@ import { Context, Data, Effect, Layer } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@auth/codex';
-import { SupabaseAuth } from '@auth/SupabaseAuth';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,
@@ -133,18 +132,6 @@ export function assertInSetupAllowlist(
     ),
   );
 }
-
-/** TeXRA account status shared by every host. */
-export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(function* () {
-  const auth = yield* SupabaseAuth;
-  // The account plane's probes settle their own failures to the signed-out
-  // answer, so there is nothing to catch here.
-  if (!(yield* auth.authenticated)) {
-    return { authenticated: false };
-  }
-  const user = yield* auth.user;
-  return { authenticated: true, email: user?.email };
-});
 
 /**
  * The ChatGPT subscription routing probe could not answer. It reads the

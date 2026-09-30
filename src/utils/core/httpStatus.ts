@@ -9,7 +9,7 @@
  * `tools -> latex` edge.
  *
  * This is the general-purpose HTTP policy (arXiv fetches, tool timeouts,
- * Supabase device-code polling). `isRetryableStatusCode`
+ * device-code polling). `isRetryableStatusCode`
  * (`common/errors/sdkError/sdkErrorKinds.ts`) is a separate, deliberately
  * different policy for LLM provider SDK errors: it also treats 409 Conflict
  * as retryable, because a provider API's 409 usually signals a transient

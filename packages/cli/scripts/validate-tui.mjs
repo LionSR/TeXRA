@@ -586,7 +586,7 @@ const SCENARIOS = [
       'Otherwise: Your own API keys',
       'Add a provider API key',
       '↑/↓ navigate',
-      '1-9/Enter select',
+      '1-7/Enter select',
       'Esc close',
     ],
     maxBlankLinesBetween: [
@@ -1141,7 +1141,7 @@ const SCENARIOS = [
       'Account & access',
       'Prefer ChatGPT subscrip',
       '↑/↓ navigate',
-      '1-9/Enter select',
+      '1-7/Enter select',
       'Esc close',
     ],
   },
