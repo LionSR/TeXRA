@@ -91,6 +91,15 @@ describe('codex model eligibility', () => {
     ).toBe(eligible);
   });
 
+  it('sends a pro-mode request to the API key: the Codex backend serves no pro mode', () => {
+    const model = openAIModel({ codexSubscription: true, modes: ['pro'] });
+    const facts = { ...OWN_KEY_ROUTE_FACTS, chatgptSubscription: true };
+    expect(decideModelRoute(model, facts).kind).toBe('chatgpt-subscription');
+    expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).not.toBe(
+      'chatgpt-subscription',
+    );
+  });
+
   it('keeps a Responses-only model on the subscription under the OpenRouter toggle', () => {
     const facts = {
       ...OWN_KEY_ROUTE_FACTS,
