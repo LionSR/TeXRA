@@ -19,10 +19,9 @@ existing users under the released storage and execution contracts.
   renamed coherently when their surrounding interfaces are revised.
 - **Breaking storage format.** SQLite is the authoritative store for persistent
   application state. 1.0 does not import or migrate the legacy JSON store,
-  histories, or execution checkpoints: no JSON-to-SQLite migration, legacy
-  readers, dual writes, or compatibility adapters, and obsolete compatibility
-  code goes with its tests. This does not authorize deleting existing user
-  data: initialize new state separately and leave old state untouched. Research
+  histories, or execution checkpoints (see "Compatibility and format
+  retirement"). This does not authorize deleting existing user data:
+  initialize new state separately and leave old state untouched. Research
   files remain ordinary files; JSON remains fine for deliberate configuration,
   interchange, and export formats.
 - **Effect-native implementation and tests.** Express asynchronous application
@@ -41,27 +40,19 @@ existing users under the released storage and execution contracts.
   (concurrency, resource lifetime, retries, streams, database, filesystem) and
   check their actual APIs before adding a custom implementation. Custom
   infrastructure needs a product requirement those facilities cannot meet;
-  preserving an old internal interface is not one. Do not build temporary
-  migration tools, transitional adapters, or compatibility mirrors: build the
-  1.0 design directly, in complete changes that stay useful.
-- **No compiled extensions.** The native cleanup addon is retired; generated-file
-  deletion resolves and checks paths in
-  `src/controllers/session/deletionCleanup.ts` (#12139 owns the final contract).
-  Do not reintroduce a compiled extension for it.
+  preserving an old internal interface is not one. Build the 1.0 design
+  directly, in complete changes that stay useful.
 
 ## Changelog Guidelines
 
 When updating CHANGELOG.md:
 
-- Focus on user-visible features and bug fixes
-- Use clear, concise language that end users can understand
-- Group changes into Features, Bug Fixes, and (rarely) Breaking Changes
+- Cover user-visible features and bug fixes in plain language, grouped into
+  Features, Bug Fixes, and (rarely) Breaking Changes
 - Describe the net difference from the previous released version, not the
-  sequence of commits made during development
-- Do not include defects that were introduced and fixed before the release;
-  intermediate implementation states are not release changes
-- Do not expose internal architecture, protocol names, schemas, codenames, or
-  implementation mechanics; describe the effect in product terms
+  commit sequence; omit defects introduced and fixed before the release
+- Do not expose internal architecture, protocol names, schemas, or codenames;
+  describe the effect in product terms
 - Exclude refactors, tests, dependency maintenance, and other changes with no
   user-visible effect
 
@@ -126,15 +117,7 @@ never in `npm test`.
 
 ### Scoping the test run
 
-`npm test` runs every suite under `src/test-kernel/` and is the gate CI
-enforces, but it takes minutes. The loop is stock Vitest: `npm run test:watch`
-while editing, `npm run test:changed` before a commit (pass a ref to widen it,
-e.g. `-- origin/main`), `npm run test:pure` before a push (the whole `pure`
-tier in ~30s, including the architecture ratchets, which read the repository
-from disk and are never selected by a module graph). Selection is only as good
-as the module graph: a changed YAML resource or image selects nothing, and a
-change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`)
-is not covered; those are what `npm test` is for.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in CLAUDE.md "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
 
 ### Build system: esbuild + Vite
 
@@ -149,10 +132,9 @@ type check first. CI always runs `typecheck`.
 `typecheck:llm`, `typecheck:cli`, `typecheck:trace-viewer`, and
 `typecheck:desktop`. Run the affected ones while developing and the full command
 before committing. `typecheck:agent` performs the complete agent-package build
-and regenerates `packages/agent/dist/`. There is deliberately no
-`typecheck:extension`: the root `tsconfig.json` already includes
-`packages/extension/src/**`. Use `build:initial` to validate a full initial
-build (desktop app and VSIX artifacts).
+and regenerates `packages/agent/dist/`. There is no `typecheck:extension`: the
+root `tsconfig.json` already includes `packages/extension/src/**`. Use
+`build:initial` to validate a full initial build (desktop app and VSIX).
 
 ## Commit messages
 
@@ -169,8 +151,8 @@ build (desktop app and VSIX artifacts).
 - Use the path aliases defined in `tsconfig.json` (for example `@frontend/*`, `@common/*`, `@utils/*`) instead of long relative import chains.
 - Document functions with concise comments. Use JSDoc style for public APIs.
 - Keep functions small and focused; extract helpers or modules when logic becomes complex.
-- Keep the directory structure aligned among different webviews where they share a concern (e.g. `components/`, `styles/`). `progressView` and `settingsView` intentionally diverge beyond that — see "Webview Consistency Patterns" for which folders are pattern-specific (`settingsView/frontend/messageDispatcher.ts` vs `progressView/frontend/formatters/`) rather than a naming drift to fix.
-- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`). Host-neutral session bridging lives under `src/controllers/session/` (e.g. `src/controllers/session/SessionBridge.ts`), per the `controllers/` host-neutral-orchestration rule.
+- Keep webview directory structure aligned where views share a concern (`components/`, `styles/`); beyond that `progressView` and `settingsView` intentionally diverge (see "Webview Consistency Patterns").
+- Place a host's own request handling beside the view it serves (e.g. `packages/extension/src/progressView/extensionHostRequests.ts`, `packages/desktop/src/main/desktopHostRequests.ts`); host-neutral session bridging lives under `src/controllers/session/`.
 
 ### Naming conventions
 
@@ -181,19 +163,7 @@ build (desktop app and VSIX artifacts).
 
 ### Directory organization
 
-This repository is a pnpm workspace. Repo-root `src/` contains host-agnostic production code and centralized tests for both shared and host-specific behavior,
-`packages/extension/` contains the VS Code extension, `packages/desktop/` the Electron shell, `packages/cli/`
-the `texra` terminal client, and `packages/trace-viewer/` the standalone trace-viewer web app.
-`packages/agent/` is the embeddable SDK surface (`@texra-ai/agent`) — it builds and bundles locally but is
-not published to npm, and there is no `@texra/core` workspace package (deleted by #7099). Hosts still reach
-shared core through the repo-root path aliases; that surface is frozen rather than open. `eslint.config.mjs`
-forbids production `src/**` and `packages/agent/src/**` from importing host layers, and the checked-in
-ratchets under `config/ratchets/` (listed in CLAUDE.md "Layout") freeze the remaining edges. Never widen a baseline;
-a decrease is always welcome. Kernel architecture tests under
-`src/test-kernel/architecture/` (for example
-`approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with
-hardcoded allowlists rather than baseline JSON. The remaining boundary work is the Tier-1 public manifest and shrinking the
-frozen deep-import lists, not another lint rule.
+This is a pnpm workspace; CLAUDE.md "Layout" describes the packages and the frozen `@agent/*` surface. Never widen a baseline under `config/ratchets/`; a decrease is always welcome. Kernel architecture tests under `src/test-kernel/architecture/` (for example `approvalPolicyAuthorityRatchet.vitest.ts`) pin single-authority invariants with hardcoded rules rather than baseline JSON.
 
 One of those baselines budgets the code itself rather than an import edge, and it runs in the pure tier:
 
@@ -205,8 +175,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - `src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, files, parsing, storage, constants), not a backend-only zone. Some browser-adjacent shared code imports dependency-light modules such as `@common/parsing/safeParseJson`; import through the `@common/*` alias and check the target's dependencies before using it from browser code.
 - `packages/extension/src/common/` holds extension-only helpers (webview base classes, shared styles):
   - `packages/extension/src/common/webview/` - Webview content provider (`BundledViewContentProvider`), webview HTML builder (`buildWebviewHtml`), command constants
-- `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
-  Do not read this as "everything in `utils/` is shared with the webviews". If a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
+- `src/utils/` is host-agnostic; only the four `BROWSER_SAFE_UTILS` modules in `eslint.config.mjs` are browser-reachable (CLAUDE.md "Layout"). Helpers specific to one side belong in `frontend/` or `common/`; an import added to one of the four must stay browser-safe.
   - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
 
@@ -215,14 +184,11 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 
 ### Pragmatic implementations
 
-- **Start simple**: Choose the most direct solution that solves the problem. A new abstraction earns its place only when it clearly reduces complexity.
-- **Use native constructs**: Rely on JavaScript/TypeScript built-ins (objects, Maps, Sets, arrays), VS Code APIs, and JSON for state. These are well-understood and require no extra code.
+- **Start simple**: Choose the most direct solution, using built-ins (objects, Maps, Sets, arrays), host APIs, and JSON for state. A new abstraction earns its place only when it clearly reduces complexity.
 - **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
 - **One error path**: Surface errors once, and let exceptions propagate naturally to that single handler rather than being caught and re-reported at every level. Two modules serve different halves of this and both are correct:
   - `@common/errors` — classification and surfacing: `classifyAgentError`, the SDK-error inspection under `sdkError/`, `errorPredicates`, `errorFormatUtils`. Reach for this when the _kind_ of failure changes what happens next.
-  - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. This is the most-imported leaf module in the repo (~203 sites) and is browser-safe, which `@common/errors` is not required to be.
-
-- **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
+  - `@utils/errors/errorMessage` — the three `unknown`-narrowing primitives `toErrorMessage`, `ensureError`, `extractErrorMessage`. Browser-safe, which `@common/errors` is not required to be.
 
 ### Testing discipline
 
@@ -365,8 +331,6 @@ Use `.nullish()` instead of `.optional()` for optional fields in tool input sche
 
 A union-branch field with a default needs `nullishWithDefault` (`src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
 
-See: https://platform.openai.com/docs/guides/structured-outputs
-
 **Design for the model's first call**
 
 Any parameter with an obvious default should be optional with that default applied at dispatch time (`.nullish()` plus a default when the tool runs), not required: a required parameter that models routinely omit is a tool bug, not a model error. When a description string enumerates dispatch behavior, verify it against the actual dispatch table whenever either changes.
@@ -467,24 +431,16 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 - Generate HTML through `BundledViewContentProvider` (`packages/extension/src/common/webview/BundledViewContentProvider.ts`) and its `buildWebviewHtml` helper. There is no shared message-handler base class: `settingsView` owns its inbound dispatch inside `SettingsViewMessageHandler` and `progressView` routes through typed host requests, so follow the pattern of the view you are touching (see "Webview Consistency Patterns").
 - Use Web Awesome (`<wa-icon>` via `waIcon()` from `@ui/wa/webAwesomeIcons`) and shared utilities from `@utils/text/stringUtils` and `@utils/core` (path basics: `normalizeFilePath`, `getBasename`, `getFileStem`). Keep CSS modular: per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`.
 
-**Progress view**
-
-- Extend the existing Lit components in `packages/extension/src/progressView/frontend/components/` (`LogList`, `UsagePanel`, `TaskGroupList`, etc.); they read the `SessionView` fold (`src/shared/session/sessionView.ts`) and the `Surface` record as properties and dispatch typed request events. Augment them rather than manipulating the DOM directly.
-- Tool-use and workflow sessions surface in separate filters; continue emitting usage, status, and log events through the established progress event commands so filters, counts, and badges update automatically.
-
 **Error handling and types**
 
 - Format and surface errors through `showLoggedErrorMessage` and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Keep shared type definitions colocated with their domains (e.g., `src/agent/core/state`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+- Derive runtime-safe interfaces with `zod` plus `z.infer`, colocated with their domains (e.g., `src/agent/core/state`).
 
 **Miscellaneous**
 
-- Maintain text cleanup rules in the `src/replacement` modules.
 - Execute VS Code commands with `safeExecuteCommand` from `packages/extension/src/frontend/system/commandUtils.ts` and shell commands with `executeCommand` from `src/utils/system/execUtils.ts` so logging and error handling stay uniform.
 - Retrieve included file extensions via `getIncludedExtensions` in `src/common/files/fileTypeUtils.ts`.
-- Initialize new agent YAML files from the templates in `packages/extension/resources/agents/` and `packages/extension/resources/tool_use_agents/`.
-- Dispose event listeners and watchers when webviews close to prevent leaks.
-- Use the helpers in `packages/extension/src/frontend/ui/dialogs.ts` and `packages/extension/src/frontend/ui/instruction.ts` for consistent notification primitives shared across the extension.
+- Use `packages/extension/src/frontend/ui/dialogs.ts` and `instruction.ts` for notification primitives shared across the extension.
 
 ### Webview Consistency Patterns
 
@@ -493,18 +449,15 @@ one the view you're touching already uses:
 
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
   (`packages/extension/src/settingsView/`) owns its inbound dispatch directly
-  (active-webview tracking, the `HandlerRegistry` build, the toast for an
-  unsupported command) over the shared settings body
+  over the shared settings body
   (`src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
   modules; only the VS Code-specific LaTeX arms live in
-  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract base.
-  Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
+  `settingsView/handlers/latexSettingsHandlers.ts`. Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
   `SETTINGS_VIEW_COMMANDS`), not string literals. Frontend state lives in
   module-level reactive signals in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
   outbound handler registry (`settingsViewHandlers`, typed
-  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive). There is no
-  Redux store or reducer.
+  `SettingsViewOutboundHandlerRegistry` so it stays exhaustive).
 - **`progressView`** (the sidebar and editor-tab conversation shell) is
   event-fold: `ProgressViewProvider` implements `vscode.WebviewViewProvider`
   directly, composed with `BundledViewContentProvider`, and routes through
@@ -513,46 +466,37 @@ one the view you're touching already uses:
   `.agents/docs/implemented/architecture/2026-09-03-one-view-state-three-renderers.md`).
   Its Lit components (`progressView/frontend/components/`) read the
   `SessionView` fold (`src/shared/session/sessionView.ts`) and `Surface`
-  records as properties; there is no command-constant registry or slice layer.
+  records as properties.
 - **Naming Convention**: within whichever pattern applies, follow
   `[Domain]View[Component]` (e.g. `SettingsViewMessageHandler`,
   `ProgressViewProvider`). Adding a genuinely new pattern needs an update to
   this section, not a silent third variant.
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors.
-- **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it.
 - **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `src/ui/README.md`. Read it before adding a control or a local style override
 
 ### UI anti-patterns
 
-**Render-time workarounds.** Never compensate for data model problems at render time; renderers only transform and display. Signs of a broken data model: `Date.now()` or synthetic IDs generated during rendering, DOM queries to check whether data exists before rendering, deduplication logic comparing rendered content. Fix: store data once at the source with all metadata (timestamps, IDs). If a renderer needs to generate or deduplicate, the upstream code path is missing data.
-
-**Duplicate UI controls.** One home per user action. Do not surface the same action (a dispatched event, a config/state write, or a command) from two controls; competing controls confuse users and drift out of sync. Secondary surfaces show read-only status, never a second control. Legitimate exceptions: a global default versus a per-item override, or one action as a command plus a single UI button. Grep procedure and details: code-review checklist § 5.
+Never compensate for data-model problems at render time: no `Date.now()`, synthetic IDs, DOM existence checks or deduplication in renderers. Store data once at the source with all metadata. One home per user action: secondary surfaces show read-only status, never a second control (exceptions: a global default versus a per-item override, or one command plus a single UI button). Grep procedure: code-review checklist § 5.
 
 ## Design and refactoring
 
-Draw on principles from John Ousterhout's _A Philosophy of Software Design_ when
-adding new code or refactoring existing modules:
+Draw on John Ousterhout's _A Philosophy of Software Design_ when adding or
+refactoring code:
 
-- Seek out sources of complexity, especially change amplification, cognitive
-  load and unknown unknowns. Simplify these areas before adding features.
-- Identify shallow modules that merely pass data through. Deepen them by hiding
-  implementation details behind well‑defined interfaces.
-- Watch for information leakage between modules and other signs of poor
-  abstraction. Refactor to combine related functionality and make interfaces
-  simpler and more obvious.
-- When submitting a PR, describe any design issues found and how the refactoring
-  addresses them. Favor deep modules with minimal, clear APIs.
-- Most importantly, ideally, when you have finished with each change, the system will have the structure it would have had if you had designed it from the start with that change in mind.
-- When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
-- **Share instances via constructors**: When managers share state, pass the shared dependency through the constructor. This keeps state consistent and dependencies explicit.
+- Simplify sources of complexity (change amplification, cognitive load, unknown
+  unknowns) before adding features.
+- Deepen shallow modules that merely pass data through: hide implementation
+  behind small interfaces and combine functionality that leaks across modules.
+- Aim for the structure you would have had if you had designed the system with
+  the change in mind. In a PR, describe the design issues found and how the
+  refactoring addresses them.
+- After large renames, search for missed files and paths.
+- Share state between managers by passing the shared dependency through the
+  constructor.
 
 ### Flattening abstraction layers
 
-Eliminate wrapper functions and indirection layers: entry points (`executeAgent`) run the loop program (`runToolUse`) directly, not through a chain of wrappers.
-
-- If a wrapper only creates state, runs the program, and interprets results, inline it.
-- Delete wrapper files when they become unused; leave no empty re-exports.
-- Update tests to exercise the underlying program directly, and imports to point at the module that defines the symbol, never a re-exporting file.
+Entry points (`executeAgent`) run the loop program (`runToolUse`) directly. Inline a wrapper that only creates state, runs the program, and interprets results; delete unused wrapper files and leave no empty re-exports; import from the module that defines the symbol, never a re-exporting file.
 
 ### Discouraged factory patterns
 
@@ -590,13 +534,11 @@ These rules were learned from a 2026-07 whole-repo simplification campaign. They
 
 ## Documentation
 
-- Documentation lives in `docs/` and uses Markdown. Follow existing heading levels and style.
-- Keep line length reasonable (< 120 characters) for readability.
+- Documentation lives in `docs/` as Markdown; follow existing heading levels and keep lines under 120 characters.
 
 ## Branching
 
-- Changes land on `main` through pull requests; use a feature branch per change.
-- Ensure the working tree is clean before creating a pull request.
+- Changes land on `main` through pull requests, one feature branch per change.
 - `.github/PULL_REQUEST_TEMPLATE.md` requires `## Net elements (R6)` and
   `## Consumer counts (R8)` sections on any `refactor:` / `simplify:` /
   `consolidate` / `dedupe` / `extract` PR — see the review checklist § 14.
@@ -615,14 +557,7 @@ Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-
 
 Never guess at Effect patterns - check the guide first. If `effect-solutions`
 is not installed (the repository does not provision it), consult the pinned
-package sources and types in `node_modules/effect` instead of guessing.
-
-### Local Effect Source
-
-`effect-solutions` may clone the Effect repository to
-`~/.local/share/effect-solutions/effect` for reference. This optional checkout
-is not provisioned by the repository. When present, it should track
-`Effect-TS/effect` `main` (v4); Effect v3 lives on that repository's `v3`
-branch. Match the installed `effect` version when APIs differ.
+package sources and types in `node_modules/effect`. Effect is v4; v3 material
+may differ from the installed version.
 
 <!-- effect-solutions:end -->
