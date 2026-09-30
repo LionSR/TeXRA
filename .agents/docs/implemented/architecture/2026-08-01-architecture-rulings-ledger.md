@@ -1078,3 +1078,55 @@ specified.
   per-host prompt or allowlist), and memory-write gating is dropped, so nothing
   reads a taxonomy. Reopen: a tool family needs an effect
   class no guard kind can express.
+
+## Effect migration design rules R1 to R10 (ratified 2026-08-26; amended 2026-09-06 and later)
+
+The migration PRD that carried these rules is deleted (history keeps it). Live
+notes cite the rules by number; this is their text.
+
+- **R1.** Effect inside, Promises at the boundary. A boundary is a host entry a
+  framework invokes, a named runtime entry, or nothing else (the tool `call`
+  contract and the SDK are no longer boundaries; see the entries above).
+  `Effect.run*` is forbidden below a boundary.
+- **R2.** Services follow semantic boundaries. A service earns its place when it
+  is independently implemented, acquired, scoped, or substituted in tests; plain
+  inputs stay arguments.
+- **R3.** Layers follow lifetimes: host process, session, agent run, call.
+  Longer-lived layers may build shorter-lived ones, never the reverse. No
+  `FooLayer` wrapper that only calls `Layer.succeed`.
+- **R4.** The agent runtime is plain Effect: no state-machine framework, node,
+  graph, cursor, or flow record. A run appends rows to the ledger and folds them.
+- **R5.** Interruption replaces internal abort choreography. `AbortSignal` only
+  where an external SDK or host API requires one.
+- **R6.** Scope owns resources (`acquireRelease`, scoped layers, finalizers).
+- **R7.** Expected failures use the typed error channel, bugs are defects,
+  cancellation is interruption, and domain decisions stay success values. One
+  user-facing error taxonomy (`classifyAgentError`), no second presentation path.
+- **R8.** One clock and one schedule model; tests advance the test clock.
+- **R9.** `AgentTrace` and `AgentEvent` stay the product traces; Effect spans
+  may enrich them, and no host UI reads generic Effect logs.
+- **R10.** Replacement must delete: each PR states what became unreachable, what
+  collapsed, what imports went, and the line and element delta. There are no
+  temporary adapters and no retirement clock.
+
+## Service scopes: HeldSessions and ExternalRoots stay (ruled 2026-09-20)
+
+`HeldSessions` is not converted to Effects: zero production breaks, but 414
+`testDefaultSession()` call sites in 45 suites for about 35 LoC. `ExternalRoots`
+is not made a standalone service: one writer, four readers, keyed by kind, a
+sound freeze rule; a service is +4 signatures for 0 deletions. Reopen when a
+consumer needs either to be scoped per session. Pinned by `SCOPE-held-sessions-as-effects`
+and `SCOPE-external-roots-standalone-service` in `config/ratchets/refuted-candidates.json`.
+
+## Cross-host Copilot OAuth is not approved (parked 2026-06-22)
+
+A GitHub Copilot route over the device flow and the undocumented
+`api.githubcopilot.com` backend (borrowed client id, editor-impersonation headers)
+would work on all three hosts but runs against Copilot's Terms and carries
+documented account-suspension risk. Do not build it without explicit maintainer
+acceptance of that risk; the official `vscode.lm` route is the only sanctioned one.
+
+## Adaptive document workflows are not planned (ruled 2026-09-06)
+
+The owner does not want a model-chosen, candidate-file document workflow replacing
+the reflection rounds. Do not re-propose it as specified.

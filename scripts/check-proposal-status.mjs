@@ -44,12 +44,12 @@ const SETTLED_STATUS = new Map([
   ['delivered', 'implemented'],
   ['executed', 'implemented'],
   ['done', 'implemented'],
-  ['archived', 'archived'],
-  ['superseded', 'archived'],
-  ['obsolete', 'archived'],
-  ['rejected', 'rejected'],
-  ['declined', 'rejected'],
-  ['withdrawn', 'rejected'],
+  ['archived', 'delete'],
+  ['superseded', 'delete'],
+  ['obsolete', 'delete'],
+  ['rejected', 'delete'],
+  ['declined', 'delete'],
+  ['withdrawn', 'delete'],
 ]);
 
 const LANDED_HEADING = /^#{1,6}\s+(?:what\s+)?landed\b/iu;
@@ -155,14 +155,17 @@ if (failures.length > 0) {
     'Notes under .agents/docs/proposed/ declare themselves done:\n',
   );
   for (const { file, marker, lifecycle } of failures) {
-    const target = file.replace('/proposed/', `/${lifecycle}/`);
-    console.error(`  ${file}\n    ${marker} → git mv it to ${target}`);
+    const action =
+      lifecycle === 'delete'
+        ? 'delete it (history keeps it)'
+        : `git mv it to ${file.replace('/proposed/', `/${lifecycle}/`)}`;
+    console.error(`  ${file}\n    ${marker} → ${action}`);
   }
   console.error(
-    `\n${failures.length} note(s) in the wrong lifecycle directory. Move the note with`,
+    `\n${failures.length} note(s) in the wrong lifecycle directory. Move a landed note with`,
   );
   console.error(
-    '`git mv`, or delete it if rejected or superseded, and update its row in',
+    '`git mv`, delete a rejected or superseded one, and update its row in',
   );
   console.error(
     '.agents/docs/INDEX.md. Citing a merged PR as evidence or as a prerequisite is not a',
