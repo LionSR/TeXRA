@@ -540,7 +540,6 @@ defaults.
 {
   "texra.model": "deepseekproT",
   "texra.outputFormat": "text",
-  "texra.approvalPolicy": "never",
   "texra.chat": {
     "agent": "assistant",
     "model": "deepseekproT"
@@ -551,11 +550,18 @@ defaults.
 }
 ```
 
-Supported top-level keys are `texra.agent`, `texra.model`,
-`texra.outputFormat`, and `texra.approvalPolicy`; `texra.chat` and `texra.run`
-may set command-specific `agent` and `model` defaults. Shared TeXRA settings
+Supported top-level keys are `texra.agent`, `texra.model`, and
+`texra.outputFormat`; `texra.chat` and `texra.run` may set command-specific
+`agent` and `model` defaults. Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
 built-in CLI model default is `deepseekproT`.
+
+The approval policy (`texra.approvalPolicy`) and the two approval switches
+(`texra.toolUse.requireEditApproval`, `texra.toolUse.requireBashApproval`) are
+never read from `.texra/config.json`, because a repository you clone can
+carry that file. Set them with `/config` or the settings view: they are kept
+in your own storage for the current workspace, and a value in your user
+configuration file is the default for every workspace. A project file that sets one is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run

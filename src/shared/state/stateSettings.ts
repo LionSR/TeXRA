@@ -176,8 +176,8 @@ export interface StateSettingEntry {
   readonly category?: string;
   /** Where the value is stored, the same on every host. */
   readonly slot: SettingStore;
-  /** Persistence target for config-backed settings; workspace when omitted. */
-  readonly configTarget?: 'global' | 'workspace';
+  /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
+  readonly configTarget?: 'global' | 'workspace' | 'local';
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -395,15 +395,11 @@ const CORE_SETTING_ROWS: Record<
     surfaces: { settingsView: 'approval', cliConfig: true },
   },
   // The provider toggles below are `configTarget: 'global'`: they describe how
-  // you talk to a provider, not a property of one project, and that is the
-  // scope they were written at before the catalog collapse routed them through
-  // the shared write path. The target restores global writes and exempts them
-  // from the extension's open-workspace write guard, while Models-tab and
-  // runtime reads both keep merged-config semantics. A workspace override
-  // therefore remains visible and honored; cleanup of values stranded by the
-  // regression window is tracked separately in #11173. Only server-side state
-  // is a choice a user makes (it decides data retention); the transport knobs
-  // have no settings-view row and are set in `.texra/config.json`.
+  // you talk to a provider, not a property of one project. Writes go to the
+  // global file past the open-workspace write guard; reads stay merged, so a
+  // workspace override stays honored (stranded values: #11173). Only
+  // server-side state is a user choice (data retention); the transport knobs
+  // have no settings-view row and live in `.texra/config.json`.
   'model.gpt5ReasoningSummary': {
     schema: z.boolean().prefault(false),
     configTarget: 'global',
@@ -614,6 +610,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
@@ -621,6 +618,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Require approval for shell commands',
     description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
 };
@@ -679,9 +677,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
+      'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slot: 'config',
+    configTarget: 'local',
     enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),

@@ -11,10 +11,6 @@ import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { WizardStepShell } from '@cli/tui/ui/WizardStepShell';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
-import {
-  TEXRA_APPROVAL_POLICY_OPTIONS,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
 import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
@@ -41,20 +37,13 @@ const OUTPUT_DESCRIPTIONS: Record<CliOutputFormat, string> = {
   ndjson: 'newline-delimited JSON stream',
 };
 
-type Step = 'agent' | 'model' | 'approval' | 'output' | 'gitignore';
+type Step = 'agent' | 'model' | 'output' | 'gitignore';
 
-const STEPS: readonly Step[] = [
-  'agent',
-  'model',
-  'approval',
-  'output',
-  'gitignore',
-];
+const STEPS: readonly Step[] = ['agent', 'model', 'output', 'gitignore'];
 
 const STEP_TITLES: Record<Step, string> = {
   agent: 'Default agent for texra chat',
   model: 'Default model',
-  approval: 'Approval policy',
   output: 'Default output format',
   gitignore: 'Add .texra/ to .gitignore?',
 };
@@ -62,7 +51,6 @@ const STEP_TITLES: Record<Step, string> = {
 interface Draft {
   agent?: string;
   model?: string;
-  approvalPolicy?: TexraApprovalPolicy;
   outputFormat?: CliOutputFormat;
   gitignore?: boolean;
 }
@@ -120,7 +108,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
     if (
       merged.agent === undefined ||
       merged.model === undefined ||
-      merged.approvalPolicy === undefined ||
       merged.outputFormat === undefined
     ) {
       throw new Error(
@@ -131,7 +118,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       answers: {
         agent: merged.agent,
         model: merged.model,
-        approvalPolicy: merged.approvalPolicy,
         outputFormat: merged.outputFormat,
       },
       gitignore: merged.gitignore ?? false,
@@ -165,16 +151,6 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
           )}
           items={initWizardModelSelectItems(props.options.models)}
           onSelect={(model) => commit({ model })}
-          onCancel={cancel}
-        />
-      );
-      break;
-    case 'approval':
-      picker = (
-        <Select
-          key={step}
-          items={TEXRA_APPROVAL_POLICY_OPTIONS}
-          onSelect={(approvalPolicy) => commit({ approvalPolicy })}
           onCancel={cancel}
         />
       );

@@ -16,7 +16,10 @@ import {
 } from '@cli/runtime/cliContext';
 import * as logSinks from '@cli/runtime/logSinks';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
@@ -124,7 +127,7 @@ describe('CLI context config defaults', () => {
     });
   });
 
-  it('honors a user-level approval policy the workspace config leaves unset', async () => {
+  it('reads the approval policy from the user files, never the project file', async () => {
     const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
     const globalStorage = resolveGlobalStoragePath(storageRoot);
     await mkdir(globalStorage, { recursive: true });
@@ -133,8 +136,31 @@ describe('CLI context config defaults', () => {
       JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
     );
 
-    // The workspace file still wins when it sets the row...
+    // A project file (which a cloned repository can supply) cannot loosen or
+    // tighten the policy, and the ignored key is reported...
     const workspace = await workspaceWithConfig(
+      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+    );
+    const projectContext = await cliContext({
+      ambient,
+      env: {},
+      globalArgs: { cwd: workspace },
+      storageRoot,
+    });
+    expect(projectContext.approvalPolicy).toBe('yolo');
+    expect(projectContext.configDegradations.join('\n')).toContain(
+      'Ignoring "texra.approvalPolicy"',
+    );
+
+    // ...while the user's own file for that workspace does win over the
+    // user-wide one.
+    const localDir = resolveWorkspaceStoragePath(
+      storageRoot,
+      projectContext.cwd,
+    );
+    await mkdir(localDir, { recursive: true });
+    await writeFile(
+      join(localDir, 'config.json'),
       JSON.stringify({ 'texra.approvalPolicy': 'never' }),
     );
     await expect(
@@ -146,8 +172,8 @@ describe('CLI context config defaults', () => {
       }),
     ).resolves.toMatchObject({ approvalPolicy: 'never' });
 
-    // ...and the user file decides when it does not, as it already does for
-    // the extension and desktop hosts through `testWorkspaceRoots().config`.
+    // The user-wide file decides elsewhere, as it does for the extension and
+    // desktop hosts through `testWorkspaceRoots().config`.
     await expect(
       cliContext({
         ambient,

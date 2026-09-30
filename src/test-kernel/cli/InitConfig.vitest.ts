@@ -28,7 +28,6 @@ const tempDirs = useTempDirs();
 const ANSWERS: InitAnswers = {
   agent: 'chat',
   model: 'deepseekT',
-  approvalPolicy: 'ask',
   outputFormat: 'json',
 };
 
