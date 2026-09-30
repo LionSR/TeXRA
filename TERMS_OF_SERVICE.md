@@ -2,7 +2,7 @@
 
 _Effective Date: February 9, 2026_
 
-_Last Updated: August 21, 2026_
+_Last Updated: September 30, 2026_
 
 ---
 
@@ -28,7 +28,7 @@ You must be at least 18 years old, or the age of legal majority in your jurisdic
 
 **Software**: The VS Code extension, desktop application, and command-line interface are open source. Their source code is licensed under the Apache License, Version 2.0, which governs your rights to use, modify, and redistribute that code — including building on it or using it in a competing product. Nothing in these Terms restricts those rights; see the LICENSE file in the public repository.
 
-**Hosted Service**: Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the hosted Service — your TeXRA account, the hosted research-agent catalog, and any other infrastructure we operate — for your personal or internal business purposes. This license does not include the right to:
+**Hosted Service**: Current versions of TeXRA do not require any hosted service. Earlier versions connect to hosted services we operate — a TeXRA account, the hosted research-agent catalog, and usage reporting. For as long as we operate them, and subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use those hosted services for your personal or internal business purposes. This license does not include the right to:
 
 1. Modify, adapt, or create derivative works of the hosted Service's non-public infrastructure.
 2. Distribute, sublicense, lease, lend, or sell access to the hosted Service to any third party.
@@ -36,11 +36,11 @@ You must be at least 18 years old, or the age of legal majority in your jurisdic
 
 We reserve all rights not expressly granted in these Terms.
 
-## 5. User Accounts and API Keys
+## 5. API Keys and TeXRA Accounts
 
 - **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
-- **TeXRA Accounts**: A TeXRA account is optional and unlocks account-backed features such as the hosted research-agent catalog. Signing in does not route your model requests through TeXRA servers; model calls continue to use your own API keys or provider subscriptions. Account-backed features are subject to fair-use limits and may be modified or discontinued at any time.
-- **Account Integrity**: You may only create and operate one account for your own personal use. To prevent abuse of account-backed resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
+- **TeXRA Accounts**: Current versions of TeXRA have no TeXRA account and never ask you to sign in to a TeXRA service. Earlier versions offered an optional account that unlocked account-backed features such as the hosted research-agent catalog; signing in did not route your model requests through TeXRA servers. Those accounts and account-backed features remain available to earlier versions for as long as we operate them, are subject to fair-use limits, and may be modified or discontinued at any time.
+- **Account Integrity**: For accounts used with earlier versions, you may only create and operate one account for your own personal use. To prevent abuse of account-backed resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
   1. use a disposable, temporary, or throwaway email provider;
   2. use a privacy / forwarding-only email provider that has been disproportionately associated with abuse;
   3. authenticate through a third-party identity provider account (e.g., a GitHub account) that was created very recently (typically within the last 30 days) or that otherwise has no meaningful prior history.
@@ -75,7 +75,7 @@ If you voluntarily provide suggestions, ideas, enhancement requests, or other fe
 
 - **Personal API Keys and Provider Subscriptions (Local Processing)**: All calls to AI providers are made directly from your local device to the provider's endpoints, using your own API keys or provider subscription credentials. Your document content is not sent to or routed through TeXRA servers. Your API keys are stored locally (e.g., via VS Code's built-in Secret Storage or equivalent platform-specific secure storage) and are never transmitted to us.
 - **Third-Party Providers**: Your content is transmitted to the respective AI provider's API endpoints. You are responsible for reviewing and accepting the privacy policies and terms of service of your chosen AI provider(s).
-- **Telemetry**: When you are signed in to TeXRA, the Service collects anonymized usage metadata — such as model name, token counts, estimated cost, and response time — to monitor service health and improve the product. Telemetry does not include Your Content. If you are not signed in, no telemetry data is collected or transmitted.
+- **Telemetry**: Current versions of TeXRA collect anonymous usage metadata — such as the agent (a bundled agent's name, otherwise "custom"), the model and provider, token counts, response time, and the TeXRA version and host — to monitor service health and improve the product. Each installation also sends a random anonymous install identifier, generated on your device the first time telemetry is on. It is not derived from your hardware, name, email, or any account, and is not linked to one; deleting the stored identifier resets it. Telemetry does not include Your Content, file names or paths, prompts, or error text. Telemetry is on by default. You can turn it off at any time in the settings, with the `TEXRA_NO_TELEMETRY` or `DO_NOT_TRACK` environment variable, or (in the VS Code extension) with VS Code's telemetry setting; while it is off, no identifier is created or sent. Earlier versions collected similar metadata only while you were signed in to a TeXRA account.
 
 ## 10. AI and Machine Learning
 
@@ -100,7 +100,7 @@ A current list of supported providers and their operating jurisdictions is avail
 
 ## 13. Free and Beta Services
 
-Certain features of the Service, including the hosted research-agent catalog, may be offered free of charge or in beta. These features are provided without any service level commitments and may be modified, suspended, or discontinued at any time without notice. We make no guarantees regarding availability, uptime, or continued support for free or beta features.
+Certain features of the Service, including the hosted research-agent catalog available to earlier versions, may be offered free of charge or in beta. These features are provided without any service level commitments and may be modified, suspended, or discontinued at any time without notice. We make no guarantees regarding availability, uptime, or continued support for free or beta features.
 
 ## 14. Assumption of Risk
 
