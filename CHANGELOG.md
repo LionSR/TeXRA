@@ -361,6 +361,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
+  a sign-in row in the chat's account menu started the sign-in but left the
+  menu on screen, so the sign-in link, one-time code and `c` copy-link key
+  never appeared. The panel now switches to the sign-in progress as soon as a
+  row is chosen. In VS Code, when browser sign-in can't start, ChatGPT and
+  Grok sign-in offer a one-time code instead of failing.
+
 - **Auto-compaction and the context gauge measure the whole conversation.**
   A tool-use run compacted on the text of its messages alone, so the
   provider's own token count (which includes the system prompt and tool

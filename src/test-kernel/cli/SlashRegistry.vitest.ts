@@ -91,7 +91,10 @@ afterEach(() => {
 describe('slashRegistry', () => {
   beforeAll(bindTestSessionView);
   function renderFormAdapter<TProps>(node: unknown): { props?: TProps } {
-    const element = node as {
+    // The slot renders the form inside the surface that swaps in the busy
+    // frame; the adapter is its child.
+    const element = (node as { props?: { children?: unknown } }).props
+      ?.children as {
       type?: (props: unknown) => unknown;
       props?: unknown;
     };

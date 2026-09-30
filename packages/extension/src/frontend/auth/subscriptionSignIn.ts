@@ -137,8 +137,10 @@ export function signInWithSubscription(
       () =>
         provider.signIn({
           // Remote windows cannot reach the extension host's loopback port
-          // from the user's local browser.
-          transport: vscode.env.remoteName ? 'device' : 'loopback',
+          // from the user's local browser. Locally, `auto` drops to a device
+          // code when the callback ports are taken (another sign-in holding
+          // them) instead of failing with a bind error.
+          transport: vscode.env.remoteName ? 'device' : 'auto',
           present: vscodePresenter(provider, channel),
         }),
     ).pipe(
