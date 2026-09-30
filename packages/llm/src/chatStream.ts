@@ -9,9 +9,9 @@ import type { TurnEvent, TurnResult } from './turn.js';
 
 /**
  * The canonical counts a Chat completion receipt reports under the documented
- * OpenAI-compatible field names, which every route in this protocol family
- * shares. An absent count is unreported, never a zero, and a route's own
- * additional receipts stay with the route that reads them.
+ * OpenAI-compatible field names, which every OpenRouter route shares. An
+ * absent count is unreported, never a zero, and a route's own additional
+ * receipts stay with the route that reads them.
  */
 export const chatUsageCounts = (receipt: {
   readonly prompt_tokens?: number | null;

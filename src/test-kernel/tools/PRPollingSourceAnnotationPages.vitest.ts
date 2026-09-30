@@ -3,7 +3,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
@@ -11,6 +11,7 @@ import { Secrets } from '@platform/secrets';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
 import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
@@ -57,7 +58,10 @@ interface AnnotationDrainSource {
  * mocked here, so no member is called; the layer satisfies the requirement
  * the host root provides in production.
  */
-const secretsLayer = Secrets.layer(new FakeSecrets());
+const secretsLayer = Layer.merge(
+  Secrets.layer(new FakeSecrets()),
+  testHttpClientLayer,
+);
 
 function annotation(
   level: GhCheckAnnotation['annotation_level'],

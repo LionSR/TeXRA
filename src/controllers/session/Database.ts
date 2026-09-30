@@ -135,13 +135,14 @@ RETURNING id, seq
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
-INSERT INTO event (aggregate, seq, type, version, origin, at, data, blob)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO event (aggregate, seq, type, version, origin, at, data)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
 /** A blob is stored once per store, whichever run wrote it first. */
 const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
+const INSERT_REF = 'INSERT INTO event_blob ("commit", digest) VALUES (?, ?)';
 const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
@@ -268,13 +269,12 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed_by = ?
         WHERE id IN (SELECT id FROM dependents)
       `;
-      const dependentBlobs = `${dependents}
-        SELECT DISTINCT blob FROM event
-        WHERE aggregate IN (SELECT id FROM dependents) AND blob IS NOT NULL`;
-      /** Blob collection is by reachability: a digest no event names. */
+      const dependentBlobs = `${dependents} SELECT DISTINCT r.digest FROM event_blob r
+        JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
+      /** Blob collection is by reachability: a digest no row references. */
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
-          AND NOT EXISTS (SELECT 1 FROM event WHERE event.blob = blob.digest)`;
+          AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
       const all = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
@@ -845,9 +845,6 @@ export const databaseLayer = (
           });
           const encoded =
             committedDraft === draft ? row : encodeDraft(committedDraft);
-          if (encoded.blob !== null) {
-            yield* exec(INSERT_BLOB, [encoded.blob.digest, encoded.blob.value]);
-          }
           const commit = (yield* execOne(INSERT_EVENT, [
             aggregate,
             seq,
@@ -856,12 +853,15 @@ export const databaseLayer = (
             identity.ownerId,
             at,
             encoded.data,
-            encoded.blob?.digest ?? null,
           ]))?.commit;
           if (typeof commit !== 'number')
             return yield* invariant(
               `No commit assigned for aggregate ${draft.aggregateId}`,
             );
+          for (const { digest, value } of encoded.blobs) {
+            yield* exec(INSERT_BLOB, [digest, value]);
+            yield* exec(INSERT_REF, [commit, digest]);
+          }
           if (seq === 1) {
             yield* exec(
               'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
@@ -1193,7 +1193,7 @@ export const databaseLayer = (
                       const digests = (yield* exec(
                         dependentBlobs,
                         columns,
-                      )).map((row) => row.blob);
+                      )).map((row) => row.digest);
                       if (
                         (yield* exec(collectClosed, [
                           ...columns,

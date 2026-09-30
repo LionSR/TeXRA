@@ -25,7 +25,7 @@ import {
 } from './turn.js';
 import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { systemUpdateText } from './message.js';
-import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
+import { JsonObjectSchema, originOf, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
@@ -588,12 +588,7 @@ export function googleInteractionsModel(
       'Google Interactions requires its configuration and an explicit API key.',
     );
   }
-  const origin: ModelOrigin = {
-    protocol: 'google-interactions',
-    codecVersion: 1,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-  };
+  const origin = originOf(config);
   const client = new GoogleGenAI({
     enterprise: false,
     apiKey: transport.apiKey,

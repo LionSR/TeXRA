@@ -27,7 +27,6 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { Disposable } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
@@ -36,6 +35,7 @@ import {
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
+  type GitHubServices,
 } from './githubClient';
 import { shouldDropBotEvent } from './botFilter';
 import type { DedupedResource } from './pollingDedup';
@@ -196,13 +196,13 @@ export abstract class PollingSourceBase<
   protected abstract pollOne(
     key: K,
     state: S,
-  ): Effect.Effect<void, Error, Secrets>;
+  ): Effect.Effect<void, Error, GitHubServices>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,
-  ): Effect.Effect<void, PollHookRejected, Secrets> {
+  ): Effect.Effect<void, PollHookRejected, GitHubServices> {
     return Effect.void;
   }
 
@@ -270,7 +270,7 @@ export abstract class PollingSourceBase<
     key: K,
     initState: (now: number) => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, GitHubServices> {
     return Effect.uninterruptible(
       Effect.flatMap(Clock.currentTimeMillis, (now) => {
         const lifetime = this.lifetime;
@@ -471,7 +471,7 @@ export abstract class PollingSourceBase<
    */
   private ensurePolling(
     lifetime: PollingLifetime,
-  ): Effect.Effect<void, never, Secrets> {
+  ): Effect.Effect<void, never, GitHubServices> {
     return Effect.uninterruptible(
       Effect.gen({ self: this }, function* () {
         if (this.pollLoopStop) return;

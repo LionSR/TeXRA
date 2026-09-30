@@ -369,3 +369,20 @@ export function responseAuthentication(
         },
       };
 }
+
+/** The SDK client for one selected Responses deployment: no retries, no ambient organization. */
+export const openaiClient = (
+  endpoint: string,
+  authentication: ReturnType<typeof responseAuthentication>,
+  fetch?: typeof globalThis.fetch,
+) =>
+  new OpenAI({
+    apiKey: authentication.token,
+    defaultHeaders: authentication.headers,
+    baseURL: endpoint,
+    fetch,
+    maxRetries: 0,
+    organization: null,
+    project: null,
+    logLevel: 'off',
+  });

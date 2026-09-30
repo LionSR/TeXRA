@@ -38,7 +38,6 @@ import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { Disposable } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
   formatRepoIssueComment,
@@ -49,7 +48,7 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { ghGet } from './githubClient';
+import { ghGet, type GitHubServices } from './githubClient';
 import {
   type BasePollSubscriptionState,
   createBasePollState,
@@ -178,7 +177,7 @@ export class RepoPollingSource extends PollingSourceBase<
   subscribe(
     input: RepoSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, GitHubServices> {
     const key = repoKeyToString(input);
     return this.register(key, (now) => createInitialState(input, now), onEvent);
   }
@@ -190,7 +189,7 @@ export class RepoPollingSource extends PollingSourceBase<
   protected pollOne(
     _key: RepoKey,
     state: SubscriptionState,
-  ): Effect.Effect<void, Error, Secrets> {
+  ): Effect.Effect<void, Error, GitHubServices> {
     return this.pollRepo(state);
   }
 

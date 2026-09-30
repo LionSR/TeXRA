@@ -20,7 +20,7 @@ import {
   type RemoteOperation,
 } from './errors.js';
 import { openaiFailure } from './openaiError.js';
-import { parseInboundToolArguments, pullStream } from './transport.js';
+import { parseInboundToolArguments, sdkStream } from './transport.js';
 import {
   ResponsesUsageSchema,
   responsesUsage,
@@ -766,33 +766,13 @@ export function responseEvents(
   });
 }
 
-/** Owns only the foreign iterator lifetime shared by create and retrieve. */
-export const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
+/** The Responses SDK's event stream: its failures classified the way both create and retrieve report them. */
+export const sdkEvents = (
   source: AsyncIterable<unknown> & { readonly controller: AbortController },
   enrich: (error: ModelError) => ModelError,
-) {
-  const iterator = yield* Effect.acquireRelease(
-    Effect.sync(() => source[Symbol.asyncIterator]()),
-    (iterator) =>
-      Effect.gen(function* () {
-        source.controller.abort();
-        if (!iterator.return) return;
-        const close = Effect.tryPromise({
-          try: () => iterator.return!(),
-          catch: (cause) =>
-            enrich(
-              new ModelError({
-                kind: 'transport',
-                message: 'The model stream cleanup failed.',
-                cause,
-              }),
-            ),
-        });
-        yield* close.pipe(Effect.orDie);
-      }),
-  );
-  return pullStream(
-    () => iterator.next(),
+) =>
+  sdkStream(
+    source,
     (cause) =>
       enrich(
         cause instanceof SyntaxError
@@ -803,5 +783,12 @@ export const sdkEvents = Effect.fn('llm.responses.sdkEvents')(function* (
             })
           : openaiFailure(cause),
       ),
+    (cause) =>
+      enrich(
+        new ModelError({
+          kind: 'transport',
+          message: 'The model stream cleanup failed.',
+          cause,
+        }),
+      ),
   );
-});

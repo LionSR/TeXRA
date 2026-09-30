@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import { Cause, Clock, Effect, Exit, Stream, type Scope } from 'effect';
-import OpenAI from 'openai';
 import { WebSocket, createWebSocketStream } from 'ws';
 import { z } from 'zod';
 
@@ -22,10 +21,13 @@ import {
   parseJsonOrModelError,
 } from './errors.js';
 import { openaiResponsesContinuation } from './openaiResponsesLower.js';
-import { responseEvents, type ResponseOrigin } from './openaiResponsesCodec.js';
+import { responseEvents } from './openaiResponsesCodec.js';
+import { originOf } from './protocol.js';
+import { rejoin } from './transport.js';
 import {
   ResponseAuthenticationSchema,
   estimateResponseInput,
+  openaiClient,
   prepareResponsesTurn,
   responseAuthentication,
   responseParameters,
@@ -71,12 +73,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       kind: 'unsupported',
       message: 'This model implements the Responses protocol.',
     });
-  const origin = Object.freeze({
-    protocol: config.protocol,
-    requestedModel: config.requestedModel,
-    deployment: config.deployment,
-    codecVersion: 1,
-  } satisfies ResponseOrigin);
+  const origin = originOf(config);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),
     catch: (cause) => cause,
@@ -86,15 +83,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
     ),
   );
   const countClient = config.supportsInputTokenEstimation
-    ? new OpenAI({
-        apiKey: selected.token,
-        defaultHeaders: selected.headers,
-        baseURL: config.deployment.endpoint,
-        maxRetries: 0,
-        organization: null,
-        project: null,
-        logLevel: 'off',
-      })
+    ? openaiClient(config.deployment.endpoint, selected)
     : undefined;
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
@@ -132,21 +121,17 @@ export const openaiResponsesWebSocketModel = Effect.fn(
           cause,
         });
   const join = (pending: Promise<unknown>, exit: Exit.Exit<unknown, unknown>) =>
-    Effect.tryPromise({ try: () => pending, catch: (cause) => cause }).pipe(
-      Effect.catch((cause) => {
-        const repeated =
-          Exit.isFailure(exit) &&
-          exit.cause.reasons.some(
-            (reason) =>
-              (Cause.isFailReason(reason) &&
-                (reason.error === cause ||
-                  (reason.error instanceof ModelError &&
-                    reason.error.cause === cause))) ||
-              (Cause.isDieReason(reason) && reason.defect === cause),
-          );
-        return cause === closed || repeated ? Effect.void : Effect.die(cause);
-      }),
-      Effect.asVoid,
+    rejoin(
+      pending,
+      exit,
+      (cause) =>
+        cause === closed ||
+        (Exit.isFailure(exit) &&
+          exit.cause.reasons.some((reason) =>
+            Cause.isFailReason(reason)
+              ? reason.error === cause
+              : Cause.isDieReason(reason) && reason.defect === cause,
+          )),
     );
   const resource = yield* Effect.acquireRelease(
     Effect.sync(() => {

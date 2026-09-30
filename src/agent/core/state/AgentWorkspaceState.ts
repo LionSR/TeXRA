@@ -208,14 +208,6 @@ export class AgentWorkspaceState {
   }
 
   /**
-   * Create an empty snapshot without instantiating a full class.
-   * Use at initialization sites that only need the serializable shape.
-   */
-  static emptySnapshot(): AgentWorkspaceSnapshot {
-    return AgentWorkspaceStateSnapshotSchema.parse({ workPlan: {} });
-  }
-
-  /**
    * Hydration: validates the snapshot, then rebuilds the slices. The one entry
    * point for every caller, because there is one supported persisted format.
    *

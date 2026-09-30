@@ -21,6 +21,7 @@ import {
 } from '@texra-ai/llm/openai-responses';
 import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 import {
+  originOf,
   type Model,
   type ModelConfiguration,
   type ModelOrigin,
@@ -968,12 +969,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ),
     );
   }
-  const origin: ModelOrigin = {
-    protocol: configuration.protocol,
-    codecVersion: 1,
-    requestedModel: configuration.requestedModel,
-    deployment: configuration.deployment,
-  } as ModelOrigin;
+  const origin = originOf(configuration);
   return {
     modelId: config.name,
     config,

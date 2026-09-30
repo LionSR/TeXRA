@@ -61,10 +61,10 @@ const tableWrite = (tables: string) =>
     'i',
   );
 /** The ledger's tables: `event` and `event_sequence`, the store-wide `blob`
- *  table, the `stored_kind` and `projection_state` bookkeeping, and the four
+ *  table and its `event_blob` references, the `stored_kind` and `projection_state` bookkeeping, and the four
  *  projection tables. `Database.ts` is their one writer. */
 const EVENT_TABLE_WRITE = tableWrite(
-  'event|event_sequence|blob|stored_kind|projection_state|projected_row|listing_entry|run_usage|run_model',
+  'event|event_sequence|event_blob|blob|stored_kind|projection_state|projected_row|listing_entry|run_usage|run_model',
 );
 /** A root's current values and input history, written by `currentValues.ts`
  *  alone. */

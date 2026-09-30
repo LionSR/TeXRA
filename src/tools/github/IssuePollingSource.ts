@@ -17,7 +17,6 @@
 import { Effect } from 'effect';
 
 import type { Disposable } from '@platform/interfaces';
-import type { Secrets } from '@platform/secrets';
 import {
   formatIssueClosed,
   formatIssueComment,
@@ -25,7 +24,7 @@ import {
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
 import { issueRef, withSince } from './githubPaths';
-import { ghGet } from './githubClient';
+import { ghGet, type GitHubServices } from './githubClient';
 import {
   type BasePollSubscriptionState,
   createBasePollState,
@@ -101,7 +100,7 @@ export class IssuePollingSource extends PollingSourceBase<
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, GitHubServices> {
     const key = issueKeyToString(issue);
     return this.register(key, (now) => createInitialState(issue, now), onEvent);
   }
@@ -117,7 +116,7 @@ export class IssuePollingSource extends PollingSourceBase<
   protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Effect.Effect<void, Error, Secrets> {
+  ): Effect.Effect<void, Error, GitHubServices> {
     return this.pollIssue(state);
   }
 
