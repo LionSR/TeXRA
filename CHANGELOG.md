@@ -342,6 +342,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Auto-compaction and the context gauge measure the whole conversation.**
+  A tool-use run compacted on the text of its messages alone, so the
+  provider's own token count (which includes the system prompt and tool
+  definitions) never reached the compaction trigger; the trigger, the context
+  gauge and the output-length limit now all read the last response's reported
+  input plus output tokens and add an estimate for what was added since. The
+  gauge therefore counts the model's reply too.
+
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history
   query (`executions` on `/executions`) no longer fails with "Invalid string

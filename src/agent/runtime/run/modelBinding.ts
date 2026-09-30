@@ -326,7 +326,6 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     ...base,
     protocol: 'openai-responses',
     background: 'unsupported',
-    supportsInputTokenEstimation: false,
     supportsTemperature: fields.supportsTemperature,
     supportsMaxOutputTokens: true,
     supportsStorage: fields.stores,
@@ -449,7 +448,6 @@ const PROTOCOL_DESCRIPTORS: {
     }) => ({
       ...base,
       protocol: 'anthropic-messages',
-      supportsInputTokenEstimation: capabilities.supportsTokenCounting,
       supportsTemperature,
       supportsForcedToolChoice: true,
       supportsSystemMessages: capabilities.supportsIntermDevMsgs,
@@ -497,7 +495,6 @@ const PROTOCOL_DESCRIPTORS: {
           requestedModel: credential.requestedModel,
           protocol: 'openai-responses',
           background: 'unsupported',
-          supportsInputTokenEstimation: false,
           supportsTemperature,
           supportsMaxOutputTokens: false,
           supportsStorage: false,
@@ -538,7 +535,6 @@ const PROTOCOL_DESCRIPTORS: {
         ...base,
         protocol: 'openai-responses',
         background: xai ? 'unsupported' : 'supported',
-        supportsInputTokenEstimation: false,
         supportsTemperature,
         supportsMaxOutputTokens: true,
         supportsStorage: true,
@@ -592,7 +588,6 @@ const PROTOCOL_DESCRIPTORS: {
       ...base,
       protocol: 'google-interactions',
       background: 'supported',
-      supportsInputTokenEstimation: capabilities.supportsTokenCounting,
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
         // Server-side conversation state is the user's choice: on, Google

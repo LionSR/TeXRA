@@ -23,7 +23,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
-import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { decodeTurnRequest } from './turnInput.js';
 import { systemUpdateText } from './message.js';
 import { JsonObjectSchema, originOf, sameModelOrigin } from './protocol.js';
 import {
@@ -1257,63 +1257,11 @@ export function googleInteractionsModel(
       ),
     );
   });
-
-  const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.google.estimateInputTokens')(function* (turn) {
-      if (turn.protocol !== 'google-interactions' || turn.mode !== 'foreground')
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'The prepared Google count invocation is unsupported.',
-        });
-      yield* invocationInput(turn, origin);
-      const text = initialTextInput(turn);
-      if (text === undefined)
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Google counting supports one initial text-only user message and optional system text.',
-        });
-      const parts = text.map((part) => ({ text: part.text }));
-      const response = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.models.countTokens({
-            model: turn.requestedModel,
-            // Preserve the existing converted-content estimate, not a claim
-            // to count the full Interactions request or its thinking controls.
-            contents: [
-              ...(turn.system === undefined
-                ? []
-                : [{ role: 'system', parts: [{ text: turn.system }] }]),
-              { role: 'user', parts },
-            ],
-            config: {
-              abortSignal: signal,
-              httpOptions: { retryOptions: { attempts: 1 } },
-            },
-          }),
-        sdkFailure,
-        { isAbortMatch: googleAbortMatch },
-      );
-      const count = z
-        .object({ totalTokens: z.int().nonnegative() })
-        .safeParse(response);
-      if (!count.success)
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned no valid input token estimate.',
-          cause: count.error,
-        });
-      return Object.freeze({
-        inputTokens: count.data.totalTokens,
-        coverage: 'google-converted-content' as const,
-      });
-    });
   return Object.freeze({
     prepareTurn,
     streamTurn,
     ...(config.background === 'supported'
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),
-    ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),
   });
 }
