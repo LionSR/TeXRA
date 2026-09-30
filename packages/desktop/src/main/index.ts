@@ -233,8 +233,14 @@ if (ownsSingleInstanceLock) {
           const notice = yield* telemetryNoticeIfDue(
             platformInit.processRoots.config,
           );
-          if (notice)
-            void dialog.showMessageBox({ type: 'info', message: notice });
+          if (notice) {
+            // A sheet on the window, not an app-modal box: an app-modal one on
+            // a fresh profile keeps the first window from appearing.
+            const parent = windows.window();
+            void (parent
+              ? dialog.showMessageBox(parent, { type: 'info', message: notice })
+              : dialog.showMessageBox({ type: 'info', message: notice }));
+          }
           app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
           });
