@@ -109,7 +109,7 @@ function FormBusyFrame(props: {
     props.availableRows !== undefined &&
     requiredRows(liveCopyable) > props.availableRows;
   useLayoutEffect(() => {
-    if (copyableDoesNotFit) progress.archiveCopyable?.();
+    if (copyableDoesNotFit) progress.archiveCopyable();
   }, [copyableDoesNotFit, progress]);
   const spinnerFrozen = liveCopyable !== undefined;
   const displayMessage = copyableDoesNotFit

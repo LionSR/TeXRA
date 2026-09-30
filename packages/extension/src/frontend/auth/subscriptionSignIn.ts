@@ -144,10 +144,9 @@ export function signInWithSubscription(
           present: vscodePresenter(provider, channel),
         }),
     ).pipe(
-      // A transport defect is reported the same as its typed failure, exactly
-      // as the rejection this replaces was. An interrupt is not: shutdown
-      // cancelling the sign-in is not a sign-in failure, and the
-      // `Effect.tryPromise` this replaces never saw one.
+      // A transport defect is reported the same as its typed failure. An
+      // interrupt is not: shutdown cancelling the sign-in is not a sign-in
+      // failure.
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
