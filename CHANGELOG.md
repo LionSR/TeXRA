@@ -175,6 +175,15 @@ All notable changes to this project will be documented in this file.
   Saved session history from an earlier build is cleared once, since the
   stored shape of a model reply changed.
 
+- **A cloned repository can no longer loosen your approvals.** The approval
+  policy and the two approval switches (edits, shell commands) are now read
+  only from your own settings: per workspace, in your TeXRA storage, with a
+  value in your user configuration file as the default for every workspace. A
+  `.texra/config.json` that sets one of them is ignored, and every host warns
+  naming the key, so a project that set `texra.approvalPolicy` (or a switch)
+  there needs it set again in the settings view or `/config`. `texra init` no
+  longer asks for an approval policy or writes one.
+
 ### Features
 
 - **Session history takes several times less disk** — long tool output,

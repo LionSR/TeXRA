@@ -28,7 +28,7 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
+import { openTexraWorkspaceConfigStores } from '@platform/defaults/nodeStores';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
@@ -294,7 +294,7 @@ export function openDesktopProjectRegistry(
           const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const [workspaceState, repoState, workspaceConfig] =
+            const [workspaceState, repoState, workspaceConfigs] =
               yield* Effect.all(
                 [
                   openProjectStateStore(storage, root).pipe(
@@ -303,7 +303,7 @@ export function openDesktopProjectRegistry(
                   openRepoStateStore(root, storage).pipe(
                     Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
-                  openTexraWorkspaceConfigStore(storage, root, (message) =>
+                  openTexraWorkspaceConfigStores(storage, root, (message) =>
                     console.warn(`[desktop] ${message}`),
                   ),
                 ],
@@ -315,7 +315,7 @@ export function openDesktopProjectRegistry(
               storage,
               globalStorage: resolveGlobalStoragePath(options.dataRoot),
               config: {
-                workspace: workspaceConfig,
+                ...workspaceConfigs,
                 global: options.globalConfigStore,
               },
               workspaceState,

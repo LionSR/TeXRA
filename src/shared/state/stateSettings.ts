@@ -182,8 +182,11 @@ export interface StateSettingEntry {
   readonly category?: string;
   /** Where the value is stored, the same on every host. */
   readonly slot: SettingStore;
-  /** Persistence target for config-backed settings; workspace when omitted. */
-  readonly configTarget?: 'global' | 'workspace';
+  /**
+   * Persistence target for config-backed settings; workspace when omitted.
+   * `global` and `local` rows are never read from the project file.
+   */
+  readonly configTarget?: 'global' | 'workspace' | 'local';
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -613,6 +616,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
@@ -620,6 +624,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Require approval for shell commands',
     description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
+    configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
 };
@@ -678,9 +683,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
+      'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slot: 'config',
+    configTarget: 'local',
     enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),

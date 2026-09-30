@@ -249,7 +249,6 @@ describe('CLI init command', () => {
         readonly path?: string;
         readonly agent?: string;
         readonly model?: string;
-        readonly approvalPolicy?: string;
         readonly outputFormat?: string;
         readonly gitignore?: string;
         readonly config?: unknown;
@@ -261,13 +260,11 @@ describe('CLI init command', () => {
         path: path.join(root, '.texra', 'config.json'),
         agent: 'assistant',
         model: 'deepseekproT',
-        approvalPolicy: 'ask',
         outputFormat: 'text',
         gitignore: 'created',
         config: {
           'texra.model': 'deepseekproT',
           'texra.outputFormat': 'text',
-          'texra.approvalPolicy': 'ask',
           'texra.chat': { agent: 'assistant', model: 'deepseekproT' },
         },
       },

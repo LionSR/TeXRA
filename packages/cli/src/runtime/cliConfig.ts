@@ -16,7 +16,10 @@ import {
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
@@ -300,6 +303,7 @@ export function loadCliStartupConfig(
         config: new JsonConfigProvider({
           workspace: withoutInvalid(stores.workspace),
           global: withoutInvalid(stores.global),
+          local: withoutInvalid(stores.local),
         }),
         warnings: [
           ...configFileWarnings([
@@ -312,6 +316,14 @@ export function loadCliStartupConfig(
               store: stores.global,
               filePath: path.join(
                 resolveGlobalStoragePath(storageRoot),
+                TEXRA_CONFIG_FILE_NAME,
+              ),
+              isProjectFile: false,
+            },
+            {
+              store: stores.local,
+              filePath: path.join(
+                resolveWorkspaceStoragePath(storageRoot, cwd),
                 TEXRA_CONFIG_FILE_NAME,
               ),
               isProjectFile: false,
