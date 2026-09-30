@@ -417,7 +417,7 @@ describe('CLI history runtime', () => {
   it('labels team runs by preset in history lists', async () => {
     const teamConfig = toolUseAgentConfig({
       agent: 'engineer',
-      cli: { multiAgentPresetId: ' software-engineer ' },
+      cli: { teamId: ' software-engineer ' },
     });
     mocks.listRuns.mockReturnValue(
       Effect.succeed([

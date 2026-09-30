@@ -29,7 +29,7 @@ const CliOutputFieldsSchema = z.object({
    * orchestrator agent — is not inferred as the default agent for a plain
    * `texra chat` session. Preserved across resume.
    */
-  multiAgentPresetId: z.string().nullish(),
+  teamId: z.string().nullish(),
 });
 
 /** Fields shared by both category-specific config variants. */

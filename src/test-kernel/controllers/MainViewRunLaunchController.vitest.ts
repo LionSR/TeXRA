@@ -147,7 +147,7 @@ describe('main-view run launch controller', () => {
             workflow: ['builtInWorkflow:writer'],
             toolUse: ['builtInToolUse:lead'],
           },
-          cli: { multiAgentPresetId: 'custom-team' },
+          cli: { teamId: 'custom-team' },
         },
         missingNames: ['writer'],
       });
@@ -172,7 +172,7 @@ describe('main-view run launch controller', () => {
           workflow: ['builtInWorkflow:writer'],
           toolUse: ['builtInToolUse:lead'],
         },
-        cli: { multiAgentPresetId: 'custom-team' },
+        cli: { teamId: 'custom-team' },
       });
     }),
   );

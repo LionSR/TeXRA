@@ -206,7 +206,7 @@ export const runTeam = Effect.fn('runTeam')(function* (
           displayInstruction,
           workingDirectory: runContext.cwd,
           agentCategory: AgentCategory.ToolUse,
-          cli: { multiAgentPresetId: plan.preset.id },
+          cli: { teamId: plan.preset.id },
           delegationAgentScope: byCategory((category) => [
             ...plan.agentKeys[category],
           ]),
