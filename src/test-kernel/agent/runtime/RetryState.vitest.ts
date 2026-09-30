@@ -720,7 +720,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('keeps a delegated call on its own model and run ledger', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const parentModel = stubModel([{ ok: completedTurn('parent') }]);
       const childModel = stubModel([{ ok: completedTurn('child') }]);
       const parent = yield* openRun(session, parentModel.model);
@@ -748,7 +748,7 @@ describe('ModelInvoker retry', () => {
   // the scenario costs no wall time.
   it.effect('repeats an automatic attempt and returns the response', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const stub = stubModel([
         { fail: httpError('temporary provider failure', 503) },
@@ -769,7 +769,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const denied = autoDecideRequests(session, () => ({
         action: 'deny',
         reason: 'Denied by TeXRA approval policy.',
@@ -789,7 +789,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('treats a user abort as a cancellation without prompting', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
       }));
@@ -808,7 +808,7 @@ describe('ModelInvoker retry', () => {
 
   it.effect('abandons the pending retry when the run is interrupted', () =>
     Effect.gen(function* () {
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
       const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
@@ -846,7 +846,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'retry',
@@ -900,7 +900,7 @@ describe('ModelInvoker retry', () => {
         yield* Effect.promise(() =>
           installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
         );
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
         const requests = autoDecideRequests(session, () => ({
           action: 'retry',
@@ -946,7 +946,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       session.setApprovalPolicy('yolo');
       const stub = stubModel([
         { fail: new Error('stream dropped before first token') },
@@ -977,7 +977,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
         action: 'cancel',
         cause: 'The user declined the retry.',
@@ -1010,7 +1010,7 @@ describe('ModelInvoker retry', () => {
           },
         }),
       );
-      const session = sessionWithInteractions(undefined);
+      const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
       const requests = autoDecideRequests(session, () => ({
         action: 'deny',
@@ -1036,7 +1036,7 @@ describe('ModelInvoker retry', () => {
     'retries a chained request once without its continuation when the stored response is gone',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
         const chained: boolean[] = [];
         const model: Model = {
@@ -1121,7 +1121,7 @@ describe('ModelInvoker retry', () => {
     'cancels an observed background response on a user stop, never on shutdown',
     () =>
       Effect.gen(function* () {
-        const session = sessionWithInteractions(undefined);
+        const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
         vi.spyOn(session.runs, 'stopReason').mockImplementation((runId) =>
           stopped.get(runId),

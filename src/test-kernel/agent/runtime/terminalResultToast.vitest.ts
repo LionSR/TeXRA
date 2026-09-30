@@ -29,7 +29,7 @@ async function toastsFor(
   event: ResultEvent,
   parent: RunId | null = null,
 ): Promise<{ event: string; payload: unknown }[]> {
-  const session = createTestSession();
+  const session = await Effect.runPromise(createTestSession());
   const emitted: { event: string; payload: unknown }[] = [];
   const emit = vi.fn((name: string, payload: unknown) => {
     emitted.push({ event: name, payload });

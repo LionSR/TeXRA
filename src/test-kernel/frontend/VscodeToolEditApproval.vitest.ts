@@ -154,18 +154,20 @@ function createApprovalHarness(): ApprovalHarness {
   return harness;
 }
 
-function requestApproval(
+async function requestApproval(
   controller: ToolEditApprovalController,
   filePath: string,
   runId: RunId,
-): Pick<StartedApproval, 'presented' | 'requestId'> {
-  const request = toolEditApprovalRequest({
-    path: filePath,
-    originalContent: 'old\n',
-    proposedContent: 'new\n',
-    sourceTool: 'write_file',
-    runId,
-  });
+): Promise<Pick<StartedApproval, 'presented' | 'requestId'>> {
+  const request = await onRuntime(
+    toolEditApprovalRequest({
+      path: filePath,
+      originalContent: 'old\n',
+      proposedContent: 'new\n',
+      sourceTool: 'write_file',
+      runId,
+    }),
+  );
   const presented = onRuntime(controller.present(request));
   presentations.push(presented);
   return { presented, requestId: request.permission.requestId };
@@ -193,7 +195,7 @@ function currentProposedUri(): TestUri {
 
 async function startApproval(): Promise<StartedApproval> {
   const harness = createApprovalHarness();
-  const request = requestApproval(
+  const request = await requestApproval(
     harness.controller,
     '/workspace/notes.txt',
     'run-approval' as RunId,

@@ -39,9 +39,7 @@ function dispatchWolfram(
 ) {
   return Effect.gen(function* () {
     const session = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        sessionWithInteractions(createRecordingHost().interactions),
-      ),
+      sessionWithInteractions(createRecordingHost().interactions),
       (session) => closeSessionOf(session),
     );
     publishTestRunStart(session, runId);

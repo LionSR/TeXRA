@@ -718,7 +718,7 @@ describe('CLI history runtime', () => {
 
   it.live('deletes indexed executions and reports a later missing lookup', () =>
     Effect.acquireUseRelease(
-      Effect.sync(createTestSession),
+      createTestSession(),
       (session) =>
         Effect.gen(function* () {
           const id = 'aabbcc' as RunId;

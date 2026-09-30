@@ -29,13 +29,11 @@ describe('SessionHandle', () => {
     'keeps run tracking and approval policy isolated between sessions',
     () =>
       Effect.gen(function* () {
-        const a = yield* Effect.acquireRelease(
-          Effect.sync(() => createTestSession()),
-          (session) => closeSessionOf(session),
+        const a = yield* Effect.acquireRelease(createTestSession(), (session) =>
+          closeSessionOf(session),
         );
-        const b = yield* Effect.acquireRelease(
-          Effect.sync(() => createTestSession()),
-          (session) => closeSessionOf(session),
+        const b = yield* Effect.acquireRelease(createTestSession(), (session) =>
+          closeSessionOf(session),
         );
         const isolated = generateRunId();
         const runB = generateRunId();
@@ -86,7 +84,7 @@ describe('SessionHandle', () => {
 
   it.effect('finishes owner teardown before surfacing a disposal failure', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const failure = new Error('interaction disposal failed');
       const interactions = vi
         .spyOn(session.interactions, 'dispose')
@@ -108,7 +106,7 @@ describe('SessionHandle', () => {
 
   it.effect('refuses run work once disposal has begun', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       let attempted = false;
       // The handle's owners unwind after the session's runs: a launch reaching
       // the registry from inside that unwind is already refused.

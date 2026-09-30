@@ -16,10 +16,8 @@ import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 function withSession<A, E, R>(
   run: (session: SessionHandle) => Effect.Effect<A, E, R>,
 ) {
-  return Effect.acquireUseRelease(
-    Effect.sync(createTestSession),
-    run,
-    (session) => closeSessionOf(session),
+  return Effect.acquireUseRelease(createTestSession(), run, (session) =>
+    closeSessionOf(session),
   );
 }
 

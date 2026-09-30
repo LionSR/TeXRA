@@ -259,7 +259,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
   it.effect('dispose releases every binding and the source-key listener', () =>
     Effect.gen(function* () {
       const source = new RegistryTestSource();
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const registry = createTestRegistry(source);
       yield* Effect.addFinalizer(() => closeSessionOf(session));
 
@@ -284,7 +284,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         session.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(session));
@@ -314,9 +314,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const firstSession = createTestSession();
+        const firstSession = yield* createTestSession();
         firstSession.followUps.claimLive(runId, 'loop');
-        const secondSession = createTestSession();
+        const secondSession = yield* createTestSession();
         secondSession.followUps.claimLive(runId, 'loop');
         const registry = createTestRegistry(source);
         yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
@@ -350,7 +350,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       Effect.gen(function* () {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
-        const session = createTestSession();
+        const session = yield* createTestSession();
         const logs = captureLogEntries();
         const registry = createTestRegistry(source);
         const unhandledRejection = vi.fn();

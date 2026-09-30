@@ -113,9 +113,7 @@ describe('ConfigTools — update_config approval', () => {
         config: { 'texra.bib.zoteroPort': 23119 },
       });
       const session = yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          sessionWithInteractions(createRecordingHost().interactions),
-        ),
+        sessionWithInteractions(createRecordingHost().interactions),
         (session) => closeSessionOf(session),
       );
       const runId = generateRunId();

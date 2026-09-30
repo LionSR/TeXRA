@@ -333,7 +333,7 @@ const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
 const openDispatch = Effect.fn('openDispatch')(function* (
   options: HarnessOptions,
 ) {
-  const session = createTestSession();
+  const session = yield* createTestSession();
   const runId = dispatchRunId();
   const logger = options.logger ?? noopTrace;
   const tools = new MapToolRegistry(options.tools);

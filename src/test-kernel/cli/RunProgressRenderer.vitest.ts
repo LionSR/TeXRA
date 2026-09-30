@@ -796,7 +796,7 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
             testRuntime(),
             context({
@@ -826,7 +826,7 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
             testRuntime(),
             context({
@@ -866,7 +866,7 @@ describe('CLI run progress renderer', () => {
       const output = yield* captureStreamWrites(
         process.stderr,
         Effect.gen(function* () {
-          const session = createTestSession();
+          const session = yield* createTestSession();
           const host = createCliRuntimeHost(
             testRuntime(),
             context({
@@ -897,7 +897,7 @@ describe('CLI run progress renderer', () => {
           stderr = yield* captureStreamWrites(
             process.stderr,
             Effect.gen(function* () {
-              const session = createTestSession();
+              const session = yield* createTestSession();
               const host = createCliRuntimeHost(
                 testRuntime(),
                 context({
@@ -1018,7 +1018,7 @@ describe('CLI run progress renderer', () => {
         const output = yield* captureStreamWrites(
           process.stdout,
           Effect.gen(function* () {
-            const session = createTestSession();
+            const session = yield* createTestSession();
             publishTestRunStart(session, parentRunId);
             yield* Effect.promise(() => settle());
             // The roster is the fold's: the parent's `childIds` and the child's own

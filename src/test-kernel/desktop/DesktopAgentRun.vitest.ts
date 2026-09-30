@@ -46,7 +46,7 @@ describe('desktop agent run completion hook', () => {
   // awaited launch to settle.
   it.effect('fires after the awaited launch settles, not from run.end', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const onRunCompleted = vi.fn();
       const host = createStubDesktopAgentRunHost();
       const launchSettled = yield* Deferred.make<void>();

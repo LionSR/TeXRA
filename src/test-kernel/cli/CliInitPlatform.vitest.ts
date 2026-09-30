@@ -262,7 +262,7 @@ describe('CLI platform init', () => {
       // disposed.
       yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const drain = vi
         .spyOn(session.runs, 'killBackgroundProcesses')
         .mockImplementation(() => {});

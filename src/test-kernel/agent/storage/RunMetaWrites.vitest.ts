@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
 import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import { freshRunState } from '@shared/session/runStateFold';
 import {
@@ -12,10 +13,10 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
-let session: ReturnType<typeof createTestSession>;
+let session: SessionHandle;
 const id = 'bbb001' as RunId;
 beforeEach(async () => {
-  session = createTestSession();
+  session = await Effect.runPromise(createTestSession());
   publishTestRunStart(session, id);
   await Effect.runPromise(session.settlePublications());
 });

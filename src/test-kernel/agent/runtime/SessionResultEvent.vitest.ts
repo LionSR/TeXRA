@@ -226,7 +226,7 @@ describe('terminal result event', () => {
 
   it.effect('bridges a child run result to session.onResult', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       const onResult = vi.fn((_event: ResultEvent) => Effect.void);
       const parentRunId = publishTestRunStart(session);
       const { logger, ctx } = setupResultCase({ session, parentRunId });

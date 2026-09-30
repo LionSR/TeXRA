@@ -70,8 +70,8 @@ describe('Concurrent session tool edit approval handlers', () => {
           });
         }
 
-        const sessionA = createTestSession();
-        const sessionB = createTestSession();
+        const sessionA = yield* createTestSession();
+        const sessionB = yield* createTestSession();
         yield* Effect.addFinalizer(() =>
           closeSessionOf(sessionA).pipe(
             Effect.andThen(closeSessionOf(sessionB)),

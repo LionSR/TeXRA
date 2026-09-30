@@ -54,9 +54,9 @@ const cleanups: Array<() => void> = [];
  * a run opens is a `request.opened` row, and a surface's `request.decide`
  * answers it (one run model, 3.7).
  */
-function planSession(runId: RunId) {
+const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   const { interactions } = createRecordingHost();
-  const session = sessionWithInteractions(interactions);
+  const session = yield* sessionWithInteractions(interactions);
   publishTestRunStart(session, runId);
   const requests = autoDecideRequests(session, () => null);
   cleanups.push(() => requests.detach());
@@ -83,7 +83,7 @@ function planSession(runId: RunId) {
   };
 
   return { session, awaitPlanRequest };
-}
+});
 
 function startPlanUpdate(
   runId: RunId,
@@ -92,7 +92,7 @@ function startPlanUpdate(
   seed?: (session: SessionHandle) => Effect.Effect<void, Error>,
 ) {
   return Effect.gen(function* () {
-    const { session, awaitPlanRequest } = planSession(runId);
+    const { session, awaitPlanRequest } = yield* planSession(runId);
     if (seed) yield* seed(session);
     const workPlanState = new WorkPlanState();
     const tool = PlanTool;
@@ -156,7 +156,7 @@ describe('PlanTool — update (plan approval)', () => {
         Effect.gen(function* () {
           yield* Effect.tryPromise(() => installFakePlatform());
           const runId = generateRunId();
-          const { session, awaitPlanRequest } = planSession(runId);
+          const { session, awaitPlanRequest } = yield* planSession(runId);
           const workPlanState = new WorkPlanState();
 
           yield* Effect.addFinalizer(() =>

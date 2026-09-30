@@ -21,8 +21,8 @@ describe('session-owned transcripts and follow-up queues', () => {
     "writes run trace entries to the launching session's transcript store only",
     () =>
       Effect.gen(function* () {
-        const launching = createTestSession();
-        const sibling = createTestSession();
+        const launching = yield* createTestSession();
+        const sibling = yield* createTestSession();
         yield* Effect.addFinalizer(() =>
           closeSessionOf(launching).pipe(
             Effect.andThen(closeSessionOf(sibling)),
@@ -55,7 +55,7 @@ describe('session-owned transcripts and follow-up queues', () => {
 
   it.effect('commits partial streaming text when the run parks', () =>
     Effect.gen(function* () {
-      const session = createTestSession();
+      const session = yield* createTestSession();
       yield* Effect.addFinalizer(() => closeSessionOf(session));
       const runId = generateRunId();
       publishTestRunStart(session, runId);
@@ -83,8 +83,8 @@ describe('session-owned transcripts and follow-up queues', () => {
 
   it.effect('keeps same-stream follow-up queues isolated by session', () =>
     Effect.gen(function* () {
-      const a = createTestSession();
-      const b = createTestSession();
+      const a = yield* createTestSession();
+      const b = yield* createTestSession();
       yield* Effect.addFinalizer(() =>
         closeSessionOf(a).pipe(Effect.andThen(closeSessionOf(b))),
       );
@@ -113,7 +113,7 @@ describe('sendFollowUp host-path session routing', () => {
     'resolves the follow-up target against the passed session, not the process default',
     () =>
       Effect.gen(function* () {
-        const processSession = createTestSession();
+        const processSession = yield* createTestSession();
         const parentRun = publishTestRunStart(processSession);
         yield* processSession.settlePublications();
         yield* Effect.addFinalizer(() =>

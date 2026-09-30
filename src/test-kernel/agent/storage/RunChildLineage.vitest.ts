@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
@@ -9,9 +10,9 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
-let session: ReturnType<typeof createTestSession>;
-beforeEach(() => {
-  session = createTestSession();
+let session: SessionHandle;
+beforeEach(async () => {
+  session = await Effect.runPromise(createTestSession());
 });
 
 const readParentRunId = (runId: RunId) =>

@@ -28,12 +28,7 @@ import {
 
 const withSession = <A, E>(
   body: (session: SessionHandle) => Effect.Effect<A, E>,
-) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => createTestSession()),
-    body,
-    closeSessionOf,
-  );
+) => Effect.acquireUseRelease(createTestSession(), body, closeSessionOf);
 
 const run = (runId: RunId) => aggregateId('run', runId);
 
