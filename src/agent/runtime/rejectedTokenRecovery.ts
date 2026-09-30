@@ -3,12 +3,17 @@
  * (revoked, or expired server-side) is refreshed once per invocation and the
  * attempt rebound on the new session. A refresh or rebind that fails takes
  * the stale 401's place as the invocation's failure, so the user reads the
- * "sign in again" instruction rather than "token is expired".
+ * "sign in again" instruction rather than "token is expired". That failure
+ * is terminal: it rarely carries a status, so classification alone would
+ * auto-retry it, and the retry would resend the rejected token and bring the
+ * stale 401 back.
  */
 import { StatusCodes } from 'http-status-codes';
 import { Effect, type Result } from 'effect';
 
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import type { PlatformSecrets } from '@platform/secrets';
+import { toRetryErrorInfo } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 
 import { refreshRejectedSubscription } from './modelRoutes';
@@ -53,9 +58,17 @@ export function rejectedTokenRecovery<R>(
         ),
       ),
       Effect.as(null),
-      Effect.catch((error: Error) =>
-        Effect.succeed(classifyModelFailure(error, bound)),
-      ),
+      Effect.catch((error: Error) => {
+        const failed = classifyModelFailure(error, bound);
+        const formatted = { ...failed.formatted, userRetryable: false };
+        attachProviderError(failed.error, formatted);
+        return Effect.succeed({
+          ...failed,
+          formatted,
+          info: toRetryErrorInfo(formatted),
+          autoRetryable: false,
+        });
+      }),
     );
   };
 }
