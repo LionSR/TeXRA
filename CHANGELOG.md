@@ -387,6 +387,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The desktop app and the VS Code extension no longer ship the internal
+  validation model.** The canned model the CLI's package validation runs
+  against was bundled into both, behind a gate that environment variables
+  could open; it is now replaced by a stub in every shipped build, as it
+  already was in the published CLI.
 - **A history file cut short no longer stops TeXRA from opening the
   workspace.** A session store truncated inside its first page (a copy that
   stopped part way) failed every open as "database disk image is

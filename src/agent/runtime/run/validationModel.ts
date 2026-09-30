@@ -11,10 +11,12 @@
  *
  * The four `TEXRA_CLI_*` reads are build constants: direct `process.env.<NAME>`
  * property access (never computed keys) so esbuild's `define`
- * (`packages/cli/scripts/build-bundle.mjs`) inlines them at bundle time. In the
- * default CLI build the include flag is defined to `''`, so
- * {@link shouldUseInternalValidationModel} constant-folds to `false`, and the
- * build aliases this whole module to a stub so no canned output ships. The
+ * (`packages/cli/scripts/build-bundle.mjs`) inlines them at bundle time; only
+ * the CLI's package-validation build defines them non-empty. Every shipped
+ * bundle (the default CLI, the desktop main process and the extension host)
+ * loads a stub in place of this module
+ * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
+ * environment-opened gate ships. The
  * runtime keys (the per-run switch, the flag-file path, `CI`, and the per-turn
  * workflow-script switch) go through the ambient Effect `ConfigProvider`
  * (`envVar`), read when the program runs, never at module load.
