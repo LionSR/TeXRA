@@ -266,7 +266,7 @@ the seam is two files wide rather than now.
 
 ## 5. Corrections to existing notes
 
-- **[`2026-09-08-effect-4-interface-findings.md`](../../archived/architecture/2026-09-08-effect-4-interface-findings.md) §3
+- **`2026-09-08-effect-4-interface-findings.md` §3
   should be re-scoped.** Its API findings are correct and verified: there is no synchronous
   `PubSub` constructor carrying a delivery strategy, and `makeAtomicUnbounded` yields a poll-queue
   rather than a callback registry. Its _conclusion_ does not follow. The section preserves
@@ -305,7 +305,7 @@ call sites, per the 1.0 rule that a wrapper count is not evidence of changed exe
 ## 7. Non-goals
 
 - **No log persistence.** Assessed and rejected in
-  [`2026-05-17-logger-simplification-feasibility.md`](../../rejected/simplification/2026-05-17-logger-simplification-feasibility.md)
+  `2026-05-17-logger-simplification-feasibility.md`
   (JSONL deferred, append-only never). Nothing has changed.
 - **No merge of the transcript and diagnostics planes.** §2.
 - **No metrics plane** until a consumer is named. §3.6.

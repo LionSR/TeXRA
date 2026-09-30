@@ -304,7 +304,7 @@ function readBaseline(): EdgeBaseline {
 /**
  * New edges admitted by name, each with its reason. The JSON baseline is
  * shrink-only, so a deliberate new edge is recorded here, the way
- * `check-effect-migration-ratchet.mjs` records BOUNDARY_RUNTIME_ENTRIES. The
+ * eslint.config.mjs names its Effect runtime entries. The
  * admission is for the type-only form only: a later value import still fails
  * as a new-edge violation of kind `value`. Adding an entry is a ruling, not a
  * refactor.

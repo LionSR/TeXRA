@@ -581,8 +581,8 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Account & access',
-      'Prefer ChatGPT subscrip',
-      'Prefer Grok subscription',
+      '1. ChatGPT subscription',
+      'Grok subscription',
       'Otherwise: Your own API keys',
       'Add a provider API key',
       '↑/↓ navigate',
@@ -870,7 +870,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       'Account & access',
-      'Prefer ChatGPT subscrip',
+      '1. ChatGPT subscription',
       'Otherwise:',
       'Your own API keys',
     ],
@@ -1139,7 +1139,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Account & access',
-      'Prefer ChatGPT subscrip',
+      '1. ChatGPT subscription',
       '↑/↓ navigate',
       '1-7/Enter select',
       'Esc close',
@@ -1181,7 +1181,7 @@ const SCENARIOS = [
     },
     keys: ['/login', '\r', '3'],
     frame: 'viewport',
-    expect: ['Prefer Kimi Code subscription enabled'],
+    expect: ['Kimi Code subscription enabled'],
     expectCollapsed: ['other models still use your own API keys'],
     unexpect: ['No Kimi Code API key configured'],
   },

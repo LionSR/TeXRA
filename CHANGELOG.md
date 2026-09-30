@@ -392,6 +392,28 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Long prompts are priced at the provider's long-context rate.** OpenAI's
+  1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
+  bill a whole request at 2x input and 1.5x output once the prompt passes
+  272K tokens, and Gemini 3.1 Pro and 2.5 Pro do the same past 200K; a run's
+  cost now counts that, where it had billed only GPT-6 and Grok at the higher
+  rate. Cached input on Gemini 3.1 Pro, 3.1 Flash-Lite, 2.5 Pro and 2.5 Flash
+  is priced at 10% of input, as Google charges, instead of 25%.
+
+- **A failed model request shows the provider's error again.** It had
+  shown "Malformed error payload" with a schema complaint about
+  `rawErrorBody` instead of the actual failure.
+
+- **Subscription switches are named for the account they route.** The four
+  routing switches now read "ChatGPT subscription", "Grok subscription", "Kimi
+  Code subscription" and "GLM Coding Plan" in the chat's `/login` menu, in
+  `/config` and in the settings view. `/login` called them "Prefer ChatGPT
+  subscription", "Prefer Grok subscription", "Prefer Kimi Code subscription"
+  and "Prefer GLM Coding Plan", and the Kimi switch also read "Prefer Kimi
+  Code" in `/config` and the settings view. The names also stop promising a
+  preference: a session that cannot be used fails the run and asks you to sign
+  in again, rather than falling back to your API key.
+
 - **The ChatGPT and Grok sign-in link shows up again in `/login`.** Choosing
   a sign-in row in the chat's account menu started the sign-in but left the
   menu on screen, so the sign-in link, one-time code and `c` copy-link key

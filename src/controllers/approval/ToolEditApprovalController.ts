@@ -11,8 +11,8 @@
  * reading back what the user edited, lives behind {@link ToolEditApprovalHost}.
  *
  * Every verb is an Effect and the controller holds no runtime: a run belongs
- * at a host boundary (the Effect-4 migration's R1, frozen at zero below one
- * by `config/ratchets/effect-migration-baseline.json`) and this controller is
+ * at a host boundary (the Effect-4 migration's R1, held at zero below one
+ * by the `Effect.run*` rule in `eslint.config.mjs`) and this controller is
  * host-agnostic, so the host that owns a controller supplies the fiber
  * (`attachSessionHost.ts` is the wiring both hosts share).
  *

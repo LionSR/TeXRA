@@ -9,7 +9,7 @@ Baseline: `origin/main` at `b865508` (`SESSION_EVENT_FORMAT = 19`).
 ## Thesis
 
 The harness supplies ground truth; it does not guess at the model's
-questions ([research roadmap](../../archived/feature/2026-07-05-open-problem-research-roadmap.md):
+questions (research roadmap:
 "The harness provisions; it does not supervise"). The `executions` tool does
 the opposite today. Its thirteen virtual paths are thirteen questions we
 decided the model would ask, each with a hand-written reader and formatter.
@@ -17,7 +17,7 @@ A question outside that set ("which of my subagents failed in a tool call, and
 what did they call?") takes several `view` calls and the model's own joins.
 
 The run history now sits in one SQLite table
-([persistence substrate](../../archived/architecture/2026-09-03-persistence-substrate-decision.md)).
+(persistence substrate).
 The general way to question that data is code. So the model writes the
 question as SQL, and later as a workflow script. **Views are the contract;
 SQL is the interface.** A general primitive improves as the model improves.
@@ -41,7 +41,7 @@ draw on five different sources:
 | Filesystem (`StorageFs`, `FileSystem`)                                                                | `/files`, `/files/{path}`, `/workspace-files/{path}`                                             |
 
 The first four are the `event` table read four different ways. The
-[tools-surface collapse](../../archived/simplification/2026-09-20-tools-and-schema-surface-collapse.md)
+tools-surface collapse
 already moved the tool onto `SessionView`. What remains is that each
 question is still a path with its own code.
 

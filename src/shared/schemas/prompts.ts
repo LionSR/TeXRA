@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { API_KEY_PROVIDER_IDS } from '../constants/providers';
 import { AgentCategory } from './agent';
-import { ProviderErrorPartialSchema } from './errors';
+import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema } from './identifiers';
 import {
   ExternalInquiryTurnRecordSchema,
@@ -81,7 +81,7 @@ export const RetryPermissionSchema = z.strictObject({
   operation: z.string(),
   model: z.string().optional(),
   errorMessage: z.string().optional(),
-  errorDetails: ProviderErrorPartialSchema.optional(),
+  errorDetails: RetryErrorInfoSchema.partial().optional(),
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: CredentialSwitchSchema.nullish(),
 });

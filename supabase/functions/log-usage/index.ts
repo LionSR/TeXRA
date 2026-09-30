@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Resolve the owner. CI relay tokens went away with the relay
-    // (2026-08, see .agents/docs/archived/simplification/2026-08-18-relay-removal-and-recovery.md);
+    // (2026-08, see 2026-08-18-relay-removal-and-recovery.md);
     // released clients send a signed-in session, current ones an install id.
     const owner = await resolveOwner(req);
     if (!owner) {

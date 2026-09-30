@@ -788,7 +788,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- Agent coordination ---------------------------------------------
   // Both child-work policy toggles live in `globalState` per the 2026-08-15
-  // maintainer ruling (.agents/docs/archived/simplification/2026-08-15-shared-contracts-and-retirement.md
+  // maintainer ruling (2026-08-15-shared-contracts-and-retirement.md
   // §2.1): they describe how *this user* wants child runs handled, not anything
   // about a particular checkout, so no worktree-scoping need is documented on
   // either row. Before the move the extension smuggled that same intent past a
@@ -1114,7 +1114,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
     model: {
       provider: 'kimiCode',
-      label: 'Prefer Kimi Code',
+      label: 'Kimi Code subscription',
       description:
         'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     },

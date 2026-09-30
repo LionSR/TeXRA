@@ -602,7 +602,7 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
 
   it.effect.each([
     {
-      name: 'routes to Moonshot by default (Prefer Kimi Code off)',
+      name: 'routes to Moonshot by default (Kimi Code subscription off)',
       globalState: {},
       secrets: {
         [apiKeySecretName('kimiCode')]: 'sk-kimi-code',

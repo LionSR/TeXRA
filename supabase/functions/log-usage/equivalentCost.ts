@@ -18,33 +18,22 @@
  *   input·in − cached·in·(1−discount) + output·out + reasoning·out.
  */
 
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, requestRates, type ModelConfig } from 'llm-zoo';
 import type { UsageLogEntry } from './usageValidation.ts';
 
-interface ListPrice {
-  inputPrice: number;
-  outputPrice: number;
-  cacheDiscountFactor: number;
-}
-
 /**
- * Standard-tier list prices keyed by API model name. Fast-tier registry
+ * Standard-tier catalog entries keyed by API model name. Fast-tier registry
  * entries (`serviceTier: 'fast'`) carry premium rates for the same model id
  * and are skipped; among remaining duplicates (e.g. gpt-5.6-sol standard vs
  * pro mode, which bill identically) the first registry entry wins.
  */
-const [priceByFullName, priceByShortName] = (() => {
-  const byFull = new Map<string, ListPrice>();
-  const byShort = new Map<string, ListPrice>();
+const [configByFullName, configByShortName] = (() => {
+  const byFull = new Map<string, ModelConfig>();
+  const byShort = new Map<string, ModelConfig>();
   for (const config of Object.values(MODEL_CONFIGS)) {
     if (config.serviceTier === 'fast') continue;
-    const price: ListPrice = {
-      inputPrice: config.inputPrice,
-      outputPrice: config.outputPrice,
-      cacheDiscountFactor: config.capabilities?.cacheDiscountFactor ?? 1,
-    };
-    if (!byFull.has(config.fullName)) byFull.set(config.fullName, price);
-    if (!byShort.has(config.shortName)) byShort.set(config.shortName, price);
+    if (!byFull.has(config.fullName)) byFull.set(config.fullName, config);
+    if (!byShort.has(config.shortName)) byShort.set(config.shortName, config);
   }
   return [byFull, byShort];
 })();
@@ -65,12 +54,16 @@ export function equivalentListCost(
     | 'reasoningTokens'
   >,
 ): number | undefined {
-  const price =
-    priceByFullName.get(entry.model) ?? priceByShortName.get(entry.model);
-  if (!price) return undefined;
+  const config =
+    configByFullName.get(entry.model) ?? configByShortName.get(entry.model);
+  if (!config) return undefined;
 
   const cached = entry.cachedInputTokens ?? 0;
   const reasoning = entry.reasoningTokens ?? 0;
+  // One entry is one model request, so its prompt is the cache-miss input
+  // plus the cached tokens, and a long prompt bills the whole request at the
+  // model's long-context tier, as the client's run ledger does.
+  const price = requestRates(config, entry.inputTokens + cached);
   const cost =
     (entry.inputTokens * price.inputPrice +
       cached * price.inputPrice * price.cacheDiscountFactor +
