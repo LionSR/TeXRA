@@ -64,35 +64,25 @@ jobs:
           # strings avoid the pipeline entirely.
           grep_files() { grep -qE "$1" <<<"$files"; }
 
-          # area:model-handlers covers the registry, the src/model/ tree, the llm
+          # area:model-handlers covers the src/model/ tree, the llm
           # protocol package, and the run's model binding. The binding also lives
           # under src/agent/, so a PR touching it carries area:agent-runtime too.
-          grep_files '^src/agent/modelRegistry/' && labels+=('area:model-handlers') || true
-          grep_files '^src/model/' && labels+=('area:model-handlers') || true
-          grep_files '^packages/llm/' && labels+=('area:model-handlers') || true
-          grep_files '^src/agent/runtime/run/modelBinding\.ts$' && labels+=('area:model-handlers') || true
-          # area:agent-runtime: src/agent/ (excluding modelRegistry) plus
-          # src/tools/ (per the label description: "...delegation, tools...").
-          # Filter into an intermediate variable so the two-stage check has no
-          # internal pipe (same SIGPIPE concern as above).
-          non_model_agent=$(grep -vE '^src/agent/modelRegistry/' <<<"$files" || true)
-          if grep -qE '^src/agent/' <<<"$non_model_agent"; then
-            labels+=('area:agent-runtime')
-          fi
-          grep_files '^src/tools/' && labels+=('area:agent-runtime') || true
+          grep_files '^(src/model/|packages/llm/|src/agent/runtime/run/modelBinding\.ts$)' && labels+=('area:model-handlers') || true
+          # area:agent-runtime: src/agent/ plus src/tools/ (per the label
+          # description: "...delegation, tools...").
+          grep_files '^src/(agent|tools)/' && labels+=('area:agent-runtime') || true
           grep_files '^src/latex/' && labels+=('area:latex-workflow') || true
-          grep_files '^(src|packages/extension/src)/progressView/' && labels+=('area:progress-view') || true
+          grep_files '^packages/extension/src/progressView/' && labels+=('area:progress-view') || true
           # area:webview covers all webview-side and webview-adjacent UI code:
           # webview frontends, the settings view, extension-host UI orchestration
           # (packages/extension/src/frontend/), and the shared webview base classes.
-          grep_files '^(src|packages/extension/src)/(webview|settingsView|frontend)/' && labels+=('area:webview') || true
-          grep_files '^packages/extension/src/common/webview/' && labels+=('area:webview') || true
-          grep_files '^(docs/|README\.md|CHANGELOG\.md|resources/walkthroughs/|packages/extension/resources/walkthroughs/)' && labels+=('area:docs') || true
+          grep_files '^packages/extension/src/(settingsView|frontend|common/webview)/' && labels+=('area:webview') || true
+          grep_files '^(docs/|README\.md|CHANGELOG\.md|packages/extension/resources/walkthroughs/)' && labels+=('area:docs') || true
           grep_files '^\.github/workflows/' && labels+=('area:ci') || true
           # Build/lint/tsconfig at the repo root also belong to area:ci.
           grep_files '^((packages/extension/)?(esbuild|vite|webpack)|eslint|prettier|babel|jest|rollup)\.config\.(mjs|cjs|js|ts)$' && labels+=('area:ci') || true
           grep_files '^(packages/extension/)?tsconfig(\..+)?\.json$' && labels+=('area:ci') || true
-          grep_files '^(package(-lock)?\.json|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
+          grep_files '^(package\.json|pnpm-lock\.yaml|\.github/dependabot\.yml)$' && labels+=('area:deps') || true
 
           if [ ${#labels[@]} -eq 0 ]; then
             echo "No labels matched."

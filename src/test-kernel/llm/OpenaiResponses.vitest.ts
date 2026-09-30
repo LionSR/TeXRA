@@ -41,7 +41,6 @@ const CONFIG: OpenAIResponsesConfiguration = {
   supportsInputTokenEstimation: false,
   supportsMaxOutputTokens: true,
   supportsStorage: true,
-  supportsResponseChaining: true,
   supportsDocumentInput: true,
   allowedReasoningEfforts: [
     'none',
@@ -73,7 +72,6 @@ const SUBSCRIPTION_CONFIG: OpenAIResponsesConfiguration = {
   supportsTemperature: false,
   supportsMaxOutputTokens: false,
   supportsStorage: false,
-  supportsResponseChaining: false,
   supportsDocumentInput: false,
   allowedReasoningEfforts: ['low', 'medium'],
   instructions: {
@@ -1681,7 +1679,6 @@ describe('native OpenAI Responses protocol', () => {
               events(
                 [message],
                 snapshot([message], {
-                  service_tier: 'default',
                   usage: {
                     input_tokens: 32,
                     output_tokens: 9,
@@ -1709,7 +1706,6 @@ describe('native OpenAI Responses protocol', () => {
         expect(result.usage?.providerUsage).toEqual({
           kind: 'xai',
           costInUsdTicks: 70,
-          serviceTier: 'default',
         });
         assert(result.continuation !== undefined);
         const next = yield* model.prepareTurn({

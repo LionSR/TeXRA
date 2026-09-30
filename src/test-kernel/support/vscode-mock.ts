@@ -46,13 +46,6 @@ export const Uri = {
   parse: (s: string) => ({ fsPath: s, toString: () => s, path: s }),
 };
 
-export class RelativePattern {
-  constructor(
-    public readonly base: unknown,
-    public readonly pattern: string,
-  ) {}
-}
-
 export const DiagnosticSeverity = {
   Error: 0,
   Warning: 1,

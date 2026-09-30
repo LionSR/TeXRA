@@ -23,10 +23,6 @@ function makeActions(): ExtensionCommandActions {
     showSettings: asyncNoop(),
     newTask: asyncNoop(),
     cleanBuild: asyncNoop(),
-    pack: asyncNoop(),
-    clean: asyncNoop(),
-    compare: asyncNoop(),
-    acceptEdited: vi.fn(() => Effect.succeed(true)),
     signIn: vi.fn(() => Effect.succeed(false)),
     signInChatGpt: asyncNoop(),
     signOut: asyncNoop(),
@@ -69,68 +65,6 @@ function dispatch(
 }
 
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  describe('typed file-operation arguments', () => {
-    const BASE_FILE = {
-      kind: 'external' as const,
-      absolutePath: '/tmp/base.tex',
-    };
-    const EDITED_FILE = {
-      kind: 'external' as const,
-      absolutePath: '/tmp/edited.tex',
-    };
-    const COPY_META = { agent: 'editor', model: 'gpt-5', round: 2 };
-
-    it('normalizes and forwards pack/clean config objects', async () => {
-      const actions = makeActions();
-      const config = {
-        inputFile: 'main.tex',
-        agent: 'editor',
-        model: 'gpt-5',
-      };
-
-      await expect(
-        dispatch(actions, 'texra.pack', config),
-      ).resolves.toBeUndefined();
-      await expect(
-        dispatch(actions, 'texra.clean', config),
-      ).resolves.toBeUndefined();
-      expect(actions.pack).toHaveBeenCalledExactlyOnceWith({
-        ...config,
-        outputFiles: [],
-      });
-      expect(actions.clean).toHaveBeenCalledExactlyOnceWith({
-        ...config,
-        outputFiles: [],
-      });
-    });
-
-    it('forwards compare and accept arguments without collapsing them', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.compare', BASE_FILE, EDITED_FILE),
-      ).resolves.toBeUndefined();
-      await expect(
-        dispatch(
-          actions,
-          'texra.acceptEdited',
-          BASE_FILE,
-          EDITED_FILE,
-          COPY_META,
-        ),
-      ).resolves.toBe(true);
-      expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        BASE_FILE,
-        EDITED_FILE,
-      );
-      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        BASE_FILE,
-        EDITED_FILE,
-        COPY_META,
-      );
-    });
-  });
-
   it.each([null, true, 'true', { inPlace: 'true' }, { extra: true }])(
     'texra.showProgressView rejects malformed argument %j',
     async (argument) => {

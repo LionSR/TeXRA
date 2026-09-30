@@ -79,8 +79,6 @@ function initial() {
           ephemeral_5m_input_tokens: 11,
           ephemeral_1h_input_tokens: 19,
         },
-        service_tier: 'priority',
-        inference_geo: 'us',
       },
     },
   };
@@ -862,8 +860,6 @@ describe('canonical Anthropic Messages protocol', () => {
             cacheCreationTokens: 30,
             cacheCreation5mTokens: 11,
             cacheCreation1hTokens: 19,
-            serviceTier: 'priority',
-            inferenceGeo: 'us',
           },
         });
         const first = JSON.parse(fetchModel.mock.calls[0][1]!.body as string);
@@ -1098,8 +1094,6 @@ describe('canonical Anthropic Messages protocol', () => {
           providerUsage: {
             uncachedInputTokens: 7,
             cacheCreationTokens: null,
-            serviceTier: null,
-            inferenceGeo: null,
           },
         });
       }),

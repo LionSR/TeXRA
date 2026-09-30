@@ -128,13 +128,13 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       (!config.supportsTemperature && turn.controls.temperature !== null) ||
       (!config.supportsMaxOutputTokens &&
         turn.controls.maxOutputTokens !== null) ||
-      (!config.supportsStorage && turn.controls.store) ||
+      (!config.supportsStorage &&
+        (turn.controls.store || turn.continuation !== undefined)) ||
       (config.instructions.kind === 'required' && !turn.system?.trim()) ||
       (turn.controls.reasoning?.effort != null &&
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
         )) ||
-      (turn.continuation !== undefined && !config.supportsResponseChaining) ||
       (turn.controls.toolChoice !== 'auto' && !config.supportsForcedToolChoice)
     )
       return yield* new ModelError({

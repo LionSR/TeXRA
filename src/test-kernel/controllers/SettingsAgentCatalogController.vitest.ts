@@ -126,6 +126,7 @@ function createController(options?: {
         .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
+    roster,
     controller: new SettingsAgentCatalogController({
       repoState: workspaceState,
       roster,
@@ -141,7 +142,7 @@ function createController(options?: {
 
 describe('SettingsAgentCatalogController', () => {
   it.effect(
-    'resolves preset members to canonical keys and commits the team symbolically',
+    'applying a team resolves its members to canonical keys and stores the team symbolically',
     () =>
       Effect.gen(function* () {
         const persistedPreset = {
@@ -154,13 +155,13 @@ describe('SettingsAgentCatalogController', () => {
             toolUse: ['review', 'missing'],
           },
         };
-        const { controller, workspaceState } = createController({
+        const { roster, workspaceState } = createController({
           customPresets: [persistedPreset],
         });
 
-        const resolved = yield* controller.resolvePreset('custom-team');
-        expect(resolved.ok).toBe(true);
-        if (!resolved.ok) throw new Error('expected the preset to resolve');
+        const resolved = yield* roster.applyTeam('custom-team');
+        if (resolved.status !== 'applied')
+          throw new Error('expected the preset to apply');
         expect(resolved.preset).toStrictEqual({
           ...persistedPreset,
           icon: 'bookmark',
@@ -176,8 +177,6 @@ describe('SettingsAgentCatalogController', () => {
         assert.deepEqual(resolved.resolution.agentKeys.toolUse, [
           'builtInToolUse:review',
         ]);
-
-        yield* controller.commitPreset(resolved.preset);
 
         // The commit stores the team reference, not a frozen key snapshot: the
         // roster re-resolves it against the catalog on every read.

@@ -78,7 +78,8 @@ describe('NdjsonStdoutSink', () => {
       const { emit, lines, stdout } = createStdoutStub([false, true]);
       const sink = new NdjsonStdoutSink(stdout);
 
-      sink.write({
+      sink.writeRecord({
+        kind: 'log',
         ts: '2026-07-10T00:00:00.000Z',
         level: 'error',
         message: 'first',

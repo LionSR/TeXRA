@@ -14,9 +14,9 @@
  * not a trace arm: the storage finalizer writes it once, and the in-memory
  * `ResultEvent` below is that row named by its run.
  *
- * Host-specific events that don't belong in the core union (TeXRA's
- * file-list payloads, latexdiff, missing outputs, etc.) use the `domain`
- * escape hatch with a host-chosen `key`.
+ * Host-specific facts that don't belong in the core union (TeXRA's
+ * file-list payloads, latexdiff, missing outputs, etc.) ride a log arm:
+ * `trace.info(text, { messageType, data })`.
  */
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 
@@ -24,13 +24,6 @@ import type { RunId, SessionEventDraft } from '@shared/schemas';
 type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
   ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
   : never;
-
-/**
- * StreamKind identifies what a streaming message represents. Subscribers
- * key on it for render decisions. Generic string so host taxonomies
- * (TeXRA's MessageType) plug in without coupling the SDK.
- */
-export type StreamKind = string;
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
@@ -69,7 +62,6 @@ export type AgentEvent =
       | 'stream.start'
       | 'stream.end'
       | 'response.finalized'
-      | 'domain'
     >
   /** Mutable persisted run config changed after run.start. */
   | (TraceArm<'run.config'> & { readonly runId: RunId })

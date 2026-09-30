@@ -10,17 +10,9 @@ import {
 } from '@commands/auth/authCommands';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
+import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
-import {
-  confirmCleanBuild,
-  handleClean as fileHandleClean,
-} from '@commands/housekeeping/cleanCommands';
-import { handlePack as fileHandlePack } from '@commands/housekeeping/packCommands';
-import {
-  handleAcceptEdited as latexHandleAcceptEdited,
-  handleCompare as latexHandleCompare,
-} from '@commands/latex/compareCommands';
 import {
   setApiKey as apiSetApiKey,
   removeApiKey as apiRemoveApiKey,
@@ -67,10 +59,6 @@ export function createExtensionCommandActions(
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
-    pack: fileHandlePack,
-    clean: fileHandleClean,
-    compare: latexHandleCompare,
-    acceptEdited: latexHandleAcceptEdited,
     signIn: () => authSignIn,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signOut: () => authSignOut,
@@ -116,10 +104,10 @@ export function createExtensionCommandActions(
  * have no stale `vscode.commands.registerCommand(...)` call on the
  * single-folder path that installs this registry, and every other direct
  * `registerCommand` call site there registers an id NOT tagged
- * `extensionRegistry` in `commandCatalog` — they're legitimate VS Code-only
- * handlers (git, file selection/opening, merge, and LaTeX tools). The
- * no-folder welcome path installs its own standalone variants of a few
- * tagged ids, since this registry is not installed there.
+ * `extensionRegistry` in `commandCatalog` (inline comments and the
+ * walkthrough action). The no-folder welcome path installs its own
+ * standalone variants of a few tagged ids, since this registry is not
+ * installed there.
  */
 
 /**

@@ -98,6 +98,7 @@ vi.mock('vscode', () => ({
   },
   commands: { executeCommand: mocks.executeCommand },
   window: {
+    visibleTextEditors: [],
     showTextDocument: mocks.showTextDocument,
     showErrorMessage: mocks.showErrorMessage,
   },

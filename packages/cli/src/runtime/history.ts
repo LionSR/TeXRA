@@ -31,10 +31,7 @@ import {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 import { serializeFilteredConfig } from '@tools/executions/configView';
-import {
-  hasCompletedRunConversationEvidence,
-  readCompletedRunConversation,
-} from '@transcript';
+import { readCompletedRunConversation } from '@transcript';
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -189,7 +186,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       config,
       result,
       report,
-      conversationResult,
+      conversation,
       persistedWorkspaceFilePaths,
       generatedFiles,
       checkpointPresent,
@@ -226,9 +223,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       config,
       persistedWorkspaceFilePaths,
     );
-    const conversation = conversationResult.conversation;
-    const hasTranscriptEvidence =
-      hasCompletedRunConversationEvidence(conversationResult);
     const conversationPreview = createConversationPreview(conversation);
     const fullConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
@@ -242,14 +236,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       })),
     );
 
-    if (
-      !run &&
-      !config &&
-      !conversationPreview &&
-      !fullConversation &&
-      !checkpointPresent &&
-      !hasTranscriptEvidence
-    ) {
+    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
       return null;
     }
     return {
@@ -307,11 +294,13 @@ export const readCliHistoryExportInput = Effect.fn(
   session: Effect.Effect<SessionHandle, SessionOpenError>,
   id: RunId,
 ) {
-  const { run, config, conversation, hasTranscriptEvidence, exportInput } =
-    yield* Effect.flatMap(session, (opened) => loadChatExportInput(id, opened));
+  const { run, config, conversation, exportInput } = yield* Effect.flatMap(
+    session,
+    (opened) => loadChatExportInput(id, opened),
+  );
   if (exportInput)
     return { status: 'ok', exportInput } satisfies CliHistoryExportInputResult;
-  if (!run && !config && !conversation && !hasTranscriptEvidence) {
+  if (!run && !config && conversation.length === 0) {
     return { status: 'not_found' } satisfies CliHistoryExportInputResult;
   }
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;

@@ -21,6 +21,7 @@ import {
   isDamaged,
   pragmaValue,
   removeOldAsides,
+  retryBusy,
   run,
   underCopy,
   type Sql,
@@ -325,17 +326,37 @@ const prepareStore = Effect.fnUntraced(function* (
   return movedAside;
 });
 
+/** Pages one reclaim step frees at most: a few milliseconds of the lock. */
+const RECLAIM_PAGES = 256;
+
 /**
  * Give the pages a collection freed back to the filesystem (the design's
- * §7). `incremental_vacuum` frees one page per step, and the driver steps a
- * statement once, so it runs once per free page.
+ * §7), once it commits, in autocommit steps of `incremental_vacuum(N)`, so
+ * another writer waits on one step, never the whole reclaim. A driver that
+ * steps a statement to its end frees N pages a step, one that steps it once
+ * frees one; either way the steps run until the freelist is empty or stops
+ * shrinking. It is not interrupted, as the collection is not: a session that
+ * closes first would leave the pages. A step that fails ends it, and the
+ * next collection reclaims the rest.
  */
-export const reclaimFreePages = Effect.fnUntraced(function* (sql: Sql) {
-  const free = Number(yield* pragmaValue(sql, 'freelist_count'));
-  yield* Effect.replicateEffect(run(sql, 'PRAGMA incremental_vacuum'), free, {
-    discard: true,
-  });
-});
+export const reclaimFreePages = (sql: Sql, path: string) =>
+  Effect.gen(function* () {
+    const free = () =>
+      pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
+    for (let left = yield* free(); left > 0;) {
+      yield* retryBusy(run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`));
+      const now = yield* free();
+      if (now >= left) return;
+      left = now;
+    }
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Could not return the pages freed in ${path} to the filesystem; the next collection retries.`,
+      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+    ),
+  );
 
 /**
  * Open the store at `filename` through `connect` and prepare it. A file

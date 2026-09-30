@@ -3,23 +3,10 @@ import { z } from 'zod';
 
 // Local imports
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  CleanConfigSchema,
-  PackConfigSchema,
-  type CleanConfig,
-  type PackConfig,
-} from '@commands/housekeeping/fileOpSchemas';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import {
-  AcceptCopyMetaSchema,
-  AgentCategorySchema,
-  FileLocationSchema,
-  type AcceptCopyMeta,
-  type AgentCategory,
-  type FileLocation,
-} from '@shared/schemas';
+import { AgentCategorySchema, type AgentCategory } from '@shared/schemas';
 import {
   SettingsTargetSchema,
   type SettingsTarget,
@@ -59,24 +46,12 @@ type ExtensionRegistryCatalogEntry = Extract<
 type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
 
 /**
- * Internal ids intentionally absent from the shared catalog — they don't
- * appear in the command palette or `package.json` contributions — but must
- * keep resolving for extension callers. Each takes an argument no palette
- * invocation could supply.
+ * `texra.openDoc` is intentionally absent from the shared catalog: it does not
+ * appear in the command palette or `package.json` contributions, and takes a
+ * page argument no palette invocation could supply.
  */
-const EXTENSION_INTERNAL_COMMAND_IDS = [
-  'texra.compare',
-  'texra.acceptEdited',
-  'texra.pack',
-  'texra.clean',
-  'texra.openDoc',
-] as const;
-
-type InternalExtensionRegistryCommandId =
-  (typeof EXTENSION_INTERNAL_COMMAND_IDS)[number];
-
 type ExtensionRegistryCommandId =
-  ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
+  ExtensionRegistryCatalogCommandId | 'texra.openDoc';
 
 /**
  * A command's program. The registration boundary in
@@ -101,17 +76,6 @@ export interface ExtensionCommandActions {
   ): CommandProgram;
   newTask(): CommandProgram;
   cleanBuild(): CommandProgram;
-  pack(config: PackConfig): CommandProgram;
-  clean(config: CleanConfig): CommandProgram;
-  compare(
-    baseLocation: FileLocation,
-    editedLocation: FileLocation,
-  ): CommandProgram;
-  acceptEdited(
-    baseLocation: FileLocation,
-    editedLocation: FileLocation,
-    copyMeta?: AcceptCopyMeta,
-  ): CommandProgram<boolean>;
   signIn(): CommandProgram<boolean>;
   signInChatGpt(): CommandProgram;
   signOut(): CommandProgram;
@@ -164,32 +128,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ),
   'texra.showMainView': (actions) => actions.newTask(),
   'texra.cleanBuild': (actions) => actions.cleanBuild(),
-  'texra.pack': definedHandler(
-    z.tuple([PackConfigSchema]),
-    (actions: ExtensionCommandActions, config) => actions.pack(config),
-  ),
-  'texra.clean': definedHandler(
-    z.tuple([CleanConfigSchema]),
-    (actions: ExtensionCommandActions, config) => actions.clean(config),
-  ),
-  'texra.compare': definedHandler(
-    z.tuple([FileLocationSchema, FileLocationSchema]),
-    (actions: ExtensionCommandActions, baseLocation, editedLocation) =>
-      actions.compare(baseLocation, editedLocation),
-  ),
-  'texra.acceptEdited': definedHandler(
-    z.tuple([
-      FileLocationSchema,
-      FileLocationSchema,
-      AcceptCopyMetaSchema.optional(),
-    ]),
-    (
-      actions: ExtensionCommandActions,
-      baseLocation,
-      editedLocation,
-      copyMeta?: AcceptCopyMeta,
-    ) => actions.acceptEdited(baseLocation, editedLocation, copyMeta),
-  ),
   'texra.auth.signIn': (actions) => actions.signIn(),
   'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
   'texra.auth.signOut': (actions) => actions.signOut(),

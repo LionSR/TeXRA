@@ -309,10 +309,13 @@ export class Database extends Context.Service<
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** {@link readAll} filtered to display types in SQL: a tail never decodes
-     *  a run's private records only to drop them. */
+     *  a run's private records only to drop them. Read a page at a time, so
+     *  a long history is never held whole; each page is its own snapshot,
+     *  so a tombstone one page saw is still delivered when its run is
+     *  collected before the page that holds it. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
-    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
+    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
