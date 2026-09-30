@@ -123,17 +123,26 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging
 
-When telemetry is enabled, TeXRA records model and provider names, agent
-category, token counts, response time, route, stream identifier, version, and
-host. No account is involved: each install sends a random anonymous install ID
-(a UUID made the first time logging is on) in the `X-TeXRA-Install-Id` request
-header. It does not send prompt text, document content, file paths, or error
-text. Each host tells you this once on first run. Turning telemetry off stops
-all usage reporting and the ID is not created.
+When telemetry is enabled, TeXRA records model and provider names, the agent
+name and category, token counts, response time, route, stream identifier,
+version, and host. A custom agent or custom model is sent under the name you
+gave it, so do not put anything private in those names. No account is
+involved: each install sends a random anonymous install ID (a UUID made the
+first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
+not send prompt text, document content, file paths, or error text. Each host
+tells you this once on first run. Turning telemetry off stops all usage
+reporting and the ID is not created.
 
-To reset the install ID, delete the `texra.telemetry.installId` entry from
-TeXRA's global state (the CLI's global state file, or the extension's or
-desktop app's storage); a new ID is made on the next send.
+The CLI, the extension, and the desktop app share one install ID. It lives in
+the global settings database, `~/.texra/v1/global-storage/texra.db`. To reset
+it, quit every TeXRA host and run:
+
+```bash
+sqlite3 ~/.texra/v1/global-storage/texra.db \
+  "DELETE FROM current_value WHERE family = 'app-state' AND key = 'texra.telemetry.installId'"
+```
+
+A new ID is made on the next send.
 
 ## File discovery
 

@@ -144,13 +144,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // the process runtime — so the quit follows it on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
-  // which builds the process runtime (its stores and account plane resolve
-  // before `installProcessRuntime`, being the values that install is given)
+  // which builds the process runtime (its stores resolve before
+  // `installProcessRuntime`, being the values that install is given)
   // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
   // The VS Code entry: one program from `activate` to the last registration,
-  // which builds the process runtime (its account plane resolves before
-  // `installProcessRuntime`, being a value that install is given) and
+  // which builds the process runtime and
   // closes its scope when activation fails; and `deactivate`, which closes
   // that same scope. The scope's finalizer is the shutdown drain that
   // disposes the process runtime, so neither can settle on it. Every other

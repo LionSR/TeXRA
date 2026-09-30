@@ -48,7 +48,7 @@ import type { Secrets } from './secrets';
 
 /**
  * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags beside the records, the account plane, the
+ * cohort-A tags beside the records, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
  * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install

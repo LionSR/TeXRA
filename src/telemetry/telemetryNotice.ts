@@ -8,7 +8,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { usageLoggingOptOut } from './UsageLogService';
 
-const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_KEY}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. Delete the "${GlobalStateKey.TELEMETRY_INSTALL_ID}" state key to reset the ID.`;
+const TELEMETRY_NOTICE = `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${TELEMETRY_ENABLED_KEY}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. Custom agent and model names are sent as named. The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
 
 /**
  * The first-run notice, or null. It is due once per host while telemetry is

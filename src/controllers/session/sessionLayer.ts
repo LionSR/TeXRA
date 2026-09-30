@@ -1135,8 +1135,8 @@ export function installProcessRuntime({
       Sessions.layer(held).pipe(
         Layer.provideMerge(projectDatabaseLayer),
         // The usage log's own lifetime: its sender and ticker run with this
-        // runtime, its finalizer drains the queue while the account plane is
-        // up, and it is ahead of `services` so that plane and HTTP reach it.
+        // runtime, its finalizer drains the queue while HTTP is up, and it
+        // is ahead of `services` so HTTP reaches it.
         Layer.provideMerge(usageLog),
         // Its probes read the Lean port and the services below.
         Layer.provideMerge(toolAvailability),

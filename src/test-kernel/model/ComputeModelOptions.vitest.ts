@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import {
@@ -96,7 +96,7 @@ async function installAccessPlatform(
   });
   // Coordinators are keyed by the secret store, so the reinstalled host's
   // store is what the probes installed here read.
-  installTexraAccountProbes(hostStores().secrets);
+  installSubscriptionProbes(hostStores().secrets);
 }
 
 function codexSessionSecrets(): Record<string, string> {
@@ -156,9 +156,9 @@ describe('model availability', () => {
   });
 
   beforeEach(() => {
-    // The picker reads the app's account plane through the model layer's
+    // The picker reads subscription sign-in state through the model layer's
     // seam; install the same probes the three hosts install.
-    installTexraAccountProbes(hostStores().secrets);
+    installSubscriptionProbes(hostStores().secrets);
   });
 
   it.effect.each([

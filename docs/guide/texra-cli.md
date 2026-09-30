@@ -155,8 +155,7 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 ## Authentication
 
 Model calls run on your own provider API keys, or on a provider subscription
-you already pay for. Signing in to TeXRA is a separate, optional step: every
-agent ships bundled, so no agent needs it.
+you already pay for. There is no TeXRA account: every agent ships bundled.
 
 **Bring your own provider keys.** Set the environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -186,8 +185,7 @@ or out and sets which subscription serves each provider's models, and
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
-There is no TeXRA account to sign in to. Subscriptions sign in through
-`texra auth <provider> login`:
+Subscriptions sign in through `texra auth <provider> login`:
 
 ```bash
 texra auth chatgpt login              # browser sign-in

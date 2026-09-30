@@ -15,7 +15,7 @@ Do not open a public issue for a security problem.
 Email **contact@texra.ai** with `SECURITY` in the subject line, and include:
 
 - what the issue is, and which surface it affects (extension, desktop, CLI, or
-  the hosted account services at `remote.texra.ai`)
+  the hosted usage-logging service at `remote.texra.ai`)
 - the version you saw it on
 - steps to reproduce, or a proof of concept
 - the impact you believe it has
@@ -37,8 +37,8 @@ anonymous.
 - **Prompt injection that escalates privilege** — content in a user's documents,
   tool results, or fetched pages that makes an agent take an action the approval
   gate should have covered.
-- **The hosted account services** — authentication and the remote-agent
-  catalog.
+- **The hosted usage-logging service** — the endpoint that receives anonymous
+  usage metadata.
 - **Webview and renderer isolation** — the VS Code webviews and the Electron
   renderer, including navigation policy and any path from rendered content to
   host APIs.

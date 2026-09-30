@@ -63,7 +63,7 @@ On first launch, configure the desktop app explicitly:
   { n: 4, icon: 'play', title: 'Run a small task', desc: 'Run a LaTeX or polish task and confirm the output appears in the Sessions view.', chips: [{ text: 'Sessions view', variant: 'success', icon: 'list-check' }] }
 ]" />
 
-<p class="hero-caption">First-run setup is explicit: open your project, sign in, add keys, review settings, then confirm a small task lands in the Sessions view.</p>
+<p class="hero-caption">First-run setup is explicit: open your project, add keys, review settings, then confirm a small task lands in the Sessions view.</p>
 
 ### What carries over from the extension and CLI
 

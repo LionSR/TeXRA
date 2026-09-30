@@ -25,7 +25,7 @@ describe('desktop navigation policy', () => {
   });
 
   it('does not allow third-party Supabase project subdomains', () => {
-    // Auth uses remote.texra.ai (covered by *.texra.ai); a blanket
+    // Only texra.ai is allowed; a blanket
     // *.supabase.co allow-rule would let any Supabase project be opened.
     expect(isAllowedExternalUrl('https://abc.supabase.co/auth/v1')).toBe(false);
     expect(isAllowedExternalUrl('https://supabase.co/')).toBe(false);

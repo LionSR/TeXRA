@@ -98,10 +98,9 @@ access: `research`, `numerics`, `review`, `presenter`, `latexFixer`,
 software-engineering line — `engineer`, `coder`, `codeReviewer`,
 `testEngineer`, `codeSimplifier`.
 
-**Hosted specialists** (signed-in users): `orchestrator`, `search`,
-`simplifier`, `criticize`, `firstread`, `logic`, `notation`, `enhance`,
-`elevate`, `humanize`, `devise`, `apply`, `verifyFix`, `generic`,
-`progressCheck`, and the Lean line — `leanOrchestrator`,
+**Specialists**, also bundled: `orchestrator`, `search`, `simplifier`,
+`criticize`, `firstread`, `logic`, `notation`, `enhance`, `devise`, `apply`,
+`generic`, `progressCheck`, and the Lean line — `leanOrchestrator`,
 `leanBlueprint`, `leanSearch`, `leanSimplifier`.
 
 Every tool call is gated by per-stream approval. Optional YOLO mode

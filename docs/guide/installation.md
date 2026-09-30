@@ -20,9 +20,8 @@ TeXRA runs on all major operating systems. Minimum requirements:
 A fresh install logs anonymous usage metadata (model, agent, token counts,
 duration, host, version) under a random install ID, and says so once on first
 run. There is no sign-in. Turn it off with `TEXRA_NO_TELEMETRY=1`,
-`DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`; to reset the ID, delete
-the `texra.telemetry.installId` global-state entry. Details:
-[Usage logging](./configuration.md#usage-logging).
+`DO_NOT_TRACK=1`, or `"texra.telemetry.enabled": false`. Details, including how
+to reset the ID: [Usage logging](./configuration.md#usage-logging).
 
 ## Installing the extension
 
@@ -111,7 +110,7 @@ Run `texra doctor` to see what TeXRA found: Node.js, the workspace and packaged 
 
 <DoctorReportCard />
 
-<p class="hero-caption"><code>texra doctor</code> checks the runtime, your account and models, usage logging, the full LaTeX toolchain, and the workspace config. Optional image tools are not listed; the feature that needs them reports when one is missing.</p>
+<p class="hero-caption"><code>texra doctor</code> checks the runtime, your models, usage logging, the full LaTeX toolchain, and the workspace config. Optional image tools are not listed; the feature that needs them reports when one is missing.</p>
 
 ### Homebrew {#homebrew}
 
@@ -320,7 +319,7 @@ set -a; . .env; set +a
 texra doctor
 ```
 
-If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models.:
+If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models:
 
 ```bash
 texra auth chatgpt login

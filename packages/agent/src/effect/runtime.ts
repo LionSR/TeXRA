@@ -188,7 +188,7 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       mcpConfigPath: platform.mcpConfigPath,
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
-      // its own to stamp entries with, and no account plane to send them on.
+      // its own to stamp entries with.
       usageLog: UsageLog.disabled,
       // The embedder's global root is a root like any host's: one handle for
       // the life of the runtime this composition installs.

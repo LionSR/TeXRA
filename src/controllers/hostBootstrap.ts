@@ -41,7 +41,7 @@ import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 // Local file imports
-import { installTexraAccountProbes } from './modelAccess/installTexraAccountProbes';
+import { installSubscriptionProbes } from './modelAccess/installSubscriptionProbes';
 
 export interface HostBootstrapInit {
   /**
@@ -67,10 +67,10 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // traffic. Model traffic carries its own transport; this is the host's
   // process, so it may set the global dispatcher an embedder's may not.
   installProcessHttpDispatcher();
-  // TeXRA's account plane (ChatGPT / Grok sign-in). Without this the model
-  // layer is bring-your-own-key. See installTexraAccountProbes. The probes
+  // ChatGPT / Grok subscription sign-in. Without this the model layer is
+  // bring-your-own-key. See installSubscriptionProbes. The probes
   // close over the secret store, so the model layer stays secrets-free.
-  installTexraAccountProbes(yield* Secrets);
+  installSubscriptionProbes(yield* Secrets);
   // Project skills follow each session's workspace; only the bundle is fixed
   // here, so this is a registration rather than a scan. Tool plugins that ship
   // skills contribute them to the bundled tier; the ids cross as strings so

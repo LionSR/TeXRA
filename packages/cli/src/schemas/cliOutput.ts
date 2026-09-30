@@ -17,7 +17,7 @@
  *
  * Members are intentionally *loose*: the discriminator and the primary nested
  * field are pinned, but extra keys pass through. Several commands spread a
- * typed payload at the top level (`{ kind: 'auth-status', ...profile }`) and
+ * typed payload at the top level (`{ kind: 'chatgpt-auth-status', ...status }`) and
  * `ts` is added downstream, so over-constraining here would reject valid output
  * and break headless byte-parity for no contract gain. The value is in the
  * exhaustive, named `kind` registry, not in re-validating each payload field.
@@ -88,8 +88,6 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('model-enabled'), model: payload }),
   z.looseObject({ kind: z.literal('memory'), memory: payload }),
   z.looseObject({ kind: z.literal('memory-detail') }),
-  z.looseObject({ kind: z.literal('auth') }),
-  z.looseObject({ kind: z.literal('auth-status') }),
   z.looseObject({ kind: z.literal('init-config'), init: payload }),
   z.looseObject({ kind: z.literal('chatgpt-auth') }),
   z.looseObject({ kind: z.literal('chatgpt-auth-status') }),

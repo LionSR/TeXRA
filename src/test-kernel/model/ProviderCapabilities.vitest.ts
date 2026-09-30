@@ -11,7 +11,7 @@ import {
 import { Effect } from 'effect';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
-import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { routeConfig } from '@model/modelRoute';
 import { codexBackendModelId } from '@model/providerCapabilities';
@@ -73,7 +73,7 @@ async function installSubscriptionPlatform(options?: {
         : { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInSession) },
   });
   // Sign-in state reaches the model layer through the seam the hosts install.
-  installTexraAccountProbes(hostStores().secrets);
+  installSubscriptionProbes(hostStores().secrets);
 }
 
 describe('provider capabilities', () => {
