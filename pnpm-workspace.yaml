@@ -34,7 +34,7 @@ catalog:
   image-size: '^2.0.4'
   ipaddr.js: '^2.5.0'
   is-wsl: '^3.1.1'
-  llm-zoo: '^1.40.1'
+  llm-zoo: '^1.41.0'
   lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
   nanoid: '^6.0.1'

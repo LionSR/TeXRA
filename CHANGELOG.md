@@ -387,6 +387,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Long prompts are priced at the provider's long-context rate.** OpenAI's
+  1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
+  bill a whole request at 2x input and 1.5x output once the prompt passes
+  272K tokens, and Gemini 3.1 Pro and 2.5 Pro do the same past 200K; a run's
+  cost now counts that, where it had billed only GPT-6 and Grok at the higher
+  rate. Cached input on Gemini 3.1 Pro, 3.1 Flash-Lite, 2.5 Pro and 2.5 Flash
+  is priced at 10% of input, as Google charges, instead of 25%.
+
 - **A failed model request shows the provider's error again.** It had
   shown "Malformed error payload" with a schema complaint about
   `rawErrorBody` instead of the actual failure.
