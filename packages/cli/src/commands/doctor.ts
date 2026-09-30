@@ -43,11 +43,10 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
       // resources, LaTeX, config and the platform-failure row — renders
       // with only the Node platform services its LaTeX probes spawn on.
       // Nothing in it logs through Effect.
-      return yield* buildDoctorReport(
-        context,
-        {},
-        ensureError(Cause.squash(init.cause)),
-      ).pipe(Effect.provide(nodePlatformServices));
+      return yield* buildDoctorReport(context, {
+        kind: 'degraded',
+        initError: ensureError(Cause.squash(init.cause)),
+      }).pipe(Effect.provide(nodePlatformServices));
     }
     const services = init.value;
     // The healthy report settles on the root's own context — the provision
@@ -57,6 +56,7 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
     return yield* withProcessServices(
       services.runtime,
       buildDoctorReport(context, {
+        kind: 'ready',
         authProfile: getCliAuthProfile(),
         modelAccessList: withProcessServices(
           services.runtime,

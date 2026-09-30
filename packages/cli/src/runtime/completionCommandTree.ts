@@ -60,11 +60,18 @@ function argValues(arg: ArgDef): readonly string[] {
   return arg.type === 'enum' && Array.isArray(arg.options) ? arg.options : [];
 }
 
-function isNegatableBoolean(arg: ArgDef): boolean {
-  if (arg.type !== 'boolean') return false;
-  // Booleans defaulting to `true` are passed via their negated form. Keep this
-  // in step with the CLI flag router so a documented `--no-<name>` completes.
-  return 'default' in arg && arg.default === true;
+/**
+ * Whether a boolean arg documents a negated `--no-<name>` spelling: those
+ * defaulting to `true`, which the user necessarily passes via the negative
+ * (`--no-color`, `--no-pr`). citty rewrites `--no-<name>` to `<name>: false`;
+ * completion, leading-flag reordering and unknown-flag detection all register
+ * the spelling from this one predicate.
+ */
+export function documentsNegatedBooleanForm(def: {
+  readonly type?: string;
+  readonly default?: boolean | number | string;
+}): boolean {
+  return def.type === 'boolean' && def.default === true;
 }
 
 function negativeDescription(arg: ArgDef): string | undefined {
@@ -74,7 +81,10 @@ function negativeDescription(arg: ArgDef): string | undefined {
     : undefined;
 }
 
-function flagFromArg(name: string, arg: ArgDef): CompletionFlag | undefined {
+export function flagFromArg(
+  name: string,
+  arg: ArgDef,
+): CompletionFlag | undefined {
   if (arg.type === 'positional') return undefined;
   return {
     name,
@@ -83,7 +93,7 @@ function flagFromArg(name: string, arg: ArgDef): CompletionFlag | undefined {
     takesValue: arg.type !== 'boolean',
     values: argValues(arg),
     valueKind: arg.valueHint,
-    ...(isNegatableBoolean(arg)
+    ...(documentsNegatedBooleanForm(arg)
       ? {
           negatedName: `no-${name}`,
           negatedDescription: negativeDescription(arg),

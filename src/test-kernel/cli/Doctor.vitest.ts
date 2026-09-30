@@ -92,7 +92,10 @@ function captureDoctorStdout(
   return stdout;
 }
 
-type DoctorProbes = NonNullable<Parameters<typeof buildDoctorReport>[1]>;
+type DoctorProbes = Omit<
+  Extract<Parameters<typeof buildDoctorReport>[1], { kind: 'ready' }>,
+  'kind'
+>;
 
 // A signed-in report on supported Node with no model available and a partially
 // installed LaTeX toolchain; tests override only the probes they care about.
@@ -105,6 +108,7 @@ function buildReport(
 ): Promise<DoctorReport> {
   return Effect.runPromise(
     buildDoctorReport(reportContext, {
+      kind: 'ready',
       nodeVersion: '24.15.0',
       authProfile: Effect.succeed({ authenticated: true }),
       modelAccessList: Effect.succeed([]),

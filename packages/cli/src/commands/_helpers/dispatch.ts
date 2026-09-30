@@ -11,15 +11,15 @@ import {
   commandArgs,
   commandMeta,
   commandSubcommands,
+  completionFlagVariants,
+  flagFromArg,
   type AnyCommand,
 } from '@cli/runtime/completionCommandTree';
-import { ensureArray } from '@utils/core';
 import {
   editDistance,
   typoSuggestionThreshold,
 } from '@utils/text/editDistance';
 import {
-  documentsNegatedBooleanForm,
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,
   GLOBAL_VALUE_FLAGS,
@@ -398,44 +398,13 @@ interface CommandFlagSpecs {
   readonly short: Map<string, FlagSpec>;
 }
 
-function kebabCaseFlagName(name: string): string {
-  return name
-    .replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replaceAll(/_+/g, '-')
-    .toLowerCase();
-}
-
-function addLongFlag(
-  specs: CommandFlagSpecs,
-  flagName: string,
-  spec: FlagSpec,
-): void {
-  const names = new Set([flagName]);
-  if (/[A-Z_]/.test(flagName)) {
-    names.add(kebabCaseFlagName(flagName));
-  }
-  for (const name of names) {
-    specs.long.set(`--${name}`, spec);
-  }
-}
-
 function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
-  if (def.type === 'positional') return;
-
-  const spec = { takesValue: def.type !== 'boolean' };
-  addLongFlag(specs, name, spec);
-  const aliasDef = (def as { alias?: string | string[] }).alias;
-  const aliases = aliasDef === undefined ? [] : ensureArray(aliasDef);
-  for (const alias of aliases) {
-    if (alias.length === 1) {
-      specs.short.set(`-${alias}`, spec);
-    } else {
-      addLongFlag(specs, alias, spec);
-    }
-  }
-
-  if (documentsNegatedBooleanForm(def)) {
-    addLongFlag(specs, `no-${name}`, { takesValue: false });
+  const flag = flagFromArg(name, def);
+  if (flag === undefined) return;
+  for (const variant of completionFlagVariants(flag)) {
+    const spec = { takesValue: variant.takesValue };
+    specs.long.set(`--${variant.name}`, spec);
+    for (const alias of variant.aliases) specs.short.set(`-${alias}`, spec);
   }
 }
 

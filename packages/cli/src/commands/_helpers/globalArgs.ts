@@ -1,4 +1,5 @@
 import { CliUsageError } from '@cli/runtime/cliContext';
+import { documentsNegatedBooleanForm } from '@cli/runtime/completionCommandTree';
 import { CLI_OUTPUT_FORMATS, type CliOutputFormat } from '@shared/schemas';
 import {
   TEXRA_APPROVAL_POLICIES,
@@ -182,20 +183,6 @@ export const GLOBAL_VALUE_FLAGS = new Set<string>(
     def.type === 'boolean' ? [] : flagSpellings(name, def),
   ),
 );
-
-/**
- * Whether a boolean arg documents a negated `--no-<name>` spelling: those
- * defaulting to `true`, which the user necessarily passes via the negative
- * (`--no-color`, `--no-pr`). citty rewrites `--no-<name>` to `<name>: false`;
- * both leading-flag reordering and unknown-flag detection register the spelling
- * so `texra --no-color agents list` parses.
- */
-export function documentsNegatedBooleanForm(def: {
-  readonly type?: string;
-  readonly default?: boolean | number | string;
-}): boolean {
-  return def.type === 'boolean' && def.default === true;
-}
 
 export const GLOBAL_BOOL_FLAGS = new Set<string>(
   Object.entries(AGENT_RUN_GLOBAL_ARGS).flatMap(([name, def]) => {

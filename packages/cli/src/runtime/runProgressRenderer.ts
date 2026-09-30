@@ -6,10 +6,9 @@
  */
 import path from 'node:path';
 
-import { SubscriptionRef } from 'effect';
+import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import { getCategoryAgent } from '@agent/index';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
   RUN_PHASE,
@@ -31,23 +30,20 @@ import {
   truncateSummaryToWidth,
 } from './terminalText';
 import { getStderrColumns, writeRawStderr } from './logSinks';
-import {
-  claimRootRun,
-  followView,
-  type RunProgressSession,
-} from './sessionViewFollow';
+import { claimRootRun, type RunProgressSession } from './sessionViewFollow';
 import type { CliContext } from './cliContext';
 
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 
 export interface RunProgressRenderer {
-  /** Follow the session's view; `runId` names the run to describe
-   *  (the first root run the view gains after attach, when omitted). */
+  /** Follow the session's view until the scope closes; `runId` names the run
+   *  to describe (the first root run the view gains after attach, when
+   *  omitted). */
   attach(
     session: RunProgressSession,
     options?: { readonly runId?: RunId },
-  ): () => void;
+  ): Effect.Effect<void, never, Scope.Scope>;
   clear(): void;
   preserve(): void;
 }
@@ -77,12 +73,11 @@ export function shouldRenderRunProgress(
 }
 
 export function createRunProgressRenderer(
-  runtime: ProcessRuntime,
   context: CliContext,
   init?: RunProgressRendererInit,
 ): RunProgressRenderer | undefined {
   if (context.renderRunProgress !== true) return undefined;
-  return new DefaultRunProgressRenderer(runtime, {
+  return new DefaultRunProgressRenderer({
     colorEnabled: context.stderrColorEnabled,
     ...init,
     getColumns:
@@ -118,7 +113,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
-    private readonly runtime: ProcessRuntime,
     init: RunProgressRendererInit & {
       readonly getColumns: () => number | undefined;
     },
@@ -138,16 +132,26 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   attach(
     session: RunProgressSession,
     options: { readonly runId?: RunId } = {},
-  ): () => void {
-    this.wantedRunId = options.runId;
-    this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
-    const detach = followView(this.runtime, session, (view) =>
-      this.applyView(view),
-    );
-    return () => {
-      detach();
-      this.view = undefined;
-    };
+  ): Effect.Effect<void, never, Scope.Scope> {
+    return Effect.suspend(() => {
+      this.wantedRunId = options.runId;
+      this.attachCursor = SubscriptionRef.getUnsafe(session.view).cursor;
+      return Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          this.view = undefined;
+        }),
+      ).pipe(
+        Effect.andThen(
+          Effect.forkScoped(
+            Stream.runForEach(session.viewChanges, (view) =>
+              Effect.sync(() => this.applyView(view)),
+            ),
+            { startImmediately: true },
+          ),
+        ),
+        Effect.asVoid,
+      );
+    });
   }
 
   clear(): void {

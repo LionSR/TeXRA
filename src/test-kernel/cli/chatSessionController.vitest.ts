@@ -600,7 +600,7 @@ describe('createChatSessionController', () => {
         const presentationHost = {
           emit: vi.fn(),
           close: mocks.presentationHostClose,
-          attachRunProgressRenderer: vi.fn(() => vi.fn()),
+          attachRunProgressRenderer: vi.fn(() => Effect.void),
         } as unknown as CliRuntimeHost;
         mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
         mocks.createTuiHostInteractions.mockReturnValue({

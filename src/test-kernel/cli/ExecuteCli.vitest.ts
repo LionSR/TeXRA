@@ -40,9 +40,7 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   emit: vi.fn(),
   attachRunProgressRenderer: vi.fn(),
-  detachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
-  detachWorkflowPlainOutput: vi.fn(),
   attachWorkflowPlainOutput: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
@@ -315,15 +313,10 @@ function checkpointSnapshot(): RunSnapshotPayload {
 async function stubExecuteCliDeps(): Promise<void> {
   vi.clearAllMocks();
   mocks.close.mockReturnValue(Effect.void);
-  mocks.detachRunProgressRenderer.mockReturnValue(undefined);
   // The projection's detach is an Effect the run drains, not a promise.
   mocks.detachSessionProgressProjection.mockReturnValue(Effect.void);
-  mocks.attachRunProgressRenderer.mockReturnValue(
-    mocks.detachRunProgressRenderer,
-  );
-  mocks.attachWorkflowPlainOutput.mockReturnValue(
-    mocks.detachWorkflowPlainOutput,
-  );
+  mocks.attachRunProgressRenderer.mockReturnValue(Effect.void);
+  mocks.attachWorkflowPlainOutput.mockReturnValue(Effect.void);
   // The host answers the session's approval question the way the headless
   // adapter does: whether this context can answer a prompt.
   mocks.createHeadlessCliHostInteractions.mockImplementation(
