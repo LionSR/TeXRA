@@ -266,28 +266,10 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.auth.signIn",
-        "title": "Sign In to TeXRA Account",
-        "category": "TeXRA",
-        "icon": "$(sign-in)"
-      },
-      {
         "command": "texra.auth.chatgpt.signIn",
         "title": "Sign In with ChatGPT Subscription",
         "category": "TeXRA",
         "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "texra.auth.signOut",
-        "title": "Sign Out",
-        "category": "TeXRA",
-        "icon": "$(sign-out)"
-      },
-      {
-        "command": "texra.auth.viewProfile",
-        "title": "Account Settings",
-        "category": "TeXRA",
-        "icon": "$(account)"
       },
       {
         "command": "texra.showMemory",
@@ -515,20 +497,8 @@
           "when": "false"
         },
         {
-          "command": "texra.auth.signIn",
-          "when": "texra.activated"
-        },
-        {
           "command": "texra.auth.chatgpt.signIn",
           "when": "texra.activated"
-        },
-        {
-          "command": "texra.auth.signOut",
-          "when": "false"
-        },
-        {
-          "command": "texra.auth.viewProfile",
-          "when": "false"
         },
         {
           "command": "texra.showMemory",

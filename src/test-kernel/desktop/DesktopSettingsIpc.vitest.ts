@@ -141,7 +141,6 @@ async function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         presentSubscriptionSignInUrl: () => Effect.void,
         presentSubscriptionDeviceCode: () => Effect.void,
       },
-      auth: { signIn: () => Effect.void, signOut: () => Effect.void },
       secrets: new FakeSecrets(),
       resourcesPath: '/resources',
       session,

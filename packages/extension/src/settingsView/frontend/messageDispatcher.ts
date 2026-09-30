@@ -20,7 +20,6 @@ import {
   agentSelectionItems,
   agentSubTab,
   applySettingsSnapshot,
-  authenticated,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -40,7 +39,6 @@ import {
   providerKeyStatuses,
   selectedPanel,
   selectedSections,
-  sessionProblem,
   skillLoadIssues,
   installedPlugins,
   skillsList,
@@ -48,7 +46,6 @@ import {
   subscriptionUsage,
   toolDashboardItems,
   toolDashboardLoaded,
-  userEmail,
 } from './settingsState';
 
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
@@ -95,11 +92,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
 
   // Profile.
   [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
-    authenticated.set(data.authenticated);
-    userEmail.set(data.user?.email ?? '');
-    // Fields declared with `.prefault()` in UpdateProfileMessageSchema are
-    // guaranteed present by the validating dispatcher — no fallback needed.
-    sessionProblem.set(data.sessionProblem);
     providerKeyStatuses.set(data.providerKeyStatuses);
   },
 

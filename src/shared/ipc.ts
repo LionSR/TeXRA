@@ -20,8 +20,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   PIN_MEMORY: 'pinMemory',
   UNPIN_MEMORY: 'unpinMemory',
   // Profile commands
-  SIGN_IN: 'signIn',
-  SIGN_OUT: 'signOut',
   SET_PROVIDER_KEY: 'setProviderKey',
   REMOVE_PROVIDER_KEY: 'removeProviderKey',
   OPEN_PROVIDER_KEY_URL: 'openProviderKeyUrl',

@@ -11,7 +11,6 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
-import { AUTH_COMMANDS } from '@auth/constants';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
@@ -226,10 +225,6 @@ export class SettingsViewMessageHandler {
     return this.body.signInSubscription(providerId);
   }
 
-  /** Repaint what a TeXRA account change touches. */
-  public readonly refreshAfterAuthChange = () =>
-    this.body.refreshAfterAuthChange();
-
   /** Every page's opening data, posted to the active view. */
   public readonly sendAllData = () => this.body.postAll;
 
@@ -238,10 +233,6 @@ export class SettingsViewMessageHandler {
   ): SettingsViewInboundHandlerRegistry<ProcessServices | StorageFs> {
     return {
       ...this.body.handlers,
-      signIn: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
-      signOut: () =>
-        safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>

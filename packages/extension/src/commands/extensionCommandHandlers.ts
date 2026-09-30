@@ -76,9 +76,7 @@ export interface ExtensionCommandActions {
   ): CommandProgram;
   newTask(): CommandProgram;
   cleanBuild(): CommandProgram;
-  signIn(): CommandProgram<boolean>;
   signInChatGpt(): CommandProgram;
-  signOut(): CommandProgram;
   runSetupAssistant(): CommandProgram;
   openGettingStarted(): CommandProgram;
   createSampleProject(): CommandProgram;
@@ -128,9 +126,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ),
   'texra.showMainView': (actions) => actions.newTask(),
   'texra.cleanBuild': (actions) => actions.cleanBuild(),
-  'texra.auth.signIn': (actions) => actions.signIn(),
   'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
-  'texra.auth.signOut': (actions) => actions.signOut(),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     actions.runSetupAssistant(),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>

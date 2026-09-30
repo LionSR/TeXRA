@@ -590,7 +590,7 @@ const CORE_SETTING_ROWS: Record<
     title: 'Share usage telemetry',
     description:
       'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
-    category: 'account',
+    category: 'privacy',
     configTarget: 'global',
     surfaces: { settingsView: 'telemetry' },
   },

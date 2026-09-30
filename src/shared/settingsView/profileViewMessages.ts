@@ -2,25 +2,15 @@
  * Schema definitions for ProfileView messages.
  *
  * Outbound: Backend → Frontend (UPDATE_PROFILE)
- * Inbound: Frontend → Backend (SIGN_IN, SIGN_OUT, etc.)
  */
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderSettingDefSchema } from '@shared/constants/providers';
 
-import { commandOnly } from './messageFactories';
-
 // ============================================================
 // Data schemas
 // ============================================================
-
-const ProfileUserSchema = z.object({
-  email: z.string(),
-});
-
-const SessionProblemSchema = z.enum(['expired', 'unavailable']);
-export type SessionProblem = z.infer<typeof SessionProblemSchema>;
 
 /**
  * A native configuration toggle surfaced in a provider's expanded settings.
@@ -48,24 +38,6 @@ export type ProviderKeyStatus = z.infer<typeof ProviderKeyStatusSchema>;
 
 export const UpdateProfileMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE),
-  authenticated: z.boolean(),
-  user: ProfileUserSchema.nullable(),
-  /**
-   * Why a stored session could not provide a fresh token. Invalid credentials
-   * require reconnection; transient failures should instead invite a retry.
-   */
-  sessionProblem: SessionProblemSchema.nullable().prefault(null),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
 });
 export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
-
-// ============================================================
-// Inbound message schemas (frontend → backend)
-// ============================================================
-
-// Inbound messages with command literals
-export const SignInMessageSchema = commandOnly(SETTINGS_VIEW_COMMANDS.SIGN_IN);
-
-export const SignOutMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_OUT,
-);
