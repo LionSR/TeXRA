@@ -70,7 +70,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.87.2",
     "@effect/vitest": "4.0.0-rc.117",
-    "@electron/asar": "^4.3.0",
+    "@electron/asar": "^4.3.1",
     "@eslint/js": "^10.0.1",
     "@texra-ai/llm": "workspace:*",
     "@types/diff-match-patch": "^1.0.36",
