@@ -431,7 +431,7 @@ Before writing any metadata, `--apply` verifies that every catalog `storage_path
 supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```
 
-The same apply command (including the storage check) runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
+Run `npm run sync:remote-agents` (generate only) to preview; the apply step is manual.
 
 The sync only upserts the agents it finds under `prompts/agents/remote/`; it never deletes a row. When an agent leaves the remote catalog (for example because it now ships bundled in `packages/extension/resources/tool_use_agents/`), its `remote_agents` row and `agent-configs` object stay behind. They are harmless: the registry ranks the bundled sources above `remote` for the same name, so signed-in users resolve the bundled copy. Deleting them by hand is cleanup only.
 
