@@ -74,7 +74,7 @@ A `project` field is a capability of **the orchestrator's session**, not of an a
 - **Where the registry is served.**
   - `ProjectRegistry` is served by the desktop and CLI composition roots, not by `installProcessRuntime`, so VS Code and the SDK are unchanged.
   - The tools read it with `Effect.serviceOption`. Absence is a worded `ToolError` ("projects are available in the TeXRA desktop app and CLI"), never a silent empty list.
-  - `projects` and `wake`'s `on` trigger also declare `unavailableHosts: ['vscode', 'sdk']` (`src/tools/core/definition.ts`), so they never reach the model there.
+  - `projects` and `wake` also declare `unavailableHosts: ['vscode', 'sdk']` (`src/tools/core/definition.ts`), so they never reach the model there. `unavailableHosts` hides a whole tool, not one branch of its input, so `wake` is withheld there entirely, timed wakes included. VS Code has no process that outlives its window to deliver them.
 - **Each call resolves the target once, up front.**
   - `sessionFor(project)` is resolved before the proposal is built, and that session's roots are used for everything the call prepares:
     - agent and model resolution, and the visible roster;
@@ -114,24 +114,34 @@ This gives dispatch, steering (`executions send`), stopping (`kill`), inspection
     - `on` (`{project, event}`, where `event` is `run_finished`, `run_failed` or `request_opened`).
   - **Other input:**
     - optional `name`, a short label;
-    - `initiation`, either `researcher_asked` or `own_followup`;
-    - optional `budget_usd`, a cap on what the woken turn and its dispatches may spend (§Budget).
+    - optional `budget_usd`, a cap on what the woken turn and its dispatches may spend (§Budget);
+    - optional `grant`, a pre-approval the researcher must confirm (§Unattended turns).
+  - **`initiation` is not an input.** The tool derives it from the turn that called it:
+    - `researcher_asked` when that turn's input was the researcher's own message (`from.kind === 'user'`);
+    - `own_followup` otherwise.
+    - A model cannot claim the researcher asked.
   - **Result:** an `id`. `cancel: <id>` cancels it and `list: true` lists what is pending.
   - **Storage.** Each wake is its own aggregate, kind `wake`, logical id `wakeId`, in the orchestrator's store (`event_sequence.kind`, `src/controllers/session/storeSchema.ts`). It is not a row under the run that scheduled it.
     - `wake.scheduled {wakeId, targetRunId, trigger, message, name, initiation, budgetUsd, grant, cursor}`.
     - `wake.fired {wakeId, deliveryId, cursor}`.
-    - `wake.cancelled {wakeId}`, the aggregate's tombstone.
-    - Deleting the conversation that scheduled it does not drop it.
-    - Deleting the target run cancels its wakes, with the cancellation written as a `wake.cancelled` row and listed.
+    - `wake.cancelled {wakeId, reason}`, the aggregate's tombstone.
+    - A wake is delivered back into the run that scheduled it (`targetRunId`), so deleting that conversation cancels its wakes. The delete confirmation lists them ("also cancels 2 wakes: Weekday brief, …"), and the delete commits a `wake.cancelled {reason: 'run_deleted'}` for each before the run's rows go. The wake is never dropped silently by a cascade.
     - The fold of the `wake` aggregates is the pending set that `list` returns and the orchestrator home renders.
   - **Event cursor.**
     - An `on` wake records the target store's `commit` at scheduling as `cursor`. Each `wake.fired` advances it to the triggering row's commit.
     - On restart or reopen, the fiber scans the target's `run.end` and `request.opened` rows after the cursor. So a failure that happened while no host ran still wakes once, and nothing older than the schedule ever does.
     - It does not reuse `desktopAttention`'s first-view-is-history rule.
-  - **Delivery.** One fiber per open session, forked beside the session's other scoped fibers in the `Sessions` layer (`src/controllers/session/sessionLayer.ts`).
+  - **One owner per wake.**
+    - A wake aggregate is claimed, like a run's, by the process that scheduled it: `event_sequence.owner_id`, with liveness checked by pid and start time (`leaseOwnerLiveness.ts`).
+    - Only the owner cancels and fires it. `appendAll` already refuses an aggregate held by another live process (`DatabaseNotOwner`, `Database.ts`), so the other host cannot race it.
+    - The other host shows the wake read-only ("scheduled in TeXRA desktop").
+    - It takes the claim over only when the owner is dead, as `resumeRun` does for a run.
+    - Scheduling and cancelling are tool calls of the orchestrator run. That run executes in exactly one process (`owned_elsewhere`), which is the process that ends up owning its wakes.
+  - **Delivery.** One fiber per open session, forked beside the session's other scoped fibers in the `Sessions` layer (`src/controllers/session/sessionLayer.ts`). It fires only the wakes this process owns.
     - It sleeps until the earliest due time, and follows each target store for `on` wakes.
-    - Delivery is one `SessionEvents.exclusive` job. Inside the write transaction it re-reads the wake's rows, and appends nothing if a `wake.cancelled` is there. Otherwise it appends `wake.fired` and the follow-up together.
-    - A cancel committed by the other host therefore always wins, and two hosts firing the same due time collide on `deliveryId`: `wakeId` plus the due time or triggering commit, skipped on replay by the queue manager and the fold (`ToolUseFollowUpQueueManager.ts`, `runRows.ts`).
+    - Cancel and fire both go through this process's `SessionEvents` inbox, so they are serialized. A fire job skips a wake whose cancel committed first. No other process can commit a cancel in between.
+    - A fire appends `wake.fired` and the follow-up in one batch.
+    - `deliveryId` (`wakeId` plus the due time or triggering commit) remains the replay guard after a crash, skipped by the queue manager and the fold (`ToolUseFollowUpQueueManager.ts`, `runRows.ts`).
     - The follow-up is `submitFollowUp(targetRunId, {text, from: {kind:'wake', wakeId, initiation}, deliveryId}, {session})`.
   - **Missed times:** if no host was running at `at`, the message is delivered when the session next opens, marked late ("was due 09:00"). A recurring wake missed several times delivers once.
   - **This replaces the in-memory `RunSubscriptionRegistry` route** for anything the orchestrator watches. GitHub subscriptions stay as they are for now (Later).
@@ -147,15 +157,20 @@ This gives dispatch, steering (`executions send`), stopping (`kill`), inspection
 Borrowed from Dots: a turn nobody is watching roams read-only and acts only by proposal.
 
 - **A wake-started turn cannot bypass approval.** A turn whose input is a `{kind:'wake'}` follow-up runs under the `ask` policy whatever the run's stored policy. It also runs with no scoped bash bypass. The rule lives in core approval state (`src/shared/approvalPolicy.ts`), next to the headless `yolo` refusal.
+- **So does everything it dispatches.**
+  - A run dispatched from a wake-started turn records the wake on its `origin`, as `origin {sessionRoot, runId, wakeId}` (§Changes 2).
+  - A run with an `origin.wakeId` runs under `ask` with no scoped bypass for its whole life, whatever the target project's stored policy (`yolo` included).
+  - Its children inherit that through ordinary lineage in their own session. So a project stored at `yolo` cannot turn an unattended dispatch into unapproved commands.
   - Reading is free: `projects list`, `executions view` / `query`, and file reads.
   - Every cross-project `delegate_*`, `executions send` / `kill`, `accept_run_files`, `update_config` / `apply_team`, and every `bash` call opens a request.
 - **Attended turns follow the run's existing policy,** `bash` included. `yolo` or a scoped bash bypass lets `bash` run without asking there, as it does in any session today.
 - **An unanswered request waits durably.** With no host attached, requests already open and wait in the fold (`HostInteractions.ts`). The desktop notifier announces them. The orchestrator home lists them as the researcher's inbox.
-- **The researcher can pre-approve.** A wake with `initiation: researcher_asked` may carry a `grant`: a goal-grant scope, `commands` or `allAgentWork` (`src/tools/goal/goalAutoApproval.ts`), that the researcher approved when scheduling it.
-  - The grant is stored on `wake.scheduled`.
+- **The researcher can pre-approve.** A wake may carry a `grant`: a goal-grant scope, `commands` or `allAgentWork` (`src/tools/goal/goalAutoApproval.ts`).
+  - A `wake` call with a `grant` opens an ordinary approval request that shows the scope, the trigger and the message. `wake.scheduled` commits only on the researcher's approval.
+  - The grant is stored on `wake.scheduled`, and the approving `request.decided` is on record.
+  - A request the model opened in an unattended turn waits for the researcher like any other, so an orchestrator cannot grant itself.
   - It is re-armed for the delivered turn only. `SessionApprovals.restoreRun` still never restores goal grants in general.
   - So a restart between scheduling and delivery keeps the approval, and it does not leak into later turns.
-  - Wakes the orchestrator set for itself never carry one.
 
 ## Requests from other sessions
 
@@ -163,6 +178,11 @@ A run dispatched into a project opens its later requests (bash, edits, retries) 
 
 - **Desktop** already follows every open project's requests (`desktopAttention.ts`) and shows them in each project's view. The orchestrator home also lists them.
 - **CLI.** `texra orchestrator` subscribes to the request stream of every session it opened through `ProjectRegistry`, not just its `runtimeSession`. The TUI renders a project's request with the project name and decides it on the session it came from. Without this, a dispatched run would stall on its first bash call.
+- **Only the process that owns the run can decide.**
+  - `SessionRequests.decide` appends only for a run this process holds, and answers `NotOwner` otherwise (`src/controllers/session/SessionRequests.ts`).
+  - Each host therefore renders a request on a run another live process owns as read-only: "Waiting in TeXRA desktop". It gets no approve button.
+  - A run the CLI dispatched executes in the CLI, so its requests are the CLI's to decide.
+  - There is no interprocess decision path, because there is no daemon to route it through.
 
 ## Budget
 
@@ -170,7 +190,8 @@ There is no spend limit anywhere today; the only limit is the child-run concurre
 
 - **Settings:** `orchestrator.dailyBudgetUsd` (default 5) in the Zod settings catalog (`src/shared/schemas/coreSettings.ts`) and the settings view.
 - **What counts.**
-  - Every priced turn of a run whose lineage reaches the orchestrator: its own, and runs it dispatched into projects through `origin`.
+  - Every priced turn of a run whose lineage reaches the orchestrator: its own, runs it dispatched into projects through `origin`, and their children.
+  - A run whose `origin` carries a `wakeId` also counts against that wake's `budget_usd`. `ModelInvoker` reads `origin` from the lineage root of the run it is calling for.
   - **At the model's API rates, including on a plan route.**
     - `pricing.ts` prices a plan-backed turn (ChatGPT/Codex, Grok, the GLM coding plan, Kimi Code) at zero, which would make the cap unreachable there.
     - The budget ignores the `plan` flag and uses the catalog rates.
@@ -181,7 +202,12 @@ There is no spend limit anywhere today; the only limit is the child-run concurre
   - The daily total sums today's bucket over the orchestrator's store and the stores of the projects it dispatched into.
 - **Enforcement is per model call, not per dispatch.**
   - `ModelInvoker`, the one service that calls a model, checks the day's total before each call of a run in the orchestrator's lineage, and the wake's `budget_usd` if it has one.
-  - Over either cap, the run stops at a checkpoint before the call and opens a request: "Daily budget reached ($5.00). Continue with $N more?"
+  - Over either cap, the run stops at a checkpoint before the call and opens a `budget` request: "Daily budget reached ($5.00). Allow $N more today?"
+    - `N` defaults to the cap and is editable.
+  - **The approval raises the cap durably.**
+    - `RequestDecisionSchema` (`src/shared/schemas/request.ts`) gains `{action: 'extend', usd}`.
+    - Deciding it commits `budget.extended {day, usd}` for the daily cap, or `wake.budget_extended {wakeId, usd}` for a wake's cap. Both go in the orchestrator's store.
+    - `ModelInvoker` checks against the cap plus that day's extensions, so the resumed run passes. A restart keeps the extension, and the next day starts from the setting again.
   - Nothing is discarded. A stopped run continues from its journal on approval.
   - The overshoot is bounded by the calls already in flight, one per concurrent run. We do not reserve allowance ahead of a call: a turn's cost is not known until it ends, and an estimate would be a guess.
 - **Estimates:** the proposal card for a dispatch shows the run's model and what is left of the day's budget. We do not guess a dollar figure for the task.
@@ -190,7 +216,7 @@ There is no spend limit anywhere today; the only limit is the child-run concurre
 
 Borrowed from Pulse: a finite brief, not a feed.
 
-- **Scheduling:** during setup the orchestrator offers a recurring wake, `every: weekdays 08:00`, with `initiation: researcher_asked`.
+- **Scheduling:** during setup the orchestrator offers a recurring wake, `every: weekdays 08:00`. The researcher said yes in that turn, so its initiation is `researcher_asked`.
 - **The woken turn:**
   - reads `projects list` and each project's recent rows (`executions query`);
   - writes `briefs/YYYY-MM-DD.md` in its folder: at most ten items, each one of **needs you** (a pending request, a failed run), **finished** (with the files it produced) or **stuck**;
@@ -213,21 +239,30 @@ Borrowed from Pulse: a finite brief, not a feed.
    - A child's lineage is session-local:
      - `registerRun` checks that the parent's records exist in the same session;
      - `RunRegistry` stop and ancestry, `isOwnedBy`, approval ancestry and `detachSubagentsOnStop` are all per session.
-   - Rather than stretch every one of those across two stores, a run dispatched with `project` is registered in the target session **with no parent**. It carries `origin {sessionRoot, runId}` on its `run.start`.
+   - Rather than stretch every one of those across two stores, a run dispatched with `project` is registered in the target session **with no parent**. It carries `origin {sessionRoot, runId, wakeId?}` on its `run.start`. `wakeId` is set when the dispatch came from a wake-started turn (§Unattended turns, §Budget).
    - **Its report** is admitted onto the origin run in the origin session, as `from: {kind:'run', runId, relation:'dispatched'}`. `runRelation` (`src/shared/session/runRelation.ts`) gains that relation, stamped from `origin` rather than from `parentOf`.
    - **Stopping** it from the orchestrator is `executions kill` with `project`. That checks `origin` against the caller, not `isOwnedBy`.
-   - **Closing the orchestrator** or the project does not detach or stop it. It is top-level in its project and finishes there. Its report waits on the origin run's queue until that session is next open.
+   - **Closing the orchestrator** does not detach or stop it. It is top-level in its project and finishes there. Its report waits on the origin run's queue until that session is next open.
+   - **Closing the project** would stop it today: `DesktopProjectRegistry.close` closes the project's scope, whose finalizer runs `closeSession` and stops the session's runs (`desktopProjects.ts`).
+     - `close` changes. While the project has a live run with an `origin`, closing removes it from the rail but keeps its scope, and the scope closes when the last such run ends.
+     - The rail shows it under the orchestrator as "running for the orchestrator".
+     - Quitting still stops everything. The run is then resumable, and the orchestrator sees it as paused in `projects list`.
 3. **`executions` with `project` holds two sessions.**
    - The caller's session, `Runs` and follow-up queue stay as today, for identity and for `wait` to see the caller's own follow-ups.
    - A target context is resolved from `sessionFor(project)`: its view, query, runs, `StorageFs` and `WorkspaceFs`. `view`, `query`, `send`, `kill` and file reads use it.
    - `send` records `from` as the caller's run, with relation `dispatched` when the target's `origin` is the caller.
 4. **Wake sender kind.**
    - Add `{kind:'wake', wakeId, initiation}` to the sender union (`src/shared/schemas/followUp.ts`).
+   - `initiation` is derived from the calling turn's input, never taken from the model.
    - `submitFollowUp`'s no-loop branch lets a `wake` follow-up resume a resumable run, as it does for `user` (`src/agent/followUp/ToolUseFollowUp.ts`). It still never restarts a run the user stopped.
 5. **`wake`.**
    - The `wake` aggregate kind and its three events go in `src/shared/schemas/sessionEvent.ts`, with their fold in `src/shared/session/sessionFold.ts`.
-   - The fiber, its cursor scan and its `exclusive` delivery go in `sessionLayer.ts`.
-6. **Unattended policy, budget and cross-session requests** (§Unattended turns, §Budget, §Requests from other sessions). The budget adds the `run_spend_day` projection and the per-call check in `ModelInvoker`.
+   - The fiber, its cursor scan and owner-only delivery go in `sessionLayer.ts`, with the wake claim on `event_sequence.owner_id`.
+   - Run deletion commits `wake.cancelled {reason: 'run_deleted'}` for the run's wakes, and its confirmation lists them.
+6. **Unattended policy, budget and cross-session requests** (§Unattended turns, §Budget, §Requests from other sessions).
+   - The policy reads `origin.wakeId` for dispatched runs.
+   - The budget adds the `run_spend_day` projection, the per-call check in `ModelInvoker`, the `budget` request kind with its `extend` decision, and the `budget.extended` / `wake.budget_extended` rows.
+   - A request on a run another process owns renders read-only.
 7. **Tools.**
    - Register `projects` and `wake` in `src/tools/registry.ts` and `src/tools/pluginManifest.ts`.
    - Add `project` to `delegate_*`, `delegate_multi_agents`, `executions`, `accept_run_files`, `read_config`, `update_config` and `apply_team`, with the session-root gate and up-front resolution (§Cross-project scope).
@@ -242,13 +277,17 @@ Done when (each is an E2E through the real `texra` CLI or desktop, ending in a d
 - `delegate_workflow` with `project` names a file that exists only in the target project. The dispatched run appears, is approved showing its destination, asks for a bash approval that the CLI answers, and resumes in that project. Its report comes back to the orchestrator, and `accept_run_files` with `project` writes the output there.
 - `executions` with `project` lists, messages and kills that project's runs, and `wait` still sees the orchestrator's own follow-ups.
 - `assistant` in a project calling `delegate_agent` with `project` gets a `ToolError`.
-- A `wake` with `at` arrives after TeXRA is restarted before its time. A cancelled one never arrives, including when the other host cancels it.
+- A `wake` with `at` arrives after TeXRA is restarted before its time. A cancelled one never arrives. With the desktop owning it, the CLI shows it read-only. With the desktop killed, the CLI takes it over and delivers it.
 - An `on: run_failed` wake arrives when a project run fails while no host is running, once, after the next launch. A failure from before the wake was scheduled never triggers it.
 - With the desktop and `texra orchestrator --stay` both up, one wake is delivered once.
-- Deleting the conversation that scheduled a recurring wake leaves the wake pending.
+- Deleting the conversation that scheduled a recurring wake lists it in the confirmation and commits its `wake.cancelled`.
+- A `wake` call with a `grant` opens a request, and nothing is scheduled until it is approved. A wake scheduled in a wake-started turn is `own_followup`.
+- A wake-started dispatch into a project stored at `yolo` still asks for its `bash`. Its spend counts against the wake's `budget_usd`.
+- Closing a project while a dispatched run is live keeps the run going, and its report reaches the orchestrator.
+- The CLI shows a request on a desktop-owned run read-only, with no approve action.
 - A wake-started turn with `yolo` stored still opens a request for a cross-project dispatch and for `bash`.
 - A `researcher_asked` wake with a `commands` grant, delivered after a restart, runs its commands without asking, and the next attended turn asks.
-- With the daily budget set to $0.01, a woken run on a plan route stops before its next model call and asks, and continues on approval. A run spanning midnight counts only today's turns.
+- With the daily budget set to $0.01, a woken run on a plan route stops before its next model call and asks; approving $1 more continues it, and it survives a restart without asking again. A run spanning midnight counts only today's turns.
 - First-run setup on desktop and the CLI runs as an orchestrator run in `~/.texra/orchestrator/`, created if absent. Resuming it after a restart and finishing it does not mark the first real run done.
 
 ## Setup
@@ -269,7 +308,7 @@ The `setup` agent's job is environment, keys, config, teams and the first task. 
   - `ProgressViewProvider.ts` hardcodes `'setup'`.
 - **Where the run lives.**
   - On desktop and the CLI, the setup run lives in the orchestrator's folder session, so a new user's first conversation is already with the orchestrator.
-  - VS Code holds one session per window, so there the orchestrator runs in that window's session, without `projects`, the `project` fields or `on` wakes.
+  - VS Code holds one session per window, so there the orchestrator runs in that window's session, without `projects`, the `project` fields or `wake`.
 - **Onboarding funnel.**
   - `AgentRunLifecycle.ts` excludes runs of the agent named `SETUP_AGENT_NAME` from "first real run completed".
   - Since the orchestrator also does real work, the exclusion keys on the run's purpose. `setupLaunch.ts` launches with `purpose: 'setup'`, which is recorded on the run's `run.start` and folded into `RunState`. So a setup run resumed after a restart is still a setup run.
