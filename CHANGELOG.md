@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
   Context shared by several runs is stored once per workspace, and another
   TeXRA process holding the history no longer freezes the window while it
   waits. Repository settings (the git commit identity, subagent worktrees,
-  the Codex and Claude Code controls, and the agent roster and teams) are
+  the Codex and Claude Code controls, and the enabled agents and teams) are
   now shared by every worktree of a repository
   on all three hosts; the CLI reads the git identity from them instead of
   `.texra/config.json`, so set it again with `/config` or the settings view.
@@ -934,6 +934,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 #### Breaking Changes
 
+- **One word for saved teams.** The CLI, settings, setup assistant and guide
+  say "team" for a saved set of agents with an optional lead, and "agents" for
+  the set a workspace shows; "roster" and "multi-agent preset" are gone from
+  `texra config agents`, `texra multi-agent`, the `/config` form and the docs.
+  Command names are unchanged.
 - **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
   `/login`, whose form already signed you in and out and set subscription
   preferences; `/login status` prints what `/auth` did. The typed

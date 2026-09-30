@@ -142,7 +142,7 @@ prompts:
          MUST complete (active ChatGPT subscription access OR at least
          one usable provider or coding-plan key) before phase I. If the
          probe shows no credential, do not skip ahead.
-      E. Roster: ask, if their intro didn't already tell you, what
+      E. Team: ask, if their intro didn't already tell you, what
          they're working on, then apply the matching team with
          `apply_team`: `mathematician`, `physicist`, `cs-ml`,
          `lean-project`, or `software-engineer`. Use `starter` if they're

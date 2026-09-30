@@ -80,7 +80,7 @@ shares:
 - history and execution records; and
 - project files, custom instructions, and checked-in agent definitions.
 
-Agent and team rosters, tool enablement and availability, model visibility, and
+Enabled agents, default team, tool enablement and availability, model visibility, and
 host-specific LaTeX compile and formatter preferences stay in each host's
 state. Credentials are host-specific too: the extension uses VS Code Secret
 Storage, while the desktop and command-line hosts use their own secure stores,

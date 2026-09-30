@@ -80,7 +80,7 @@ export const setupCommand = withUsageSections(
     meta: {
       name: 'setup',
       description:
-        'Guided setup with the setup agent: environment, agent roster, and your first task (sign-in, ChatGPT, or API key first)',
+        'Guided setup with the setup agent: environment, agents, and your first task (sign-in, ChatGPT, or API key first)',
     },
     args: {
       ...INTERACTIVE_GLOBAL_ARGS,
@@ -92,7 +92,7 @@ export const setupCommand = withUsageSections(
     {
       title: 'EXAMPLES',
       rows: [
-        ['texra setup', 'agent-led setup: environment, roster, first task'],
+        ['texra setup', 'agent-led setup: environment, agents, first task'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra login', RESEARCHER_ACCESS_AUTH.credentialsOnlyExample],
         ['texra auth status', RESEARCHER_ACCESS_AUTH.statusExample],

@@ -76,7 +76,7 @@ function buildChatDefaultAgentItems(
     {
       value: '',
       label: 'Automatic',
-      description: 'Choose from the effective workspace roster',
+      description: 'Choose from the workspace agents',
     },
     ...agents
       .filter((agent) => effective.has(agentKeyOf(agent)))
@@ -182,7 +182,7 @@ export function AgentRosterForm(
       [
         {
           value: 'workspace',
-          label: 'Workspace roster',
+          label: 'Workspace agents',
           description: selectionLabel(data.record),
         },
         {

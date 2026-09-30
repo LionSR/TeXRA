@@ -47,7 +47,7 @@ available until your first message in any new chat.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
 (TeXRA account, ChatGPT subscription, or an API key), checks your
-environment, shows the agent roster, and starts your first task:
+environment, shows your agents, and starts your first task:
 
 ```bash
 texra setup
@@ -141,11 +141,11 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
-  `event: "run.children"`, reports a parent run's live child roster as
+  `event: "run.children"`, reports a parent run's live children as
   `{ runId, children }`, each child carrying its `childRunId`, `identity`,
   `agentName`, and `status` — the run phase, or `ready` before the child's
   first activation. A child that reached a terminal outcome leaves the
-  roster; its `run.end` record carries the outcome.
+  list; its `run.end` record carries the outcome.
 - `kind: "agent-result"`, `kind: "result"`, and `kind: "multi-agent-result"`
   carry the run result described above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) spell a terminal
@@ -260,7 +260,7 @@ and produces document-oriented outputs. If one name exists in both categories,
 `texra run` refuses it and names both candidates — pass the source-qualified
 form it prints (for example `texra run custom:assistant`) to pick one.
 
-## Multi-agent teams
+## Teams
 
 The CLI can list, show, and run the same built-in teams as the
 extension's Teams settings tab: Lean Project, Physicist, Mathematician,
@@ -498,11 +498,11 @@ texra memory show memories/<file>
 Run `texra config` in a terminal, or `/config` in a chat, to open the same
 configuration view. Its **Agents** section has three distinct choices:
 
-- **Workspace roster** controls which agents are available in the current
+- **Workspace agents** controls which agents are available in the current
   folder. It may inherit the user default, show all agents, use a named team,
   or store an exact custom selection.
-- **Default team** is a user-level choice used only by workspaces whose roster
-  is set to inherit. With no default team, an inherited workspace shows all
+- **Default team** is a user-level choice used only by workspaces whose agents are
+  set to inherit. With no default team, an inherited workspace shows all
   agents.
 - **Default chat agent** is the root agent selected for new chats in this
   workspace. It is stored under `texra.chat` in `.texra/config.json` and does
@@ -511,7 +511,7 @@ configuration view. Its **Agents** section has three distinct choices:
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                         # inspect the effective roster
+texra config agents                         # inspect the effective agents
 texra config agents --all                   # make every agent visible in this folder
 texra config agents --team lean-project     # use a named team
 texra config agents --inherit               # follow the user default
@@ -522,7 +522,7 @@ texra config agents --default-agent builtInToolUse:assistant
 
 `texra agents list` and `texra multi-agent list|show|run` keep narrower
 responsibilities: they inspect or run agents and teams, but do not alter the
-workspace roster. `texra init` writes initial command defaults and likewise
+workspace agents. `texra init` writes initial command defaults and likewise
 does not change agent visibility.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the

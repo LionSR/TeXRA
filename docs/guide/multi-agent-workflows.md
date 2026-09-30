@@ -136,7 +136,7 @@ In the CLI, a workflow run resumes headless: `texra resume <id>` continues a sto
 ## Next steps
 
 - [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads can run workflows
-- [TeXRA CLI](./texra-cli.md#multi-agent-teams): running a team from the terminal
+- [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
 - [Workflow agents](./agent-architecture.md): what a single workflow-agent call does
 - [Agent integrations](./agent-integrations.md): the Tools tab and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent the tool

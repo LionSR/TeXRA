@@ -81,32 +81,32 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   const unresolvedNames = missingMemberNames(result.resolution);
 
   const lines = [
-    `Applied the ${preset.name} roster to this workspace.`,
+    `Applied the ${preset.name} team to this workspace.`,
     `Workflow agents (${activeWorkflow.length}): ${
       activeWorkflow.map((key) => agentName(key)).join(', ') || '(none)'
     }`,
     `Assistants (${activeToolUse.length}): ${
       activeToolUse.map((key) => agentName(key)).join(', ') || '(none)'
     }`,
-    `Saved "${preset.id}" as the default team: fresh workspaces start with this roster.`,
+    `Saved "${preset.id}" as the default team: fresh workspaces start with this team.`,
   ];
   if (unresolvedNames.length > 0) {
     lines.push(
-      `Not installed yet (kept in the roster, activates when available): ${unresolvedNames.join(', ')}.`,
+      `Not installed yet (kept in the team, activates when available): ${unresolvedNames.join(', ')}.`,
     );
   }
 
   return executed(
     lines.join('\n'),
-    `Applied the ${preset.name} roster: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
+    `Applied the ${preset.name} team: ${activeWorkflow.length} workflows, ${activeToolUse.length} assistants.`,
   );
 });
 
 export const ApplyTeamTool = defineTool({
   name: 'apply_team',
-  description: `Apply an agent team (a discipline roster) to this workspace and record it as the user's default team.
+  description: `Apply an agent team (one per discipline) to this workspace and record it as the user's default team.
 
-Sets which workflow agents and assistants appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same roster. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.
+Sets which workflow agents and assistants appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same team. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.
 
 Teams:
 ${describeTeams()}`,
