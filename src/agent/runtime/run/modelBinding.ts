@@ -129,23 +129,26 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
   { protocol: P }
 >;
 
-const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
-  {
-    Validation: 'validation',
-    OpenAIResponse: 'openai-responses',
-    OpenRouterNative: 'openrouter-chat',
-    VscodeLm: 'vscode-lm',
-    Anthropic: 'anthropic-messages',
-    OpenAI: 'openai-responses',
-    GoogleInteractions: 'google-interactions',
-    DeepSeek: 'openai-responses',
-    XAI: 'openai-responses',
-    Kimi: 'openai-responses',
-    DashScope: 'openai-responses',
-    MiniMax: 'openai-responses',
-    GLM: 'openai-responses',
-    Meta: 'openai-responses',
-  };
+/** The wire protocol each conversation format binds. */
+export const PROTOCOL_BY_KEY: Record<
+  ModelCompatibilityKey,
+  Protocol | 'validation'
+> = {
+  Validation: 'validation',
+  OpenAIResponse: 'openai-responses',
+  OpenRouterNative: 'openrouter-chat',
+  VscodeLm: 'vscode-lm',
+  Anthropic: 'anthropic-messages',
+  OpenAI: 'openai-responses',
+  GoogleInteractions: 'google-interactions',
+  DeepSeek: 'openai-responses',
+  XAI: 'openai-responses',
+  Kimi: 'openai-responses',
+  DashScope: 'openai-responses',
+  MiniMax: 'openai-responses',
+  GLM: 'openai-responses',
+  Meta: 'openai-responses',
+};
 
 /** A binding's {@link BoundModel.wireRouteKey} and model-scoped key. */
 function routeKeys(wire: readonly string[], model: string) {

@@ -9,12 +9,13 @@ import {
   resolveModelRoute,
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
+import { reasoningFor } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { selectModel } from '@shared/model/modelSelection';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { bindModel } from '../run/modelBinding';
+import { bindModel, PROTOCOL_BY_KEY } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
@@ -97,35 +98,59 @@ export function modelSwitchPort(
   run: AgentRunShape,
   languageModel: LanguageModel['Service'],
 ) {
-  const modelSwitchDisabledReason = Effect.fn(
-    'toolUse.modelSwitchDisabledReason',
-  )(function* (model: string) {
+  /** The switch's route and format, or why it cannot replace the run's. */
+  const admission = Effect.fn('toolUse.modelSwitchAdmission')(function* (
+    model: string,
+  ) {
     const current = SynchronizedRef.getUnsafe(run.model);
-    if (current.modelId === model) return undefined;
+    if (current.modelId === model) return { reason: undefined };
     const selected = selectModel(model);
-    if (!selected) return `Model ${model} is not registered`;
+    if (!selected) return { reason: `Model ${model} is not registered` };
     const nextConfig = selected.config;
     const route = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextKey = yield* routeCompatibilityKey(nextConfig, route);
-    if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
-    return current.compatibilityKey === nextKey
-      ? undefined
-      : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
+    if (!nextKey) {
+      return { reason: `Unsupported model provider: ${nextConfig.provider}` };
+    }
+    if (current.compatibilityKey !== nextKey) {
+      return { reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON };
+    }
+    return { reason: undefined, selected, route, nextKey };
   });
+  const modelSwitchDisabledReason = (model: string) =>
+    admission(model).pipe(Effect.map(({ reason }) => reason));
   return {
     modelSwitchDisabledReason,
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const disabledReason = yield* modelSwitchDisabledReason(model);
-      if (disabledReason !== undefined) {
+      const admitted = yield* admission(model);
+      if (admitted.reason !== undefined) {
         return yield* Effect.fail(
           new Error(
-            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+            admitted.reason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
               ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : disabledReason,
+              : admitted.reason,
           ),
         );
+      }
+      // A reasoning request the route cannot carry (`@none` on a model that
+      // always thinks) is refused here, as the command's error, instead of
+      // failing the bind inside the loop and ending the conversation.
+      if (admitted.selected !== undefined) {
+        const { selected, route, nextKey } = admitted;
+        const protocol = PROTOCOL_BY_KEY[nextKey];
+        if (protocol !== 'vscode-lm' && protocol !== 'validation') {
+          yield* reasoningFor(
+            selected.config,
+            selected.request,
+            run.stores.globalState,
+            {
+              protocol,
+              codexSubscription: route.kind === 'chatgpt-subscription',
+            },
+          );
+        }
       }
       // Bound and recorded by the loop at its next model boundary: the rows
       // that record the switch belong to the fiber holding the run's state.
