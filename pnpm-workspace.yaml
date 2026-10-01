@@ -24,7 +24,7 @@ catalog:
   date-fns: '^4.4.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
-  effect: '4.0.0-rc.117'
+  effect: '4.0.0-rc.118'
   esbuild: '^0.28.2'
   escape-string-regexp: '^5.0.0'
   glob: '^13.0.6'
