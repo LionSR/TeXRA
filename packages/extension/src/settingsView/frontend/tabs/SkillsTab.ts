@@ -22,7 +22,6 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -230,7 +229,7 @@ export class SkillsTab extends LitElement {
   }
 
   override render(): TemplateResult {
-    const groups = groupBy(this.skills, (skill) => skill.scope);
+    const groups = Map.groupBy(this.skills, (skill) => skill.scope);
     return html`
       <div>
         ${renderSettingsSectionHeading({

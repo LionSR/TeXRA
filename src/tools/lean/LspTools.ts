@@ -8,7 +8,6 @@ import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { resolveToolPath } from '@tools/pathResolution';
-import { groupBy } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -45,7 +44,7 @@ const PROJECT_COMMAND_NAMES = Object.keys(
 ) as LeanProjectCommand[];
 
 /** Project commands bucketed by their declared group, in declaration order. */
-const PROJECT_COMMAND_GROUPS = groupBy(
+const PROJECT_COMMAND_GROUPS = Map.groupBy(
   Object.entries(LEAN_PROJECT_COMMANDS),
   ([, spec]) => spec.group,
 );

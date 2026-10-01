@@ -9,7 +9,7 @@
     "module": "nodenext",
     "target": "ES2022",
     "jsx": "react-jsx",
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2024", "DOM"],
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "paths": {

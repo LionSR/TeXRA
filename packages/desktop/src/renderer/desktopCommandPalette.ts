@@ -14,7 +14,7 @@ import {
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { groupBy, isThenable } from '@utils/core';
+import { isThenable } from '@utils/core';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {
   dispatchDesktopCommand,
@@ -191,7 +191,7 @@ export function createDesktopCommandPalette({
 
   const renderTemplate = (): void => {
     const groups = [
-      ...groupBy(visibleEntries, (entry) => entry.category ?? 'Other'),
+      ...Map.groupBy(visibleEntries, (entry) => entry.category ?? 'Other'),
     ];
     const activeEntry =
       activeIndex >= 0 ? visibleEntries[activeIndex] : undefined;

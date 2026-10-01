@@ -44,7 +44,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - shared state keys and utilities
 import { readSelectValue } from '@ui/wa/selectTemplates';
-import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, select, and option components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -397,7 +396,7 @@ export class ToolsTab extends LitElement {
     const items = this.items.filter(
       (item) => (item.category === 'ai-agents') === integrations,
     );
-    const groups = groupBy(items, (i) => i.category);
+    const groups = Map.groupBy(items, (i) => i.category);
 
     return html`
       <div class="tools-container tab-content-container">
