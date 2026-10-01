@@ -210,6 +210,12 @@ All notable changes to this project will be documented in this file.
   `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
   address is refused.
 
+- **Pack archives only the run.** Pack copies the run's folder into
+  `History/` and nothing else. It no longer copies the input document's own
+  `<name>.pdf`/`.tex` there or deletes that document's LaTeX build files
+  (`.aux`, `.log`, `.synctex.gz`, …); your workspace files are left as they
+  are.
+
 ### Features
 
 - **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
