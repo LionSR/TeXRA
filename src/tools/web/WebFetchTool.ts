@@ -10,7 +10,6 @@ import {
 } from 'effect/unstable/http';
 import ipaddr from 'ipaddr.js';
 import {
-  Agent,
   EnvHttpProxyAgent,
   fetch as undiciFetch,
   type Dispatcher,
@@ -111,17 +110,18 @@ const publicOnlyLookup: LookupFunction = (hostname, options, callback) =>
 
 /**
  * Built on first use, as the proxy agent reads the environment when it is
- * constructed. Under a configured proxy the proxy resolves names and the
- * connection is to the proxy, so the resolver guard cannot apply there.
+ * constructed. Every direct connection resolves through
+ * {@link publicOnlyLookup}: with no proxy configured, for a host `NO_PROXY`
+ * exempts, and for a scheme no `*_PROXY` variable covers. A proxied request
+ * connects to the proxy, whose connector ignores this `lookup`, so there the
+ * proxy resolves the name and only {@link assertPublicLiteral} applies.
  */
 let dispatcher: Dispatcher | undefined;
 
 function webFetchDispatcher(): Dispatcher {
-  const { HTTP_PROXY, HTTPS_PROXY, http_proxy, https_proxy } = process.env;
-  dispatcher ??=
-    HTTP_PROXY || HTTPS_PROXY || http_proxy || https_proxy
-      ? new EnvHttpProxyAgent()
-      : new Agent({ connect: { lookup: publicOnlyLookup } });
+  dispatcher ??= new EnvHttpProxyAgent({
+    connect: { lookup: publicOnlyLookup },
+  });
   return dispatcher;
 }
 
