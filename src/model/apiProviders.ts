@@ -33,7 +33,7 @@ export function apiKeySecretName(provider: ApiProvider): string {
 
 /**
  * The provider whose API key a secret-store entry holds, or `undefined` for
- * every other entry (OAuth tokens, the GitHub token, sign-in nonces). The
+ * every other entry (OAuth tokens, the GitHub token). The
  * inverse of {@link apiKeySecretName}, for subscribers of the store's
  * `credentialChanged` signal.
  */

@@ -94,7 +94,7 @@ media or evidence it cannot represent. The current explicit failures:
   blocks fail the event schema as malformed output, and a paused hosted turn
   fails by name as the boundary a future lane would have to implement.
 - Assistant media output, Responses service-tier billing accounting, native
-  provider compaction, and OpenRouter continuation and token estimation.
+  provider compaction, and OpenRouter continuation.
 - Streaming reconnection and managed-agent execution for background work.
   Observation polls or re-reads; it never creates a replacement generation.
 - Remote cancellation is only ever claimed when the provider answers

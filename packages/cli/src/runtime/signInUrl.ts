@@ -1,6 +1,6 @@
 /**
- * How a terminal shows a loopback sign-in URL, shared by the TeXRA-account
- * sign-in and every subscription sign-in.
+ * How a terminal shows a loopback sign-in URL, shared by every subscription
+ * sign-in.
  */
 import { Effect } from 'effect';
 import { tryOpenBrowser } from './browser';

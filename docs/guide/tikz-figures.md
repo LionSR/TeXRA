@@ -190,7 +190,7 @@ This compiles all extracted figures into standalone PDFs.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 
-Several settings tune how TeXRA handles TikZ. They have no control in Settings, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
+Several settings tune how TeXRA handles TikZ. They have no control in Settings, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/v1/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
 
 ### TikZ template
 

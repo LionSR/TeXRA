@@ -43,7 +43,7 @@ const UsageLogMetadataSchema = z.object({
 
 /**
  * Field names here intentionally follow this wire schema, not
- * `NormalizedUsage`'s — this is the persisted/billing log contract, so
+ * `NormalizedUsage`'s — this is the persisted log contract, so
  * renaming fields isn't free.
  */
 const UsageLogStatsSchema = z.object({
