@@ -1,11 +1,13 @@
 # Anonymous install-id usage logging (runbook)
 
 Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
-below); function deploy and smoke test (steps 3-4) still pending. Lets TeXRA clients without an account send usage batches to the
+below) and the function deployed (step 3, live as version 35 since
+2026-10-01); the write half of the smoke test (step 4) is still pending. Lets
+TeXRA clients without an account send usage batches to the
 `log-usage` edge function, identified by a random install ID instead of a
 login. Steps 1-2 are done: do not rerun the migration SQL below (its
 `ADD COLUMN`, `ADD CONSTRAINT` and `CREATE INDEX` statements are not
-idempotent). Only steps 3-5 remain.
+idempotent). Only the step 4 write test remains.
 
 ## Contract
 
@@ -83,7 +85,7 @@ RLS is unchanged: both tables are written only by the service role.
 2. **Done (2026-09-30).** Apply the migration (columns, constraints, indexes, both RPCs) in one
    transaction. The old function keeps working: it writes `user_id` rows and
    leaves `install_id` NULL.
-3. Deploy the function with the same flags as today:
+3. **Done (2026-10-01, version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
    `supabase functions deploy log-usage --no-verify-jwt`. Confirm the live
    function is already `--no-verify-jwt`; if the gateway verifies JWTs, a
    request with no `Authorization` header is rejected before the function runs.
@@ -92,7 +94,12 @@ RLS is unchanged: both tables are written only by the service role.
    `curl -i -X POST "$URL/functions/v1/log-usage" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
    expects 200 `accepted: 1`; repeat for `deduplicated`; no header expects 401.
    Then delete the test rows (`DELETE ... WHERE install_id = '0000...0001'`).
-5. Ship the client only after steps 2-4.
+   The read-only half passed on 2026-10-01: no header gets the function's 401
+   ("Missing or invalid credential"), and an install-id request with an
+   invalid batch reaches validation (`BATCH_REJECTED`). The insert, dedupe and
+   delete half needs database access and is not done yet.
+5. Ship the client only after steps 2-4. (The anonymous client is already on
+   `main`, so step 4's write test is the one open item.)
 
 ## Rollback
 
