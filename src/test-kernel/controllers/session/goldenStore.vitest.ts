@@ -106,7 +106,8 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARKED = RunIdSchema.parse('a00000000001');
 const PARENT = RunIdSchema.parse('a00000000002');
-const TOMBSTONED = RunIdSchema.parse('a00000000009');
+const CHAT = RunIdSchema.parse('a00000000009');
+const TOMBSTONED = RunIdSchema.parse('a0000000000a');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -224,6 +225,38 @@ describe('the golden 1.0 store', () => {
       'run.removed',
     ] as const)
       expect(types, type).toContain(type);
+    // The chat's `/model` switch: the compaction it records, and the
+    // snapshots naming the model before and after it.
+    const chat = aggregateId('run', CHAT);
+    expect(
+      events.filter(
+        (event) =>
+          event.type === 'model.compaction' &&
+          event.aggregateId === chat &&
+          event.payload.cause === 'model-switch',
+      ),
+    ).toHaveLength(1);
+    expect([
+      ...new Set(
+        events.flatMap((event) =>
+          event.type === 'run.snapshot' && event.aggregateId === chat
+            ? [event.payload.runtime.modelId]
+            : [],
+        ),
+      ),
+    ]).toEqual(['gpt56', 'gemini38f']);
+    // The plan the chat ran as a goal: the goal plugin's fact, active, then
+    // completed.
+    expect(
+      events.flatMap((event) =>
+        event.type === 'plugin.fact' &&
+        event.aggregateId === chat &&
+        event.plugin === 'goal' &&
+        event.kind === 'state'
+          ? [(event.value as { active: boolean }).active]
+          : [],
+      ),
+    ).toEqual([true, false]);
     // Context blobs two runs share: one stored value, referenced by rows of
     // two aggregates.
     const shared = raw(storage, (db) =>
@@ -279,6 +312,8 @@ describe('the golden 1.0 store', () => {
         run('a00000000006', 'golden_child', { parent: PARENT }),
         run('a00000000007', 'review'),
         run('a00000000008', 'review'),
+        // Its chat exited with Ctrl-C while it waited for the next message.
+        run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
       ]);
       expect(folded.requests).toEqual([]);
       expect(
@@ -315,6 +350,7 @@ describe('the golden 1.0 store', () => {
         ],
         openAttempt: false,
       });
+      expect((yield* ledger.load(CHAT))?.modelId).toBe('gemini38f');
     }).pipe(
       Effect.provide(runLedgerLayer.pipe(Layer.provideMerge(graph(storage)))),
       Effect.scoped,
@@ -373,7 +409,11 @@ describe('the golden 1.0 store', () => {
         ]);
         expect(
           runs.filter((run) => run.blocked === null).map((run) => run.status),
-        ).toEqual(['running', ...Array.from({ length: 4 }, () => 'completed')]);
+        ).toEqual([
+          'running',
+          ...Array.from({ length: 4 }, () => 'completed'),
+          'cancelled',
+        ]);
         const db = yield* Database;
         for (const [run, type] of [
           [NEWER, 'model.message'],
@@ -467,7 +507,6 @@ describe('the parked golden run', () => {
       'texra-cli-run-validation',
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
-    CI: '1',
   };
   let restore: Record<string, string | undefined> = {};
   let session: SessionHandle;
