@@ -169,7 +169,7 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
     // decision this run's own: a sibling's rolled-back fact is that run's.
     const drainFailure = yield* session.settlePublications(handle.runId).pipe(
       Effect.mapError(
-        (cause) => new RunArtifactDrainError(handle.runId, cause),
+        (cause) => new RunArtifactDrainError({ runId: handle.runId, cause }),
       ),
       Effect.as(undefined),
       Effect.catch((failure) => Effect.succeed(failure)),

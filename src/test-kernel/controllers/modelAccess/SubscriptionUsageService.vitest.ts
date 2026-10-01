@@ -683,7 +683,9 @@ describe('SubscriptionUsageService', () => {
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
     stubCodexSession({
       getFreshSession: () =>
-        Effect.fail(new SubscriptionOAuthError('refresh failed', kind)),
+        Effect.fail(
+          new SubscriptionOAuthError({ message: 'refresh failed', kind }),
+        ),
     });
     const http = vi.fn<UsageFetch>();
 

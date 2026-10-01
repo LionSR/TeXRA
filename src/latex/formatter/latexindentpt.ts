@@ -105,63 +105,55 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
  * path — the caller's own session root and configuration, held as data, not
  * the roots the calling fiber happens to carry.
  */
-export const runLatexIndent = Effect.fn('latex.runLatexIndent')(
-  function* (
-    filePath: string,
-    workspacePath: string | undefined,
-    latexindentConfig: string,
-    settings: SettingsStores,
-  ) {
-    // Resolve workspace-relative paths to absolute so cleanup works correctly.
-    // Some callers (latexCommands, housekeeping/indent) pass relative paths.
-    const absolutePath =
-      path.isAbsolute(filePath) || !workspacePath
-        ? filePath
-        : path.join(workspacePath, filePath);
+export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
+  filePath: string,
+  workspacePath: string | undefined,
+  latexindentConfig: string,
+  settings: SettingsStores,
+) {
+  // Resolve workspace-relative paths to absolute so cleanup works correctly.
+  // Some callers (latexCommands, housekeeping/indent) pass relative paths.
+  const absolutePath =
+    path.isAbsolute(filePath) || !workspacePath
+      ? filePath
+      : path.join(workspacePath, filePath);
 
-    const args = ['-w', '-s'];
-    if (latexindentConfig) {
-      args.push(`-l=${latexindentConfig}`);
-    }
-    args.push(absolutePath);
+  const args = ['-w', '-s'];
+  if (latexindentConfig) {
+    args.push(`-l=${latexindentConfig}`);
+  }
+  args.push(absolutePath);
 
-    const result = yield* runToolWithCheck('latexindent', args, {
-      channel: CHANNEL,
-      cwd: workspacePath,
-      // The slots the caller resolved this formatter from.
-      settings,
-      showError: !missingLatexindentReported,
-    });
-    if (result === false) missingLatexindentReported = true;
-    const success = Boolean(result && result.success);
+  const result = yield* runToolWithCheck('latexindent', args, {
+    channel: CHANNEL,
+    cwd: workspacePath,
+    // The slots the caller resolved this formatter from.
+    settings,
+    showError: !missingLatexindentReported,
+  });
+  if (result === false) missingLatexindentReported = true;
+  const success = Boolean(result && result.success);
 
-    if (success) {
-      // Wait a moment for the file system to stabilize after a successful write
-      yield* Effect.sleep(100);
-    }
+  if (success) {
+    // Wait a moment for the file system to stabilize after a successful write
+    yield* Effect.sleep(100);
+  }
 
-    // Always clean up backup files — latexindent creates .bak before modifying,
-    // so a crash or failure can still leave orphaned backups.
-    const fileBaseName = path.basename(absolutePath, '.tex');
-    const fileDir = path.dirname(absolutePath);
-    yield* cleanupBackupFiles(fileBaseName, fileDir);
-    yield* cleanupIndentLog(path.join(fileDir, 'indent.log'));
-    // latexindent may also create indent.log at the process cwd (workspace root)
-    if (workspacePath && fileDir !== workspacePath) {
-      yield* cleanupIndentLog(path.join(workspacePath, 'indent.log'));
-    }
+  // Always clean up backup files — latexindent creates .bak before modifying,
+  // so a crash or failure can still leave orphaned backups.
+  const fileBaseName = path.basename(absolutePath, '.tex');
+  const fileDir = path.dirname(absolutePath);
+  yield* cleanupBackupFiles(fileBaseName, fileDir);
+  yield* cleanupIndentLog(path.join(fileDir, 'indent.log'));
+  // latexindent may also create indent.log at the process cwd (workspace root)
+  if (workspacePath && fileDir !== workspacePath) {
+    yield* cleanupIndentLog(path.join(workspacePath, 'indent.log'));
+  }
 
-    if (success) {
-      yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-    }
-    return success;
-  },
-  Effect.catch((err) =>
-    Effect.logError(`Error running LaTeX indent: ${toErrorMessage(err)}`).pipe(
+  if (success) {
+    yield* Effect.logInfo(`Indented ${absolutePath}`).pipe(
       withLogChannel(CHANNEL),
-      Effect.as(false),
-    ),
-  ),
-);
+    );
+  }
+  return success;
+});

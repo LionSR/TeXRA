@@ -144,14 +144,16 @@ type MachineFailure = SubscriptionOAuthError | AuthPortError;
 function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
   switch (error._tag) {
     case 'OAuthHttpError':
-      return new SubscriptionOAuthError(
-        error.message,
-        error.kind,
-        error.status,
-      );
+      return new SubscriptionOAuthError({
+        message: error.message,
+        kind: error.kind,
+        status: error.status,
+      });
     case 'OAuthNetworkError':
     case 'OAuthUnexpectedResponse':
-      return new SubscriptionOAuthError(error.message, 'transient', undefined, {
+      return new SubscriptionOAuthError({
+        message: error.message,
+        kind: 'transient',
         cause: error.cause,
       });
   }
@@ -332,10 +334,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     const { session } = yield* this.stableSession();
     if (!session) {
       return yield* Effect.fail(
-        new SubscriptionOAuthError(
-          this.policy.sessionChangedMessage,
-          'expired',
-        ),
+        new SubscriptionOAuthError({
+          message: this.policy.sessionChangedMessage,
+          kind: 'expired',
+        }),
       );
     }
     const replaced =
@@ -345,10 +347,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
       return session;
     }
     return yield* Effect.fail(
-      new SubscriptionOAuthError(
-        this.policy.sessionChangedMessage,
-        'transient',
-      ),
+      new SubscriptionOAuthError({
+        message: this.policy.sessionChangedMessage,
+        kind: 'transient',
+      }),
     );
   });
 
@@ -393,7 +395,10 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     const { generation, session } = yield* this.stableSession();
     if (!session) {
       return yield* Effect.fail(
-        new SubscriptionOAuthError(this.policy.notSignedInMessage, 'expired'),
+        new SubscriptionOAuthError({
+          message: this.policy.notSignedInMessage,
+          kind: 'expired',
+        }),
       );
     }
     if (!this.isExpiringSoon(session)) return session;
