@@ -19,7 +19,7 @@ import type { RunState } from '@shared/session/runStateFold';
 import { refreshRejectedSubscription } from './modelRoutes';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import type { BoundModel } from './run/modelBinding';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * One invocation's recovery. `null` means the retry carries a refreshed
