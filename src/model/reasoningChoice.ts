@@ -141,11 +141,15 @@ export function chooseReasoning(
       if (explicit === undefined && request.thinking === undefined) {
         // Only the user's saved `none` asked for this; the model always
         // thinks, so the default applies instead.
-        return chooseReasoning(
-          config,
-          { ...request, effort: DEFAULT_EFFORT },
-          { ...options, userEffort: undefined },
-        );
+        return {
+          ...chooseReasoning(
+            config,
+            { ...request, effort: DEFAULT_EFFORT },
+            { ...options, userEffort: undefined },
+          ),
+          requested: ReasoningEffort.NONE,
+          note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
+        };
       }
       throw new ReasoningChoiceError(`${label} cannot turn thinking off.`);
     }

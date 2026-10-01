@@ -105,6 +105,8 @@ describe('chooseReasoning', () => {
       thinking: true,
       effort: E.MEDIUM,
       mode: null,
+      requested: E.NONE,
+      note: expect.stringContaining('cannot turn thinking off'),
     });
   });
 
