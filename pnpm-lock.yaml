@@ -19,8 +19,8 @@ catalogs:
       specifier: ^1.5.0
       version: 1.5.0
     '@effect/platform-node':
-      specifier: 4.0.0-rc.117
-      version: 4.0.0-rc.117
+      specifier: 4.0.0-rc.118
+      version: 4.0.0-rc.118
     '@effect/sql-sqlite-node':
       specifier: 4.0.0-rc.117
       version: 4.0.0-rc.117
@@ -185,7 +185,7 @@ importers:
         version: 1.5.0
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.117(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.0-rc.118(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
         version: 4.0.0-rc.117(effect@4.0.0-rc.117)
@@ -474,7 +474,7 @@ importers:
         version: 1.5.0
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.117(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.0-rc.118(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
         version: 4.0.0-rc.117(effect@4.0.0-rc.117)
@@ -1196,17 +1196,17 @@ packages:
     resolution: {integrity: sha512-CfiSoaVQO8pZgaMZGw5VvMvRGybsJ2LaSDoLYaqiVGvo/YYPYVR2GzUKY0h1NtIweq/+SQ5XLrvtzPIttWQ0GQ==}
     hasBin: true
 
-  '@effect/platform-node-shared@4.0.0-rc.117':
-    resolution: {integrity: sha512-GyRkEfLBG49MwJe+/XDPiXYcQ44RA9p2z0AurlsWhR1cd1PqOUMEZU1pORL+/R5hR8aH6ZuqoJYD8lAc6h+wlA==}
+  '@effect/platform-node-shared@4.0.0-rc.118':
+    resolution: {integrity: sha512-pNbmIlxbAUxAthUNsp2xm1NLG9kxoYecsPkoYl9mNF2oxPcKDxAvkOar7tYnLSUpXJeATm4pxYVipdZjQfqO4Q==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-rc.117
+      effect: ^4.0.0-rc.118
 
-  '@effect/platform-node@4.0.0-rc.117':
-    resolution: {integrity: sha512-WbPcvQDkqXFnCeG6LohJ9eVNapCDhZbCpezhYKxm0IsZEk7swakRh7RkC1t2CXzd3hGmszTv2k9e/pXyZuL+wQ==}
+  '@effect/platform-node@4.0.0-rc.118':
+    resolution: {integrity: sha512-qdAxPZ+5bKxVnzkwziqcHZTHRHz2hyfFX6NhwEmm75CBpmaIzXIZR2LRqGd1/8eI3J3cOrXcAYzByhln7T1/EA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-rc.117
+      effect: ^4.0.0-rc.118
       redis: '>=5.0.0 <7.0.0'
 
   '@effect/sql-sqlite-node@4.0.0-rc.117':
@@ -6134,7 +6134,7 @@ snapshots:
 
   '@effect/language-service@0.87.2': {}
 
-  '@effect/platform-node-shared@4.0.0-rc.117(effect@4.0.0-rc.117)':
+  '@effect/platform-node-shared@4.0.0-rc.118(effect@4.0.0-rc.117)':
     dependencies:
       '@types/ws': 8.18.1
       effect: 4.0.0-rc.117
@@ -6143,9 +6143,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.0-rc.117(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))':
+  '@effect/platform-node@4.0.0-rc.118(effect@4.0.0-rc.117)(redis@6.2.1(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-rc.117(effect@4.0.0-rc.117)
+      '@effect/platform-node-shared': 4.0.0-rc.118(effect@4.0.0-rc.117)
       effect: 4.0.0-rc.117
       redis: 6.2.1(@opentelemetry/api@1.9.1)
       undici: 8.11.2
