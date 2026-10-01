@@ -35,18 +35,15 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   ChatgptCodexContextWindowSchema,
   ChildRunConcurrencyBudgetSchema,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
+  AGENT_CLI_EFFORT_SETTING,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  ClaudeAgentEffortSchema,
-  ClaudeAgentModelSchema,
+  CLAUDE_AGENT_MODEL_SETTING,
   ClaudeAgentPermissionModeSchema,
   CliOutputFormatSchema,
   CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_MODEL_SETTING,
   CODEX_SANDBOX_MODE_DEFAULT,
   CodexApprovalPolicySchema,
-  CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
   GOAL_MAX_COST_SETTING,
   GoalMaxCostSchema,
@@ -232,6 +229,18 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
   return entry;
 }
 
+/** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
+function agentCliSetting(
+  entry: Omit<SurfacedSettingInput, 'category' | 'slot' | 'surfaces'>,
+): SurfacedSettingEntry {
+  return surfacedSetting({
+    ...entry,
+    category: 'ai-agents',
+    slot: 'repoState',
+    surfaces: { settingsView: 'approval', cliConfig: true },
+  });
+}
+
 /**
  * A Models-tab provider toggle: a globally-scoped boolean that renders both as
  * a profile row and as one per-provider control on the Models tab. These rows
@@ -257,6 +266,13 @@ function modelProviderToggle(opts: {
     category: 'model',
     surfaces: { settingsView: 'profile', models: [opts.model] },
   };
+}
+
+/** A global provider knob with no settings-view row (`.texra/config.json`). */
+const GLOBAL_MODEL_ROW = { configTarget: 'global', category: 'model' } as const;
+function configToggle(on: boolean, title: string, description: string) {
+  const schema = z.boolean().prefault(on);
+  return { ...GLOBAL_MODEL_ROW, schema, title, description };
 }
 
 /**
@@ -400,14 +416,11 @@ const CORE_SETTING_ROWS: Record<
   // workspace override stays honored (stranded values: #11173). Only
   // server-side state is a user choice (data retention); the transport knobs
   // have no settings-view row and live in `.texra/config.json`.
-  'model.gpt5ReasoningSummary': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
-    category: 'model',
-    title: 'GPT-5 reasoning summary',
-    description:
-      "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-  },
+  'model.gpt5ReasoningSummary': configToggle(
+    false,
+    'GPT-5 reasoning summary',
+    "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
+  ),
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',
@@ -420,30 +433,26 @@ const CORE_SETTING_ROWS: Record<
         "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
   }),
-  'model.useGoogleBackgroundResponses': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
-    category: 'model',
-    title: 'Google background responses',
-    description:
-      'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-  },
-  'model.useBackgroundResponses': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
-    category: 'model',
-    title: 'Background responses',
-    description:
-      'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-  },
-  'model.openaiParallelToolCalls': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
-    category: 'model',
-    title: 'Parallel tool calls',
-    description:
-      'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
-  },
+  'model.useGoogleBackgroundResponses': configToggle(
+    false,
+    'Google background responses',
+    'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
+  ),
+  'model.useBackgroundResponses': configToggle(
+    true,
+    'Background responses',
+    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
+  ),
+  'model.openaiFastTier': configToggle(
+    false,
+    'Fast processing',
+    "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
+  ),
+  'model.openaiParallelToolCalls': configToggle(
+    true,
+    'Parallel tool calls',
+    'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
+  ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `readSettingFrom`, so narrowing the row to the global scope would
   // hide (and block writes to) a workspace override the runtime honors.
@@ -830,77 +839,63 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- External coding agent controls ---------------------------------------
-  surfacedSetting({
+  agentCliSetting({
+    key: WorkspaceStateKey.CODEX_MODEL,
+    ...CODEX_MODEL_SETTING,
+    title: 'Codex model',
+    description: 'OpenAI model selected for Codex agent sessions.',
+  }),
+  agentCliSetting({
     key: WorkspaceStateKey.CODEX_SANDBOX_MODE,
     schema: CodexSandboxModeSchema.prefault(CODEX_SANDBOX_MODE_DEFAULT),
     title: 'Codex sandbox mode',
     description: 'Filesystem access mode used when TeXRA launches Codex.',
-    category: 'ai-agents',
-    slot: 'repoState',
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   }),
-  surfacedSetting({
+  agentCliSetting({
     key: WorkspaceStateKey.CODEX_REASONING_EFFORT,
-    schema: CodexReasoningEffortSchema.prefault(CODEX_REASONING_EFFORT_DEFAULT),
+    ...AGENT_CLI_EFFORT_SETTING,
     title: 'Codex reasoning effort',
-    description: 'Reasoning effort hint passed to Codex runs.',
-    category: 'ai-agents',
-    slot: 'repoState',
-    enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
+    description: 'Reasoning effort for Codex runs, up to what the model takes.',
   }),
-  surfacedSetting({
+  agentCliSetting({
     key: WorkspaceStateKey.CODEX_APPROVAL_POLICY,
     schema: CodexApprovalPolicySchema.prefault(CODEX_APPROVAL_POLICY_DEFAULT),
     title: 'Codex approval policy',
     description: 'When Codex should ask for approval before risky actions.',
-    category: 'ai-agents',
-    slot: 'repoState',
     enumLabels: [
       'Auto approve',
       'Ask when requested',
       'Ask for untrusted',
       'Ask on failure',
     ],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   }),
-  surfacedSetting({
+  agentCliSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-    schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
+    ...CLAUDE_AGENT_MODEL_SETTING,
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
-    category: 'ai-agents',
-    slot: 'repoState',
-    enumLabels: ['Sonnet 5.5', 'Fable 5.1', 'Opus 5.5', 'Opus 5', 'Haiku 4.5'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   }),
-  surfacedSetting({
+  agentCliSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
     schema: ClaudeAgentPermissionModeSchema.prefault(
       CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
     ),
     title: 'Claude Code permission mode',
     description: 'Permission policy used by Claude Code agent sessions.',
-    category: 'ai-agents',
-    slot: 'repoState',
     enumLabels: [
       'Prompt for risky actions',
       'Auto-accept edits',
       'Bypass all (dangerous)',
       'Plan only (read-only)',
     ],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   }),
-  surfacedSetting({
+  agentCliSetting({
     key: WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-    schema: ClaudeAgentEffortSchema.prefault(CLAUDE_AGENT_DEFAULT_EFFORT),
+    ...AGENT_CLI_EFFORT_SETTING,
     title: 'Claude Code reasoning effort',
-    description: 'Reasoning effort hint passed to Claude Code agent sessions.',
-    category: 'ai-agents',
-    slot: 'repoState',
-    enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
+    description:
+      'Reasoning effort for Claude Code, up to what the model takes.',
   }),
 
   // --- Workflow auto-compile -------------------------------------------------

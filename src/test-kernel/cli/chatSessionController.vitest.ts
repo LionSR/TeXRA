@@ -242,7 +242,7 @@ function makeSessionContext(): CliContext {
 function makeRunRequest(instruction: string): AgentConfigPayload {
   return {
     agent: 'chat',
-    model: 'gpt54',
+    model: 'openai/gpt-5.4-2026-03-05',
     instruction,
     workingDirectory: '/tmp/test',
     agentCategory: 'toolUse',

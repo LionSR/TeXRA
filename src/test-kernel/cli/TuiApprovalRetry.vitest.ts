@@ -209,7 +209,7 @@ function proposalPayload(
     runId,
     agent: 'critic',
     agentSource: null,
-    model: 'kimi26T',
+    model: 'moonshot/kimi-k2.6',
     instruction,
     memories: [],
     workingDirectory: null,

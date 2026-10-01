@@ -61,7 +61,7 @@ import StatusPill from './StatusPill.vue';
         <div class="ic-srow">
           <dt>Model</dt>
           <dd>
-            <StatusPill variant="accent" shape="chip">Sonnet 5</StatusPill>
+            <StatusPill variant="accent" shape="chip">Sonnet 5.5</StatusPill>
           </dd>
         </div>
         <div class="ic-srow">
@@ -74,7 +74,7 @@ import StatusPill from './StatusPill.vue';
         </div>
         <div class="ic-srow">
           <dt>Reasoning effort</dt>
-          <dd><StatusPill variant="info" shape="pill">High</StatusPill></dd>
+          <dd><StatusPill variant="info" shape="pill">Medium</StatusPill></dd>
         </div>
       </dl>
     </article>

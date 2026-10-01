@@ -57,7 +57,7 @@ function createExactInputsConfig(
 ): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'writer',
-    model: 'gemini31p',
+    model: 'google/gemini-3.1-pro-preview',
     ...followUpWorkflowDefaults,
     agentCategory: AgentCategory.Workflow,
     ...overrides,
@@ -177,7 +177,7 @@ describe('ProgressFollowUpController', () => {
           }),
           compileFailures: [createCompileFailure()],
           runOutputs: {},
-          modelOptions: [{ value: 'gemini31p' }],
+          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
         });
 
         expect(plan.kind).toBe('execute');
@@ -205,7 +205,7 @@ describe('ProgressFollowUpController', () => {
           runOutputs: {
             2: [createRunStorageOutputFile({ source: '/external/main.tex' })],
           },
-          modelOptions: [{ value: 'gemini31p' }],
+          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
         });
 
         expect(plan).toEqual({
@@ -231,7 +231,7 @@ describe('ProgressFollowUpController', () => {
           runOutputs: {
             2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
           },
-          modelOptions: [{ value: 'gemini31p' }],
+          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
         });
 
         expect(plan.kind).toBe('execute');
@@ -267,7 +267,7 @@ describe('ProgressFollowUpController', () => {
           runOutputs: {
             2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
           },
-          modelOptions: [{ value: 'gemini31p' }],
+          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
         });
 
         expect(plan.kind).toBe('execute');
@@ -294,7 +294,7 @@ describe('ProgressFollowUpController', () => {
           runOutputs: {
             2: [createRunStorageOutputFile({ source: 'main-diffea268c1.tex' })],
           },
-          modelOptions: [{ value: 'gemini31p' }],
+          modelOptions: [{ value: 'google/gemini-3.1-pro-preview' }],
         });
 
         expect(plan.kind).toBe('execute');

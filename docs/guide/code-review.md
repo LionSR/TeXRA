@@ -159,8 +159,8 @@ The built-in defaults:
 ::: warning xAI users
 The action's xAI default, `grok4`, is retired in the current CLI and cannot be
 selected, so an xAI-only setup fails until the action's default is updated.
-Set `TEXRA_REVIEW_MODEL` to a current model such as `grok47`, or
-set `TEXRA_REVIEW_MODEL_DEFAULTS` to `{"xai":"grok47"}`, and wire the variable
+Set `TEXRA_REVIEW_MODEL` to a current model such as `xai/grok-4.7`, or
+set `TEXRA_REVIEW_MODEL_DEFAULTS` to `{"xai":"xai/grok-4.7"}`, and wire the variable
 through as described below.
 :::
 
@@ -169,10 +169,12 @@ To override, add a repo **variable**: the same place as secrets, but the
 → **New repository variable**). Variables are plain, non-secret settings:
 
 - `TEXRA_REVIEW_MODEL`: pin one model id for every review, regardless of
-  provider.
+  provider. Besides the action's short names, TeXRA now also accepts a
+  `provider/id` model reference here, such as `anthropic/claude-opus-5-5`
+  (optionally with an `@effort` suffix; see [AI models](./models.md)).
 - `TEXRA_REVIEW_MODEL_DEFAULTS`: JSON map from provider id to default model
   id, used when you want provider-specific defaults. Example:
-  `{"deepseek":"deepseekproT","anthropic":"opus55"}`. This explicitly opts
+  `{"deepseek":"deepseek/deepseek-v4-pro","anthropic":"anthropic/claude-opus-5-5"}`. This explicitly opts
   Anthropic reviews into Opus 5.5; the action's built-in default remains `opus48T`.
 
 The scaffolded workflow does not pass either variable yet: the `model` input is

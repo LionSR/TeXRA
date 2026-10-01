@@ -10,7 +10,6 @@
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
  * write that follows it hit the same store.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect } from 'effect';
 
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
@@ -20,6 +19,7 @@ import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
+import { modelConfig, modelRefOf } from '@shared/model/modelSelection';
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {
@@ -40,7 +40,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
     return knownCliModelIds()
       .filter((id) => !isRetiredModel(id))
       .map((id) => {
-        const config = MODEL_CONFIGS[id];
+        const config = modelConfig(id);
         return {
           id,
           label: getModelLabel(id),
@@ -58,7 +58,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
 
 /**
  * Enable or disable one model from a CLI argument, resolving common spellings
- * (`grok-4.7` → `grok47`) before handing the id to the shared writer.
+ * (`grok-4.7` → `xai/grok-4.7`) before handing the id to the shared writer.
  *
  * One program: the caller runs it on the process runtime, so this refusal and
  * the writer's own invariant refusals land in the same channel — the
@@ -79,7 +79,9 @@ export function setCliModelEnabled(
   StateWriteFailed | StateReadFailed
 > {
   return Effect.suspend(() => {
-    const model = resolveKnownCliModelId(modelInput);
+    // Enablement belongs to the model, not to an effort or mode suffix.
+    const resolved = resolveKnownCliModelId(modelInput);
+    const model = resolved && (modelRefOf(resolved) ?? resolved);
     if (!model) {
       // A refusal in the channel this signature declares, not a defect: the
       // caller shows it to the user, and a defect would reach that caller as a

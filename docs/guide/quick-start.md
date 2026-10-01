@@ -106,7 +106,7 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 ### Choose agent, model, and instruction
 
 The dropdown menus at the bottom of the instruction box pick the agent
-(e.g. `polish` for improving writing) and the model (e.g. `sonnet55`). The
+(e.g. `polish` for improving writing) and the model (e.g. `anthropic/claude-sonnet-5-5`). The
 agent menu lists interactive agents, document passes and teams in three
 sections, and the agent you pick decides what kind of run starts: there is
 no separate mode to set.

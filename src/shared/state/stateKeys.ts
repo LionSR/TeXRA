@@ -25,6 +25,7 @@ export enum WorkspaceStateKey {
   DISABLED_SKILL_SOURCES = 'texra.skills.disabledSources',
 
   // Codex settings
+  CODEX_MODEL = 'texra.codexModel',
   CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',
   CODEX_APPROVAL_POLICY = 'texra.codexApprovalPolicy',

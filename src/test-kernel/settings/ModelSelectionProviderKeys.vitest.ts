@@ -25,7 +25,7 @@ type ModelSelectionListElement = HTMLElement & {
 };
 
 const deepseekModel: ModelSelectionItem = {
-  name: 'deepseek',
+  name: 'deepseek/deepseek-v4-flash',
   label: 'DeepSeek V4 Flash',
   provider: 'deepseek',
   enabled: true,
@@ -61,23 +61,23 @@ describe('ModelSelectionList provider key status', () => {
         { ...deepseekModel, enabled: false },
         {
           ...deepseekModel,
-          name: 'sonnet5T',
+          name: 'anthropic/claude-sonnet-5',
           label: 'Sonnet 5 (Thinking)',
           provider: 'anthropic',
           enabled: true,
         },
       ],
-      helperModel: 'deepseek',
+      helperModel: 'deepseek/deepseek-v4-flash',
     });
 
     const helperOptions = [
       ...list.shadowRoot!.querySelectorAll('.helper-model-select wa-option'),
     ];
     expect(helperOptions.map((option) => option.getAttribute('value'))).toEqual(
-      ['deepseek', 'sonnet5T'],
+      ['deepseek/deepseek-v4-flash', 'anthropic/claude-sonnet-5'],
     );
     expect(helperOptions[0]?.textContent?.trim()).toBe(
-      'DeepSeek V4 Flash (deepseek)',
+      'DeepSeek V4 Flash (deepseek/deepseek-v4-flash)',
     );
   });
 });

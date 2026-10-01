@@ -146,7 +146,7 @@ const DelegateAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
+      'Model reference from the Available models line (e.g. `anthropic/claude-opus-5-5`); append `@low`, `@medium`, `@high`, `@xhigh` or `@max` to set the reasoning effort, or `@none` to turn thinking off where the model allows it. Omit unless the user explicitly requested a model or effort; defaults to the current model when available.',
     ),
   instruction: z
     .string()

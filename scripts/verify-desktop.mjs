@@ -1554,7 +1554,9 @@ const hostSnapshot = {
     ],
     workflow: [{ value: 'correct', label: 'correct' }],
   },
-  modelOptions: [{ value: 'deepseekT', label: 'DeepSeek V4 Flash' }],
+  modelOptions: [
+    { value: 'deepseek/deepseek-flash', label: 'DeepSeek V4 Flash' },
+  ],
   teamOptions: [],
   workspaceRoots: [],
   fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
@@ -1623,7 +1625,7 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     type: 'run.config',
     config: {
       agentCategory: 'toolUse',
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-flash',
       agent,
       inputFiles: ['main.tex'],
     },

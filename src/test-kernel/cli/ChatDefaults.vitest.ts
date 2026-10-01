@@ -66,8 +66,11 @@ describe('CLI chat defaults', () => {
     await withConfig({
       workspace: {
         'texra.agent': 'generic',
-        'texra.model': 'gpt55',
-        'texra.chat': { agent: 'assistant', model: 'deepseekT' },
+        'texra.model': 'openai/gpt-5.5-2026-04-23',
+        'texra.chat': {
+          agent: 'assistant',
+          model: 'deepseek/deepseek-v4-flash',
+        },
       },
     });
 
@@ -75,7 +78,7 @@ describe('CLI chat defaults', () => {
       {},
       {
         agent: 'assistant',
-        model: 'deepseekT',
+        model: 'deepseek/deepseek-v4-flash',
         modelSource: 'workspace-config',
       },
     );
@@ -85,38 +88,62 @@ describe('CLI chat defaults', () => {
     await withConfig({
       user: {
         'texra.agent': 'assistant',
-        'texra.chat': { model: 'deepseekT' },
+        'texra.chat': { model: 'deepseek/deepseek-v4-flash' },
       },
     });
 
     await expectChatDefaults(
       {},
-      { agent: 'assistant', model: 'deepseekT', modelSource: 'user-config' },
+      {
+        agent: 'assistant',
+        model: 'deepseek/deepseek-v4-flash',
+        modelSource: 'user-config',
+      },
     );
   });
 
   it('lets the environment outrank config and an override outrank both', async () => {
     await withConfig({
-      workspace: { 'texra.chat': { agent: 'assistant', model: 'deepseekT' } },
+      workspace: {
+        'texra.chat': {
+          agent: 'assistant',
+          model: 'deepseek/deepseek-v4-flash',
+        },
+      },
     });
 
     await expectChatDefaults(
-      { envModel: 'sonnet46T' },
-      { agent: 'assistant', model: 'sonnet46T', modelSource: 'environment' },
+      { envModel: 'anthropic/claude-sonnet-4-6' },
+      {
+        agent: 'assistant',
+        model: 'anthropic/claude-sonnet-4-6',
+        modelSource: 'environment',
+      },
     );
     await expectChatDefaults(
-      { envModel: 'sonnet46T', modelOverride: 'gpt55' },
-      { model: 'gpt55', modelSource: 'explicit-override' },
+      {
+        envModel: 'anthropic/claude-sonnet-4-6',
+        modelOverride: 'openai/gpt-5.5-2026-04-23',
+      },
+      { model: 'openai/gpt-5.5-2026-04-23', modelSource: 'explicit-override' },
     );
   });
 
   it('ignores an agent that cannot be an implicit default, unless it is explicit', async () => {
     await withConfig({
-      workspace: { 'texra.chat': { agent: 'simplifier', model: 'sonnet46T' } },
+      workspace: {
+        'texra.chat': {
+          agent: 'simplifier',
+          model: 'anthropic/claude-sonnet-4-6',
+        },
+      },
     });
 
     // Configured and environment tiers drop it; the explicit flag keeps it.
-    await expectChatDefaults({}, { agent: 'assistant', model: 'sonnet46T' });
+    await expectChatDefaults(
+      {},
+      { agent: 'assistant', model: 'anthropic/claude-sonnet-4-6' },
+    );
     await expectChatDefaults(
       { envAgent: 'simplifier' },
       { agent: 'assistant' },

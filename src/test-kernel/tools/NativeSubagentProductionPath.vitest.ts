@@ -60,6 +60,7 @@ import {
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
+import { chooseReasoning } from '@model/reasoningChoice';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
@@ -105,8 +106,8 @@ const OUTER_RUN_ID = '0a95310a9531' as RunId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const WORKFLOW_CHILD_AGENT = 'workflow_child_9531';
-const PARENT_MODEL = 'gpt54';
-const CHILD_MODEL = 'gpt55';
+const PARENT_MODEL = 'openai/gpt-5.4-2026-03-05';
+const CHILD_MODEL = 'openai/gpt-5.5-2026-04-23';
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;
@@ -238,17 +239,17 @@ function scriptedBoundModel(
   observed: ObservedRequest[],
   hangGate?: Promise<unknown>,
 ): BoundModel {
-  const origin = scriptedOrigin(config.fullName);
+  const origin = scriptedOrigin(config.id);
   let progressOnly = false;
   const model: Model = {
     prepareTurn: (request) => {
       const latest = request.messages.at(-1);
       const text = latest ? messageText(latest) : '';
       progressOnly =
-        config.name === PARENT_MODEL &&
+        config.ref === PARENT_MODEL &&
         text.includes('<subagent-progress') &&
         !text.includes('<subagent-result');
-      observed.push({ model: config.name, messages: request.messages });
+      observed.push({ model: config.ref, messages: request.messages });
       return Effect.succeed(preparedTurn(origin, request));
     },
     streamTurn: () =>
@@ -273,14 +274,14 @@ function scriptedBoundModel(
             return Stream.fail(
               new ModelError({
                 kind: 'transport',
-                message: `Unexpected ${config.name} model invocation.`,
+                message: `Unexpected ${config.ref} model invocation.`,
               }),
             );
           }
           const events: TurnEvent[] = [
             {
               kind: 'identified',
-              providerResponseId: `resp-${config.name}`,
+              providerResponseId: `resp-${config.ref}`,
               requestedOrigin: origin,
               returnedModel: null,
             },
@@ -291,8 +292,9 @@ function scriptedBoundModel(
       ),
   };
   return {
-    modelId: config.name,
+    modelId: config.ref,
     config,
+    reasoning: chooseReasoning(config),
     compatibilityKey: 'OpenAI',
     model,
     origin,
@@ -303,12 +305,12 @@ function scriptedBoundModel(
     supportsNativePdf: false,
     supportsNativeAudio: false,
     supportsForcedToolChoice: true,
-    wireRouteKey: JSON.stringify(['openai', 'api-key', config.fullName]),
+    wireRouteKey: JSON.stringify(['openai', 'api-key', config.id]),
     modelRetryRouteKey: JSON.stringify([
       'openai',
       'api-key',
-      config.fullName,
-      config.name,
+      config.id,
+      config.ref,
     ]),
     backgroundCapable: false,
     persistentConnection: false,
@@ -519,7 +521,7 @@ async function launchWaitingChild(options: {
       Effect.succeed(
         scriptedBoundModel(
           input.config,
-          input.config.name === CHILD_MODEL
+          input.config.ref === CHILD_MODEL
             ? options.childTurns
             : options.parentTurns,
           observedRequests,
@@ -1246,7 +1248,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             Effect.succeed(
               scriptedBoundModel(
                 input.config,
-                input.config.name === CHILD_MODEL ? childTurns : parentTurns,
+                input.config.ref === CHILD_MODEL ? childTurns : parentTurns,
                 observedRequests,
               ),
             ),

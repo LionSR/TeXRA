@@ -285,7 +285,7 @@ export function validationModel(config: ModelConfig): {
 } {
   const origin = originOf({
     protocol: 'openai-responses',
-    requestedModel: config.fullName,
+    requestedModel: config.id,
     deployment: {
       endpoint: VALIDATION_ENDPOINT,
       credentialScope: 'validation',
@@ -373,7 +373,7 @@ export function validationModel(config: ModelConfig): {
       kind: 'http',
       providerResponseId: `validation-response-${responses}`,
       requestedOrigin: origin,
-      returnedModel: config.fullName,
+      returnedModel: config.id,
       modelFingerprint: null,
       content,
       finishReason: calls ? 'tool-calls' : 'stop',

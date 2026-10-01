@@ -34,7 +34,8 @@ sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
 Provider transport knobs (OpenAI background responses, parallel tool calls, the
-GPT-5 reasoning summary, and Google background responses) keep their defaults
+GPT-5 reasoning summary, OpenAI fast processing, and Google background
+responses) keep their defaults
 unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 

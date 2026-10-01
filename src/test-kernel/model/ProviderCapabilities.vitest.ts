@@ -30,9 +30,9 @@ const chatgptConfig = (config: ModelConfig) =>
   routeConfig(hostStores(), config, { kind: 'chatgpt-subscription' });
 
 const gpt55Config: ModelConfig = {
-  name: 'gpt55',
+  ref: 'openai/gpt-5.5-2026-04-23',
   label: 'GPT-5.5',
-  fullName: 'gpt-5.5-2026-04-23',
+  id: 'gpt-5.5-2026-04-23',
   shortName: 'gpt-5.5',
   provider: ModelProvider.OPENAI,
   maxOutputTokens: 128_000,
@@ -41,10 +41,8 @@ const gpt55Config: ModelConfig = {
   contextWindow: 1_050_000,
   // Codex eligibility comes from the registry's codexSubscription flag
   // (see providerCapabilities.ts), not from tier/naming heuristics.
-  capabilities: {
-    ...DEFAULT_MODEL_CAPABILITIES,
-    reasoningEffort: ReasoningEffort.XHIGH,
-  },
+  capabilities: DEFAULT_MODEL_CAPABILITIES,
+  reasoning: { efforts: [ReasoningEffort.XHIGH] },
   openRouterOnly: false,
   codexSubscription: true,
 };
@@ -97,7 +95,11 @@ describe('provider capabilities', () => {
       }),
   );
 
-  it.effect.each(['gpt56', 'gpt56-', 'gpt56--'] as const)(
+  it.effect.each([
+    'openai/gpt-5.6-sol',
+    'openai/gpt-5.6-terra',
+    'openai/gpt-5.6-luna',
+  ] as const)(
     'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
     (id) =>
       Effect.gen(function* () {
@@ -158,7 +160,7 @@ describe('ChatGPT subscription model routing', () => {
   const prospectiveRoute = () =>
     withProcessServices(
       testRuntime(),
-      readProspectiveUsageRoute(hostStores(), 'gpt55'),
+      readProspectiveUsageRoute(hostStores(), 'openai/gpt-5.5-2026-04-23'),
     );
 
   it.effect(
@@ -208,29 +210,32 @@ describe('codexBackendModelId', () => {
   // "The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
   // account", which reads as a plan problem rather than a bad id.
   it.each([
-    ['gpt56', 'gpt-5.6-sol'],
-    ['gpt56-', 'gpt-5.6-terra'],
-    ['gpt56--', 'gpt-5.6-luna'],
-    ['gpt6', 'gpt-6-astra'],
-    ['gpt55', 'gpt-5.5'],
-  ])('sends the backend slug for %s', (key, slug) => {
-    expect(codexBackendModelId(MODEL_CONFIGS[key])).toBe(slug);
+    ['openai/gpt-5.6-sol', 'gpt-5.6-sol'],
+    ['openai/gpt-5.6-terra', 'gpt-5.6-terra'],
+    ['openai/gpt-5.6-luna', 'gpt-5.6-luna'],
+    ['openai/gpt-6-astra', 'gpt-6-astra'],
+    ['openai/gpt-5.5-2026-04-23', 'gpt-5.5'],
+  ] as const)('sends the backend slug for %s', (ref, slug) => {
+    expect(codexBackendModelId(MODEL_CONFIGS[ref])).toBe(slug);
   });
 
   it('strips the llm-zoo date pin', () => {
     expect(
       codexBackendModelId({
-        name: 'not-a-registry-id',
-        fullName: 'gpt-5.5-2026-04-23',
+        ref: 'openai/not-a-registry-id',
+        id: 'gpt-5.5-2026-04-23',
       }),
     ).toBe('gpt-5.5');
   });
 
-  // #12873: "Prefer short model names" rewrites `fullName` to `shortName`
+  // #12873: "Prefer short model names" rewrites `id` to `shortName`
   // before the binding reaches here, so the slug must come from the registry.
-  it('ignores a fullName the short-name preference already swapped', () => {
+  it('ignores an id the short-name preference already swapped', () => {
     expect(
-      codexBackendModelId({ ...MODEL_CONFIGS.gpt56, fullName: 'gpt-5.6' }),
+      codexBackendModelId({
+        ...MODEL_CONFIGS['openai/gpt-5.6-sol'],
+        id: 'gpt-5.6',
+      }),
     ).toBe('gpt-5.6-sol');
   });
 });

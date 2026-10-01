@@ -12,7 +12,6 @@ import {
   type ModelOptionData,
   type UsageRoute,
 } from '@shared/schemas';
-import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import { providerDisplayName } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -20,10 +19,11 @@ import {
 } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { selectModel } from '@shared/model/modelSelection';
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
   reasoningEffortOverrides,
-  supportsReasoningLevel,
+  reasoningLevelLabel,
 } from './reasoningLevel';
 import {
   decideModelRoute,
@@ -396,20 +396,22 @@ function routeModels(
     let copilotRoutes: ReadonlyMap<string, CopilotModelRoute> | undefined;
     for (const model of models) {
       if (routed.has(model)) continue;
-      const rawConfig = MODEL_CONFIGS[model];
-      if (!rawConfig) continue;
+      const selected = selectModel(model);
+      if (!selected) continue;
+      const rawConfig = selected.config;
       // A retired row settles without its Copilot preference.
       const prefersCopilot =
         !rawConfig.retired &&
-        (yield* prefersCopilotRoute(model, stores.globalState));
+        (yield* prefersCopilotRoute(rawConfig.ref, stores.globalState));
       const copilotRoute = prefersCopilot
-        ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(model)
+        ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(rawConfig.ref)
         : undefined;
       const route = decideModelRoute(rawConfig, {
         ...ctx.facts,
         validation: false,
         prefersCopilot,
         copilotRoute,
+        mode: selected.request.mode,
       });
       routed.set(model, {
         rawConfig,
@@ -614,26 +616,13 @@ function buildModelOptionData(
   );
   const optionConfig = availability.copilotConfig ?? config;
   const source = modelSource(route, optionConfig);
-  let reasoning: string | undefined;
-  if (optionConfig.capabilities.supportsReasoning) {
-    if (availability.kind === 'copilot-allowed') {
-      reasoning = 'Default (provider managed)';
-    } else {
-      const defaultLevel =
-        REASONING_LEVEL_LABELS[optionConfig.capabilities.reasoningEffort];
-      if (supportsReasoningLevel(optionConfig)) {
-        const effort = ctx.reasoningLevels[model];
-        reasoning =
-          effort === undefined
-            ? `Default (${defaultLevel})`
-            : REASONING_LEVEL_LABELS[effort];
-      } else {
-        reasoning = optionConfig.capabilities.supportsReasoningEffort
-          ? `${defaultLevel} (fixed)`
-          : 'Default';
-      }
-    }
-  }
+  const reasoning =
+    availability.kind === 'copilot-allowed'
+      ? optionConfig.reasoning && 'Default (provider managed)'
+      : reasoningLevelLabel(
+          optionConfig,
+          ctx.reasoningLevels[optionConfig.ref],
+        );
   let routeLabel: string | undefined;
   if (availability.kind === 'copilot-allowed') {
     // The row's identity stays the base model; the badge names the route.

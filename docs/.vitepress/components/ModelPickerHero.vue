@@ -1,21 +1,27 @@
 <script setup>
 // Frameless illustration of the TeXRA model picker: a closed select showing the
-// current value, an open list of monospace model ids, and a tooltip/popover
+// current value, an open list of monospace model references, and a tooltip/popover
 // anchored to the hovered row that renders the context-window + cost estimate
 // the prose promises on hover. It is a figure (statically open), so it stays
 // inline-flowed and inherits the --mk-* scope — mirrors DropdownMenu styling.
 import StatusPill from './StatusPill.vue';
 
 const items = [
-  { id: 'opus55', thinking: true },
+  { id: 'anthropic/claude-fable-5-1', thinking: true },
+  { id: 'anthropic/claude-opus-5-5', thinking: true },
   {
-    id: 'sonnet55',
+    id: 'anthropic/claude-sonnet-5-5',
     thinking: true,
     hovered: true,
-    tip: { context: '1M', input: '$2', output: '$10', mode: 'Thinking' },
+    tip: {
+      context: '1M',
+      input: '$2',
+      output: '$10',
+      mode: 'Thinking · medium',
+    },
   },
-  { id: 'haiku45T', thinking: true },
-  { id: 'haiku45', thinking: false },
+  { id: 'anthropic/claude-haiku-4-5-20251001', thinking: true },
+  { id: 'openai/gpt-6.1-sol', thinking: true },
 ];
 </script>
 
@@ -24,7 +30,7 @@ const items = [
     <span class="mp-label">Model</span>
     <div class="mp-control">
       <wa-icon class="mp-cv-ic" library="texra" name="cpu"></wa-icon>
-      <span class="mp-value">sonnet55</span>
+      <span class="mp-value">anthropic/claude-sonnet-5-5</span>
       <wa-icon class="mp-caret" library="texra" name="chevron-down"></wa-icon>
     </div>
     <div class="mp-menu">
@@ -73,7 +79,7 @@ const items = [
 <style scoped>
 .mp {
   margin: var(--mk-space-16) 0;
-  max-width: 360px;
+  max-width: 400px;
   font-family: var(--vp-font-family-base);
 }
 .mp-label {
@@ -134,6 +140,7 @@ const items = [
   font-family: var(--vp-font-family-mono);
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .mp-think {
   flex-shrink: 0;

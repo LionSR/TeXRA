@@ -315,7 +315,7 @@ function publishRun(
     config: AgentConfigSchema.parse({
       agent,
       agentCategory: overrides.agentCategory ?? AgentCategory.Workflow,
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
       inputFiles: overrides.inputFiles ?? ['paper.tex'],
       contextFiles: [],
       mediaFiles: [],

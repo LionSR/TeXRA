@@ -61,7 +61,7 @@ import MockupFrame from './MockupFrame.vue';
               ><wa-icon library="texra" name="robot"></wa-icon
             ></span>
             <div class="select">
-              <span class="s-val">sonnet55</span>
+              <span class="s-val">anthropic/claude-sonnet-5-5</span>
               <wa-icon
                 class="s-caret"
                 library="texra"

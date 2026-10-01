@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Models are named by their provider's own model ID.** Settings, agent
+  files, `--model` and delegation now take names like
+  `anthropic/claude-opus-5-5` or `openai/gpt-6.1-sol`, optionally with an
+  effort: `anthropic/claude-opus-5-5@high`, or `@none` to turn thinking off
+  where the model allows it. The old short names (`opus55`, `sonnet5T`) are
+  still understood when you type them. Thinking and non-thinking versions of
+  a model are one entry now; saved per-model reasoning levels start fresh.
+- **Reasoning effort defaults to medium** for every model, including Claude
+  Code and Codex subagents, unless you or the agent choose another level. A
+  level a model does not offer is replaced by the nearest one it does, and
+  the run log says so.
 - **History and settings reset once with this update, and later updates
   keep them.** The first time this build runs, session history, saved
   settings, remembered desktop projects, open inquiry threads, the
@@ -222,6 +233,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
+  setting picks any model the Codex backend serves (default GPT-6.1 Sol).
+- **OpenAI fast processing** (`model.openaiFastTier` in `.texra/config.json`)
+  sends OpenAI requests on the fast tier where a model offers it, and run
+  costs use the fast-tier prices.
 - **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
   (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
   $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats

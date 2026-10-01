@@ -62,7 +62,7 @@ const ROOT_RUN = 'root-run' as RunId;
 const CHILD_RUN = 'c41dc41dc41d' as RunId;
 const SESSION_META = {
   agent: 'research',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   modelSource: 'builtin-default',
   cwd: '/tmp/project',
   apiMode: 'personal',
@@ -1040,12 +1040,12 @@ describe('CLI conversation transcript', () => {
       identityLine({
         ...SESSION_META,
         agent: 'orchestrator',
-        model: 'gpt56-',
+        model: 'openai/gpt-5.6-terra',
         teamName: 'Physicist',
       }),
     ).toBe('team: Physicist · root: orchestrator · model: GPT-5.6 Terra');
     expect(identityLine(SESSION_META)).toBe(
-      'agent: research · model: DeepSeek V4 Flash (Thinking)',
+      'agent: research · model: DeepSeek V4 Flash',
     );
   });
 

@@ -3,7 +3,6 @@
  * model boundary: the rows that record it are appended by the one fiber that
  * holds the run's state.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, SynchronizedRef } from 'effect';
 
 import {
@@ -13,6 +12,7 @@ import {
 import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
+import { selectModel } from '@shared/model/modelSelection';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
@@ -44,15 +44,16 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (model === null) return state;
     const current = yield* SynchronizedRef.get(run.model);
     if (current.modelId === model) return state;
-    const nextConfig = MODEL_CONFIGS[model];
-    if (!nextConfig) {
+    const selected = selectModel(model);
+    if (!selected) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
     let switched = state;
     yield* run.swapModel(() =>
       Effect.gen(function* () {
         const next = yield* bindModel({
-          config: nextConfig,
+          modelId: model,
+          config: selected.config,
           stores: run.stores,
           compatibilityKey: current.compatibilityKey,
           declinedRoutes: state.declinedRoutes,
@@ -101,11 +102,12 @@ export function modelSwitchPort(
   )(function* (model: string) {
     const current = SynchronizedRef.getUnsafe(run.model);
     if (current.modelId === model) return undefined;
-    const nextConfig = MODEL_CONFIGS[model];
-    if (!nextConfig) return `Model ${model} is not registered`;
-    const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
-      Effect.provideService(LanguageModel, languageModel),
-    );
+    const selected = selectModel(model);
+    if (!selected) return `Model ${model} is not registered`;
+    const nextConfig = selected.config;
+    const route = yield* resolveModelRoute(run.stores, nextConfig, {
+      mode: selected.request.mode,
+    }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextKey = yield* routeCompatibilityKey(nextConfig, route);
     if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
     return current.compatibilityKey === nextKey

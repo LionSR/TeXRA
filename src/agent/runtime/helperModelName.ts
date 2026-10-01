@@ -3,6 +3,7 @@ import { getEnabledModels } from '@model/computeModelOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { modelRefOf } from '@shared/model/modelSelection';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
@@ -23,6 +24,8 @@ export function getHelperModelName(stores: SettingsStores) {
     )).trim();
     if (configured === DEFAULT_HELPER_MODEL) return configured;
     const enabled = yield* getEnabledModels(stores.globalState);
-    return enabled.includes(configured) ? configured : DEFAULT_HELPER_MODEL;
+    return enabled.includes(modelRefOf(configured) ?? configured)
+      ? configured
+      : DEFAULT_HELPER_MODEL;
   });
 }

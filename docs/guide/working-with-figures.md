@@ -18,7 +18,7 @@ pull figures out of your documents with the built-in extraction tools.
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
 1. Select the `polish` agent from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `gpt61-`, `sonnet55`, or `gemini31p`.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-3.1-pro-preview`.
 3. Select your figure in the **Media** (<wa-icon library="texra" name="file-media"></wa-icon>) section.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).

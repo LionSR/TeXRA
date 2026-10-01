@@ -188,7 +188,7 @@ describe('CLI context config defaults', () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({
         unknown: true,
-        'texra.chat': { other: true, model: 'deepseekT' },
+        'texra.chat': { other: true, model: 'deepseek/deepseek-v4-flash' },
       }),
     );
 
@@ -203,7 +203,7 @@ describe('CLI context config defaults', () => {
     // The section itself still resolves: an unknown member is a diagnostic,
     // not a reason to drop the keys beside it.
     expect(context.config.get('texra.chat')).toMatchObject({
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
     });
   });
 
@@ -233,9 +233,12 @@ describe('CLI context config defaults', () => {
       JSON.stringify({
         'texra.chatgptCodex.preferSubscription': true,
         'texra.agent': 'generic',
-        'texra.model': 'gpt55',
-        'texra.chat': { agent: 'chat', model: 'deepseekT' },
-        'texra.run': { agent: 'criticize', model: 'sonnet46T' },
+        'texra.model': 'openai/gpt-5.5-2026-04-23',
+        'texra.chat': { agent: 'chat', model: 'deepseek/deepseek-v4-flash' },
+        'texra.run': {
+          agent: 'criticize',
+          model: 'anthropic/claude-sonnet-4-6',
+        },
       }),
     );
 
@@ -248,7 +251,7 @@ describe('CLI context config defaults', () => {
     expect(context.configWarnings).toEqual([]);
     expect(context.config.get('texra.run')).toEqual({
       agent: 'criticize',
-      model: 'sonnet46T',
+      model: 'anthropic/claude-sonnet-4-6',
     });
   });
 

@@ -248,7 +248,7 @@ export class HostDraftRequests {
       const postStop = Effect.gen(function* () {
         const credential = yield* resolveRouteCredential(
           take.session.roots,
-          MODEL_CONFIGS['gpt4o'],
+          MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
           { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
           secrets,
         ).pipe(
