@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 import { fetch as undiciFetch } from 'undici';
 
@@ -16,7 +16,24 @@ vi.mock('undici', async (importOriginal) => {
   return { ...actual, fetch: vi.fn(actual.fetch) };
 });
 
+// The dispatcher reads the proxy environment once, so clear what the shell
+// may export before the first fetch; a test that wants a proxy stubs its own.
+const PROXY_ENV = [
+  'http_proxy',
+  'HTTP_PROXY',
+  'https_proxy',
+  'HTTPS_PROXY',
+  'no_proxy',
+  'NO_PROXY',
+];
+function clearProxyEnv() {
+  for (const name of PROXY_ENV) vi.stubEnv(name, undefined);
+}
+
 describe('WebFetchTool', () => {
+  beforeAll(clearProxyEnv);
+  afterAll(() => vi.unstubAllEnvs());
+
   it.effect.each([
     // Loopback and RFC 1918 private ranges.
     { url: 'http://127.0.0.1/', name: 'IPv4 loopback' },
@@ -83,6 +100,6 @@ describe('WebFetchTool', () => {
 
       expect(result).toMatchObject({ status: 'error' });
       expect(result.error).toMatch(/cannot fetch/i);
-    }).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs()))),
+    }).pipe(Effect.ensuring(Effect.sync(clearProxyEnv))),
   );
 });
