@@ -1,6 +1,8 @@
 // @ts-check
 import * as esbuild from 'esbuild';
 
+import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
+
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
@@ -41,6 +43,7 @@ const extensionConfig = {
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
     'import.meta.url': 'importMetaUrl',
   },
+  plugins: [stubInternalValidationModel],
 };
 
 async function main() {
