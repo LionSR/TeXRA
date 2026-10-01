@@ -643,12 +643,26 @@ describe('the parked golden run', () => {
       const resumed = yield* Effect.forkChild(
         withProcessServices(testRuntime(), resumeRun(APPROVAL, { session })),
       );
+      // The resume's own activation: the test's killed owner shares this
+      // process's pid, so the view can call the run this process's before
+      // the resume has taken it, and only an answer after it is the resumed
+      // run's to read.
+      const activated = () =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = 'run.activate'`,
+            )
+            .get(APPROVAL),
+        )?.n === 2;
       // Re-presented: the run waits on its user, held here, on that request.
       yield* SubscriptionRef.changes(session.view).pipe(
         Stream.takeUntil(
           (view) =>
             view.runs.get(APPROVAL)?.approval === 'own' &&
-            view.requests.some((request) => request.requestId === requestId),
+            view.requests.some((request) => request.requestId === requestId) &&
+            activated(),
         ),
         Stream.runDrain,
       );
