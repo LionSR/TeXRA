@@ -12,10 +12,12 @@
 //    all.
 // 4. The wall deadline does not end a script that waits on the host forever.
 // 5. A malformed worker message is trusted instead of failing its decode.
+// 6. A call that dies leaves the script waiting out its deadline (review of
+//    #13601).
 
 import { it } from '@effect/vitest';
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Clock, Deferred, Effect, Fiber, Layer } from 'effect';
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
 import * as Worker from 'effect/unstable/workers/Worker';
 import { expect } from 'vitest';
 
@@ -163,6 +165,22 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         expect(elapsed).toBeLessThan(2_000);
         expect(thread.threadId).toBe(-1);
       }),
+  );
+
+  it.effect('a call that dies ends the run with its defect at once', () =>
+    Effect.gen(function* () {
+      const sandbox = yield* CodeSandbox;
+      // A BigInt does not serialize, so delivering this settlement dies.
+      const exit = yield* sandbox
+        .run({
+          source: 'return await tools.big({});',
+          tools: ['big'],
+          timeout: '1 minute',
+          call: () => Effect.succeed({ _tag: 'Value', value: 1n }),
+        })
+        .pipe(Effect.timeout('5 seconds'), Effect.exit);
+      expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
+    }),
   );
 
   it.effect('a loop that never awaits trips the CPU budget', () =>

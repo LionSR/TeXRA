@@ -7,10 +7,12 @@ import { Worker as WorkerThread } from 'node:worker_threads';
 import quickJsWasm from '@jitl/quickjs-wasmfile-release-sync/wasm';
 import codeSandboxWorkerSource from 'virtual:code-sandbox-worker';
 import {
+  Cause,
   Context,
   Data,
   Duration,
   Effect,
+  Exit,
   FiberSet,
   Layer,
   Queue,
@@ -262,13 +264,19 @@ const make = Effect.gen(function* () {
           open += 1;
           yield* FiberSet.run(
             calls,
-            request
-              .call(op)
-              .pipe(
-                Effect.flatMap((settlement) =>
-                  Queue.offer(settled, toSettleMessage(op.seq, settlement)),
-                ),
+            request.call(op).pipe(
+              Effect.flatMap((settlement) =>
+                Queue.offer(settled, toSettleMessage(op.seq, settlement)),
               ),
+              // A call that dies (its value will not serialize, say) fails
+              // the queue the loop takes from, so the run ends with that
+              // defect rather than waiting out its deadline.
+              Effect.onExit((exit) =>
+                Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+                  ? Queue.failCause(settled, exit.cause)
+                  : Effect.void,
+              ),
+            ),
           );
         }
         if (report.end)
@@ -284,12 +292,7 @@ const make = Effect.gen(function* () {
               'The script awaits a promise that no tool call will settle.',
           });
         }
-        // A call that dies (its value will not serialize, say) ends the run
-        // with that defect rather than leaving the script to its deadline.
-        const next = yield* Effect.raceFirst(
-          Queue.take(settled),
-          Effect.andThen(FiberSet.join(calls), Effect.never),
-        );
+        const next = yield* Queue.take(settled);
         open -= 1;
         yield* worker
           .send(next)
