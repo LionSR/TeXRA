@@ -153,7 +153,7 @@ function agentProposal(
     requestId: `proposal-${(proposalOrdinal += 1)}`,
     runId: ROOT_RUN,
     agent: 'review',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     instruction: 'Please check this proof.',
     memories: [],
   };

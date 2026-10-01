@@ -52,7 +52,7 @@ async function appendLogEntry(runId: RunId, text: string): Promise<void> {
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'orchestrator',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
     agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
@@ -110,7 +110,10 @@ describe('assembleTrace', () => {
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {
       const runId = 'aa11bb22cc33' as RunId;
-      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+      const runConfigRecord = config({
+        agent: 'review',
+        model: 'anthropic/claude-sonnet-4-6',
+      });
 
       yield* Effect.promise(() =>
         writeRun(runId, { outcome: 'completed' }, runConfigRecord),
@@ -135,7 +138,10 @@ describe('assembleTrace', () => {
       const { trace, record } = unwrapOk(yield* assembleTrace(runId, session));
 
       expect(trace.runId).toBe(runId);
-      expect(record).toMatchObject({ agent: 'review', model: 'sonnet46T' });
+      expect(record).toMatchObject({
+        agent: 'review',
+        model: 'anthropic/claude-sonnet-4-6',
+      });
       // The creation row is authored, not copied: an exported file has no
       // producer, no siblings and no writable host.
       expect(trace.events[0]).toMatchObject({

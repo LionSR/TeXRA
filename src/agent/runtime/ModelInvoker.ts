@@ -16,7 +16,6 @@
  * restart; a consumed permit never buys a second billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
@@ -111,7 +110,7 @@ import {
   positionRow,
 } from './loop/rows';
 import type { RunCell } from './loop/runProgram';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * Credential source a retry decision picked: the account the run is already
@@ -271,7 +270,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           {
             backgroundCapable: bound.backgroundCapable,
             protocol: bound.origin.protocol,
-            modelName: bound.config.name,
+            modelName: bound.config.id,
             agentCategory: run.config.agentCategory,
           },
           session.roots,
@@ -750,13 +749,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             current !== failed
               ? Effect.succeed(current)
               : bindModel({
+                  modelId: failed.modelId,
                   // A personal-key retry leaves the failed route's overlay
                   // behind (subscription window, prices, PDF admission, a
                   // Kimi coding endpoint) and binds the catalog model.
-                  config:
-                    selection === 'personal'
-                      ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
-                      : failed.config,
+                  config: selection === 'personal' ? undefined : failed.config,
                   stores: run.stores,
                   compatibilityKey: failed.compatibilityKey,
                   declinedRoutes,

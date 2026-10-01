@@ -44,7 +44,7 @@ import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'subscriptionProviders';
 

@@ -15,7 +15,7 @@ import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { LiveTools } from '@tools/liveTools';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * A plugin's process-lifetime services (`PLUGIN_PROCESS_LAYERS`): built

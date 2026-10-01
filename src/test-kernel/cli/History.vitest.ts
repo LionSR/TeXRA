@@ -126,7 +126,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const config = AgentConfigSchema.parse({
   agent: 'correct',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   instruction: 'Polish the introduction.',
   agentCategory: 'workflow',
   inputFiles: ['chapters/intro.tex'],
@@ -434,7 +434,7 @@ describe('CLI history runtime', () => {
     const entries = await historyEntries();
 
     expect(entries[0]?.agent).toBe('engineer');
-    expect(entries[0]?.teamPresetId).toBe('software-engineer');
+    expect(entries[0]?.teamId).toBe('software-engineer');
     expect(formatCliHistoryText(entries)).toBe(
       'bea111\t2026-05-18T10:00:00.000Z\tteam:software-engineer\tresumable\t-',
     );
@@ -781,7 +781,7 @@ describe('CLI history runtime', () => {
               description: 'Polish pass',
               config: {
                 agent: 'correct',
-                model: 'deepseekT',
+                model: 'deepseek/deepseek-v4-flash',
                 instruction: 'Polish the introduction.',
                 inputFiles: ['chapters/intro.tex'],
                 mediaFiles: [],

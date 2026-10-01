@@ -79,7 +79,7 @@ vi.mock('@cli/runtime/runModel', () => ({
     renderRunProgress: false,
   })),
   selectCliRunModel: vi.fn((_context: CliContext, model: string | undefined) =>
-    Effect.succeed(model ?? 'deepseekT'),
+    Effect.succeed(model ?? 'deepseek/deepseek-v4-flash'),
   ),
 }));
 
@@ -159,10 +159,10 @@ const preset = (
 ) =>
   Effect.provide(
     nativeRun(context, {
-      preset: 'mathematician',
+      team: 'mathematician',
       inputFiles: [],
       contextFiles: [],
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
       ...init,
     }),
     fakeProcessServices(),
@@ -195,7 +195,7 @@ async function expectBlockedLaunch(options: {
   expect(mocks.formatCliTeamLaunchBlockMessage).toHaveBeenCalledWith(
     options.plan,
     {
-      requestedPreset: 'mathematician',
+      requestedTeam: 'mathematician',
       followUpAdvice: options.followUpAdvice,
     },
   );

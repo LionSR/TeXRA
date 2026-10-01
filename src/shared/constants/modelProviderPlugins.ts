@@ -106,7 +106,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
     compatibilityKey: 'OpenAI',
-    setupModel: 'gpt61-',
+    setupModel: 'openai/gpt-6.1-sol',
     modelSource: true,
   },
   {
@@ -117,7 +117,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
     baseUrl: 'https://api.anthropic.com',
     compatibilityKey: 'Anthropic',
-    setupModel: 'opus55',
+    setupModel: 'anthropic/claude-opus-5-5',
     modelSource: true,
   },
   {
@@ -128,7 +128,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
     baseUrl: 'https://generativelanguage.googleapis.com',
     compatibilityKey: 'GoogleInteractions',
-    setupModel: 'gemini31p',
+    setupModel: 'google/gemini-3.1-pro-preview',
     modelSource: true,
   },
   {
@@ -139,7 +139,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_XAI,
     baseUrl: 'https://api.x.ai/v1',
     compatibilityKey: 'XAI',
-    setupModel: 'grok47',
+    setupModel: 'xai/grok-4.7',
     modelSource: true,
   },
   {
@@ -150,7 +150,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
     baseUrl: 'https://api.deepseek.com',
     compatibilityKey: 'DeepSeek',
-    setupModel: 'deepseekproT',
+    setupModel: 'deepseek/deepseek-v4-pro',
     modelSource: true,
   },
   {
@@ -183,7 +183,7 @@ const MANIFEST = [
       international: 'https://api.moonshot.ai/v1',
     },
     compatibilityKey: 'Kimi',
-    setupModel: 'kimi3',
+    setupModel: 'moonshot/kimi-k3',
     modelSource: true,
   },
   {
@@ -208,7 +208,7 @@ const MANIFEST = [
       international: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     },
     compatibilityKey: 'DashScope',
-    setupModel: 'qwenplus',
+    setupModel: 'dashscope/qwen-plus',
     modelSource: true,
   },
   {
@@ -236,7 +236,7 @@ const MANIFEST = [
       international: 'https://api.minimax.io/v1',
     },
     compatibilityKey: 'MiniMax',
-    setupModel: 'minimaxM3',
+    setupModel: 'minimax/MiniMax-M3',
     modelSource: true,
   },
   {
@@ -266,7 +266,7 @@ const MANIFEST = [
       international: 'https://api.z.ai/api/v1',
     },
     compatibilityKey: 'GLM',
-    setupModel: 'glm53',
+    setupModel: 'glm/glm-5.3',
     modelSource: true,
   },
   {
@@ -277,7 +277,7 @@ const MANIFEST = [
     endpointKey: GlobalStateKey.ENDPOINT_META,
     baseUrl: 'https://api.meta.ai/v1',
     compatibilityKey: 'Meta',
-    setupModel: 'musespark13',
+    setupModel: 'meta/muse-spark-1.3',
     modelSource: true,
   },
   {
@@ -285,7 +285,7 @@ const MANIFEST = [
     displayName: 'OpenRouter',
     keyUrl: 'https://openrouter.ai/keys',
     apiKey: true,
-    setupModel: 'sonnet55',
+    setupModel: 'anthropic/claude-sonnet-5-5',
   },
   {
     id: 'kimiCode',
@@ -293,7 +293,7 @@ const MANIFEST = [
     keyUrl: 'https://www.kimi.com/code/console',
     apiKey: true,
     apiKeyEnvName: 'KIMI_CODE_API_KEY',
-    setupModel: 'kimi3',
+    setupModel: 'moonshot/kimi-k3',
     modelSource: true,
   },
   {

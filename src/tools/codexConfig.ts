@@ -1,75 +1,139 @@
 import { Effect } from 'effect';
+import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
 // Local imports - agent config
 import { withLogChannel } from '@logger/effectLog';
+import { codexBackendModelId } from '@model/providerCapabilities';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { CodexReasoningEffort } from '@shared/schemas';
+import {
+  isCodexModel,
+  type AgentCliEffort,
+  type ToolError,
+} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import {
+  agentCliReasoning,
+  resolveAgentCliModel,
+  selectAgentCliModel,
+  type AgentCliModelRule,
+} from './agentCliModel';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
 
-// ============================================================================
-// Model config — the Codex CLI uses short model names, not versioned API IDs
-// ============================================================================
-
-/** Short model name passed to the Codex CLI via --model. */
-export const CODEX_CLI_MODEL = 'gpt-5.5';
-
 const CHANNEL = 'codexConfig';
-const codexXhighSupportByBinary = new Map<string, boolean>();
-const codexXhighProbeLanes = new Map<string, PerKeyLane>();
 
-// ============================================================================
-// Reasoning effort
-// ============================================================================
-
-/**
- * Older Codex CLI runtimes reject `xhigh` even though it is present in the SDK
- * type. Preserve the requested level only after the resolved binary has been
- * checked; otherwise cap it to `high`.
- */
-type CodexCliReasoningEffort = Extract<
-  ModelReasoningEffort,
-  'low' | 'medium' | 'high' | 'xhigh'
+/** Compile-time guard: every agent CLI effort is a level the Codex SDK takes. */
+type _AssertTrue<T extends true> = T;
+type _CodexEffortsAccepted = _AssertTrue<
+  `${AgentCliEffort}` extends ModelReasoningEffort ? true : false
 >;
 
-export function toCodexCliReasoningEffort(
-  effort: CodexReasoningEffort,
-  supportsXhigh = false,
-): CodexCliReasoningEffort {
-  return effort === 'xhigh' && !supportsXhigh ? 'high' : effort;
+export const CODEX_MODEL_RULE: AgentCliModelRule = {
+  cli: 'Codex',
+  eligible: isCodexModel,
+  requirement: 'a non-retired OpenAI model served by the Codex backend',
+};
+
+// ============================================================================
+// Model and effort
+// ============================================================================
+
+/** What one Codex thread runs: the backend slug and the effort to send. */
+export interface CodexRun {
+  /** The model's llm-zoo reference, the run's model label. */
+  readonly ref: string;
+  /** The Codex backend's model slug (`--model`). */
+  readonly slug: string;
+  readonly effort: AgentCliEffort | undefined;
+  /** Why the effort differs from the one asked for, for the run's log. */
+  readonly note: string | undefined;
 }
 
-/** The persisted effort, uncapped: a requested `xhigh` goes through
- *  `toCodexCliReasoningEffort` with the binary probe's answer. */
-export const getCodexCliReasoningEffort = (
+const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
+
+/**
+ * The route ceiling when the installed CLI's own levels are unknown: every
+ * level up to `high`, which every Codex runtime accepts. Older runtimes
+ * reject `xhigh` although the SDK type lists it.
+ */
+const UNPROBED_ROUTE_EFFORTS: readonly ReasoningEffort[] = EFFORT_SCALE.filter(
+  (effort) => rank(effort) <= rank(ReasoningEffort.HIGH),
+);
+
+/**
+ * Resolve the configured Codex model and effort through the reasoning
+ * policy. A level above `high` is kept only when the installed CLI
+ * (`binaryPath`) reports it for the model's slug, so other levels never wait
+ * on a slow or hung Codex binary.
+ */
+export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
   stores: SettingsStores,
-): Effect.Effect<CodexReasoningEffort, StateReadFailed> =>
-  readSettingFrom<CodexReasoningEffort>(
+  binaryPath: string | undefined,
+): Effect.fn.Return<
+  CodexRun,
+  ToolError | StateReadFailed,
+  ChildProcessSpawner
+> {
+  const modelString = yield* readSettingFrom<string>(
+    stores,
+    WorkspaceStateKey.CODEX_MODEL,
+  );
+  const userEffort = yield* readSettingFrom<AgentCliEffort>(
     stores,
     WorkspaceStateKey.CODEX_REASONING_EFFORT,
   );
+  const selection = yield* resolveAgentCliModel(() =>
+    selectAgentCliModel(modelString, CODEX_MODEL_RULE),
+  );
+  const slug = codexBackendModelId(selection.config);
+  const uncapped = yield* resolveAgentCliModel(() =>
+    agentCliReasoning(selection, undefined, { userEffort }),
+  );
+  const { effort } = uncapped.choice;
+  const resolved =
+    effort === null || rank(effort) <= rank(ReasoningEffort.HIGH)
+      ? uncapped
+      : yield* codexRouteEfforts(binaryPath, slug).pipe(
+          Effect.flatMap((routeEfforts) =>
+            resolveAgentCliModel(() =>
+              agentCliReasoning(selection, undefined, {
+                userEffort,
+                routeEfforts,
+              }),
+            ),
+          ),
+        );
+  return {
+    ref: selection.config.ref,
+    slug,
+    effort: resolved.effort,
+    note: resolved.choice.note,
+  };
+});
 
 // ============================================================================
-// Extra High capability probe
+// Reasoning-level probe
 //
-// `xhigh` is a level the resolved Codex runtime either reports or does not,
-// so the effort above is only allowed to keep it once this probe says so.
+// The installed Codex runtime reports the levels it serves for each model
+// slug (`codex debug models --bundled`); those are the route's ceiling.
 // ============================================================================
+
+const codexRouteEffortsByKey = new Map<string, readonly ReasoningEffort[]>();
+const codexRouteEffortLanes = new Map<string, PerKeyLane>();
 
 type BundledCodexModel = {
   slug?: string;
   supported_reasoning_levels?: Array<{ effort?: string }>;
 };
 
-/** Just the shape `catalogSupportsXhigh` depends on — a `models` array. Model
+/** Just the shape `catalogEfforts` depends on — a `models` array. Model
  *  entries stay `unknown` here and are duck-typed below, so one malformed
  *  entry elsewhere in the catalog can't take down a lookup for a model it
  *  doesn't concern. */
@@ -77,10 +141,17 @@ const BundledCodexCatalogSchema = z.object({
   models: z.array(z.unknown()),
 });
 
-const catalogSupportsXhigh = (
+const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
+  EFFORT_SCALE.includes(value as ReasoningEffort);
+
+/**
+ * The levels the catalog lists for `slug`: `undefined` when the catalog is
+ * unreadable, the unprobed ceiling when the slug is absent or lists none.
+ */
+const catalogEfforts = (
   stdout: string,
-  model: string,
-): Effect.Effect<boolean | undefined> =>
+  slug: string,
+): Effect.Effect<readonly ReasoningEffort[] | undefined> =>
   Effect.try({
     try: (): unknown => JSON.parse(stdout),
     catch: () => undefined,
@@ -92,20 +163,22 @@ const catalogSupportsXhigh = (
         (item): item is BundledCodexModel =>
           typeof item === 'object' &&
           item != null &&
-          (item as BundledCodexModel).slug === model,
+          (item as BundledCodexModel).slug === slug,
       );
-      if (entry == null) return false;
-      return (entry.supported_reasoning_levels ?? []).some(
-        (level) => level.effort === 'xhigh',
-      );
+      const efforts = (entry?.supported_reasoning_levels ?? [])
+        .map((level) => level.effort)
+        .filter(isReasoningEffort);
+      return efforts.length > 0 ? efforts : UNPROBED_ROUTE_EFFORTS;
     }),
     Effect.catch(() => Effect.succeed(undefined)),
   );
 
-const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
+const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
   binaryPath: string,
-): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-  const cached = codexXhighSupportByBinary.get(binaryPath);
+  slug: string,
+  key: string,
+): Effect.fn.Return<readonly ReasoningEffort[], never, ChildProcessSpawner> {
+  const cached = codexRouteEffortsByKey.get(key);
   if (cached != null) return cached;
 
   const result = yield* executeCommand(
@@ -116,11 +189,12 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   );
   if (result.timedOut || result.exitCode === 127) {
     yield* Effect.logWarning(
-      'Codex xhigh capability probe failed; not caching the result',
+      'Codex reasoning-level probe failed; not caching the result',
     ).pipe(
       Effect.annotateLogs({
         data: {
           binaryPath,
+          slug,
           timedOut: result.timedOut,
           exitCode: result.exitCode,
           stderr: result.stderr,
@@ -128,42 +202,42 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
       }),
       withLogChannel(CHANNEL),
     );
-    return false;
+    return UNPROBED_ROUTE_EFFORTS;
   }
   if (!result.success) {
-    codexXhighSupportByBinary.set(binaryPath, false);
-    return false;
+    codexRouteEffortsByKey.set(key, UNPROBED_ROUTE_EFFORTS);
+    return UNPROBED_ROUTE_EFFORTS;
   }
-  const supported = yield* catalogSupportsXhigh(result.stdout, CODEX_CLI_MODEL);
-  if (supported == null) {
+  const efforts = yield* catalogEfforts(result.stdout, slug);
+  if (efforts == null) {
     yield* Effect.logWarning(
-      'Codex xhigh capability probe returned unreadable catalog',
+      'Codex reasoning-level probe returned unreadable catalog',
     ).pipe(
-      Effect.annotateLogs({ data: { binaryPath } }),
+      Effect.annotateLogs({ data: { binaryPath, slug } }),
       withLogChannel(CHANNEL),
     );
-    return false;
+    return UNPROBED_ROUTE_EFFORTS;
   }
-  codexXhighSupportByBinary.set(binaryPath, supported);
-  return supported;
+  codexRouteEffortsByKey.set(key, efforts);
+  return efforts;
 });
 
 /**
- * Probe whether the resolved Codex runtime reports `xhigh` for the pinned
- * CLI model. Timeouts and spawn failures are not cached so a later call
- * retries instead of permanently capping Extra High to High.
+ * The reasoning levels the resolved Codex runtime serves for `slug`, capped
+ * at `high` when unknown. Timeouts and spawn failures are not cached so a
+ * later call retries instead of permanently capping the level.
  *
- * One lane per binary path: concurrent launches of the same binary queue
- * behind the first probe and read its cached answer instead of each spawning
- * their own five-second `codex debug models`.
+ * One lane per binary and slug: concurrent launches queue behind the first
+ * probe and read its cached answer instead of each spawning their own
+ * five-second `codex debug models`.
  */
-export const codexBinarySupportsXhigh = Effect.fn(
-  'codexConfig.codexBinarySupportsXhigh',
-)(function* (
+const codexRouteEfforts = Effect.fn('codexConfig.codexRouteEfforts')(function* (
   binaryPath: string | undefined,
-): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-  if (!binaryPath) return false;
-  return yield* probeXhighSupport(binaryPath).pipe(
-    withPerKeyLane(codexXhighProbeLanes, binaryPath),
+  slug: string,
+): Effect.fn.Return<readonly ReasoningEffort[], never, ChildProcessSpawner> {
+  if (!binaryPath) return UNPROBED_ROUTE_EFFORTS;
+  const key = `${binaryPath}\0${slug}`;
+  return yield* probeRouteEfforts(binaryPath, slug, key).pipe(
+    withPerKeyLane(codexRouteEffortLanes, key),
   );
 });

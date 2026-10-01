@@ -11,99 +11,102 @@ TeXRA connects directly to frontier reasoning models from leading providers—in
 
 <ModelPickerHero />
 
-<p class="hero-caption">The model picker: monospace model ids with a <code>T</code> badge on thinking variants, and a hover popover showing context window and per-1M token pricing.</p>
+<p class="hero-caption">The model picker: one entry per model, named by its model reference, with a <code>T</code> badge on models that think, and a hover popover showing context window and per-1M token pricing.</p>
 
-**Model ID suffixes:**
+**Model references.** A model is named `provider/id`, where `id` is the provider's own API model ID: `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`. Wherever you type a model (an agent's `model`, `--model`, or `.texra/config.json`), you can add:
 
-- `T` = thinking/reasoning mode enabled (shows chain-of-thought)
-- `-` = lighter, faster variant
-- Numbers indicate the version (for example, `45` = 4.5, `25` = 2.5)
+- `@effort` to set the reasoning effort: `@low`, `@medium`, `@high`, `@xhigh`, or `@max` (for example `anthropic/claude-opus-5-5@high`)
+- `@none` to turn thinking off, on models that allow it (for example `deepseek/deepseek-v4-pro@none`)
+- `+pro` to run an OpenAI model in pro reasoning mode (for example `openai/gpt-5.6-sol+pro`)
+
+Thinking and non-thinking versions of a model are one entry, not separate models. Without an `@effort`, TeXRA uses the level you last saved for that model, otherwise **medium**, for every model. If a model does not offer the level you ask for, TeXRA uses the nearest level it does offer (a tie goes to the higher level, so `medium` on a model with only `low`, `high`, and `max` runs at `high`), and the run log says so. Old short names such as `opus55` or `sonnet5T` are still accepted when you type them, but the reference is the canonical name.
 
 ## Anthropic models
 
-| Model ID   | Use Case                                      | Cost | Speed  |
-| :--------- | :-------------------------------------------- | :--- | :----- |
-| `fable51`  | Most capable, always-on adaptive thinking     | $$$$ | Slow   |
-| `opus55`   | Long-running agentic work, always-on thinking | $$$  | Medium |
-| `sonnet55` | All-rounder, always-on adaptive thinking      | $$$  | Medium |
-| `haiku45T` | Fast with reasoning                           | $$   | Fast   |
-| `haiku45`  | Fast responses                                | $$   | Fast   |
+| Model                                 | Use Case                                  | Cost | Speed  |
+| :------------------------------------ | :---------------------------------------- | :--- | :----- |
+| `anthropic/claude-fable-5-1`          | Most capable, always-on adaptive thinking | $$$$ | Slow   |
+| `anthropic/claude-opus-5-5`           | Long-running agentic work                 | $$$  | Medium |
+| `anthropic/claude-sonnet-5-5`         | All-rounder, always-on adaptive thinking  | $$$  | Medium |
+| `anthropic/claude-haiku-4-5-20251001` | Fast; `@none` for fastest responses       | $$   | Fast   |
 
 Fable 5.1, Opus 5.5, and Sonnet 5.5 (and the older Opus 4.6 through Opus 5, Sonnet 4.6, and Sonnet 5) include the full 1M context window at standard pricing, with no opt-in or
 beta header required. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
 
-Claude Fable 5.1 (`fable51`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so there is no separate `T` variant. It supports the full reasoning-effort range up to Extra High and the top Max tier, and is eligible for context compaction in tool-use mode.
+Claude Fable 5.1 (`anthropic/claude-fable-5-1`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so it does not take `@none`. It supports the full reasoning-effort range up to `@xhigh` and the top `@max` tier, and is eligible for context compaction in tool-use mode.
 
-Claude Sonnet 5.5 (`sonnet55`) costs $2 / $10 per 1M tokens with a 1M context window. Thinking is always on (adaptive, default effort High), so there is no separate `T` variant. It supersedes Sonnet 5 (`sonnet5`, `sonnet5T`), which is now deprecated.
+Claude Sonnet 5.5 (`anthropic/claude-sonnet-5-5`) costs $2 / $10 per 1M tokens with a 1M context window. Thinking is always on (adaptive), so it does not take `@none`. It supersedes Sonnet 5 (`anthropic/claude-sonnet-5`), which is now deprecated.
 
-Claude Opus 5.5 (`opus55`) is built for long-running agentic coding and knowledge work at $4 / $20 per 1M tokens, below Opus 5. Like Fable 5.1, thinking is always on, so there is no separate `T` variant. Its default effort is Medium, and it accepts the full range up to Max.
+Claude Opus 5.5 (`anthropic/claude-opus-5-5`) is built for long-running agentic coding and knowledge work at $4 / $20 per 1M tokens, below Opus 5. Like Fable 5.1, thinking is always on, and it accepts the full effort range up to `@max`.
 
-TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `opus55` with Extra High (or the top Max tier) effort for the strongest agentic coding and long-horizon tasks. Opus 5.5 reads dense charts, diagrams, and screenshots more precisely than earlier models. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
+TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `anthropic/claude-opus-5-5` with Extra High (`@xhigh`) or the top Max tier (`@max`) for the strongest agentic coding and long-horizon tasks. Opus 5.5 reads dense charts, diagrams, and screenshots more precisely than earlier models. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
 
 ## OpenAI models
 
-| Model ID    | Use Case                       | Cost | Speed |
-| :---------- | :----------------------------- | :--- | :---- |
-| `gpt6`      | Most capable, 1M context       | $$$$ | Fast  |
-| `gpt61-`    | GPT-6.1 Sol, agentic coding    | $$$  | Fast  |
-| `gpt6--`    | GPT-6 Luna, budget reasoning   | $    | Fast  |
-| `gpt56pro`  | Pro reasoning mode, 1M context | $$$$ | Slow  |
-| `gpt56fast` | GPT-5.6 Sol, fast variant      | $$$$ | Fast  |
-| `gpt56-`    | Lower-cost reasoning           | $$$  | Fast  |
+| Model                  | Use Case                 | Cost | Speed |
+| :--------------------- | :----------------------- | :--- | :---- |
+| `openai/gpt-6-astra`   | Most capable, 1M context | $$$$ | Fast  |
+| `openai/gpt-6.1-sol`   | Agentic coding           | $$$  | Fast  |
+| `openai/gpt-6-luna`    | Budget reasoning         | $    | Fast  |
+| `openai/gpt-5.6-sol`   | Previous flagship        | $$$$ | Fast  |
+| `openai/gpt-5.6-terra` | Lower-cost reasoning     | $$$  | Fast  |
 
-GPT-6 Astra (`gpt6`) is OpenAI's most capable model for the hardest end-to-end work; it is
+GPT-6 Astra (`openai/gpt-6-astra`) is OpenAI's most capable model for the hardest end-to-end work; it is
 available in the API and in Codex for Pro, Enterprise, and Business Premium subscribers, and
-supports reasoning effort up to Max.
+supports reasoning effort up to `@max`.
 Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
 output for the full request.
 
-GPT-6.1 Sol (`gpt61-`) and GPT-6 Luna (`gpt6--`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol) and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). Both take reasoning effort up to Max and use the same long-context pricing as Astra. GPT-6.1 Sol supersedes GPT-6 Sol (`gpt6-`) at the same price with cheaper cached input.
+GPT-6.1 Sol (`openai/gpt-6.1-sol`) and GPT-6 Luna (`openai/gpt-6-luna`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol) and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). Both take reasoning effort up to `@max` and use the same long-context pricing as Astra. GPT-6.1 Sol supersedes GPT-6 Sol (`openai/gpt-6-sol`) at the same price with cheaper cached input.
 
-GPT-6 Sol and Luna supersede GPT-5.6 Sol (`gpt56`) and Luna (`gpt56--`), which are now
-deprecated. TeXRA pins the [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`.
-GPT-5.6 Pro (`gpt56pro`) runs GPT-5.6 Sol in the Responses API's pro reasoning mode, billed at standard token rates
-rather than a premium tier, for the hardest planning and long-horizon tasks. It is hidden by
-default; enable it from Settings → Models → Models when you need it. For one-off hard questions you can
+GPT-6 Sol and Luna supersede GPT-5.6 Sol (`openai/gpt-5.6-sol`) and Luna (`openai/gpt-5.6-luna`); GPT-5.6 Luna is now
+deprecated. The [Codex integration](./agent-integrations.md#openai-codex) runs GPT-6.1 Sol unless you pick another model.
+`openai/gpt-5.6-terra` (Terra) remains a mid-priced option.
+
+**Pro mode.** Add `+pro` to a GPT model (for example `openai/gpt-5.6-sol+pro`) to run it in the Responses API's pro reasoning mode, billed at standard token rates
+rather than a premium tier, for the hardest planning and long-horizon tasks. Pro mode needs a direct OpenAI route; it is refused through OpenRouter. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
-running a full agent turn against the API. `gpt56-` (Terra) remains a mid-priced option. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
+running a full agent turn against the API.
+
+**Fast processing.** Set `"texra.model.openaiFastTier": true` in `.texra/config.json` to send OpenAI requests on OpenAI's fast service tier, for models that offer it. Responses come back faster at a higher per-token price (for example $4 / $20 per 1M tokens for GPT-6.1 Sol), and run costs use the fast-tier prices. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.
 
 GPT-5 reasoning summaries require account verification. Enable them with `texra.model.gpt5ReasoningSummary`.
 
 ## Google models
 
-| Model ID    | Use Case                       | Cost | Speed  |
-| :---------- | :----------------------------- | :--- | :----- |
-| `gemini31p` | Pro with reasoning, 1M context | $$$  | Medium |
-| `gemini38f` | Flash model with 1M context    | $$   | Fast   |
+| Model                           | Use Case                       | Cost | Speed  |
+| :------------------------------ | :----------------------------- | :--- | :----- |
+| `google/gemini-3.1-pro-preview` | Pro with reasoning, 1M context | $$$  | Medium |
+| `google/gemini-3.8-flash`       | Flash model with 1M context    | $$   | Fast   |
 
 ## DeepSeek models
 
-| Model ID       | Use Case                  | Cost | Speed  |
-| :------------- | :------------------------ | :--- | :----- |
-| `deepseek41`   | V4.1 Flash chat mode      | $    | Fast   |
-| `deepseek41T`  | V4.1 Flash with reasoning | $    | Medium |
-| `deepseekpro`  | V4 Pro chat mode          | $    | Medium |
-| `deepseekproT` | V4 Pro with reasoning     | $    | Medium |
+| Model                      | Use Case                          | Cost | Speed  |
+| :------------------------- | :-------------------------------- | :--- | :----- |
+| `deepseek/deepseek-flash`  | V4.1 Flash; `@none` for chat mode | $    | Medium |
+| `deepseek/deepseek-v4-pro` | V4 Pro; `@none` for chat mode     | $    | Medium |
+
+DeepSeek offers `low`, `high`, and `max` effort, so the medium default runs at `high`.
 
 ## Moonshot Kimi models
 
-| Model ID | Use Case                | Cost | Speed  |
-| :------- | :---------------------- | :--- | :----- |
-| `kimi3`  | K3 flagship, 1M context | $$$  | Medium |
+| Model              | Use Case                | Cost | Speed  |
+| :----------------- | :---------------------- | :--- | :----- |
+| `moonshot/kimi-k3` | K3 flagship, 1M context | $$$  | Medium |
 
 ## DashScope Qwen models
 
-| Model ID    | Use Case                    | Cost | Speed  |
-| :---------- | :-------------------------- | :--- | :----- |
-| `qwenplus`  | Hybrid thinking, 1M context | $$   | Medium |
-| `qwenturbo` | Fast with optional thinking | $    | Fast   |
+| Model                         | Use Case                    | Cost | Speed  |
+| :---------------------------- | :-------------------------- | :--- | :----- |
+| `dashscope/qwen-plus`         | Hybrid thinking, 1M context | $$   | Medium |
+| `dashscope/qwen-turbo-latest` | Fast with optional thinking | $    | Fast   |
 
 ## MiniMax models
 
-| Model ID    | Use Case                                       | Cost | Speed  |
-| :---------- | :--------------------------------------------- | :--- | :----- |
-| `minimaxM3` | Flagship with interleaved thinking, 1M context | $    | Medium |
+| Model                | Use Case                                       | Cost | Speed  |
+| :------------------- | :--------------------------------------------- | :--- | :----- |
+| `minimax/MiniMax-M3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
 MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimax.cn) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
 
@@ -113,10 +116,10 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) models
 
-| Model ID    | Use Case                                     | Cost | Speed  |
-| :---------- | :------------------------------------------- | :--- | :----- |
-| `glm53`     | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
-| `glm5turbo` | Fast inference, agent-optimized              | $$$  | Medium |
+| Model             | Use Case                                     | Cost | Speed  |
+| :---------------- | :------------------------------------------- | :--- | :----- |
+| `glm/glm-5.3`     | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
+| `glm/glm-5-turbo` | Fast inference, agent-optimized              | $$$  | Medium |
 
 GLM models support thinking mode (reasoning is shown inline). TeXRA uses the
 Responses API each region serves at `/api/v1`.
@@ -127,12 +130,12 @@ Responses API each region serves at `/api/v1`.
 
 ## Meta (Muse Spark) models
 
-| Model ID      | Use Case                                | Cost | Speed  |
-| :------------ | :-------------------------------------- | :--- | :----- |
-| `musespark13` | Flagship reasoning + vision, 1M context | $$   | Medium |
-| `musespark11` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
+| Model                 | Use Case                                | Cost | Speed  |
+| :-------------------- | :-------------------------------------- | :--- | :----- |
+| `meta/muse-spark-1.3` | Flagship reasoning + vision, 1M context | $$   | Medium |
+| `meta/muse-spark-1.1` | Reasoning + vision + PDF, 1M context    | $$   | Medium |
 
-Muse Spark always reasons (effort is adjustable but cannot be disabled). TeXRA
+Muse Spark always reasons (effort is adjustable, but it does not take `@none`). TeXRA
 uses the Meta Model API's Responses surface, which carries reasoning across
 turns and supports tool calling. The API is in public preview for US-based
 developers.
@@ -141,9 +144,9 @@ developers.
 
 ## Grok / xAI models
 
-| Model ID | Use Case           | Cost | Speed  |
-| :------- | :----------------- | :--- | :----- |
-| `grok47` | Reasoning + vision | $$$  | Medium |
+| Model          | Use Case           | Cost | Speed  |
+| :------------- | :----------------- | :--- | :----- |
+| `xai/grok-4.7` | Reasoning + vision | $$$  | Medium |
 
 Direct xAI models (API key or Grok subscription) use xAI's Responses API. xAI
 keeps each response for 30 days, so a tool-use round sends only the new turn
@@ -156,7 +159,7 @@ and Google's own APIs); only OpenRouter still uses Chat Completions.
 
 <ModelChoiceMatrix />
 
-<p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model ids.</p>
+<p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model references.</p>
 
 ## Setting API keys
 
@@ -209,11 +212,11 @@ Choose which models appear in the extension picker from **Settings → Models �
 
 In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 
-For headless CLI runs, list what is available with `texra models list` (or `texra models show <id>` for details), then pick a default for your project by setting the `model` key in `.texra/config.json`, or override per run with `--model <id>`:
+For headless CLI runs, list what is available with `texra models list` (or `texra models show <model>` for details), then pick a default for your project by setting the `texra.model` key in `.texra/config.json`, or override per run with `--model <model>` (an `@effort` or `+pro` suffix works here too):
 
 <CliModelsHero />
 
-<p class="hero-caption">The id column is exactly what <code>--model</code> takes: the same short ids used in the tables above. <code>--all</code> includes models your current credentials can't run, with the reason.</p>
+<p class="hero-caption">The first column is exactly what <code>--model</code> takes: the same model references used in the tables above. <code>--all</code> includes models your current credentials can't run, with the reason.</p>
 
 ## Using OpenRouter
 

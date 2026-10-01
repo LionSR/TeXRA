@@ -49,7 +49,7 @@ import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import { generateShortId, getBasename, groupBy } from '@utils/core';
+import { generateShortId, getBasename } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -809,7 +809,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   // Partitions in order; each barrier is its own, each run of parallel-safe
   // calls shares one and executes under the window.
-  const partitions = groupBy(pending.calls, (fact) => fact.partition);
+  const partitions = Map.groupBy(pending.calls, (fact) => fact.partition);
   let endTurn = Object.values(pending.settled).some(endsTurn);
   for (const members of partitions.values()) {
     const primaries = members.filter((fact) => fact.duplicateOf === null);

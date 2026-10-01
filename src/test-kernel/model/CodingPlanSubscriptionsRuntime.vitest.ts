@@ -17,7 +17,7 @@ import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
-const GLM53 = MODEL_CONFIGS.glm53;
+const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
 
 /** The endpoint and plan the decided route binds `config` to. */
 const boundEndpoint = (
@@ -51,7 +51,7 @@ describe('coding-plan subscription runtime', () => {
   });
 
   afterEach(async () => {
-    delete MODEL_CONFIGS.glm53.baseUrl;
+    delete MODEL_CONFIGS['glm/glm-5.3'].baseUrl;
     await Effect.runPromise(
       hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
     );
@@ -166,7 +166,7 @@ describe('coding-plan subscription runtime', () => {
           GlobalStateKey.ENDPOINT_GLM,
           providerEndpoint,
         );
-        if (modelBaseUrl) MODEL_CONFIGS.glm53.baseUrl = modelBaseUrl;
+        if (modelBaseUrl) MODEL_CONFIGS['glm/glm-5.3'].baseUrl = modelBaseUrl;
 
         const endpoint = yield* boundEndpoint({
           ...GLM53,
@@ -178,7 +178,7 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          yield* readProspectiveUsageRoute(hostStores(), 'glm53').pipe(
+          yield* readProspectiveUsageRoute(hostStores(), 'glm/glm-5.3').pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),

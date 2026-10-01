@@ -89,7 +89,7 @@ describe('run metadata updates', () => {
         const opening = {
           ...freshRunState(0),
           family: 'toolUse' as const,
-          modelId: 'gpt54',
+          modelId: 'openai/gpt-5.4-2026-03-05',
           modelCompatibilityKey: 'OpenAI' as const,
         };
         const opened = yield* session.ledger.appendBatch(id, null, [

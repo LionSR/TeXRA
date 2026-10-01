@@ -6,7 +6,6 @@
 import MarkdownIt, { type StateBlock } from 'markdown-it';
 
 // Local imports - utilities
-import { groupBy } from '@utils/core';
 
 // Local imports - markdown pipeline
 import {
@@ -166,10 +165,14 @@ export function createBegEndEnvironmentProbe(
       }
       if (openerNames.size === 0) return matches;
 
-      closersByEnv = groupBy(
-        [...content.matchAll(/\\end\{([a-z]+)\}/g)],
-        (closer) => closer[1]!,
-        (closer) => closer.index,
+      closersByEnv = new Map(
+        Array.from(
+          Map.groupBy(
+            content.matchAll(/\\end\{([a-z]+)\}/g),
+            (closer) => closer[1]!,
+          ),
+          ([name, closers]) => [name, closers.map((closer) => closer.index)],
+        ),
       );
       if (![...openerNames].some((name) => closersByEnv.has(name))) {
         return matches;

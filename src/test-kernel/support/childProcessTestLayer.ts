@@ -10,9 +10,9 @@ import {
   make as makeSpawner,
   makeHandle,
   ProcessId,
-} from 'effect/unstable/process/ChildProcessSpawner';
+} from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
-import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import type * as ChildProcess from 'effect/process/ChildProcess';
 
 /**
  * The production spawner (`nodePlatformServices`, the supervised Node

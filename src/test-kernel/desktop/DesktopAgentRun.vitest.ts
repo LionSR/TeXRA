@@ -77,7 +77,7 @@ describe('desktop agent run completion hook', () => {
         run.runValidated({
           config: ToolUseAgentConfigSchema.parse({
             agent: 'proofreader',
-            model: 'deepseekproT',
+            model: 'deepseek/deepseek-v4-pro',
             agentCategory: AgentCategory.ToolUse,
           }),
         }),

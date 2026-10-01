@@ -44,9 +44,12 @@ const availabilityInputs = (
 // The discovered-editor-model fixture must track an llm-zoo base model that
 // is active (neither deprecated nor retired) and Copilot-documented (carries
 // `copilotFullName`): route resolution filters deprecated/retired configs and
-// matches the editor id against the registry's Copilot name. gemini31p
-// satisfies both in llm-zoo 1.28.0; gemini36f, the previous pick, is
-// deprecated there.
+// matches the editor id against the registry's Copilot name. Gemini 3.1 Pro
+// (Gemini 3.1 Pro) satisfies both.
+const GEMINI31P = 'google/gemini-3.1-pro-preview';
+const GPT56_TERRA = 'openai/gpt-5.6-terra';
+const GPT55 = 'openai/gpt-5.5-2026-04-23';
+
 const GEMINI_PRO: LanguageModelInfo = {
   id: 'gemini-3.1-pro-preview',
   name: 'Gemini 3.1 Pro',
@@ -101,23 +104,22 @@ describe('Copilot route discovery', () => {
       Effect.gen(function* () {
         const routes = yield* discover(GEMINI_PRO);
 
-        expect(routes.get('gemini31p')).toEqual(
+        expect(routes.get(GEMINI31P)).toEqual(
           expect.objectContaining({
             access: 'allowed',
             reference: { vendor: 'copilot', id: GEMINI_PRO.id },
             version: GEMINI_PRO.version,
             effectiveConfig: expect.objectContaining({
-              name: 'gemini31p',
+              ref: GEMINI31P,
               contextWindow: GEMINI_PRO.maxInputTokens,
               inputPrice: 0,
               outputPrice: 0,
-              capabilities: expect.objectContaining({
-                supportsReasoningEffort: false,
-              }),
+              // The editor manages reasoning: the route offers no effort levels.
+              reasoning: { efforts: [] },
             }),
           }),
         );
-        expect(MODEL_CONFIGS.gemini31p.label).not.toContain('Copilot');
+        expect(MODEL_CONFIGS[GEMINI31P].label).not.toContain('Copilot');
       }),
   );
 
@@ -134,7 +136,7 @@ describe('Copilot route discovery', () => {
           { ...GEMINI_PRO, id: 'gemini-3.1-pro-preview', version: '2026-07' },
         );
 
-        expect(routes.get('gemini31p')?.reference).toEqual({
+        expect(routes.get(GEMINI31P)?.reference).toEqual({
           vendor: 'copilot',
           id: 'gemini-3.1-pro-preview',
         });
@@ -157,29 +159,33 @@ describe('Copilot route discovery', () => {
   );
 
   it('reports the direct fallback for a base model and a legacy copilot id', () => {
-    expect(getRuntimeModelDirectFallback('gemini31p', false)).toEqual({
-      model: 'gemini31p',
+    expect(getRuntimeModelDirectFallback(GEMINI31P, false)).toEqual({
+      model: GEMINI31P,
       provider: 'google',
     });
-    expect(getRuntimeModelDirectFallback('gemini31p', true)).toEqual({
-      model: 'gemini31p',
+    expect(getRuntimeModelDirectFallback(GEMINI31P, true)).toEqual({
+      model: GEMINI31P,
       provider: 'openRouter',
     });
-    expect(getRuntimeModelDirectFallback('gpt56-', false)).toEqual({
-      model: 'gpt56-',
+    expect(getRuntimeModelDirectFallback(GPT56_TERRA, false)).toEqual({
+      model: GPT56_TERRA,
       provider: 'openai',
     });
+    // OpenRouter serves no provider reasoning mode, so `+pro` keeps its key.
+    expect(
+      getRuntimeModelDirectFallback('openai/gpt-5.6-sol+pro', true),
+    ).toBeUndefined();
   });
 
   it.effect('reports no route error only when the route is allowed', () =>
     Effect.gen(function* () {
       const routes = yield* discover(GEMINI_PRO);
       expect(
-        copilotRouteUnavailableReason('gemini31p', routes.get('gemini31p')),
+        copilotRouteUnavailableReason(GEMINI31P, routes.get(GEMINI31P)),
       ).toBeUndefined();
       // A model the editor does not offer cannot route.
       expect(
-        copilotRouteUnavailableReason('gpt56-', routes.get('gpt56-')),
+        copilotRouteUnavailableReason(GPT56_TERRA, routes.get(GPT56_TERRA)),
       ).toMatch(/does not currently/);
     }),
   );
@@ -195,8 +201,8 @@ describe('Copilot route in model pickers', () => {
           installPlatform(
             {
               globalState: {
-                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
-                [GlobalStateKey.REASONING_LEVELS]: { gemini31p: 'low' },
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GEMINI31P],
+                [GlobalStateKey.REASONING_LEVELS]: { [GEMINI31P]: 'low' },
               },
               secrets: googleKeySecrets(),
             },
@@ -205,13 +211,13 @@ describe('Copilot route in model pickers', () => {
         );
 
         const options = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), [GEMINI31P]),
         );
 
         expect(options).toHaveLength(1);
         expect(options[0]).toEqual(
           expect.objectContaining({
-            value: 'gemini31p',
+            value: GEMINI31P,
             availability: 'copilot-allowed',
             routeLabel: 'Via Copilot',
             reasoning: 'Default (provider managed)',
@@ -230,7 +236,7 @@ describe('Copilot route in model pickers', () => {
           {
             globalState: {
               [GlobalStateKey.MODEL_SELECTION]: {
-                enabledExtras: ['gpt55'],
+                enabledExtras: [GPT55],
                 disabledDefaults: DEFAULT_MODELS,
               },
             },
@@ -243,7 +249,7 @@ describe('Copilot route in model pickers', () => {
         yield* availabilityInputs(hostStores(), undefined),
       );
 
-      expect(options.map((option) => option.value)).toEqual(['gpt55']);
+      expect(options.map((option) => option.value)).toEqual([GPT55]);
     }),
   );
 
@@ -258,11 +264,11 @@ describe('Copilot route in model pickers', () => {
           installPlatform(
             {
               globalState: {
-                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GEMINI31P],
                 [GlobalStateKey.MODEL_SELECTION]: {
                   enabledExtras: [],
                   disabledDefaults: DEFAULT_MODELS.filter(
-                    (model) => model !== 'gemini31p',
+                    (model) => model !== GEMINI31P,
                   ),
                 },
               },
@@ -278,7 +284,7 @@ describe('Copilot route in model pickers', () => {
         expect(options).toHaveLength(1);
         expect(options[0]).toEqual(
           expect.objectContaining({
-            value: 'gemini31p',
+            value: GEMINI31P,
             availability: 'copilot-consent-required',
           }),
         );
@@ -296,7 +302,7 @@ describe('Copilot route in model pickers', () => {
           installPlatform(
             {
               globalState: {
-                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GEMINI31P],
               },
               secrets: googleKeySecrets(),
             },
@@ -305,13 +311,13 @@ describe('Copilot route in model pickers', () => {
         );
 
         const options = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), [GEMINI31P]),
         );
 
         expect(options).toHaveLength(1);
         expect(options[0]).toEqual(
           expect.objectContaining({
-            value: 'gemini31p',
+            value: GEMINI31P,
             availability: 'copilot-unavailable',
           }),
         );
@@ -324,7 +330,7 @@ describe('Copilot route in model pickers', () => {
         installPlatform(
           {
             globalState: {
-              [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+              [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GEMINI31P],
             },
             secrets: googleKeySecrets(),
           },
@@ -333,12 +339,12 @@ describe('Copilot route in model pickers', () => {
       );
 
       const options = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['gemini31p']),
+        yield* availabilityInputs(hostStores(), [GEMINI31P]),
       );
 
       expect(options[0]).toEqual(
         expect.objectContaining({
-          value: 'gemini31p',
+          value: GEMINI31P,
           availability: 'copilot-unavailable',
         }),
       );
@@ -356,12 +362,12 @@ describe('Copilot route in model pickers', () => {
       );
 
       const options = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['gemini31p']),
+        yield* availabilityInputs(hostStores(), [GEMINI31P]),
       );
 
       expect(options[0]).toEqual(
         expect.objectContaining({
-          value: 'gemini31p',
+          value: GEMINI31P,
           availability: 'provider-key',
         }),
       );

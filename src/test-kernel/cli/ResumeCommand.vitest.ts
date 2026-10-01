@@ -71,7 +71,7 @@ const TOOL_USE_CONFIG = AgentConfigSchema.parse({
 
 const WORKFLOW_CONFIG = AgentConfigSchema.parse({
   agent: 'correct',
-  model: 'gemini31p',
+  model: 'google/gemini-3.1-pro-preview',
   agentCategory: AgentCategory.Workflow,
 });
 
@@ -79,7 +79,7 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
 const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
-    modelId: 'gpt54',
+    modelId: 'openai/gpt-5.4-2026-03-05',
     modelCompatibilityKey: null,
     lastError: null,
     declinedRoutes: [],

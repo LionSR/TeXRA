@@ -488,10 +488,10 @@ describe('desktop settings IPC', () => {
       const workspaceState = new FakeStateStore();
       const globalState = new FakeStateStore({
         [GlobalStateKey.MODEL_SELECTION]: {
-          enabledExtras: ['gpt55'],
+          enabledExtras: ['openai/gpt-5.5-2026-04-23'],
           disabledDefaults: [],
         },
-        [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+        [GlobalStateKey.HELPER_MODEL]: 'openai/gpt-5.5-2026-04-23',
       });
 
       const showErrorMessage = vi.fn(() => Effect.void);
@@ -510,7 +510,7 @@ describe('desktop settings IPC', () => {
       expect(
         settings.handleMessage({
           command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
-          modelName: 'gpt55',
+          modelName: 'openai/gpt-5.5-2026-04-23',
           enabled: false,
         }),
       ).toBe(true);

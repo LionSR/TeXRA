@@ -16,9 +16,9 @@ import {
   Option,
   Schedule,
 } from 'effect';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
+import { isSqlError } from 'effect/sql/SqlError';
 import { withLogChannel } from '@logger/effectLog';
-import type * as SqlClient from 'effect/unstable/sql/SqlClient';
+import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
 

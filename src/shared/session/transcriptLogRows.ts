@@ -4,7 +4,6 @@
  * exactly once (`decodeLogPayload`). A payload its schema rejects is written
  * as an error row naming the diagnostic, never dropped or cast.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   MESSAGE_TYPES,
@@ -15,6 +14,7 @@ import {
   type MessageType,
   type TranscriptEvent,
 } from '@shared/schemas';
+import { modelConfig } from '@shared/model/modelSelection';
 import type { StreamingTextRow } from '@ui/transcript';
 
 import { open, write, type Draft } from './transcriptState';
@@ -102,13 +102,19 @@ export function recordLogRow(
       if (statistics === undefined) return;
       d.ix.spend = addTurnTotals(d.ix.spend, event.usage);
       const id = d.ix.model ?? statistics.model;
-      const model = id == null ? undefined : MODEL_CONFIGS[id];
+      const model = id == null ? undefined : modelConfig(id);
       appendLog(
         d,
         d.ix.runStage,
         MESSAGE_TYPES.STATISTICS,
         '',
-        runStatistics(d.ix.spend, model?.capabilities),
+        runStatistics(
+          d.ix.spend,
+          model && {
+            ...model.capabilities,
+            supportsReasoning: model.reasoning !== undefined,
+          },
+        ),
       );
       return;
     }

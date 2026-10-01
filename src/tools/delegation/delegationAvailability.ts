@@ -43,6 +43,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { modelRefOf } from '@shared/model/modelSelection';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 
@@ -233,7 +234,8 @@ export const selectAvailableDelegationModel = Effect.fn(
       },
       { model: availableModels[0], reason: 'access-list-default' },
     ],
-    (model) => availableModels.includes(model),
+    // Availability belongs to the model; an `@effort` suffix does not change it.
+    (model) => availableModels.includes(modelRefOf(model) ?? model),
   );
   if (!decision) {
     return yield* Effect.fail(new Error(NO_DELEGATION_MODELS_MESSAGE));

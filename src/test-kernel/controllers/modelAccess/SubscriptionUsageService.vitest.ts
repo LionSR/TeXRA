@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
@@ -24,7 +24,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /** The request the adapters make through `FetchHttpClient.Fetch`. */
 type UsageFetch = (url: string | URL, init: RequestInit) => Promise<Response>;

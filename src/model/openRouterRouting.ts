@@ -1,4 +1,4 @@
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import {
   isKimiCodeExclusiveModel,
@@ -9,7 +9,6 @@ interface OpenRouterRoutingConfig {
   provider?: string;
   requiresResponsesAPI?: boolean;
   openRouterOnly: boolean;
-  capabilities?: Pick<ModelConfig['capabilities'], 'reasoningMode'>;
 }
 
 /**
@@ -32,16 +31,20 @@ function isOpenRouterAccessSelected(
   );
 }
 
-/** Whether the requested OpenRouter route would discard required model semantics. */
+/**
+ * Whether the requested OpenRouter route would discard what the request asks
+ * for: OpenRouter has no provider reasoning modes (OpenAI's `pro`).
+ */
 export function isOpenRouterRoutingUnsupported(
   config: ModelRoutingConfig,
   useOpenRouter: boolean,
+  mode: ReasoningMode | undefined,
 ): boolean {
   const openRouterSelected =
     config.provider === ModelProvider.GLM
       ? shouldRouteModelThroughOpenRouter(config, useOpenRouter)
       : isOpenRouterAccessSelected(config, useOpenRouter);
-  return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
+  return openRouterSelected && mode !== undefined;
 }
 
 /** Product-facing model source; direct managed services own their own group. */

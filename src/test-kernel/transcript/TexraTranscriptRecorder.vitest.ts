@@ -341,7 +341,7 @@ describe('createTestRunTrace workflow task state', () => {
         label: 'Audit core',
         phase: 'Audit',
         status: 'completed',
-        model: 'gpt56',
+        model: 'openai/gpt-5.6-sol',
         durationMs: 12_000,
         costUsd: 0.03,
       },

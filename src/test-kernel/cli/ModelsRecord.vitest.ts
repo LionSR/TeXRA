@@ -9,7 +9,7 @@ import type { ModelOptionData } from '@shared/schemas';
 
 function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
   return {
-    value: 'sonnet46T',
+    value: 'anthropic/claude-sonnet-4-6',
     label: 'Sonnet 4.6 (Thinking)',
     provider: 'anthropic',
     context: '1.0M',
@@ -49,7 +49,7 @@ describe('CLI model JSON record', () => {
   it('exposes the model id under `id` only, for cross-resource addressability', () => {
     const record = cliModelRecord(model());
 
-    expect(record.id).toBe('sonnet46T');
+    expect(record.id).toBe('anthropic/claude-sonnet-4-6');
     // `id` is the single spelling; the internal `value` key does not leak.
     expect(record).not.toHaveProperty('value');
     // `id` must appear first so callers using `Object.keys()[0]`
@@ -78,12 +78,18 @@ describe('CLI model JSON record', () => {
 describe('CLI model list filtering', () => {
   it('does not recompute availability from model metadata', () => {
     const personalModeEntries = [
-      access('sonnet46T', {
+      access('anthropic/claude-sonnet-4-6', {
         available: false,
-        model: model({ value: 'sonnet46T', availability: 'provider-key' }),
+        model: model({
+          value: 'anthropic/claude-sonnet-4-6',
+          availability: 'provider-key',
+        }),
       }),
-      access('deepseekT', {
-        model: model({ value: 'deepseekT', availability: 'provider-key' }),
+      access('deepseek/deepseek-v4-flash', {
+        model: model({
+          value: 'deepseek/deepseek-v4-flash',
+          availability: 'provider-key',
+        }),
       }),
       access('openrouterOnlyT', {
         model: model({
@@ -97,16 +103,19 @@ describe('CLI model list filtering', () => {
       listableModelAccessEntries(personalModeEntries).map(
         (entry) => entry.model.value,
       ),
-    ).toEqual(['deepseekT', 'openrouterOnlyT']);
+    ).toEqual(['deepseek/deepseek-v4-flash', 'openrouterOnlyT']);
   });
 
   it('keeps unavailable models for the explicit diagnostic view', () => {
-    const entries = [access('sonnet46T'), unavailableAccess('opus48T')];
+    const entries = [
+      access('anthropic/claude-sonnet-4-6'),
+      unavailableAccess('anthropic/claude-opus-4-8'),
+    ];
 
     expect(
       listableModelAccessEntries(entries, { includeUnavailable: true }).map(
         (entry) => entry.model.value,
       ),
-    ).toEqual(['sonnet46T', 'opus48T']);
+    ).toEqual(['anthropic/claude-sonnet-4-6', 'anthropic/claude-opus-4-8']);
   });
 });

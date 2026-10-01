@@ -65,18 +65,3 @@ const FileOpResultSchema = z.discriminatedUnion('status', [
 ]);
 
 export type FileOpResult = z.infer<typeof FileOpResultSchema>;
-
-/**
- * Merges the runDir and workspace legs of a run's pack. Surfaces an error
- * from either leg — a failed runDir snapshot must not be masked by a
- * successful workspace pack — and otherwise prefers the workspace result,
- * falling back to the runDir result when the workspace leg found nothing.
- */
-export function mergeRunDirAndWorkspaceResult(
-  runDirResult: FileOpResult,
-  workspaceResult: FileOpResult,
-): FileOpResult {
-  if (runDirResult.status === 'error') return runDirResult;
-  if (workspaceResult.status === 'error') return workspaceResult;
-  return workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
-}

@@ -192,6 +192,7 @@ function trackInterruptibleHandle(
 /** The `RunControls` fixture shared by the tool-use-admission tests. */
 function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
   return {
+    oneShot: false,
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
     switchModel: vi.fn(() => Effect.void),

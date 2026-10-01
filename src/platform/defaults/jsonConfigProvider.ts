@@ -37,12 +37,24 @@ export interface JsonConfigProviderOptions {
 }
 
 /**
+ * Whether a project file's `value` for `key` is ignored: the one scope rule
+ * every read and the open-time warning share. A row the catalog leaves at the
+ * workspace scope reads its project value; a `global` or `local` row (the
+ * approval settings) does not, so a cloned repository cannot set it, except
+ * that a `projectMayOptOut` row (telemetry) still takes anything but `true`.
+ */
+export function projectValueIgnored(key: string, value: unknown): boolean {
+  const row = settingByKey(key);
+  if ((row?.configTarget ?? 'workspace') === 'workspace') return false;
+  return row?.projectMayOptOut !== true || value === true;
+}
+
+/**
  * Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
  * `texra.*` prefix. Workspace values shadow global values on read and
- * `update()` routes writes by {@link ConfigTarget}. A row the catalog scopes
- * to `global` or `local` (the approval settings) is never read from the
- * project file, so a cloned repository cannot set it: `local` shadows `global`
- * for `local` rows, and `global` alone answers for `global` rows.
+ * `update()` routes writes by {@link ConfigTarget}. The project file answers
+ * only where {@link projectValueIgnored} lets it; past it, `local` shadows
+ * `global` for `local` rows, and `global` alone answers for the others.
  */
 export class JsonConfigProvider implements ConfigProvider {
   private readonly workspaceStore: ConfigStore;
@@ -57,13 +69,17 @@ export class JsonConfigProvider implements ConfigProvider {
 
   get<T>(key: string, defaultValue?: T): T {
     const storedKey = canonicalConfigKey(key);
-    // The stores a row reads, first hit wins: the project file answers only
-    // for a row the catalog leaves at the workspace scope.
-    const layers = {
-      workspace: [this.workspaceStore, this.globalStore],
-      local: [this.localStore, this.globalStore],
-      global: [this.globalStore],
-    }[settingByKey(storedKey)?.configTarget ?? 'workspace'];
+    const projectValue = this.workspaceStore.get<T>(storedKey);
+    if (
+      projectValue !== undefined &&
+      !projectValueIgnored(storedKey, projectValue)
+    ) {
+      return projectValue;
+    }
+    const layers =
+      settingByKey(storedKey)?.configTarget === 'local'
+        ? [this.localStore, this.globalStore]
+        : [this.globalStore];
     for (const store of layers) {
       const value = store.get<T>(storedKey);
       if (value !== undefined) return value;

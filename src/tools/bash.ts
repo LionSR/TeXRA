@@ -46,7 +46,7 @@ import { nullishWithDefault } from './core/inputSchema';
 import { requireToolRun } from './core/toolRun';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /**

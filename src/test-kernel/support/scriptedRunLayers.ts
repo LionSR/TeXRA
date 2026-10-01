@@ -67,6 +67,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
   return {
     modelId: 'test-model',
     config: buildTestModelConfig({ capabilities: { supportsVision } }),
+    reasoning: { thinking: false, effort: null, mode: null },
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: TEST_ORIGIN,

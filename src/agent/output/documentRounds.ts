@@ -69,7 +69,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The services a round prepares, compiles and diffs on. */
 export type RoundServices =

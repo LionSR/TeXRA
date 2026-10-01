@@ -12,7 +12,7 @@ import {
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
 import type { Cause } from 'effect';
-import type { HttpClient, HttpClientError } from 'effect/unstable/http';
+import type { HttpClient, HttpClientError } from 'effect/http';
 
 const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 

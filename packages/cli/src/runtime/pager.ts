@@ -4,7 +4,7 @@ import { cliEnvValue } from './cliContext';
 import { runForegroundCommand } from './foregroundCommand';
 import { writeTextStdout } from './logSinks';
 import type { PlatformError } from 'effect/PlatformError';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * Default pager command (clig.dev's suggestion). `less` flags:

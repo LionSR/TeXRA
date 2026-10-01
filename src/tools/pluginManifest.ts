@@ -296,6 +296,7 @@ export const MANIFEST = [
     name: 'OpenAI Codex CLI',
     category: 'ai-agents',
     settings: [
+      [WorkspaceStateKey.CODEX_MODEL, 'Model'],
       [WorkspaceStateKey.CODEX_SANDBOX_MODE, 'Sandbox mode'],
       [WorkspaceStateKey.CODEX_REASONING_EFFORT, 'Reasoning effort'],
       [WorkspaceStateKey.CODEX_APPROVAL_POLICY, 'Approval policy'],

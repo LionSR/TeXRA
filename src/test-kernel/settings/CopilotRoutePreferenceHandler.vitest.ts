@@ -166,7 +166,7 @@ async function requestModelAccess(handler = createHandler()): Promise<void> {
     handler.handleMessage(
       {
         command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-        modelName: 'gemini31p',
+        modelName: 'google/gemini-3.1-pro-preview',
       },
       createWebviewView(),
     ),
@@ -201,7 +201,7 @@ describe('Copilot route preference handler', () => {
       await installModels({ ...GEMINI_PRO, access });
       await requestModelAccess();
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'gemini31p',
+        'google/gemini-3.1-pro-preview',
         true,
         installedHost().roots.globalState,
       );
@@ -385,13 +385,13 @@ describe('Copilot route preference handler', () => {
         createHandler().handleMessage(
           {
             command: SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
-            modelName: 'gemini31p',
+            modelName: 'google/gemini-3.1-pro-preview',
           },
           createWebviewView(),
         ),
       );
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
-        'gemini31p',
+        'google/gemini-3.1-pro-preview',
         false,
         installedHost().roots.globalState,
       );

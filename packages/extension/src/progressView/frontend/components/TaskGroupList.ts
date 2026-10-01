@@ -36,7 +36,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { groupBy } from '@utils/core';
 import { formatDuration, pluralize } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
@@ -114,7 +113,7 @@ function transcriptTimeline(
   rows: readonly TranscriptRow[],
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
-  const children = groupBy(
+  const children = Map.groupBy(
     groups.filter(
       (group) => group.parentGroupId && groupIds.has(group.parentGroupId),
     ),
@@ -123,7 +122,7 @@ function transcriptTimeline(
   const sortedRows = rows.toSorted(compareRows);
   const isGroupedRow = (row: TranscriptRow) =>
     Boolean(row.groupId && groupIds.has(row.groupId));
-  const rowsByGroup = groupBy(
+  const rowsByGroup = Map.groupBy(
     sortedRows.filter(isGroupedRow),
     (row) => row.groupId as string,
   );

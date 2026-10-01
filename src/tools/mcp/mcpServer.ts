@@ -20,10 +20,7 @@
 import { createHash } from 'node:crypto';
 
 import { Data, Duration, Effect, Exit, Ref, Scope, Stream } from 'effect';
-import {
-  ChildProcess,
-  type ChildProcessSpawner,
-} from 'effect/unstable/process';
+import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 import { z } from 'zod';
 
 import type { RuntimeTool } from '@agent/runtime/ToolServices';

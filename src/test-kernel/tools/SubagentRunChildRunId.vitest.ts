@@ -67,7 +67,7 @@ describe('executeSubagent child run launch', () => {
 
   const defaultPayload = {
     agent: 'proof-checker',
-    model: 'gpt5',
+    model: 'openai/gpt-5-2025-08-07',
     agentCategory: 'toolUse',
   } as never;
 
@@ -79,8 +79,11 @@ describe('executeSubagent child run launch', () => {
       session: { tag: 'parent-session' } as never,
       steps: noStep(),
       scope: Scope.makeUnsafe(),
-      config: AgentConfigSchema.parse({ agent: 'chat', model: 'gpt5' }),
-      model: testModelCell('gpt5'),
+      config: AgentConfigSchema.parse({
+        agent: 'chat',
+        model: 'openai/gpt-5-2025-08-07',
+      }),
+      model: testModelCell('openai/gpt-5-2025-08-07'),
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,

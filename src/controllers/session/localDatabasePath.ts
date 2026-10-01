@@ -5,8 +5,8 @@ import { platform } from 'node:os';
 import { join } from 'node:path';
 
 import { Effect } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { PlatformError } from 'effect/PlatformError';
 

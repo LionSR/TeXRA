@@ -307,7 +307,7 @@ describe('AgentLaunchContext', () => {
             buildAgentLaunchContext({
               config: AgentConfigSchema.parse({
                 agent: 'chat',
-                model: 'gpt55',
+                model: 'openai/gpt-5.5-2026-04-23',
                 agentCategory: AgentCategory.ToolUse,
               }),
               runId: EXECUTION_ID,
@@ -354,7 +354,7 @@ describe('AgentLaunchContext', () => {
         );
         const config = AgentConfigSchema.parse({
           agent: 'chat',
-          model: 'gpt55',
+          model: 'openai/gpt-5.5-2026-04-23',
           agentCategory: AgentCategory.ToolUse,
         });
         yield* registerRun(session, EXECUTION_ID, config, {
@@ -395,7 +395,7 @@ describe('AgentLaunchContext', () => {
         yield* Effect.addFinalizer(() => closeSessionOf(session));
         const config = AgentConfigSchema.parse({
           agent: 'chat',
-          model: 'gpt55',
+          model: 'openai/gpt-5.5-2026-04-23',
           agentCategory: AgentCategory.ToolUse,
         });
         const definitionMocks = () => {
@@ -496,7 +496,7 @@ describe('AgentLaunchContext', () => {
           buildAgentLaunchContext({
             config: AgentConfigSchema.parse({
               agent: 'chat',
-              model: 'gpt55',
+              model: 'openai/gpt-5.5-2026-04-23',
               agentCategory: AgentCategory.ToolUse,
             }),
             runId: EXECUTION_ID,

@@ -235,12 +235,12 @@ describe('delegation model availability', () => {
   it('filters model options to only currently runnable models', () => {
     expect(
       availableModelNamesFromOptions([
-        model('sonnet46T'),
-        model('opus48T', { availability: 'retired' }),
-        model('gemini31p', { availability: 'missing-key' }),
-        model('deepseekT', { availability: 'provider-key' }),
+        model('anthropic/claude-sonnet-4-6'),
+        model('anthropic/claude-opus-4-8', { availability: 'retired' }),
+        model('google/gemini-3.1-pro-preview', { availability: 'missing-key' }),
+        model('deepseek/deepseek-v4-flash', { availability: 'provider-key' }),
       ]),
-    ).toEqual(['sonnet46T', 'deepseekT']);
+    ).toEqual(['anthropic/claude-sonnet-4-6', 'deepseek/deepseek-v4-flash']);
   });
 
   it.effect(
@@ -269,19 +269,22 @@ describe('delegation model availability', () => {
     () =>
       Effect.gen(function* () {
         mocks.readModelAvailabilityInputs.mockReturnValue(
-          Effect.succeed([model('sonnet46T'), model('deepseekT')]),
+          Effect.succeed([
+            model('anthropic/claude-sonnet-4-6'),
+            model('deepseek/deepseek-v4-flash'),
+          ]),
         );
 
         const failure = yield* Effect.flip(
           selectAvailableDelegationModel({
-            requestedModel: 'opus48T',
-            parentModel: 'sonnet46T',
+            requestedModel: 'anthropic/claude-opus-4-8',
+            parentModel: 'anthropic/claude-sonnet-4-6',
             settings: hostStores(),
           }),
         );
 
         expect(failure.message).toContain(
-          'Model "opus48T" is not currently available for delegation with the currently configured model access. Available models: sonnet46T, deepseekT.',
+          'Model "anthropic/claude-opus-4-8" is not currently available for delegation with the currently configured model access. Available models: anthropic/claude-sonnet-4-6, deepseek/deepseek-v4-flash.',
         );
       }).pipe(Effect.provide(fakeProcessServices())),
   );
@@ -289,22 +292,25 @@ describe('delegation model availability', () => {
   it.effect('uses the parent model only when it is available', () =>
     Effect.gen(function* () {
       mocks.readModelAvailabilityInputs.mockReturnValue(
-        Effect.succeed([model('deepseekT'), model('sonnet46T')]),
+        Effect.succeed([
+          model('deepseek/deepseek-v4-flash'),
+          model('anthropic/claude-sonnet-4-6'),
+        ]),
       );
 
       expect(
         yield* selectAvailableDelegationModel({
-          parentModel: 'sonnet46T',
+          parentModel: 'anthropic/claude-sonnet-4-6',
           settings: hostStores(),
         }),
-      ).toBe('sonnet46T');
+      ).toBe('anthropic/claude-sonnet-4-6');
 
       expect(
         yield* selectAvailableDelegationModel({
-          parentModel: 'opus48T',
+          parentModel: 'anthropic/claude-opus-4-8',
           settings: hostStores(),
         }),
-      ).toBe('deepseekT');
+      ).toBe('deepseek/deepseek-v4-flash');
     }).pipe(Effect.provide(fakeProcessServices())),
   );
 });
@@ -316,7 +322,7 @@ describe('resolveStepTools delegation annotation', () => {
     mocks.readModelAvailabilityInputs.mockReturnValue(
       Effect.succeed([
         {
-          value: 'deepseekT',
+          value: 'deepseek/deepseek-v4-flash',
           label: 'DeepSeek',
           availability: 'provider-key',
         },

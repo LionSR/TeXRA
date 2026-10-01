@@ -9,7 +9,7 @@ import { AgentCategory } from '@shared/schemas';
 function createAgentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'correct',
-    model: 'gemini31p',
+    model: 'google/gemini-3.1-pro-preview',
     inputFiles: ['input.tex'],
     outputFiles: ['declared.tex'],
     agentCategory: AgentCategory.Workflow,

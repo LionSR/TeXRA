@@ -1,6 +1,7 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { assert, describe, expect } from 'vitest';
 
 import { bindModel } from '@agent/runtime/run/modelBinding';
@@ -13,10 +14,13 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { selectModel } from '@shared/model/modelSelection';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+
+const GPT4O = 'openai/gpt-4o-2024-11-20';
 
 describe('shouldRouteModelThroughOpenRouter', () => {
   it.each([
@@ -57,21 +61,22 @@ describe('shouldRouteModelThroughOpenRouter', () => {
 });
 
 describe('isOpenRouterRoutingUnsupported', () => {
-  const modeSelectedConfig = {
-    openRouterOnly: false,
-    requiresResponsesAPI: false,
-    capabilities: { reasoningMode: 'pro' as const },
-  };
+  const config = { openRouterOnly: false, requiresResponsesAPI: false };
 
-  it('rejects a route that would discard a selected reasoning mode', () => {
-    expect(isOpenRouterRoutingUnsupported(modeSelectedConfig, true)).toBe(true);
+  it('rejects a route that would discard a requested reasoning mode', () => {
+    expect(isOpenRouterRoutingUnsupported(config, true, 'pro')).toBe(true);
+  });
+
+  it('accepts the same model on OpenRouter when no mode is requested', () => {
+    expect(isOpenRouterRoutingUnsupported(config, true, undefined)).toBe(false);
   });
 
   it('does not silently change access routes for a Responses API model', () => {
     expect(
       isOpenRouterRoutingUnsupported(
-        { ...modeSelectedConfig, requiresResponsesAPI: true },
+        { ...config, requiresResponsesAPI: true },
         true,
+        'pro',
       ),
     ).toBe(true);
   });
@@ -86,8 +91,10 @@ describe('bindModel', () => {
     secrets: { [apiKeySecretName('openai')]: 'openai-key' },
   });
 
-  const bind = (config: (typeof MODEL_CONFIGS)[string]) =>
-    Effect.runPromise(
+  const bind = (modelId: string) => {
+    const selected = selectModel(modelId);
+    assert(selected, `${modelId} is registered`);
+    return Effect.runPromise(
       Effect.exit(
         Effect.scoped(
           Effect.provide(
@@ -97,7 +104,8 @@ describe('bindModel', () => {
             ),
           )(
             bindModel({
-              config,
+              modelId,
+              config: selected.config,
               stores: hostStores(),
               compatibilityKey: null,
               agentCategory: AgentCategory.Workflow,
@@ -107,21 +115,22 @@ describe('bindModel', () => {
         ),
       ),
     );
+  };
 
   it.effect(
-    'rejects a reasoning-mode model the live OpenRouter choice would discard',
+    'rejects a pro-mode request the live OpenRouter choice would discard',
     () =>
       Effect.gen(function* () {
         // The route the picker already reports as unavailable: a saved agent or a
         // CLI config must fail with the instruction, not run without the mode.
         const exit = yield* Effect.promise(() =>
-          bind(MODEL_CONFIGS['gpt56pro']),
+          bind('openai/gpt-5.6-sol+pro'),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
         if (!Exit.isFailure(exit)) return;
         const message = String(Cause.squash(exit.cause));
-        expect(message).toContain('requires reasoning mode pro');
+        expect(message).toContain('in pro mode is not served by OpenRouter');
         expect(message).toContain('Disable OpenRouter');
       }),
   );
@@ -133,15 +142,13 @@ describe('bindModel', () => {
         false,
       );
 
-      const exit = yield* Effect.promise(() => bind(MODEL_CONFIGS['gpt4o']));
+      const exit = yield* Effect.promise(() => bind(GPT4O));
 
       expect(Exit.isSuccess(exit)).toBe(true);
       if (!Exit.isSuccess(exit)) return;
-      expect(MODEL_CONFIGS['gpt4o'].fullName).not.toBe(
-        MODEL_CONFIGS['gpt4o'].shortName,
-      );
+      expect(MODEL_CONFIGS[GPT4O].id).not.toBe(MODEL_CONFIGS[GPT4O].shortName);
       expect(exit.value.origin.requestedModel).toBe(
-        MODEL_CONFIGS['gpt4o'].shortName,
+        MODEL_CONFIGS[GPT4O].shortName,
       );
     }),
   );
@@ -158,9 +165,7 @@ describe('bindModel', () => {
               GlobalStateKey.ENDPOINT_OPENAI,
               endpoint,
             );
-            const exit = yield* Effect.promise(() =>
-              bind(MODEL_CONFIGS['gpt4o']),
-            );
+            const exit = yield* Effect.promise(() => bind(GPT4O));
             assert(Exit.isSuccess(exit));
             const turn = yield* exit.value.model.prepareTurn({
               messages: [

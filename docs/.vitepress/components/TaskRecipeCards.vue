@@ -13,8 +13,8 @@ const recipes = [
     icon: 'check',
     title: 'Fix grammar & typos',
     agent: 'correct',
-    model: 'gemini37f',
-    alts: 'deepseek, gpt6--, sonnet55',
+    model: 'google/gemini-3.8-flash',
+    alts: 'deepseek/deepseek-flash, openai/gpt-6-luna, anthropic/claude-sonnet-5-5',
     instruction:
       'Fix grammatical errors and typos without changing the content or technical terminology.',
   },
@@ -22,8 +22,8 @@ const recipes = [
     icon: 'file-export',
     title: 'Paper to slides',
     agent: 'paper2slide',
-    model: 'sonnet55',
-    alts: 'opus55, gpt61-',
+    model: 'anthropic/claude-sonnet-5-5',
+    alts: 'anthropic/claude-opus-5-5, openai/gpt-6.1-sol',
     instruction:
       'Convert this paper into presentation slides using the beamer template. Create approximately 12–15 slides highlighting the key points, methodology, and results.',
   },
@@ -31,8 +31,8 @@ const recipes = [
     icon: 'sparkle',
     title: 'Polish writing style',
     agent: 'polish',
-    model: 'opus55',
-    alts: 'sonnet55',
+    model: 'anthropic/claude-opus-5-5',
+    alts: 'anthropic/claude-sonnet-5-5',
     instruction:
       'Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content.',
   },

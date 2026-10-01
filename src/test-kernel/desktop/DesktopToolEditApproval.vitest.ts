@@ -30,7 +30,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const approvalTest = (
   name: string,

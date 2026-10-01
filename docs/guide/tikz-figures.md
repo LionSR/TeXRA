@@ -66,7 +66,7 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 ### Creating new figures
 
 1. Select a tool-use agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `sonnet55`, `opus55`, `gpt61-`, and `gemini31p` are good choices for complex drawings.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `anthropic/claude-sonnet-5-5`, `anthropic/claude-opus-5-5`, `openai/gpt-6.1-sol`, and `google/gemini-3.1-pro-preview` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
@@ -190,7 +190,7 @@ This compiles all extracted figures into standalone PDFs.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 
-Several settings tune how TeXRA handles TikZ. They have no control in Settings, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
+Several settings tune how TeXRA handles TikZ. They have no control in Settings, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/v1/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
 
 ### TikZ template
 

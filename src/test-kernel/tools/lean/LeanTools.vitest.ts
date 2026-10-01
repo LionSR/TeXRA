@@ -14,7 +14,7 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
 import { extractHoverText } from '@tools/lean/leanTypes';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // ---------------------------------------------------------------------------
 // LeanHoverTypes

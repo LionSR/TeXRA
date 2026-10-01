@@ -36,6 +36,11 @@ export interface RunParent {
  * act on them; a stop is the run fiber's interruption, not a control.
  */
 export interface RunControls {
+  /** The loop ends after its current turn (`stopAfterCycle`): it reads no
+   *  input, so nothing may queue a message on it. A resume of the same run
+   *  may not be one-shot, which is why this is the live loop's, not the
+   *  launch's `followUpSupport`. */
+  readonly oneShot: boolean;
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(
     model: string,

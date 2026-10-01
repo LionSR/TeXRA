@@ -191,6 +191,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------ host port
   let live = false;
   const controls: RunControls = {
+    oneShot: run.toolPolicy.stopAfterCycle === true,
     requestImmediateCompaction(): void {
       compactionRequested = true;
       // A parked loop wakes on a synthetic turn; the compaction runs before

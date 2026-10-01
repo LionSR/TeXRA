@@ -7,7 +7,6 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -25,6 +24,7 @@ import {
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
+import { selectModel } from '@shared/model/modelSelection';
 import {
   AGENT_SOURCE,
   AgentCategory,
@@ -43,7 +43,7 @@ import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
 import type { OpenStep } from '../loop/step';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
@@ -264,8 +264,9 @@ export const agentRunLayer = (
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey = persisted?.modelCompatibilityKey ?? null;
+      const selected = selectModel(modelId);
       const modelConfig =
-        modelId === config.model ? ctx.modelConfig : MODEL_CONFIGS[modelId];
+        modelId === config.model ? ctx.modelConfig : selected?.config;
       if (!modelConfig) {
         return yield* Effect.fail(
           new Error(`Model ${modelId} is not registered`),
@@ -284,6 +285,7 @@ export const agentRunLayer = (
       // update, which serializes every swap.
       let bindingScope = yield* Scope.fork(scope);
       const bound = yield* bindModel({
+        modelId,
         config: modelConfig,
         stores: ctx.stores,
         compatibilityKey,

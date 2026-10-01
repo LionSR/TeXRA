@@ -147,7 +147,7 @@ const view = ref('search');
             <div class="tc-body">
               <div class="tc-row">
                 <span class="tc-k">Agent</span><code class="tc-code">lean</code
-                ><span class="tc-model">(opus47T)</span>
+                ><span class="tc-model">(anthropic/claude-opus-5-5)</span>
               </div>
               <div class="tc-row">
                 <span class="tc-k">Instruction</span

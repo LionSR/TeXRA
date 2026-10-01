@@ -27,7 +27,7 @@ function config(
 ): AgentConfig {
   return AgentConfigSchema.parse({
     agent,
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     instruction: 'Test run listing.',
     agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',

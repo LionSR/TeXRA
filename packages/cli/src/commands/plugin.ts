@@ -36,7 +36,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * A mistake in what the user asked (an unknown name, a taken name) exits 2;

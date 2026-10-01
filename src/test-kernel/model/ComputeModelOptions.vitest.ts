@@ -33,6 +33,18 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 
+const GPT55 = 'openai/gpt-5.5-2026-04-23';
+const GPT56 = 'openai/gpt-5.6-sol';
+const KIMI3 = 'moonshot/kimi-k3';
+const SONNET45 = 'anthropic/claude-sonnet-4-5';
+const GPT4O = 'openai/gpt-4o-2024-11-20';
+const KIMI_CODING = 'moonshot/kimi-for-coding';
+const HAIKU3 = 'anthropic/claude-3-haiku-20240307';
+const HAIKU35 = 'anthropic/claude-3-5-haiku-20241022';
+const GPT56_TERRA = 'openai/gpt-5.6-terra';
+const GPT56_PRO = 'openai/gpt-5.6-sol+pro';
+const GEMINI31P = 'google/gemini-3.1-pro-preview';
+
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
 
 /**
@@ -86,7 +98,7 @@ async function installAccessPlatform(
     config: options.config,
     globalState: {
       [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(
-        options.enabledModels ?? ['gpt55'],
+        options.enabledModels ?? [GPT55],
       ),
       ...(options.useOpenRouter === undefined
         ? {}
@@ -151,7 +163,7 @@ function unreadableStore(cause: Error): SecretsFailed {
 
 describe('model availability', () => {
   setupPlatform({
-    globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']) },
+    globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
     secrets: OPENAI_KEY_SECRETS,
   });
 
@@ -162,11 +174,13 @@ describe('model availability', () => {
   });
 
   it.effect.each([
-    { model: 'gpt56', override: undefined, expected: 'Default (Medium)' },
-    { model: 'gpt56', override: 'low', expected: 'Low' },
-    { model: 'kimi3', override: 'low', expected: 'Max (fixed)' },
-    { model: 'sonnet45T', override: 'low', expected: 'Default' },
-    { model: 'gpt4o', override: 'high', expected: undefined },
+    { model: GPT56, override: undefined, expected: 'Default (Medium)' },
+    { model: GPT56, override: 'low', expected: 'Low' },
+    // Kimi K3 takes low, high and max: the default medium snaps up to high.
+    { model: KIMI3, override: undefined, expected: 'Default (High)' },
+    { model: KIMI3, override: 'low', expected: 'Low' },
+    { model: SONNET45, override: 'low', expected: 'Default' },
+    { model: GPT4O, override: 'high', expected: undefined },
   ])(
     'includes the current reasoning setting for $model ($override)',
     ({ model, override, expected }) =>
@@ -198,7 +212,7 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['kimiCoding']),
+        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
       );
 
       expect(model).toMatchObject({
@@ -217,11 +231,11 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['kimiCoding']),
+        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* availabilityInputs(hostStores(), ['kimiCoding']),
-        'kimiCoding',
+        yield* availabilityInputs(hostStores(), [KIMI_CODING]),
+        KIMI_CODING,
       );
 
       expect(model).toMatchObject({
@@ -229,7 +243,7 @@ describe('model availability', () => {
         availability: 'missing-key',
       });
       expect(reason).toBe(
-        'Model "kimiCoding" requires your Kimi Code API key. Provide it to continue.',
+        'Model "moonshot/kimi-for-coding" requires your Kimi Code API key. Provide it to continue.',
       );
     }),
   );
@@ -247,7 +261,7 @@ describe('model availability', () => {
           installPlatform(
             {
               globalState: {
-                [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+                [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]),
               },
             },
             { secrets },
@@ -256,7 +270,7 @@ describe('model availability', () => {
         const logs = captureLogEntries();
 
         const [gpt55, gpt56] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55', 'gpt56']),
+          yield* availabilityInputs(hostStores(), [GPT55, GPT56]),
         );
 
         expect(gpt55.availability).toBe('missing-key');
@@ -290,7 +304,7 @@ describe('model availability', () => {
           Effect.fail(unreadableStore(new Error('unreadable store'))),
         );
         const globalState = new CountingStateStore({
-          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
+          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]),
         });
         yield* Effect.promise(() =>
           installPlatform({}, { secrets, globalState }),
@@ -298,7 +312,7 @@ describe('model availability', () => {
         const logs = captureLogEntries();
 
         const rows = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['haiku3', 'haiku35']),
+          yield* availabilityInputs(hostStores(), [HAIKU3, HAIKU35]),
         );
 
         expect(rows.map((row) => row.availability)).toEqual([
@@ -310,7 +324,7 @@ describe('model availability', () => {
 
         // Two models that do reach the Copilot branch: one preference read each.
         const keyed = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55', 'gpt56']),
+          yield* availabilityInputs(hostStores(), [GPT55, GPT56]),
         );
 
         expect(keyed).toHaveLength(2);
@@ -328,30 +342,30 @@ describe('model availability', () => {
         // the rows are built, so a credential change mid-render cannot split
         // one computation across two views of the host.
         //
-        // `gpt56-` is preferred through Copilot with no route discovered, which
+        // GPT-5.6 Terra is preferred through Copilot with no route discovered, which
         // is the case whose sentence used to be worded at finish time out of
         // the live preference and catalogue: it is the arm that can leak a host
         // read past this boundary, so it is the one the counting store watches.
         const secrets = new FakeSecrets(OPENAI_KEY_SECRETS);
         const secretReads = vi.spyOn(secrets, 'get');
         const globalState = new CountingStateStore({
-          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gpt56-'],
+          [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]),
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: [GPT56_TERRA],
         });
         yield* Effect.promise(() =>
           installPlatform({}, { secrets, globalState }),
         );
 
         const inputs = yield* availabilityInputs(hostStores(), [
-          'gpt55',
-          'gpt56-',
+          GPT55,
+          GPT56_TERRA,
         ]);
         const readsAfterInputs = secretReads.mock.calls.length;
         const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
 
         const rows = modelOptionsFrom(inputs);
-        const available = modelUnavailableReasonFrom(inputs, 'gpt55');
-        const copilot = modelUnavailableReasonFrom(inputs, 'gpt56-');
+        const available = modelUnavailableReasonFrom(inputs, GPT55);
+        const copilot = modelUnavailableReasonFrom(inputs, GPT56_TERRA);
 
         expect(rows.map((row) => row.availability)).toEqual([
           'provider-key',
@@ -359,7 +373,7 @@ describe('model availability', () => {
         ]);
         expect(available).toBeNull();
         expect(copilot).toBe(
-          'VS Code does not currently offer "gpt56-" through Copilot.',
+          'VS Code does not currently offer "openai/gpt-5.6-terra" through Copilot.',
         );
         expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
         expect(globalState.copilotPreferenceReads).toBe(
@@ -391,17 +405,17 @@ describe('model availability', () => {
       yield* Effect.promise(() => installAccessPlatform());
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['haiku3']),
+        yield* availabilityInputs(hostStores(), [HAIKU3]),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* availabilityInputs(hostStores(), ['haiku3']),
-        'haiku3',
+        yield* availabilityInputs(hostStores(), [HAIKU3]),
+        HAIKU3,
       );
 
       expect(model.availability).toBe('retired');
       expect(isModelOptionAvailable(model)).toBe(false);
       expect(reason).toBe(
-        'Model "haiku3" is retired and no longer available from its provider. Choose an active model.',
+        'Model "anthropic/claude-3-haiku-20240307" is retired and no longer available from its provider. Choose an active model.',
       );
     }),
   );
@@ -415,7 +429,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), [GPT55]),
         );
 
         expect(model.availability).toBe('provider-key');
@@ -433,10 +447,10 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['gpt56pro']),
+        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
       );
 
-      expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
+      expect(MODEL_CONFIGS['openai/gpt-5.6-sol'].modes).toContain('pro');
       expect(model).toMatchObject({
         availability: 'missing-key',
       });
@@ -450,18 +464,18 @@ describe('model availability', () => {
       );
 
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['gpt56pro']),
+        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
       );
       const reason = modelUnavailableReasonFrom(
-        yield* availabilityInputs(hostStores(), ['gpt56pro']),
-        'gpt56pro',
+        yield* availabilityInputs(hostStores(), [GPT56_PRO]),
+        GPT56_PRO,
       );
 
       expect(model).toMatchObject({
         availability: 'provider-unavailable',
       });
       expect(reason).toBe(
-        'Model "gpt56pro" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.',
+        'Model "openai/gpt-5.6-sol+pro" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.',
       );
     }),
   );
@@ -475,17 +489,19 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), [GPT55]),
         );
         const reason = modelUnavailableReasonFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55']),
-          'gpt55',
+          yield* availabilityInputs(hostStores(), [GPT55]),
+          GPT55,
         );
 
         expect(model).toMatchObject({
           availability: 'missing-key',
         });
-        expect(reason).toBe('Model "gpt55" requires an OpenRouter API key.');
+        expect(reason).toBe(
+          'Model "openai/gpt-5.5-2026-04-23" requires an OpenRouter API key.',
+        );
       }),
   );
 
@@ -503,7 +519,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gemini31p']),
+          yield* availabilityInputs(hostStores(), [GEMINI31P]),
         );
 
         expect(model.availability).toBe('missing-key');
@@ -522,7 +538,7 @@ describe('model availability', () => {
         );
 
         const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55']),
+          yield* availabilityInputs(hostStores(), [GPT55]),
         );
 
         expect(model.availability).toBe('subscription-access');
@@ -530,7 +546,7 @@ describe('model availability', () => {
           `${Math.round(
             (CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue *
               CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit +
-              MODEL_CONFIGS.gpt55.maxOutputTokens) /
+              MODEL_CONFIGS[GPT55].maxOutputTokens) /
               1000,
           )}K`,
         );
@@ -546,7 +562,7 @@ describe('model availability', () => {
         installAccessPlatform({
           config: PREFER_CODEX_CONFIG,
           secrets: codexSessionSecrets(),
-          enabledModels: ['gemini31p'],
+          enabledModels: [GEMINI31P],
         }),
       );
 
@@ -588,14 +604,14 @@ describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
       yield* Effect.promise(() =>
         installPlatform({
           globalState: {
-            [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['kimi3']),
+            [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([KIMI3]),
             ...globalState,
           },
           secrets,
         }),
       );
       const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['kimi3']),
+        yield* availabilityInputs(hostStores(), [KIMI3]),
       );
       return model;
     });

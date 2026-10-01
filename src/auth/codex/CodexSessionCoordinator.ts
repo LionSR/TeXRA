@@ -32,7 +32,7 @@ import {
   CodexTokenResponseSchema,
   type CodexSession,
 } from './codexSessionTypes';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 export type CodexSessionStatus = SubscriptionSessionStatus;
 

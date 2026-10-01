@@ -1,10 +1,10 @@
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { lookup, type ModelConfig } from 'llm-zoo';
 
-/** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
+/** Trailing llm-zoo date pin (`-2026-04-23`) on a model `id`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
 
 /**
- * The model id the Codex backend keys on: the `fullName` with its llm-zoo date
+ * The model id the Codex backend keys on: the API `id` with its llm-zoo date
  * pin stripped.
  *
  * Never the `shortName`. That is llm-zoo's display abbreviation, and for every
@@ -18,16 +18,16 @@ const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
  * to check their plan, when the id was simply not a model.
  */
 export function codexBackendModelId(
-  config: Pick<ModelConfig, 'name' | 'fullName'>,
+  config: Pick<ModelConfig, 'ref' | 'id'>,
 ): string {
-  // The canonical registry `fullName`, not the caller's. A bound config has
-  // already been through `withShortModelName`, which overwrites `fullName`
-  // with `shortName` when "Prefer short model names" is on — reinstating the
-  // exact `gpt-5.6` this function exists to never send (#12873). `name` is
-  // the persisted registry id and is not rewritten anywhere on this path, so
-  // it is the one field that still identifies the model. A config the
-  // registry does not know (a runtime-discovered entry) has no canonical name
-  // to read, so its own `fullName` is the only answer available.
-  const canonical = MODEL_CONFIGS[config.name]?.fullName;
-  return (canonical ?? config.fullName).replace(CODEX_MODEL_DATE_PIN, '');
+  // The canonical registry `id`, not the caller's. A bound config has
+  // already been through `withShortModelName`, which overwrites `id` with
+  // `shortName` when "Prefer short model names" is on — reinstating the exact
+  // `gpt-5.6` this function exists to never send (#12873). `ref` is the
+  // registry key and is not rewritten anywhere on this path, so it is the one
+  // field that still identifies the model. A config the registry does not
+  // know (a runtime-discovered entry) has no canonical entry to read, so its
+  // own `id` is the only answer available.
+  const canonical = lookup(config.ref)?.id;
+  return (canonical ?? config.id).replace(CODEX_MODEL_DATE_PIN, '');
 }

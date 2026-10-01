@@ -18,7 +18,7 @@ import { seedReport } from '@test/support/runRecordSeeds';
 setupPlatform({ workspacePath: '/workspace/root' });
 const baseConfig = AgentConfigSchema.parse({
   agent: 'chat',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
   agentCategory: 'toolUse',
 });

@@ -38,15 +38,18 @@ import {
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
 import { type ModelOptionStores } from '@model/computeModelOptions';
+import { CODEX_ROUTE_EFFORTS, reasoningFor } from '@model/reasoningLevel';
 import {
-  reasoningEffortOverrides,
-  supportsReasoningLevel,
-} from '@model/reasoningLevel';
+  acceptedEfforts,
+  wireEffort,
+  type ReasoningChoice,
+  type ReasoningRequest,
+} from '@model/reasoningChoice';
 import type { CopilotModelRoute } from '@model/copilotRouting';
 import { routeConfig, type ModelRoute } from '@model/modelRoute';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
-import type { StateStore } from '@platform/interfaces';
 import { LanguageModel } from '@platform/languageModel';
+import { selectModel } from '@shared/model/modelSelection';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
@@ -59,46 +62,20 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
 
-/**
- * The efforts a wire route can be asked for: llm-zoo's vocabulary minus the
- * two that mean "ask for none". The catalog's effort is already llm-zoo's
- * enum, so no re-parse stands between the catalog and the request.
- */
-type RouteEffort = Exclude<
-  ReasoningEffort,
-  ReasoningEffort.NONE | ReasoningEffort.MINIMAL
->;
-
-function routeEffort(effort: ReasoningEffort | undefined): RouteEffort | null {
-  return effort === undefined ||
-    effort === ReasoningEffort.NONE ||
-    effort === ReasoningEffort.MINIMAL
-    ? null
-    : effort;
-}
-
-function supportedRouteEfforts(config: ModelConfig): readonly RouteEffort[] {
-  const listed = config.capabilities.supportedReasoningEfforts ?? [];
-  const efforts = listed
-    .map((effort) => routeEffort(effort))
-    .filter((effort): effort is RouteEffort => effort !== null);
-  const configured = routeEffort(config.capabilities.reasoningEffort);
-  if (configured !== null && !efforts.includes(configured)) {
-    efforts.push(configured);
-  }
-  return efforts;
-}
-
 /** The runtime facts of one bound model that the package does not carry. */
 export interface BoundModel {
-  /** Registry short name; the run's `modelId` on every snapshot. */
+  /** The run's model string (`provider/id[@effort][+pro]`), as every snapshot names it. */
   readonly modelId: string;
   readonly config: ModelConfig;
+  /** What this binding asks the model for: thinking, effort and mode, and any level it substituted. */
+  readonly reasoning: ReasoningChoice;
+  /** The service tier the requests are sent on, which pricing bills. */
+  readonly serviceTier?: 'fast';
   readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
@@ -125,7 +102,10 @@ export interface BoundModel {
 }
 
 interface BindModelInput {
-  readonly config: ModelConfig;
+  /** The run's model string, as stored; it also carries the effort, thinking and mode asked for. */
+  readonly modelId: string;
+  /** The config to bind: a route's overlay, else the catalog entry the model string names. */
+  readonly config?: ModelConfig;
   /** Live settings from this run's session, plus the process secret store. */
   readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
@@ -149,23 +129,25 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
   { protocol: P }
 >;
 
-const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
-  {
-    Validation: 'validation',
-    OpenAIResponse: 'openai-responses',
-    OpenRouterNative: 'openrouter-chat',
-    VscodeLm: 'vscode-lm',
-    Anthropic: 'anthropic-messages',
-    OpenAI: 'openai-responses',
-    GoogleInteractions: 'google-interactions',
-    DeepSeek: 'openai-responses',
-    XAI: 'openai-responses',
-    Kimi: 'openai-responses',
-    DashScope: 'openai-responses',
-    MiniMax: 'openai-responses',
-    GLM: 'openai-responses',
-    Meta: 'openai-responses',
-  };
+/** The wire protocol each conversation format binds. */
+export const PROTOCOL_BY_KEY: Readonly<
+  Record<ModelCompatibilityKey, Protocol | 'validation'>
+> = {
+  Validation: 'validation',
+  OpenAIResponse: 'openai-responses',
+  OpenRouterNative: 'openrouter-chat',
+  VscodeLm: 'vscode-lm',
+  Anthropic: 'anthropic-messages',
+  OpenAI: 'openai-responses',
+  GoogleInteractions: 'google-interactions',
+  DeepSeek: 'openai-responses',
+  XAI: 'openai-responses',
+  Kimi: 'openai-responses',
+  DashScope: 'openai-responses',
+  MiniMax: 'openai-responses',
+  GLM: 'openai-responses',
+  Meta: 'openai-responses',
+};
 
 /** A binding's {@link BoundModel.wireRouteKey} and model-scoped key. */
 function routeKeys(wire: readonly string[], model: string) {
@@ -187,7 +169,7 @@ function credentialFingerprint(route: string, secret: string): string {
 /** Configuration shared by every HTTP protocol arm. */
 function binding(config: ModelConfig, credential: RouteCredential) {
   return {
-    requestedModel: config.fullName,
+    requestedModel: config.id,
     deployment: {
       endpoint: credential.endpoint,
       credentialScope: `${credential.provider}:${credential.route}`,
@@ -201,11 +183,12 @@ type AnthropicThinking = Extract<
 >['defaults']['thinking'];
 
 function anthropicThinking(
-  capabilities: ModelConfig['capabilities'],
+  config: ModelConfig,
+  reasoning: ReasoningChoice,
   maxOutputTokens: number,
 ): AnthropicThinking {
-  if (!capabilities.supportsReasoning) return { mode: 'disabled' };
-  if (capabilities.supportsAdaptiveThinking) {
+  if (!reasoning.thinking) return { mode: 'disabled' };
+  if (!config.reasoning?.budget) {
     return { mode: 'adaptive', display: 'summarized' };
   }
   return {
@@ -217,15 +200,6 @@ function anthropicThinking(
 
 /** Instructions the Codex backend requires when the request carries none. */
 const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
-
-/**
- * The Codex backend runs every turn synchronously on one connection, so an
- * effort above medium risks the client timing out before it answers.
- */
-const CODEX_ALLOWED_EFFORTS: readonly RouteEffort[] = [
-  ReasoningEffort.LOW,
-  ReasoningEffort.MEDIUM,
-];
 
 type ResponsesAuthentication = Parameters<
   typeof openaiResponsesWebSocketModel
@@ -271,11 +245,14 @@ interface BindingFacts {
     readonly parallelToolCalls: boolean;
   };
   readonly supportsTemperature: boolean;
-  readonly effort: RouteEffort | null;
-  readonly supportedEfforts: readonly RouteEffort[];
+  /** The one reasoning decision this bind carries out. */
+  readonly reasoning: ReasoningChoice;
+  /** The effort values the model accepts on the wire (see {@link acceptedEfforts}). */
+  readonly acceptedEfforts: readonly ReasoningEffort[];
   readonly gpt5ReasoningSummary: boolean;
   readonly googleServerState: boolean;
-  readonly thinkingMode: 'enabled' | 'disabled';
+  /** The user runs OpenAI models on the fast service tier where it is offered. */
+  readonly fastTier: boolean;
 }
 
 /**
@@ -310,7 +287,8 @@ type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
  * `null` for OpenAI, Meta and xAI, which the arm below binds.
  */
 function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
-  const { base, config, capabilities, controls, effort, thinkingMode } = facts;
+  const { base, config, controls, reasoning: choice } = facts;
+  const effort = wireEffort(config, choice);
   const route = (
     fields: Pick<
       ResponsesConfiguration,
@@ -350,59 +328,39 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
     value: ResponsesConfiguration['allowedReasoningEfforts'][number] | null,
   ) => ({ effort: value, mode: null, summary: null });
   switch (config.provider) {
-    case ModelProvider.DEEPSEEK: {
+    case ModelProvider.DEEPSEEK:
       // `none` turns thinking off; thinking refuses a temperature.
-      const thinkingEffort =
-        effort === ReasoningEffort.LOW || effort === ReasoningEffort.MAX
-          ? effort
-          : ReasoningEffort.HIGH;
       return route({
         supportsTemperature: facts.supportsTemperature,
         supportsForcedToolChoice: true,
-        allowedReasoningEfforts: ['none', 'low', 'high', 'max'],
+        allowedReasoningEfforts: facts.acceptedEfforts,
         stores: false,
         temperature: controls.temperature,
-        reasoning: reasoning(
-          thinkingMode === 'disabled' ? 'none' : thinkingEffort,
-        ),
+        reasoning: reasoning(effort),
       });
-    }
     case ModelProvider.MOONSHOT:
-      // Kimi fixes its sampling, always thinks, and takes only `auto`.
+      // Kimi fixes its sampling. Its `thinking` switch is not part of this
+      // request shape, so `@none` is refused here (`routeReasoning`).
       return route({
         supportsTemperature: false,
         supportsForcedToolChoice: false,
-        allowedReasoningEfforts: ['low', 'high', 'max'],
+        allowedReasoningEfforts: config.reasoning?.efforts ?? [],
         stores: false,
         temperature: null,
-        reasoning: reasoning(
-          effort === ReasoningEffort.LOW ||
-            effort === ReasoningEffort.HIGH ||
-            effort === ReasoningEffort.MAX
-            ? effort
-            : null,
-        ),
+        reasoning: reasoning(choice.effort),
       });
     case ModelProvider.GLM:
       // Zhipu stores for seven days; `none` turns thinking off.
       return route({
         supportsTemperature: facts.supportsTemperature,
         supportsForcedToolChoice: false,
-        allowedReasoningEfforts: [
-          'none',
-          'minimal',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-          'max',
-        ],
+        allowedReasoningEfforts: facts.acceptedEfforts,
         stores: true,
         temperature:
           controls.temperature === null
             ? null
             : Math.min(1, controls.temperature),
-        reasoning: reasoning(thinkingMode === 'disabled' ? 'none' : effort),
+        reasoning: reasoning(effort),
       });
     case ModelProvider.DASHSCOPE:
       // DashScope stores by default; Qwen keeps its own thinking default.
@@ -422,7 +380,7 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
         allowedReasoningEfforts: ['high'],
         stores: false,
         temperature: Math.min(1, Math.max(0.01, facts.input.temperature)),
-        reasoning: capabilities.supportsReasoning ? reasoning('high') : null,
+        reasoning: choice.thinking ? reasoning('high') : null,
       });
     default:
       return null;
@@ -441,10 +399,11 @@ const PROTOCOL_DESCRIPTORS: {
   'anthropic-messages': {
     configure: ({
       base,
+      config,
       capabilities,
       controls,
       supportsTemperature,
-      effort,
+      reasoning,
     }) => ({
       ...base,
       protocol: 'anthropic-messages',
@@ -454,8 +413,17 @@ const PROTOCOL_DESCRIPTORS: {
       defaults: {
         ...controls,
         parallelToolCalls: true,
-        thinking: anthropicThinking(capabilities, controls.maxOutputTokens),
-        effort: capabilities.supportsReasoningEffort ? effort : null,
+        thinking: anthropicThinking(
+          config,
+          reasoning,
+          controls.maxOutputTokens,
+        ),
+        // Anthropic has no `none` or `minimal`: off is the thinking switch.
+        effort:
+          reasoning.effort === ReasoningEffort.NONE ||
+          reasoning.effort === ReasoningEffort.MINIMAL
+            ? null
+            : reasoning.effort,
         cache: capabilities.supportsPromptCaching ? '5m' : 'disabled',
         stopSequences: [],
       },
@@ -475,21 +443,20 @@ const PROTOCOL_DESCRIPTORS: {
         controls,
         credential,
         supportsTemperature,
-        effort,
-        supportedEfforts,
+        reasoning: choice,
         gpt5ReasoningSummary,
       } = facts;
+      const effort = wireEffort(config, choice);
       // GPT-5 asks for a reasoning summary only when the user turned it on;
       // every other reasoning Responses model asks. `null` omits the field.
-      const isGpt5 =
-        config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
+      const isGpt5 = config.id.startsWith('gpt-5');
       const summary: 'auto' | null =
         !isGpt5 || gpt5ReasoningSummary ? 'auto' : null;
+      const reasoning =
+        config.reasoning === undefined
+          ? null
+          : { effort, mode: choice.mode, summary };
       if (credential.route === 'chatgpt-subscription') {
-        let codexEffort: RouteEffort | null = effort;
-        if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
-          codexEffort = ReasoningEffort.MEDIUM;
-        }
         return {
           ...base,
           requestedModel: credential.requestedModel,
@@ -500,7 +467,11 @@ const PROTOCOL_DESCRIPTORS: {
           supportsStorage: false,
           supportsDocumentInput: capabilities.supportsNativePdf,
           webSocketStreamParameter: 'required',
-          allowedReasoningEfforts: [...CODEX_ALLOWED_EFFORTS],
+          allowedReasoningEfforts: facts.acceptedEfforts.filter(
+            (value) =>
+              value === ReasoningEffort.NONE ||
+              CODEX_ROUTE_EFFORTS.includes(value),
+          ),
           instructions: {
             kind: 'required',
             fallback: CODEX_DEFAULT_INSTRUCTIONS,
@@ -514,23 +485,14 @@ const PROTOCOL_DESCRIPTORS: {
             temperature: controls.temperature,
             store: false,
             parallelToolCalls: controls.parallelToolCalls,
-            reasoning: capabilities.supportsReasoning
-              ? {
-                  effort: capabilities.supportsReasoningEffort
-                    ? codexEffort
-                    : null,
-                  mode: capabilities.reasoningMode ?? null,
-                  summary,
-                }
-              : null,
+            reasoning,
             serviceTier: null,
           },
         };
       }
-      // xAI stores and chains too, but has no background mode, `max` effort
-      // or summary control; a chained request reuses the stored instructions.
+      // xAI stores and chains too, but has no background mode or summary
+      // control; a chained request reuses the stored instructions.
       const xai = config.provider === ModelProvider.XAI;
-      const routeEffort = xai && effort === ReasoningEffort.MAX ? null : effort;
       return {
         ...base,
         protocol: 'openai-responses',
@@ -540,11 +502,7 @@ const PROTOCOL_DESCRIPTORS: {
         supportsStorage: true,
         supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
-        allowedReasoningEfforts: supportedEfforts.length
-          ? supportedEfforts.filter(
-              (value) => !xai || value !== ReasoningEffort.MAX,
-            )
-          : ['low', 'medium', 'high'],
+        allowedReasoningEfforts: facts.acceptedEfforts,
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: xai,
         supportsForcedToolChoice: true,
@@ -557,16 +515,11 @@ const PROTOCOL_DESCRIPTORS: {
           // background submission read; the Codex arm above is stateless.
           store: true,
           parallelToolCalls: controls.parallelToolCalls,
-          reasoning: capabilities.supportsReasoning
-            ? {
-                effort: capabilities.supportsReasoningEffort
-                  ? routeEffort
-                  : null,
-                mode: capabilities.reasoningMode ?? null,
-                summary: xai ? null : summary,
-              }
-            : null,
-          serviceTier: config.serviceTier ?? null,
+          reasoning:
+            reasoning === null || !xai
+              ? reasoning
+              : { ...reasoning, summary: null },
+          serviceTier: facts.fastTier && config.tiers?.fast ? 'fast' : null,
         },
       };
     },
@@ -583,7 +536,7 @@ const PROTOCOL_DESCRIPTORS: {
       capabilities,
       controls,
       googleServerState,
-      effort,
+      reasoning,
     }) => ({
       ...base,
       protocol: 'google-interactions',
@@ -595,9 +548,14 @@ const PROTOCOL_DESCRIPTORS: {
         // (and background execution becomes reachable); off, every round
         // resends the full transcript and nothing is retained.
         store: googleServerState,
+        // A Gemini model without levels (2.5, budget-controlled) keeps the
+        // level this route has always sent.
         thinkingLevel:
-          effort === 'low' || effort === 'medium' || effort === 'high'
-            ? effort
+          reasoning.effort === 'minimal' ||
+          reasoning.effort === 'low' ||
+          reasoning.effort === 'medium' ||
+          reasoning.effort === 'high'
+            ? reasoning.effort
             : 'high',
       },
     }),
@@ -614,11 +572,12 @@ const PROTOCOL_DESCRIPTORS: {
       capabilities,
       controls,
       supportsTemperature,
-      supportedEfforts,
+      reasoning,
+      acceptedEfforts: supportedEfforts,
     }) => ({
       ...base,
       requestedModel:
-        config.openrouterFullName ?? `${config.provider}/${config.fullName}`,
+        config.openrouterFullName ?? `${config.provider}/${config.id}`,
       protocol: 'openrouter-chat',
       supportsTemperature,
       supportsForcedToolChoice: true,
@@ -628,9 +587,7 @@ const PROTOCOL_DESCRIPTORS: {
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
         temperature: controls.temperature,
-        effort: capabilities.supportsReasoningEffort
-          ? capabilities.reasoningEffort
-          : null,
+        effort: wireEffort(config, reasoning),
         stopSequences: [],
       },
     }),
@@ -646,8 +603,8 @@ const configurationFor = Effect.fn('configurationFor')(function* (
   config: ModelConfig,
   credential: RouteCredential,
   input: BindModelInput,
+  reasoning: ReasoningChoice,
 ) {
-  const { capabilities } = config;
   const maxOutputTokens =
     input.agentCategory === AgentCategory.ToolUse
       ? Math.max(
@@ -655,10 +612,17 @@ const configurationFor = Effect.fn('configurationFor')(function* (
           Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
         )
       : config.maxOutputTokens;
-  const supportsTemperature = !capabilities.supportsReasoning;
+  // A request that does not think is sampled at the run's temperature (the
+  // helper model runs at 0), except on an OpenAI reasoning model, which
+  // refuses a temperature even at effort `none`.
+  const supportsTemperature =
+    !reasoning.thinking &&
+    !(
+      config.provider === ModelProvider.OPENAI && config.reasoning !== undefined
+    );
   return PROTOCOL_DESCRIPTORS[protocol].configure({
     config,
-    capabilities,
+    capabilities: config.capabilities,
     credential,
     input,
     base: binding(config, credential),
@@ -684,9 +648,14 @@ const configurationFor = Effect.fn('configurationFor')(function* (
       ),
     },
     supportsTemperature,
-    effort: routeEffort(capabilities.reasoningEffort),
-    supportedEfforts: supportedRouteEfforts(config),
-    thinkingMode: capabilities.supportsReasoning ? 'enabled' : 'disabled',
+    reasoning,
+    acceptedEfforts: acceptedEfforts(config),
+    fastTier:
+      protocol === 'openai-responses' &&
+      (yield* readSettingFrom<boolean>(
+        input.stores,
+        'texra.model.openaiFastTier',
+      )),
   });
 });
 
@@ -776,9 +745,10 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
 /** Bind a model the editor serves over the route its decision discovered
  *  (exact id, vendor and version), into the caller's scope. */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
-  config: ModelConfig,
+  modelId: string,
   compatibilityKey: ModelCompatibilityKey,
   route: CopilotModelRoute,
+  reasoning: ReasoningChoice,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | LanguageModel> {
   const editor = yield* LanguageModel;
   // The discovered route carries the editor's own context ceiling and the
@@ -798,8 +768,9 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     defaults: { justification: 'Run the selected TeXRA agent.' },
   });
   return {
-    modelId: config.name,
+    modelId,
     config: routed,
+    reasoning,
     compatibilityKey,
     model,
     origin: {
@@ -825,24 +796,6 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
 });
 
 /**
- * The user's per-model reasoning level, applied to the config the run binds
- * so the request default, the reported range and the accounting all read one
- * effort. Only models whose level is user-selectable honor it; every other
- * model keeps the catalog's effort.
- */
-const withReasoningLevelOverride = Effect.fn('withReasoningLevelOverride')(
-  function* (config: ModelConfig, globalState: StateStore) {
-    if (!supportsReasoningLevel(config)) return config;
-    const effort = (yield* reasoningEffortOverrides(globalState))[config.name];
-    if (effort === undefined) return config;
-    return {
-      ...config,
-      capabilities: { ...config.capabilities, reasoningEffort: effort },
-    };
-  },
-);
-
-/**
  * Bind one model for a run. The route is `resolveModelRoute`'s one decision,
  * and only the credential that route names is fetched; the persisted
  * compatibility key of a resumed conversation wins over today's default.
@@ -854,25 +807,55 @@ export const bindModel = Effect.fn('bindModel')(function* (
   Error,
   Scope.Scope | HttpClient.HttpClient | LanguageModel
 > {
-  // The wire identity the preference promises, applied to the bound config.
-  const requested = yield* withShortModelName(input.config, input.stores);
-  const route = yield* resolveModelRoute(input.stores, requested, input);
+  const selected = selectModel(input.modelId);
+  const catalog = input.config ?? selected?.config;
+  if (catalog === undefined) {
+    return yield* Effect.fail(
+      new Error(`Model ${input.modelId} is not registered`),
+    );
+  }
+  const request: ReasoningRequest = selected?.request ?? {};
+  // The wire identity the preference promises, applied to the bound config;
+  // a request in a provider mode (OpenAI `pro`) keeps the pinned id.
+  const requested =
+    request.mode === undefined
+      ? yield* withShortModelName(catalog, input.stores)
+      : catalog;
+  const route = yield* resolveModelRoute(input.stores, requested, {
+    ...input,
+    mode: request.mode,
+  });
   const compatibilityKey =
     input.compatibilityKey ?? (yield* routeCompatibilityKey(requested, route));
   if (compatibilityKey === undefined) {
     return yield* Effect.fail(
-      new Error(`Unsupported model provider: ${input.config.provider}`),
+      new Error(`Unsupported model provider: ${catalog.provider}`),
     );
   }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
   if (protocol === 'vscode-lm' && route.kind === 'copilot') {
-    return yield* bindEditorModel(requested, compatibilityKey, route.route);
+    // The editor manages its own reasoning; the choice is recorded, not sent.
+    return yield* bindEditorModel(
+      input.modelId,
+      compatibilityKey,
+      route.route,
+      yield* reasoningFor(requested, request, input.stores.globalState, {
+        protocol,
+        codexSubscription: false,
+      }),
+    );
   }
   if (protocol === 'validation') {
     const bound = validationModel(requested);
     return {
-      modelId: requested.name,
+      modelId: input.modelId,
       config: requested,
+      reasoning: yield* reasoningFor(
+        requested,
+        request,
+        input.stores.globalState,
+        { protocol, codexSubscription: false },
+      ),
       compatibilityKey,
       model: bound.model,
       origin: bound.origin,
@@ -883,7 +866,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       supportsNativePdf: false,
       supportsNativeAudio: false,
       supportsForcedToolChoice: true,
-      ...routeKeys([requested.provider, 'validation'], requested.fullName),
+      ...routeKeys([requested.provider, 'validation'], requested.id),
       backgroundCapable: false,
       persistentConnection: false,
     };
@@ -895,11 +878,11 @@ export const bindModel = Effect.fn('bindModel')(function* (
   ) {
     return yield* Effect.fail(
       new Error(
-        `Model ${requested.name} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,
+        `Model ${input.modelId} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,
       ),
     );
   }
-  let config = yield* routeConfig(input.stores, requested, route);
+  const config = yield* routeConfig(input.stores, requested, route);
   const credential: RouteCredential =
     route.kind === 'chatgpt-subscription' || route.kind === 'xai-subscription'
       ? yield* resolveSubscriptionCredential(
@@ -913,13 +896,23 @@ export const bindModel = Effect.fn('bindModel')(function* (
           route,
           input.stores.secrets,
         );
-  config = yield* withReasoningLevelOverride(config, input.stores.globalState);
+  const reasoning = yield* reasoningFor(
+    config,
+    request,
+    input.stores.globalState,
+    {
+      protocol,
+      codexSubscription: credential.route === 'chatgpt-subscription',
+    },
+  );
   const configuration = yield* configurationFor(
     protocol,
     config,
     credential,
     input,
+    reasoning,
   );
+
   // Background delivery and the persistent WebSocket are alternatives on the
   // Responses protocol, and background wins where the user selected both.
   const onWebSocket =
@@ -928,7 +921,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       {
         backgroundCapable: backgroundCapable(configuration),
         protocol: configuration.protocol,
-        modelName: config.name,
+        modelName: config.id,
         agentCategory: input.agentCategory,
       },
       input.stores,
@@ -955,7 +948,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
           unreleased.length === 0
             ? Effect.void
             : Effect.logWarning(
-                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.name} binding closed; the provider expires them on its own.`,
+                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.label} binding closed; the provider expires them on its own.`,
               ).pipe(Effect.annotateLogs({ unreleased })),
         ),
       ),
@@ -963,8 +956,13 @@ export const bindModel = Effect.fn('bindModel')(function* (
   }
   const origin = originOf(configuration);
   return {
-    modelId: config.name,
+    modelId: input.modelId,
     config,
+    reasoning,
+    ...(configuration.protocol === 'openai-responses' &&
+      configuration.defaults.serviceTier === 'fast' && {
+        serviceTier: 'fast' as const,
+      }),
     compatibilityKey,
     model,
     origin,
@@ -989,7 +987,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         credential.endpoint,
         credentialFingerprint(credential.route, routeBearer(credential)),
       ],
-      config.fullName,
+      config.id,
     ),
     // The socket carries one turn at a time and submits no background work.
     backgroundCapable: !onWebSocket && backgroundCapable(configuration),

@@ -1,7 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, vi, type Mock } from 'vitest';
 import { z } from 'zod';
 

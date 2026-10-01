@@ -1,30 +1,46 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
+import { Effect } from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { isClaudeCodeModel } from '@shared/schemas';
 import type {
-  ClaudeAgentEffort,
+  AgentCliEffort,
   TokenUsageStats,
+  ToolError,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { truncateSummary } from '@utils/text/stringUtils';
+
+import {
+  agentCliReasoning,
+  resolveAgentCliModel,
+  selectAgentCliModel,
+  type AgentCliModelRule,
+} from './agentCliModel';
+import type { ModelConfig } from 'llm-zoo';
 
 import type {
   EffortLevel,
   ModelUsage,
   SDKResultMessage,
+  ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
 
 const CHANNEL = 'claudeAgent';
 
 /**
- * Compile-time guard: `ClaudeAgentEffort` in `@shared` (the single source of
- * truth for the settings UI, the IPC schema, and the tool runtime) and the
- * SDK's `EffortLevel` union must stay synchronized in both directions. If the
- * SDK adds or removes an effort level, this line produces a type error so
- * `ClaudeAgentEffortSchema` and the SDK type are reviewed together. Effort
- * levels mirror the SDK's `EffortLevel` (low → max): Claude decides adaptively
- * how much thinking to do, scaled by this hint.
+ * Compile-time guard: the agent CLI effort vocabulary in `@shared` (the one
+ * the settings UI, the IPC schema, and the tool runtime share) and the SDK's
+ * `EffortLevel` union must stay synchronized in both directions. If the SDK
+ * adds or removes an effort level, this line produces a type error so
+ * `AgentCliEffortSchema` and the SDK type are reviewed together.
  */
 type _AssertExact<T extends true> = T;
 type _IsExact<A, B> = [A] extends [B]
@@ -34,24 +50,93 @@ type _IsExact<A, B> = [A] extends [B]
   : false;
 
 type _EffortLevelsAligned = _AssertExact<
-  _IsExact<EffortLevel, ClaudeAgentEffort>
+  _IsExact<EffortLevel, `${AgentCliEffort}`>
 >;
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
 
-/**
- * Adaptive thinking is only supported on Fable 5, Opus 4.6+, and Sonnet 4.6+
- * (on Fable thinking is always on; an explicit `adaptive` is accepted). Haiku
- * (and any earlier model) rejects the `thinking: { type: 'adaptive' }`
- * option — gate the SDK option on this predicate to keep Haiku usable.
- */
-export function modelSupportsAdaptiveThinking(model: string): boolean {
-  return (
-    model.startsWith('claude-opus-') ||
-    model.startsWith('claude-sonnet-') ||
-    model.startsWith('claude-fable-')
-  );
+const CLAUDE_CODE_MODEL_RULE: AgentCliModelRule = {
+  cli: 'Claude Code',
+  eligible: isClaudeCodeModel,
+  requirement: 'a non-retired Anthropic model',
+};
+
+/** What one Claude Code session runs: the SDK's model, effort and thinking. */
+export interface ClaudeCodeRun {
+  /** The model's llm-zoo reference, the run's model label. */
+  readonly ref: string;
+  /** The API model ID the SDK takes. */
+  readonly model: string;
+  readonly effort: EffortLevel | undefined;
+  readonly thinking: ThinkingConfig | undefined;
+  /** Why the effort differs from the one asked for, for the run's log. */
+  readonly note: string | undefined;
 }
+
+/** Thinking off says so; a budget-sized model keeps Claude Code's default; otherwise adaptive. */
+function claudeCodeThinking(
+  thinking: boolean,
+  config: Pick<ModelConfig, 'reasoning'>,
+): ThinkingConfig | undefined {
+  if (!thinking) return { type: 'disabled' };
+  if (config.reasoning?.budget === true) return undefined;
+  return { type: 'adaptive' };
+}
+
+/**
+ * Resolve a Claude Code model string (`anthropic/<id>[@effort]`) and the
+ * call's effort through the reasoning policy. Adaptive thinking is sent when
+ * the model thinks on this request and sizes thinking adaptively; a
+ * budget-sized model (e.g. Haiku 4.5) rejects `adaptive`, so it keeps Claude
+ * Code's own default. A request with thinking off (`@none`) says so.
+ * Throws a `ToolError` for a model Claude Code cannot run.
+ */
+function claudeCodeRun(
+  modelString: string,
+  effort: AgentCliEffort | undefined,
+  userEffort: AgentCliEffort,
+): ClaudeCodeRun {
+  const selection = selectAgentCliModel(modelString, CLAUDE_CODE_MODEL_RULE);
+  const { config } = selection;
+  const resolved = agentCliReasoning(selection, effort, { userEffort });
+  return {
+    ref: config.ref,
+    model: config.id,
+    effort: resolved.effort,
+    thinking: claudeCodeThinking(resolved.choice.thinking, config),
+    note: resolved.choice.note,
+  };
+}
+
+/**
+ * The run a Claude Code call asks for: its own model and effort, else the
+ * user's settings. A snapped effort's note goes to the log.
+ */
+export const readClaudeCodeRun = Effect.fn('claudeAgent.readClaudeCodeRun')(
+  function* (
+    stores: SettingsStores,
+    input: {
+      readonly model?: string | null;
+      readonly effort?: AgentCliEffort | null;
+    },
+  ): Effect.fn.Return<ClaudeCodeRun, ToolError | StateReadFailed> {
+    const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
+    const modelString =
+      input.model ??
+      (yield* readSettingFrom<string>(stores, CLAUDE_AGENT_MODEL));
+    const userEffort = yield* readSettingFrom<AgentCliEffort>(
+      stores,
+      CLAUDE_AGENT_EFFORT,
+    );
+    const run = yield* resolveAgentCliModel(() =>
+      claudeCodeRun(modelString, input.effort ?? undefined, userEffort),
+    );
+    if (run.note) {
+      yield* Effect.logInfo(run.note).pipe(withLogChannel(CLAUDE_AGENT_NAME));
+    }
+    return run;
+  },
+);
 
 const SUMMARY_MAX_LENGTH = 60;
 

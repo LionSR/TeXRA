@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import {
@@ -39,7 +39,7 @@ import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins'
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'modelRoutes';
 
@@ -237,7 +237,7 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
   ) {
     if (route.kind === 'no-api-key') {
       return yield* Effect.fail(
-        new Error(`Model "${config.name}" has no direct API-key provider.`),
+        new Error(`Model "${config.label}" has no direct API-key provider.`),
       );
     }
     const provider =
@@ -297,6 +297,8 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
     readonly compatibilityKey?: ModelCompatibilityKey | null;
     readonly ownApiKeyFallback?: boolean;
     readonly declinedRoutes?: readonly DeclinableUsageRoute[];
+    /** The provider reasoning mode the request asks for (OpenAI `pro`). */
+    readonly mode?: ReasoningMode;
   } = {},
 ): Effect.fn.Return<BindableRoute, Error, LanguageModel> {
   const host = yield* readRouteFacts(stores, options.declinedRoutes);
@@ -304,11 +306,14 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   const prefersCopilot =
     key == null
       ? !options.ownApiKeyFallback &&
-        (yield* prefersCopilotRoute(config.name, stores.globalState))
+        (yield* prefersCopilotRoute(config.ref, stores.globalState))
       : key === 'VscodeLm';
+  // A provider mode never takes the Copilot preference (`decideModelRoute`),
+  // so the editor is not asked for a route it would not use.
   const copilotRoute =
-    prefersCopilot || config.provider === ModelProvider.COPILOT
-      ? (yield* discoverCopilotRoutes()).get(config.name)
+    (prefersCopilot && options.mode === undefined) ||
+    config.provider === ModelProvider.COPILOT
+      ? (yield* discoverCopilotRoutes()).get(config.ref)
       : undefined;
   const route = decideModelRoute(
     config,
@@ -318,6 +323,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
           validation: yield* shouldUseInternalValidationModel(),
           prefersCopilot,
           copilotRoute,
+          mode: options.mode,
         }
       : {
           ...host,
@@ -328,12 +334,13 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
           chatgptSubscription:
             host.chatgptSubscription && key === 'OpenAIResponse',
           xaiSubscription: host.xaiSubscription && key === 'XAI',
+          mode: options.mode,
         },
   );
   if (route.kind === 'openrouter-unsupported') {
     return yield* Effect.fail(
       new Error(
-        `Model ${config.name} requires reasoning mode ${config.capabilities.reasoningMode}, which OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
+        `${config.label} in ${options.mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`,
       ),
     );
   }
@@ -342,7 +349,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   // keeps its format and binds whatever route the editor offers.
   const unavailableReason =
     key == null
-      ? copilotRouteUnavailableReason(config.name, route.route)
+      ? copilotRouteUnavailableReason(config.ref, route.route)
       : undefined;
   if (unavailableReason) {
     return yield* Effect.fail(new AgentError(unavailableReason));
@@ -350,7 +357,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   if (route.route === undefined) {
     return yield* Effect.fail(
       new Error(
-        `No editor route is discovered for model ${config.name}; refresh the model list.`,
+        `No editor route is discovered for model ${config.label}; refresh the model list.`,
       ),
     );
   }
@@ -360,7 +367,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
 /**
  * The config a binding sends on the wire under the user's "prefer short model
  * names" setting: the unpinned `shortName` in place of the date-pinned
- * `fullName`, for gateways that accept only the unpinned identifier. Applied
+ * `id`, for gateways that accept only the unpinned identifier. Applied
  * to the bound config, not only to the route decision, so the request carries
  * the identifier the preference promises.
  */
@@ -375,18 +382,15 @@ export const withShortModelName = Effect.fn('withShortModelName')(function* (
       stores,
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     )) ||
-    // Mode-selected registry entries share another entry's wire id. Their
-    // display-oriented shortName is not an API model identifier.
-    config.capabilities.reasoningMode !== undefined ||
     !short ||
-    short === config.fullName
+    short === config.id
   ) {
     return config;
   }
   yield* Effect.logDebug(
-    `Using short model name for ${config.name}: ${config.fullName} → ${short}`,
+    `Using short model name for ${config.ref}: ${config.id} → ${short}`,
   ).pipe(withLogChannel(CHANNEL));
-  return { ...config, fullName: short };
+  return { ...config, id: short };
 });
 
 /**

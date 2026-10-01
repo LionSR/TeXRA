@@ -47,7 +47,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =

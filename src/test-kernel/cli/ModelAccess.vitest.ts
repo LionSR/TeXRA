@@ -26,20 +26,10 @@ vi.mock('@model/computeModelOptions', () => ({
   usageRouteFrom: () => undefined,
 }));
 
-vi.mock('llm-zoo', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('llm-zoo')>();
-  return {
-    ...actual,
-    MODEL_CONFIGS: {
-      ...actual.MODEL_CONFIGS,
-      hiddenFixtureModel: {},
-      userFacingFixture: {
-        fullName: 'user-facing-fixture',
-        label: 'User Facing Fixture',
-      },
-    },
-  };
-});
+/** A registry model outside the visible list, typed in another case. */
+const HIDDEN_MODEL = 'anthropic/claude-haiku-4-5-20251001';
+/** A registry model reached by its API id (`grok-4.7`) or label. */
+const USER_FACING_MODEL = 'xai/grok-4.7';
 
 setupPlatform({});
 
@@ -103,10 +93,10 @@ function resolveModelFromAccessList(
 }
 
 const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
-  missingKeyModel('gemini31p'),
+  missingKeyModel('google/gemini-3.1-pro-preview'),
 ];
 
-const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
+const RETIRED_HAIKU3_OPTION = modelOption('anthropic/claude-3-haiku-20240307', {
   label: 'Haiku 3',
   availability: 'retired',
 });
@@ -121,45 +111,48 @@ describe('CLI model access resolution', () => {
   });
 
   it('owns fallback behavior by model source', async () => {
-    const entries = [missingKeyModel('missingModel'), model('deepseekT')];
+    const entries = [
+      missingKeyModel('missingModel'),
+      model('deepseek/deepseek-v4-flash'),
+    ];
 
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'explicit-override',
       }),
     ).rejects.toThrow(
-      'Model "missingModel" is not available (missing api key). Available models: deepseekT.',
+      'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'environment',
       }),
     ).rejects.toThrow(
-      'Model "missingModel" is not available (missing api key). Available models: deepseekT.',
+      'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
     );
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'command-config',
       }),
     ).resolves.toEqual({
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
       notice:
-        'Model "missingModel" is not available (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
+        'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'history',
       }),
     ).resolves.toEqual({
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
       notice:
-        'Model "missingModel" is not available (missing api key). Available models: deepseekT. Using "deepseekT" instead.',
+        'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
     });
     await expect(
       resolveModelFromAccessList(entries, 'missingModel', {
         fallbackReason: 'builtin-default',
       }),
-    ).resolves.toEqual({ model: 'deepseekT' });
+    ).resolves.toEqual({ model: 'deepseek/deepseek-v4-flash' });
   });
 
   effectIt.effect(
@@ -167,8 +160,8 @@ describe('CLI model access resolution', () => {
     () =>
       Effect.gen(function* () {
         const rows = yield* modelSelectItemsForCli([
-          model('deepseekT', {
-            model: modelOption('deepseekT', {
+          model('deepseek/deepseek-v4-flash', {
+            model: modelOption('deepseek/deepseek-v4-flash', {
               label: 'DeepSeek',
               reasoning: 'Default (High)',
               availability: 'provider-key',
@@ -182,9 +175,9 @@ describe('CLI model access resolution', () => {
             }),
             status: 'openrouter key',
           }),
-          model('gemini31p', {
+          model('google/gemini-3.1-pro-preview', {
             available: false,
-            model: modelOption('gemini31p', {
+            model: modelOption('google/gemini-3.1-pro-preview', {
               label: 'Gemini',
               availability: 'missing-key',
             }),
@@ -193,7 +186,7 @@ describe('CLI model access resolution', () => {
         ]);
 
         expect(rows.map((row) => row.value)).toEqual([
-          'deepseekT',
+          'deepseek/deepseek-v4-flash',
           'openrouterOnlyT',
         ]);
         expect(rows.map((row) => row.description)).toEqual([
@@ -210,16 +203,16 @@ describe('CLI model access resolution', () => {
         expect(
           yield* modelSelectItemsForCli(
             [
-              model('sonnet46T', {
-                model: modelOption('sonnet46T', {
+              model('anthropic/claude-sonnet-4-6', {
+                model: modelOption('anthropic/claude-sonnet-4-6', {
                   label: 'Sonnet',
                   reasoning: 'Low',
                   availability: 'provider-key',
                 }),
                 status: 'api key set',
               }),
-              model('gpt55', {
-                model: modelOption('gpt55', {
+              model('openai/gpt-5.5-2026-04-23', {
+                model: modelOption('openai/gpt-5.5-2026-04-23', {
                   label: 'GPT-5.5',
                   availability: 'provider-key',
                 }),
@@ -228,21 +221,21 @@ describe('CLI model access resolution', () => {
             ],
             (candidate) =>
               Effect.succeed(
-                candidate === 'sonnet46T'
+                candidate === 'anthropic/claude-sonnet-4-6'
                   ? 'different conversation format; start new chat'
                   : undefined,
               ),
           ),
         ).toEqual([
           {
-            value: 'sonnet46T',
+            value: 'anthropic/claude-sonnet-4-6',
             label: 'Sonnet',
             description:
               'different conversation format; start new chat; api: api key set · reasoning setting: Low',
             disabled: true,
           },
           {
-            value: 'gpt55',
+            value: 'openai/gpt-5.5-2026-04-23',
             label: 'GPT-5.5',
             description: 'api: api key set',
             disabled: false,
@@ -253,11 +246,15 @@ describe('CLI model access resolution', () => {
 
   it('reports when no fallback model is runnable', async () => {
     await expect(
-      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
-        fallbackReason: 'command-config',
-      }),
+      resolveModelFromAccessList(
+        MISSING_KEY_ONLY_ENTRIES,
+        'google/gemini-3.1-pro-preview',
+        {
+          fallbackReason: 'command-config',
+        },
+      ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available (missing api key). No models are currently available. Add a provider API key with `texra setup`.',
+      'Model "google/gemini-3.1-pro-preview" is not available (missing api key). No models are currently available. Add a provider API key with `texra setup`.',
     );
   });
 
@@ -268,22 +265,24 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        selectCliRunnableModel('haiku3', {
+        selectCliRunnableModel('anthropic/claude-3-haiku-20240307', {
           fallbackReason: 'explicit-override',
           accessList: [],
           stores,
         }),
       ),
-    ).rejects.toThrow('Model "haiku3" is not available (retired).');
+    ).rejects.toThrow(
+      'Model "anthropic/claude-3-haiku-20240307" is not available (retired).',
+    );
   });
 
   it.each([
     {
       name: 'shows terminal recovery text for retired models in model details',
-      entry: model('haiku3', {
+      entry: model('anthropic/claude-3-haiku-20240307', {
         available: false,
         status: 'retired',
-        model: modelOption('haiku3', {
+        model: modelOption('anthropic/claude-3-haiku-20240307', {
           label: 'Haiku 3',
           availability: 'retired',
         }),
@@ -297,10 +296,10 @@ describe('CLI model access resolution', () => {
     },
     {
       name: 'shows a recovery hint for missing provider-key models in model details',
-      entry: model('glm52', {
+      entry: model('glm/glm-5.2', {
         available: false,
         status: 'missing api key',
-        model: modelOption('glm52', {
+        model: modelOption('glm/glm-5.2', {
           label: 'GLM-5.2',
           availability: 'missing-key',
         }),
@@ -321,7 +320,7 @@ describe('CLI model access resolution', () => {
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
     readModelAvailabilityInputsMock.mockReturnValueOnce(
       Effect.succeed([
-        modelOption('gpt56', {
+        modelOption('openai/gpt-5.6-sol', {
           availability: 'subscription-access',
         }),
       ]),
@@ -332,7 +331,7 @@ describe('CLI model access resolution', () => {
         {
           available: true,
           model: {
-            value: 'gpt56',
+            value: 'openai/gpt-5.6-sol',
             availability: 'subscription-access',
           },
         },
@@ -344,25 +343,27 @@ describe('CLI model access resolution', () => {
     readModelAvailabilityInputsMock
       .mockReturnValueOnce(
         Effect.succeed([
-          modelOption('sonnet46T', { availability: 'provider-key' }),
+          modelOption('anthropic/claude-sonnet-4-6', {
+            availability: 'provider-key',
+          }),
         ]),
       )
       .mockReturnValueOnce(
         Effect.succeed([
-          modelOption('hiddenFixtureModel', { availability: 'provider-key' }),
+          modelOption(HIDDEN_MODEL, { availability: 'provider-key' }),
         ]),
       );
 
     await expect(
       run(
-        selectCliRunnableModel('HIDDENFIXTUREMODEL', {
+        selectCliRunnableModel(HIDDEN_MODEL.toUpperCase(), {
           fallbackReason: 'explicit-override',
           stores,
         }),
       ),
-    ).resolves.toEqual({ model: 'hiddenFixtureModel' });
+    ).resolves.toEqual({ model: HIDDEN_MODEL });
     expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
-      'hiddenFixtureModel',
+      HIDDEN_MODEL,
     ]);
   });
 
@@ -373,22 +374,25 @@ describe('CLI model access resolution', () => {
       run(
         selectCliRunnableModel(
           [
-            { model: 'sonnet46T', reason: 'explicit-override' },
-            { model: 'hiddenFixtureModel', reason: 'environment' },
+            {
+              model: 'anthropic/claude-sonnet-4-6',
+              reason: 'explicit-override',
+            },
+            { model: HIDDEN_MODEL, reason: 'environment' },
           ],
           {
-            accessList: [model('sonnet46T')],
+            accessList: [model('anthropic/claude-sonnet-4-6')],
             stores,
           },
         ),
       ),
-    ).resolves.toEqual({ model: 'sonnet46T' });
+    ).resolves.toEqual({ model: 'anthropic/claude-sonnet-4-6' });
   });
 
   it('resolves hidden model entries for diagnostic commands', async () => {
     readModelAvailabilityInputsMock.mockReturnValueOnce(
       Effect.succeed([
-        modelOption('hiddenFixtureModel', {
+        modelOption(HIDDEN_MODEL, {
           availability: 'missing-key',
         }),
       ]),
@@ -396,8 +400,8 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        loadCliModelAccessEntry('HIDDENFIXTUREMODEL', {
-          accessList: [model('sonnet46T')],
+        loadCliModelAccessEntry(HIDDEN_MODEL.toUpperCase(), {
+          accessList: [model('anthropic/claude-sonnet-4-6')],
           stores,
         }),
       ),
@@ -405,25 +409,23 @@ describe('CLI model access resolution', () => {
       available: false,
       status: 'missing api key',
       model: {
-        value: 'hiddenFixtureModel',
+        value: HIDDEN_MODEL,
         availability: 'missing-key',
       },
     });
-    expectModelOptionsRequested(['hiddenFixtureModel']);
+    expectModelOptionsRequested([HIDDEN_MODEL]);
   });
 
   it('resolves user-facing model names to canonical registry ids', async () => {
     await expect(
-      resolveModelFromAccessList(
-        [model('userFacingFixture')],
-        'user-facing-fixture',
-        { fallbackReason: 'explicit-override' },
-      ),
-    ).resolves.toEqual({ model: 'userFacingFixture' });
+      resolveModelFromAccessList([model(USER_FACING_MODEL)], 'grok-4.7', {
+        fallbackReason: 'explicit-override',
+      }),
+    ).resolves.toEqual({ model: USER_FACING_MODEL });
 
     readModelAvailabilityInputsMock.mockReturnValueOnce(
       Effect.succeed([
-        modelOption('userFacingFixture', {
+        modelOption(USER_FACING_MODEL, {
           availability: 'missing-key',
         }),
       ]),
@@ -431,39 +433,41 @@ describe('CLI model access resolution', () => {
 
     await expect(
       run(
-        loadCliModelAccessEntry('User Facing Fixture', {
-          accessList: [model('sonnet46T')],
+        loadCliModelAccessEntry('Grok 4.7', {
+          accessList: [model('anthropic/claude-sonnet-4-6')],
           stores,
         }),
       ),
     ).resolves.toMatchObject({
       available: false,
       model: {
-        value: 'userFacingFixture',
+        value: USER_FACING_MODEL,
         availability: 'missing-key',
       },
     });
-    expectModelOptionsRequested(['userFacingFixture']);
+    expectModelOptionsRequested([USER_FACING_MODEL]);
   });
 
   it('reports stale hidden model configuration directly', async () => {
     readModelAvailabilityInputsMock
       .mockReturnValueOnce(
         Effect.succeed([
-          modelOption('sonnet46T', { availability: 'provider-key' }),
+          modelOption('anthropic/claude-sonnet-4-6', {
+            availability: 'provider-key',
+          }),
         ]),
       )
       .mockReturnValueOnce(Effect.succeed([]));
 
     await expect(
       run(
-        selectCliRunnableModel('hiddenFixtureModel', {
+        selectCliRunnableModel(HIDDEN_MODEL, {
           fallbackReason: 'explicit-override',
           stores,
         }),
       ),
     ).rejects.toThrow(
-      'Model "hiddenFixtureModel" is configured but has no option data.',
+      `Model "${HIDDEN_MODEL}" is configured but has no option data.`,
     );
   });
 });

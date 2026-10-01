@@ -155,7 +155,7 @@ function baseRequest(): CliRequest {
 function toolUseConfig() {
   return {
     agent: 'chat',
-    model: 'gpt54',
+    model: 'openai/gpt-5.4-2026-03-05',
     inputFiles: [] as string[],
     contextFiles: [] as string[],
     instruction: 'Check this.',
@@ -301,7 +301,7 @@ function checkpointSnapshot(): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
-      modelId: 'deepseekT',
+      modelId: 'deepseek/deepseek-v4-flash',
       modelCompatibilityKey: null,
       lastError: null,
       declinedRoutes: [],

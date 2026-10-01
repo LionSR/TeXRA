@@ -16,7 +16,7 @@ import {
   Schedule,
   Stream,
 } from 'effect';
-import { Headers, HttpClient } from 'effect/unstable/http';
+import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
