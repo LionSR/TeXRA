@@ -12,7 +12,7 @@
  * spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
- *   node scripts/validate-journeys.mjs [--model deepseek41T|glm53flash]
+ *   node scripts/validate-journeys.mjs [--model deepseek/deepseek-flash|glm/glm-5.3-flash]
  *     [--journey polish] [--no-build] [--out dir]
  */
 
@@ -44,8 +44,8 @@ const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
  * (`glm/glm-5.3-flash` is OpenRouter-only in the catalog).
  */
 const MODEL_KEYS = {
-  deepseek41T: 'DEEPSEEK_API_KEY',
-  glm53flash: 'OPENROUTER_API_KEY',
+  'deepseek/deepseek-flash': 'DEEPSEEK_API_KEY',
+  'glm/glm-5.3-flash': 'OPENROUTER_API_KEY',
 };
 
 function assert(condition, message) {

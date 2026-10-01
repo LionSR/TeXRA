@@ -26,7 +26,7 @@ import {
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import { modelConfig } from '@shared/model/modelSelection';
+import { selectModel } from '@shared/model/modelSelection';
 import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
 
 /**
@@ -199,12 +199,13 @@ export function getRuntimeModelDirectFallback(
   model: string,
   useOpenRouter: boolean,
 ): CopilotDirectFallback | undefined {
-  const config = modelConfig(model);
-  if (!config) return undefined;
+  const selected = selectModel(model);
+  if (!selected) return undefined;
   // The replacement run declines every subscription route and Copilot.
-  const route = decideModelRoute(config, {
+  const route = decideModelRoute(selected.config, {
     ...OWN_KEY_ROUTE_FACTS,
     useOpenRouter,
+    mode: selected.request.mode,
   });
   if (route.kind === 'openrouter') return { model, provider: 'openRouter' };
   return route.kind === 'api-key'

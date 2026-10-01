@@ -171,6 +171,10 @@ describe('Copilot route discovery', () => {
       model: GPT56_TERRA,
       provider: 'openai',
     });
+    // OpenRouter serves no provider reasoning mode, so `+pro` keeps its key.
+    expect(
+      getRuntimeModelDirectFallback('openai/gpt-5.6-sol+pro', true),
+    ).toBeUndefined();
   });
 
   it.effect('reports no route error only when the route is allowed', () =>
