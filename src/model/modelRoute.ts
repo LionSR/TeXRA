@@ -154,8 +154,14 @@ export function decideModelRoute(
 ): ModelRoute {
   if (facts.validation) return { kind: 'validation' };
   // Editor-supplied models cannot be proxied through OpenRouter, and a
-  // preference is a hard route choice (#9635).
-  if (facts.prefersCopilot || config.provider === ModelProvider.COPILOT) {
+  // preference is a hard route choice (#9635) for every request the editor
+  // can serve. The editor sends its own reasoning controls, so a provider
+  // mode (OpenAI `pro`) takes the model's own route, as the Codex
+  // subscription preference below does.
+  if (
+    (facts.prefersCopilot && facts.mode === undefined) ||
+    config.provider === ModelProvider.COPILOT
+  ) {
     return { kind: 'copilot', route: facts.copilotRoute };
   }
   if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter, facts.mode)) {
