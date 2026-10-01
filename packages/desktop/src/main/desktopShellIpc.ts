@@ -19,7 +19,7 @@ import {
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type {
   DesktopCommandRoutes,
   DesktopRenderer,

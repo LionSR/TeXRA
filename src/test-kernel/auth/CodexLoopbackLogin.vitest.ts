@@ -1,7 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports

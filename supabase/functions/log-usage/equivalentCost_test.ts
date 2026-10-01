@@ -3,8 +3,8 @@ import { equal } from 'node:assert/strict';
 import { equivalentListCost } from './equivalentCost.ts';
 
 // gpt-5.6-sol list price: $4/M input, $20/M output, cache discount 0.1
-// (prompts here stay under its 272K long-context tier). The fast-tier registry entry for the same model id
-// ($8/$40) must not be selected.
+// (prompts here stay under its 272K long-context tier). Its fast tier
+// ($8/$40) must not be used.
 Deno.test('prices a known model at standard-tier list price', () => {
   const cost = equivalentListCost({
     model: 'gpt-5.6-sol',

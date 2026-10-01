@@ -12,7 +12,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const LATEXDIFF_PICTURE_ENVIRONMENTS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';

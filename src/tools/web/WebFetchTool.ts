@@ -3,11 +3,7 @@ import { lookup } from 'node:dns';
 
 // Third-party imports
 import { Effect, Stream } from 'effect';
-import {
-  FetchHttpClient,
-  HttpClient,
-  type HttpClientError,
-} from 'effect/unstable/http';
+import { FetchHttpClient, HttpClient, type HttpClientError } from 'effect/http';
 import ipaddr from 'ipaddr.js';
 import {
   EnvHttpProxyAgent,

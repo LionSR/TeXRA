@@ -5,7 +5,7 @@
 
 // Third-party imports
 import { Layer } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient } from 'effect/http';
 
 /**
  * Builds a fetch-compatible `Response` from a JSON-serializable body, for

@@ -10,7 +10,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

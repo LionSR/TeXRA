@@ -32,7 +32,7 @@ import {
 } from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'toolUtils';
 

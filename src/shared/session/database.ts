@@ -8,7 +8,7 @@ import {
   type RcMap,
   type Stream,
 } from 'effect';
-import { isSqlError } from 'effect/unstable/sql/SqlError';
+import { isSqlError } from 'effect/sql/SqlError';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {

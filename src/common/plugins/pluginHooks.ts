@@ -13,7 +13,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Clock, Effect, Fiber, FileSystem, Option, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 import which from 'which';
 
 // Local imports - utilities
@@ -25,7 +25,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import { PluginError } from './pluginManifest';
 import type { ConfiguredHook } from './hookConfig';
 import type { HookRun } from './hookProtocol';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** What a hook's placeholders and `CLAUDE_*` variables name when it runs. */
 interface HookPlaces {

@@ -4,7 +4,7 @@
  */
 import { Effect } from 'effect';
 import { tryOpenBrowser } from './browser';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The URL is a loopback address on the machine running texra. */
 const REMOTE_CALLBACK_HINT =

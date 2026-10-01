@@ -26,7 +26,7 @@ import {
 } from './latexParsingUtils';
 import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** LaTeX project siblings that should always ride alongside the main file. */
 const PROJECT_SIBLING_EXTENSIONS = new Set(['.cls', '.sty', '.bst', '.cfg']);

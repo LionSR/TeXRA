@@ -23,7 +23,7 @@ import {
 } from './logSinks';
 import { createCliStyle } from './style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';

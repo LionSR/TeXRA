@@ -5,7 +5,7 @@
  * `SUBSCRIPTION_PROVIDERS` catalog.
  */
 import { Effect } from 'effect';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
   subscriptionProvider,

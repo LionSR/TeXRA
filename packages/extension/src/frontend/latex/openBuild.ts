@@ -21,7 +21,7 @@ import {
 import { getFileStem } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';
 

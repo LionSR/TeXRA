@@ -37,7 +37,7 @@ import {
   readPlugin,
   type ResolvedPlugin,
 } from './pluginManifest';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
 export type PluginOrigin =

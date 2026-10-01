@@ -63,7 +63,7 @@ import {
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A batch as the rows that consume it, for a caller that commits them in
  *  its own batch with a snapshot carrying `recorded`, the address of the

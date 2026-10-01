@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 import type { ExecResult } from '@shared/schemas';
 import { executeCommand } from '@utils/system/execUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type GitRead<A> = Effect.Effect<A, never, ChildProcessSpawner>;
 

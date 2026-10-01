@@ -11,7 +11,7 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const TexcountInputSchema = z.strictObject({
   files: z

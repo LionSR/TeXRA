@@ -110,7 +110,7 @@ import {
   positionRow,
 } from './loop/rows';
 import type { RunCell } from './loop/runProgram';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * Credential source a retry decision picked: the account the run is already

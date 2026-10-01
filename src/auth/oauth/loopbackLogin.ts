@@ -14,7 +14,7 @@
 import http from 'node:http';
 
 import { Deferred, Duration, Effect, Fiber, Result } from 'effect';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
 
