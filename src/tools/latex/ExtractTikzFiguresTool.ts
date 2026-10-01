@@ -17,7 +17,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = z.strictObject({
   texPath: texPathField('Path to the LaTeX file containing TikZ figures.'),

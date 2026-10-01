@@ -17,7 +17,7 @@ import {
 } from '@shared/constants/latexTiming';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),

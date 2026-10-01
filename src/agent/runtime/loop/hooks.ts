@@ -37,7 +37,7 @@ import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
 import type { RunCell } from './runProgram';
 import type { StepTools } from './step';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** One installed plugin's command hook, as a step pinned it. */
 export interface StepHook {

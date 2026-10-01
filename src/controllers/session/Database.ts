@@ -17,9 +17,9 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
-import * as SqlClient from 'effect/unstable/sql/SqlClient';
-import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as SqlClient from 'effect/sql/SqlClient';
+import * as Reactivity from 'effect/reactivity/Reactivity';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   Clock,
   Duration,

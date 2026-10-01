@@ -37,7 +37,7 @@ import {
 } from './compiledPdfArtifacts';
 import { combineFailureLogExcerpts } from './compileFailureRoundContext';
 import { getOutputFilesByRound, type OutputState } from './outputState';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */

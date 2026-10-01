@@ -32,7 +32,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '../leanLanguageServices';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type {
   LspHover,
   LspResult,

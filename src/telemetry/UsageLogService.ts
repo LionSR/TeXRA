@@ -11,11 +11,7 @@ import {
   Schedule,
   Semaphore,
 } from 'effect';
-import {
-  HttpClient,
-  HttpClientError,
-  HttpClientRequest,
-} from 'effect/unstable/http';
+import { HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';

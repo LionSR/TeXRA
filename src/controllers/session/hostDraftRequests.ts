@@ -28,8 +28,8 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@utils/files/pastedImageUtils';
-import type { HttpClient } from 'effect/unstable/http';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { HttpClient } from 'effect/http';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';
 

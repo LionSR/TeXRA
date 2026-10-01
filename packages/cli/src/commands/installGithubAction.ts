@@ -26,7 +26,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';

@@ -3,7 +3,7 @@
 
 // Third-party imports
 import { Effect, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -11,7 +11,7 @@ import { makeMachineGitEnv } from '@utils/system/gitEnv';
 
 // Local imports - this module's neighbours
 import { PluginError } from './pluginManifest';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Machine git env only: extending would merge back the helper-invoking keys
 // makeMachineGitEnv strips. A failure names the command and git's stderr.

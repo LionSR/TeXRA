@@ -1,6 +1,6 @@
 import { Data, Effect } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { envVar } from '@utils/system/envFlags';
 import type { PlatformError } from 'effect/PlatformError';
 

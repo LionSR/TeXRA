@@ -62,7 +62,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { validationModel } from './validationModel';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;

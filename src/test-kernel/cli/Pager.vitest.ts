@@ -6,7 +6,7 @@ import { pageStdout } from '@cli/runtime/pager';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import type * as ChildProcess from 'effect/process/ChildProcess';
 
 type Answer = ReturnType<Parameters<typeof scriptedSpawnerLayer>[0]>;
 

@@ -26,7 +26,7 @@ import {
   isNonEmptyString,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
 const MAX_DESCRIPTION_LENGTH = 80;

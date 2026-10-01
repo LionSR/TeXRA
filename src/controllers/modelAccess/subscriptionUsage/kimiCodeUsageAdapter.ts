@@ -11,7 +11,7 @@ import {
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
 import type { Cause } from 'effect';
-import type { HttpClient, HttpClientError } from 'effect/unstable/http';
+import type { HttpClient, HttpClientError } from 'effect/http';
 
 const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
 

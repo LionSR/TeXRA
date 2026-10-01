@@ -1,6 +1,6 @@
 import { Effect, Exit, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { CliExitCode } from './exitCodes';
 import type { PlatformError } from 'effect/PlatformError';
 

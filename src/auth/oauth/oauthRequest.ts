@@ -11,7 +11,7 @@
  */
 // Third-party imports
 import { Data, Duration, Effect } from 'effect';
-import { HttpBody, HttpClient, HttpClientRequest } from 'effect/unstable/http';
+import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
 import { toErrorMessage } from '@utils/errors/errorMessage';

@@ -25,9 +25,9 @@ import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 import type { PlatformError } from 'effect/PlatformError';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';

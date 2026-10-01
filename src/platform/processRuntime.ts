@@ -38,8 +38,8 @@ import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
-import type { HttpClient } from 'effect/unstable/http';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { HttpClient } from 'effect/http';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { AgentDirectories, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';

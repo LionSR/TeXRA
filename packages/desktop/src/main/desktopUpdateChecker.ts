@@ -7,7 +7,7 @@ import {
   fetchJsonStringField,
   runDailyUpdateCheck,
 } from '@utils/system/updateCheck';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).

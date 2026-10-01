@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import type * as ChildProcess from 'effect/process/ChildProcess';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];

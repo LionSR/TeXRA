@@ -26,7 +26,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@utils/media/img';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { z } from 'zod';
 

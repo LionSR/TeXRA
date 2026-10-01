@@ -12,7 +12,7 @@ import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface TestUri {
   readonly fsPath: string;
