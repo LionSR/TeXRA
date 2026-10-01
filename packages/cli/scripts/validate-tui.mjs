@@ -79,7 +79,13 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-// `/config` → Tools (sixth row) → Tool integrations (third row, by hotkey).
+/**
+ * `/config` down to the tool-integration list. Three action rows ("Agents",
+ * "API keys", "GitHub token") and the Agents category put the Tools category
+ * on the fifth row (index 4); inside it the tool list is the "Tool
+ * integrations" row, where the highlight lands on the fifth row, so one UP
+ * selects the fourth.
+ */
 const CONFIG_TOOLS_FORM_KEYS = [
   '/config',
   { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
@@ -87,9 +93,9 @@ const CONFIG_TOOLS_FORM_KEYS = [
   DOWN,
   DOWN,
   DOWN,
-  DOWN,
   '\r',
-  { input: '3', delayMs: ASYNC_FORM_SETTLE_MS },
+  UP,
+  { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
 ];
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_ENTRIES: '4',
@@ -1313,12 +1319,11 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      '… 8 previous rows',
-      '› /status   Show session details',
-      '/config',
-      'View and toggle settings',
-      '/exit',
-      'Esc close',
+      '… 5 previous rows',
+      '› /status    Show session details',
+      '/plan',
+      'Read the focused session work plan',
+      '… 6 more rows',
     ],
   },
   {
@@ -1676,7 +1681,7 @@ const SCENARIOS = [
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: [
-      'approval: Ask before commands and edits.',
+      'approval: Ask before shell commands and file edits.',
       'auto-approvals: commands',
       'AUTO-BASH',
     ],
