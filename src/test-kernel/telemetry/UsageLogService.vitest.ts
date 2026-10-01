@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   AGENT_SOURCE,
   AgentCategory,
@@ -17,7 +18,6 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
@@ -295,9 +295,11 @@ describe('UsageLogService', () => {
     expect(batchId(batches[2])).toBe(batchId(batches[1]));
   });
 
-  it('keeps a failed batch id separate from later queued entries', async () => {
+  // A failed batch backs off (the flush interval, doubling) instead of being
+  // resent by every trigger, and stays apart from entries queued meanwhile.
+  it('backs off a failed batch and keeps its id separate from later entries', async () => {
     const { batches, fetchMock } = stubBatchFetch((callCount) => {
-      if (callCount === 1) {
+      if (callCount <= 2) {
         throw new Error('network unavailable');
       }
     });
@@ -307,15 +309,23 @@ describe('UsageLogService', () => {
 
     usageLog.log(usageEntry('second'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(batches.map(batchModels)).toEqual([
+      ['first'],
       ['first'],
       ['first'],
       ['second'],
     ]);
-    expect(batchId(batches[1])).toBe(batchId(batches[0]));
-    expect(batchId(batches[2])).not.toBe(batchId(batches[0]));
+    expect(batchId(batches[2])).toBe(batchId(batches[0]));
+    expect(batchId(batches[3])).not.toBe(batchId(batches[0]));
   });
 
   describe('texra.telemetry.enabled opt-out', () => {
@@ -323,7 +333,8 @@ describe('UsageLogService', () => {
     // mutation outlives the test — the file-scoped fake from setupFakePlatform
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
-    setupPlatform({}, { config: new FakeScopedConfigProvider() });
+    // The real provider, so the project-file scope rule is the one tested.
+    setupPlatform({}, { config: new MemoryConfigProvider() });
 
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {

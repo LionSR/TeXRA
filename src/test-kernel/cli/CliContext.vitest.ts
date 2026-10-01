@@ -137,9 +137,13 @@ describe('CLI context config defaults', () => {
     );
 
     // A project file (which a cloned repository can supply) cannot loosen or
-    // tighten the policy, and the ignored key is reported...
+    // tighten the policy, and the ignored key is reported; a telemetry opt-out
+    // there is honoured, so it is not...
     const workspace = await workspaceWithConfig(
-      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+      JSON.stringify({
+        'texra.approvalPolicy': 'never',
+        'texra.telemetry.enabled': false,
+      }),
     );
     const projectContext = await cliContext({
       ambient,
@@ -150,6 +154,9 @@ describe('CLI context config defaults', () => {
     expect(projectContext.approvalPolicy).toBe('yolo');
     expect(projectContext.configDegradations.join('\n')).toContain(
       'Ignoring "texra.approvalPolicy"',
+    );
+    expect(projectContext.configDegradations.join('\n')).not.toContain(
+      'texra.telemetry.enabled',
     );
 
     // ...while the user's own file for that workspace does win over the

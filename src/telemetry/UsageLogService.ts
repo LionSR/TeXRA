@@ -8,6 +8,7 @@ import {
   Fiber,
   Layer,
   Queue,
+  Schedule,
   Semaphore,
 } from 'effect';
 import {
@@ -19,10 +20,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
-import {
-  TELEMETRY_ENABLED_DEFAULT,
-  TELEMETRY_ENABLED_KEY,
-} from '@shared/schemas';
+import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {
   UsageLogEntry,
@@ -43,6 +41,8 @@ const USAGE_LOG_ENDPOINT = 'https://remote.texra.ai/functions/v1/log-usage';
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;
+/** The longest wait between retries of an undelivered batch. */
+const MAX_RETRY_DELAY = Duration.minutes(30);
 
 interface UsageLogConfig {
   batchSize: number;
@@ -90,32 +90,20 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   // has not initialized its platform yet.
   if (telemetryOptOutEnvVar()) return false;
 
-  const inspection = config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
-  const configuredValues = [
-    inspection?.globalValue,
-    inspection?.workspaceValue,
-  ].filter((value) => value !== undefined);
-  // `.texra/config.json` is hand-edited and JsonConfigProvider hands back raw
-  // JSON. Validate each present scope before applying consent precedence: a
-  // valid global `true` must not hide a mistyped project-local `"false"` and
-  // quietly enable the thing the user likely meant to switch off.
-  const malformed = configuredValues.find(
-    (value) => typeof value !== 'boolean',
-  );
-  if (malformed !== undefined) {
+  // Which scope answers is the config store's rule (`projectValueIgnored`):
+  // a project file may opt out but never opt in. The config files are
+  // hand-edited raw JSON, so a mistyped `"false"` must not read as consent.
+  const value = config.get<unknown>(TELEMETRY_ENABLED_KEY);
+  if (typeof value !== 'boolean') {
     // A sync read (`log`, `texra doctor`) has no fiber: it writes the sink.
     writeLogLine(
       'WARN',
       CHANNEL,
-      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating usage logging as disabled`,
+      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof value}); treating usage logging as disabled`,
     );
     return false;
   }
-  // Either scope may opt out. In particular, a checked-in project `true` must
-  // not reverse a user-wide privacy choice, while the CLI still honours a
-  // project-local `false` when no global value is present.
-  if (configuredValues.includes(false)) return false;
-  return configuredValues.length > 0 ? true : TELEMETRY_ENABLED_DEFAULT;
+  return value;
 }
 
 /** Why usage logging is off, or `null` when it is on. */
@@ -172,8 +160,8 @@ class UsageLogServiceImpl {
   private triggers: Queue.Queue<void> | null = null;
   /** One permit: batches leave in order, and the drain joins an active send. */
   private readonly flushLane = Semaphore.makeUnsafe(1);
-  /** Coalesce triggers before they wait for the lane; failed sends wait for
-   *  a later trigger instead of being retried by already waiting callers. */
+  /** Coalesce triggers before they wait for the lane; while a failed send
+   *  backs off, triggers are absorbed instead of retrying it early. */
   private backgroundFlushActive = false;
   private warnedUndelivered = false;
   private warnedRejected = false;
@@ -275,13 +263,14 @@ class UsageLogServiceImpl {
     Queue.offerUnsafe(this.triggers, undefined);
   }
 
-  /** Send every batch that is due, one after another, under the lane. */
+  /** Send every batch that is due, one after another, under the lane. An
+   *  undelivered batch is kept for the retry and stops the drain. */
   private readonly drain = Effect.fn('UsageLogService.drain')(function* (
     this: UsageLogServiceImpl,
   ) {
     while (this.retryBatch || this.queue.length > 0) {
-      const batchSettled = yield* this.sendNextBatch().pipe(
-        Effect.catchTag('UsageBatchUndelivered', (error) =>
+      yield* this.sendNextBatch().pipe(
+        Effect.tapError((error) =>
           Effect.suspend(() => {
             const requeued = error.requeue?.entries.length ?? 0;
             if (error.requeue) this.retryBatch = error.requeue;
@@ -295,24 +284,42 @@ class UsageLogServiceImpl {
             this.warnedUndelivered = true;
             return log(
               `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
-            ).pipe(withLogChannel(CHANNEL), Effect.as(false));
+            ).pipe(withLogChannel(CHANNEL));
           }),
         ),
       );
-      if (!batchSettled) return;
     }
   });
 
   /**
-   * A flush nobody awaits: the periodic one and the batch-size trigger. The
-   * drain cannot fail, so only a defect reaches here, and it is reported by
-   * its owner instead of ending a fiber nobody observes.
+   * A flush nobody awaits: the periodic one and the batch-size trigger. An
+   * undelivered batch is retried on an exponential backoff from the flush
+   * interval, capped at {@link MAX_RETRY_DELAY}, without holding the lane
+   * while it waits. The schedule never ends, so only a defect reaches the
+   * end, and it is reported by its owner instead of ending a fiber nobody
+   * observes.
    */
   private readonly backgroundFlush = Effect.fn(
     'UsageLogService.backgroundFlush',
   )(
     function* (this: UsageLogServiceImpl) {
+      const backoff = Schedule.exponential(
+        Duration.millis(this.config.flushIntervalMs),
+      ).pipe(
+        Schedule.modifyDelay(({ duration }) =>
+          Effect.succeed(Duration.min(duration, MAX_RETRY_DELAY)),
+        ),
+      );
       yield* this.flushLane.withPermit(this.drain()).pipe(
+        Effect.retry(backoff),
+        Effect.orDie,
+        // The backoff wait must not keep a host process alive on its own.
+        (flush) =>
+          Clock.clockWith((clock) =>
+            flush.pipe(
+              Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
+            ),
+          ),
         Effect.ensuring(
           Effect.sync(() => {
             this.backgroundFlushActive = false;
@@ -327,7 +334,7 @@ class UsageLogServiceImpl {
     ),
   );
 
-  /** True means this batch is settled; false pauses draining until a later trigger. */
+  /** Settle the next batch: sent, discarded, or failed with it kept. */
   private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
     function* (this: UsageLogServiceImpl) {
       let batch = this.retryBatch;
@@ -336,7 +343,7 @@ class UsageLogServiceImpl {
       } else {
         const entries = this.queue;
         this.queue = [];
-        if (entries.length === 0) return false;
+        if (entries.length === 0) return;
 
         batch = {
           entries,
@@ -357,9 +364,7 @@ class UsageLogServiceImpl {
           `Usage logging is disabled; dropped ${dropped} ${dropped === 1 ? 'entry' : 'entries'} without sending`,
         ).pipe(withLogChannel(CHANNEL));
       }
-      if (kept.length === 0) {
-        return true;
-      }
+      if (kept.length === 0) return;
       batch = { ...batch, entries: kept };
 
       yield* Effect.logDebug(
@@ -379,33 +384,35 @@ class UsageLogServiceImpl {
       );
       const response = yield* this.sendBatch(batch, installId);
       if (!response.success) {
-        yield* this.reportPermanentRejection(
-          batch,
-          response.error ?? 'Usage batch was rejected',
-        );
-        return true;
+        yield* this.reportPermanentRejection(batch, response);
+        return;
       }
       yield* Effect.logDebug(
         `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
       ).pipe(withLogChannel(CHANNEL));
-      return true;
     },
   );
 
+  /** The endpoint refused the batch for good (`retryable: false`): drop it,
+   *  naming the cause once at warn and at debug after that. */
   private reportPermanentRejection(
     batch: RetryBatch,
-    reason: string,
+    rejection: Extract<UsageLogResponse, { success: false }>,
   ): Effect.Effect<void> {
-    const log = this.warnedRejected ? Effect.logDebug : Effect.logError;
+    const log = this.warnedRejected ? Effect.logDebug : Effect.logWarning;
     this.warnedRejected = true;
+    const cause = [rejection.errorCode, rejection.error]
+      .filter((part) => part !== undefined)
+      .join(': ');
     return log(
-      `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
+      `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,
     ).pipe(
       Effect.annotateLogs({
         data: {
           batchId: batch.batchId,
           entryCount: batch.entries.length,
-          reason,
+          errorCode: rejection.errorCode,
+          error: rejection.error,
         },
       }),
       withLogChannel(CHANNEL),
@@ -521,7 +528,11 @@ class UsageLogServiceImpl {
         ),
       );
       yield* this.flushLane.withPermit(
-        Fiber.interrupt(warning).pipe(Effect.andThen(this.drain())),
+        Fiber.interrupt(warning).pipe(
+          Effect.andThen(this.drain()),
+          // Already logged by the drain; nothing is left to retry it.
+          Effect.catchTag('UsageBatchUndelivered', () => Effect.void),
+        ),
       );
 
       this.triggers = null;

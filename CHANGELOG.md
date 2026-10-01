@@ -415,6 +415,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A project file can switch usage logging off without a warning.**
+  `"texra.telemetry.enabled": false` in `.texra/config.json` is honoured, and
+  every host no longer reports it as ignored. A project file still cannot
+  switch usage logging on: a `true` there is ignored and reported.
+- **The removed TeXRA account's saved credentials are deleted.** The old
+  sign-in session (with its refresh token) and pending sign-in records stayed
+  in the system keychain or secret store after the account was removed. Each
+  host now deletes them once at startup without reading them.
 - **The CLI, the desktop app and the VS Code extension no longer ship the
   internal validation model.** The canned model the CLI's package validation
   runs against was bundled into all three; in the desktop app and the

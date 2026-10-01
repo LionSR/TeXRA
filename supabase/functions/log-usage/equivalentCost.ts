@@ -13,12 +13,20 @@
  * (`src/agent/runtime/run/pricing.ts`) on the wire fields. The client reports
  * `inputTokens` as cache-MISS tokens (`UsageMonitor.logToBackend` sends
  * `usage.cacheMissInputTokens`) with cached tokens separate, so
- *   miss·in + cached·in·discount + (output + reasoning)·out
+ *   miss·in + cached·in·discount + (output + separate reasoning)·out
  * is algebraically the client's inclusive-cache formula
- *   input·in − cached·in·(1−discount) + output·out + reasoning·out.
+ *   input·in − cached·in·(1−discount) + output·out + separate reasoning·out.
+ * Reasoning tokens are already inside the output count for every provider
+ * but xAI, whose receipts count them beside it (`responsesUsage` in
+ * `packages/llm/src/openaiResponsesUsage.ts`); only there are they added.
  */
 
-import { MODEL_CONFIGS, requestRates, type ModelConfig } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  requestRates,
+  type ModelConfig,
+} from 'llm-zoo';
 import type { UsageLogEntry } from './usageValidation.ts';
 
 /**
@@ -59,7 +67,8 @@ export function equivalentListCost(
   if (!config) return undefined;
 
   const cached = entry.cachedInputTokens ?? 0;
-  const reasoning = entry.reasoningTokens ?? 0;
+  const reasoning =
+    config.provider === ModelProvider.XAI ? (entry.reasoningTokens ?? 0) : 0;
   // One entry is one model request, so its prompt is the cache-miss input
   // plus the cached tokens, and a long prompt bills the whole request at the
   // model's long-context tier, as the client's run ledger does.

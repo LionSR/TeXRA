@@ -29,13 +29,14 @@ Deno.test('bills cached input at the cache-read discount', () => {
   equal(cost, 0.04);
 });
 
-Deno.test('bills reasoning tokens at the output rate', () => {
+// OpenAI's output count already includes its reasoning tokens.
+Deno.test('does not bill reasoning tokens twice', () => {
   const cost = equivalentListCost({
     model: 'gpt-5.6-sol',
     inputTokens: 0,
-    outputTokens: 0,
+    outputTokens: 1_000_000,
     cachedInputTokens: undefined,
-    reasoningTokens: 1_000_000,
+    reasoningTokens: 400_000,
   });
 
   equal(cost, 20);

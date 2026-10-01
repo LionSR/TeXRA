@@ -175,6 +175,12 @@ export interface StateSettingEntry {
   readonly slot: SettingStore;
   /** Config-backed target, workspace when omitted; `global`/`local` skip the project file. */
   readonly configTarget?: 'global' | 'workspace' | 'local';
+  /**
+   * A `global` row a project file may still switch off: its project value
+   * counts unless it is `true`, so a repository can opt out (telemetry) but
+   * never opt in. A malformed project value counts too, and fails closed.
+   */
+  readonly projectMayOptOut?: true;
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
   /** Write-time consequences applied by every write path. */
@@ -598,6 +604,7 @@ const CORE_SETTING_ROWS: Record<
       'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
     category: 'privacy',
     configTarget: 'global',
+    projectMayOptOut: true,
     surfaces: { settingsView: 'telemetry' },
   },
   'debug.saveModelIO': {
