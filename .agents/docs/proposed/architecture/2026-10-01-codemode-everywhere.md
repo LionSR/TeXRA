@@ -34,9 +34,15 @@ Rollout has two stages:
 2. **"only":** the script tool is all the model sees. The switch to "only"
    happens once the nightly live journeys show it is no worse.
 
-Only the deletion of the workflow row kinds has to land before the 1.0
-storage freeze. Everything else is additive, or is a version-2 row with a
-one-line upcaster.
+The owner ruled on the open questions on 2026-10-01 (see "Owner rulings").
+Two rulings shape the order of work:
+
+- **Parity before deletion.** `delegate_multi_agents` is deleted in the same
+  change set as the script tool that covers everything it does, or after it.
+  There is no window in which the capability is missing. "Parity inventory"
+  lists every capability and where it lands.
+- **The freeze waits.** The 1.0 storage freeze and tag move after parity and
+  the deletion, so the five `workflow.*` row kinds are never released.
 
 Measured on the real tool definitions:
 
@@ -57,10 +63,12 @@ constant for the run.
 
 ## What gets deleted
 
-### When the script tool lands (stage "on")
+### In the parity change set (lane 9)
 
-The workflow-script tool and its protocol go entirely. Line counts come from
-`wc -l` at the baseline.
+The workflow-script tool and its protocol go entirely, in the lane that
+merges only once every row of "Parity inventory" is delivered. Where a file
+below has a successor, the successor is named in the inventory, not here.
+Line counts come from `wc -l` at the baseline.
 
 **Engine, `src/agent/workflowScript/`**
 
@@ -96,8 +104,9 @@ The workflow-script tool and its protocol go entirely. Line counts come from
 **Runtime and session**
 
 - `src/agent/runtime/workflowControlRegistry.ts` (51).
-- The `workflow.control` request: `runtimeRequest.ts:88` and
-  `SessionRequests.ts:488-491`.
+- The `workflow.control` request: `src/shared/session/runtimeRequest.ts:87-92`
+  and `src/controllers/session/SessionRequests.ts:488-498`. It is replaced by
+  `call.control` (inventory, "Skip and retry").
 - The control hooks in `SessionHandle.ts` (`:96`, `:302`, `:354`).
 - The interrupted-card write at close (`sessionLayer.ts:838`).
 - The run-model branches in `sessionFold.ts` (`:676-677`, `:705-728`, `:799`,
@@ -115,7 +124,9 @@ The workflow-script tool and its protocol go entirely. Line counts come from
 - The workflow-script branches of the shared proposal schema
   (`src/shared/schemas/prompts.ts:89-101`).
 - The `multiAgentWorkflow` run identity (`runIdentity.ts:27`, `:48`;
-  `icons.ts:97`; `executionFormatters.ts:64`; `RunTab.ts:85`).
+  `icons.ts:97`; `executionFormatters.ts:64`; `RunTab.ts:85`). A background
+  script run takes the `script` identity in its place (inventory,
+  "Background run").
 - `WORKFLOW_TASK` (`log.ts:28`).
 
 **Row kinds** (see "Storage and the freeze")
@@ -127,8 +138,9 @@ The workflow-script tool and its protocol go entirely. Line counts come from
 
 **Plugin toggle and registry**
 
-- The `workflow-script` plugin entry (`pluginManifest.ts:239-252`) and its
-  registry row (`registry.ts:90`, `:182`).
+- The `workflow-script` plugin's `delegate_multi_agents` row
+  (`pluginManifest.ts:239-252`; `registry.ts:90`, `:182`). The plugin itself
+  stays and contributes `agent` instead (see "Fit with the plugin model").
 
 **Renderers**
 
@@ -140,6 +152,9 @@ The workflow-script tool and its protocol go entirely. Line counts come from
   workflow branches of `AgentProposal.tsx` (`:17-19`, `:102-128`,
   `:206-211`) and `approvalSummaries.ts` (`:14-16`, `:130-160`); most of
   `workflowPlainOutput.ts` (134).
+- The board, the popup and the proposal branches are replaced, not dropped:
+  lane 6 renders a script stage with the same rows, tabs and controls from
+  generic cards (inventory, "Board").
 - Kept: the CLI files that serve YAML round-mode workflow agents
   (`WorkflowRunDetails.tsx`, `commands/workflow.ts`,
   `runtime/workflowOutput.ts`).
@@ -194,9 +209,24 @@ decision (Q3).
 
 ## The script surface
 
-One tool, `script`, takes `{ code: string }`. The code is the body of an
-async function: it may use `await` at the top level, and `return` gives the
-result. Seven globals are available:
+One tool, `script`, takes:
+
+```ts
+{
+  code?: string | null;          // exactly one of code and path
+  path?: string | null;          // a saved script file
+  title?: string | null;         // card, approval and run heading
+  args?: JsonValue | null;       // the global `args`
+  files?: WorkspaceFiles | null; // inputFiles, contextFiles, mediaFiles
+  run_in_background?: boolean | null;
+  timeoutMs?: number | null;     // wall clock, 1 s to 24 h
+}
+```
+
+The code is the body of an async function: it may use `await` at the top
+level, and `return` gives the result. Every field but `code` exists to carry a
+capability of `delegate_multi_agents` (see "Parity inventory"). Eight globals
+are available:
 
 ```ts
 declare const tools: {
@@ -221,9 +251,22 @@ declare function agent(
   prompt: string,
   opts?: AgentOptions,
 ): Promise<AgentResult>;
+declare function phase(title: string): void;
 declare const args: unknown;
 declare const files: WorkspaceFiles;
 declare const console: { log(...values: unknown[]): void };
+
+interface AgentOptions {
+  agentName: string; // required: the old tool-level default agent is gone
+  model?: string; // model reference, `@effort` suffix allowed
+  schema?: JsonSchema; // structured call: tool-use agent, `.structured`
+  inputFiles?: string[]; // workflow-agent call: editable files
+  contextFiles?: string[];
+  mediaFiles?: string[];
+  id?: string; // disambiguates otherwise identical calls for reuse
+  label?: string; // card title
+  timeoutMs?: number; // stops the child at the deadline, rejects `TimedOut`
+}
 ```
 
 - **Result shape.** `ToolOutput` is `{ output, summary }` from an executed
@@ -240,10 +283,15 @@ declare const console: { log(...values: unknown[]): void };
   the same envelope (`README.md`, "`agent(prompt, opts?)`"). It is a
   top-level global only because it is the one call every fan-out script
   makes.
-- **Gone.** `phase()`, `meta.tasks` and `meta.phases` are gone. Progress is
-  the nested cards themselves, and `console.log` writes transient text to the
-  script's card (`hooks.onToolOutput` → `stream.chunk`, the path bash already
-  uses: `toolUseDispatch.ts:413-424`).
+- **Progress.** Progress is the nested cards themselves. `phase(title)`
+  names the group the following calls belong to; it is recorded on each
+  `script.call` row, not as a stage of its own, so replay needs nothing
+  extra. `console.log` writes transient text to the script's card
+  (`hooks.onToolOutput` → `stream.chunk`, the path bash already uses:
+  `toolUseDispatch.ts:413-424`), and the script's own `tool.result` carries
+  the last 80 lines, as the run log does today.
+- **Gone.** `export const meta`, `meta.tasks` and `meta.phases` are gone.
+  Whether the declared plan needs a successor is Q6.
 - **No recursion.** A script cannot call `script`.
 - **Terminal tool.** `submit_output` (the structured-output terminal tool,
   `src/tools/structuredOutput.ts`) stays a direct tool in both modes. It ends
@@ -307,8 +355,14 @@ This design brings back a job-queue drain. It does so in a smaller form:
   captures exactly as it captures `step` today.
 - The host never holds a guest object.
 
-That keeps the data-only boundary (README "Sandbox"). Even so, it reverses a
-ruling made six days ago, which is why it is Q1.
+That keeps the data-only boundary (README "Sandbox"). It still reverses the
+2026-09-25 generator ruling
+(`.agents/docs/implemented/architecture/2026-09-25-workflow-script-generator-protocol.md`).
+The owner accepted the reversal on 2026-10-01 (Q1), for a forward-looking
+reason: `await tools.x()` is the form models write best, and it is the form
+pi and Codex use. The generator note stays as the record of why the promise
+bridge was removed once; this design brings back only the smaller form
+above.
 
 Model fluency was measured on 2026-09-25. Over 144 generations on gemini38f,
 deepseek41T and glm53flash, the `async` description failed 8/48 on first
@@ -324,8 +378,15 @@ What the script gives up compared with `yield*`:
   on the first failure, but the other calls keep running until the script
   ends. Ending the script interrupts every call still open, and their cards
   settle cancelled.
-- **`timeout()` and `retry()` become plain code.** A script writes them with
-  `try/catch` and loops. A per-call timeout is the tool's own.
+- **`retry()` becomes plain code.** A script writes it with `try/catch` and a
+  loop. With Q2 reuse, a retried branch does not re-bill the `agent` calls it
+  already completed, which is what `retry()` gave.
+- **`timeout()` becomes an option.** The realm has no timers, so a script
+  cannot write a timeout. `agent` takes `timeoutMs` and rejects with
+  `TimedOut`; other tools keep their own timeouts.
+- **`all(items, { concurrency })` loses its per-call bound.** The session's
+  child-run budget still bounds every `agent` call; a script that wants a
+  smaller bound batches its items.
 
 ## Approvals, cards and the ledger
 
@@ -343,6 +404,18 @@ The approval vocabulary and its single authority (`shared/approvalPolicy.ts`,
 `approvalPolicyAuthorityRatchet.vitest.ts`) do not change, and no evaluator
 is added. The script tool itself requires no approval: it does nothing except
 through its nested calls.
+
+**The script request (Q5, ruled).** `agent` is the one exception to
+per-call asking. The first `agent` call of a script opens one request that
+shows the script's title, source, args and files. Approving it grants every
+`agent` call of that script, the way `bash` takes a run-scoped command grant
+(`ToolTypes.ts:27-31`). The request keeps the four outcomes the proposal flow
+has today (`proposalFlow.ts:195-230`): denied by policy, auto-approved under
+the run's proposal bypass, approved with inherited child approvals when no
+prompt can be shown, or presented. Presented, it offers approve, approve all
+agent work in this run, reject with a note, and edit as new task. The grant
+is bound to the script's call with `tool.binding`, so it survives a restart
+(lane 1). Nested calls other than `agent` still ask on their own.
 
 **Concurrency.** Concurrency inside a script follows the declarations the
 tools already make (`ToolTypes.ts:54-68`):
@@ -362,8 +435,14 @@ names the response (`runLedgerEvent.ts:283-291`). A nested call has no
 response. It gets:
 
 - **`script.call`** (new): `{ scriptCallId, seq, callId, toolName, input,
-replay, logId, stageId }`, committed when the guest issues the call.
-  `callId` is `<scriptCallId>/<seq>`.
+replay, logId, stageId, phase }`, committed when the guest issues the call.
+  `callId` is `<scriptCallId>/<seq>`; `phase` is the title the last
+  `phase()` set, or null.
+- **`script.source`** (new): `{ scriptCallId, blob }`, committed before the
+  first nested call when the script came from `path`. `blob` is the
+  `context.blob` address of the source as read, so replay never re-reads an
+  edited file. A `code` submission needs no row: its source is on the
+  `model.message` row.
 - **`tool.intent`** (changed): `responseId` becomes an origin,
   `{ responseId } | { scriptCallId }`.
 - **`tool.binding`, `tool.result`, `request.opened`, `request.decided`:**
@@ -427,7 +506,8 @@ This applies to direct calls too, so in both modes a pending approval
 survives a restart.
 
 **Resuming a script.** The script's source is its call's arguments on the
-`model.message` row. Resume opens a fresh realm and runs the source from the
+`model.message` row, or the `script.source` blob for a `path` submission.
+Resume opens a fresh realm and runs the source from the
 top, then handles the nested calls by state:
 
 - **Settled.** A nested call that has a `tool.result` is delivered from the
@@ -460,17 +540,40 @@ child's own aggregate, using these facts:
 - an active turn, or a settled turn with no manifest, is refused for
   operator attention.
 
-(README, "Restart-safe checkpoints".) This recovery moves into the `agent`
-tool. The child id is derived from `(callId, tool.intent.attempt)`, which
-replaces `workflow.attempt`'s attempt mark.
+(README, "Restart-safe checkpoints"; `workflowScriptAgentRunner.ts:640-729`.)
+This recovery moves into the `agent` tool. The child id is derived from
+`(callId, tool.intent.attempt)`, which replaces `workflow.attempt`'s attempt
+mark. The cases the runner refuses today "for operator attention" (an
+accepted turn that never settled, a manifest without a settle, a child resumed
+after it completed) become the outcome-unknown request: the call opens it,
+binds it with `tool.binding`, and the user decides. Today they abort the
+whole workflow instead.
 
-**Cross-script reuse.** The current tool lets a model edit a failed script
-and rerun it while "completed agent() calls replay for free"
+**Cross-script reuse (Q2, ruled).** The current tool lets a model edit a
+failed script and rerun it while "completed agent() calls replay for free"
 (`WorkflowScriptTool.ts:668`). Ledger replay covers the resume of one
-script. It does not cover a new script call. Q2 asks whether `agent` should
-reuse a completed result from the same run whose arguments hash the same.
-That lookup reads the run's own `script.call` and `tool.result` rows and needs
-no new storage.
+script; it does not cover a new script call. So `agent`, and no other tool,
+reuses a completed result:
+
+- **Key.** A hash of the prompt and every run-affecting option (`agentName`,
+  `model`, `schema`, the three file lists, `id`), plus a fingerprint of the
+  bytes of every referenced file. That is today's journal key
+  (`runWorkflowScript.ts:51-67`, `inputFields.ts:413`), so editing an input
+  file still invalidates the result. `label` and `phase` stay out of it.
+- **Scope.** The run that issued the `script` call, together with the
+  background script runs it launched (their `run.start` names it as parent).
+  A completed `agent` result in that scope with the same key is returned
+  without launching a child. Failed, cancelled and skipped calls are never
+  reused.
+- **Record.** The reused call still gets its own `script.call` and
+  `tool.result`. The result names the call it reused (`reusedFrom`), which
+  is what the board shows as "Reused".
+- **Storage.** The lookup reads the runs' own `script.call` and
+  `tool.result` rows. No index or table is added until a session shows it is
+  needed.
+- **Duplicates.** Two calls in one script with the same key would receive
+  the same result. As today (`runWorkflowScript.ts:462-468`), the second one
+  fails unless the calls carry distinct `id`s.
 
 ## Prompt and cache
 
@@ -553,10 +656,11 @@ hundred entries is enough until a catalog shows otherwise.
 So `assistant` drops from about 13,900 tokens to about 2,900 per request. That
 figure assumes typed declarations for everything and moves the per-field
 descriptions behind `describeTool`. Those descriptions carry real guidance:
-`executions`' description is 949 tokens and `delegate_workflow`'s is 280. Q4
-asks whether to inline full declarations for a short core list and one-line
-entries for the rest. That would come to 1,192 tokens for `assistant` with
-the file tools typed. The nightly comparison decides.
+`executions`' description is 949 tokens and `delegate_workflow`'s is 280.
+The owner ruled (Q4) that every declared tool is inlined as a typed
+declaration. The alternative, a typed core list with one-line entries for
+the rest (1,192 tokens for `assistant` with the file tools typed), stays on
+the table only if the nightly comparison shows it does better.
 
 ## Engine and isolation
 
@@ -693,8 +797,9 @@ converted, not wrapped:
 
 1. **"on".** The script tool is offered beside the direct tools to agents
    whose YAML lists it. Each direct tool's description gains one line, "also
-   `tools.x(args)` in `script`". `delegate_multi_agents` is gone, and the
-   orchestrator's fan-out guidance points at `script`.
+   `tools.x(args)` in `script`". `delegate_multi_agents` stays until the
+   parity lane deletes it; from then on the orchestrator's fan-out guidance
+   points at `script`.
 2. **Measure.**
    - Run the live journeys (`packages/cli/scripts/validate-journeys.mjs`,
      four journeys graded on file invariants and a real `latexmk` build)
@@ -710,11 +815,263 @@ converted, not wrapped:
 3. **"only".** Flip the default when, for every model, `only` passes at
    least as many journeys as `direct` on three consecutive nightlies and its
    cost is no higher.
-4. **Per-model fallback.** A model that fails the bar keeps direct tools.
+4. **Per-model fallback (Q3, ruled).** A model that fails the bar keeps
+   direct tools, and the fallback stays until the nightly data says
+   otherwise. Retiring it is a later, separate decision.
    - The flag lives on the binding (`BoundModel`, `modelBinding.ts:87-98`),
      set in the vendor arms (`:285-380`) next to `supportsForcedToolChoice`.
      That needs no llm-zoo release.
    - A route without tool calling cannot run either mode, and is unchanged.
+
+## Fit with the plugin model
+
+The 2026-09-27 ruling builds plugins on five primitives
+(`2026-09-26-core-concepts.md`, "Central primitives", :119-228). Two are
+built and carry this design: `Registry<K,V>` (`src/tools/liveRegistry.ts`)
+and `Step.open` (`src/agent/runtime/loop/step.ts:186`). Trust is partly
+built (`src/common/plugins/pluginTrust.ts`). `Plugin.load` and
+`History.writer(pluginId)` were ruled not built on 2026-09-30
+(core-concepts :162-179). The script tool needs neither.
+
+**`tools.*` is the step's pinned snapshot.** `Step.open` pins every
+registry the run uses as one snapshot. A response's calls dispatch against
+the step that offered them (`stepFor` with `kind === 'dispatch'`,
+`step.ts:425-458`), and the pin is held hand over hand until the next step
+has pinned its own (`step.ts:14-17`, `:319-329`). A script is one call, so:
+
+- `tools` is built from that snapshot's tool generation, and `searchTools`
+  and `describeTool` read the same generation. Nothing else is consulted.
+- A plugin change reaches a script only at a step boundary. A script that is
+  running keeps calling against the generation it started with, with that
+  generation's services (`toolUseDispatch.ts:398`, `:458`). This is
+  invariant 7, "Nothing changes mid-call" (core-concepts :312-316), applied
+  to the script as the call.
+- **A plugin switched off while a script runs.** The script's nested calls
+  to that plugin's tools still run: the generation is pinned, and switching
+  off withdraws from the next generation, not the pinned one
+  (`liveTools.ts:17-22`). The next step's `tools` lacks them, and the
+  `contextUpdate` message tells the model. The old generation drains when
+  the script's step releases it. A background script holds its own run's
+  step for as long as it runs, so its pin lasts that long too.
+- **On resume.** A settled nested call replays from the ledger and needs no
+  tool. A nested call that was in flight is re-dispatched against the
+  resumed step's snapshot. If its tool's identity changed or left, it
+  settles `tool_unavailable` (`step.ts:416-424`), exactly as a direct call
+  does, and the script sees a `ToolFailed` rejection.
+
+**Built-in plugins contribute both tools.** Neither is special-cased in the
+loop by name.
+
+- `script` comes from a new built-in plugin, `codemode`, with revision
+  `builtin` (`src/tools/catalogEntries.ts:87`). It is hidden and not
+  toggleable, like `core` (`pluginManifest.ts:392-404`). Whether a run sees
+  it is decided per agent during stage "on" (the YAML lists it) and per
+  model binding after the flip (Q3). A user switch would be a third knob
+  with no case the other two miss.
+- `agent` comes from the existing `workflow-script` plugin
+  ("Multi-Agent Workflow", `pluginManifest.ts:238-253`). Its row swaps
+  `delegate_multi_agents` for `agent` in lane 4, and drops the old tool in
+  lane 9. It stays toggleable and off on new installs, so automated fan-out
+  keeps its two consents: the agent's YAML names `agent`, and the global
+  switch is on. The switch still hides the plugin's skill
+  (`skillSources.ts:168-175`).
+- The loop knows the per-call program, not the script tool. It serves that
+  program to tools through the step's context, and `script` is its one
+  consumer.
+
+**One writer.** `script.call`, `script.source` and every nested call's
+rows are core ledger kinds, not plugin arms. Replay is a loop fact, so they
+belong to the closed run-ledger schema. They are appended through the run's
+`RunCell` and committed by the one `SessionEvents` publisher, the same path
+the loop's own rows take. The script tool opens no second writer, and
+`History.writer` stays unbuilt.
+
+**Hooks fire per nested call.** `PreToolUse` runs before a nested call's
+approval and body, and `PostToolUse` commits with its settlement
+(`toolUseDispatch.ts:426-433`, `:553`), as for a direct call. A deny settles
+that nested call with "Blocked by a PreToolUse hook" (`hooks.ts:392-457`),
+which the script sees as a `ToolFailed` rejection. The `script` call itself
+also gets the two hooks, with tool name `script` and its input. Each
+invocation writes its `hook.outcome` row. On resume, a recorded `PreToolUse`
+hook that is gone or changed denies the re-dispatched call
+(`hooks.ts:94-123`).
+
+**Trust gates plugin tools the same way.** A plugin that is not trusted is
+held back (`pluginTrust.ts:292-330`), so its tools never enter the
+generation and never appear in `tools`. A script cannot reach a tool the
+step did not offer.
+
+**MCP tools are registry entries with deferred discovery.** MCP servers
+enter the registry through `serverHolds.holdServer`, which contributes their
+tools under `mcp:<name>` or `plugin:<name>` (`serverHolds.ts:86-142`), and
+only when a run declares an MCP tool (`mcpConfig.ts:150-200`). In a script
+they are callable as `tools["mcp__server__tool"]` but not declared inline:
+`searchTools` and `describeTool` find them. They keep the bash approval and
+are not `parallelSafe`, so they take the one-permit lane.
+
+**Identity.** The `tools.offered` row records each tool as
+`{ name, digest, shown, plugin, revision }`, and `sameIdentity` compares
+name, digest, plugin and revision (`offeredTools.ts:18-31`, `:84-89`). A
+nested call resolves its `toolName` against that row for its step, so the
+plugin id and revision are part of the call's identity without being copied
+onto `script.call`. A call to a name the row lacks settles
+`tool_unavailable`.
+
+## Parity inventory
+
+`delegate_multi_agents` is deleted only when every row below is delivered
+(lane 9). Each row was checked in the code at the baseline. "Today" gives the
+evidence; paths are under `src/` unless they name a package. Abbreviations:
+`Tool` is `tools/delegation/WorkflowScriptTool.ts`, `Runner` is
+`tools/delegation/workflowScriptAgentRunner.ts`, `Strategy` is
+`tools/delegation/workflowScriptStrategy.ts`, `Engine` is
+`agent/workflowScript/runWorkflowScript.ts`, `README` is
+`agent/workflowScript/README.md`, `Board` is
+`packages/extension/src/progressView/frontend/components/WorkflowRunBoard.ts`,
+and `Popup` is `packages/cli/src/chat/tui/panes/WorkflowPopup.tsx`.
+
+Some things the request for this inventory listed do not exist today: there
+is no pause control (a stop leaves a "paused" notice and nothing more,
+`Strategy:390-395`), no cost budget, no per-call isolation option, and no
+effort option beyond the model reference's `@effort` suffix.
+
+### Input and launch
+
+| Capability                                                                       | Today                                        | New home                                                                                 | Lane |
+| -------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- | ---- |
+| Inline script source                                                             | `Tool:100-106`                               | `script.code`                                                                            | 3    |
+| Every source saved as a non-overwriting draft; the path is in every result       | `Tool:166-201`, `:213-228`; `Strategy:60-65` | `code` is saved under `.texra/scripts/`; every script result names the file              | 3    |
+| Rerun a saved file by path                                                       | `Tool:107-113`, `:251-263`                   | `script.path`; the source read is pinned by `script.source`                              | 3    |
+| JSON arguments as the global `args`                                              | `Tool:93-96`, `:116-122`                     | `script.args`                                                                            | 3    |
+| Files bound by role as the global `files`                                        | `Tool:97-99`; `workflowScriptFiles.ts:8-14`  | `script.files`                                                                           | 3    |
+| Files must exist; oversized `.bib` context refused                               | `Tool:314-329`                               | the same checks when `script` dispatches                                                 | 3    |
+| Rerun reuses the prior checkpoint's args and files when omitted                  | `checkpoint.ts:377-389`; `Tool:299-311`      | **Narrowed.** Resume replays the call's own arguments; a new call passes them again (Q7) | —    |
+| `meta.name` and `description` as heading and identity                            | `types.ts:33-36`; `Tool:294-298`             | `script.title` for display; identity is the call                                         | 3    |
+| Tool-level default agent                                                         | `Tool:87-92`                                 | `agentName` is required on `agent`; a script keeps a constant                            | 4    |
+| Agents must be visible workflow or tool-use agents inside `delegationAgentScope` | `Tool:282-288`; `Runner:131-166`             | `agent` resolves through `requireVisibleAgent` with the scope                            | 4    |
+| Model availability checked before launch                                         | `Tool:347-353`                               | `agent` checks each call's model with `selectAvailableDelegationModel`                   | 4    |
+| Syntax errors with location; imports refused                                     | `parseScript.ts:64-107`                      | `ScriptSyntaxError` with location; the realm has no module loader. The `await` hint goes | 3    |
+
+### The `agent()` call
+
+| Capability                                                                                | Today                                                 | New home                                                                             | Lane |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ | ---- |
+| Workflow-agent call with input, context and media files; the file envelope                | `types.ts:171-176`; `Strategy:299-318`; README :92-98 | `agent` with the same options, returning the same envelope                           | 4    |
+| Structured call: `schema` plus a tool-use `agentName`, read as `.structured`              | `types.ts:128-149`, `:187-214`                        | the same on `agent`                                                                  | 4    |
+| Per-call `agentName`                                                                      | `types.ts:166-167`                                    | the same                                                                             | 4    |
+| Per-call model, with reasoning effort through the `@effort` suffix                        | `types.ts:168-169`; `delegationAvailability.ts:237`   | the same                                                                             | 4    |
+| An unavailable declared model aborts the whole workflow                                   | `Runner:59-83`                                        | **Narrowed.** `agent` rejects with `ModelUnavailable`, which a script can catch (Q7) | 4    |
+| `id`, `label`, `phase` per call                                                           | `types.ts:157-165`                                    | `id` joins the reuse key; `label` is the card title; `phase()` sets the group        | 3, 4 |
+| A later call takes an earlier call's outputs; the paths are checked against child lineage | `inputFields.ts:307-411`                              | moves into `agent`                                                                   | 4    |
+| Editing a referenced file invalidates the cached result                                   | `inputFields.ts:413`; `Engine:51-67`                  | the file fingerprint is part of the reuse key                                        | 4    |
+| A non-completed child, or a workflow child with no outputs, rejects `AgentFailed`         | `Runner:837-850`                                      | the same, as a `ToolFailed` named `AgentFailed`                                      | 4    |
+| Children inherit the parent's bypasses; a bypassed proposal grants child edits            | `Runner:812-824`; `Tool:509-514`                      | `agent` configures child approvals from the script request's decision                | 4    |
+| Children see at most the parent's offered tools                                           | `Runner:812`                                          | the same                                                                             | 4    |
+| Children run in the parent's working directory                                            | `Runner:117-119`                                      | the same; no new isolation option                                                    | 4    |
+| Children nest under the workflow run, so a kill cascades                                  | `Runner:85-96`                                        | under the calling run, or under the background script run                            | 4, 5 |
+| Crash recovery from the child's own aggregate                                             | `Runner:640-729`                                      | moves into `agent`; refusals become the outcome-unknown request                      | 4    |
+| Retry of an attempt keeps a durable supersession mark                                     | `Engine:662-697`; `workflow.attempt`                  | `tool.intent` at `attempt + 1`, committed before the interrupt                       | 4    |
+
+### Control flow
+
+| Capability                                                     | Today                           | New home                                                                                                                          | Lane |
+| -------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `all()` and `forEach()` fan-out                                | README :107-111                 | `Promise.all` over `map`                                                                                                          | 3    |
+| Fail-fast `all()` interrupts the siblings still running        | README :107-110                 | **Narrowed.** An uncaught rejection ends the script and interrupts every open call; a caught one leaves the siblings running (Q7) | 3    |
+| `attempt()` for tolerant fan-out                               | README :112-114                 | `Promise.allSettled`, `try/catch`                                                                                                 | 3    |
+| `retry()` without re-billing completed calls in the branch     | README :115-120                 | a loop; Q2 reuse keeps completed calls free                                                                                       | 3, 4 |
+| `timeout(op, ms)` stops the child and throws `TimedOut`        | README :121-122                 | `agent`'s `timeoutMs`                                                                                                             | 4    |
+| `all(items, { concurrency })`                                  | README :107; `Engine:170`       | **Narrowed.** The session budget bounds `agent`; a script batches for a smaller bound (Q7)                                        | 3    |
+| Observable failures named `AgentFailed`, `TimedOut`, `Skipped` | README :123-128                 | the same names on the rejection                                                                                                   | 3, 4 |
+| A script's own bug fails the run with up to three guest frames | README :279-282                 | `ScriptFault` with the same frames                                                                                                | 3    |
+| `log()`, delivered to the model as an 80-line tail             | `Strategy:55-93`                | `console.log`; the tail rides on the script's result                                                                              | 3    |
+| `phase()` groups calls                                         | `workflowScriptRun.ts:165-187`  | `phase()`, recorded on `script.call.phase`                                                                                        | 3    |
+| Declared plan shows pending work before it runs                | `types.ts:38-43`; README :70-86 | **Gap**, Q6                                                                                                                       | —    |
+
+### Limits
+
+| Capability                                                | Today                                     | New home                                                | Lane |
+| --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------- | ---- |
+| 30 s guest CPU; 64 MB heap; 1 MB stack                    | `sandbox.ts:40-49`                        | kept, enforced on the worker                            | 2    |
+| 4096 items per `all()`                                    | `sandbox.ts:42`                           | at most 4096 nested calls open in one script            | 2    |
+| Wall clock: 60 minutes, `meta.timeoutMs` from 1 s to 24 h | `types.ts:44-49`; `Engine:73`, `:176-177` | `script.timeoutMs`, same default and bounds             | 3    |
+| 1000 live `agent()` calls per run; replays free           | `Engine:74`, `:603-605`                   | 1000 live `agent` calls per script; reused results free | 3    |
+| Concurrency from the session's child-run budget           | `Strategy:290-294`                        | `agent` takes the budget (`runRegistry.ts:597-601`)     | 4    |
+
+### Approval
+
+| Capability                                                                                  | Today                                                                     | New home                                                              | Lane |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---- |
+| One proposal for the whole script                                                           | `Tool:372-401`                                                            | the script request (Q5)                                               | 4    |
+| Proposal shows name, agent, model, description, phases, cost warning, clickable script path | `ProposalRequestPanel.ts:98-101`, `:212-275`; `AgentProposal.tsx:100-131` | the script request shows title, source, args, files and the file path | 4, 6 |
+| Approve; approve all agent work in this run; reject with a note; edit as new task           | `ProposalRequestPanel.ts:81-90`, `:133-139`; `proposalFlow.ts:139-144`    | the same four outcomes                                                | 4, 6 |
+| Policy deny, run bypass, unattended approval                                                | `proposalFlow.ts:195-230`                                                 | the same decision function                                            | 4    |
+| Consent: the agent's YAML names the tool and the global switch is on                        | `pluginManifest.ts:238-253`; `plugins.ts:69-74`                           | the same for `agent`                                                  | 4    |
+
+### Running, delivery and resume
+
+| Capability                                                                         | Today                                                                           | New home                                                                                                                 | Lane |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---- |
+| Detached run: the call returns at once and the result arrives as a follow-up       | `Tool:593-603`; `Strategy:400-420`                                              | `run_in_background`: a detached child run with identity `{ kind: 'script', title }`, through `startDetachedChildRunLoop` | 5    |
+| One-shot runs wait and return the report                                           | `Tool:574-591`                                                                  | in a one-shot run the script runs in the foreground, and its result says so                                              | 5    |
+| A second launch of the same `meta.name` is refused while one runs                  | `Tool:407-418`                                                                  | **Dropped.** Each background script is its own run; completed calls are reused, in-flight ones are not (Q7)              | —    |
+| Delivery: return value, run-log tail, script path                                  | `Strategy:400-420`                                                              | the script's `tool.result`, delivered as the follow-up when backgrounded                                                 | 3, 5 |
+| `<workflow-summary>` line: tally, cost, duration, files with diffstat, path, cause | `workflowScriptDelivery.ts:13-23`; `Strategy:239-255`; `UserMessage.ts:189-235` | the same line, folded from the script's cards and its children's usage rows                                              | 5    |
+| Stop leaves a "paused at X of Y calls" notice for the parent                       | `Strategy:390-395`; `childRun.ts:113-119`                                       | the stop notice names the run to resume                                                                                  | 5    |
+| Resume after a crash, stop or timeout                                              | `Tool:668`; `checkpoint.ts:299-482`                                             | ledger replay: the run's own resume in the foreground, `resumeRun` on the script run in the background                   | 3, 5 |
+| Edit and rerun without re-billing unchanged calls                                  | README :233-241                                                                 | Q2 reuse                                                                                                                 | 4    |
+| `/executions/{id}` with a bounded board                                            | `ExecutionsTool.ts:378-386`; `workflowSummaryView.ts:22-24`, `:119-143`         | the script run's view lists its script stage's cards under the same bounds                                               | 5    |
+| Kill the run (`executions` kill, `run.stop`, CLI `x`)                              | `ExecutionsTool.ts:420-450`; `Popup:363-365`                                    | unchanged: a background script is a child run                                                                            | 5    |
+| Cost per call and in total, discarded attempts included                            | `workflowScriptRun.ts:89-119`                                                   | each child's usage rows; the script card sums its calls                                                                  | 5, 6 |
+| Workflow outputs land in run storage and are accepted with `accept_run_files`      | `AcceptRunFilesTool.ts:482-498`                                                 | unchanged; a script may also call `tools.accept_run_files`, and each file still asks                                     | 4    |
+
+### Board and controls
+
+| Capability                                                                                | Today                                                   | New home                                                                                     | Lane |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---- |
+| Rows with statuses queued, running, finished, reused, skipped, cancelled, failed, not run | `workflowCallProgress.ts:11-20`, `:242-262`             | nested cards; "Reused" from `reusedFrom`; "not run" for calls open when the script ended     | 6    |
+| Row facts: kind, agent, model, attempt, files, duration, cost                             | `ui/copy/workflowCall.ts:46-69`                         | read from the `agent` input and the child run                                                | 6    |
+| Phase tabs with tallies and badges                                                        | `Board:399-431`; `Popup:71-73`                          | grouped by `script.call.phase`                                                               | 6    |
+| "Needs a decision", "Failed", "Running" sections; folded groups; Review button            | `Board:79-83`, `:127-146`, `:598-616`                   | the same over nested cards and the children's requests                                       | 6    |
+| A row opens its child run                                                                 | `Board:527-537`                                         | the card's child-run link                                                                    | 6    |
+| Skip and Restart on running rows; `s` and `r` in the CLI                                  | `Board:454-478`; `Popup:354-361`                        | `call.control { runId, callId, action }`: skip settles `Skipped`; retry starts `attempt + 1` | 4, 6 |
+| Next failed, filter, glyph strip, phase and row keys                                      | `Board:658-683`; `Popup:98-110`, `:266-281`             | the same in the script stage view                                                            | 6    |
+| Live elapsed time, tokens, tool count and spend per child                                 | `workflowRunModel.ts:93-97`, `:372-393`                 | the child run's live view, which every child already has                                     | 6    |
+| Resume and "Edit as new task" on an ended run                                             | `BaseRunContent.ts:71-101`                              | the generic run content of the background script run                                         | 5, 6 |
+| Headless `texra run` progress lines                                                       | `packages/cli/src/runtime/workflowPlainOutput.ts:35-63` | the same lines over the script stage                                                         | 6    |
+
+### Plugin-facing
+
+| Capability                                                                        | Today                                           | New home                                                                   | Lane |
+| --------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- | ---- |
+| The "Multi-Agent Workflow" switch, off on new installs, over the per-agent opt-in | `pluginManifest.ts:238-253`; `plugins.ts:69-74` | the same plugin and switch, contributing `agent`                           | 4    |
+| The plugin ships the multi-agent-orchestration skill, hidden by the switch        | `plugins.ts:99-100`; `skillSources.ts:168-175`  | the same plugin ships the rewritten skill                                  | 8    |
+| Built-in tool identity, revision `builtin`                                        | `catalogEntries.ts:87`                          | `agent` under `workflow-script`, `script` under `codemode`, both `builtin` | 3, 4 |
+
+### Documentation
+
+| Capability                                                                                                                                   | Today                                 | New home                          | Lane |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------- | ---- |
+| User guide                                                                                                                                   | `docs/guide/multi-agent-workflows.md` | rewritten for scripts             | 8    |
+| Fan-out patterns: per-item branches, adversarial verification, referee panel, loop until nothing new, completeness critic, staged escalation | `SKILL.md:26-61`, `:91-126`           | the same patterns in `await` form | 8    |
+
+The guide is already wrong in five places, and the rewrite fixes them. It
+puts skip and retry in the "subagent panel" with `k` to kill, where the code
+has them in the workflow popup and kill on `x`. It calls the cached status
+"Saved result", which the code labels "Reused". It says board rows show time
+and cost, which the VS Code row does not. It implies the proposal card lists
+the defaults, which only the CLI prints. And it never mentions the board's
+Restart and Skip buttons. (`docs/guide/multi-agent-workflows.md:25-28`, `:106`.)
+
+**Skip and retry.** `call.control` replaces `workflow.control`. It names the
+nested call by `callId`, not by its child's run id, and the run that owns
+the call handles it from the map of open nested calls it already keeps for
+interruption. No session registry is needed. Skip interrupts the call and
+settles it as an error named `Skipped`, with reason `user`. Retry commits
+`tool.intent` at `attempt + 1` before interrupting the running attempt, so the
+next attempt's child id is the free slot, and a crash between the two
+resumes on the same fact. Skip applies to any nested call that is in flight.
+Retry applies to `agent` calls and to tools that declare `replay: 'safe'`.
 
 ## Storage and the freeze
 
@@ -728,20 +1085,22 @@ the 1.0 tag. After that:
 `config/storage/frozen/` does not exist yet, so every kind is still
 unreleased.
 
-| Change                                                                                                                                                                                            | Kind                          | Before the freeze?                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- |
-| Delete `workflow.plan`, `workflow.call`, `workflow.script`, `workflow.journal`, `workflow.attempt`; aggregate kind `workflow-checkpoint`; `run.start.checkpointId`; run kind `multiAgentWorkflow` | removal                       | **Blocks.** Once released, they must be read forever, and an unknown kind blocks its aggregate. |
-| `script.call`                                                                                                                                                                                     | new kind, V1                  | No: additive after the freeze                                                                   |
-| `tool.intent.responseId` → origin union                                                                                                                                                           | changed shape                 | No: V2 with a one-line upcaster (`{responseId}` → `{origin:{responseId}}`); free before         |
-| `StageKind` gains `script`                                                                                                                                                                        | widened enum on `stage.start` | No: V2 with an identity upcaster; free before                                                   |
-| `tool.binding` covers any guarded request                                                                                                                                                         | meaning only                  | No shape change                                                                                 |
+The owner ruled that the freeze and the 1.0 tag come after parity and the
+deletion (lane 9). Every change below therefore lands before the freeze, in
+its version-1 shape, and none needs an upcaster:
 
-Only the deletion blocks the freeze. Shipping 1.0 without
-`delegate_multi_agents` costs little: it is opt-in, and new installs start
-with its switch off (README, "Production integration";
-`pluginManifest.ts:239-252`). The three schema changes are cheaper before
-the tag, so they ride along if lane 2 is ready by then. Otherwise each is one
-V2 entry.
+| Change                                                                                                                                                             | Kind                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| Delete `workflow.plan`, `workflow.call`, `workflow.script`, `workflow.journal`, `workflow.attempt`; aggregate kind `workflow-checkpoint`; `run.start.checkpointId` | removal, never released       |
+| Run identity `multiAgentWorkflow` replaced by `script`                                                                                                             | changed union, before release |
+| `script.call`, `script.source`                                                                                                                                     | new kinds                     |
+| `tool.intent.responseId` becomes an origin union                                                                                                                   | changed shape, before release |
+| `StageKind` gains `script`                                                                                                                                         | widened enum, before release  |
+| `tool.binding` covers any guarded request                                                                                                                          | meaning only                  |
+
+`call.control` is a session request (`runtimeRequest.ts`), not a stored row.
+The order the lanes table gives is the order the freeze depends on: no
+deletion runs ahead of its replacement, and the tag waits for lane 9.
 
 ## Peer comparison
 
@@ -759,47 +1118,84 @@ The one property TeXRA has that neither peer has is that a script survives a
 restart with its finished calls intact. That follows from the run ledger, not
 from the sandbox.
 
+## Owner rulings (2026-10-01)
+
+The owner's direction: "i want to be as future looking as possible. but also
+it should cover everything that delegate_multi_agents can do."
+
+1. **Q1. `await` or `yield*`: `await`.** `await tools.x()` with a job-queue
+   drain in the realm. This reverses the 2026-09-25 generator ruling
+   (`.agents/docs/implemented/architecture/2026-09-25-workflow-script-generator-protocol.md`)
+   because it is the form models write best and the form pi and Codex use.
+   The commit-order delivery rule keeps replay exact.
+2. **Q2. Reuse of `agent` results: yes, for `agent` only.** A completed
+   `agent` result whose key hashes the same is reused within a run (see
+   "Resume and replay").
+3. **Q3. The per-model direct fallback stays** until the nightly data says
+   otherwise. Retiring it is a later, separate decision, and until then
+   response partitioning and duplicate detection stay.
+4. **Q4. Every declared tool is inlined as a typed declaration.** The
+   nightly comparison may revise this.
+5. **Q5. One approval request per script.** It shows the script's source
+   and grants that script's `agent` calls, like a `bash` command grant.
+
+Two more rulings set the order of work:
+
+- **Parity before deletion.** `delegate_multi_agents` is deleted only in
+  the same change set as a script tool that covers everything it does, or
+  after it. There is no window without the capability.
+- **Freeze sequencing.** The 1.0 storage freeze and tag move after parity
+  and the deletion, so the five `workflow.*` row kinds are never released.
+
 ## Open questions for the owner
 
-1. **Q1. `await` or `yield*`.** Accept `await tools.x()` and a job-queue
-   drain in the realm, reversing the 2026-09-25 generator ruling for the one
-   surface that now carries every call? _Recommended: yes._ Single calls are
-   most of the traffic, every model writes `await` unprompted, and the
-   commit-order delivery rule keeps replay exact.
-2. **Q2. Cross-script reuse of `agent` results.** Should a completed
-   `agent` call whose arguments hash the same be reused within the same run,
-   read from the run's own rows? _Recommended: yes, for `agent` only._ It
-   keeps the "edit and rerun without re-billing" behaviour that
-   `delegate_multi_agents` users have, with no new storage. No other tool
-   reuses results across scripts.
-3. **Q3. Keep the per-model direct fallback indefinitely?** As long as it
-   exists, response partitioning and duplicate detection stay.
-   _Recommended: keep it until a model's nightly results stop needing it,
-   then retire it in its own decision._
-4. **Q4. Inline typed declarations for every declared tool, or a typed core
-   plus one-liners?** _Recommended: decide by the nightly comparison; ship
-   all typed (≈2,400 tokens for `assistant`)._
-5. **Q5. Approval for `agent` fan-out.** Today one proposal approves a whole
-   workflow script (`WorkflowScriptTool.ts:372-395`). Under the core policy,
-   each `agent` call would ask on its own. _Recommended:_ the first `agent`
-   call of a script opens one request that shows the script source, and
-   approving it grants `agent` calls for that script, in the way `bash` takes
-   a run-scoped command grant (`ToolTypes.ts:27-31`).
+1. **Q6. A successor to the declared plan?** `meta.tasks` lets a board show
+   pending work before it runs (`types.ts:38-43`). Each plan entry is a
+   label, not a call: nothing guarantees the script reaches it (README
+   :76-86). A successor would be a `plan(labels)` global recorded on the
+   script's first row, shown as "Not started" rows until calls claim them.
+   _Recommended: no successor._ The script request already shows the whole
+   source before anything runs, and the rows that matter are the issued
+   calls.
+2. **Q7. Accept the five narrowings?** The inventory marks five places where
+   the new surface does less:
+   - a rerun does not inherit the previous run's args and files;
+   - an unavailable declared model fails the call, which a script can
+     catch, instead of aborting the workflow;
+   - a caught `Promise.all` rejection does not interrupt its siblings;
+   - `all()`'s per-call `concurrency` bound is gone; the session budget
+     still applies;
+   - two background runs of the same script are not refused; only completed
+     `agent` calls are shared between them.
+
+   _Recommended: accept all five._ Each follows from a script being plain
+   JavaScript over ordinary tool calls, and none loses a result or bills
+   twice for completed work. Restoring any of them would bring back an
+   engine-level concept the design deletes.
 
 ## Lanes
 
-| Lane | Work                                                                                                                                                                      | Effort                               | Depends on                                                             |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| 0    | Delete `delegate_multi_agents`, its engine half, renderers, five row kinds, `multiAgentWorkflow`, the toggle and docs (list above)                                        | M (deletion, ~15k lines incl. tests) | Q1 not required; **must merge before the 1.0 tag**                     |
-| 1    | Durable approvals: bind every guarded request with `tool.binding`; park at `waiting`; re-attach on resume. Direct calls benefit immediately                               | M                                    | none                                                                   |
-| 2    | `CodeSandbox` service: worker entry in four bundles, Effect RPC over `NodeWorker`, `settle`/job-drain realm, shared interrupt flag, `BARE_EFFECT_RUN_SITES` entry         | L                                    | Q1; coordinate the worker-shipping table with the database-worker note |
-| 3    | `script` tool: `script.call` row, `tool.intent` origin, `script` stage kind, nested dispatch through the existing per-call program, commit-order replay, `ScriptDiverged` | L                                    | 1, 2                                                                   |
-| 4    | `agent` tool: move child launch and aggregate recovery out of `workflowScriptAgentRunner`; child id from `(callId, attempt)`; Q2 reuse; Q5 grant                          | M                                    | 3                                                                      |
-| 5    | Prompt: declarations rendered and frozen with system text; `searchTools`/`describeTool` over the offered catalog incl. MCP; `contextUpdate` for catalog changes           | M                                    | 3                                                                      |
-| 6    | Evaluation: fix the live-journeys matrix keys, add gemini38f and a fan-out journey, `direct` vs `only` per model; per-model flag on `BoundModel`                          | S                                    | 3, 5                                                                   |
-| 7    | Flip the default to "only"                                                                                                                                                | S                                    | 6 meeting the bar                                                      |
+The parity gate is lane 9. It merges only when every row of "Parity
+inventory" is delivered, and the 1.0 freeze and tag follow it.
 
-Lanes 0 and 1 can start today and do not touch each other.
+| Lane | Work                                                                                                                                                                                                                                                                                                          | Effort                               | Depends on                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
+| 1    | Durable approvals: bind every guarded request with `tool.binding`; park at `waiting`; re-attach on resume. Direct calls benefit at once                                                                                                                                                                       | M                                    | none                                                                                |
+| 2    | `CodeSandbox` service: worker entry in four bundles, Effect RPC over `NodeWorker`, `settle`/job-drain realm, shared interrupt flag, `BARE_EFFECT_RUN_SITES` entry, the limits                                                                                                                                 | L                                    | none (Q1 ruled); coordinate the worker-shipping table with the database-worker note |
+| 3    | `script` tool under the `codemode` plugin: `script.call` (with `phase`) and `script.source`, `tool.intent` origin, `script` stage kind, nested dispatch through the per-call program, commit-order replay, `ScriptDiverged`; `code`/`path`/`title`/`args`/`files`/`timeoutMs`, drafts, call cap, run-log tail | L                                    | 1, 2                                                                                |
+| 4    | `agent` tool under `workflow-script`: options and envelope, file hand-off and fingerprint, post-conditions, child approvals, recovery with refusals as outcome-unknown, child id from `(callId, attempt)`, `timeoutMs`, Q2 reuse, Q5 script request, `call.control` skip and retry                            | L                                    | 3                                                                                   |
+| 5    | Background scripts: `run_in_background`, `script` run identity, detached delivery and the summary line, stop notice, `resumeRun`, `/executions` view, one-shot foreground                                                                                                                                     | M                                    | 3, 4                                                                                |
+| 6    | Renderers in the three hosts: the script stage board (rows, phase tabs, sections, Review, Skip and Restart, next failed, CLI popup keys), headless lines, the script request panels                                                                                                                           | L                                    | 3, 4, 5                                                                             |
+| 7    | Prompt: declarations rendered and frozen with the system text; `searchTools`/`describeTool` over the pinned snapshot, MCP included; `contextUpdate` for catalog changes                                                                                                                                       | M                                    | 3                                                                                   |
+| 8    | Docs and skill: rewrite the guide and the multi-agent-orchestration skill for scripts                                                                                                                                                                                                                         | S                                    | 4, 5                                                                                |
+| 9    | **Parity gate and deletion.** Delete `delegate_multi_agents`, its engine half, renderers, the five row kinds and `multiAgentWorkflow` (list above). **Requires every parity row delivered**                                                                                                                   | M (deletion, ~15k lines incl. tests) | 3, 4, 5, 6, 8; then the 1.0 freeze and tag                                          |
+| 10   | Evaluation: fix the live-journeys matrix keys, add gemini38f and a fan-out journey, `direct` vs `only` per model; per-model flag on `BoundModel`                                                                                                                                                              | S                                    | 3, 7                                                                                |
+| 11   | Flip the default to "only"                                                                                                                                                                                                                                                                                    | S                                    | 10 meeting the bar                                                                  |
+
+Lanes 1 and 2 can start today and do not touch each other. Nothing is
+deleted ahead of its replacement: until lane 9, `delegate_multi_agents` and
+the new tools ship side by side, and the `workflow-script` plugin contributes
+both.
 
 ## Verified
 
@@ -815,6 +1211,28 @@ Lanes 0 and 1 can start today and do not touch each other.
   - `orchestrator.yaml` and `assistant.yaml`;
   - `src/test-kernel/architecture/dependencyDirection.vitest.ts`;
   - the generator-protocol, storage-v1 and database-worker notes.
+- For the parity inventory, read on the same baseline:
+  - `src/tools/delegation/{WorkflowScriptTool,workflowScriptRun,workflowScriptStrategy,workflowScriptAgentRunner,inputFields,proposalFlow,delegationAvailability}.ts`;
+  - `src/agent/workflowScript/{types,parseScript,runWorkflowScript,checkpoint}.ts`;
+  - `src/agent/runtime/workflowControlRegistry.ts`,
+    `src/shared/session/runtimeRequest.ts`,
+    `src/controllers/session/SessionRequests.ts`;
+  - `src/shared/runs/workflowRunModel.ts`,
+    `src/shared/schemas/{workflowCallProgress,workflowScriptDelivery,workflowScriptFiles,runIdentity}.ts`,
+    `src/tools/executions/workflowSummaryView.ts`, `src/tools/ExecutionsTool.ts`,
+    `src/tools/AcceptRunFilesTool.ts`, `src/tools/bash.ts` (background
+    delivery);
+  - `WorkflowRunBoard.ts`, `WorkflowRunContent.ts`, `ProposalRequestPanel.ts`,
+    `WorkflowPopup.tsx`, `WorkflowPopupRows.tsx`, `AgentProposal.tsx`,
+    `approvalSummaries.ts`, `workflowPlainOutput.ts`;
+  - the multi-agent-orchestration `SKILL.md` and
+    `docs/guide/multi-agent-workflows.md`;
+  - `src/tools/{pluginManifest,plugins,liveRegistry,liveTools,catalogEntries,serverHolds}.ts`,
+    `src/agent/runtime/loop/{step,hooks}.ts`,
+    `src/shared/schemas/offeredTools.ts`, `src/common/plugins/pluginTrust.ts`;
+  - the core-concepts note, the plugin-architecture note and the hooks-v1
+    note. The `critique.md` and `effect-mapping.md` beside core-concepts
+    predate the 2026-09-30 ruling and were read as history only.
 - Read the code to confirm `NodeWorker.layerPlatform`'s close-then-terminate
   finalizer (`@effect/platform-node` `NodeWorker.js:28-53`) and the RPC
   worker protocol layers.
