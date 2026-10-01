@@ -74,6 +74,16 @@ The owner also asked what else gets cleaner, and how agents coordinate:
   gives scripts a small set of calls over it.
 - "Adapting the agents" lists what changes in the built-in agents, their
   prompts and the skill.
+- "Harness boundary" says where each new piece lives, so that code mode
+  stays free of LaTeX and the other research domains until a later doc
+  splits the general harness from TeXRA.
+
+pi shipped v1.0.0 on 2026-10-01 with a reworked code mode. Five of its
+choices are folded in below: an output budget that keeps the start and end
+("The script surface"), recovery errors (lane 7), its budgeted prompt as a
+third evaluation arm (lane 10), raw source as the tool input (Q18), and the
+peer table. Its one large divergence, model calls from scripts in place of
+`agent()`, is recorded in "Peer comparison" and not adopted.
 
 ## What gets deleted
 
@@ -716,7 +726,9 @@ One tool, `script`, takes:
 
 The code is the body of an async function: it may use `await` at the top
 level, and `return` gives the result. Every field but `code` exists to carry a
-capability of `delegate_multi_agents` (see "Parity inventory"). Eight globals
+capability of `delegate_multi_agents` (see "Parity inventory"). Q18 proposes
+folding the other fields into an optional `// @options:` first line of
+`code`, as pi v1.0.0 does; the fields themselves do not change. Eight globals
 are available:
 
 ```ts
@@ -782,14 +794,83 @@ interface AgentOptions {
   `script.call` row, not as a stage of its own, so replay needs nothing
   extra. `console.log` writes transient text to the script's card
   (`hooks.onToolOutput` → `stream.chunk`, the path bash already uses:
-  `toolUseDispatch.ts:413-424`), and the script's own `tool.result` carries
-  the last 80 lines, as the run log does today.
+  `toolUseDispatch.ts:413-424`). The script's own `tool.result` carries the
+  log and the return value under one output budget (see "Output budget"
+  below), not the last 80 lines the run log keeps today.
 - **Gone.** `export const meta`, `meta.tasks` and `meta.phases` are gone.
   Whether the declared plan needs a successor is Q6.
 - **No recursion.** A script cannot call `script`.
 - **Terminal tool.** `submit_output` (the structured-output terminal tool,
   `src/tools/structuredOutput.ts`) stays a direct tool in both modes. It ends
   the run as a protocol, not as work.
+
+### Output budget
+
+**Today.**
+
+- The workflow-script run log keeps the last 80 lines of at most 500
+  characters each (`workflowScriptStrategy.ts:55-56`, `:77-92`). The start
+  of the log, where a script usually prints what it set out to do, is the
+  part that is dropped.
+- Every tool result is capped when its settlement is lowered for the model
+  (`toolUseDispatch.ts:226-229`): past 200,000 characters it keeps the first
+  4,000 and the last 50,000 (`toolResultText.ts:12-21`, `:53-71`). The
+  model has no way to read the elided middle.
+- 200,000 characters is about 50,000 tokens. A script exists to filter
+  before the model sees anything, so that cap is far too loose for its
+  result.
+
+**pi v1.0.0.** A script's output (log, `text()`, the return value) has a
+budget of 10,000 tokens by default, which the script can change with
+`max_output_tokens` (`pi: packages/coding-agent/src/extensions/codemode/execute.ts:233-235`).
+Past the budget it keeps the first half and the last half around a marker,
+and writes the full text to a temporary file whose path the result names
+(`:261-300`).
+
+**Adopted, in lane 3.**
+
+- The log and the return value share one budget, 10,000 tokens by default,
+  set per script (Q18 puts it on the `@options` line).
+- Over budget, the result keeps the start and the end, as pi does and as
+  `checkToolResultTextLimit` already does at its larger cap.
+- The full text is written to a file the result names, which the model reads
+  with `read_file` and its offset and limit. Unlike pi's temporary
+  directory, the file sits under the run's own directory, so it survives a
+  restart and is deleted with the run. Lane 3 picks the place within the
+  run directory that `read_file`'s path resolution already reaches.
+- The 80-line tail goes with the run log in lane 9.
+
+### Recovery errors
+
+pi v1.0.0 makes two kinds of mistake fail with the fix in the message
+(pi `packages/coding-agent/CHANGELOG.md:29`):
+
+- **Unknown members.** `tools` and each namespace are wrapped in a `Proxy`.
+  Reading a member that does not exist throws a `TypeError` naming up to
+  five close matches, so `tools.Bash` names `tools.bash`. Names are
+  compared lowercased with non-alphanumerics removed: exact matches under
+  that comparison first, then substring matches. With no close match and at
+  most 20 members, the error lists them all
+  (`pi: packages/codemode/src/runtime/prelude-source.ts:115-142`). `in`
+  checks still work, and `then` and `toJSON` pass through so the object is
+  not mistaken for a promise.
+- **Malformed arguments.** pi does this only for its two model calls,
+  `models.classify()` and `models.generateImages()`, which reject with the
+  expected shape (`execute.ts:122-163`). Its tool calls go through the
+  generic validator, which lists the failing paths and echoes the arguments
+  received (`pi: packages/ai/src/utils/validation.ts:347`).
+
+**Adopted, in lane 7.**
+
+- The same `Proxy` over `tools` and every namespace. The error is thrown
+  in the realm before any call is issued, so it writes no row and replays
+  trivially: the names come from the pinned catalog.
+- A nested call whose input fails the tool's Zod schema rejects with
+  `ToolFailed` carrying the Zod issues and the tool's declaration, the text
+  `describeTool` returns. That goes further than pi for tool calls, and it
+  costs nothing on a valid call.
+- The surface text says to test for a tool with `"name" in tools`, since
+  `typeof tools.name` now throws for a missing name.
 
 ### Determinism under `await`
 
@@ -1203,6 +1284,37 @@ declaration. The alternative, a typed core list with one-line entries for
 the rest (1,192 tokens for `assistant` with the file tools typed), stays on
 the table only if the nightly comparison shows it does better.
 
+**pi v1.0.0 leans the other way.** Its description
+(`pi: packages/coding-agent/src/extensions/codemode/tool.ts:140-300`):
+
+- gives each script global one line, and moves the long `models` reference
+  to a doc the model reads when it needs it (`:140-151`);
+- inlines tool declarations only up to a budget of 3,000 estimated tokens
+  (`:153-156`). The tools without a namespace come first, then the
+  namespaces by name; in each round every group places its cheapest
+  remaining declaration, and a group whose next one does not fit drops out
+  (`selectCatalog`, `:205-226`). A namespace that did not fit whole is
+  marked "some tools not listed";
+- never lists deferred tools, which include MCP tools by default, so the
+  description does not change while MCP servers connect (`:228-243`). TeXRA
+  already keeps MCP tools out of the inline list (owner ruling 6).
+
+pi reports that this cut a GPT-5.6 request with its default tools from
+about 5,300 to 3,300 tokens (vendor-reported, pi v1.0.0 changelog,
+2026-10-01, `packages/coding-agent/CHANGELOG.md:28`; not re-measured
+here). That figure motivates the comparison and gates nothing.
+
+The Q4 comparison in lane 10 therefore has three arms, not two:
+
+1. every declared tool inlined as a typed declaration (the Q4 ruling);
+2. a typed core list and one line for each other tool;
+3. pi's budgeted form: one line per global, typed declarations up to
+   3,000 tokens picked as above, everything else through `searchTools` and
+   `describeTool`.
+
+The third arm reuses the renderer and the ranker the first two need. Its
+only extra code is the selection loop, about 20 lines.
+
 ## Engine and isolation
 
 The engine stays QuickJS (`quickjs-emscripten-core` with
@@ -1495,6 +1607,79 @@ nested call resolves its `toolName` against that row for its step, so the
 plugin id and revision are part of the call's identity without being copied
 onto `script.call`. A call to a name the row lacks settles
 `tool_unavailable`.
+
+## Harness boundary
+
+The owner's direction (2026-10-01): "eventually i want to split texra from
+the general harness part with effect … texra would just be an example."
+Code mode is harness work. This section says where each new piece lives so
+that it stays free of TeXRA's research domains. The split itself is a later
+doc; nothing here designs it.
+
+**Where the pieces live.**
+
+| Piece                                          | Home                                                                 | Domain imports                                                                                                                                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CodeSandbox`                                  | `src/agent/codeSandbox/` (#13601, lane 2, open)                      | None. It imports `effect`, `@effect/platform-node`, QuickJS, `zod`, two `@utils` helpers and `determinismPrelude`, which moves in beside it when lane 9 deletes `workflowScript/` |
+| `script` tool, BM25 ranker, namespace renderer | `src/tools/codemode/`, new, contributed by the `codemode` plugin     | None allowed                                                                                                                                                                      |
+| `agent` tool                                   | `src/tools/delegation/`, contributed by `workflow-script`            | None, but two of its options are LaTeX by name (below)                                                                                                                            |
+| `script.call` and `script.source` rows         | the closed run-ledger schema, `src/shared/schemas/runLedgerEvent.ts` | None: the file imports only `zod` and sibling schemas (`:18-36`)                                                                                                                  |
+| The effect class (Q10)                         | `ITool` (`src/agent/core/tools/ToolTypes.ts`) and `DispatchFacts`    | None                                                                                                                                                                              |
+
+**The rule.** None of these imports LaTeX, Zotero, arXiv, Crossref, Lean or
+Wolfram code: nothing from `@latex/*` or `@replacement/*`, and nothing from
+`@tools/{latex,zotero,lean,arxiv,citation,wolfram,texcount}/*`. Domain tools
+reach scripts only as registry entries a plugin contributes. The script
+surface renders whatever the step's pinned generation holds, and every
+per-tool difference comes from the tool's own declaration: its schema
+(namespace or plain function), its `effect`, its description. Code mode
+never switches on a tool's name. MCP tools already work this way.
+
+**What the code shows today.**
+
+- **Two LaTeX options in the `agent` tool.** Lane 4 carries over
+  `extractFigures` and `extractTikz` (`inputFields.ts:90-101`), which fold
+  into the `autoExtractFigure` and `autoExtractTikzFigure` overrides
+  (`proposalInput.ts:55-73`). There is no import, but the names are domain
+  options in a harness tool. Parity keeps them. Lane 4 declares them as one
+  group next to each other, so the split can move them whole to the
+  documents plugin, which is what reads them.
+- **The `core` plugin is not domain-free.** `codemode` is to be hidden and
+  not toggleable "like `core`", but `core` lists `lean_loogle` and
+  `open_pdf` (`pluginManifest.ts:388-404`). `codemode` copies those two
+  flags, not `core`'s tool list.
+- **Existing edges from the agent core into the LaTeX code.**
+  `SessionHandle.ts:48` and `responseTextProcessing.ts:3` import
+  `@latex/texraResponseTextProcessing`; `runListing.ts:13` imports
+  `@latex/latexdiff/runDiscovery`; `src/agent/output/` is the documents
+  plugin. These are the split doc's work. Code mode adds none.
+
+**Seams the split can use.** Each already exists:
+
+- `packages/llm`, the package `@texra-ai/llm`, "TeXRA-owned canonical
+  model operations" (`packages/llm/package.json:2`, `:6`): the provider
+  layer, with no domain code in it.
+- `packages/agent`, `@texra-ai/agent`, "Embeddable TeXRA agent runtime"
+  (`packages/agent/package.json:2`, `:4`): the built SDK surface.
+- The plugin manifest's domain plugins, each already a registry
+  contribution with its own availability probe: `latex-extract`
+  (`src/tools/pluginManifest.ts:50-61`), `latex-diagnostics` (`:62-69`),
+  `arxiv` (`:70-77`), `crossref` (`:78-85`), `texcount` (`:133-152`),
+  `wolfram` (`:153-166`), `zotero` (`:167-196`) and `lean4` (`:197-237`).
+- `src/agent/output/`, "the documents plugin" (`documentRounds.ts:1-12`),
+  which round mode calls through one import (`rounds.ts:1-5`).
+
+**A lint boundary, proposed, not built.** `VSCODE_FREE_ZONE_DIRS`
+(`eslint.config.mjs:103-122`) and its rule
+`no-vscode-import-in-free-zones` (`:409-440`) show the shape: a list of
+directories and a rule that refuses one import inside them. A
+`HARNESS_ZONE_DIRS` list naming `src/agent/codeSandbox` and
+`src/tools/codemode`, with `no-restricted-imports` patterns for the
+specifiers above, would keep the boundary from eroding before the split doc
+exists. It is lane 14 and lands no later than lane 3, so each directory is
+covered from its first file. The row schema and `ToolTypes.ts` are left out:
+they sit in shared directories whose imports are already narrow, and a
+per-file list for them would be noise.
 
 ## How agents talk to each other
 
@@ -2069,19 +2254,46 @@ runtime check (Q14), and a verifier-picked merge is script code.
 
 ## Peer comparison
 
-|              | TeXRA (proposed)                                                                 | pi                                                                                                                  | Codex Code Mode                                                                                  |
-| ------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Engine       | QuickJS WASM, worker thread, one per session                                     | QuickJS WASM (`quickjs-wasi`), worker per call (`host.ts:155`)                                                      | V8 in a separate host process (`connection.rs:157-169`)                                          |
-| VM lifetime  | Fresh runtime per script                                                         | Fresh worker and VM per call (`host.ts:81-86`)                                                                      | Fresh isolate per cell; cells outlive turns (`code_mode/mod.rs:356`)                             |
-| Limits       | 64 MB heap, 30 s CPU, wall deadline                                              | 256 MB heap, no timeout by default (`execute.ts:52-57`, `:385`)                                                     | Heap and limits plumbed but unapplied (`service.rs:42-63`); 10 s yield, no timeout               |
-| Nested calls | Real tool calls: policy, ledger rows, nested cards                               | Same pipeline as direct; recorded only as bounded `nestedCalls` on the parent result (`nested-tool-calls.ts:26-31`) | Same `ToolCallRuntime`, approvals and Guardian; best-effort record (`executed_tool_calls.rs:60`) |
-| Durability   | Replay from the ledger in commit order; approvals survive restart                | None; `store()` entries persist on success (`execute.ts:406-410`)                                                   | None; `store` is in memory (`session_runtime/mod.rs:46-49`)                                      |
-| Discovery    | Typed declarations inline; MCP and plugin tools via `searchTools`/`describeTool` | 3,000-token inline budget, BM25 search (`tool.ts:154-156`, `execute.ts:459-479`)                                    | Inline list only in code-mode-only; deferred via `ALL_TOOLS` (`description.rs:295-360`)          |
-| Default      | "on", then "only" after evaluation                                               | Off; auto-on when an MCP server opts in (`index.ts:41`)                                                             | Off, under development (`features/src/lib.rs:1089-1094`)                                         |
+pi is read at v1.0.0 (tag `a13d35a74`, 2026-10-01). Its paths are relative
+to `packages/coding-agent/src/extensions/codemode/` unless they name a
+package. The Codex column is unchanged from the earlier read; its three new
+rows were not re-checked.
+
+|              | TeXRA (proposed)                                                                 | pi v1.0.0                                                                                                                                                | Codex Code Mode                                                                                  |
+| ------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Engine       | QuickJS WASM, worker thread, one per session                                     | QuickJS WASM, a worker per call (`packages/codemode/src/runtime/host.ts:155`)                                                                            | V8 in a separate host process (`connection.rs:157-169`)                                          |
+| VM lifetime  | Fresh runtime per script                                                         | Fresh worker and VM per call; a stuck worker is terminated (`host.ts:81-86`, `:270`)                                                                     | Fresh isolate per cell; cells outlive turns (`code_mode/mod.rs:356`)                             |
+| Input        | JSON object today; one `code` string with an `@options` line proposed (Q18)      | Raw source with an optional `// @options:` line; a grammar-constrained custom tool on OpenAI models (`tool.ts:87-91`, `:380`)                            | Not re-checked for this revision                                                                 |
+| Limits       | 64 MB heap, 30 s CPU, wall deadline                                              | 256 MB heap, no timeout unless `timeout_ms` (`execute.ts:57`)                                                                                            | Heap and limits plumbed but unapplied (`service.rs:42-63`); 10 s yield, no timeout               |
+| Output       | One budget, head and tail kept, full text to a run file (adopted)                | 10,000-token budget, head and tail kept, full text to a temp file (`execute.ts:233-235`, `:261-300`)                                                     | Not re-checked for this revision                                                                 |
+| Nested calls | Real tool calls: policy, ledger rows, nested cards                               | Same pipeline as direct (`ctx.executeTool`); listed on the parent result's details (`execute.ts:345-372`)                                                | Same `ToolCallRuntime`, approvals and Guardian; best-effort record (`executed_tool_calls.rs:60`) |
+| Sub-agents   | `agent()`, an ordinary tool                                                      | None. Scripts call non-chat models instead: `models.classify()`, `models.generateImages()`, at most four at once (`execute.ts:51`, `:532`)               | Not re-checked for this revision                                                                 |
+| Durability   | Replay from the ledger in commit order; approvals survive restart                | No replay. `store()` writes persist only when the script succeeds, as a session entry read per branch (`execute.ts:219-229`, `:393-410`)                 | None; `store` is in memory (`session_runtime/mod.rs:46-49`)                                      |
+| Discovery    | Typed declarations inline; MCP and plugin tools via `searchTools`/`describeTool` | Declarations within a 3,000-token budget; deferred and MCP tools unlisted; BM25 search (`tool.ts:153-156`, `:205-243`; `../tool-search/tool.ts:118-155`) | Inline list only in code-mode-only; deferred via `ALL_TOOLS` (`description.rs:295-360`)          |
+| Default      | "on", then "only" after evaluation                                               | Registered inactive; the MCP extension turns it on when MCP tools are reachable only from scripts (`index.ts:5-6`, `:41`)                                | Off, under development (`features/src/lib.rs:1089-1094`)                                         |
 
 The one property TeXRA has that neither peer has is that a script survives a
 restart with its finished calls intact. That follows from the run ledger, not
 from the sandbox.
+
+**`store()`.** pi's store is the one place it keeps state past a script, and
+it keeps it only for a script that succeeded, with no replay of the calls.
+TeXRA does not add a store. Within a script the ledger replays every finished
+call after a restart, which covers the failed and interrupted cases pi drops.
+Across scripts, the earlier script's result is already in the model's
+context, and `memory` or a file holds anything that must outlive it.
+
+**The main divergence: `agent()` against model calls.** pi has no sub-agent
+call in scripts. What a script can run besides tools is non-chat models:
+`models.classify()` and `models.generateImages()`, resolved by provider and
+id only so a script cannot redirect credentials, at most four at a time per
+script, with their usage added to the script's result and the session cost
+(`execute.ts:338-340`, `:525-540`). TeXRA's fan-out is `agent()`, because
+the work TeXRA fans out (a section rewrite, a proof check) needs a model
+that uses tools. Non-chat model calls from scripts are recorded here as a
+possible later namespace that a plugin contributes, like any other tool
+family (`tools.models.classify`). It is not built, and nothing in this
+design reserves a name for it.
 
 ## Owner rulings (2026-10-01)
 
@@ -2223,28 +2435,107 @@ Two more rulings set the order of work:
     _Recommended: yes._ Three nights of four journeys is 12 tasks per arm,
     which cannot tell a 10-point difference from noise.
 
+13. **Q18. Raw source or a JSON object as the script tool's input?** "The
+    script surface" takes an object with `code`, `path`, `title`, `args`,
+    `files`, `run_in_background` and `timeoutMs`. pi v1.0.0 takes raw
+    JavaScript with an optional first line,
+    `// @options: {"max_output_tokens": …, "timeout_ms": …}`
+    (`pi: packages/codemode/src/source.ts:11-115`). The point is that the
+    model does not have to escape a program inside a JSON string.
+    - **How pi declares it.** The canonical input is still JSON: one
+      required string, `code`
+      (`pi: packages/coding-agent/src/extensions/codemode/tool.ts:87-91`).
+      The tool also carries a Lark grammar for the options line and the
+      source (`tool.ts:380`; `source.ts:22-30`). Only where a model's catalog
+      entry sets `supportsOpenAIGrammarTools` do the OpenAI codecs send it
+      as a `custom` tool with that grammar
+      (`pi: packages/ai/src/api/openai-responses-shared.ts:360-378`,
+      `openai-completions.ts:1476-1495`). The raw text comes back as
+      `custom_tool_call.input` and is wrapped into `{ code }`
+      (`openai-responses-shared.ts:505-515`); when history is sent again it
+      is unwrapped into a `custom_tool_call` (`:306-316`). Every other
+      provider gets an ordinary function tool, and the model writes
+      `{"code": "…"}`, escaped. The options line works the same in both.
+    - **Which providers take raw input.** OpenAI's Responses and Chat
+      Completions APIs have custom tools with a Lark or regex grammar. The
+      other routes TeXRA lowers take JSON arguments only: Anthropic Messages
+      requires an object `input_schema` per tool (`anthropicMessages.ts:381-391`),
+      Google Interactions declares functions with JSON parameters, and the
+      OpenRouter route sends function tools (`openrouterChat.ts:365`). So
+      raw text would reach only the `openai` request dialect; on every other
+      route the model escapes the code whatever we choose.
+    - **How TeXRA would carry it.** `TurnRequestSchema.tools` is
+      `{ name, description, parameters: JsonObject }`
+      (`packages/llm/src/turn.ts:66-72`, `:125-139`), and the Responses
+      lowering emits only `type: 'function'` tools
+      (`openaiResponsesRequest.ts:189-207`) and `function_call` history
+      (`openaiResponsesLower.ts:224-236`). A call is stored as a `local-call`
+      part whose `argumentsText` holds the provider's exact bytes
+      (`message.ts:100-121`; `storedTurn.ts:89-95`), parsed at dispatch by
+      `parseCallArguments`, which already passes bytes that are not JSON
+      through as a string (`run/tools.ts:57-75`). Stored evidence kinds are
+      an open string (`storedTurn.ts:22-25`), so marking a call as custom
+      changes no stored row shape.
+    - **Options.** (1) Keep the JSON object. (2) Raw source everywhere,
+      every other field on the options line. (3) A hybrid: one `code`
+      string whose optional first line is `// @options: {…}`, and a custom
+      tool only where the provider has one.
+
+    _Recommended: the hybrid, in two steps._
+
+    1. **Lane 3: one input string.** The input schema is `{ code: string }`.
+       Its optional first line `// @options: {…}` carries `title`, `args`,
+       `files`, `path`, `run_in_background`, `timeoutMs` and
+       `max_output_tokens`. Zod parses that line once, at the tool's
+       boundary, into the same typed options the object form has today, and
+       the line is blanked so error line numbers stay right (pi does the
+       same, `source.ts:39-43`, `:106-114`). A body may be empty only when
+       `path` is set, which keeps "exactly one of code and path".
+    2. **After lane 10: a custom tool on the `openai` dialect, if measured.**
+       `ToolDefinition` gains an optional grammar; the Responses codec sends
+       the script tool as a `custom` tool where the binding allows it,
+       stores the input as the JSON text `{"code": "…"}` with an evidence
+       kind `openai-responses-custom-call`, and lowers that back to
+       `custom_tool_call` on later turns. `JSON.stringify` of a string
+       round-trips exactly, so `argumentsText` stays a faithful carrier and
+       a run that switches to another provider mid-way needs nothing. This
+       step is built only if the nightly shows escape errors or output
+       tokens on OpenAI models that it would remove.
+
+    Why: step 1 gives one canonical input on every provider and every
+    stored row, needs no provider feature, and moves the six capability
+    fields out of the way of the one long field. It is no worse than today
+    on Anthropic, Gemini or OpenRouter, where the code is escaped either
+    way, and the escape cost is then the same as for `bash`'s `command`.
+    Step 2 is the only part that needs `packages/llm` work, and it helps
+    only one dialect, so it waits for a measurement. Against the hybrid:
+    fields on a comment line are less visible than schema fields, so the
+    surface text must document them, and a model that sends the old JSON
+    fields gets a worded refusal that names the options line.
+
 ## Lanes
 
 The parity gate is lane 9. It merges only when every row of "Parity
 inventory" is delivered, and the 1.0 freeze and tag follow it.
 
-| Lane | Work                                                                                                                                                                                                                                                                                                                                                                                                                                  | Effort                               | Depends on                                                                          |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------- |
-| 1    | Durable approvals: bind every guarded request with `tool.binding`; park at `waiting`; re-attach on resume. Direct calls benefit at once. In flight as #13604                                                                                                                                                                                                                                                                          | M                                    | none                                                                                |
-| 2    | `CodeSandbox` service: worker entry in four bundles, Effect RPC over `NodeWorker`, `settle`/job-drain realm, shared interrupt flag, `BARE_EFFECT_RUN_SITES` entry, the limits. No row names a realm (Q11)                                                                                                                                                                                                                             | L                                    | none (Q1 ruled); coordinate the worker-shipping table with the database-worker note |
-| 3    | `script` tool under the `codemode` plugin: `script.call` (with `phase`) and `script.source`, `tool.intent` origin tagged with `kind`, `script` stage kind, nested dispatch through the per-call program, namespace dispatch for union tools, commit-order replay, `ScriptDiverged`; `code`/`path`/`title`/`args`/`files`/`timeoutMs`, drafts, call cap, run-log tail; `executions send` idempotent by `callId` (retirement item 13)   | L                                    | 1, 2                                                                                |
-| 4    | `agent` tool under `workflow-script`: options and envelope, file hand-off and fingerprint, post-conditions, child approvals, recovery with refusals as outcome-unknown, child id from `(callId, attempt)`, `timeoutMs`, Q2 reuse, Q5 script request, `call.control` skip and retry; the `delegate_*` options (`outputFiles`, `extractFigures`, `extractTikz`, `memories`, `working_directory`, the hand-off wrapper) and `background` | L                                    | 3                                                                                   |
-| 5    | Background scripts: `run_in_background`, `script` run identity, detached delivery and the summary line, stop notice, `resumeRun`, `/executions` view, one-shot foreground                                                                                                                                                                                                                                                             | M                                    | 3, 4                                                                                |
-| 6    | Renderers in the three hosts: the script stage board (rows, phase tabs, sections, Review, Skip and Restart, next failed, CLI popup keys), headless lines, the script request panels                                                                                                                                                                                                                                                   | L                                    | 3, 4, 5                                                                             |
-| 7    | Prompt: declarations rendered and frozen with the system text, union tools as namespaces (token cost measured first); BM25 `searchTools` and `describeTool` (namespaces included) over the pinned snapshot, MCP included; `contextUpdate` for catalog changes                                                                                                                                                                         | M                                    | 3                                                                                   |
-| 8    | Docs and skill: rewrite the guide and the multi-agent-orchestration skill for scripts, parent-routed coordination as the default pattern; `tool_catalog.md` and `execution_and_testing.md`                                                                                                                                                                                                                                            | S                                    | 4, 5                                                                                |
-| 9    | **Parity gate and deletion.** Delete `delegate_multi_agents`, its engine half, renderers, the five row kinds and `multiAgentWorkflow` (list above). **Requires every parity row delivered**                                                                                                                                                                                                                                           | M (deletion, ~15k lines incl. tests) | 3, 4, 5, 6, 8; then the 1.0 freeze and tag                                          |
-| 10   | Evaluation: fix the live-journeys matrix keys, add gemini38f, the fan-out journey in its parent-routed and peer forms, three runs per journey per arm, the pooled five-night window; `direct` vs `only` per model on pass rate, cost and latency; per-model flag on `BoundModel`                                                                                                                                                      | S                                    | 3, 7                                                                                |
-| 11   | Flip the default to "only"                                                                                                                                                                                                                                                                                                                                                                                                            | S                                    | 10 meeting the bar                                                                  |
-| 12   | **Retire the delegation pair and adapt the agents.** Delete `delegate_agent` and `delegate_workflow` (requires the `delegate_agent` and `delegate_workflow` parity rows); `hasDelegationTool`'s name set becomes `{ agent }`; the six built-in YAMLs and their prompts, the creator docs, the tool descriptions that cross-reference them, the test fixture; a declared unknown built-in tool refuses the run (retirement item 12)    | M                                    | 4; before the 1.0 freeze                                                            |
-| 13   | **Tool declarations.** Freeze the delegation availability text with the system text and delete the per-step rewrite (retirement item 2, can start now); `effect` replaces `replay`, per branch where needed, in `ITool` and `DispatchFacts` (Q10)                                                                                                                                                                                     | S                                    | none for the first part; the second before lane 3 lands and before the freeze       |
+| Lane | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Effort                               | Depends on                                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------------- |
+| 1    | Durable approvals: bind every guarded request with `tool.binding`; park at `waiting`; re-attach on resume. Direct calls benefit at once. In flight as #13604                                                                                                                                                                                                                                                                                                                                                                                                                               | M                                    | none                                                                                |
+| 2    | `CodeSandbox` service: worker entry in four bundles, Effect RPC over `NodeWorker`, `settle`/job-drain realm, shared interrupt flag, `BARE_EFFECT_RUN_SITES` entry, the limits. No row names a realm (Q11)                                                                                                                                                                                                                                                                                                                                                                                  | L                                    | none (Q1 ruled); coordinate the worker-shipping table with the database-worker note |
+| 3    | `script` tool under the `codemode` plugin: `script.call` (with `phase`) and `script.source`, `tool.intent` origin tagged with `kind`, `script` stage kind, nested dispatch through the per-call program, namespace dispatch for union tools, commit-order replay, `ScriptDiverged`; the input as one `code` string with an `@options` line (Q18 step 1) carrying `path`/`title`/`args`/`files`/`timeoutMs`/`max_output_tokens`, drafts, call cap; the output budget with head and tail kept and the full text in a run file; `executions send` idempotent by `callId` (retirement item 13) | L                                    | 1, 2                                                                                |
+| 4    | `agent` tool under `workflow-script`: options and envelope, file hand-off and fingerprint, post-conditions, child approvals, recovery with refusals as outcome-unknown, child id from `(callId, attempt)`, `timeoutMs`, Q2 reuse, Q5 script request, `call.control` skip and retry; the `delegate_*` options (`outputFiles`, `extractFigures` and `extractTikz` as one group (see "Harness boundary"), `memories`, `working_directory`, the hand-off wrapper) and `background`                                                                                                             | L                                    | 3                                                                                   |
+| 5    | Background scripts: `run_in_background`, `script` run identity, detached delivery and the summary line, stop notice, `resumeRun`, `/executions` view, one-shot foreground                                                                                                                                                                                                                                                                                                                                                                                                                  | M                                    | 3, 4                                                                                |
+| 6    | Renderers in the three hosts: the script stage board (rows, phase tabs, sections, Review, Skip and Restart, next failed, CLI popup keys), headless lines, the script request panels                                                                                                                                                                                                                                                                                                                                                                                                        | L                                    | 3, 4, 5                                                                             |
+| 7    | Prompt: declarations rendered and frozen with the system text, union tools as namespaces (token cost measured first); BM25 `searchTools` and `describeTool` (namespaces included) over the pinned snapshot, MCP included; `contextUpdate` for catalog changes; recovery errors (close-match `Proxy` on `tools` and namespaces, the declaration on a schema failure)                                                                                                                                                                                                                        | M                                    | 3                                                                                   |
+| 8    | Docs and skill: rewrite the guide and the multi-agent-orchestration skill for scripts, parent-routed coordination as the default pattern; `tool_catalog.md` and `execution_and_testing.md`                                                                                                                                                                                                                                                                                                                                                                                                 | S                                    | 4, 5                                                                                |
+| 9    | **Parity gate and deletion.** Delete `delegate_multi_agents`, its engine half, renderers, the five row kinds and `multiAgentWorkflow` (list above). **Requires every parity row delivered**                                                                                                                                                                                                                                                                                                                                                                                                | M (deletion, ~15k lines incl. tests) | 3, 4, 5, 6, 8; then the 1.0 freeze and tag                                          |
+| 10   | Evaluation: fix the live-journeys matrix keys, add gemini38f, the fan-out journey in its parent-routed and peer forms, three runs per journey per arm, the pooled five-night window; `direct` vs `only` per model on pass rate, cost and latency; the three Q4 arms (all inline, typed core plus one line each, pi's 3,000-token budget); escape errors and output tokens on OpenAI models, which decide Q18 step 2; per-model flag on `BoundModel`                                                                                                                                        | S                                    | 3, 7                                                                                |
+| 11   | Flip the default to "only"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | S                                    | 10 meeting the bar                                                                  |
+| 12   | **Retire the delegation pair and adapt the agents.** Delete `delegate_agent` and `delegate_workflow` (requires the `delegate_agent` and `delegate_workflow` parity rows); `hasDelegationTool`'s name set becomes `{ agent }`; the six built-in YAMLs and their prompts, the creator docs, the tool descriptions that cross-reference them, the test fixture; a declared unknown built-in tool refuses the run (retirement item 12)                                                                                                                                                         | M                                    | 4; before the 1.0 freeze                                                            |
+| 13   | **Tool declarations.** Freeze the delegation availability text with the system text and delete the per-step rewrite (retirement item 2, can start now); `effect` replaces `replay`, per branch where needed, in `ITool` and `DispatchFacts` (Q10)                                                                                                                                                                                                                                                                                                                                          | S                                    | none for the first part; the second before lane 3 lands and before the freeze       |
+| 14   | **Harness boundary lint.** `HARNESS_ZONE_DIRS` (`src/agent/codeSandbox`, `src/tools/codemode`) in `eslint.config.mjs`, refusing `@latex/*`, `@replacement/*` and the domain `@tools/*` directories (see "Harness boundary")                                                                                                                                                                                                                                                                                                                                                                | S                                    | none; lands no later than lane 3                                                    |
 
-Lanes 1, 2 and the first half of 13 can start today and do not touch each
+Lanes 1, 2, 14 and the first half of 13 can start today and do not touch each
 other. Nothing is
 deleted ahead of its replacement: until lane 9, `delegate_multi_agents` and
 the new tools ship side by side, and the `workflow-script` plugin contributes
@@ -2317,6 +2608,25 @@ both. Likewise `delegate_agent` and `delegate_workflow` stay until lane 12.
 - Ran `node:sqlite` on Node 26.9.0 to confirm FTS5 is compiled in and that
   `unicode61` does not split camelCase. Read pi's BM25 ranker and discovery
   globals at `origin/main` (`6f1072cc0`).
+- For the pi v1.0.0 revision, read pi at tag `v1.0.0` (`a13d35a74`,
+  2026-10-01): `packages/coding-agent/docs/codemode.md`, `packages/codemode`
+  (`source.ts`, `runtime/{host,prelude-source,worker}.ts`),
+  `packages/coding-agent/src/extensions/codemode/{tool,execute,index}.ts`,
+  `packages/ai/src/api/{constrained-sampling,openai-responses-shared,openai-completions}.ts`,
+  `packages/ai/src/types.ts` (`ConstrainedSamplingConfig`,
+  `supportsOpenAIGrammarTools`), `packages/ai/src/utils/validation.ts`, and
+  the v1.0.0 changelog entries.
+- For "Harness boundary", "Output budget" and Q18, read on the same
+  baseline: `eslint.config.mjs` (`VSCODE_FREE_ZONE_DIRS` and its rule),
+  `src/tools/pluginManifest.ts`, `packages/{llm,agent}/package.json`,
+  `src/agent/output/documentRounds.ts`, `src/agent/runtime/loop/rounds.ts`,
+  the `@latex` imports under `src/agent/`, `src/tools/delegation/inputFields.ts`,
+  `src/shared/schemas/{proposalInput,storedTurn,runLedgerEvent}.ts`,
+  `packages/llm/src/{turn,message,openaiResponsesRequest,openaiResponsesLower,anthropicMessages,openrouterChat}.ts`,
+  `src/agent/runtime/run/{tools,toolResultText}.ts`,
+  `src/tools/delegation/workflowScriptStrategy.ts` (run log),
+  `src/tools/executions/pathCatalog.ts`; and the import lines of
+  `src/agent/codeSandbox/` on the head of #13601 (open).
 - External figures in this note come from the harness-direction survey
   (coauthor-fc, "Where Harnesses Are Going", 2026-10-01,
   https://claude.ai/artifact/FNYhVNuUjQY6hxordqbbhx, owner-private). They
