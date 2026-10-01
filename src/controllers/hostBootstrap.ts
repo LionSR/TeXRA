@@ -52,6 +52,14 @@ const RETIRED_ACCOUNT_SECRET_PREFIXES = [
   'texra.auth.pendingOAuthState.',
 ];
 
+/** The fixed names among them, deleted by name where the store cannot list
+ *  its keys; only the per-nonce pending records need the listing. */
+const RETIRED_ACCOUNT_SECRET_KEYS = [
+  'texra.supabase.session',
+  'texra.supabase.gotrue',
+  'texra.supabase.gotrue-code-verifier',
+];
+
 export interface HostBootstrapInit {
   /**
    * The process roots the root just built: the global state store the
@@ -84,9 +92,14 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // The removed TeXRA account left its Supabase session (a refresh token),
   // GoTrue's PKCE verifiers and the pending sign-in records in the secret
   // store. Delete them by name, never reading a value; once gone, the listing
-  // finds nothing and this is a no-op. A failure only leaves them for the
-  // next start.
+  // finds nothing and this is a no-op. A store that cannot list its keys
+  // (an editor without `SecretStorage.keys()`) still loses the fixed names.
+  // A failure only leaves them for the next start.
   yield* secrets.listStoredKeys().pipe(
+    Effect.catchIf(
+      (error) => error.reason === 'enumeration-unsupported',
+      () => Effect.succeed(RETIRED_ACCOUNT_SECRET_KEYS),
+    ),
     Effect.map((keys) =>
       keys.filter((key) =>
         RETIRED_ACCOUNT_SECRET_PREFIXES.some((prefix) =>
