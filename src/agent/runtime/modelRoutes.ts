@@ -271,7 +271,7 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
  * a Copilot route binds only with the editor route discovered for it.
  */
 export type BindableRoute =
-  | Exclude<ModelRoute, { kind: 'mode-unsupported' | 'copilot' }>
+  | Exclude<ModelRoute, { kind: 'openrouter-unsupported' | 'copilot' }>
   | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
 
 /**
@@ -308,8 +308,11 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ? !options.ownApiKeyFallback &&
         (yield* prefersCopilotRoute(config.ref, stores.globalState))
       : key === 'VscodeLm';
+  // A provider mode never takes the Copilot preference (`decideModelRoute`),
+  // so the editor is not asked for a route it would not use.
   const copilotRoute =
-    prefersCopilot || config.provider === ModelProvider.COPILOT
+    (prefersCopilot && options.mode === undefined) ||
+    config.provider === ModelProvider.COPILOT
       ? (yield* discoverCopilotRoutes()).get(config.ref)
       : undefined;
   const route = decideModelRoute(
@@ -334,12 +337,10 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
           mode: options.mode,
         },
   );
-  if (route.kind === 'mode-unsupported') {
+  if (route.kind === 'openrouter-unsupported') {
     return yield* Effect.fail(
       new Error(
-        route.via === 'openrouter'
-          ? `${config.label} in ${options.mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`
-          : `${config.label} in ${options.mode} mode is not served through Copilot. Stop using Copilot for this model to use the provider API directly.`,
+        `${config.label} in ${options.mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`,
       ),
     );
   }

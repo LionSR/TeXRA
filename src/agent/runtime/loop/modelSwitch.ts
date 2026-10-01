@@ -9,7 +9,7 @@ import {
   resolveModelRoute,
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
-import { reasoningFor } from '@model/reasoningLevel';
+import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
@@ -113,8 +113,11 @@ export function modelSwitchPort(
       };
     }
     const nextConfig = selected.config;
+    // The routes the run declined, so the preflight decides the route the
+    // bind at the next model boundary will.
     const route = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
+      declinedRoutes: run.declinedRoutes,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextKey = yield* routeCompatibilityKey(nextConfig, route);
     if (!nextKey) {
@@ -151,7 +154,7 @@ export function modelSwitchPort(
       // failing the bind inside the loop and ending the conversation.
       if (admitted.admitted !== undefined) {
         const { selected, route, nextKey } = admitted.admitted;
-        yield* reasoningFor(
+        yield* decideReasoning(
           selected.config,
           selected.request,
           run.stores.globalState,

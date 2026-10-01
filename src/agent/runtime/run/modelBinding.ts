@@ -130,9 +130,8 @@ type ConfigurationOf<P extends HttpProtocol> = Extract<
 >;
 
 /** The wire protocol each conversation format binds. */
-export const PROTOCOL_BY_KEY: Record<
-  ModelCompatibilityKey,
-  Protocol | 'validation'
+export const PROTOCOL_BY_KEY: Readonly<
+  Record<ModelCompatibilityKey, Protocol | 'validation'>
 > = {
   Validation: 'validation',
   OpenAIResponse: 'openai-responses',

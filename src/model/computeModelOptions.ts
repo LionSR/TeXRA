@@ -245,13 +245,8 @@ function routeGate(
         copilotReason: copilotRouteUnavailableReason(model, route.route),
       };
     }
-    case 'mode-unsupported':
-      return route.via === 'openrouter'
-        ? availabilityStatus('provider-unavailable')
-        : {
-            ...availabilityStatus('copilot-unavailable'),
-            copilotReason: `Copilot does not serve "${model}" in its provider mode. Stop using Copilot for this model to use the provider API.`,
-          };
+    case 'openrouter-unsupported':
+      return availabilityStatus('provider-unavailable');
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
