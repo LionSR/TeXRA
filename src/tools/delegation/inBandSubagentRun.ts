@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Clock, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -165,7 +165,7 @@ const executeInBand = Effect.fn('executeInBand')(
     runId: RunId,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
     const { config } = definition;
-    const startedAt = Date.now();
+    const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     // A child that needs a plugin its parent's step lacks is an ordinary
     // failed call, refused before any row records it.

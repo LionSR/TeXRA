@@ -36,7 +36,7 @@ export class SettingsMemoryController {
   readonly getMemoryDataMessage = Effect.fn(
     'SettingsMemoryController.getMemoryDataMessage',
   )(function* () {
-    const items = yield* Effect.orDie(loadMemoryItems());
+    const items = yield* loadMemoryItems();
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
       items,
@@ -94,14 +94,12 @@ export class SettingsMemoryController {
     pinned: boolean,
   ) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = yield* Effect.orDie(
-      setMemoryPinned(resolvedPath, pinned).pipe(onMemoryTreeLane),
+    const result = yield* setMemoryPinned(resolvedPath, pinned).pipe(
+      onMemoryTreeLane,
     );
     if (result.status === 'cap-reached') {
-      yield* Effect.orDie(
-        this.deps.prompt.warning(
-          `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-        ),
+      yield* this.deps.prompt.warning(
+        `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
       );
       return null;
     }

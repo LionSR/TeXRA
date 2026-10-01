@@ -4,7 +4,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import {
+  announce,
+  showLoggedInfoMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { fileOpResultMessage, packRunOutputs } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
@@ -24,24 +30,23 @@ const showPackResult = (
     if (result.status === 'success' && folderPath) {
       yield* Effect.forkDetach(
         Effect.gen(function* () {
-          const sel = yield* Effect.promise(() =>
-            vscode.window.showInformationMessage(text, 'Open Folder'),
+          const sel = yield* announce(
+            CHANNEL,
+            vscodeUi.info(text, { items: ['Open Folder'] }),
+            undefined,
           );
           if (sel !== 'Open Folder') return;
-          yield* Effect.promise(() =>
-            vscode.commands.executeCommand(
-              'revealFileInOS',
-              vscode.Uri.file(folderPath),
-            ),
+          yield* safeExecuteCommand(
+            'revealFileInOS',
+            [vscode.Uri.file(folderPath)],
+            CHANNEL,
           );
         }),
       );
-    } else if (result.status === 'missingParams') {
+    } else if (result.status === 'missingParams' || level === 'error') {
       yield* Effect.forkDetach(showLoggedMessage(CHANNEL, text));
-    } else if (level === 'error') {
-      void vscode.window.showErrorMessage(text);
     } else {
-      void vscode.window.showInformationMessage(text);
+      yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, text));
     }
   });
 

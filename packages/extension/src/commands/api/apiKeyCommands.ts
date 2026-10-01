@@ -7,6 +7,7 @@ import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   API_PROVIDERS,
@@ -96,11 +97,9 @@ function pickApiProvider(
       description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
       provider,
     }));
-    const providerPick = yield* Effect.promise(() =>
-      vscode.window.showQuickPick<ApiProviderQuickPickItem>(providerItems, {
-        placeHolder,
-        prompt,
-      }),
+    const providerPick = yield* quickPick<ApiProviderQuickPickItem>(
+      providerItems,
+      { placeHolder, prompt },
     );
     return providerPick?.provider;
   });

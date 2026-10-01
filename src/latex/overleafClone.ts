@@ -36,9 +36,9 @@ type CloneServices = ChildProcessSpawner | FileSystem.FileSystem;
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
 
 export interface OverleafCloneWorkflowPorts {
-  getStoredToken(key: string): Effect.Effect<string | undefined>;
-  deleteStoredToken(key: string): Effect.Effect<void>;
-  storeToken(key: string, token: string): Effect.Effect<void>;
+  getStoredToken(key: string): Effect.Effect<string | undefined, Error>;
+  deleteStoredToken(key: string): Effect.Effect<void, Error>;
+  storeToken(key: string, token: string): Effect.Effect<void, Error>;
   /**
    * Prompt for a new token; null when the user cancels. Fails when the host
    * cannot prompt at all (a non-interactive CLI run, say) — that is a usage

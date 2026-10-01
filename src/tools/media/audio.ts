@@ -5,6 +5,7 @@ import { createReadStream } from 'node:fs';
 import * as path from 'node:path';
 
 import {
+  Clock,
   Data,
   Duration,
   Effect,
@@ -150,7 +151,10 @@ export function startRecording(
     yield* fs
       .makeDirectory(directory, { recursive: true })
       .pipe(recorderFailure('startRecording'));
-    const absPath = path.join(directory, `record_${Date.now()}.wav`);
+    const absPath = path.join(
+      directory,
+      `record_${yield* Clock.currentTimeMillis}.wav`,
+    );
     const soxArgs = [
       '--default-device',
       '--no-show-progress',

@@ -169,7 +169,7 @@ const deleteWithAuxFiles = (
     yield* Effect.forEach(
       [filePath, ...unlinkTargets],
       (target) => silentDelete(target, 'file'),
-      { concurrency: 'unbounded', discard: true },
+      { concurrency: 8, discard: true },
     );
   });
 

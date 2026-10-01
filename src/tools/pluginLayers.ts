@@ -88,7 +88,10 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
     used: ReadonlySet<string>,
   ) =>
     lock.withPermits(1)(
-      Effect.uninterruptible(
+      // Only the builds are interruptible: the standing map and its scopes
+      // never fall out of step, and a cancelled step is not held behind a
+      // slow plugin layer.
+      Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const current = generation >= applied;
           if (current) applied = generation;
@@ -96,7 +99,9 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
             const held = standing.get(id);
             if (on.has(id) && held === undefined) {
               const hold = yield* Scope.fork(scope);
-              yield* RcMap.get(built, id).pipe(Scope.provide(hold));
+              yield* restore(
+                RcMap.get(built, id).pipe(Scope.provide(hold)),
+              ).pipe(Effect.onError(() => Scope.close(hold, Exit.void)));
               standing.set(id, hold);
             } else if (!on.has(id) && held !== undefined) {
               standing.delete(id);
@@ -107,7 +112,7 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
             [...used].filter((id) => on.has(id) && layers.has(id)),
             () => Context.empty() as Context.Context<PluginServices>,
             (merged, id) =>
-              Effect.map(RcMap.get(built, id), (services) =>
+              Effect.map(restore(RcMap.get(built, id)), (services) =>
                 Context.merge(merged, services),
               ),
           );
