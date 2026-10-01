@@ -406,7 +406,17 @@ class UsageLogServiceImpl {
       .join(': ');
     return log(
       `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,
-    ).pipe(withLogChannel(CHANNEL));
+    ).pipe(
+      Effect.annotateLogs({
+        data: {
+          batchId: batch.batchId,
+          entryCount: batch.entries.length,
+          errorCode: rejection.errorCode,
+          error: rejection.error,
+        },
+      }),
+      withLogChannel(CHANNEL),
+    );
   }
 
   /**
