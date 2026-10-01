@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Data, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -65,12 +65,12 @@ const CHANNEL = 'inBandSubagentRun';
  * call, because a durability fault must abort the caller's run instead of
  * returning a null value to it.
  */
-export class SubagentDurabilityError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'SubagentDurabilityError';
-  }
-}
+export class SubagentDurabilityError extends Data.TaggedError(
+  'SubagentDurabilityError',
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
@@ -183,195 +183,190 @@ const executeInBand = Effect.fn('executeInBand')(
     }).pipe(
       Effect.mapError((cause) =>
         mode === 'required-result'
-          ? new SubagentDurabilityError(
-              `Failed to register subagent ${runId}.`,
-              { cause },
-            )
+          ? new SubagentDurabilityError({
+              message: `Failed to register subagent ${runId}.`,
+              cause,
+            })
           : ensureError(cause),
       ),
     );
-    const completed = yield* Effect.gen(function* () {
-      let settledTurn: SettledInBandTurn | undefined;
-      const { completion } = yield* startDetachedChildRunLoop({
-        session: options.session,
-        runId,
-        parentRunId: options.parentRunId,
-        agentName: config.agent,
-        // The parent is blocked awaiting this child, so it rides the parent's
-        // budget slot (child-run budget design note).
-        budgeted: false,
-        ...(options.notify !== undefined && { notify: options.notify }),
-        onTurnSettled: (settled) => {
-          settledTurn = settled;
-        },
-        // Built inside the loop's launch guard, like every attempt-scoped
-        // setup: a throw here ends the run and releases its claim.
-        buildLaunch: () =>
-          Effect.succeed({
-            strategy: createNativeSubagentStrategy({
-              ...options,
-              definition,
-              runId,
-              startedAt,
-              workingDirectory,
-              runMode: 'single-cycle',
-              resultOnly: mode === 'required-result',
-              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            }),
+    let settledTurn: SettledInBandTurn | undefined;
+    const { completion } = yield* startDetachedChildRunLoop({
+      session: options.session,
+      runId,
+      parentRunId: options.parentRunId,
+      agentName: config.agent,
+      // The parent is blocked awaiting this child, so it rides the parent's
+      // budget slot (child-run budget design note).
+      budgeted: false,
+      ...(options.notify !== undefined && { notify: options.notify }),
+      onTurnSettled: (settled) => {
+        settledTurn = settled;
+      },
+      // Built inside the loop's launch guard, like every attempt-scoped
+      // setup: a throw here ends the run and releases its claim.
+      buildLaunch: () =>
+        Effect.succeed({
+          strategy: createNativeSubagentStrategy({
+            ...options,
+            definition,
+            runId,
+            startedAt,
+            workingDirectory,
+            runMode: 'single-cycle',
+            resultOnly: mode === 'required-result',
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           }),
-      });
+        }),
+    });
 
-      const completionExit = yield* Effect.exit(Fiber.join(completion));
-      const loopFailure = Exit.isFailure(completionExit)
-        ? Cause.squash(completionExit.cause)
-        : undefined;
+    const completionExit = yield* Effect.exit(Fiber.join(completion));
+    const loopFailure = Exit.isFailure(completionExit)
+      ? Cause.squash(completionExit.cause)
+      : undefined;
 
-      // The loop hands this caller the settled turn's facts only once its
-      // report and result manifest are on disk; no turn settling means the run
-      // was interrupted, or a delivery write or the infrastructure failed
-      // before terminal persistence.
-      const resultMeta = settledTurn?.resultMeta;
-      if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
-        return yield* Effect.fail(
-          new SubagentDurabilityError(
-            `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
-            loopFailure !== undefined ? { cause: loopFailure } : undefined,
-          ),
-        );
-      }
-
-      // How the child ended is the `run.end` row's fact, written by the run's
-      // own lifecycle; the manifest carries only the output as this turn's
-      // delivery enriched it. A read failure is kept apart from an absent row
-      // so the thrown error can name the I/O cause.
-      const endExit = yield* Effect.exit(
-        getRunRecords(options.session, runId).readRunEnd(),
+    // The loop hands this caller the settled turn's facts only once its
+    // report and result manifest are on disk; no turn settling means the run
+    // was interrupted, or a delivery write or the infrastructure failed
+    // before terminal persistence.
+    const resultMeta = settledTurn?.resultMeta;
+    if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
+      return yield* Effect.fail(
+        new SubagentDurabilityError({
+          message: `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
+          cause: loopFailure,
+        }),
       );
-      const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
-      const endFailure = Exit.isFailure(endExit)
-        ? Cause.squash(endExit.cause)
+    }
+
+    // How the child ended is the `run.end` row's fact, written by the run's
+    // own lifecycle; the manifest carries only the output as this turn's
+    // delivery enriched it. A read failure is kept apart from an absent row
+    // so the thrown error can name the I/O cause.
+    const endExit = yield* Effect.exit(
+      getRunRecords(options.session, runId).readRunEnd(),
+    );
+    const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
+    const endFailure = Exit.isFailure(endExit)
+      ? Cause.squash(endExit.cause)
+      : undefined;
+    if (endFailure !== undefined)
+      yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
+        Effect.annotateLogs({ data: { runId, error: endFailure } }),
+        withLogChannel(CHANNEL),
+      );
+    const childFailed =
+      settledTurn.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
+    // The raw application error when the turn threw; otherwise the terminal
+    // row's own structured error (the result-only contract). Read the
+    // settled turn's fields into consts: `settledTurn` stays assignable inside
+    // the onTurnSettled callback, so a closure cannot keep the narrowing.
+    const turnError = settledTurn.error;
+    const turnMessage = settledTurn.message;
+    const childError = () =>
+      turnError ??
+      new Error(
+        runEnd?.error?.message ??
+          `Subagent ${runId} ended with failed outcome.`,
+      );
+
+    // A required-result caller answers a call whose recovery reads the
+    // child's own `run.result` row, so the in-memory manifest is not enough:
+    // a completed run whose manifest never landed is precisely what recovery
+    // refuses to repeat, so the write is verified here, where the failure can
+    // still be named. A read failure stays distinct from an absent row so the
+    // thrown error blames the I/O cause rather than persistence.
+    if (mode === 'required-result') {
+      const persistedExit = yield* Effect.exit(
+        getRunRecords(options.session, runId).readResultMeta(),
+      );
+      const readFailure = Exit.isFailure(persistedExit)
+        ? Cause.squash(persistedExit.cause)
         : undefined;
-      if (endFailure !== undefined)
-        yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
-          Effect.annotateLogs({ data: { runId, error: endFailure } }),
+      if (readFailure !== undefined)
+        yield* Effect.logWarning(
+          'Failed to read the persisted result manifest',
+        ).pipe(
+          Effect.annotateLogs({ data: { runId, error: readFailure } }),
           withLogChannel(CHANNEL),
         );
-      const childFailed =
-        settledTurn.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
-      // The raw application error when the turn threw; otherwise the terminal
-      // row's own structured error (the result-only contract). Read the
-      // settled turn's fields into consts: `settledTurn` stays assignable inside
-      // the onTurnSettled callback, so a closure cannot keep the narrowing.
-      const turnError = settledTurn.error;
-      const turnMessage = settledTurn.message;
-      const childError = () =>
-        turnError ??
-        new Error(
-          runEnd?.error?.message ??
-            `Subagent ${runId} ended with failed outcome.`,
-        );
-
-      // A required-result caller answers a call whose recovery reads the
-      // child's own `run.result` row, so the in-memory manifest is not enough:
-      // a completed run whose manifest never landed is precisely what recovery
-      // refuses to repeat, so the write is verified here, where the failure can
-      // still be named. A read failure stays distinct from an absent row so the
-      // thrown error blames the I/O cause rather than persistence.
-      if (mode === 'required-result') {
-        const persistedExit = yield* Effect.exit(
-          getRunRecords(options.session, runId).readResultMeta(),
-        );
-        const readFailure = Exit.isFailure(persistedExit)
-          ? Cause.squash(persistedExit.cause)
-          : undefined;
-        if (readFailure !== undefined)
-          yield* Effect.logWarning(
-            'Failed to read the persisted result manifest',
-          ).pipe(
-            Effect.annotateLogs({ data: { runId, error: readFailure } }),
-            withLogChannel(CHANNEL),
-          );
-        const persisted = Exit.isSuccess(persistedExit)
-          ? persistedExit.value
-          : null;
-        if (persisted === null) {
-          if (childFailed) {
-            const error = childError();
-            return yield* Effect.fail(
-              new SubagentDurabilityError(
-                `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-                {
-                  cause: new AggregateError(
-                    readFailure === undefined ? [error] : [error, readFailure],
-                    `Subagent ${runId} run and persistence both failed.`,
-                  ),
-                },
-              ),
-            );
-          }
+      const persisted = Exit.isSuccess(persistedExit)
+        ? persistedExit.value
+        : null;
+      if (persisted === null) {
+        if (childFailed) {
+          const error = childError();
           return yield* Effect.fail(
-            new SubagentDurabilityError(
+            new SubagentDurabilityError({
+              message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+              cause: new AggregateError(
+                readFailure === undefined ? [error] : [error, readFailure],
+                `Subagent ${runId} run and persistence both failed.`,
+              ),
+            }),
+          );
+        }
+        return yield* Effect.fail(
+          new SubagentDurabilityError({
+            message:
               readFailure === undefined
                 ? `Failed to persist result for subagent ${runId}.`
                 : `Failed to verify the persisted result for subagent ${runId}.`,
-              readFailure !== undefined ? { cause: readFailure } : undefined,
-            ),
-          );
-        }
-      }
-
-      // A drain rolled back facts this run had queued, so the call is not
-      // durably answered: a required-result caller journals from those rows.
-      // It outranks how the child itself ended, which the terminal row is
-      // reporting as failed for this very reason (the row is the post-drain
-      // fact). Two drains can lose it, and only one of them reaches here as an
-      // error: the pre-terminal drain the run's own lifecycle ran is only
-      // legible on the row it marked (a publication that fails once is settled
-      // and gone by the time the ending's drain runs), while the ending's
-      // drain fails this loop, alone or wrapped with its other cleanup
-      // failures.
-      if (
-        mode === 'required-result' &&
-        (runEnd?.error?.kind === 'artifact-drain' ||
-          loopFailure instanceof RunArtifactDrainError ||
-          (loopFailure instanceof AggregateError &&
-            loopFailure.errors.some(
-              (error: unknown) => error instanceof RunArtifactDrainError,
-            )))
-      ) {
-        return yield* Effect.fail(
-          new SubagentDurabilityError(
-            `Subagent ${runId} failed to commit its final artifacts.`,
-            loopFailure !== undefined ? { cause: loopFailure } : undefined,
-          ),
+            cause: readFailure,
+          }),
         );
       }
+    }
 
-      if (childFailed) return yield* Effect.fail(ensureError(childError()));
+    // A drain rolled back facts this run had queued, so the call is not
+    // durably answered: a required-result caller journals from those rows.
+    // It outranks how the child itself ended, which the terminal row is
+    // reporting as failed for this very reason (the row is the post-drain
+    // fact). Two drains can lose it, and only one of them reaches here as an
+    // error: the pre-terminal drain the run's own lifecycle ran is only
+    // legible on the row it marked (a publication that fails once is settled
+    // and gone by the time the ending's drain runs), while the ending's
+    // drain fails this loop, alone or wrapped with its other cleanup
+    // failures.
+    if (
+      mode === 'required-result' &&
+      (runEnd?.error?.kind === 'artifact-drain' ||
+        loopFailure instanceof RunArtifactDrainError ||
+        (loopFailure instanceof AggregateError &&
+          loopFailure.errors.some(
+            (error: unknown) => error instanceof RunArtifactDrainError,
+          )))
+    ) {
+      return yield* Effect.fail(
+        new SubagentDurabilityError({
+          message: `Subagent ${runId} failed to commit its final artifacts.`,
+          cause: loopFailure,
+        }),
+      );
+    }
 
-      if (!runEnd) {
-        // The child did not fail, so the missing terminal row is an
-        // infrastructure gap: the run's lifecycle never committed it, or the
-        // read of it failed.
-        return yield* Effect.fail(
-          new SubagentDurabilityError(
-            `Subagent ${runId} ended without a terminal record.`,
-            endFailure !== undefined ? { cause: endFailure } : undefined,
-          ),
-        );
-      }
+    if (childFailed) return yield* Effect.fail(ensureError(childError()));
 
-      return {
-        runId,
-        result: { ...runEnd, output: resultMeta.output },
-        delivery: turnMessage,
-      };
-    });
+    if (!runEnd) {
+      // The child did not fail, so the missing terminal row is an
+      // infrastructure gap: the run's lifecycle never committed it, or the
+      // read of it failed.
+      return yield* Effect.fail(
+        new SubagentDurabilityError({
+          message: `Subagent ${runId} ended without a terminal record.`,
+          cause: endFailure,
+        }),
+      );
+    }
 
     // A caller stop landing here interrupts the join, not the child: the
     // child's rows were committed under its own claim and the
     // detached loop owns its terminal record.
-    return completed;
+    return {
+      runId,
+      result: { ...runEnd, output: resultMeta.output },
+      delivery: turnMessage,
+    };
   },
   // Interruptible: the registration is one durable commit and the detached
   // loop owns the child from its first tick, so an interruption lands in the

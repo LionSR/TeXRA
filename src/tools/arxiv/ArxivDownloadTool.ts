@@ -85,12 +85,11 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
     autoIndent: input.autoIndent,
     destination: input.destination,
   }).pipe(
-    Effect.catch((error: ArxivSourceError) =>
-      Effect.fail(
+    Effect.mapError(
+      (error: ArxivSourceError) =>
         new ToolError(`Failed to download arXiv source: ${error.message}`, {
           cause: error,
         }),
-      ),
     ),
   );
 

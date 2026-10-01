@@ -13,7 +13,7 @@
  */
 import http from 'node:http';
 
-import { Deferred, Duration, Effect, Fiber, Result } from 'effect';
+import { Data, Deferred, Duration, Effect, Fiber, Result } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 import type { SubscriptionAuthorizeRequest } from './SubscriptionOAuthCoordinator';
@@ -36,12 +36,12 @@ const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
  * Distinct from every other sign-in failure because nothing was asked of the
  * user yet: a host with a device-code transport can retry on that instead.
  */
-export class LoopbackTransportUnavailableError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = 'LoopbackTransportUnavailableError';
-  }
-}
+export class LoopbackTransportUnavailableError extends Data.TaggedError(
+  'LoopbackTransportUnavailableError',
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 /**
  * Minimal coordinator surface the loopback flow needs. The code exchange is a
@@ -134,10 +134,11 @@ function bindLoopbackServer(
     }
     const portList = ports.join(' or ');
     return yield* Effect.fail(
-      new LoopbackTransportUnavailableError(
-        `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
+      new LoopbackTransportUnavailableError({
+        message:
+          `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
           'Close whatever is using them, or use device-code sign-in instead.',
-      ),
+      }),
     );
   });
 }

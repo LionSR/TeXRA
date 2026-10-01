@@ -240,7 +240,7 @@ export const rejectOversizedBibAttachments = Effect.fn(
       Effect.catch((error) =>
         fs.readLink(absolute).pipe(
           Effect.as(undefined),
-          Effect.catch(() => Effect.fail(error)),
+          Effect.mapError(() => error),
         ),
       ),
     );
@@ -293,7 +293,7 @@ export const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
     );
     const missing = inspected.find((entry) => !entry.exists);
     if (missing) {
-      yield* Effect.fail(
+      return yield* Effect.fail(
         new Error(`${missing.label} not found: ${missing.path}`),
       );
     }

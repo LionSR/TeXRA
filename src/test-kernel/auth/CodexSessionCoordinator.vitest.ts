@@ -293,7 +293,13 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const storage = gatedStorage('delete', expiredSession());
         const refreshTokens = vi.fn(() =>
-          Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
+          Effect.fail(
+            new SubscriptionOAuthError({
+              message: 'revoked',
+              kind: 'fatal',
+              status: 401,
+            }),
+          ),
         );
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(newLoginTokenResponse()),
@@ -469,7 +475,13 @@ describe('CodexSessionCoordinator', () => {
         yield* loginWithCode(coordinator);
         Deferred.doneUnsafe(
           pending,
-          Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
+          Effect.fail(
+            new SubscriptionOAuthError({
+              message: 'revoked',
+              kind: 'fatal',
+              status: 401,
+            }),
+          ),
         );
 
         const error = yield* joinFailure(token);
@@ -573,7 +585,13 @@ describe('CodexSessionCoordinator', () => {
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const refreshTokens = vi.fn(() =>
-        Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
+        Effect.fail(
+          new SubscriptionOAuthError({
+            message: 'revoked',
+            kind: 'fatal',
+            status: 401,
+          }),
+        ),
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -593,7 +611,11 @@ describe('CodexSessionCoordinator', () => {
       const storage = memoryStorage(expiredSession());
       const refreshTokens = vi.fn(() =>
         Effect.fail(
-          new SubscriptionOAuthError('upstream 502', 'transient', 502),
+          new SubscriptionOAuthError({
+            message: 'upstream 502',
+            kind: 'transient',
+            status: 502,
+          }),
         ),
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });

@@ -75,10 +75,10 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   buildSession(tokens, nowMs, previous) {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     if (!refreshToken) {
-      throw new SubscriptionOAuthError(
-        'OAuth response did not include a refresh token.',
-        'config',
-      );
+      throw new SubscriptionOAuthError({
+        message: 'OAuth response did not include a refresh token.',
+        kind: 'config',
+      });
     }
     const claims = extractCodexClaims(
       tokens.id_token ?? undefined,

@@ -200,7 +200,7 @@ fenced, and the self-tests pin a sibling on each side (`ProgressApp.ts`,
 entry must hold its runtime as a local or take it as a parameter; a module that reaches the
 process-global `effectRuntime()` does not qualify.
 
-## `effect/unstable/*`: five families are admitted, each with a stated exit (ruled 2026-09-18)
+## Effect submodules: five families are admitted, each with a stated exit (ruled 2026-09-18; paths updated for 4.0.0 stable 2026-10-01)
 
 **Question.** The Effect-4 PRD's non-goal 4 and §11 bar `effect/unstable/*`
 "without a separate decision naming its replacement or exit plan". Five
@@ -210,19 +210,32 @@ one's exit?
 **Ruling.** All five are admitted. The 2026-09-13 filesystem ruling ("adopt
 Effect's own file system as much as possible") settled the general question
 the PRD reserved; what was missing is the per-family record the PRD asks for,
-and it is this:
+and it is this. Effect 4.0.0 (stable) moved the modules out of the
+`effect/unstable/*` paths, so the rows use the real subpaths. Every 4.0.0
+module is still marked `@stability unstable` upstream, so the exits below
+stay the plan if one is withdrawn.
 
-| Family                       | Used for                                                                      | Stabilization or exit                                                                                                                                |
-| ---------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/unstable/http`       | `HttpClient` on the auth, model and telemetry paths (27 sites)                | Stays; follows the module when Effect promotes it. Exit is `ky`, which still serves 8 tool and remote-agent call sites and is not being deleted yet. |
-| `effect/unstable/process`    | Type-only, the two Lean direct-server files                                   | Stays type-only until the process edges convert (#12078). Exit is `execa`, which every other spawn site already uses.                                |
-| `effect/unstable/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database         | Stays; the repo already depends on the same RC line. Exit is the official Node SQLite driver directly, which the client only wraps.                  |
-| `effect/unstable/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`)  | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels the layer already owns.   |
-| `effect/unstable/encoding`   | `Sse.makeParser` for provider token streams (`packages/llm/src/transport.ts`) | Stays; it replaced a hand-rolled SSE parser. Exit is restoring that parser, which is a single function over one `Stream`.                            |
+| Family              | Used for                                                                                 | Stabilization or exit                                                                                                               |
+| ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/http`       | `HttpClient` on the auth, model, tool and telemetry paths                                | Stays; follows the module's stability. Exit is Node `fetch` behind the same typed errors.                                           |
+| `effect/process`    | `ChildProcess` and `ChildProcessSpawner` at every spawn site, MCP stdio servers included | Stays. Exit is `node:child_process` behind the same spawner service.                                                                |
+| `effect/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database                    | Stays. Exit is the official Node SQLite driver directly, which the client only wraps.                                               |
+| `effect/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`)             | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels it owns. |
+| `effect/testing`    | Test clocks and schedulers in the Vitest suites                                          | Test-only; stays. No production exit needed.                                                                                        |
 
-**Evidence.** `rg "effect/unstable/"` returns exactly these five families and
-no others. Every exit named above is a path the repository has already walked
-or is still standing on, so none of them is speculative.
+`effect/ai` is not used and has no row. `effect/encoding` (`Sse.makeParser`)
+and the `ky` and `execa` exits named in the first version of this row are
+gone: nothing imports the SSE parser, and neither package is in any
+`package.json`.
+
+**Evidence.** `rg -oN "from 'effect/[A-Za-z]+" src packages/*/src` lists the
+first path segment of every `effect/<subpath>` import: `process`, `http`,
+`testing`, `sql` and `reactivity` (the families above, with their deeper
+subpaths such as `effect/process/ChildProcess` and `effect/sql/SqlClient`
+counted under the first segment), plus `PlatformError`, a plain core module
+that needs no row. Every
+exit named above is a path the repository has already walked or is still
+standing on, so none of them is speculative.
 
 **Forbids.** A sixth family without its own row here. Adopting one of these
 for a second purpose without checking that the exit still holds. Treating
@@ -231,9 +244,9 @@ it; the exits above are what happens if a module is withdrawn, not a system
 maintained in parallel.
 
 **Amendment (owner decision, 2026-09-24; plugin architecture).** Effect
-unstable modules are allowed for the plugin work. `effect/unstable/process` is
-no longer type-only: the MCP plugin (#13092) spawns its stdio servers through
-it at runtime (`src/tools/mcp/mcpServer.ts`). The exit named in the table is
+modules are allowed for the plugin work. `effect/process` is no longer
+type-only: the MCP plugin (#13092) spawns its stdio servers through it at
+runtime (`src/tools/mcp/mcpServer.ts`). The exit named in the table is
 unchanged. See the [plugin architecture note](./2026-09-24-plugin-architecture.md).
 
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
