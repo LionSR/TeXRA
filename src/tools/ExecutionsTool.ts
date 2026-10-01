@@ -812,7 +812,7 @@ Use view_range: [start, end] to paginate file and background-command output cont
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
-Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it.
+Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it. A one-shot run (a headless run, or a subagent its orchestrator waits on in band) reads none, and a message to it is refused.
 Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). Children: SELECT * FROM runs WHERE parent_id = ?. Task list: SELECT * FROM todos WHERE run_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,

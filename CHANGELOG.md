@@ -309,7 +309,9 @@ show` print the same notice, and the new `texra agents customize`,
   subagent to its orchestrator, one run to a sibling or to an unrelated run.
   Who launched whom never limits who may talk. The message is read when the
   recipient finishes its current turn, an idle run wakes to read it, and a
-  subagent's report now arrives the same way. An orchestrator waiting with `executions wait` wakes
+  subagent's report now arrives the same way. A one-shot run (a headless
+  `texra run`, or a subagent the orchestrator waits on in band) has no next
+  turn, so a message to it is refused rather than left unread. An orchestrator waiting with `executions wait` wakes
   as soon as any message reaches it, including its subagent's report. Nothing
   caps how many messages agents exchange; stop the runs if they talk too
   long. In the terminal, `/ps` lists the
@@ -396,14 +398,6 @@ show` print the same notice, and the new `texra agents customize`,
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
-
-- **A message to a one-shot run is refused instead of lost.** In a headless
-  `texra run`, a subagent could message its parent with `executions send` and
-  be told the parent would read it at its next turn boundary. A one-shot run
-  has no next turn, so the parent finished with the message still unread and
-  no host showed it. The send is now refused with that reason, as every host
-  already refuses the user's own follow-up to such a run, so the subagent puts
-  the note in its result instead.
 
 - **The CLI, the desktop app and the VS Code extension no longer ship the
   internal validation model.** The canned model the CLI's package validation
