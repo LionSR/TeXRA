@@ -172,13 +172,14 @@ export function chooseReasoning(
       )
     : reasoning.efforts;
   if (reasoning.efforts.length === 0) {
-    if (explicit === undefined) return { thinking: true, effort: null, mode };
+    if (explicit === undefined && options.userEffort === undefined)
+      return { thinking: true, effort: null, mode };
     return {
       thinking: true,
       effort: null,
       mode,
-      requested: explicit,
-      note: `${label} has no effort levels; ignoring ${explicit}.`,
+      requested: wanted,
+      note: `${label} has no effort levels; ignoring ${wanted}.`,
     };
   }
   return { thinking: true, mode, ...snapped(accepted, wanted, label, strict) };

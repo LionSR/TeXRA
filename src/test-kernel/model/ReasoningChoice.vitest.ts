@@ -127,6 +127,9 @@ describe('chooseReasoning', () => {
       requested: E.HIGH,
       note: expect.stringContaining('ignoring high'),
     });
+    expect(
+      chooseReasoning(noLevels, {}, { userEffort: E.HIGH }).requested,
+    ).toBe(E.HIGH);
     expect(chooseReasoning(noLevels).note).toBeUndefined();
   });
 
