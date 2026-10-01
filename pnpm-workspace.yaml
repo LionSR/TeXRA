@@ -34,7 +34,7 @@ catalog:
   image-size: '^2.0.4'
   ipaddr.js: '^2.5.0'
   is-wsl: '^3.1.1'
-  llm-zoo: '^1.41.0'
+  llm-zoo: '^2.0.0'
   lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
   nanoid: '^6.0.1'
@@ -85,8 +85,3 @@ patchedDependencies:
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
 # reviewed bumps land immediately.
 minimumReleaseAge: 0
-
-# Local development against the llm-zoo 2.0 checkout (model references). Remove
-# once llm-zoo 2.0 is published and the catalog entry above is bumped to it.
-overrides:
-  llm-zoo: 'link:../../my-texra-ai/llm-zoo'

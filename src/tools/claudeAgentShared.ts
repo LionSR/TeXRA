@@ -91,7 +91,7 @@ function claudeCodeThinking(
  * Code's own default. A request with thinking off (`@none`) says so.
  * Throws a `ToolError` for a model Claude Code cannot run.
  */
-export function claudeCodeRun(
+function claudeCodeRun(
   modelString: string,
   effort: AgentCliEffort | undefined,
   userEffort: AgentCliEffort,

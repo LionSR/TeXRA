@@ -104,7 +104,10 @@ const PHYSICIST_LOCAL_TOOL_USE_AGENTS = [
   'presenter',
 ].join('||');
 const PHYSICIST_WORKFLOW_AGENTS = ['correct', 'polish'].join('||');
-const TWO_OPENAI_MODELS = ['openai/gpt-5.5-2026-04-23', 'openai/gpt-5.5-pro-2026-04-23'].join('||');
+const TWO_OPENAI_MODELS = [
+  'openai/gpt-5.5-2026-04-23',
+  'openai/gpt-5.5-pro-2026-04-23',
+].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');

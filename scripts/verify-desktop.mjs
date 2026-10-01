@@ -1554,7 +1554,9 @@ const hostSnapshot = {
     ],
     workflow: [{ value: 'correct', label: 'correct' }],
   },
-  modelOptions: [{ value: 'deepseek/deepseek-flash', label: 'DeepSeek V4 Flash' }],
+  modelOptions: [
+    { value: 'deepseek/deepseek-flash', label: 'DeepSeek V4 Flash' },
+  ],
   teamOptions: [],
   workspaceRoots: [],
   fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },

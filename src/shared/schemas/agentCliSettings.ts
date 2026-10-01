@@ -45,16 +45,15 @@ const codexModels = pickerModels(isCodexModel);
 
 /** The Claude Code model setting: a bare reference; effort is its own setting. */
 export const ClaudeAgentModelSchema = claudeCodeModels.schema;
-export const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef =
-  'anthropic/claude-sonnet-5-5';
+const CLAUDE_AGENT_DEFAULT_MODEL: ModelRef = 'anthropic/claude-sonnet-5-5';
 
 /** The Codex model setting: a bare reference; effort is its own setting. */
-export const CodexModelSchema = codexModels.schema;
+const CodexModelSchema = codexModels.schema;
 /**
  * The newest Codex model. llm-zoo records no release date, so "newest" is
  * not derivable from the registry; a test holds this to the picker.
  */
-export const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
+const CODEX_DEFAULT_MODEL: ModelRef = 'openai/gpt-6.1-sol';
 
 /**
  * The saved effort level for either agent CLI, passed to the reasoning policy
@@ -73,7 +72,7 @@ export const AgentCliEffortSchema = z.enum([
 export type AgentCliEffort = z.infer<typeof AgentCliEffortSchema>;
 
 /** The reasoning policy's `DEFAULT_EFFORT` (a test holds them equal). */
-export const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
+const AGENT_CLI_EFFORT_DEFAULT: AgentCliEffort = ReasoningEffort.MEDIUM;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
 export const CLAUDE_AGENT_MODEL_SETTING = {

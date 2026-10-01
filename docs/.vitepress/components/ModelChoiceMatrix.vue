@@ -12,31 +12,55 @@ const rows = [
     icon: 'bolt',
     use: 'Simple tasks',
     note: 'Fast, cheap models',
-    models: ['openai/gpt-6-luna', 'deepseek/deepseek-flash@none', 'anthropic/claude-haiku-4-5-20251001@none'],
+    models: [
+      'openai/gpt-6-luna',
+      'deepseek/deepseek-flash@none',
+      'anthropic/claude-haiku-4-5-20251001@none',
+    ],
   },
   {
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-opus-5-5', 'openai/gpt-6.1-sol', 'google/gemini-3.1-pro-preview'],
+    models: [
+      'anthropic/claude-fable-5-1',
+      'anthropic/claude-opus-5-5',
+      'openai/gpt-6.1-sol',
+      'google/gemini-3.1-pro-preview',
+    ],
   },
   {
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5', 'openai/gpt-6.1-sol'],
+    models: [
+      'anthropic/claude-opus-5-5',
+      'anthropic/claude-sonnet-5-5',
+      'openai/gpt-6.1-sol',
+    ],
   },
   {
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['anthropic/claude-fable-5-1', 'anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5', 'deepseek/deepseek-flash', 'moonshot/kimi-k3'],
+    models: [
+      'anthropic/claude-fable-5-1',
+      'anthropic/claude-opus-5-5',
+      'anthropic/claude-sonnet-5-5',
+      'deepseek/deepseek-flash',
+      'moonshot/kimi-k3',
+    ],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['google/gemini-3.1-pro-preview', 'anthropic/claude-fable-5-1', 'anthropic/claude-sonnet-5-5@none', 'anthropic/claude-opus-5-5'],
+    models: [
+      'google/gemini-3.1-pro-preview',
+      'anthropic/claude-fable-5-1',
+      'anthropic/claude-sonnet-5-5@none',
+      'anthropic/claude-opus-5-5',
+    ],
   },
 ];
 </script>

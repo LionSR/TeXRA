@@ -4,7 +4,6 @@ import { ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 import {
   chooseReasoning,
   defaultReasoningLevel,
-  nearestEffort,
   ReasoningChoiceError,
 } from '@model/reasoningChoice';
 
@@ -30,16 +29,15 @@ const gapped = model({ efforts: [E.LOW, E.HIGH, E.MAX], off: [] });
 const noLevels = model({ efforts: [] });
 const neverThinks = model(undefined);
 
-describe('nearestEffort', () => {
+describe('snapping to the nearest level', () => {
   it('breaks a tie toward the higher level', () => {
-    expect(nearestEffort([E.LOW, E.HIGH, E.MAX], E.MEDIUM)).toBe(E.HIGH);
+    expect(chooseReasoning(gapped, { effort: E.MEDIUM }).effort).toBe(E.HIGH);
   });
   it('takes the closest level on either side', () => {
-    expect(nearestEffort([E.LOW, E.MEDIUM, E.HIGH], E.MAX)).toBe(E.HIGH);
-    expect(nearestEffort([E.HIGH, E.MAX], E.LOW)).toBe(E.HIGH);
-  });
-  it('has no answer for an empty list', () => {
-    expect(nearestEffort([], E.MEDIUM)).toBeUndefined();
+    const lowToHigh = model({ efforts: [E.LOW, E.MEDIUM, E.HIGH] });
+    expect(chooseReasoning(lowToHigh, { effort: E.MAX }).effort).toBe(E.HIGH);
+    const highUp = model({ efforts: [E.HIGH, E.MAX] });
+    expect(chooseReasoning(highUp, { effort: E.LOW }).effort).toBe(E.HIGH);
   });
 });
 

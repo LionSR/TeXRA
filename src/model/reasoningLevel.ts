@@ -99,7 +99,7 @@ export interface ReasoningRoute {
  * off; DashScope's has none that turns Qwen's thinking on. The policy then
  * refuses a request the route cannot carry and records what really happens.
  */
-export function routeReasoning(
+function routeReasoning(
   config: ModelConfig,
   route: ReasoningRoute,
 ): Pick<ModelConfig, 'label' | 'reasoning' | 'modes'> {

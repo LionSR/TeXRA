@@ -16,7 +16,7 @@ import {
 } from 'llm-zoo';
 
 /** The effort used when neither the caller nor the user names one. */
-export const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
+const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
 
 /** What a request asks for, and how that differs from what was selected. */
 export interface ReasoningChoice {
@@ -45,7 +45,7 @@ const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
  * The accepted level nearest to `wanted`; a tie goes to the higher level, so
  * a missing `medium` between `low` and `high` becomes `high`.
  */
-export function nearestEffort(
+function nearestEffort(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
 ): ReasoningEffort | undefined {

@@ -96,6 +96,9 @@ catalogs:
     is-wsl:
       specifier: ^3.1.1
       version: 3.1.1
+    llm-zoo:
+      specifier: ^2.0.0
+      version: 2.0.0
     lru-cache:
       specifier: ^11.5.3
       version: 11.5.3
@@ -156,9 +159,6 @@ catalogs:
     zod:
       specifier: ^4.4.3
       version: 4.4.3
-
-overrides:
-  llm-zoo: link:../../my-texra-ai/llm-zoo
 
 patchedDependencies:
   ink@7.1.1: db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6
@@ -274,8 +274,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: link:../../my-texra-ai/llm-zoo
-        version: link:../../my-texra-ai/llm-zoo
+        specifier: 'catalog:'
+        version: 2.0.0(zod@4.4.3)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -542,8 +542,8 @@ importers:
         specifier: 'catalog:'
         version: 3.1.1
       llm-zoo:
-        specifier: link:../../../../my-texra-ai/llm-zoo
-        version: link:../../../../my-texra-ai/llm-zoo
+        specifier: 'catalog:'
+        version: 2.0.0(zod@4.4.3)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -4245,6 +4245,15 @@ packages:
 
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
+
+  llm-zoo@2.0.0:
+    resolution: {integrity: sha512-lKZ3N/T4juKmQX2dE/X+M0l+zAaXPuhSDOORN2QNXXLgn9XgpY7T0eTs/lzbCNPpZN8N4k5A0SHCvhqIeWepfg==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      zod: ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
@@ -9092,6 +9101,10 @@ snapshots:
       '@lit/reactive-element': 2.1.2
       lit-element: 4.2.2
       lit-html: 3.3.2
+
+  llm-zoo@2.0.0(zod@4.4.3):
+    optionalDependencies:
+      zod: 4.4.3
 
   locate-path@6.0.0:
     dependencies:

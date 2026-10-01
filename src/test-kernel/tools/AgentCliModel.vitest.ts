@@ -5,30 +5,30 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { ReasoningEffort } from 'llm-zoo';
 
-import { DEFAULT_EFFORT } from '@model/reasoningChoice';
 import { modelConfig } from '@shared/model/modelSelection';
 import { settingDefault } from '@shared/config/settingsAccess';
 import {
-  CLAUDE_AGENT_DEFAULT_MODEL,
   CLAUDE_AGENT_MODEL_SETTING,
-  CODEX_DEFAULT_MODEL,
   CODEX_MODEL_SETTING,
   ClaudeAgentModelSchema,
-  CodexModelSchema,
   ToolError,
+  type AgentCliEffort,
   isClaudeCodeModel,
   isCodexModel,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { settingByKey } from '@shared/state/stateSettings';
 import { selectAgentCliModel } from '@tools/agentCliModel';
-import { claudeCodeRun } from '@tools/claudeAgentShared';
+import { readClaudeCodeRun } from '@tools/claudeAgentShared';
 import { CODEX_MODEL_RULE, codexRun } from '@tools/codexConfig';
 
 import { scriptedSpawnerLayer } from '../support/childProcessTestLayer';
 import { makeFakeSettingsStores } from '../support/settingsStoresFake';
 
 const MEDIUM = ReasoningEffort.MEDIUM;
+const CLAUDE_AGENT_DEFAULT_MODEL = 'anthropic/claude-sonnet-5-5';
+const CODEX_DEFAULT_MODEL = 'openai/gpt-6.1-sol';
+const CodexModelSchema = CODEX_MODEL_SETTING.schema.unwrap();
 
 describe('agent CLI model settings', () => {
   it('defaults both efforts to medium and both models to registry models', () => {
@@ -37,11 +37,10 @@ describe('agent CLI model settings', () => {
       if (!entry) throw new Error(`no row ${key}`);
       return settingDefault(entry);
     };
-    expect(DEFAULT_EFFORT).toBe('medium');
-    expect(row(WorkspaceStateKey.CLAUDE_AGENT_EFFORT)).toBe(DEFAULT_EFFORT);
-    expect(row(WorkspaceStateKey.CODEX_REASONING_EFFORT)).toBe(DEFAULT_EFFORT);
+    expect(row(WorkspaceStateKey.CLAUDE_AGENT_EFFORT)).toBe(MEDIUM);
+    expect(row(WorkspaceStateKey.CODEX_REASONING_EFFORT)).toBe(MEDIUM);
     expect(row(WorkspaceStateKey.CLAUDE_AGENT_MODEL)).toBe(
-      'anthropic/claude-sonnet-5-5',
+      CLAUDE_AGENT_DEFAULT_MODEL,
     );
     expect(row(WorkspaceStateKey.CODEX_MODEL)).toBe(CODEX_DEFAULT_MODEL);
   });
@@ -72,56 +71,90 @@ describe('agent CLI model settings', () => {
   });
 });
 
-describe('claudeCodeRun', () => {
-  it('rejects a model that is not a served Anthropic model', () => {
-    expect(() =>
-      claudeCodeRun('openai/gpt-6.1-sol', undefined, MEDIUM),
-    ).toThrow(/Claude Code cannot run "openai\/gpt-6\.1-sol".*Anthropic/);
-    expect(() => claudeCodeRun('claude-sonnet-5', undefined, MEDIUM)).toThrow(
-      ToolError,
-    );
-  });
-
-  it('sends the API id, the default medium effort and adaptive thinking', () => {
-    expect(
-      claudeCodeRun(CLAUDE_AGENT_DEFAULT_MODEL, undefined, MEDIUM),
-    ).toEqual({
-      ref: 'anthropic/claude-sonnet-5-5',
-      model: 'claude-sonnet-5-5',
-      effort: 'medium',
-      thinking: { type: 'adaptive' },
-      note: undefined,
+describe('readClaudeCodeRun', () => {
+  const claudeRun = (
+    model: string,
+    effort?: AgentCliEffort,
+    userEffort?: AgentCliEffort,
+  ) => {
+    const fake = makeFakeSettingsStores();
+    return Effect.gen(function* () {
+      if (userEffort) {
+        yield* fake.repoState.update(
+          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
+          userEffort,
+        );
+      }
+      return yield* readClaudeCodeRun(fake.stores, { model, effort });
     });
-  });
+  };
 
-  it("takes the model string's @effort, and the call's effort over it", () => {
-    const suffixed = 'anthropic/claude-opus-5-5@high';
-    expect(claudeCodeRun(suffixed, undefined, MEDIUM).effort).toBe('high');
-    expect(claudeCodeRun(suffixed, ReasoningEffort.LOW, MEDIUM).effort).toBe(
-      'low',
-    );
-  });
+  it.effect('rejects a model that is not a served Anthropic model', () =>
+    Effect.gen(function* () {
+      const openai = yield* Effect.flip(claudeRun('openai/gpt-6.1-sol'));
+      expect(openai).toBeInstanceOf(ToolError);
+      expect(openai.message).toMatch(
+        /Claude Code cannot run "openai\/gpt-6\.1-sol".*Anthropic/,
+      );
+      expect(yield* Effect.flip(claudeRun('claude-sonnet-5'))).toBeInstanceOf(
+        ToolError,
+      );
+    }),
+  );
 
-  it('snaps a level the model lacks to the nearest one and says so', () => {
-    // Opus 4.6 has no xhigh; high and max are equally near, so it goes up.
-    const run = claudeCodeRun(
-      'anthropic/claude-opus-4-6',
-      ReasoningEffort.XHIGH,
-      MEDIUM,
-    );
-    expect(run.effort).toBe('max');
-    expect(run.note).toMatch(/no xhigh effort; using max/);
-  });
+  it.effect(
+    'sends the API id, the default medium effort and adaptive thinking',
+    () =>
+      Effect.gen(function* () {
+        expect(yield* claudeRun(CLAUDE_AGENT_DEFAULT_MODEL)).toEqual({
+          ref: 'anthropic/claude-sonnet-5-5',
+          model: 'claude-sonnet-5-5',
+          effort: 'medium',
+          thinking: { type: 'adaptive' },
+          note: undefined,
+        });
+      }),
+  );
 
-  it('sends neither effort nor adaptive thinking to a budget-sized model', () => {
-    const run = claudeCodeRun(
-      'anthropic/claude-haiku-4-5-20251001',
-      undefined,
-      ReasoningEffort.HIGH,
-    );
-    expect(run.effort).toBeUndefined();
-    expect(run.thinking).toBeUndefined();
-  });
+  it.effect(
+    "takes the model string's @effort, and the call's effort over it",
+    () =>
+      Effect.gen(function* () {
+        const suffixed = 'anthropic/claude-opus-5-5@high';
+        expect((yield* claudeRun(suffixed)).effort).toBe('high');
+        expect((yield* claudeRun(suffixed, ReasoningEffort.LOW)).effort).toBe(
+          'low',
+        );
+      }),
+  );
+
+  it.effect(
+    'snaps a level the model lacks to the nearest one and says so',
+    () =>
+      Effect.gen(function* () {
+        // Opus 4.6 has no xhigh; high and max are equally near, so it goes up.
+        const run = yield* claudeRun(
+          'anthropic/claude-opus-4-6',
+          ReasoningEffort.XHIGH,
+        );
+        expect(run.effort).toBe('max');
+        expect(run.note).toMatch(/no xhigh effort; using max/);
+      }),
+  );
+
+  it.effect(
+    'sends neither effort nor adaptive thinking to a budget-sized model',
+    () =>
+      Effect.gen(function* () {
+        const run = yield* claudeRun(
+          'anthropic/claude-haiku-4-5-20251001',
+          undefined,
+          ReasoningEffort.HIGH,
+        );
+        expect(run.effort).toBeUndefined();
+        expect(run.thinking).toBeUndefined();
+      }),
+  );
 });
 
 describe('codexRun', () => {
