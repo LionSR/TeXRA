@@ -21,15 +21,17 @@
  *   the policy approves (a decided `planApproval` request); a workflow
  *   script with one attempt of one child (`workflow.script`,
  *   `workflow.attempt`, `workflow.journal` and the child run); and a
- *   `delegate_agent` child that looks its parent up and messages it, a
- *   follow-up the parent never reads, so it stays queued. Headless
+ *   `delegate_agent` child that looks its parent up and messages it, which
+ *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
  * - `golden_chat`, the interactive `texra chat` driven under a PTY: a plan
  *   the user runs as a goal (`r` on the approval, the `goal` plugin fact)
  *   and the goal completed, then `/model` and a message, so the switch is
- *   recorded at the run's next model boundary. Only the chat makes either:
- *   the headless policy approves a plan without a goal. Each keystroke
+ *   recorded at the run's next model boundary; then a held turn, a message
+ *   typed behind it, and the user's stop, so that follow-up stays queued.
+ *   Only the chat makes a goal: the headless policy approves a plan
+ *   without one. Each keystroke
  *   waits for the screen or the store to show the step before it, so the
  *   rows commit in one order.
  * - one `golden_child` run deleted last with `texra history delete`: the
@@ -415,6 +417,41 @@ async function generate(root) {
   await shows('the model switch notice', 'Model switched to gemini38f');
   await send('After the model switch.');
   await waiting(2);
+  // A held turn, a message typed behind it, and the user's stop: the
+  // follow-up stays queued on the stopped run.
+  await send('Hold this turn.');
+  const chatRows = (sql) =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND ${sql}`,
+      [chatRun()],
+    ).length;
+  await until(
+    'the held model call',
+    () =>
+      chatRows(`e.type = 'run.position'
+        AND json_extract(e.data, '$.payload.at') = 'turn.begin'
+        AND json_extract(e.data, '$.payload.turn') = 3`) > 0 &&
+      tty.screen().includes('Ctrl-C stop'),
+    tty,
+  );
+  tty.write('Queued behind the held turn.');
+  await shows('the typed follow-up', '› Queued behind the held turn.');
+  tty.write('\r');
+  await until(
+    'the queued follow-up',
+    () => chatRows(`e.type = 'followup.queued'`) === 3,
+    tty,
+  );
+  tty.write('\x03');
+  await until(
+    'the stopped chat',
+    () =>
+      chatRows(`e.type = 'run.position'
+        AND json_extract(e.data, '$.payload.at') = 'halted'`) > 0,
+    tty,
+  );
   await shows('the idle prompt', 'Ctrl-C exit');
   tty.write('\x03');
   const exit = await tty.exited;

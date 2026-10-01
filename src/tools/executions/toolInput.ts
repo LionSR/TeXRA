@@ -120,7 +120,7 @@ const SendActionSchema = z.strictObject({
   action: z
     .literal('send')
     .describe(
-      "Put a message on another run's input (use on /executions/{id}). It is read when that run finishes its current turn; a reply, if any, arrives as your own follow-up.",
+      "Put a message on another run's input (use on /executions/{id}). It is read when that run finishes its current turn; a one-shot run takes none. A reply, if any, arrives as your own follow-up.",
     ),
   message: z.string().min(1).describe('The message for the run.'),
 });

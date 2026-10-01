@@ -312,13 +312,16 @@ describe('the golden 1.0 store', () => {
         run('a00000000006', 'golden_child', { parent: PARENT }),
         run('a00000000007', 'review'),
         run('a00000000008', 'review'),
-        // Its chat exited with Ctrl-C while it waited for the next message.
+        // The user stopped its held turn with Ctrl-C, then exited.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
       ]);
       expect(folded.requests).toEqual([]);
+      // The message typed behind the stopped turn stays queued for a resume
+      // to join. The headless parent holds none: its child's message was
+      // refused, since a one-shot run never reads one.
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
-      ).toEqual([[PARENT, 1]]);
+      ).toEqual([[CHAT, 1]]);
       const ledger = yield* RunLedger;
       const stateOf = (id: RunId) =>
         Effect.map(ledger.load(id), (state) => ({

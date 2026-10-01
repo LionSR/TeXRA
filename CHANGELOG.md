@@ -309,7 +309,9 @@ show` print the same notice, and the new `texra agents customize`,
   subagent to its orchestrator, one run to a sibling or to an unrelated run.
   Who launched whom never limits who may talk. The message is read when the
   recipient finishes its current turn, an idle run wakes to read it, and a
-  subagent's report now arrives the same way. An orchestrator waiting with `executions wait` wakes
+  subagent's report now arrives the same way. A one-shot run (a headless
+  `texra run`, or a subagent the orchestrator waits on in band) has no next
+  turn, so a message to it is refused rather than left unread. An orchestrator waiting with `executions wait` wakes
   as soon as any message reaches it, including its subagent's report. Nothing
   caps how many messages agents exchange; stop the runs if they talk too
   long. In the terminal, `/ps` lists the

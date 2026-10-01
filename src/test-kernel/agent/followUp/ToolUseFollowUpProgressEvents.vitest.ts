@@ -65,6 +65,7 @@ describe('tool-use follow-up progress events', () => {
     const handle = testRunHandle({ runId, agent: 'search' });
     const owner = session ?? testDefaultSession();
     handle.attachControls({
+      oneShot: false,
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => Effect.succeed(undefined),
       switchModel: () => Effect.void,
