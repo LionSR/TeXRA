@@ -27,7 +27,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 
 interface CliTeamLaunchBlockMessageOptions {
-  readonly requestedPreset?: string;
+  readonly requestedTeam?: string;
   readonly followUpAdvice?: string;
 }
 
@@ -62,11 +62,11 @@ export function readCliTeams(repoState: StateStore) {
 /** Resolve the current display name for a persisted team identity. */
 export function readCliTeamName(
   repoState: StateStore,
-  presetId: string | undefined,
+  teamId: string | undefined,
 ) {
   return Effect.gen(function* () {
-    if (!presetId) return undefined;
-    return findTeamPreset(yield* readCliTeams(repoState), presetId)?.name;
+    if (!teamId) return undefined;
+    return findTeamPreset(yield* readCliTeams(repoState), teamId)?.name;
   });
 }
 
@@ -147,7 +147,7 @@ export function formatCliTeamLaunchBlockMessage(
   plan: CliTeamRunPlan,
   options: CliTeamLaunchBlockMessageOptions = {},
 ): string {
-  const preset = options.requestedPreset ?? plan.preset.id;
+  const requested = options.requestedTeam ?? plan.preset.id;
   const reason = teamLaunchBlockReason(plan);
   if (!reason) {
     throw new Error(
@@ -155,7 +155,7 @@ export function formatCliTeamLaunchBlockMessage(
     );
   }
   const parts = [
-    `Team "${preset}" cannot start: ${reason}.`,
+    `Team "${requested}" cannot start: ${reason}.`,
     `Run \`texra team show ${plan.preset.id}\` to see missing agents.`,
     options.followUpAdvice,
   ];

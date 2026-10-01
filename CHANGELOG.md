@@ -1050,7 +1050,9 @@ show` print the same notice, and the new `texra agents customize`,
   renamed: `agent-roster` (field `roster`) is `workspace-agents` (field
   `agents`), `multi-agent-result` is `team-result`, `multi-agent-preset` is
   `team`, and `multi-agent-preset-inspection` is `team-inspection`; update any
-  script that reads them. The VS Code command `texra.showMultiAgent` is now
+  script that reads them. A `texra history` JSON/NDJSON entry names its team
+  in `teamId` (was `teamPresetId`), and `texra team show|run` help calls the
+  argument `<TEAM>`. The VS Code command `texra.showMultiAgent` is now
   `texra.showTeamSettings`, so a custom keybinding on the old id stops
   working. The saved agent selection and saved custom teams moved to the state
   keys `texra.workspaceAgents` and `texra.customTeams`; a selection or custom

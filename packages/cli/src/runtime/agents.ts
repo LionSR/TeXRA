@@ -35,7 +35,7 @@ const CLI_AGENT_LAUNCH_TARGETS = {
     requiredCategory: AgentCategory.ToolUse,
     missing: missingToolUseAgentMessage,
     mismatch: (name: string, actual: AgentEntry['category']) =>
-      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra team run <preset>\` for teams.`,
+      `Agent "${name}" is a ${actual} agent; \`texra chat\` only handles tool-use agents. Use \`texra run ${name}\` for workflow agents, or \`texra team run <team>\` for teams.`,
   },
   workflowResume: {
     requiredCategory: AgentCategory.Workflow,
