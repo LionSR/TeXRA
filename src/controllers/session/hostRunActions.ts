@@ -49,7 +49,6 @@ import {
 } from '@shared/session/requestErrors';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
-import { unique } from '@utils/core';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,
@@ -83,7 +82,6 @@ export interface WorkflowFileOperationRequest {
   agent: string;
   model: string;
   inputFile: string;
-  outputFiles: string[];
   runId: RunId;
 }
 
@@ -214,9 +212,7 @@ export interface HostRunActions {
   ): Effect.Effect<AgentConfig, Rejected | RunConfigUnreadable | Unavailable>;
   /** The run's output facts as the view holds them, read by the workflow
    *  controllers. */
-  readonly runOutputs: ProgressFollowUpState & {
-    getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
-  };
+  readonly runOutputs: ProgressFollowUpState;
   restoreProposal(proposal: unknown): Effect.Effect<AgentConfig, Rejected>;
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
@@ -271,14 +267,6 @@ export const createHostRunActions = (
       getOutputFiles,
       getCompileFailures: (runId: RunId) =>
         session.runView(runId)?.compileFailures ?? {},
-      getKnownWorkspaceOutputPaths: (runId: RunId) =>
-        new Set(
-          Object.values(getOutputFiles(runId)).flatMap((files) =>
-            files
-              .filter((file) => file.location.kind === 'workspace')
-              .map((file) => file.location.absolutePath),
-          ),
-        ),
     };
 
     const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
@@ -640,12 +628,6 @@ export const createHostRunActions = (
             agent: config.agent,
             model: config.model,
             inputFile: config.inputFiles[0] ?? '',
-            outputFiles: unique(
-              [
-                ...config.outputFiles,
-                ...runOutputs.getKnownWorkspaceOutputPaths(runId),
-              ].filter(Boolean),
-            ),
             runId,
           });
         }).pipe(Effect.scoped),

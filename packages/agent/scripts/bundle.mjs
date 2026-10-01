@@ -1,6 +1,8 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 
+import { stubInternalValidationModel } from '../../../scripts/stub-internal-validation-model.mjs';
+
 const packageRoot = new URL('..', import.meta.url);
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
 
@@ -76,6 +78,7 @@ await build({
         );
       },
     },
+    stubInternalValidationModel,
   ],
   loader: {
     '.wasm': 'binary',

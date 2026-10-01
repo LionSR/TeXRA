@@ -221,6 +221,14 @@ All notable changes to this project will be documented in this file.
   `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
   address is refused.
 
+- **Pack archives only the run's folder.** Pack copies the run's folder
+  (which holds the run's own copy of its inputs) into `History/`, and no
+  longer makes a second pass over the workspace: it does not copy the input
+  document's workspace `<name>.pdf`/`.tex` or delete that document's LaTeX
+  build files (`.aux`, `.log`, `.synctex.gz`, …). Packing the same run twice
+  within one second now reports an error instead of merging into the first
+  snapshot.
+
 ### Features
 
 - **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
@@ -403,6 +411,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The CLI, the desktop app and the VS Code extension no longer ship the
+  internal validation model.** The canned model the CLI's package validation
+  runs against was bundled into all three; in the desktop app and the
+  extension, environment variables could switch a run onto it. Every
+  shipped build now carries a stub in its place.
+- **A history file cut short no longer stops TeXRA from opening the
+  workspace.** A session store truncated inside its first page (a copy that
+  stopped part way) failed every open as "database disk image is
+  malformed"; it is now moved aside to `texra.db.corrupt-<time>`, as a file
+  that is not a database at all already was, and a fresh store opens.
 - **Long prompts are priced at the provider's long-context rate.** OpenAI's
   1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
   bill a whole request at 2x input and 1.5x output once the prompt passes

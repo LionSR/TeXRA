@@ -1,0 +1,9 @@
+name: golden_child
+description: The golden store's child, delegated to and deleted.
+settings:
+  agentCategory: toolUse
+  tools:
+    - executions
+prompts:
+  systemPrompt: 'GOLDEN-CHILD: answer the task.'
+  userRequest: '{{ INSTRUCTION }}'

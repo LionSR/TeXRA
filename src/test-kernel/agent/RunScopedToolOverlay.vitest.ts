@@ -113,7 +113,7 @@ function runLayer(
 }
 
 // Every launch here binds the deterministic in-process model through the
-// real route: the guarded package-validation gate, opened as CI opens it.
+// real route: the guarded package-validation gate, opened as validation opens it.
 beforeAll(() => {
   const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
   writeFileSync(flag, 'overlay');
@@ -121,7 +121,6 @@ beforeAll(() => {
     TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
     TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_OVERLAY_VALIDATION',
     TEXRA_OVERLAY_VALIDATION: '1',
-    CI: '1',
     TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV: 'TEXRA_OVERLAY_FLAG',
     TEXRA_OVERLAY_FLAG: flag,
     TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'overlay',

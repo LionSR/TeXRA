@@ -9,9 +9,6 @@ import { fileURLToPath, URL } from 'node:url';
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
 );
-const internalValidationModelStub = fileURLToPath(
-  new URL('./internal-validation-model-stub.mjs', import.meta.url),
-);
 
 // `--harness` bundles the PTY validator's TUI harness (scripts/tui-harness.tsx)
 // through this same build graph, so validate-tui exercises the configuration
@@ -26,12 +23,17 @@ const includeInternalValidationModel =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
 
 try {
-  const [{ build }, { reactCompilerPlugin }, { esmCjsGlobalsBanner }] =
-    await Promise.all([
-      import('esbuild'),
-      import('./reactCompilerPlugin.mjs'),
-      import('../../../scripts/esm-cjs-globals-banner.mjs'),
-    ]);
+  const [
+    { build },
+    { reactCompilerPlugin },
+    { esmCjsGlobalsBanner },
+    { stubInternalValidationModel },
+  ] = await Promise.all([
+    import('esbuild'),
+    import('./reactCompilerPlugin.mjs'),
+    import('../../../scripts/esm-cjs-globals-banner.mjs'),
+    import('../../../scripts/stub-internal-validation-model.mjs'),
+  ]);
 
   await build({
     entryPoints: [entryPoint],
@@ -66,11 +68,6 @@ try {
       // to a no-op stub. Avoids pulling the (heavy) real package into the
       // bundle while keeping ink's dynamic-import path resolvable.
       'react-devtools-core': reactDevtoolsStub,
-      ...(!includeInternalValidationModel
-        ? {
-            '@agent/runtime/run/validationModel': internalValidationModelStub,
-          }
-        : {}),
     },
     outfile,
     minify: !harness,
@@ -84,7 +81,10 @@ try {
     // packages/cli/src/chat/tui/ and packages/cli/src/tui/ (the shared Ink UI
     // kit). Confirmed addition is only `react/compiler-runtime`; see
     // 2026-05-14-20-implementation.md (Phase 0). Risk R12.
-    plugins: [reactCompilerPlugin()],
+    plugins: [
+      reactCompilerPlugin(),
+      ...(includeInternalValidationModel ? [] : [stubInternalValidationModel]),
+    ],
     // JSX needs to be transformed for ink (which uses React's JSX runtime).
     jsx: 'automatic',
     banner: {
