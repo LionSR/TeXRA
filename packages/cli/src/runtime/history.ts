@@ -85,7 +85,7 @@ export interface CliHistoryEntry {
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
-  readonly teamPresetId?: string;
+  readonly teamId?: string;
   readonly parentRunId?: RunId;
 }
 
@@ -490,7 +490,7 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const teamPreset = teamPresetId(config);
+  const team = teamIdOf(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
   const lines = [
     `Run: ${details.id}`,
@@ -500,7 +500,7 @@ export function formatCliHistoryDetailsText(
     `Model: ${model ?? 'unknown'}`,
   ];
 
-  if (teamPreset) lines.push(`Team: ${teamPreset}`);
+  if (team) lines.push(`Team: ${team}`);
   if (
     details.currentModel &&
     config?.model &&
@@ -565,11 +565,11 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     inputBasename,
     category: config.agentCategory,
     description: entry.description,
-    teamPresetId: teamPresetId(config),
+    teamId: teamIdOf(config),
     parentRunId: entry.parentRunId,
   };
 });
 
-function teamPresetId(config: AgentConfig | null): string | undefined {
+function teamIdOf(config: AgentConfig | null): string | undefined {
   return config?.cli?.teamId?.trim() || undefined;
 }

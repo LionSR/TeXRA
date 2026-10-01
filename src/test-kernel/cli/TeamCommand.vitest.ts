@@ -159,7 +159,7 @@ const preset = (
 ) =>
   Effect.provide(
     nativeRun(context, {
-      preset: 'mathematician',
+      team: 'mathematician',
       inputFiles: [],
       contextFiles: [],
       model: 'deepseekT',
@@ -195,7 +195,7 @@ async function expectBlockedLaunch(options: {
   expect(mocks.formatCliTeamLaunchBlockMessage).toHaveBeenCalledWith(
     options.plan,
     {
-      requestedPreset: 'mathematician',
+      requestedTeam: 'mathematician',
       followUpAdvice: options.followUpAdvice,
     },
   );

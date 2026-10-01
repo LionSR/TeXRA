@@ -7,20 +7,15 @@ import type { StateStore } from '@platform/interfaces';
 
 import { missingTeamMessage } from './agents';
 import { CliUsageError } from './cliContext';
-import { writeTextStderr } from './logSinks';
-import {
-  formatCliTeamRunWarnings,
-  readCliTeams,
-  type CliTeamRunPlan,
-} from './cliTeams';
+import { readCliTeams } from './cliTeams';
 
 interface TeamRunPlanInit {
-  readonly preset: string;
+  readonly team: string;
   readonly agent?: string;
 }
 
 /**
- * Resolve a preset's run plan against the loaded catalog. Headless
+ * Resolve a team's run plan against the loaded catalog. Headless
  * `team run` routes through this runtime helper so command entrypoints
  * cannot drift.
  */
@@ -29,21 +24,15 @@ export function loadCliTeamRunPlan(
   repoState: StateStore,
 ) {
   return Effect.gen(function* () {
-    const preset = findTeamPreset(yield* readCliTeams(repoState), init.preset);
-    if (!preset) {
+    const team = findTeamPreset(yield* readCliTeams(repoState), init.team);
+    if (!team) {
       return yield* Effect.fail(
-        new CliUsageError(missingTeamMessage(init.preset)),
+        new CliUsageError(missingTeamMessage(init.team)),
       );
     }
-    return planTeamRun(preset, {
+    return planTeamRun(team, {
       resolveAgent: getCategoryAgent,
       agentOverride: init.agent,
     });
   });
-}
-
-export function writeMissingPresetAgents(plan: CliTeamRunPlan): void {
-  for (const warning of formatCliTeamRunWarnings(plan)) {
-    writeTextStderr(warning);
-  }
 }

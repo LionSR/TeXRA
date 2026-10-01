@@ -34,15 +34,15 @@ export function formatCliHistorySubject(
 }
 
 export function formatCliHistoryAgentLabel(
-  entry: Pick<CliHistoryEntry, 'agent' | 'teamPresetId'>,
+  entry: Pick<CliHistoryEntry, 'agent' | 'teamId'>,
 ): string {
-  return entry.teamPresetId ? `team:${entry.teamPresetId}` : entry.agent;
+  return entry.teamId ? `team:${entry.teamId}` : entry.agent;
 }
 
 export function formatCliHistoryResumeSummary(
   entry: Pick<
     CliHistoryEntry,
-    'agent' | 'description' | 'inputBasename' | 'status' | 'teamPresetId'
+    'agent' | 'description' | 'inputBasename' | 'status' | 'teamId'
   >,
 ): string {
   return `${formatCliHistoryAgentLabel(entry)}; ${entry.status}; ${formatCliHistorySubject(entry, 'no input')}`;
