@@ -397,6 +397,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A message to a one-shot run is refused instead of lost.** In a headless
+  `texra run`, a subagent could message its parent with `executions send` and
+  be told the parent would read it at its next turn boundary. A one-shot run
+  has no next turn, so the parent finished with the message still unread and
+  no host showed it. The send is now refused with that reason, as every host
+  already refuses the user's own follow-up to such a run, so the subagent puts
+  the note in its result instead.
+
 - **The CLI, the desktop app and the VS Code extension no longer ship the
   internal validation model.** The canned model the CLI's package validation
   runs against was bundled into all three; in the desktop app and the

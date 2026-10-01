@@ -121,7 +121,8 @@ function goldenTurn(
           : text('Workflow child done.'),
       );
     // The delegated child looks its parent up and messages it while the
-    // parent waits on the delegation: a follow-up queued on a live run.
+    // parent waits on the delegation: refused, since the headless parent
+    // ends after its turn and would never read it.
     if (!said.includes('Answer the delegated child task'))
       return Effect.succeed(text('Child result.'));
     if (results.length === 0)
@@ -166,6 +167,10 @@ function goldenTurn(
     ];
     const step = steps[results.length];
     if (step !== undefined) return Effect.succeed([step()]);
+    // The last turn is held until the user stops it, so the message typed
+    // behind it stays queued on the stopped run.
+    if (said.includes('Hold this turn.'))
+      return gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     return Effect.succeed(
       text(
         said.includes('After the model switch.')

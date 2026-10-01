@@ -18,7 +18,12 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpSender';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentCategory, ToolError, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  ToolError,
+  USER_FOLLOW_UP_SUPPORT,
+  type RunId,
+} from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { executed } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
@@ -54,6 +59,17 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
     return yield* Effect.fail(
       new ToolError(
         `Run '${target}' is a workflow agent. Only tool-use runs take messages.`,
+      ),
+    );
+  }
+  // A one-shot run (headless, or an in-band child) ends after its current
+  // turn and has no next boundary to read a message at: one queued here would
+  // sit unread under a "sent" acknowledgement. Refused, as every host refuses
+  // the user's follow-up to it (`acceptsFollowUp`).
+  if (recipient.followUpSupport === USER_FOLLOW_UP_SUPPORT.UNSUPPORTED) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Run '${target}' is a one-shot run: it ends after its current turn and reads no messages. Put what it needs in your own result instead.`,
       ),
     );
   }
