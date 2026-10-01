@@ -13,6 +13,12 @@ import { Effect, Result, type Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports - utilities
+import {
+  GUEST_CPU_BUDGET_MS,
+  MAX_FANOUT,
+  QUICKJS_MEMORY_LIMIT_BYTES,
+  QUICKJS_STACK_LIMIT_BYTES,
+} from '@agent/codeSandbox/limits';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { DETERMINISM_PRELUDE } from './determinismPrelude';
@@ -36,17 +42,6 @@ export interface SandboxOptions {
   /** Guest CPU budget; defaults to {@link GUEST_CPU_BUDGET_MS}. */
   cpuBudgetMs?: number;
 }
-
-const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
-const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;
-const MAX_FANOUT = 4096;
-/**
- * Total time guest code may run across every step, apart from the wall
- * clock. Guest code runs on the host thread, so a loop that never yields
- * would otherwise hold that thread until the whole-run deadline; waiting on
- * agents is not guest time and never counts.
- */
-const GUEST_CPU_BUDGET_MS = 30_000;
 
 const getQuickJsModule = memoizePromiseFactory(() =>
   newQuickJSWASMModuleFromVariant(

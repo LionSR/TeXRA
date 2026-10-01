@@ -5,6 +5,7 @@
       "entry": [
         "src/test-kernel/**/*.vitest.ts",
         "src/test-kernel/support/setupFakePlatform.ts",
+        "src/agent/codeSandbox/worker.ts!",
         "scripts/**/*.mjs!"
       ],
       "project": ["src/**/*.{ts,mts}!", "!src/**/*.js", "!src/test-kernel/**!"]

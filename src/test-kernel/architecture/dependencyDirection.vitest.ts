@@ -100,7 +100,7 @@ const EFFECT_RUN_ROOTS = [
   'packages/trace-viewer/src',
 ] as const;
 const EFFECT_RUN_CALL =
-  /\bEffect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?\s*\(/g;
+  /\b(?:Effect\.run(?:Promise|PromiseExit|Sync|SyncExit|Fork|Callback)(?:With)?|NodeRuntime\.runMain)\s*\(/g;
 const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // The CLI platform shutdown sequence, which cannot run on the process
   // runtime for the same reason the SDK entry cannot: `cliPlatformShutdown`
@@ -155,6 +155,10 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // disposes the process runtime, so neither can settle on it. Every other
   // Effect in this file settles on the local `ProcessRuntime` the entry holds.
   'packages/extension/src/extension.ts': 2,
+  // Worker entry: no process runtime exists in the worker. The code sandbox
+  // worker runs its one program under `NodeRuntime.runMain`; every host
+  // embeds this file as the worker's source (scripts/code-sandbox-worker.mjs).
+  'src/agent/codeSandbox/worker.ts': 1,
 };
 
 function sourceFilesUnder(

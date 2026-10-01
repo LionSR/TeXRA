@@ -28,6 +28,10 @@ import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import {
+  RUN_LOG_MAX_LINE_LENGTH,
+  RUN_LOG_MAX_LINES,
+} from '@agent/codeSandbox/limits';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   RunId,
@@ -52,8 +56,6 @@ import {
   type WorkflowScriptProgressProjection,
 } from './workflowScriptRun';
 
-const RUN_LOG_MAX_LINES = 80;
-const RUN_LOG_MAX_LINE_LENGTH = 500;
 const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
 
 /** One model-facing reference for editing and rerunning a persisted script. */

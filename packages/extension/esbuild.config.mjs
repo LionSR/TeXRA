@@ -1,6 +1,7 @@
 // @ts-check
 import * as esbuild from 'esbuild';
 
+import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
 import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
 
 const production = process.argv.includes('--production');
@@ -43,7 +44,7 @@ const extensionConfig = {
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
     'import.meta.url': 'importMetaUrl',
   },
-  plugins: [stubInternalValidationModel],
+  plugins: [stubInternalValidationModel, codeSandboxWorker],
 };
 
 async function main() {
