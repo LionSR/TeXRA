@@ -379,14 +379,19 @@ describe('summarizeSubagentFollowup', () => {
   // the CLI transcript/queued follow-ups panel (codex review, issue #7679).
   // One case per newly-recognized tag family.
 
-  it('summarizes a background-result block, falling back to the tag family name', () => {
-    const xml = [
-      '<background-result id="abc" command="npm test">',
-      '<wall-time>3sec</wall-time>',
-      '</background-result>',
-    ].join('\n');
-    expect(summarizeSubagentFollowup(xml)).toBe(
-      '✓ background completed · 3sec',
+  it('summarizes a background-result block by its command and exit code', () => {
+    const block = (exitCode: number) =>
+      [
+        '<background-result id="abc" command="npm test &amp;&amp; lint">',
+        `<exit-code>${exitCode}</exit-code>`,
+        '<wall-time>3sec</wall-time>',
+        '</background-result>',
+      ].join('\n');
+    expect(summarizeSubagentFollowup(block(0))).toBe(
+      '✓ $ npm test && lint · 3sec',
+    );
+    expect(summarizeSubagentFollowup(block(1))).toBe(
+      '✗ $ npm test && lint · exit 1 · 3sec',
     );
   });
 

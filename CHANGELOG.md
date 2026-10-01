@@ -387,6 +387,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A finished background command names itself in the queued follow-ups and
+  the transcript.** The row showed `✓ background completed · 2m` for every
+  background shell command, with a tick even when it failed. It now shows the
+  command and its result: `✓ $ npm test · 2m`, or `✗ $ npm test · exit 1 · 2m`.
+
 - **The CLI, the desktop app and the VS Code extension no longer ship the
   internal validation model.** The canned model the CLI's package validation
   runs against was bundled into all three; in the desktop app and the
