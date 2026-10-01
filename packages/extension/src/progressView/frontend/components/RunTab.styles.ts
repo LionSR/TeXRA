@@ -241,6 +241,22 @@ export const runTabStyles = css`
     display: none;
   }
 
+  /* The row's Delete: shown on hover or focus, like Resume. */
+  .tab-remove {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  .tab-remove::part(base) {
+    padding: 0 var(--wa-space-3xs);
+    border: none;
+    background: none;
+  }
+
+  .tab-container:not(:hover, :focus-within) .tab-remove {
+    display: none;
+  }
+
   .tab-container.is-read-only .tab-title {
     color: var(--color-text-secondary);
   }

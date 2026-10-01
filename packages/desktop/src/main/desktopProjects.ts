@@ -208,6 +208,7 @@ export const readRememberedDesktopProjects = Effect.fn(
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
+  // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {

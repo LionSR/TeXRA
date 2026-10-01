@@ -308,8 +308,11 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ? !options.ownApiKeyFallback &&
         (yield* prefersCopilotRoute(config.ref, stores.globalState))
       : key === 'VscodeLm';
+  // A provider mode never takes the Copilot preference (`decideModelRoute`),
+  // so the editor is not asked for a route it would not use.
   const copilotRoute =
-    prefersCopilot || config.provider === ModelProvider.COPILOT
+    (prefersCopilot && options.mode === undefined) ||
+    config.provider === ModelProvider.COPILOT
       ? (yield* discoverCopilotRoutes()).get(config.ref)
       : undefined;
   const route = decideModelRoute(

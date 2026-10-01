@@ -356,8 +356,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@effect/language-service':
-        specifier: ^0.87.2
-        version: 0.87.2
+        specifier: ^0.87.3
+        version: 0.87.3
       '@effect/vitest':
         specifier: 4.0.0
         version: 4.0.0(effect@4.0.0)(vitest@5.0.2(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.1(@noble/hashes@2.2.0))(vite@8.3.1(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
@@ -1192,8 +1192,8 @@ packages:
   '@date-fns/tz@1.5.0':
     resolution: {integrity: sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg==}
 
-  '@effect/language-service@0.87.2':
-    resolution: {integrity: sha512-CfiSoaVQO8pZgaMZGw5VvMvRGybsJ2LaSDoLYaqiVGvo/YYPYVR2GzUKY0h1NtIweq/+SQ5XLrvtzPIttWQ0GQ==}
+  '@effect/language-service@0.87.3':
+    resolution: {integrity: sha512-g1OmRBZF5chbW9QMNoirPo5Bb4zzU2HfP88tR7/VSZEUxHJ1/qVb8AQ0kUh2ggctLH1I715yCwP4gkw56PTjpQ==}
     hasBin: true
 
   '@effect/platform-node-shared@4.0.0':
@@ -6132,7 +6132,7 @@ snapshots:
 
   '@date-fns/tz@1.5.0': {}
 
-  '@effect/language-service@0.87.2': {}
+  '@effect/language-service@0.87.3': {}
 
   '@effect/platform-node-shared@4.0.0(effect@4.0.0)':
     dependencies:
