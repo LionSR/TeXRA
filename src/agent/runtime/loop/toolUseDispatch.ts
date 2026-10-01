@@ -437,22 +437,29 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // as cancelled, so no surface keeps offering it.
     let reentering = standing;
     let bound = standing !== null;
-    const retireStanding = (): RunLedgerDraft[] => {
+    // Through the decision authority's own check, so an answer a surface
+    // landed meanwhile stands and the retirement writes nothing.
+    const retireStanding = Effect.suspend(() => {
       const open = reentering?.decision === null ? reentering : null;
       reentering = null;
-      if (open === null) return [];
-      return [
-        {
-          type: 'request.decided',
-          aggregateId,
-          requestId: open.requestId,
-          decision: {
-            action: 'cancel',
-            cause: 'The resumed call no longer asks it.',
-          },
-        },
-      ];
-    };
+      if (open === null) return Effect.void;
+      return run.session
+        .decideRequest(runId, open.requestId, {
+          action: 'cancel',
+          cause: 'The resumed call no longer asks it.',
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              logger.warn(
+                `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
+                { data: error },
+              ),
+            ),
+          ),
+          Effect.asVoid,
+        );
+    });
     const requests: CallRequests = {
       nextId: (prefix) =>
         reentering?.requestId.startsWith(`${prefix}-`) === true
@@ -489,21 +496,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   ? Effect.succeed(from)
                   : append(decided).pipe(Effect.as(from));
               }
-              const from = run.session.now();
-              return append([
-                ...retireStanding(),
-                ...rows,
-                ...(binds
-                  ? [
-                      bindingRow(runId, {
-                        callId: fact.callId,
-                        attempt,
-                        requestId: payload.data.requestId,
-                        role: 'call',
-                      }),
-                    ]
-                  : []),
-              ]).pipe(Effect.as(from));
+              return retireStanding.pipe(
+                Effect.andThen(Effect.sync(() => run.session.now())),
+                Effect.flatMap((from) =>
+                  append([
+                    ...rows,
+                    ...(binds
+                      ? [
+                          bindingRow(runId, {
+                            callId: fact.callId,
+                            attempt,
+                            requestId: payload.data.requestId,
+                            role: 'call',
+                          }),
+                        ]
+                      : []),
+                  ]).pipe(Effect.as(from)),
+                ),
+              );
             },
           });
         }),
@@ -639,6 +649,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const cards = settledCards(fact, parsedInput, status, editedFiles);
     // An executed call's PostToolUse rows commit with its settlement.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
+    yield* retireStanding;
     yield* settle(
       fact,
       attempt,
@@ -652,7 +663,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         attachments,
         stateMutation: [],
       },
-      [...cards, ...post, ...retireStanding()],
+      [...cards, ...post],
       true,
     );
   });

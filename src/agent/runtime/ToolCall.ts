@@ -53,6 +53,8 @@ export interface ToolCallShape {
     /** What the tool prints while it runs, for its card's transient output. */
     readonly onToolOutput?: (chunk: string) => void;
   };
+  /** Where the call's requests open: present exactly when {@link run} is. */
+  readonly requests?: CallRequests;
   /**
    * Absent for a standalone host invocation outside an agent run. What the run
    * already answers for (its model, its delegation scope, its current step,
@@ -60,8 +62,6 @@ export interface ToolCallShape {
    * than copied onto the call. A tool that starts something the run should
    * stop at its end registers that stop on the run's scope.
    */
-  /** Where the call's requests open: present exactly when {@link run} is. */
-  readonly requests?: CallRequests;
   readonly run:
     | Pick<
         AgentRunShape,
