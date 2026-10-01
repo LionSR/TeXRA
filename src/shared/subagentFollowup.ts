@@ -35,6 +35,7 @@ import {
   formatCompactDuration,
   formatCostUsd,
   formatResultCount,
+  stripControlCharacters,
 } from '@utils/text/stringUtils';
 
 // Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags), so
@@ -318,6 +319,44 @@ export function summarizeSubagentFollowup(text: unknown): string {
   ) {
     const summary = parseWorkflowScriptDeliverySummary(trimmed);
     if (summary) return formatWorkflowScriptDeliverySummary(summary);
+  }
+
+  // A background shell command (bashDelivery.ts) is named by the model's
+  // description, else its command, and judged by its exit code: it carries
+  // neither `agent` nor `status`.
+  if (
+    tag === DELIVERY_TAG.backgroundResult ||
+    tag === DELIVERY_TAG.backgroundError
+  ) {
+    // Model-written text reaches terminals: drop control characters so a
+    // crafted description or command cannot emit escape sequences.
+    const label = (name: string) =>
+      stripControlCharacters(
+        decodeXmlEntities(attr(trimmed, name) ?? '').split('\n')[0] ?? '',
+      ).trim();
+    const description = label('description');
+    const command = label('command');
+    const exitCode = innerTag(trimmed, 'exit-code');
+    const failed =
+      tag === DELIVERY_TAG.backgroundError ||
+      (exitCode !== undefined && exitCode !== '0');
+    const message = innerTag(trimmed, 'message');
+    // A timeout or a lost exit status has only a synthetic code; name it.
+    let outcome: string | undefined;
+    if (innerTag(trimmed, 'timed-out') !== undefined) outcome = 'timed out';
+    else if (innerTag(trimmed, 'no-exit-code') !== undefined)
+      outcome = 'no exit code';
+    else if (exitCode !== undefined) outcome = `exit ${exitCode}`;
+    const facts = [
+      `${failed ? '✗' : '✓'} ${description || `$ ${command || 'background command'}`}`,
+      ...(failed && outcome !== undefined ? [outcome] : []),
+      ...(tag === DELIVERY_TAG.backgroundError ? ['failed'] : []),
+      innerTag(trimmed, 'wall-time'),
+    ].filter(Boolean);
+    const head = facts.join(' · ');
+    return message
+      ? `${head}\n${stripControlCharacters(decodeXmlEntities(message), ' ')}`
+      : head;
   }
 
   // Result/error envelopes share one shape across families

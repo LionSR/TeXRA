@@ -167,7 +167,7 @@ describe('formatBashDelivery', () => {
 
     const delivery = formatBashDelivery(
       'bash-1',
-      'printf lines',
+      { command: 'printf lines' },
       1000,
       { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: `${outputTail}\n` },
@@ -181,13 +181,17 @@ describe('formatBashDelivery', () => {
   it('escapes background bash ids at the XML attribute boundary', () => {
     const delivery = formatBashDelivery(
       'bash&1"<',
-      'printf lines',
+      { command: 'printf lines' },
       1000,
       { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: 'ok' },
       { tail: '' },
     );
-    const error = formatBashError('bash&1"<', 'printf lines', new Error('no'));
+    const error = formatBashError(
+      'bash&1"<',
+      { command: 'printf lines' },
+      new Error('no'),
+    );
 
     expect(delivery).toContain('<background-result id="bash&amp;1&quot;&lt;"');
     expect(error).toContain('<background-error id="bash&amp;1&quot;&lt;"');
@@ -201,7 +205,7 @@ describe('formatBashDelivery', () => {
 
     const delivery = formatBashDelivery(
       'bash-2',
-      'printf lines',
+      { command: 'printf lines' },
       1000,
       { success: true, stdout: '', stderr: '', timedOut: false, exitCode: 0 },
       { tail: `${outputTail}\r\n` },

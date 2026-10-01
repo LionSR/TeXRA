@@ -420,6 +420,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A shell command is named by its description, and a finished background
+  command by its result.** The bash tool's `description` (a 5-10 word summary
+  the model writes) now heads the command's row in the CLI and the progress
+  view, with the command beneath it, and names a background command's task.
+  A finished background command showed `✓ background completed · 2m`, with a
+  tick even when it failed; it now reads `✓ Run the unit tests · 2m`, or
+  `✗ $ npm test · exit 1 · 2m` for an undescribed command that failed.
+
 - **A ChatGPT or Grok sign-in that expired early recovers on its own.** A
   run no longer fails with "token is expired" while Settings says the
   subscription is ready; when the sign-in cannot be renewed, the run asks you
