@@ -103,21 +103,33 @@ export function modelSwitchPort(
     model: string,
   ) {
     const current = SynchronizedRef.getUnsafe(run.model);
-    if (current.modelId === model) return { reason: undefined };
+    if (current.modelId === model)
+      return { reason: undefined, admitted: undefined };
     const selected = selectModel(model);
-    if (!selected) return { reason: `Model ${model} is not registered` };
+    if (!selected) {
+      return {
+        reason: `Model ${model} is not registered`,
+        admitted: undefined,
+      };
+    }
     const nextConfig = selected.config;
     const route = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextKey = yield* routeCompatibilityKey(nextConfig, route);
     if (!nextKey) {
-      return { reason: `Unsupported model provider: ${nextConfig.provider}` };
+      return {
+        reason: `Unsupported model provider: ${nextConfig.provider}`,
+        admitted: undefined,
+      };
     }
     if (current.compatibilityKey !== nextKey) {
-      return { reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON };
+      return {
+        reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON,
+        admitted: undefined,
+      };
     }
-    return { reason: undefined, selected, route, nextKey };
+    return { reason: undefined, admitted: { selected, route, nextKey } };
   });
   const modelSwitchDisabledReason = (model: string) =>
     admission(model).pipe(Effect.map(({ reason }) => reason));
@@ -137,20 +149,17 @@ export function modelSwitchPort(
       // A reasoning request the route cannot carry (`@none` on a model that
       // always thinks) is refused here, as the command's error, instead of
       // failing the bind inside the loop and ending the conversation.
-      if (admitted.selected !== undefined) {
-        const { selected, route, nextKey } = admitted;
-        const protocol = PROTOCOL_BY_KEY[nextKey];
-        if (protocol !== 'vscode-lm' && protocol !== 'validation') {
-          yield* reasoningFor(
-            selected.config,
-            selected.request,
-            run.stores.globalState,
-            {
-              protocol,
-              codexSubscription: route.kind === 'chatgpt-subscription',
-            },
-          );
-        }
+      if (admitted.admitted !== undefined) {
+        const { selected, route, nextKey } = admitted.admitted;
+        yield* reasoningFor(
+          selected.config,
+          selected.request,
+          run.stores.globalState,
+          {
+            protocol: PROTOCOL_BY_KEY[nextKey],
+            codexSubscription: route.kind === 'chatgpt-subscription',
+          },
+        );
       }
       // Bound and recorded by the loop at its next model boundary: the rows
       // that record the switch belong to the fiber holding the run's state.

@@ -4,7 +4,6 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
 import { readState } from '@shared/config/settingsAccess';
@@ -15,8 +14,6 @@ import {
   defaultReasoningLevel,
   type ReasoningRequest,
 } from './reasoningChoice';
-
-const CHANNEL = 'Reasoning';
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
@@ -48,7 +45,7 @@ export function reasoningEffortOverrides(state: StateStore) {
       yield* Effect.logWarning(
         `Stored reasoning level ${JSON.stringify(value)} for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
         parsed.error,
-      ).pipe(withLogChannel(CHANNEL));
+      );
     }
     return overrides;
   });
@@ -146,9 +143,7 @@ export const reasoningFor = Effect.fn('reasoningFor')(function* (
       }),
     catch: ensureError,
   });
-  if (choice.note !== undefined) {
-    yield* Effect.logInfo(choice.note).pipe(withLogChannel(CHANNEL));
-  }
+  if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
   return choice;
 });
 

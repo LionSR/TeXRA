@@ -121,7 +121,12 @@ export type ModelRoute =
       /** The discovered route; absent when the editor offers none now. */
       readonly route: CopilotModelRoute | undefined;
     }
-  | { readonly kind: 'openrouter-unsupported' }
+  /** The selection's provider reasoning mode (OpenAI `pro`) cannot be
+   *  served on the route the model would take. */
+  | {
+      readonly kind: 'mode-unsupported';
+      readonly via: 'openrouter' | 'copilot';
+    }
   | { readonly kind: 'chatgpt-subscription' }
   | { readonly kind: 'xai-subscription' }
   | { readonly kind: 'openrouter' }
@@ -156,10 +161,14 @@ export function decideModelRoute(
   // Editor-supplied models cannot be proxied through OpenRouter, and a
   // preference is a hard route choice (#9635).
   if (facts.prefersCopilot || config.provider === ModelProvider.COPILOT) {
-    return { kind: 'copilot', route: facts.copilotRoute };
+    // The editor sends its own reasoning controls, so a provider mode would
+    // silently not be served.
+    return facts.mode === undefined
+      ? { kind: 'copilot', route: facts.copilotRoute }
+      : { kind: 'mode-unsupported', via: 'copilot' };
   }
   if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter, facts.mode)) {
-    return { kind: 'openrouter-unsupported' };
+    return { kind: 'mode-unsupported', via: 'openrouter' };
   }
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).

@@ -271,7 +271,7 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
  * a Copilot route binds only with the editor route discovered for it.
  */
 export type BindableRoute =
-  | Exclude<ModelRoute, { kind: 'openrouter-unsupported' | 'copilot' }>
+  | Exclude<ModelRoute, { kind: 'mode-unsupported' | 'copilot' }>
   | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
 
 /**
@@ -334,23 +334,16 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
           mode: options.mode,
         },
   );
-  if (route.kind === 'openrouter-unsupported') {
+  if (route.kind === 'mode-unsupported') {
     return yield* Effect.fail(
       new Error(
-        `${config.label} in ${options.mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`,
+        route.via === 'openrouter'
+          ? `${config.label} in ${options.mode} mode is not served by OpenRouter. Disable OpenRouter and use the provider API directly.`
+          : `${config.label} in ${options.mode} mode is not served through Copilot. Stop using Copilot for this model to use the provider API directly.`,
       ),
     );
   }
   if (route.kind !== 'copilot') return route;
-  // The editor sends its own reasoning controls, so a provider mode (OpenAI
-  // `pro`) asked for on a Copilot route would silently not be served.
-  if (options.mode !== undefined) {
-    return yield* Effect.fail(
-      new Error(
-        `${config.label} in ${options.mode} mode is not served through Copilot. Turn off the Copilot preference for this model to use the provider API directly.`,
-      ),
-    );
-  }
   // A fresh run needs the editor to allow the route; a resumed conversation
   // keeps its format and binds whatever route the editor offers.
   const unavailableReason =
