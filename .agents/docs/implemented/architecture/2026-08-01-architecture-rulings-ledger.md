@@ -228,8 +228,12 @@ and the `ky` and `execa` exits named in the first version of this row are
 gone: nothing imports the SSE parser, and neither package is in any
 `package.json`.
 
-**Evidence.** `rg "from 'effect/(http|process|sql|reactivity|testing)"` returns
-exactly these families, plus `effect/PlatformError`, a plain core module. Every
+**Evidence.** `rg -oN "from 'effect/[A-Za-z]+" src packages/*/src` lists the
+first path segment of every `effect/<subpath>` import: `process`, `http`,
+`testing`, `sql` and `reactivity` (the families above, with their deeper
+subpaths such as `effect/process/ChildProcess` and `effect/sql/SqlClient`
+counted under the first segment), plus `PlatformError`, a plain core module
+that needs no row. Every
 exit named above is a path the repository has already walked or is still
 standing on, so none of them is speculative.
 
