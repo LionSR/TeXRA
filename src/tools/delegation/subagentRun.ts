@@ -8,7 +8,7 @@
  */
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -155,7 +155,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   }
 
   const runId = generateRunId();
-  const startedAt = yield* Clock.currentTimeMillis;
+  const startedAt = Date.now();
   const definition = yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(childConfigPayload),
     session: parentSession,

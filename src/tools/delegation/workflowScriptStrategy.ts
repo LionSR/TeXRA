@@ -1,4 +1,4 @@
-import { Clock, Effect, Exit, FileSystem, type Scope } from 'effect';
+import { Effect, Exit, FileSystem, type Scope } from 'effect';
 
 /**
  * Workflow-script child-run strategy over the shared `childRunLoop`.
@@ -260,7 +260,7 @@ export function createWorkflowScriptStrategy(
 
     launch: (_ports, signal) =>
       Effect.gen(function* () {
-        startedAt = yield* Clock.currentTimeMillis;
+        startedAt = Date.now();
         // Physical-attempt callbacks are the current-invocation boundary: replay
         // and stable recovery emit none, while every model attempt emits one.
         const attemptCost = createWorkflowAttemptCostTracker();

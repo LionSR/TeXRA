@@ -101,7 +101,14 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
               const hold = yield* Scope.fork(scope);
               yield* restore(
                 RcMap.get(built, id).pipe(Scope.provide(hold)),
-              ).pipe(Effect.onError(() => Scope.close(hold, Exit.void)));
+              ).pipe(
+                // Any exit but success, an interrupt of the build included.
+                Effect.onExit((exit) =>
+                  Exit.isSuccess(exit)
+                    ? Effect.void
+                    : Scope.close(hold, Exit.void),
+                ),
+              );
               standing.set(id, hold);
             } else if (!on.has(id) && held !== undefined) {
               standing.delete(id);

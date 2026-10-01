@@ -4,7 +4,7 @@
  * this strategy owns native launch options and result formatting.
  */
 
-import { Clock, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -253,7 +253,7 @@ export function createNativeSubagentStrategy(
           return buildSubagentResultMeta(
             config.agent,
             result?.output ?? emptyRunEndOutput(config.agentCategory),
-            (yield* Clock.currentTimeMillis) - params.startedAt,
+            Date.now() - params.startedAt,
           );
         }
         return yield* buildResult(turn);

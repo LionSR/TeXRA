@@ -1,4 +1,4 @@
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Result } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -353,7 +353,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             ...launchOptions,
             runId,
             parentRunId,
-            startedAt: yield* Clock.currentTimeMillis,
+            startedAt: Date.now(),
             workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             resume: { identity: resume, options: { ...launchOptions, onIdle } },

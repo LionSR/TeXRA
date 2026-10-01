@@ -10,7 +10,7 @@
 
 import path from 'node:path';
 
-import { Clock, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -457,7 +457,7 @@ export const buildSubagentResult = Effect.fn(
   },
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
   // The run's wall time, not the diff computation that follows it.
-  const wallTimeMs = (yield* Clock.currentTimeMillis) - options.startedAt;
+  const wallTimeMs = Date.now() - options.startedAt;
   const enriched: RunEndOutput =
     output.category === 'workflow'
       ? yield* withWorkflowDiffs(options.storageRoot, runId, output)
