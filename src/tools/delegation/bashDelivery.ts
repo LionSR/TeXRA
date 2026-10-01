@@ -68,6 +68,10 @@ export function formatBashDelivery(
 ): string {
   const lines = [
     `<exit-code>${result.exitCode}</exit-code>`,
+    // The code above is synthetic when the process timed out or its exit
+    // status was lost; say which, so no reader takes it for a real exit.
+    ...(result.timedOut ? ['<timed-out>true</timed-out>'] : []),
+    ...(result.noExitCode ? ['<no-exit-code>true</no-exit-code>'] : []),
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
   const outputStreams = [

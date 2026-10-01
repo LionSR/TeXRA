@@ -490,7 +490,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parentRunId,
           category: AgentCategory.ToolUse,
-          description: childRunDescription(call.description || command),
+          description: childRunDescription(call.description?.trim() || command),
         },
       );
 

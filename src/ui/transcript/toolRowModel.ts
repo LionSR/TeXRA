@@ -209,9 +209,10 @@ function headerSummaryText(summary: string): string {
 
 /**
  * The header preview both hosts show, and the only statement of its
- * precedence: a shell call is described by its command, so `bash`-kind tools
- * prefer the input preview; every other tool reports its own summary first and
- * falls back to the input preview while it is still in flight. An
+ * precedence: a `bash`-kind call is named by the model's description, else its
+ * command (the input preview), else its summary; every other tool reports its
+ * own summary first and falls back to the input preview while it is still in
+ * flight. An
  * `executions` call names its child runs by label: the session fold passes
  * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
@@ -305,9 +306,18 @@ export function toolRowModel(
     failed: normalized.status === TOOL_CALL_STATUS.FAILED,
   });
 
+  // A bash call's output is its result even when it echoes the description,
+  // so the duplicate check compares against the command, as before
+  // descriptions named the row.
+  const echoPreview =
+    toolDisplayKind(normalized.toolName) === 'bash'
+      ? collapseWhitespace(
+          deriveToolInputPreview(normalized.toolName, normalized.input),
+        ) || headerSummaryText(normalized.headerSummary)
+      : headerPreview;
   const suppression = outputSuppression(
     normalized,
-    headerPreview,
+    echoPreview,
     carriesOutput,
     fileLinkKind,
   );
