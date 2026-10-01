@@ -1,8 +1,14 @@
 # Anonymous install-id usage logging (runbook)
 
-Internal. Lets TeXRA clients without an account send usage batches to the
+Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
+below), the function deployed and smoke-tested (steps 3-4, 2026-09-30), and
+redeployed as version 35 on 2026-10-01 with only the subscription list-price
+change (llm-zoo 1.41.0 long-context tiers). All steps are complete. Lets
+TeXRA clients without an account send usage batches to the
 `log-usage` edge function, identified by a random install ID instead of a
-login. Nothing here is applied until the owner runs the checklist below.
+login. Steps 1-2 are done: do not rerun the migration SQL below (its
+`ADD COLUMN`, `ADD CONSTRAINT` and `CREATE INDEX` statements are not
+idempotent).
 
 ## Contract
 
@@ -36,7 +42,7 @@ CREATE UNIQUE INDEX usage_logs_install_stream_key
   ON public.usage_logs (install_id, stream_id)
   WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
 CREATE UNIQUE INDEX subscription_usage_logs_install_stream_key
-  ON public.subscription_usage_logs (install_id, stream_id)
+  ON public.subscription_usage_logs (install_id, source, stream_id)
   WHERE install_id IS NOT NULL AND stream_id IS NOT NULL;
 
 -- Batch dedup lookup (the function filters by install_id and batch_id).
@@ -53,14 +59,22 @@ CREATE INDEX subscription_usage_logs_install_batch_idx
 read `install_id` from each row, insert it, and split the conflict target by
 owner:
 
-- rows with `user_id`: the existing `ON CONFLICT (user_id, stream_id)` path;
+- rows with `user_id`: the existing `ON CONFLICT (user_id, stream_id)` path
+  (`(user_id, source, stream_id)` for `subscription_usage_logs_upsert`);
 - rows with `install_id`: `ON CONFLICT (install_id, stream_id) WHERE
-install_id IS NOT NULL AND stream_id IS NOT NULL`, with the same aggregation
-  (`DO UPDATE`) expressions as the user path.
+install_id IS NOT NULL AND stream_id IS NOT NULL` for `usage_logs_upsert`,
+  and `ON CONFLICT (install_id, source, stream_id) WHERE install_id IS NOT
+NULL AND stream_id IS NOT NULL` for `subscription_usage_logs_upsert`
+  (matching its install index), with the same aggregation (`DO UPDATE`)
+  expressions as the user path.
 
-**The RPC bodies are not in this repo and the drafter never saw them. Write the
-new bodies from the live definitions (`\sf public.usage_logs_upsert`, same for
-the subscription one), not from this description.** A `p_rows` batch holds one
+**Applied.** The live bodies were rewritten from `pg_get_functiondef` of the
+then-current definitions: each keeps its parse/aggregate CTEs and its `DO UPDATE`
+expressions, adds `install_id` to the parse, group and insert lists, and runs
+two data-modifying CTEs over one materialized `agg` (user rows on the
+`(user_id[, source], stream_id)` key, install rows on the
+`(install_id[, source], stream_id)` key); the return value is the sum of both
+upserts. The subscription table's key includes `source`, so its install index does too. A `p_rows` batch holds one
 owner (the function builds it from one request), but rows without a
 `stream_id` must keep whatever plain-insert behavior the live bodies have.
 
@@ -68,11 +82,11 @@ RLS is unchanged: both tables are written only by the service role.
 
 ## Deploy checklist
 
-1. Write and review the RPC bodies against the live definitions.
-2. Apply the migration (columns, constraints, indexes, both RPCs) in one
+1. **Done (2026-09-30).** Write and review the RPC bodies against the live definitions.
+2. **Done (2026-09-30).** Apply the migration (columns, constraints, indexes, both RPCs) in one
    transaction. The old function keeps working: it writes `user_id` rows and
    leaves `install_id` NULL.
-3. Deploy the function with the same flags as today:
+3. **Done (2026-09-30; redeployed 2026-10-01 as version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
    `supabase functions deploy log-usage --no-verify-jwt`. Confirm the live
    function is already `--no-verify-jwt`; if the gateway verifies JWTs, a
    request with no `Authorization` header is rejected before the function runs.
@@ -81,7 +95,14 @@ RLS is unchanged: both tables are written only by the service role.
    `curl -i -X POST "$URL/functions/v1/log-usage" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
    expects 200 `accepted: 1`; repeat for `deduplicated`; no header expects 401.
    Then delete the test rows (`DELETE ... WHERE install_id = '0000...0001'`).
-5. Ship the client only after steps 2-4.
+   **Done (2026-09-30, version 34):** a throwaway install ID got 200
+   `accepted: 1`, the repeat got 200 `deduplicated`, no header and a malformed
+   ID each got 401, the row landed in `usage_logs` with `install_id` set, and
+   the test rows were deleted. Version 35 was re-checked read-only only (no
+   header gets 401; an invalid install-id batch gets `BATCH_REJECTED`); it
+   changes no write path, so the write test was not repeated on it.
+5. Ship the client only after steps 2-4. **Done:** the anonymous client is on
+   `main`, and real install-id rows are arriving.
 
 ## Rollback
 
