@@ -1,13 +1,14 @@
 # Anonymous install-id usage logging (runbook)
 
 Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
-below) and the function deployed (step 3, live as version 35 since
-2026-10-01); the write half of the smoke test (step 4) is still pending. Lets
+below), the function deployed and smoke-tested (steps 3-4, 2026-09-30), and
+redeployed as version 35 on 2026-10-01 with only the subscription list-price
+change (llm-zoo 1.41.0 long-context tiers). All steps are complete. Lets
 TeXRA clients without an account send usage batches to the
 `log-usage` edge function, identified by a random install ID instead of a
 login. Steps 1-2 are done: do not rerun the migration SQL below (its
 `ADD COLUMN`, `ADD CONSTRAINT` and `CREATE INDEX` statements are not
-idempotent). Only the step 4 write test remains.
+idempotent).
 
 ## Contract
 
@@ -85,7 +86,7 @@ RLS is unchanged: both tables are written only by the service role.
 2. **Done (2026-09-30).** Apply the migration (columns, constraints, indexes, both RPCs) in one
    transaction. The old function keeps working: it writes `user_id` rows and
    leaves `install_id` NULL.
-3. **Done (2026-10-01, version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
+3. **Done (2026-09-30; redeployed 2026-10-01 as version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
    `supabase functions deploy log-usage --no-verify-jwt`. Confirm the live
    function is already `--no-verify-jwt`; if the gateway verifies JWTs, a
    request with no `Authorization` header is rejected before the function runs.
@@ -94,12 +95,14 @@ RLS is unchanged: both tables are written only by the service role.
    `curl -i -X POST "$URL/functions/v1/log-usage" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
    expects 200 `accepted: 1`; repeat for `deduplicated`; no header expects 401.
    Then delete the test rows (`DELETE ... WHERE install_id = '0000...0001'`).
-   The read-only half passed on 2026-10-01: no header gets the function's 401
-   ("Missing or invalid credential"), and an install-id request with an
-   invalid batch reaches validation (`BATCH_REJECTED`). The insert, dedupe and
-   delete half needs database access and is not done yet.
-5. Ship the client only after steps 2-4. (The anonymous client is already on
-   `main`, so step 4's write test is the one open item.)
+   **Done (2026-09-30, version 34):** a throwaway install ID got 200
+   `accepted: 1`, the repeat got 200 `deduplicated`, no header and a malformed
+   ID each got 401, the row landed in `usage_logs` with `install_id` set, and
+   the test rows were deleted. Version 35 was re-checked read-only only (no
+   header gets 401; an invalid install-id batch gets `BATCH_REJECTED`); it
+   changes no write path, so the write test was not repeated on it.
+5. Ship the client only after steps 2-4. **Done:** the anonymous client is on
+   `main`, and real install-id rows are arriving.
 
 ## Rollback
 
