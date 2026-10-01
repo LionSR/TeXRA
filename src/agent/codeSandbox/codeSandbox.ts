@@ -17,7 +17,7 @@ import {
   Layer,
   Queue,
 } from 'effect';
-import * as Worker from 'effect/unstable/workers/Worker';
+import * as Worker from 'effect/workers/Worker';
 import { z } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';

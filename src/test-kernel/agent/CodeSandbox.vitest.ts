@@ -18,7 +18,7 @@
 import { it } from '@effect/vitest';
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
 import { Cause, Clock, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
-import * as Worker from 'effect/unstable/workers/Worker';
+import * as Worker from 'effect/workers/Worker';
 import { expect } from 'vitest';
 
 import {

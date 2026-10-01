@@ -16,7 +16,7 @@ import * as NodeRuntime from '@effect/platform-node/NodeRuntime';
 import * as NodeWorkerRunner from '@effect/platform-node/NodeWorkerRunner';
 import quickJsReleaseVariant from '@jitl/quickjs-wasmfile-release-sync';
 import { Deferred, Effect, type Scope } from 'effect';
-import { WorkerRunnerPlatform } from 'effect/unstable/workers/WorkerRunner';
+import { WorkerRunnerPlatform } from 'effect/workers/WorkerRunner';
 import {
   type QuickJSContext,
   type QuickJSHandle,
