@@ -7,7 +7,9 @@ name: Live journeys
 # and needs the network and a TeX Live, so it is never part of PR validation:
 # it runs nightly, on the `live-journeys` label, or by manual dispatch.
 #
-# A model whose key is not configured skips itself, as `live-llm.yml` does.
+# The script owns the model list (`MODEL_KEYS`) and runs every model in it, so
+# this workflow names none. A model whose key is not configured skips itself, as
+# `live-llm.yml` does; on the nightly schedule a missing key fails the run.
 on:
   schedule:
     - cron: '43 4 * * *'
@@ -26,18 +28,16 @@ permissions:
 
 jobs:
   journeys:
-    name: journeys on ${{ matrix.model }}
+    name: journeys
     # Secrets are not exposed to pull_request runs from forks, so a fork PR
     # carrying the label skips the run rather than leaking anything.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.label.name == 'live-journeys'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        model: [deepseek41T, glm53flash]
+    # Three models, four journeys each, run one after another: up to 600 s per
+    # journey (enable 60, run 300, latexmk 2 x 120), so 120 min plus the setup.
+    timeout-minutes: 150
 
     steps:
       - name: Checkout repository
@@ -53,16 +53,17 @@ jobs:
             latexmk latexdiff texlive-latex-recommended texlive-plain-generic
 
       - name: Run the journeys
-        run: node packages/cli/scripts/validate-journeys.mjs --model ${{ matrix.model }}
+        run: node packages/cli/scripts/validate-journeys.mjs
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Upload the run NDJSON
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: journeys-${{ matrix.model }}
+          name: journeys
           path: packages/cli/dist/journeys
           retention-days: 14
           if-no-files-found: ignore
