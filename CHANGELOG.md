@@ -207,8 +207,10 @@ All notable changes to this project will be documented in this file.
   link-local, cloud metadata), for the first request and every redirect hop;
   before, a name that resolves to `127.0.0.1` (such as `localhost.`) or a
   redirect from a public page to a private address was fetched. Behind an
-  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
-  address is refused.
+  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so for a proxied
+  request only a literal IP address is refused; a host `NO_PROXY` exempts, or
+  an `http://` URL when only `HTTPS_PROXY` is set, connects directly and gets
+  the full check.
 
 ### Features
 

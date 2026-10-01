@@ -65,4 +65,24 @@ describe('WebFetchTool', () => {
       expect(fetchStub).toHaveBeenCalledTimes(1);
     }),
   );
+
+  // With only HTTPS_PROXY set, an http:// URL connects directly; the guard
+  // must hold on that path too. A fresh module builds a fresh dispatcher,
+  // which reads the environment once.
+  it.effect('rejects localhost over a direct path while a proxy is set', () =>
+    Effect.gen(function* () {
+      vi.stubEnv('HTTPS_PROXY', 'http://192.0.2.1:3128');
+      vi.resetModules();
+      const { WebFetchTool: proxied } = yield* Effect.promise(
+        () => import('@tools/web/WebFetchTool'),
+      );
+
+      const result = yield* proxied
+        .call({ url: 'http://localhost/' })
+        .pipe(Effect.provide(nativeToolTestLayer()));
+
+      expect(result).toMatchObject({ status: 'error' });
+      expect(result.error).toMatch(/cannot fetch/i);
+    }).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllEnvs()))),
+  );
 });
