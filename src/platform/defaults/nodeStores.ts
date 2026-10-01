@@ -16,9 +16,6 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect } from 'effect';
 
-// Local imports - shared
-import { settingByKey } from '@shared/state/stateSettings';
-
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -32,7 +29,10 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from './workspaceStorage';
-import type { JsonConfigProviderOptions } from './jsonConfigProvider';
+import {
+  projectValueIgnored,
+  type JsonConfigProviderOptions,
+} from './jsonConfigProvider';
 
 /**
  * Open the stores backing the workspace and local config targets. The desktop
@@ -54,6 +54,7 @@ import type { JsonConfigProviderOptions } from './jsonConfigProvider';
  * A project file that sets a row the catalog scopes to the user (the approval
  * settings) is ignored, and `warn` names each such key: a cloned repository
  * must not loosen approvals, and the person must not find out by surprise.
+ * A project opt-out of telemetry is honoured, not ignored, so it is not warned.
  * The file is left as it is, so the warning repeats until the key is removed.
  *
  * No write runner is supplied: a config store is written through the store's
@@ -87,8 +88,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   for (const key of workspace.keys()) {
-    const scope = settingByKey(key)?.configTarget;
-    if (scope !== 'global' && scope !== 'local') continue;
+    if (!projectValueIgnored(key, workspace.get(key))) continue;
     warn(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );
