@@ -30,6 +30,7 @@ import {
 import {
   formatBashDelivery,
   formatBashError,
+  type BackgroundBashCall,
   type BashDeliveryStreamExcerpt,
 } from '@tools/delegation/bashDelivery';
 import { executed } from '@tools/core/result';
@@ -199,7 +200,7 @@ const BashInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Optional human-readable purpose for the command. Ignored by execution.',
+      'A short description of what the command does, in 5-10 words (e.g. "Run the unit tests"). It names the call in the transcript and the background task list; execution ignores it.',
     ),
   timeout: nullishWithDefault(
     z.int().min(1000).max(600_000),
@@ -224,7 +225,7 @@ type BashInput = z.infer<typeof BashInputSchema>;
  */
 function createBackgroundBashStrategy(params: {
   runId: RunId;
-  command: string;
+  call: BackgroundBashCall;
   timeoutMs: number;
   cwd: string | undefined;
   /**
@@ -234,7 +235,8 @@ function createBackgroundBashStrategy(params: {
   settings: SettingsStores;
   logger: AgentTrace;
 }): ChildRunStrategy<ExecResult, ChildProcessSpawner> {
-  const { runId, command, logger } = params;
+  const { runId, call, logger } = params;
+  const { command } = call;
   // Whitespace normalization is off here: a background log is delivered
   // verbatim, and its head/tail budgets are its own (see the constants above)
   // rather than the foreground tool-result ones.
@@ -270,7 +272,7 @@ function createBackgroundBashStrategy(params: {
   const delivery = (result: ExecResult, wallTimeMs: number): string =>
     formatBashDelivery(
       runId,
-      command,
+      call,
       wallTimeMs,
       result,
       toDeliveryExcerpt(stdout),
@@ -325,7 +327,7 @@ function createBackgroundBashStrategy(params: {
     formatError: (turn, err) =>
       turn
         ? delivery(turn, Date.now() - startedAt)
-        : formatBashError(runId, command, err),
+        : formatBashError(runId, call, err),
 
     buildResultMeta: (turn, _isError, wallTimeMs) =>
       Effect.sync(() =>
@@ -376,7 +378,7 @@ function executeBashTool(input: BashInput) {
       const run = yield* requireToolRun('bash run_in_background', toolCall);
       return yield* executeBackground(
         run.session,
-        input.command,
+        input,
         input.timeout,
         run.runId,
         cwd,
@@ -466,7 +468,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
 
 const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   session: SessionHandle,
-  command: string,
+  call: BackgroundBashCall,
   timeoutMs: number,
   parentRunId: RunId,
   cwd?: string,
@@ -474,6 +476,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = generateRunId();
+      const { command } = call;
       const preview = previewLabel(command);
 
       // The durable record states only what a shell command has: no run
@@ -487,7 +490,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           parentRunId,
           category: AgentCategory.ToolUse,
-          description: childRunDescription(command),
+          description: childRunDescription(call.description || command),
         },
       );
 
@@ -513,7 +516,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
             return {
               strategy: createBackgroundBashStrategy({
                 runId,
-                command,
+                call,
                 timeoutMs,
                 cwd,
                 settings: session.roots,

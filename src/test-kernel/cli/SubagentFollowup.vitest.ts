@@ -393,6 +393,11 @@ describe('summarizeSubagentFollowup', () => {
     expect(summarizeSubagentFollowup(block(1))).toBe(
       '✗ $ npm test && lint · exit 1 · 3sec',
     );
+    expect(
+      summarizeSubagentFollowup(
+        block(0).replace(' command=', ' description="Run the checks" command='),
+      ),
+    ).toBe('✓ Run the checks · 3sec');
   });
 
   it('summarizes a codex-result block without an agent attribute', () => {

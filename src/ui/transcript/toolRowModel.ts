@@ -29,6 +29,7 @@ import {
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { collapseWhitespace } from '@utils/text/stringUtils';
+import { isObject } from '@utils/core';
 
 import { dispatchSections, inputFilePath } from './toolRowSections';
 import {
@@ -226,9 +227,14 @@ function toolHeaderPreview(
   const inputPreview =
     labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));
   const summary = headerSummaryText(headerSummary);
-  return toolDisplayKind(toolName) === 'bash'
-    ? inputPreview || summary
-    : summary || inputPreview;
+  if (toolDisplayKind(toolName) !== 'bash') return summary || inputPreview;
+  // The model's description names a command; the command itself stays in the
+  // row's code section.
+  const description =
+    isObject(input) && typeof input.description === 'string'
+      ? collapseWhitespace(input.description).trim()
+      : '';
+  return description || inputPreview || summary;
 }
 
 // ---------------------------------------------------------------------------

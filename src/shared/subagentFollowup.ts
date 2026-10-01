@@ -320,22 +320,26 @@ export function summarizeSubagentFollowup(text: unknown): string {
     if (summary) return formatWorkflowScriptDeliverySummary(summary);
   }
 
-  // A background shell command (bashDelivery.ts) is named by its command and
-  // judged by its exit code: it carries neither `agent` nor `status`.
+  // A background shell command (bashDelivery.ts) is named by the model's
+  // description, else its command, and judged by its exit code: it carries
+  // neither `agent` nor `status`.
   if (
     tag === DELIVERY_TAG.backgroundResult ||
     tag === DELIVERY_TAG.backgroundError
   ) {
-    const command = decodeXmlEntities(attr(trimmed, 'command') ?? '')
-      .split('\n')[0]
-      ?.trim();
+    const label = (name: string) =>
+      decodeXmlEntities(attr(trimmed, name) ?? '')
+        .split('\n')[0]
+        ?.trim();
+    const description = label('description');
+    const command = label('command');
     const exitCode = innerTag(trimmed, 'exit-code');
     const failed =
       tag === DELIVERY_TAG.backgroundError ||
       (exitCode !== undefined && exitCode !== '0');
     const message = innerTag(trimmed, 'message');
     const facts = [
-      `${failed ? '✗' : '✓'} $ ${command || 'background command'}`,
+      `${failed ? '✗' : '✓'} ${description || `$ ${command || 'background command'}`}`,
       ...(failed && exitCode !== undefined ? [`exit ${exitCode}`] : []),
       ...(tag === DELIVERY_TAG.backgroundError ? ['failed'] : []),
       innerTag(trimmed, 'wall-time'),

@@ -248,8 +248,10 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
  *
  *  - a `file` section with no line range — `deriveToolInputPreview` read the
  *    very same `path`/`file_path` key to build the preview;
- *  - the unlabeled `shell`/`yaml` dump the shared default builder emits for a
- *    tool with no structured sections of its own.
+ *  - the unlabeled `yaml` dump the shared default builder emits for a tool
+ *    with no structured sections of its own, and its `shell` dump when the
+ *    header is that command (a bash call's description heads its row, and
+ *    the command then paints beneath it).
  *
  * A file body (`file` language), a workflow script, and every labeled section
  * carry content of their own and always paint.
@@ -262,11 +264,9 @@ function isHeaderRedundantSection(
   if (section.kind === 'file') {
     return section.startLine === undefined && section.endLine === undefined;
   }
-  return (
-    section.kind === 'code' &&
-    section.label === '' &&
-    (section.language === 'shell' || section.language === 'yaml')
-  );
+  if (section.kind !== 'code' || section.label !== '') return false;
+  if (section.language === 'yaml') return true;
+  return section.language === 'shell' && section.text.oneLine === headerPreview;
 }
 
 /**
