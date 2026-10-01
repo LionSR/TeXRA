@@ -211,8 +211,8 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
         return yield* Effect.fail(
-          new Error(
-            `Response too large (${lengthHeader} bytes); maximum is ${formatBytes(MAX_CONTENT_BYTES)}.`,
+          new ToolError(
+            `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${formatBytes(MAX_CONTENT_BYTES)}.`,
           ),
         );
       }
@@ -239,8 +239,8 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           total += chunk.byteLength;
           if (total > MAX_CONTENT_BYTES) {
             return Effect.fail(
-              new Error(
-                `Response too large (exceeds ${formatBytes(MAX_CONTENT_BYTES)} maximum).`,
+              new ToolError(
+                `Failed to fetch ${url}: Response too large (exceeds ${formatBytes(MAX_CONTENT_BYTES)} maximum).`,
               ),
             );
           }

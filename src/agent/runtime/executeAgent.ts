@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer } from 'effect';
+import { Data, Effect, Fiber, Layer } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -51,10 +51,11 @@ import type { RunHandle } from './RunHandle';
 const CHANNEL = 'executeAgent';
 
 /** A claimed run no longer has the persisted state to resume. */
-export class ResumeSessionUnavailableError extends Error {
-  constructor(readonly runId: RunId) {
-    super('This session can no longer be resumed. Start a new run instead.');
-    this.name = 'ResumeSessionUnavailableError';
+export class ResumeSessionUnavailableError extends Data.TaggedError(
+  'ResumeSessionUnavailableError',
+)<{ readonly runId: RunId }> {
+  override get message(): string {
+    return 'This session can no longer be resumed. Start a new run instead.';
   }
 }
 
@@ -483,7 +484,9 @@ export function resumeToolUseFromResumeData(
       Effect.flatMap((retrieved) =>
         retrieved
           ? Effect.succeed(retrieved)
-          : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
+          : Effect.fail(
+              new ResumeSessionUnavailableError({ runId: identity.runId }),
+            ),
       ),
     );
     const parentRunId = yield* persistedParentRunId(runSession, resume.runId);

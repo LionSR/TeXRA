@@ -23,6 +23,50 @@ export class OpenDialogFailed extends Data.TaggedError('OpenDialogFailed')<{
   readonly cause: unknown;
 }> {}
 
+/** VS Code would not show a quick pick or input box. */
+export class HostPromptFailed extends Data.TaggedError('HostPromptFailed')<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/**
+ * A prompt this program owns: the token source is disposed on every path, and
+ * interrupting the fiber cancels the list or box the user never answered.
+ */
+const ownedPrompt = <A>(
+  show: (token: vscode.CancellationToken) => Thenable<A>,
+): Effect.Effect<A, HostPromptFailed> =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => new vscode.CancellationTokenSource()),
+    (tokens) =>
+      Effect.tryPromise({
+        try: async () => show(tokens.token),
+        catch: (cause) =>
+          new HostPromptFailed({ message: toErrorMessage(cause), cause }),
+      }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
+    (tokens) => Effect.sync(() => tokens.dispose()),
+  );
+
+export function quickPick<T extends string | vscode.QuickPickItem>(
+  items: readonly T[],
+  options: vscode.QuickPickOptions,
+): Effect.Effect<T | undefined, HostPromptFailed> {
+  return ownedPrompt(
+    async (token) =>
+      (await vscode.window.showQuickPick(
+        items as readonly vscode.QuickPickItem[],
+        options,
+        token,
+      )) as T | undefined,
+  );
+}
+
+export function inputBox(
+  options: vscode.InputBoxOptions,
+): Effect.Effect<string | undefined, HostPromptFailed> {
+  return ownedPrompt((token) => vscode.window.showInputBox(options, token));
+}
+
 interface FileDialogOptions {
   /** Whether multiple files can be selected */
   allowMany?: boolean;

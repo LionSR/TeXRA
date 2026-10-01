@@ -41,12 +41,11 @@ function buildOverleafClonePorts(
   const secrets = new CliSecrets(cliSecretsPath(context.storageRoot));
   let canonicalWorkspacePath = workspacePath;
   return {
-    // `orDie` keeps what `Effect.promise` did with a rejected store call: a
-    // credential store this host cannot reach is a defect here, not a clone
-    // outcome the workflow reports.
-    getStoredToken: (key) => Effect.orDie(secrets.get(key)),
-    deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
-    storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
+    // A credential store this host cannot reach fails the clone with its
+    // `SecretsFailed`, which the workflow's `Error` channel carries.
+    getStoredToken: (key) => secrets.get(key),
+    deleteStoredToken: (key) => secrets.delete(key),
+    storeToken: (key, token) => secrets.set(key, token),
     promptToken: (spec) =>
       Effect.gen(function* () {
         const tokenGuidance = remote.isOverleaf

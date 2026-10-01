@@ -35,6 +35,7 @@
 
 import {
   Cause,
+  Data,
   Effect,
   Exit,
   Option,
@@ -113,16 +114,14 @@ const CHANNEL = 'sessionHandle';
  * whole: only a drain failure can leave a caller journaling work whose rows
  * are gone, so the two are told apart by identity rather than by message.
  */
-export class RunArtifactDrainError extends Error {
-  constructor(
-    readonly runId: RunId,
-    cause: unknown,
-  ) {
-    super(
-      `Run ${runId}: the facts it queued did not commit before its lease ended.`,
-      { cause },
-    );
-    this.name = 'RunArtifactDrainError';
+export class RunArtifactDrainError extends Data.TaggedError(
+  'RunArtifactDrainError',
+)<{
+  readonly runId: RunId;
+  readonly cause: unknown;
+}> {
+  override get message(): string {
+    return `Run ${this.runId}: the facts it queued did not commit before its lease ended.`;
   }
 }
 
@@ -465,7 +464,7 @@ export class SessionHandle {
           Effect.mapError((cause) =>
             cause instanceof DatabaseNotOwner
               ? cause
-              : new RunArtifactDrainError(runId, cause),
+              : new RunArtifactDrainError({ runId, cause }),
           ),
         ),
       );
@@ -480,7 +479,9 @@ export class SessionHandle {
       // after this never overtakes it.
       const published = yield* Effect.exit(
         this.settlePublications(runId).pipe(
-          Effect.mapError((cause) => new RunArtifactDrainError(runId, cause)),
+          Effect.mapError(
+            (cause) => new RunArtifactDrainError({ runId, cause }),
+          ),
         ),
       );
       const failures = [drained, ended, published].flatMap((exit) =>

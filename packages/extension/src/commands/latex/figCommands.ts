@@ -8,12 +8,15 @@ import * as vscode from 'vscode';
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { pluralize, truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -53,17 +56,18 @@ export function handleExtractTikzFigures(
           detail: truncateWithEllipsis(pictures[0], 100),
         }));
 
-        const selected = yield* Effect.promise(() =>
-          vscode.window.showQuickPick(items, {
-            placeHolder: 'Found TikZ figures (select to copy label)',
-            prompt: 'Select a TikZ figure label to copy to the clipboard',
-            canPickMany: false,
-          }),
-        );
+        const selected = yield* quickPick(items, {
+          placeHolder: 'Found TikZ figures (select to copy label)',
+          prompt: 'Select a TikZ figure label to copy to the clipboard',
+          canPickMany: false,
+        });
         if (!selected) return;
 
         const label = selected.label.split(' (')[0];
-        yield* Effect.promise(() => vscode.env.clipboard.writeText(label));
+        yield* Effect.tryPromise({
+          try: async () => vscode.env.clipboard.writeText(label),
+          catch: ensureError,
+        });
         yield* showLoggedInfoMessage(CHANNEL, `Copied figure label: ${label}`);
       }),
   );
@@ -122,20 +126,17 @@ export function handleCompileTikzFigures(
                 iconPath: vscode.ThemeIcon.File,
               }));
 
-              const selected = yield* Effect.promise(() =>
-                vscode.window.showQuickPick(items, {
-                  placeHolder: 'Compiled TikZ figures (select to open)',
-                  prompt: 'Select a compiled TikZ figure to open in the editor',
-                  canPickMany: false,
-                }),
-              );
+              const selected = yield* quickPick(items, {
+                placeHolder: 'Compiled TikZ figures (select to open)',
+                prompt: 'Select a compiled TikZ figure to open in the editor',
+                canPickMany: false,
+              });
 
               if (selected) {
-                yield* Effect.promise(() =>
-                  vscode.commands.executeCommand(
-                    'vscode.open',
-                    selected.resourceUri,
-                  ),
+                yield* safeExecuteCommand(
+                  'vscode.open',
+                  [selected.resourceUri],
+                  CHANNEL,
                 );
               }
 

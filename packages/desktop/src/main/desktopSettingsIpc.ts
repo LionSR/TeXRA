@@ -139,10 +139,10 @@ export function createDesktopSettingsIpc(
             signInPresentation.openSubscriptionSignInUrl(url).pipe(
               Effect.mapError(
                 (failure) =>
-                  new LoopbackTransportUnavailableError(
-                    `Could not open a browser for ${displayName} sign-in.`,
-                    { cause: failure.cause },
-                  ),
+                  new LoopbackTransportUnavailableError({
+                    message: `Could not open a browser for ${displayName} sign-in.`,
+                    cause: failure.cause,
+                  }),
               ),
               Effect.andThen(
                 Effect.sync(() =>

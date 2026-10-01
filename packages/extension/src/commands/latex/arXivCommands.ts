@@ -6,6 +6,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { inputBox, quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -31,13 +34,11 @@ export function downloadArXivSource(
   session: SessionHandle,
 ): Effect.Effect<void, never, ProcessServices> {
   return Effect.gen(function* () {
-    const arxivId = yield* Effect.promise(() =>
-      vscode.window.showInputBox({
-        placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
-        prompt: 'Enter arXiv ID or URL',
-        validateInput: ArxivProcessor.validateId.bind(ArxivProcessor),
-      }),
-    );
+    const arxivId = yield* inputBox({
+      placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
+      prompt: 'Enter arXiv ID or URL',
+      validateInput: ArxivProcessor.validateId.bind(ArxivProcessor),
+    });
 
     if (!arxivId) {
       return;
@@ -45,25 +46,23 @@ export function downloadArXivSource(
 
     const paperId = ArxivProcessor.getPaperDirName(arxivId);
 
-    const destinationPick = yield* Effect.promise(() =>
-      vscode.window.showQuickPick(
-        [
-          {
-            label: `References/${paperId}`,
-            description: 'Download into References folder',
-            value: 'references' as ArxivDownloadDestination,
-          },
-          {
-            label: 'Workspace root',
-            description: 'Download directly into the workspace root',
-            value: 'root' as ArxivDownloadDestination,
-          },
-        ],
+    const destinationPick = yield* quickPick(
+      [
         {
-          placeHolder: 'Where should the source be downloaded?',
-          canPickMany: false,
+          label: `References/${paperId}`,
+          description: 'Download into References folder',
+          value: 'references' as ArxivDownloadDestination,
         },
-      ),
+        {
+          label: 'Workspace root',
+          description: 'Download directly into the workspace root',
+          value: 'root' as ArxivDownloadDestination,
+        },
+      ],
+      {
+        placeHolder: 'Where should the source be downloaded?',
+        canPickMany: false,
+      },
     );
 
     if (!destinationPick) {
@@ -75,12 +74,10 @@ export function downloadArXivSource(
     // Auto-indent is not supported for root destination (would reformat all workspace files)
     const autoIndent =
       destination !== 'root' &&
-      (yield* Effect.promise(() =>
-        vscode.window.showQuickPick(['Indent files', 'Skip'], {
-          placeHolder: 'Auto-indent LaTeX files after download?',
-          canPickMany: false,
-        }),
-      )) === 'Indent files';
+      (yield* quickPick(['Indent files', 'Skip'], {
+        placeHolder: 'Auto-indent LaTeX files after download?',
+        canPickMany: false,
+      })) === 'Indent files';
 
     const extractedPath = yield* withVSCodeProgress(
       {
@@ -128,19 +125,18 @@ export function downloadArXivSource(
       return;
     }
 
-    const result = yield* Effect.promise(() =>
-      vscode.window.showInformationMessage(
-        `arXiv source downloaded to ${path.basename(extractedPath.value)}${
-          autoIndent ? ' with LaTeX files indented' : ''
-        }`,
-        'Open Folder',
-      ),
+    const result = yield* vscodeUi.info(
+      `arXiv source downloaded to ${path.basename(extractedPath.value)}${
+        autoIndent ? ' with LaTeX files indented' : ''
+      }`,
+      { items: ['Open Folder'] },
     );
 
     if (result === 'Open Folder') {
-      void vscode.commands.executeCommand(
+      yield* safeExecuteCommand(
         'revealFileInOS',
-        vscode.Uri.file(extractedPath.value),
+        [vscode.Uri.file(extractedPath.value)],
+        CHANNEL,
       );
     }
   }).pipe(

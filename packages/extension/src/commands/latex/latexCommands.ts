@@ -9,6 +9,8 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   getTeXCount,
@@ -45,19 +47,23 @@ export function handleFixCompilation(
           session.roots.workspace,
         );
 
-        yield* Effect.promise(() =>
-          vscode.commands.executeCommand('texra.execute', {
-            config: {
-              agent: 'latexFixer',
-              // latexFixer is a tool-use agent; without this the config
-              // category prefaults to workflow and resolveAgentForLaunch
-              // can't find it.
-              agentCategory: AgentCategory.ToolUse,
-              instruction,
+        yield* safeExecuteCommand(
+          'texra.execute',
+          [
+            {
+              config: {
+                agent: 'latexFixer',
+                // latexFixer is a tool-use agent; without this the config
+                // category prefaults to workflow and resolveAgentForLaunch
+                // can't find it.
+                agentCategory: AgentCategory.ToolUse,
+                instruction,
+              },
+              // This is a "run latexFixer" command, so prefer the helper model.
+              preferHelperModel: true,
             },
-            // This is a "run latexFixer" command, so prefer the helper model.
-            preferHelperModel: true,
-          }),
+          ],
+          CHANNEL,
         );
       }),
   );
@@ -127,22 +133,20 @@ export function handleGetTeXCount(
           withLogChannel(CHANNEL),
         );
 
-        const countingMode = yield* Effect.promise(() =>
-          vscode.window.showQuickPick<
-            vscode.QuickPickItem & { value: TexcountMode }
-          >(
-            [
-              { label: 'Count main file only', value: 'separate' as const },
-              {
-                label: 'Follow \\input/\\include and combine',
-                value: 'include' as const,
-              },
-            ],
+        const countingMode = yield* quickPick<
+          vscode.QuickPickItem & { value: TexcountMode }
+        >(
+          [
+            { label: 'Count main file only', value: 'separate' as const },
             {
-              placeHolder: 'Count options',
-              canPickMany: false,
+              label: 'Follow \\input/\\include and combine',
+              value: 'include' as const,
             },
-          ),
+          ],
+          {
+            placeHolder: 'Count options',
+            canPickMany: false,
+          },
         );
 
         if (!countingMode) {
@@ -181,12 +185,10 @@ export function handleGetTeXCount(
 
               const stats = parseTeXCountStats(output);
 
-              yield* Effect.promise(() =>
-                vscode.window.showQuickPick(stats, {
-                  placeHolder: 'TeXCount Results (press Esc to dismiss)',
-                  canPickMany: false,
-                }),
-              );
+              yield* quickPick(stats, {
+                placeHolder: 'TeXCount Results (press Esc to dismiss)',
+                canPickMany: false,
+              });
             }),
         );
       }),

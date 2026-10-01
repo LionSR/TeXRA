@@ -58,10 +58,10 @@ export const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   buildSession(tokens, nowMs, previous) {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     if (!refreshToken) {
-      throw new SubscriptionOAuthError(
-        'OAuth response did not include a refresh token.',
-        'config',
-      );
+      throw new SubscriptionOAuthError({
+        message: 'OAuth response did not include a refresh token.',
+        kind: 'config',
+      });
     }
     // Refresh keys off the *access* token. Prefer access JWT exp over
     // id_token.exp (which can outlive the access token). Each token is

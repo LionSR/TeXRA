@@ -625,9 +625,9 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // same marker, and the outer boundary turns it into the abort that
         // keeps it out of the call failures a script can catch.
         return yield* Effect.fail(
-          new SubagentDurabilityError(
-            `Workflow child ${runId} failed to commit its final artifacts.`,
-          ),
+          new SubagentDurabilityError({
+            message: `Workflow child ${runId} failed to commit its final artifacts.`,
+          }),
         );
       }
       // The attempt's own bookkeeping, both facts read once under the same

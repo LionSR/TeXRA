@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import type { SessionHandle } from '@agent/runtime';
 import {
   showLoggedErrorMessage,
+  showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
@@ -46,8 +47,11 @@ export function createSampleProjectWithoutWorkspace(
 
     const dest = path.join(parentPath, 'texra-sample');
     if (yield* fs.exists(dest)) {
-      void vscode.window.showInformationMessage(
-        'A texra-sample folder already exists there — opening it.',
+      yield* Effect.forkDetach(
+        showLoggedInfoMessage(
+          CHANNEL,
+          'A texra-sample folder already exists there — opening it.',
+        ),
       );
     } else {
       yield* fs.copy(path.join(extensionPath, 'resources', 'examples'), dest);
@@ -94,8 +98,11 @@ export function createSampleProject(
 
     const destFolder = 'texra-sample';
     if (yield* workspaceFs.exists(destFolder)) {
-      void vscode.window.showInformationMessage(
-        'Sample project already exists in workspace.',
+      yield* Effect.forkDetach(
+        showLoggedInfoMessage(
+          CHANNEL,
+          'Sample project already exists in workspace.',
+        ),
       );
       return;
     }
@@ -106,7 +113,9 @@ export function createSampleProject(
     yield* workspaceFs.makeDirectory(destFolder, { recursive: true });
     yield* fs.copy(sourcePath, destPath, { overwrite: true });
 
-    void vscode.window.showInformationMessage('Created TeXRA sample project.');
+    yield* Effect.forkDetach(
+      showLoggedInfoMessage(CHANNEL, 'Created TeXRA sample project.'),
+    );
 
     const readmeRelativePath = path.join(destFolder, 'README.md');
     if (yield* workspaceFs.exists(readmeRelativePath)) {

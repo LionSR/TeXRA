@@ -1,4 +1,4 @@
-import { Effect, type Scope } from 'effect';
+import { Clock, Effect, type Scope } from 'effect';
 
 // Third-party imports
 import { z } from 'zod';
@@ -408,7 +408,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
     FOREGROUND_OUTPUT_HEAD_CHARS,
     FOREGROUND_OUTPUT_TAIL_CHARS,
   );
-  const startedAt = Date.now();
+  const startedAt = yield* Clock.currentTimeMillis;
   const result = yield* executeCommand(command, {
     cwd,
     // The call's own session roots: a `git commit` the agent runs
@@ -448,7 +448,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
     return yield* Effect.fail(new ToolError(parts.join('\n')));
   }
 
-  const duration = formatDuration(Date.now() - startedAt);
+  const duration = formatDuration((yield* Clock.currentTimeMillis) - startedAt);
 
   if (result.success) {
     const preview = previewLabel(command);

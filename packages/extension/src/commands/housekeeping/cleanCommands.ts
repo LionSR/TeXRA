@@ -1,10 +1,14 @@
 // Third-party imports
 import { Effect } from 'effect';
-import * as vscode from 'vscode';
 
 // Local imports
 import type { WorkflowFileOperationRequest } from '@controllers/session/hostRunActions';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import {
+  announce,
+  showLoggedInfoMessage,
+  showLoggedMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import {
   findBuildDirectories,
   removeBuildDirectories,
@@ -22,12 +26,10 @@ const showCleanResult = (
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { level, text } = fileOpResultMessage('clean', result, inputFile);
-    if (result.status === 'missingParams') {
+    if (result.status === 'missingParams' || level === 'error') {
       yield* Effect.forkDetach(showLoggedMessage(CHANNEL, text));
-    } else if (level === 'error') {
-      void vscode.window.showErrorMessage(text);
     } else {
-      void vscode.window.showInformationMessage(text);
+      yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, text));
     }
   });
 
@@ -52,8 +54,11 @@ const LISTED_BUILD_DIRECTORIES = 10;
 export const confirmCleanBuild = Effect.gen(function* () {
   const directories = yield* findBuildDirectories;
   if (directories.length === 0) {
-    void vscode.window.showInformationMessage(
-      'No build/ folders found in this workspace.',
+    yield* Effect.forkDetach(
+      showLoggedInfoMessage(
+        CHANNEL,
+        'No build/ folders found in this workspace.',
+      ),
     );
     return;
   }
@@ -65,22 +70,29 @@ export const confirmCleanBuild = Effect.gen(function* () {
   ].join('\n');
   const noun = directories.length === 1 ? 'folder' : 'folders';
   const confirm = `Delete ${directories.length} ${noun}`;
-  const choice = yield* Effect.promise(() =>
-    vscode.window.showWarningMessage(
+  const confirmed = yield* announce(
+    CHANNEL,
+    vscodeUi.confirm(
       `Delete ${directories.length} build/ ${noun} and everything in them?`,
-      { modal: true, detail },
-      confirm,
+      { detail, confirmLabel: confirm },
     ),
+    false,
   );
-  if (choice !== confirm) return;
+  if (!confirmed) return;
   const failed = yield* removeBuildDirectories(directories);
   if (failed.length > 0) {
-    void vscode.window.showErrorMessage(
-      `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
+    yield* Effect.forkDetach(
+      showLoggedMessage(
+        CHANNEL,
+        `Could not delete ${failed.length} of ${directories.length} build/ ${noun}: ${failed.join(', ')}. See the TeXRA log for the cause.`,
+      ),
     );
     return;
   }
-  void vscode.window.showInformationMessage(
-    `Deleted ${directories.length} build/ ${noun}.`,
+  yield* Effect.forkDetach(
+    showLoggedInfoMessage(
+      CHANNEL,
+      `Deleted ${directories.length} build/ ${noun}.`,
+    ),
   );
 });

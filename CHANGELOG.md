@@ -428,6 +428,11 @@ show` print the same notice, and the new `texra agents customize`,
   tick even when it failed; it now reads `✓ Run the unit tests · 2m`, or
   `✗ $ npm test · exit 1 · 2m` for an undescribed command that failed.
 
+- **A ChatGPT or Grok sign-in that expired early recovers on its own.** A
+  run no longer fails with "token is expired" while Settings says the
+  subscription is ready; when the sign-in cannot be renewed, the run asks you
+  to sign in again and the account shows as signed out.
+
 - **A project file can switch usage logging off without a warning.**
   `"texra.telemetry.enabled": false` in `.texra/config.json` is honoured, and
   every host no longer reports it as ignored. A project file still cannot

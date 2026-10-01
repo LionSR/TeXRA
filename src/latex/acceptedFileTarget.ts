@@ -298,7 +298,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
           ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
         ),
       ),
-    { concurrency: 'unbounded' },
+    { concurrency: 8 },
   );
   return stale.filter((_, index) => removed[index]);
 });
