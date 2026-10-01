@@ -8,7 +8,7 @@ import {
 import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * Sink for human-facing progress during a long command: stdout in text mode,

@@ -16,7 +16,7 @@ import {
   Layer,
   Path,
 } from 'effect';
-import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, type HttpClient } from 'effect/http';
 import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 

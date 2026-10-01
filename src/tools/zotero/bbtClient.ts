@@ -13,7 +13,7 @@
 
 // Third-party imports
 import { Cause, Effect } from 'effect';
-import { HttpBody, HttpClientError } from 'effect/unstable/http';
+import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import { z } from 'zod';
 

@@ -23,7 +23,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat

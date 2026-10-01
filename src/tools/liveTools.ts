@@ -37,7 +37,7 @@ import {
   Scope,
   Semaphore,
 } from 'effect';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { PluginServices } from '@platform/processRuntime';

@@ -15,7 +15,7 @@ import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'claudeAgent';
 

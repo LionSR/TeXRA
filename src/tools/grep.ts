@@ -17,7 +17,7 @@ import { splitOutputLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 

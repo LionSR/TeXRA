@@ -41,7 +41,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseAggregateBlocked } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
-import type { SqlError } from 'effect/unstable/sql/SqlError';
+import type { SqlError } from 'effect/sql/SqlError';
 
 const CHANNEL = 'sessionDatabase';
 

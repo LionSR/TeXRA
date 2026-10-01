@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 export function isGitRepository(
   rootPath: string | undefined,

@@ -42,7 +42,7 @@ import type {
   DiffRunOutcome,
   DiffRunResult,
 } from './types';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** One latexdiff call: `suffix` names the diff file it writes. */
 interface DiffOperation {

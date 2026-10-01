@@ -14,7 +14,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** `missing-document-environment` is an input with no `\begin{document}`,
  *  which callers skip rather than report. */

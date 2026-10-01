@@ -31,7 +31,7 @@ import {
   Result,
 } from 'effect';
 
-import { ChildProcessSpawner } from 'effect/unstable/process';
+import { ChildProcessSpawner } from 'effect/process';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';

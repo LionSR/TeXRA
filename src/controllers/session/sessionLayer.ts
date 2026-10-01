@@ -35,7 +35,7 @@ import {
   type FileSystem,
   type Path,
 } from 'effect';
-import { FetchHttpClient, HttpClient } from 'effect/unstable/http';
+import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -142,7 +142,7 @@ import {
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'sessionLayer';
 

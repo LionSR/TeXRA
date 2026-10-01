@@ -21,7 +21,7 @@ import {
   Scope,
   Stream,
 } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 import { describe, expect } from 'vitest';
 
 // Local imports

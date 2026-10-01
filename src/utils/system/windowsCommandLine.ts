@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
 

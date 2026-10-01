@@ -88,7 +88,7 @@ import {
   type ClaudeCodeRun,
 } from './claudeAgentShared';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)

@@ -15,7 +15,7 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { getGitHubToken } from './githubAuth';
-import type { Headers, HttpClient } from 'effect/unstable/http';
+import type { Headers, HttpClient } from 'effect/http';
 
 const API_ORIGIN = 'https://api.github.com';
 const API_VERSION = '2022-11-28';

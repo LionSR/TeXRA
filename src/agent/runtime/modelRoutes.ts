@@ -39,7 +39,7 @@ import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins'
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'modelRoutes';
 

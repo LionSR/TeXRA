@@ -7,7 +7,7 @@
  */
 // Third-party imports
 import { Effect, Exit, Scope } from 'effect';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';

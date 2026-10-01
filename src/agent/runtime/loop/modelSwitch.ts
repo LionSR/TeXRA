@@ -16,7 +16,7 @@ import { selectModel } from '@shared/model/modelSelection';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
 
 /** Record a host-admitted model switch: the compaction that drops the

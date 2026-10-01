@@ -10,7 +10,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
 
 export type IndentLatexResult =

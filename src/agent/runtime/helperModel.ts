@@ -24,7 +24,7 @@ import { bindModel, type BoundModel } from './run/modelBinding';
 import { callModel, type UsageAttribution } from './run/modelCall';
 import { turnText } from './run/turnText';
 import type { SessionHandle } from './SessionHandle';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * The configured helper model cannot serve right now (no key, disabled,

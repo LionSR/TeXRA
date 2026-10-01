@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
-import { FetchHttpClient } from 'effect/unstable/http';
+import { FetchHttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
