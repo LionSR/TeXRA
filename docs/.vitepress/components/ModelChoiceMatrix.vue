@@ -58,7 +58,7 @@ const rows = [
     models: [
       'google/gemini-3.1-pro-preview',
       'anthropic/claude-fable-5-1',
-      'anthropic/claude-sonnet-5-5@none',
+      'anthropic/claude-sonnet-5-5',
       'anthropic/claude-opus-5-5',
     ],
   },

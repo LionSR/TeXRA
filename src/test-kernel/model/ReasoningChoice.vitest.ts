@@ -122,7 +122,10 @@ describe('chooseReasoning', () => {
       thinking: true,
       effort: null,
       mode: null,
+      requested: E.HIGH,
+      note: expect.stringContaining('ignoring high'),
     });
+    expect(chooseReasoning(noLevels).note).toBeUndefined();
   });
 
   it('never makes a non-reasoning model think', () => {

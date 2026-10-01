@@ -338,7 +338,7 @@ function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
       });
     case ModelProvider.MOONSHOT:
       // Kimi fixes its sampling. Its `thinking` switch is not part of this
-      // request shape, so a model that can stop thinking still thinks here.
+      // request shape, so `@none` is refused here (`routeReasoning`).
       return route({
         supportsTemperature: false,
         supportsForcedToolChoice: false,

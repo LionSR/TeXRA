@@ -167,8 +167,16 @@ export function chooseReasoning(
         options.routeEfforts?.includes(effort),
       )
     : reasoning.efforts;
-  if (reasoning.efforts.length === 0)
-    return { thinking: true, effort: null, mode };
+  if (reasoning.efforts.length === 0) {
+    if (explicit === undefined) return { thinking: true, effort: null, mode };
+    return {
+      thinking: true,
+      effort: null,
+      mode,
+      requested: explicit,
+      note: `${label} has no effort levels; ignoring ${explicit}.`,
+    };
+  }
   return { thinking: true, mode, ...snapped(accepted, wanted, label, strict) };
 }
 

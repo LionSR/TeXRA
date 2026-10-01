@@ -811,7 +811,7 @@ const SCENARIOS = [
       HARNESS_CAN_SELECT_MODEL: '1',
       HARNESS_DISABLED_MODEL_SWITCHES: 'anthropic/claude-sonnet-4-6',
       HARNESS_ENTRIES: '4',
-      HARNESS_VISIBLE_MODELS: 'sonnet46T||gpt56',
+      HARNESS_VISIBLE_MODELS: 'anthropic/claude-sonnet-4-6||openai/gpt-5.6-sol',
       OPENAI_API_KEY: 'harness-openai-key',
     },
     keys: ['/model', '\r'],
