@@ -57,7 +57,7 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
   const resolved = byCategory((category) => {
-    const [missing, found] = Arr.partition(preset.agents[category], (name) =>
+    const [found, missing] = Arr.partition(preset.agents[category], (name) =>
       Result.fromNullishOr(options.resolveAgent(category, name), () => name),
     );
     return { resolved: found, missing };

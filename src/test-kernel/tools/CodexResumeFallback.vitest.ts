@@ -79,9 +79,13 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/codexConfig', () => ({
-  getCodexCliReasoningEffort: () => Effect.succeed('high'),
-  codexBinarySupportsXhigh: async () => false,
-  CODEX_CLI_MODEL: 'gpt-5.2-codex',
+  codexRun: () =>
+    Effect.succeed({
+      ref: 'openai/gpt-6.1-sol',
+      slug: 'gpt-6.1-sol',
+      effort: 'medium',
+      note: undefined,
+    }),
 }));
 
 vi.mock('@tools/codexImport', async (importActual) => {

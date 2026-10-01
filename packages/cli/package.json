@@ -50,7 +50,8 @@
     "prepack": "npm run build",
     "validate:run": "node scripts/validate-run.mjs",
     "validate:pack": "node scripts/validate-pack.mjs",
-    "validate:tui": "node scripts/validate-tui.mjs"
+    "validate:tui": "node scripts/validate-tui.mjs",
+    "golden:store": "node scripts/generate-golden-store.mjs"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

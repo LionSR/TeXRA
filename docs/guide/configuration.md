@@ -34,7 +34,8 @@ sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
 Provider transport knobs (OpenAI background responses, parallel tool calls, the
-GPT-5 reasoning summary, and Google background responses) keep their defaults
+GPT-5 reasoning summary, OpenAI fast processing, and Google background
+responses) keep their defaults
 unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
@@ -49,7 +50,7 @@ For an open project, all three hosts read:
 User-wide values are stored in:
 
 ```text
-~/.texra/global-storage/config.json
+~/.texra/v1/global-storage/config.json
 ```
 
 Project values override user-wide values. Explicit command-line flags and
@@ -91,6 +92,9 @@ exception to the project scope: a project file can be supplied by a repository
 you clone, so TeXRA never reads them from it. They are kept per workspace in
 your own storage, and a value in your user file applies to every workspace. A
 project file that sets one is ignored with a warning naming the key.
+Usage logging (`texra.telemetry.enabled`) follows the same rule with one
+exception: a project file may switch it off but never on, so a `false` there
+is honoured and a `true` is ignored with the same warning.
 
 ## Model access and credentials
 
@@ -134,8 +138,9 @@ version, and host. Only a bundled agent's id is sent; a custom or plugin
 agent is reported as `custom`. No account is
 involved: each install sends a random anonymous install ID (a UUID made the
 first time logging is on) in the `X-TeXRA-Install-Id` request header. It does
-not send prompt text, document content, file paths, or error text. Each host
-tells you this once on first run. Turning telemetry off stops all usage
+not send prompt text, document content, file paths, or error text. The first
+TeXRA host you run with telemetry on tells you this once; the others share
+that record and stay quiet. Turning telemetry off stops all usage
 reporting and the ID is not created.
 
 The CLI, the extension, and the desktop app share one install ID. It lives in
@@ -217,7 +222,7 @@ turn the option off after the investigation.
 1. Open the relevant native settings view and confirm the displayed value.
 2. Run `texra doctor` in a project to inspect the CLI's resolved configuration.
 3. Check `<project>/.texra/config.json` for a project override.
-4. Check `~/.texra/global-storage/config.json` for a user-wide value.
+4. Check `~/.texra/v1/global-storage/config.json` for a user-wide value.
 5. Remove a saved key to return that setting to its current default.
 
 For feature-specific guidance, read [Models](./models.md),

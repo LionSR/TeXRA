@@ -31,8 +31,7 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // The `kernel` project is everything else: the fake host installed per file,
 // each file in its own module registry, because module-scope state
 // (`platform()`, the process runtime, `vi.mock` factories) still leaks between
-// files when the registry is shared. It flips to `isolate: false` when the
-// effect-migration ratchet counts reach zero for what these suites reach.
+// files when the registry is shared.
 //
 // Membership is computed from the suite's source, not declared: a suite under
 // one of these directories is `pure` unless it mocks a repository module

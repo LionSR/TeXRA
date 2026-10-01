@@ -967,7 +967,7 @@ function makeAgentProposalPayload() {
     runId: HARNESS_RUN_ID,
     agentCategory: AgentCategory.ToolUse,
     agent: 'review',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-flash',
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,

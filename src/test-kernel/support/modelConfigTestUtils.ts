@@ -18,10 +18,9 @@ export function buildTestModelConfig(
   const { capabilities, ...configFields } = config;
   const { capabilities: capabilityOverrides, ...overrideFields } = overrides;
 
-  return {
-    name: 'test-model',
+  const fields = {
     label: 'Test Model',
-    fullName: 'test-model',
+    id: 'test-model',
     shortName: 'test-model',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 1024,
@@ -31,6 +30,12 @@ export function buildTestModelConfig(
     openRouterOnly: false,
     ...configFields,
     ...overrideFields,
+  };
+  return {
+    // The registry derives a ref from provider and id; a test that sets
+    // either gets the matching ref unless it names one.
+    ref: `${fields.provider}/${fields.id}`,
+    ...fields,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       ...capabilities,

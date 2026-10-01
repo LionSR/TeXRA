@@ -23,7 +23,7 @@ import {
 } from './logSinks';
 import { createCliStyle } from './style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
@@ -371,7 +371,7 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
         'Usage logging',
         'pass',
         'On: anonymous model, agent, token counts and duration per round, with a random install ID (no account). No prompt, path or document text.',
-        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+        `Turn it off with TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1, or "${TELEMETRY_ENABLED_KEY}": false in ~/.texra/v1/global-storage/config.json.`,
       );
     }),
     Effect.catch((failure) =>

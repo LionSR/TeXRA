@@ -57,7 +57,7 @@ function storedConfig(
 ): StoredResumeConfig {
   return {
     agent: 'polish',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     inputFiles: ['paper.tex'],
     contextFiles: [],
     outputFiles: [],
@@ -276,7 +276,7 @@ describe('CLI root argument routing', () => {
   it('does not classify flag values or known aliases as unknown flags', async () => {
     for (const args of [
       ['run', 'polish', '--instruction', '--literal'],
-      ['run', 'polish', '-mdeepseekT', '--no-color'],
+      ['run', 'polish', '-mdeepseek/deepseek-v4-flash', '--no-color'],
       ['setup', '--no-input'],
       ['resume', 'abc123', '--print'],
       ['team', 'run', 'mathematician', '--instruction-file=prompt.md'],
@@ -1010,9 +1010,9 @@ describe('CLI global color/input flags', () => {
 
 describe('CLI model flag validation contract', () => {
   it('does not advertise host-only Copilot models as CLI models', () => {
-    expect(isCliSupportedModelId('copilot4o')).toBe(false);
-    expect(knownCliModelIds()).not.toContain('copilot4o');
-    expect(resolveKnownCliModelId('copilot4o')).toBeUndefined();
+    expect(isCliSupportedModelId('copilot/copilot-gpt-4o')).toBe(false);
+    expect(knownCliModelIds()).not.toContain('copilot/copilot-gpt-4o');
+    expect(resolveKnownCliModelId('copilot/copilot-gpt-4o')).toBeUndefined();
     expect(resolveKnownCliModelId('Copilot GPT-4o')).toBeUndefined();
   });
 });

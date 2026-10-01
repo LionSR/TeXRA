@@ -9,7 +9,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { FileSystem } from 'effect';
 
 interface LatexFormatterDefinition {

@@ -29,8 +29,8 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { Cause } from 'effect';
-import type { HttpClient, HttpClientError } from 'effect/unstable/http';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { HttpClient, HttpClientError } from 'effect/http';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 

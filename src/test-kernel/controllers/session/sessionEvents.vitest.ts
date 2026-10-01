@@ -12,6 +12,7 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
+import { spawn } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
@@ -26,10 +27,12 @@ import {
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
+import { build } from 'esbuild';
 import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
@@ -44,7 +47,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { TestClock } from 'effect/testing';
-import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
+import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
@@ -117,8 +120,66 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
+import { REPO_ROOT } from '@test/support/repoScan';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+/** A second OS process's writer: this build's `Database` over the store at
+ *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`
+ *  exists, appending `rows` positions to it, one transaction each. */
+const STORE_WRITER = `
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { Effect, Layer } from 'effect';
+import { databaseLayer } from '@controllers/session/Database';
+import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { aggregateId, AgentCategory } from '@shared/schemas';
+import { Database } from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+
+const [storage, owner, run, rows] = process.argv.slice(2);
+const id = aggregateId('run', run);
+const append = Effect.gen(function* () {
+  const db = yield* Database;
+  yield* db.appendAll([{ type: 'run.start', aggregateId: id,
+    identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
+    category: AgentCategory.ToolUse, parent: null }]);
+  while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
+  for (let i = 0; i < Number(rows); i += 1)
+    yield* db.appendAll([{ type: 'run.position', aggregateId: id,
+      payload: { family: 'toolUse', at: 'waiting' } }]);
+});
+await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
+  Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+  Layer.provide(ProcessIdentity.layer(owner)),
+  Layer.provide(nodePlatformServices)))));
+`;
+
+/** {@link STORE_WRITER}, bundled into `dir` for `node` to run. */
+async function bundleStoreWriter(dir: string): Promise<string> {
+  const outfile = join(dir, 'store-writer.mjs');
+  await build({
+    stdin: {
+      contents: STORE_WRITER,
+      resolveDir: join(REPO_ROOT, 'src'),
+      sourcefile: 'store-writer.ts',
+      loader: 'ts',
+    },
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    outfile,
+    // A bundled CommonJS dependency's `require` of a Node built-in.
+    banner: {
+      js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    },
+    logLevel: 'silent',
+    tsconfig: join(REPO_ROOT, 'tsconfig.json'),
+    nodePaths: [join(REPO_ROOT, 'node_modules')],
+  });
+  return outfile;
+}
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
@@ -1299,7 +1360,8 @@ describe('the C1 event table and the C6 publisher', () => {
     );
 
   /** A store as a pre-1.0 build left it: its `event` and `event_sequence`
-   *  keyed by `aggregate_id`, one event and one setting, stamped `format`. */
+   *  keyed by `aggregate_id`, one event, one setting and one line of input
+   *  history, stamped `format`. */
   const legacyStore = (storage: string, format: number) =>
     Effect.sync(() => {
       const connection = reader(storage);
@@ -1308,9 +1370,11 @@ describe('the C1 event table and the C6 publisher', () => {
           CREATE TABLE event_sequence (aggregate_id TEXT PRIMARY KEY, seq INTEGER);
           CREATE TABLE event ("commit" INTEGER PRIMARY KEY, aggregate_id TEXT, data TEXT);
           CREATE TABLE current_value (family TEXT, key TEXT, value TEXT);
+          CREATE TABLE input_history (id INTEGER PRIMARY KEY, at INTEGER, value TEXT);
           INSERT INTO event_sequence VALUES ('["run","ab12cd"]', 1);
           INSERT INTO event VALUES (1, '["run","ab12cd"]', '{}');
           INSERT INTO current_value VALUES ('setting', 'k', '1');
+          INSERT INTO input_history VALUES (1, 1, 'an earlier prompt');
           PRAGMA user_version = ${format};
         `);
       } finally {
@@ -1352,8 +1416,8 @@ describe('the C1 event table and the C6 publisher', () => {
       } finally {
         aside.close();
       }
-      // Nothing is kept, current values included, and the file carries
-      // the 1.0 header.
+      // Nothing is kept, current values and input history included, and
+      // the file carries the 1.0 header.
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
@@ -1362,9 +1426,10 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
           auto_vacuum: 2,
         });
-        expect(
-          reopened.prepare('SELECT count(*) AS rows FROM current_value').get(),
-        ).toEqual({ rows: 0 });
+        for (const table of ['current_value', 'input_history'])
+          expect(
+            reopened.prepare(`SELECT count(*) AS rows FROM ${table}`).get(),
+          ).toEqual({ rows: 0 });
       } finally {
         reopened.close();
       }
@@ -1411,39 +1476,83 @@ describe('the C1 event table and the C6 publisher', () => {
     },
   );
 
-  it.effect('refuses a foreign SQLite file and leaves it untouched', () => {
-    // Another tool's database at the store's path: no TeXRA stamp, no
-    // TeXRA tables. It is not a pre-1.0 store, so nothing retires it.
-    const storage = workspace();
-    return Effect.gen(function* () {
-      yield* Effect.sync(() => {
-        const connection = reader(storage);
+  for (const [kind, stamp, why] of [
+    // No TeXRA stamp and no TeXRA tables: not a pre-1.0 store, so nothing
+    // retires it.
+    ['unstamped', '', 'tables notes'],
+    // Stamped by another application, even at the 1.0 schema's number.
+    [
+      'stamped',
+      'PRAGMA application_id = 1234; PRAGMA user_version = 101;',
+      'application id 1234',
+    ],
+  ] as const)
+    it.effect(`refuses a foreign SQLite file (${kind}) untouched`, () => {
+      // Another tool's database at the store's path.
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* Effect.sync(() => {
+          const connection = reader(storage);
+          try {
+            connection.exec(
+              `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine'); ${stamp}`,
+            );
+          } finally {
+            connection.close();
+          }
+        });
+        const before = readFileSync(join(storage, 'texra.db'));
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(storage))),
+        );
+        expect(failure._tag).toBe('DatabaseOpenFailed');
+        expect(failure.message).toContain('not a TeXRA session store');
+        expect(failure.message).toContain(why);
+        expect(readFileSync(join(storage, 'texra.db'))).toEqual(before);
+        expect(readdirSync(storage)).toEqual(['texra.db']);
+        const stored = reader(storage);
         try {
-          connection.exec(
-            "CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');",
-          );
+          expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
+            { body: 'mine' },
+          ]);
         } finally {
-          connection.close();
+          stored.close();
         }
       });
-      const before = readFileSync(join(storage, 'texra.db'));
-      const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
-      );
-      expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(failure.message).toContain('not a TeXRA session store');
-      expect(readFileSync(join(storage, 'texra.db'))).toEqual(before);
-      expect(existsSync(join(storage, 'texra.db.pre1'))).toBe(false);
-      const stored = reader(storage);
-      try {
-        expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
-          { body: 'mine' },
-        ]);
-      } finally {
-        stored.close();
-      }
     });
-  });
+
+  it.effect('moves a truncated store aside and opens a fresh one', () =>
+    // A store cut short (a copy that stopped part way) is kept beside the
+    // fresh store, unchanged: cut inside its header SQLite reports it not a
+    // database, and cut inside its first page, damaged at the first read.
+    Effect.forEach([20, 100], (length) => {
+      const storage = workspace();
+      return Effect.gen(function* () {
+        yield* storeOfFormat(storage, 101);
+        const file = join(storage, 'texra.db');
+        const truncated = readFileSync(file).subarray(0, length);
+        rmSync(`${file}-wal`, { force: true });
+        rmSync(`${file}-shm`, { force: true });
+        writeFileSync(file, truncated);
+        const opened = yield* Effect.gen(function* () {
+          const database = yield* Database;
+          return {
+            movedAside: database.movedAside,
+            rows: yield* database.readAll(0),
+          };
+        }).pipe(Effect.provide(substrate(storage)));
+        expect(opened, `cut at ${length} bytes`).toEqual({
+          movedAside: {
+            path: file,
+            aside: expect.stringMatching(/texra\.db\.corrupt-\d+$/),
+            reason: 'corrupt',
+          },
+          rows: [],
+        });
+        expect(readFileSync(opened.movedAside!.aside)).toEqual(truncated);
+      });
+    }),
+  );
 
   it.effect(
     'marks a projection that skipped a newer row, so a build that reads it rebuilds',
@@ -2625,6 +2734,71 @@ describe('the C1 event table and the C6 publisher', () => {
       );
     },
   );
+
+  /**
+   * Two OS processes on one file (the storage design's §8 and §11): a child
+   * Node process appends to its run while this one appends to its own and
+   * reads. Failure modes: an append lost to `SQLITE_BUSY`; a seq or commit
+   * skipped or reused; a commit this connection observed going backwards;
+   * and this process's thread held in SQLite's busy wait past the 25 ms
+   * slice instead of retrying on its fiber schedule.
+   */
+  it.live('shares one store with another OS process', () => {
+    const storage = workspace();
+    const ROWS = 400;
+    const own = qualifyAggregateId('run', RUN);
+    const theirs = qualifyAggregateId('run', OLDER);
+    return Effect.gen(function* () {
+      const writer = yield* Effect.promise(() => bundleStoreWriter(storage));
+      const db = yield* Database;
+      const observed: number[] = [];
+      yield* SubscriptionRef.changes(db.observedCommit).pipe(
+        Stream.runForEach((commit) => Effect.sync(() => observed.push(commit))),
+        Effect.forkScoped,
+      );
+      yield* db.appendAll([runStart]);
+      const child = spawn(
+        process.execPath,
+        [writer, storage, OTHER, OLDER, String(ROWS)],
+        { stdio: ['ignore', 'inherit', 'inherit'] },
+      );
+      const exited = new Promise<number | null>((done) =>
+        child.on('exit', (code) => done(code)),
+      );
+      // The child has opened the store and created its run; both then start
+      // appending at once, so the two contend for the lock.
+      while ((yield* db.aggregateState([theirs])).length === 0) {
+        expect(child.exitCode, 'the writer exited before writing').toBeNull();
+        yield* Effect.sleep('5 millis');
+      }
+      const delay = monitorEventLoopDelay({ resolution: 5 });
+      delay.enable();
+      writeFileSync(join(storage, 'go'), '');
+      for (let i = 0; i < ROWS; i += 1) {
+        yield* db.appendAll([waiting]);
+        yield* db.readAggregate(own, i + 1);
+      }
+      const code = yield* Effect.promise(() => exited);
+      delay.disable();
+      expect(code).toBe(0);
+      const total = 2 * (ROWS + 1);
+      while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
+        yield* Effect.sleep('50 millis');
+      const rows = yield* db.readAll(0);
+      expect(rows.map((row) => row.commit)).toEqual(
+        Array.from({ length: total }, (_, i) => i + 1),
+      );
+      for (const id of [own, theirs])
+        expect(
+          rows.filter((row) => row.aggregateId === id).map((row) => row.seq),
+        ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
+      expect(observed).toEqual(observed.toSorted((a, b) => a - b));
+      expect(observed.at(-1)).toBe(total);
+      // The busy slice bounds one wait in SQLite; the retry sleeps on the
+      // fiber. A thread held for the whole contention fails this.
+      expect(delay.max / 1e6).toBeLessThan(250);
+    }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
+  });
 
   /**
    * C14: the lease file is gone, so the only thing that frees a crashed

@@ -1,5 +1,5 @@
 import { Effect, Exit } from 'effect';
-import { HttpClientError } from 'effect/unstable/http';
+import { HttpClientError } from 'effect/http';
 import { LRUCache } from 'lru-cache';
 
 import { settleFailure } from '@auth/authProgram';
@@ -28,7 +28,7 @@ import {
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
 

@@ -45,7 +45,7 @@ import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const CHAT_SESSION: SessionMeta = {
   agent: 'chat',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   modelSource: 'builtin-default',
   cwd: '/tmp/workspace',
   approvalPolicy: 'ask',
@@ -163,7 +163,7 @@ describe('slashRegistry', () => {
     const modelNode = renderOpenForm<{
       onSelect?: (value: string) => void;
     }>();
-    modelNode.props?.onSelect?.('gpt55');
+    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
     await settleFormSelection();
 
     expect(events).toEqual(['echo', 'outcome']);
@@ -221,11 +221,11 @@ describe('slashRegistry', () => {
       onSelect?: (value: string) => void;
       selectable?: boolean;
     }>('model');
-    modelNode.props?.onSelect?.('gpt55');
+    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
     expect(sessionMeta.get()).toMatchObject({
-      model: 'gpt55',
+      model: 'openai/gpt-5.5-2026-04-23',
       modelSource: 'explicit-override',
     });
   });
@@ -238,7 +238,7 @@ describe('slashRegistry', () => {
     const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
     }>('model');
-    modelNode.props?.onSelect?.('gpt55');
+    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
     await settleFormSelection();
 
     expect(modelNode.isClosed()).toBe(false);
@@ -266,7 +266,7 @@ describe('slashRegistry', () => {
     const modelNode = openSlashForm<{
       onSelect?: (value: string) => void;
     }>('model');
-    modelNode.props?.onSelect?.('gpt55');
+    modelNode.props?.onSelect?.('openai/gpt-5.5-2026-04-23');
     await settleFormSelection();
 
     expect(errors).toEqual(['model failed']);

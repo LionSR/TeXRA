@@ -7,7 +7,6 @@
  * A helper call is gated, priced and reported to the usage log like every
  * model call; it writes no ledger row, because it belongs to no run's history.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Data, Effect, Exit, Ref, Scope } from 'effect';
 
 import {
@@ -19,12 +18,13 @@ import type { LanguageModel } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
 
+import { selectModel } from '@shared/model/modelSelection';
 import { getHelperModelName } from './helperModelName';
 import { bindModel, type BoundModel } from './run/modelBinding';
 import { callModel, type UsageAttribution } from './run/modelCall';
 import { turnText } from './run/turnText';
 import type { SessionHandle } from './SessionHandle';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 /**
  * The configured helper model cannot serve right now (no key, disabled,
@@ -55,14 +55,15 @@ const helperModel = Effect.fn('helperModel')(function* (
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const config = MODEL_CONFIGS[modelName];
-  if (!config) {
+  const selected = selectModel(modelName);
+  if (!selected) {
     return yield* new HelperModelUnavailable({
       message: `Model "${modelName}" is not recognized.`,
     });
   }
   return yield* bindModel({
-    config,
+    modelId: modelName,
+    config: selected.config,
     stores,
     compatibilityKey: null,
     agentCategory: AgentCategory.Workflow,

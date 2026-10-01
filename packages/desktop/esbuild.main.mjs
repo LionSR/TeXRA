@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
+import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 const outdir = resolve(packageDir, 'dist/main');
@@ -62,12 +63,13 @@ const options = {
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
   banner: { js: esmCjsGlobalsBanner },
+  plugins: [stubInternalValidationModel],
 };
 
 if (watch) {
   const context = await esbuild.context({
     ...options,
-    plugins: [reportRebuild],
+    plugins: [...options.plugins, reportRebuild],
   });
   await context.watch();
 } else {

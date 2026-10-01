@@ -48,7 +48,7 @@ import {
 } from './prSubscriptionConstants';
 import { GitHubSubscriptions } from './subscriptionBindings';
 import { parseGitHubSlug } from './githubSlug';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
 
 /**

@@ -64,7 +64,9 @@ function modelAccess(
 }
 
 function expectUnavailableDefaultRecovery(output: string): void {
-  expect(output).toContain('Note: "deepseekproT" is not currently usable.');
+  expect(output).toContain(
+    'Note: "deepseek/deepseek-v4-pro" is not currently usable.',
+  );
   expect(output).toContain('Next: Add a provider API key with `texra setup`.');
   expect(output).toContain('Run `texra models list --all` to inspect access.');
   expect(output).toContain(
@@ -124,7 +126,9 @@ describe('CLI init command', () => {
     stderr = '';
     mocks.getCliModelAccessList
       .mockReset()
-      .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
+      .mockReturnValue(
+        Effect.succeed([modelAccess('deepseek/deepseek-v4-pro')]),
+      );
     // The command threads the stores this call hands back into the model
     // access list and the workspace agents' visibility read, so the mock returns the
     // installed host's own stores.
@@ -158,12 +162,12 @@ describe('CLI init command', () => {
     {
       name: 'disables init model rows without a usable credential',
       models: [
-        modelAccess('sonnet46T', {
+        modelAccess('anthropic/claude-sonnet-4-6', {
           label: 'Sonnet',
           available: true,
           status: 'subscription',
         }),
-        modelAccess('deepseekT', {
+        modelAccess('deepseek/deepseek-v4-flash', {
           label: 'DeepSeek',
           available: false,
           status: 'api key set',
@@ -171,13 +175,13 @@ describe('CLI init command', () => {
       ],
       expected: [
         {
-          value: 'sonnet46T',
+          value: 'anthropic/claude-sonnet-4-6',
           label: 'Sonnet',
           description: 'subscription',
           disabled: false,
         },
         {
-          value: 'deepseekT',
+          value: 'deepseek/deepseek-v4-flash',
           label: 'DeepSeek',
           description: 'api key set (unavailable now)',
           disabled: true,
@@ -187,12 +191,12 @@ describe('CLI init command', () => {
     {
       name: 'keeps all-unavailable init model rows selectable as a fallback',
       models: [
-        modelAccess('sonnet46T', {
+        modelAccess('anthropic/claude-sonnet-4-6', {
           label: 'Sonnet',
           available: false,
           status: 'login required',
         }),
-        modelAccess('deepseekT', {
+        modelAccess('deepseek/deepseek-v4-flash', {
           label: 'DeepSeek',
           available: false,
           status: 'missing key',
@@ -200,13 +204,13 @@ describe('CLI init command', () => {
       ],
       expected: [
         {
-          value: 'sonnet46T',
+          value: 'anthropic/claude-sonnet-4-6',
           label: 'Sonnet',
           description: 'login required (unavailable now)',
           disabled: false,
         },
         {
-          value: 'deepseekT',
+          value: 'deepseek/deepseek-v4-flash',
           label: 'DeepSeek',
           description: 'missing key (unavailable now)',
           disabled: false,
@@ -259,13 +263,16 @@ describe('CLI init command', () => {
       init: {
         path: path.join(root, '.texra', 'config.json'),
         agent: 'assistant',
-        model: 'deepseekproT',
+        model: 'deepseek/deepseek-v4-pro',
         outputFormat: 'text',
         gitignore: 'created',
         config: {
-          'texra.model': 'deepseekproT',
+          'texra.model': 'deepseek/deepseek-v4-pro',
           'texra.outputFormat': 'text',
-          'texra.chat': { agent: 'assistant', model: 'deepseekproT' },
+          'texra.chat': {
+            agent: 'assistant',
+            model: 'deepseek/deepseek-v4-pro',
+          },
         },
       },
     });
@@ -279,11 +286,11 @@ describe('CLI init command', () => {
     {
       name: 'points non-interactive init at model recovery when the default model is unavailable',
       accessList: [
-        modelAccess('deepseekproT', {
+        modelAccess('deepseek/deepseek-v4-pro', {
           available: false,
           status: 'missing key',
           model: {
-            value: 'deepseekproT',
+            value: 'deepseek/deepseek-v4-pro',
             label: 'DeepSeek Pro',
             availability: 'missing-key',
           },
@@ -293,11 +300,11 @@ describe('CLI init command', () => {
     {
       name: 'points init at model recovery when the fallback default has no access entry',
       accessList: [
-        modelAccess('sonnet46T', {
+        modelAccess('anthropic/claude-sonnet-4-6', {
           available: false,
           status: 'missing api key',
           model: {
-            value: 'sonnet46T',
+            value: 'anthropic/claude-sonnet-4-6',
             label: 'Sonnet',
             availability: 'missing-key',
           },

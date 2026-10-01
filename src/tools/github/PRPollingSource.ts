@@ -6,8 +6,8 @@
  * active subscriptions. Events are converted to natural-language text via
  * `formatPREvent` and dispatched to per-caller listeners.
  *
- * Transport is polling for v1; swapping to a push transport (e.g. a Supabase
- * edge function fan-out) would replace this file without affecting the tool
+ * Transport is polling for v1; swapping to a push transport (e.g. a server-side
+ * webhook fan-out) would replace this file without affecting the tool
  * layer above.
  */
 

@@ -149,7 +149,7 @@ Tool-use agents can remember things between sessions. When memory is enabled (to
 This scrollable area displays the detailed, timestamped logs for the selected agent run.
 
 - **Structure**: Logs are organized into expandable groups (e.g., `Initialization`, `Round 0`, `Model Operation`). Response cycles are logged within the corresponding round group. Select the arrow next to a group name to expand or collapse it.
-- **Log levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/global-storage/config.json`; TeXRA does not read VS Code settings.
+- **Log levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown when `texra.logger.debugMode` is set to `true` in `<project>/.texra/config.json` or `~/.texra/v1/global-storage/config.json`; TeXRA does not read VS Code settings.
 - **Agent thinking**: The log highlights model reasoning in purple **Thinking** blocks. These sections are flagged internally with a `thinking` type so you can spot when the model is exploring ideas.
 - **Errors**: Errors are highlighted and often show what went wrong.
 

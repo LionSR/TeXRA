@@ -51,7 +51,7 @@ const availableModels = [
   {
     available: true,
     status: 'available',
-    model: { value: 'deepseekT', label: 'DeepSeek T' },
+    model: { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek T' },
   },
 ];
 

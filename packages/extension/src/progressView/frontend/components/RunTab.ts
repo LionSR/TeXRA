@@ -1,5 +1,6 @@
 // One run row of the run list: its title, status glyph, rollup and the
-// row actions (expand, resume, delete). `run-tabs` lays the rows out.
+// row actions (expand, resume, and, where the list is `removable`, delete).
+// `run-tabs` lays the rows out.
 import {
   LitElement,
   html,
@@ -106,8 +107,19 @@ export class RunTab extends LitElement {
   @property({ type: Boolean }) unseen = false;
   /** Messages queued on the run that it has not read yet. */
   @property({ type: Number }) unread = 0;
+  /** The row offers Delete (the desktop rail); set only on a run whose
+   *  `actions` hold `delete`. */
+  @property({ type: Boolean }) removable = false;
 
   private decorator = getAgentCategoryDecorator('toolUse');
+
+  /** Focus lands on the row's select button: `run-tabs` hands focus to a
+   *  neighbour after deleting the focused row. */
+  override focus(options?: FocusOptions): void {
+    this.renderRoot
+      .querySelector<HTMLElement>('#run-tab-select-button')
+      ?.focus(options);
+  }
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('run')) this.decorator = runDecorator(this.run);
@@ -278,6 +290,24 @@ export class RunTab extends LitElement {
                 data-action="resume"
                 >${waIcon('forward-step', { slot: 'start' })} Resume</wa-button
               >`
+            : nothing
+        }
+        ${
+          this.removable
+            ? html`<wa-button
+                  id="run-tab-remove-button"
+                  class="tab-remove"
+                  appearance="plain"
+                  variant="neutral"
+                  size="s"
+                  type="button"
+                  aria-label=${`Delete ${runTitle}`}
+                  data-run=${run.id}
+                  data-action="delete"
+                  >${waIcon('xmark')}</wa-button
+                ><wa-tooltip for="run-tab-remove-button"
+                  >Delete session</wa-tooltip
+                >`
             : nothing
         }
       </div>

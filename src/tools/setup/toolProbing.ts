@@ -12,7 +12,7 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 import type { SetupPlatformShape } from './platform';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Installation status of one probed tool, with its path when discoverable. */
 interface ToolStatus {

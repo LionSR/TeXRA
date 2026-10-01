@@ -35,7 +35,7 @@ const tempDirs = useTempDirs();
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
     agent: 'orchestrator',
-    model: 'deepseekT',
+    model: 'deepseek/deepseek-v4-flash',
     instruction: 'Solve the problem.',
     agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
@@ -49,7 +49,10 @@ describe('trace-viewer TraceDocumentSchema', () => {
   it.effect('accepts a real trace document produced by assembleTrace', () =>
     Effect.gen(function* () {
       const runId = 'abc12345' as RunId;
-      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
+      const runConfigRecord = config({
+        agent: 'review',
+        model: 'anthropic/claude-sonnet-4-6',
+      });
 
       const session = yield* createTestSession();
       publishTestRunStart(session, runId);

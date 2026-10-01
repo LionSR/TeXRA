@@ -25,12 +25,10 @@ import {
   formatCliTeamLaunchBlockMessage,
   formatCliTeamInspection,
   formatCliTeamList,
+  formatCliTeamRunWarnings,
   readCliTeams,
 } from '../runtime/cliTeams';
-import {
-  loadCliTeamRunPlan,
-  writeMissingPresetAgents,
-} from '../runtime/teamRunPlan';
+import { loadCliTeamRunPlan } from '../runtime/teamRunPlan';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -55,7 +53,7 @@ import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface TeamRunInit {
-  readonly preset: string;
+  readonly team: string;
   readonly inputFiles: string[];
   readonly contextFiles: string[];
   readonly agent?: string;
@@ -99,11 +97,11 @@ const runTeamList = Effect.fn('runTeamList')(function* (
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
   context: CliContext,
-  presetIdOrName: string,
+  teamIdOrName: string,
   services: CliPlatformServices,
 ) {
   const plan = yield* loadCliTeamRunPlan(
-    { preset: presetIdOrName },
+    { team: teamIdOrName },
     services.repoState,
   );
 
@@ -146,14 +144,16 @@ export const runTeam = Effect.fn('runTeam')(function* (
       : 'Install or create a runnable team root before launching this team.';
     writeTextStderr(
       formatCliTeamLaunchBlockMessage(plan, {
-        requestedPreset: init.preset,
+        requestedTeam: init.team,
         followUpAdvice: singleAgentAdvice,
       }),
     );
     return CliExitCode.Usage;
   }
   const rootAgent = plan.rootAgent;
-  writeMissingPresetAgents(plan);
+  for (const warning of formatCliTeamRunWarnings(plan)) {
+    writeTextStderr(warning);
+  }
 
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
@@ -260,7 +260,7 @@ const teamShowCommand = defineCliCommand({
   },
   args: {
     ...GLOBAL_ARGS,
-    preset: {
+    team: {
       type: 'positional',
       required: true,
       description: 'Team id or name from `texra team list`',
@@ -269,7 +269,7 @@ const teamShowCommand = defineCliCommand({
   run: (context, ctx) =>
     Effect.gen(function* () {
       const services = yield* initCliPlatform(context);
-      return yield* runTeamShow(context, ctx.args.preset, services);
+      return yield* runTeamShow(context, ctx.args.team, services);
     }),
 });
 
@@ -278,7 +278,7 @@ const teamRunCommand = withUsageSections(
     meta: { name: 'run', description: 'Run a team' },
     args: {
       ...AGENT_RUN_GLOBAL_ARGS,
-      preset: {
+      team: {
         type: 'positional',
         required: true,
         description: 'Team id or name from `texra team list`',
@@ -319,7 +319,7 @@ const teamRunCommand = withUsageSections(
     },
     run: (context, ctx) =>
       runTeam(context, {
-        preset: ctx.args.preset,
+        team: ctx.args.team,
         ...collectCommonAgentRunFlags(ctx.rawArgs, ctx.args.instruction),
         agent: optString(ctx.args.agent),
         model: optString(ctx.args.model),

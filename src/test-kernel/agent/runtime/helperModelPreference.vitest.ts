@@ -123,7 +123,9 @@ describe('applyHelperModelPreference', () => {
     'falls back to the selected model when the helper model is unavailable',
     () =>
       Effect.gen(function* () {
-        getHelperModelName.mockReturnValue(Effect.succeed('deepseek'));
+        getHelperModelName.mockReturnValue(
+          Effect.succeed('deepseek/deepseek-flash@none'),
+        );
         modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
 
         const result = yield* resolve(configFor('opus'));

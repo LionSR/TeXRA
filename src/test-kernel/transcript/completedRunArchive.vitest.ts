@@ -56,7 +56,10 @@ import { readCompletedRunConversation as readCompletedRunConversationEffect } fr
 
 const tempDirs = useTempDirs();
 
-function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
+function runConfig(
+  agent: string,
+  model = 'deepseek/deepseek-v4-pro',
+): AgentConfig {
   return AgentConfigSchema.parse({
     agent,
     model,

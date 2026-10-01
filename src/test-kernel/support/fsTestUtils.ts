@@ -22,7 +22,7 @@ import {
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 import { nodeSpawnerLayer } from './childProcessTestLayer';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * The `FileSystem`, `Path` and `ChildProcessSpawner` services

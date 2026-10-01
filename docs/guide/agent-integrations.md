@@ -58,13 +58,14 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Settings
 
-| Setting              | Options                                                                     | Default           | What it controls                                                                                                          |
-| -------------------- | --------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.                                                      |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. Extra high is used when the installed runtime accepts it; older installs fall back to High. |
-| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.                                                     |
+| Setting              | Options                                                                     | Default           | What it controls                                                                                                                           |
+| -------------------- | --------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Model**            | the current OpenAI models your ChatGPT plan can use in Codex                | `GPT-6.1 Sol`     | Which model Codex runs.                                                                                                                    |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.                                                                       |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`, `max`                                     | `medium`          | How deeply Codex deliberates. A level the model or your installed Codex lacks becomes the nearest one it has; older installs stop at High. |
+| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.                                                                      |
 
-TeXRA pins Codex to the `gpt-5.5` model. Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
+Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
 
 ### Follow-ups
 
@@ -81,11 +82,11 @@ delivery. The new prompt joins that Codex session as the next turn.
 
 ### Settings
 
-| Setting              | Options                                                                                            | Default             | What it controls                                                              |
-| -------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| **Model**            | `Sonnet 5`, `Fable 5.1`, `Opus 5`, `Haiku 4.5`                                                     | `Sonnet 5`          | Which Claude model the delegated agent runs on. Agents may override per call. |
-| **Permission mode**  | `Prompt for risky actions`, `Auto-accept edits`, `Bypass all (dangerous)`, `Plan only (read-only)` | `Auto-accept edits` | How much the Claude Code child process may do before stopping to ask.         |
-| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                   | `High`              | How deeply Claude deliberates before acting.                                  |
+| Setting              | Options                                                                                            | Default             | What it controls                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Model**            | the current Claude models                                                                          | `Sonnet 5.5`        | Which Claude model the delegated agent runs on. Agents may override per call.                        |
+| **Permission mode**  | `Prompt for risky actions`, `Auto-accept edits`, `Bypass all (dangerous)`, `Plan only (read-only)` | `Auto-accept edits` | How much the Claude Code child process may do before stopping to ask.                                |
+| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                   | `Medium`            | How deeply Claude deliberates before acting; a level the model lacks becomes the nearest one it has. |
 
 MCP servers, custom instructions, and hooks come from Claude Code's own configuration.
 

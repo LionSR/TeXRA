@@ -31,7 +31,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 
 const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
-  model: 'gpt54',
+  model: 'openai/gpt-5.4-2026-03-05',
   instruction: 'Continue.',
   agentCategory: AgentCategory.ToolUse,
   workingDirectory: '/workspace',
@@ -93,13 +93,13 @@ describe('retrieveSessionResumeData', () => {
     () =>
       Effect.gen(function* () {
         const runId = 'abc123' as RunId;
-        yield* openRun(runId, toolUseSnapshot('gpt55'));
+        yield* openRun(runId, toolUseSnapshot('openai/gpt-5.5-2026-04-23'));
 
         expect(
           yield* retrieveSessionResumeData(runId, CONFIG, session),
         ).toMatchObject({
           runId,
-          agentConfig: { model: 'gpt55' },
+          agentConfig: { model: 'openai/gpt-5.5-2026-04-23' },
         });
       }),
   );
@@ -119,7 +119,7 @@ describe('retrieveSessionResumeData', () => {
   it.effect('retrieves a workflow run on the same resume identity', () =>
     Effect.gen(function* () {
       const runId = 'ab0003' as RunId;
-      yield* openRun(runId, toolUseSnapshot('gpt54'));
+      yield* openRun(runId, toolUseSnapshot('openai/gpt-5.4-2026-03-05'));
 
       expect(
         yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),

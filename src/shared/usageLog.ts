@@ -43,7 +43,7 @@ const UsageLogMetadataSchema = z.object({
 
 /**
  * Field names here intentionally follow this wire schema, not
- * `NormalizedUsage`'s — this is the persisted/billing log contract, so
+ * `NormalizedUsage`'s — this is the persisted log contract, so
  * renaming fields isn't free.
  */
 const UsageLogStatsSchema = z.object({
@@ -81,6 +81,8 @@ export const UsageLogResponseSchema = z.discriminatedUnion('success', [
     success: z.literal(false),
     accepted: z.literal(0),
     error: z.string().optional(),
+    /** The edge's stable rejection code (`BATCH_REJECTED`, `INVALID_JSON`). */
+    errorCode: z.string().optional(),
     /** Only an explicit false permits the client to discard instead of retry. */
     retryable: z.boolean().optional(),
   }),

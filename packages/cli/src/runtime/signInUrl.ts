@@ -1,10 +1,10 @@
 /**
- * How a terminal shows a loopback sign-in URL, shared by the TeXRA-account
- * sign-in and every subscription sign-in.
+ * How a terminal shows a loopback sign-in URL, shared by every subscription
+ * sign-in.
  */
 import { Effect } from 'effect';
 import { tryOpenBrowser } from './browser';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The URL is a loopback address on the machine running texra. */
 const REMOTE_CALLBACK_HINT =

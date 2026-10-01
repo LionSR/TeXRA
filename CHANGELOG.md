@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Models are named by their provider's own model ID.** Settings, agent
+  files, `--model` and delegation now take names like
+  `anthropic/claude-opus-5-5` or `openai/gpt-6.1-sol`, optionally with an
+  effort: `anthropic/claude-opus-5-5@high`, or `@none` to turn thinking off
+  where the model allows it. The old short names (`opus55`, `sonnet5T`) are
+  still understood when you type them. Thinking and non-thinking versions of
+  a model are one entry now; saved per-model reasoning levels start fresh.
+- **Reasoning effort defaults to medium** for every model, including Claude
+  Code and Codex subagents, unless you or the agent choose another level. A
+  level a model does not offer is replaced by the nearest one it does, and
+  the run log says so.
 - **History and settings reset once with this update, and later updates
   keep them.** The first time this build runs, session history, saved
   settings, remembered desktop projects, open inquiry threads, the
@@ -31,7 +42,7 @@ All notable changes to this project will be documented in this file.
 - **Usage logging is anonymous and needs no account.** When on, each batch
   carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
   sign-in token; the body is unchanged and never has prompts, paths or
-  document text. Each host shows a one-time notice. Opt out with
+  document text. The first host you run shows a one-time notice. Opt out with
   `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
   (or VS Code's telemetry setting); the ID is one row in
   `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that
@@ -207,11 +218,26 @@ All notable changes to this project will be documented in this file.
   link-local, cloud metadata), for the first request and every redirect hop;
   before, a name that resolves to `127.0.0.1` (such as `localhost.`) or a
   redirect from a public page to a private address was fetched. Behind an
-  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only a literal IP
-  address is refused.
+  `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so for a proxied
+  request only a literal IP address is refused; a host `NO_PROXY` exempts, or
+  an `http://` URL when only `HTTPS_PROXY` is set, connects directly and gets
+  the full check.
+
+- **Pack archives only the run's folder.** Pack copies the run's folder
+  (which holds the run's own copy of its inputs) into `History/`, and no
+  longer makes a second pass over the workspace: it does not copy the input
+  document's workspace `<name>.pdf`/`.tex` or delete that document's LaTeX
+  build files (`.aux`, `.log`, `.synctex.gz`, …). Packing the same run twice
+  within one second now reports an error instead of merging into the first
+  snapshot.
 
 ### Features
 
+- **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
+  setting picks any model the Codex backend serves (default GPT-6.1 Sol).
+- **OpenAI fast processing** (`model.openaiFastTier` in `.texra/config.json`)
+  sends OpenAI requests on the fast tier where a model offers it, and run
+  costs use the fast-tier prices.
 - **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
   (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
   $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats
@@ -221,7 +247,12 @@ All notable changes to this project will be documented in this file.
   now billed at its list price, since the promotional price ended. The Claude
   Code integration offers Sonnet 5.5 (`claude-sonnet-5-5`) in place of
   Sonnet 5 and uses it by default; a saved Sonnet 5 choice falls back to it.
-
+- **Delete a conversation from the desktop sidebar.** Hovering or focusing
+  a finished conversation under a project shows an ×; clicking it removes
+  the conversation and its run folder at once. The conversation menu's
+  Delete session no longer asks for confirmation either. A running
+  conversation shows no × until it is stopped, and deleting the one on
+  screen moves to the project's first remaining conversation.
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.
@@ -299,7 +330,9 @@ show` print the same notice, and the new `texra agents customize`,
   subagent to its orchestrator, one run to a sibling or to an unrelated run.
   Who launched whom never limits who may talk. The message is read when the
   recipient finishes its current turn, an idle run wakes to read it, and a
-  subagent's report now arrives the same way. An orchestrator waiting with `executions wait` wakes
+  subagent's report now arrives the same way. A one-shot run (a headless
+  `texra run`, or a subagent the orchestrator waits on in band) has no next
+  turn, so a message to it is refused rather than left unread. An orchestrator waiting with `executions wait` wakes
   as soon as any message reaches it, including its subagent's report. Nothing
   caps how many messages agents exchange; stop the runs if they talk too
   long. In the terminal, `/ps` lists the
@@ -392,6 +425,24 @@ show` print the same notice, and the new `texra agents customize`,
   subscription is ready; when the sign-in cannot be renewed, the run asks you
   to sign in again and the account shows as signed out.
 
+- **A project file can switch usage logging off without a warning.**
+  `"texra.telemetry.enabled": false` in `.texra/config.json` is honoured, and
+  every host no longer reports it as ignored. A project file still cannot
+  switch usage logging on: a `true` there is ignored and reported.
+- **The removed TeXRA account's saved credentials are deleted.** The old
+  sign-in session (with its refresh token) and pending sign-in records stayed
+  in the system keychain or secret store after the account was removed. Each
+  host now deletes them once at startup without reading them.
+- **The CLI, the desktop app and the VS Code extension no longer ship the
+  internal validation model.** The canned model the CLI's package validation
+  runs against was bundled into all three; in the desktop app and the
+  extension, environment variables could switch a run onto it. Every
+  shipped build now carries a stub in its place.
+- **A history file cut short no longer stops TeXRA from opening the
+  workspace.** A session store truncated inside its first page (a copy that
+  stopped part way) failed every open as "database disk image is
+  malformed"; it is now moved aside to `texra.db.corrupt-<time>`, as a file
+  that is not a database at all already was, and a fresh store opens.
 - **Long prompts are priced at the provider's long-context rate.** OpenAI's
   1.05M-context models (GPT-6, GPT-6.1 Sol, GPT-5.6, GPT-5.5 and GPT-5.4)
   bill a whole request at 2x input and 1.5x output once the prompt passes
@@ -1035,7 +1086,9 @@ show` print the same notice, and the new `texra agents customize`,
   renamed: `agent-roster` (field `roster`) is `workspace-agents` (field
   `agents`), `multi-agent-result` is `team-result`, `multi-agent-preset` is
   `team`, and `multi-agent-preset-inspection` is `team-inspection`; update any
-  script that reads them. The VS Code command `texra.showMultiAgent` is now
+  script that reads them. A `texra history` JSON/NDJSON entry names its team
+  in `teamId` (was `teamPresetId`), and `texra team show|run` help calls the
+  argument `<TEAM>`. The VS Code command `texra.showMultiAgent` is now
   `texra.showTeamSettings`, so a custom keybinding on the old id stops
   working. The saved agent selection and saved custom teams moved to the state
   keys `texra.workspaceAgents` and `texra.customTeams`; a selection or custom

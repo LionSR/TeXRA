@@ -3,8 +3,8 @@
 /**
  * Live journey checks: the fitness function for the theorist bundle. Four
  * compile-graded journeys (polish, latexFixer, latexdiff, citations) run end to
- * end through the real `texra run ... --output-format ndjson` against one cheap
- * model, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`. A
+ * end through the real `texra run ... --output-format ndjson` against each cheap
+ * model in `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`. A
  * journey passes on simple invariants over the files it leaves behind and on a
  * real LaTeX build of them, never on how the prose reads.
  *
@@ -12,8 +12,11 @@
  * spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
- *   node scripts/validate-journeys.mjs [--model deepseek41T|glm53flash]
- *     [--journey polish] [--no-build] [--out dir]
+ *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
+ *     [--no-build] [--out dir]
+ *
+ * With no `--model` it runs every model in `MODEL_KEYS`; the workflow passes
+ * none, so this map is the one list of models the journeys run.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -40,12 +43,15 @@ const fixtureRoot = path.join(
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 
 /**
- * The cheap models the journeys fund, and the env var each is served through
- * (`glm53flash` is OpenRouter-only in the catalog).
+ * The cheap models the journeys fund (the llm-zoo 1.x `gemini38f`,
+ * `deepseek41T` and `glm53flash`, spelled as the selections they stand for),
+ * and the env var each is served through (`glm/glm-5.3-flash` is
+ * OpenRouter-only in the catalog).
  */
 const MODEL_KEYS = {
-  deepseek41T: 'DEEPSEEK_API_KEY',
-  glm53flash: 'OPENROUTER_API_KEY',
+  'google/gemini-3.8-flash@medium': 'GOOGLE_API_KEY',
+  'deepseek/deepseek-flash@high': 'DEEPSEEK_API_KEY',
+  'glm/glm-5.3-flash@max': 'OPENROUTER_API_KEY',
 };
 
 function assert(condition, message) {
@@ -210,7 +216,10 @@ function runJourney(name, model, outDir) {
       ],
       300_000,
     );
-    const stem = path.join(outDir, `${name}.${model}`);
+    const stem = path.join(
+      outDir,
+      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}`,
+    );
     writeFileSync(`${stem}.ndjson`, result.stdout ?? '');
     writeFileSync(`${stem}.stderr`, result.stderr ?? '');
     assert(
@@ -251,17 +260,18 @@ function runJourney(name, model, outDir) {
 
 const { values } = parseArgs({
   options: {
-    model: { type: 'string', default: 'deepseek41T' },
+    model: { type: 'string', multiple: true },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },
   },
 });
 
-const keyEnv = MODEL_KEYS[values.model];
-if (!keyEnv) {
+const models = values.model ?? Object.keys(MODEL_KEYS);
+const unknownModels = models.filter((model) => !(model in MODEL_KEYS));
+if (unknownModels.length > 0) {
   console.error(
-    `[journeys] --model must be one of ${Object.keys(MODEL_KEYS).join(', ')}`,
+    `[journeys] unknown model: ${unknownModels.join(', ')}; --model must be one of ${Object.keys(MODEL_KEYS).join(', ')}`,
   );
   process.exit(2);
 }
@@ -271,12 +281,16 @@ if (unknown.length > 0) {
   console.error(`[journeys] unknown journey: ${unknown.join(', ')}`);
   process.exit(2);
 }
-if (!process.env[keyEnv]) {
+const funded = models.filter((model) => {
+  if (process.env[MODEL_KEYS[model]]) return true;
   // A fork PR or an unconfigured repo has no secret; live-llm skips the same way.
-  console.warn(`[journeys] ${keyEnv} is not set: skipping ${values.model}`);
-  // The nightly run must not stay green after a secret is rotated or removed.
-  process.exit(process.env.GITHUB_EVENT_NAME === 'schedule' ? 1 : 0);
-}
+  console.warn(`[journeys] ${MODEL_KEYS[model]} is not set: skipping ${model}`);
+  return false;
+});
+// The nightly run must not stay green after a secret is rotated or removed.
+const missingKeyFails =
+  funded.length < models.length && process.env.GITHUB_EVENT_NAME === 'schedule';
+if (funded.length === 0) process.exit(missingKeyFails ? 1 : 0);
 
 if (!values['no-build']) {
   for (const script of ['build-bundle.mjs', 'copy-resources.mjs']) {
@@ -289,27 +303,30 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
-const rows = names.map((name) => {
-  try {
-    return { name, ...runJourney(name, values.model, values.out) };
-  } catch (error) {
-    return {
-      name,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-});
-
-const lines = rows.map((row) =>
-  row.error
-    ? `FAIL ${row.name} (${values.model}): ${row.error}`
-    : `PASS ${row.name} (${values.model}): ${row.tokens} tokens, $${row.cost.toFixed(5)}`,
-);
-console.log(lines.join('\n'));
-if (process.env.GITHUB_STEP_SUMMARY) {
-  appendFileSync(
-    process.env.GITHUB_STEP_SUMMARY,
-    `### Journeys on ${values.model}\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`,
+let failed = missingKeyFails;
+for (const model of funded) {
+  const rows = names.map((name) => {
+    try {
+      return { name, ...runJourney(name, model, values.out) };
+    } catch (error) {
+      return {
+        name,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+  const lines = rows.map((row) =>
+    row.error
+      ? `FAIL ${row.name} (${model}): ${row.error}`
+      : `PASS ${row.name} (${model}): ${row.tokens} tokens, $${row.cost.toFixed(5)}`,
   );
+  console.log(lines.join('\n'));
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      `### Journeys on ${model}\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`,
+    );
+  }
+  failed ||= rows.some((row) => row.error);
 }
-process.exit(rows.some((row) => row.error) ? 1 : 0);
+process.exit(failed ? 1 : 0);

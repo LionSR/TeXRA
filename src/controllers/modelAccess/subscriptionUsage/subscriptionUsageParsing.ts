@@ -1,12 +1,12 @@
 import { Duration, Effect } from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
+import { HttpClient, HttpClientResponse } from 'effect/http';
 import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 
 import type { Cause } from 'effect';
-import type { HttpClientError } from 'effect/unstable/http';
+import type { HttpClientError } from 'effect/http';
 
 export type JsonObject = Record<string, unknown>;
 

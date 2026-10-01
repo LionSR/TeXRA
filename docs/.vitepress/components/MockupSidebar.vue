@@ -17,7 +17,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
     </div>
 
     <div class="stream-head">
-      <span class="sh-name">orchestrator@opus47</span>
+      <span class="sh-name">orchestrator (anthropic/claude-opus-5-5)</span>
       <span class="sh-dot" title="Running"></span>
       <span class="sh-badge"
         ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>3
@@ -130,7 +130,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
           <div class="tc-body">
             <div class="tc-row">
               <span class="tc-k">Agent</span><code class="tc-code">correct</code
-              ><span class="tc-model">(gemini31p)</span>
+              ><span class="tc-model">(google/gemini-3.1-pro-preview)</span>
             </div>
             <div class="tc-row">
               <span class="tc-k">Instruction</span

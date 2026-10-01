@@ -6,7 +6,7 @@ import {
   type DoctorLatexTool,
 } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexToolStatus = DoctorLatexTool & { readonly installed: boolean };
 

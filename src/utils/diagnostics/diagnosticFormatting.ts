@@ -6,7 +6,6 @@
  * and Lean tool diagnostics satisfy this interface.
  */
 
-import { groupBy } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
@@ -129,7 +128,7 @@ export function formatGroupedSections(
 ): string {
   // A diagnostic with an unrecognized severity groups under `undefined` and is
   // deliberately dropped: only the three known section titles are rendered.
-  const bySectionTitle = groupBy(
+  const bySectionTitle = Map.groupBy(
     diagnostics,
     (d) => SEVERITY_CONFIG[d.severity]?.sectionTitle,
   );

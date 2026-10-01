@@ -52,7 +52,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 export interface DesktopProject {
   /** The session key: the storage root the fold's `SessionView.key`
@@ -208,9 +208,10 @@ export const readRememberedDesktopProjects = Effect.fn(
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
+  // The closeable scope the caller provides; `dispose` closes it.
+  scope: Scope.Closeable,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
-    const scope = yield* Scope.Scope;
     const session = yield* Effect.acquireRelease(
       openSessionEffect({
         roots,
@@ -255,7 +256,11 @@ export function openDesktopProjectRegistry(
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(undefined, options.processRoots).pipe(
+      openProjectSession(
+        undefined,
+        options.processRoots,
+        options.processScope,
+      ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
@@ -327,7 +332,7 @@ export function openDesktopProjectRegistry(
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(root, roots).pipe(
+              openProjectSession(root, roots, projectScope).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {
                     const recent = yield* records.readRecent;

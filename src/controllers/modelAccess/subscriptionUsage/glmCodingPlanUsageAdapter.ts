@@ -11,7 +11,7 @@ import {
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
 import type { Cause } from 'effect';
-import type { HttpClient, HttpClientError } from 'effect/unstable/http';
+import type { HttpClient, HttpClientError } from 'effect/http';
 
 export const GLM_CODING_PLAN_USAGE_URL =
   'https://open.bigmodel.cn/api/monitor/usage/quota/limit';

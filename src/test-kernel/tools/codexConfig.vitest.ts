@@ -6,20 +6,10 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import { CODEX_FILE_CHANGE_TOOL } from '@shared/schemas';
-import { toCodexCliReasoningEffort } from '@tools/codexConfig';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
 } from '@tools/codexShared';
-
-describe('toCodexCliReasoningEffort', () => {
-  it("caps 'xhigh' to 'high' so the Codex CLI config deserializer accepts it", () => {
-    // Regression: the Codex CLI's Rust-side config deserializer rejects
-    // 'xhigh' with `unknown variant 'xhigh', expected one of 'minimal',
-    // 'low', 'medium', 'high' in 'model_reasoning_effort'`.
-    assert.equal(toCodexCliReasoningEffort('xhigh'), 'high');
-  });
-});
 
 describe('buildCodexFileChangeToolLog', () => {
   it('deduplicates repeated file-change entries', () => {

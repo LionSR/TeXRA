@@ -55,7 +55,7 @@ export const PROVIDER_ENDPOINT_STATE_ENTRIES = MODEL_PROVIDER_PLUGINS.flatMap(
  * option (~$0.15/$0.60 per MTok) and keeps these one-shot, non-streaming
  * helper calls fast.
  */
-export const DEFAULT_HELPER_MODEL = 'deepseek41';
+export const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 
 /**
  * Default model used when a new agent run / proposal omits one. Single source of
@@ -64,7 +64,7 @@ export const DEFAULT_HELPER_MODEL = 'deepseek41';
  * so a change here propagates to all three instead of drifting per call site.
  * `DEFAULT_MODELS` leads with this model, so it must not be a Gemini id.
  */
-export const DEFAULT_AGENT_MODEL = 'gpt61-';
+export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
 
 /**
  * Zod schema for one provider control rendered in the Models tab (without its

@@ -102,7 +102,7 @@ describe('CLI teams', () => {
     });
 
     const message = formatCliTeamLaunchBlockMessage(plan, {
-      requestedPreset: 'mathematician',
+      requestedTeam: 'mathematician',
       followUpAdvice:
         'Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     });

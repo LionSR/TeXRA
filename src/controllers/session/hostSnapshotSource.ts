@@ -30,7 +30,7 @@ import type {
 } from '@shared/session/hostSnapshot';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { readRecentCommits } from '@utils/git/repositoryOverview';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];
 

@@ -37,10 +37,7 @@ import {
   type Scope,
   Stream,
 } from 'effect';
-import {
-  ChildProcess,
-  type ChildProcessSpawner,
-} from 'effect/unstable/process';
+import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import { withLogChannel } from '@logger/effectLog';
 import {

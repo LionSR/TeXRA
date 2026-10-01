@@ -99,7 +99,7 @@ export const reportUsage = (
       try: () =>
         usageLog.log(
           {
-            model: bound.config.fullName,
+            model: bound.config.id,
             provider: usage.provider,
             agentName: attribution.agentName,
             ...(attribution.agentCategory === null

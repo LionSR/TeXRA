@@ -1006,8 +1006,10 @@ project scope through a user-level override (D6).
 `web_fetch` has no per-host prompt, grant or allowlist (D7, reversed
 2026-09-30: over-built for a small team). SSRF and redirect hardening, which
 refuses non-public addresses on every hop, is the whole of its posture. Under
-a configured `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so only
-IP-literal hosts are refused and name resolution is the proxy's to police.
+a configured `HTTP_PROXY`/`HTTPS_PROXY` the proxy resolves names, so a
+proxied request refuses only IP-literal hosts and name resolution is the
+proxy's to police; a request the environment sends direct (`NO_PROXY`, or a
+scheme no proxy variable covers) gets the resolver check.
 
 **Reopen.** A signed or trusted-project mechanism exists that D6 can defer to.
 For D7, a concrete exfiltration incident through `web_fetch`; any prompt then

@@ -27,7 +27,7 @@ const tempDirs = useTempDirs();
 
 const ANSWERS: InitAnswers = {
   agent: 'chat',
-  model: 'deepseekT',
+  model: 'deepseek/deepseek-v4-flash',
   outputFormat: 'json',
 };
 
@@ -63,8 +63,11 @@ describe('setWorkspaceCliChatAgent', () => {
             {},
             {
               config: new FakeConfigProvider({
-                'texra.model': 'deepseekT',
-                'texra.chat': { agent: 'chat', model: 'deepseekT' },
+                'texra.model': 'deepseek/deepseek-v4-flash',
+                'texra.chat': {
+                  agent: 'chat',
+                  model: 'deepseek/deepseek-v4-flash',
+                },
               }),
             },
           ),
@@ -78,14 +81,16 @@ describe('setWorkspaceCliChatAgent', () => {
         );
         expect(yield* chatSection()).toEqual({
           agent: 'builtInToolUse:review',
-          model: 'deepseekT',
+          model: 'deepseek/deepseek-v4-flash',
         });
         expect(
           yield* readSettingFrom(testWorkspaceRoots(), 'texra.model'),
-        ).toBe('deepseekT');
+        ).toBe('deepseek/deepseek-v4-flash');
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined);
-        expect(yield* chatSection()).toEqual({ model: 'deepseekT' });
+        expect(yield* chatSection()).toEqual({
+          model: 'deepseek/deepseek-v4-flash',
+        });
       }),
   );
 
@@ -93,7 +98,11 @@ describe('setWorkspaceCliChatAgent', () => {
     Effect.gen(function* () {
       const config = new FakeConfigProvider();
       yield* Effect.promise(() => installPlatform({}, { config }));
-      yield* config.update('texra.chat', { model: 'deepseekT' }, 'global');
+      yield* config.update(
+        'texra.chat',
+        { model: 'deepseek/deepseek-v4-flash' },
+        'global',
+      );
 
       yield* setWorkspaceCliChatAgent(
         testWorkspaceRoots(),

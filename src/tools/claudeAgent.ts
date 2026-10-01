@@ -39,13 +39,12 @@ import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { Secrets } from '@platform/secrets';
 import {
-  ClaudeAgentEffortSchema,
+  AgentCliEffortSchema,
+  ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
   MESSAGE_TYPES,
 } from '@shared/schemas';
 import type {
-  ClaudeAgentEffort,
-  ClaudeAgentModel,
   ClaudeAgentPermissionMode,
   RunId,
   TokenUsageStats,
@@ -54,9 +53,7 @@ import type {
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -87,18 +84,21 @@ import {
   buildClaudeToolUseLog,
   claudeResultUsage,
   CLAUDE_AGENT_NAME,
-  modelSupportsAdaptiveThinking,
+  readClaudeCodeRun,
+  type ClaudeCodeRun,
 } from './claudeAgentShared';
 import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
 import type {
+  EffortLevel,
   Options as ClaudeAgentSdkOptions,
   SDKAssistantMessage,
   SDKMessage,
   SDKUserMessage,
+  ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk';
 
 // ============================================================================
@@ -121,10 +121,10 @@ const ClaudeAgentInputSchema = z
       .string()
       .nullish()
       .describe(
-        "Claude model to use (e.g. 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-opus-5-5'). Defaults to user-configured model.",
+        `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.options.join(', ')}. Defaults to the user-configured model.`,
       ),
-    effort: ClaudeAgentEffortSchema.nullish().describe(
-      'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
+    effort: AgentCliEffortSchema.nullish().describe(
+      "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
     ),
     session_id: z
       .string()
@@ -175,9 +175,11 @@ export function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
   signal: AbortSignal;
+  /** The API model ID. */
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
-  effort: ClaudeAgentEffort;
+  effort: EffortLevel | undefined;
+  thinking: ThinkingConfig | undefined;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -202,14 +204,12 @@ export function runStreamedTurn(params: {
       abortController,
       model: params.model,
       permissionMode: params.permissionMode,
-      effort: params.effort,
       env: params.env,
       systemPrompt: { type: 'preset', preset: 'claude_code' },
       settingSources: ['user', 'project', 'local'],
     };
-    if (modelSupportsAdaptiveThinking(params.model)) {
-      sdkOptions.thinking = { type: 'adaptive' };
-    }
+    if (params.effort) sdkOptions.effort = params.effort;
+    if (params.thinking) sdkOptions.thinking = params.thinking;
     if (params.permissionMode === 'bypassPermissions') {
       sdkOptions.allowDangerouslySkipPermissions = true;
     }
@@ -405,9 +405,8 @@ function buildClaudeAgentLaunch(params: {
   childRun: ChildRunPort;
   runId: RunId;
   initialPrompt: string;
-  model: string;
+  run: ClaudeCodeRun;
   permissionMode: ClaudeAgentPermissionMode;
-  effort: ClaudeAgentEffort;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -451,9 +450,10 @@ function buildClaudeAgentLaunch(params: {
         prompt,
         logger,
         signal,
-        model: params.model,
+        model: params.run.model,
         permissionMode: params.permissionMode,
-        effort: params.effort,
+        effort: params.run.effort,
+        thinking: params.run.thinking,
         cwd: params.cwd,
         additionalDirectories: params.additionalDirectories,
         env: params.env,
@@ -526,14 +526,8 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | FileSystem.FileSystem
 > {
   const { roots } = toolCall;
-  const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
   const permissionMode = yield* claudeAgentPermissionMode(input, roots);
-  const model =
-    input.model ??
-    (yield* readSettingFrom<ClaudeAgentModel>(roots, CLAUDE_AGENT_MODEL));
-  const effort =
-    input.effort ??
-    (yield* readSettingFrom<ClaudeAgentEffort>(roots, CLAUDE_AGENT_EFFORT));
+  const claudeRun = yield* readClaudeCodeRun(roots, input);
   const sessionId = input.session_id ?? undefined;
   const isFork = input.fork_session === true;
 
@@ -553,7 +547,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
       queuedLabel: 'Claude Code session',
     },
     launch: (context) =>
-      launchClaudeAgentSession(input, permissionMode, model, effort, context),
+      launchClaudeAgentSession(input, permissionMode, claudeRun, context),
   });
 });
 
@@ -583,8 +577,7 @@ const launchClaudeAgentSession = Effect.fn(
 )(function* (
   input: ClaudeAgentInput,
   permissionMode: ClaudeAgentPermissionMode,
-  model: string,
-  effort: ClaudeAgentEffort,
+  claudeRun: ClaudeCodeRun,
   context: AgentCliLaunchContext,
 ): Effect.fn.Return<
   ToolResult,
@@ -605,12 +598,11 @@ const launchClaudeAgentSession = Effect.fn(
     Effect.orDie,
   );
   // Synthetic run metadata for the child run: the Claude Code CLI runs outside
-  // the normal run loop, so the tool-use category and a stable model label are
-  // stated here rather than inherited from the generic AgentConfig defaults.
+  // the normal run loop, so the tool-use category and the model's reference
+  // are stated here rather than inherited from the generic AgentConfig defaults.
   const agentConfig = buildSyntheticToolUseConfig({
     agent: CLAUDE_AGENT_NAME,
-    // Fabricated label, not a routed model: Claude Code drives its own model.
-    model: 'claude',
+    model: claudeRun.ref,
     instruction: input.prompt,
   });
   const preview = previewLabel(input.prompt);
@@ -628,9 +620,8 @@ const launchClaudeAgentSession = Effect.fn(
         childRun,
         runId,
         initialPrompt: input.prompt,
-        model,
+        run: claudeRun,
         permissionMode,
-        effort,
         cwd: workingDirectory,
         additionalDirectories,
         env,
@@ -641,7 +632,7 @@ const launchClaudeAgentSession = Effect.fn(
         registry: context.registry,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
-    launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,
+    launchedLine: `Claude Code agent launched (model: ${claudeRun.ref}, effort: ${claudeRun.effort ?? 'none'}, permission: ${permissionMode}).${claudeRun.note ? ` ${claudeRun.note}` : ''}`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the session_id. Pass it back on a later call to send a follow-up.`,
   });
 });

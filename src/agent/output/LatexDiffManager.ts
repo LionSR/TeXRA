@@ -35,7 +35,7 @@ import {
   resolveWorkspaceSourceDir,
 } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { RoundFileEntry, RoundFileMapping } from './types';
 
 /** The services a diff pass checks, runs and records on. */

@@ -216,9 +216,9 @@ Code extension. Running bare `texra` in a terminal opens this same session.
 <p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its slash commands at the bottom.</p>
 
 ```bash
-texra chat                          # default chat agent and model
-texra chat --agent research         # pick a tool-use agent for the session
-texra chat --model deepseek41T      # override the session model
+texra chat                                      # default chat agent and model
+texra chat --agent research                     # pick a tool-use agent for the session
+texra chat --model deepseek/deepseek-flash@high # override the session model and effort
 # headless tool-use run for scripts and CI
 texra run review --input main.tex --instruction "Check the proof." --print
 ```
@@ -459,10 +459,10 @@ List the models TeXRA knows about, and manage which ones appear in the
 
 ```bash
 texra models list
-texra models show deepseekproT
+texra models show deepseek/deepseek-v4-pro
 texra models enabled
-texra models enable grok47
-texra models disable grok47
+texra models enable xai/grok-4.7
+texra models disable xai/grok-4.7
 ```
 
 Inspect the notes agents have stored for this workspace (see
@@ -514,18 +514,18 @@ defaults.
 
 <ConfigPrecedenceStack />
 
-<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseekproT</code>).</p>
+<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseek/deepseek-v4-pro</code>).</p>
 
 ```json
 {
-  "texra.model": "deepseekproT",
+  "texra.model": "deepseek/deepseek-v4-pro",
   "texra.outputFormat": "text",
   "texra.chat": {
     "agent": "assistant",
-    "model": "deepseekproT"
+    "model": "deepseek/deepseek-v4-pro"
   },
   "texra.run": {
-    "model": "deepseekproT"
+    "model": "deepseek/deepseek-v4-pro"
   }
 }
 ```
@@ -534,7 +534,7 @@ Supported top-level keys are `texra.agent`, `texra.model`, and
 `texra.outputFormat`; `texra.chat` and `texra.run` may set command-specific
 `agent` and `model` defaults. Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
-built-in CLI model default is `deepseekproT`.
+built-in CLI model default is `deepseek/deepseek-v4-pro`.
 
 The approval policy (`texra.approvalPolicy`) and the two approval switches
 (`texra.toolUse.requireEditApproval`, `texra.toolUse.requireBashApproval`) are
@@ -555,9 +555,9 @@ Two more switches live in the environment:
 | `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging ([Usage logging](./configuration.md#usage-logging)) |
 | `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)        |
 
-Usage logging can also be turned off in the workspace file with
-`"texra.telemetry.enabled": false` in `.texra/config.json` (`texra doctor`
-prints this hint). The environment variables override a stored `true`, but
+Usage logging can also be turned off with `"texra.telemetry.enabled": false`
+in your user configuration file, `~/.texra/v1/global-storage/config.json`
+(`texra doctor` prints this hint). The environment variables override a stored `true`, but
 not the reverse: they can only switch logging off.
 
 Both take `1`, `true`, or any other value; `0`, `false`, `no`, `off`, empty,

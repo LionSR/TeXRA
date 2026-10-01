@@ -57,6 +57,17 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
       ),
     );
   }
+  // A one-shot loop (headless, or an in-band child) ends after its current
+  // turn and has no next boundary to read a message at: one queued here would
+  // sit unread under a "sent" acknowledgement. The live loop decides, not
+  // the launch: a resumed headless run is no longer one-shot.
+  if (session.runs.getHandle(target)?.controls?.oneShot === true) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Run '${target}' is a one-shot run: it ends after its current turn and reads no messages. Put what it needs in your own result instead.`,
+      ),
+    );
+  }
   const sender =
     caller === undefined
       ? 'the user'

@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, lookup } from 'llm-zoo';
 
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import {
@@ -16,6 +16,11 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
+const GPT55 = 'openai/gpt-5.5-2026-04-23';
+// Live (not deprecated): a stored preference for a deprecated model drops out at read.
+const SONNET55 = 'anthropic/claude-sonnet-5-5';
+const SONNET46 = 'anthropic/claude-sonnet-4-6';
+
 /** The controller's deps are file-local; derive them from its constructor. */
 type SettingsModelSelectionControllerDeps = ConstructorParameters<
   typeof SettingsModelSelectionController<never>
@@ -26,7 +31,7 @@ type SettingsModelSelectionControllerDeps = ConstructorParameters<
 const modelOptions = (models: readonly string[]): ModelOptionData[] =>
   models
     .map((model) => {
-      const config = MODEL_CONFIGS[model];
+      const config = lookup(model);
       return config
         ? buildBaseModelOption(model, config)
         : { value: model, label: model };
@@ -53,7 +58,7 @@ function createController(
   });
 }
 
-// A discovered sonnet46 Copilot route with the editor's context ceiling and
+// A discovered Sonnet 4.6 Copilot route with the editor's context ceiling and
 // subscription pricing, optionally with capabilities overridden.
 function sonnet46CopilotRoutes(
   access: CopilotModelRoute['access'],
@@ -61,13 +66,13 @@ function sonnet46CopilotRoutes(
 ): ReadonlyMap<string, CopilotModelRoute> {
   return new Map<string, CopilotModelRoute>([
     [
-      'sonnet46',
+      SONNET46,
       {
         access,
         reference: { vendor: 'copilot', id: 'claude-sonnet-4.6' },
         version: '2026-07',
         effectiveConfig: {
-          ...MODEL_CONFIGS.sonnet46,
+          ...MODEL_CONFIGS[SONNET46],
           ...(capabilities === undefined ? {} : { capabilities }),
           contextWindow: 200_000,
           inputPrice: 0,
@@ -83,20 +88,18 @@ describe('SettingsModelSelectionController', () => {
     Effect.gen(function* () {
       const globalState = new FakeStateStore({
         [GlobalStateKey.MODEL_SELECTION]: {
-          enabledExtras: ['gpt55'],
+          enabledExtras: [GPT55],
           disabledDefaults: [],
         },
-        [GlobalStateKey.HELPER_MODEL]: 'gpt55',
+        [GlobalStateKey.HELPER_MODEL]: GPT55,
       });
       const controller = createController({
         stores: { ...makeFakeSettingsStores().stores, globalState },
       });
 
-      expect((yield* controller.buildSelectionData()).helperModel).toBe(
-        'gpt55',
-      );
+      expect((yield* controller.buildSelectionData()).helperModel).toBe(GPT55);
 
-      yield* controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
+      yield* controller.setModelEnabled({ modelName: GPT55, enabled: false });
 
       expect(yield* globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
         enabledExtras: [],
@@ -111,7 +114,7 @@ describe('SettingsModelSelectionController', () => {
   it.effect('refuses to disable the last remaining model', () =>
     Effect.gen(function* () {
       const onlyGpt55 = {
-        enabledExtras: ['gpt55'],
+        enabledExtras: [GPT55],
         disabledDefaults: DEFAULT_MODELS,
       };
       const globalState = new FakeStateStore({
@@ -122,7 +125,7 @@ describe('SettingsModelSelectionController', () => {
       });
 
       const error = yield* Effect.flip(
-        controller.setModelEnabled({ modelName: 'gpt55', enabled: false }),
+        controller.setModelEnabled({ modelName: GPT55, enabled: false }),
       );
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toMatch(/at least one model/i);
@@ -138,7 +141,7 @@ describe('SettingsModelSelectionController', () => {
       Effect.gen(function* () {
         const globalState = new FakeStateStore({
           [GlobalStateKey.MODEL_SELECTION]: {
-            enabledExtras: ['grok4'],
+            enabledExtras: ['xai/grok-4-0709'],
             disabledDefaults: DEFAULT_MODELS,
           },
         });
@@ -211,15 +214,15 @@ describe('SettingsModelSelectionController', () => {
           stores: {
             ...makeFakeSettingsStores().stores,
             globalState: new FakeStateStore({
-              [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet55'],
+              [GlobalStateKey.COPILOT_ROUTE_MODELS]: [SONNET55],
             }),
           },
         });
 
         expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
           {
-            name: 'sonnet55',
-            label: MODEL_CONFIGS.sonnet55.label,
+            name: SONNET55,
+            label: MODEL_CONFIGS[SONNET55].label,
             access: 'unavailable',
             preferred: true,
           },
@@ -242,8 +245,8 @@ describe('SettingsModelSelectionController', () => {
 
         expect(copilotModels).toEqual([
           {
-            name: 'sonnet46',
-            label: MODEL_CONFIGS.sonnet46.label,
+            name: SONNET46,
+            label: MODEL_CONFIGS[SONNET46].label,
             access: 'consent-required',
             preferred: false,
           },
@@ -256,9 +259,9 @@ describe('SettingsModelSelectionController', () => {
               model.name.startsWith('copilot:') || model.provider === 'copilot',
           ),
         ).toEqual([]);
-        expect(
-          models.filter((model) => model.name === 'sonnet46'),
-        ).toHaveLength(1);
+        expect(models.filter((model) => model.name === SONNET46)).toHaveLength(
+          1,
+        );
       }),
   );
 });

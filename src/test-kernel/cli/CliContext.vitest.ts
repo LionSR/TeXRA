@@ -137,9 +137,13 @@ describe('CLI context config defaults', () => {
     );
 
     // A project file (which a cloned repository can supply) cannot loosen or
-    // tighten the policy, and the ignored key is reported...
+    // tighten the policy, and the ignored key is reported; a telemetry opt-out
+    // there is honoured, so it is not...
     const workspace = await workspaceWithConfig(
-      JSON.stringify({ 'texra.approvalPolicy': 'never' }),
+      JSON.stringify({
+        'texra.approvalPolicy': 'never',
+        'texra.telemetry.enabled': false,
+      }),
     );
     const projectContext = await cliContext({
       ambient,
@@ -150,6 +154,9 @@ describe('CLI context config defaults', () => {
     expect(projectContext.approvalPolicy).toBe('yolo');
     expect(projectContext.configDegradations.join('\n')).toContain(
       'Ignoring "texra.approvalPolicy"',
+    );
+    expect(projectContext.configDegradations.join('\n')).not.toContain(
+      'texra.telemetry.enabled',
     );
 
     // ...while the user's own file for that workspace does win over the
@@ -188,7 +195,7 @@ describe('CLI context config defaults', () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({
         unknown: true,
-        'texra.chat': { other: true, model: 'deepseekT' },
+        'texra.chat': { other: true, model: 'deepseek/deepseek-v4-flash' },
       }),
     );
 
@@ -203,7 +210,7 @@ describe('CLI context config defaults', () => {
     // The section itself still resolves: an unknown member is a diagnostic,
     // not a reason to drop the keys beside it.
     expect(context.config.get('texra.chat')).toMatchObject({
-      model: 'deepseekT',
+      model: 'deepseek/deepseek-v4-flash',
     });
   });
 
@@ -233,9 +240,12 @@ describe('CLI context config defaults', () => {
       JSON.stringify({
         'texra.chatgptCodex.preferSubscription': true,
         'texra.agent': 'generic',
-        'texra.model': 'gpt55',
-        'texra.chat': { agent: 'chat', model: 'deepseekT' },
-        'texra.run': { agent: 'criticize', model: 'sonnet46T' },
+        'texra.model': 'openai/gpt-5.5-2026-04-23',
+        'texra.chat': { agent: 'chat', model: 'deepseek/deepseek-v4-flash' },
+        'texra.run': {
+          agent: 'criticize',
+          model: 'anthropic/claude-sonnet-4-6',
+        },
       }),
     );
 
@@ -248,7 +258,7 @@ describe('CLI context config defaults', () => {
     expect(context.configWarnings).toEqual([]);
     expect(context.config.get('texra.run')).toEqual({
       agent: 'criticize',
-      model: 'sonnet46T',
+      model: 'anthropic/claude-sonnet-4-6',
     });
   });
 

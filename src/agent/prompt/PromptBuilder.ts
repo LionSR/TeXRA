@@ -14,7 +14,7 @@ import { ensureArray } from '@utils/core';
 import { renderPrompt } from '@utils/prompt';
 import { loadAgentsMd } from '@utils/files/agentsMd';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * Instructions appended to tool-use agent prompts at open. What depends on

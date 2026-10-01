@@ -15,6 +15,16 @@ export function zeroCostAccessOverrides(contextWindow: number): {
   readonly inputPrice: 0;
   readonly outputPrice: 0;
   readonly contextWindow: number;
+  readonly longContextPricing: undefined;
+  readonly tiers: undefined;
 } {
-  return { inputPrice: 0, outputPrice: 0, contextWindow };
+  // A covered route bills no tier either: a long-prompt or fast-tier rate
+  // left on the config would price a request the subscription paid for.
+  return {
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow,
+    longContextPricing: undefined,
+    tiers: undefined,
+  };
 }

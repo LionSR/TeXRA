@@ -30,7 +30,7 @@ import { generateOAuthState, generatePkcePair } from './pkce';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
 import type { OAuthRequestError } from './oauthRequest';
 import type { SubscriptionSessionBase } from './subscriptionSessionSchema';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 import type { z } from 'zod';
 
 const CHANNEL = 'SubscriptionOAuth';

@@ -25,7 +25,6 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 @customElement('shortcuts-tab')
@@ -241,7 +240,7 @@ export class ShortcutsTab extends LitElement {
 
   override render(): TemplateResult {
     const entries = this.visibleEntries();
-    const groups = groupBy(entries, (entry) => entry.category);
+    const groups = Map.groupBy(entries, (entry) => entry.category);
     const query = this.query.trim();
     const feedback =
       this.feedback ||

@@ -22,8 +22,8 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';

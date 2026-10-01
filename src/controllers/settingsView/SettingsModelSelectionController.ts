@@ -9,8 +9,10 @@ import {
 
 // Local imports
 import { getHelperModelName } from '@agent/runtime/helperModelName';
+import { defaultReasoningLevel } from '@model/reasoningChoice';
 import {
   reasoningEffortOverrides,
+  selectableReasoningLevels,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
 import {
@@ -209,7 +211,7 @@ export class SettingsModelSelectionController<R = never> {
         .filter((config) =>
           MODEL_SELECTION_SOURCES.has(resolveModelSource(config)),
         )
-        .map((config) => config.name);
+        .map((config) => config.ref);
       const optionsData = yield* this.deps.resolveModelOptions(
         { ...this.deps.stores, secrets: this.deps.secrets },
         candidates,
@@ -245,7 +247,7 @@ export class SettingsModelSelectionController<R = never> {
         this.addReasoningLevelData(
           item,
           effectiveConfig,
-          reasoningOverrides[name],
+          reasoningOverrides[config.ref],
         );
         items.push(item);
       }
@@ -262,17 +264,11 @@ export class SettingsModelSelectionController<R = never> {
     if (!supportsReasoningLevel(config)) return;
 
     item.supportsReasoningLevel = true;
-    const supportedLevels = config.capabilities.supportedReasoningEfforts;
-    if (supportedLevels?.length) {
-      item.supportedReasoningLevels = [...supportedLevels];
-    }
+    const supportedLevels = selectableReasoningLevels(config);
+    item.supportedReasoningLevels = supportedLevels;
+    item.defaultReasoningLevel = defaultReasoningLevel(config);
 
-    item.defaultReasoningLevel = config.capabilities.reasoningEffort;
-
-    if (
-      override !== undefined &&
-      (!supportedLevels?.length || supportedLevels.includes(override))
-    ) {
+    if (override !== undefined && supportedLevels.includes(override)) {
       item.reasoningLevel = override;
     }
   }

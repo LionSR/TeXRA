@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import { Data, Duration, Effect, Fiber, Option, Result, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -16,7 +16,7 @@ import { toWindowsCommand } from '@utils/system/windowsCommandLine';
 import type {
   ChildProcessHandle,
   ChildProcessSpawner,
-} from 'effect/unstable/process/ChildProcessSpawner';
+} from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
 const CHANNEL = 'execUtils';

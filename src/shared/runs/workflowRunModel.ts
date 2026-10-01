@@ -36,7 +36,7 @@ import {
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
 } from '@ui/copy/workflowCall';
-import { filterNotNullish, groupBy } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
@@ -193,7 +193,7 @@ function unionWithDeclaredPlan(
   const cardIds = new Set(cards.map((row) => row.call.id));
   const remainingTasks = plan.tasks.filter((task) => !cardIds.has(task.id));
   const unphased = remainingTasks.filter((task) => task.phase === undefined);
-  const declaredByPhase = groupBy(
+  const declaredByPhase = Map.groupBy(
     remainingTasks.filter((task) => task.phase !== undefined),
     (task) => task.phase!,
   );

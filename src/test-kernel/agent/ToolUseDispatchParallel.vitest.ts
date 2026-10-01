@@ -26,6 +26,7 @@ import {
 } from 'effect';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
+
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 import { z } from 'zod';
@@ -59,6 +60,7 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
+import { chooseReasoning } from '@model/reasoningChoice';
 import type { PluginServices } from '@platform/processRuntime';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
@@ -79,6 +81,8 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 import { recordSessionEvents } from './progressTestUtils';
+
+const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -168,20 +172,21 @@ function boundModel(): BoundModel {
     streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
   };
   return {
-    modelId: 'gpt54',
-    config: MODEL_CONFIGS.gpt54,
+    modelId: GPT54,
+    config: MODEL_CONFIGS[GPT54],
+    reasoning: chooseReasoning(MODEL_CONFIGS[GPT54]),
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
-    contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
+    contextWindow: MODEL_CONFIGS[GPT54].contextWindow,
     supportsVision: false,
     supportsNativePdf: false,
     supportsNativeAudio: false,
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
-    modelRetryRouteKey: 'wire:gpt54',
+    modelRetryRouteKey: `wire:${GPT54}`,
     backgroundCapable: false,
     persistentConnection: false,
   };
@@ -195,7 +200,7 @@ const dispatchRunId = (): RunId =>
 const freshState = (): RunState => ({
   ...freshRunState(0),
   family: 'toolUse',
-  modelId: 'gpt54',
+  modelId: GPT54,
   modelCompatibilityKey: 'OpenAI',
 });
 
@@ -218,7 +223,7 @@ function agentRun(
     {
       config: AgentConfigSchema.parse({
         agent: 'assistant',
-        model: 'gpt54',
+        model: GPT54,
         agentCategory: AgentCategory.ToolUse,
         ...(rootUserInstruction === undefined ? {} : { rootUserInstruction }),
       }),

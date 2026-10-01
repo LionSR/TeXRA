@@ -19,7 +19,7 @@ import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -30,7 +30,7 @@ import {
 } from '@utils/files/pastedImageUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
