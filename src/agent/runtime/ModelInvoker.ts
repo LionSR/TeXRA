@@ -1026,15 +1026,18 @@ export const modelInvokerLayer = (): Layer.Layer<
           let carried = false;
           let invocation: InvocationRef;
           let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
-          if (observing !== null) {
-            invocation = observing.invocation;
+          // The accepted operation this round observed, if any: a recovered
+          // token re-observes it rather than resubmitting an admitted turn.
+          const observed = observing;
+          if (observed !== null) {
+            invocation = observed.invocation;
             exit = yield* Effect.exit(
               observeAccepted(
                 cell,
                 invocation,
                 request,
                 bound,
-                observing.accepted,
+                observed.accepted,
               ),
             );
             observing = null;
@@ -1065,7 +1068,10 @@ export const modelInvokerLayer = (): Layer.Layer<
               : Effect.die(error ?? Cause.squash(exit.cause));
           }
           const failure = yield* recoverToken(error.failure, bound);
-          if (failure === null) continue;
+          if (failure === null) {
+            observing = observed;
+            continue;
+          }
           lastFailure = failure.formatted;
           failedAttempt = invocation;
           const dropChain = carried && failure.storedResponseGone;

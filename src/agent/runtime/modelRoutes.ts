@@ -135,7 +135,8 @@ interface SubscriptionRouteRow {
   /** The API key the subscription stands in for. */
   readonly provider: ApiProvider;
   /**
-   * The session read, the only refresh on this path. Its failure passes
+   * The session read, refreshing an expired session; `refreshRejected`
+   * below is the one forced refresh. Its failure passes
    * through `authFailure`, so a refresh that fails reaches the user as the
    * "sign in again, or turn off the preference" instruction.
    */
