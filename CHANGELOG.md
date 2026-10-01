@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
 - **Usage logging is anonymous and needs no account.** When on, each batch
   carries a random install ID in the `X-TeXRA-Install-Id` header instead of a
   sign-in token; the body is unchanged and never has prompts, paths or
-  document text. Each host shows a one-time notice. Opt out with
+  document text. The first host you run shows a one-time notice. Opt out with
   `texra.telemetry.enabled: false`, `TEXRA_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`
   (or VS Code's telemetry setting); the ID is one row in
   `~/.texra/v1/global-storage/texra.db`, and the guide gives the `DELETE` that

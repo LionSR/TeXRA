@@ -1,7 +1,7 @@
 import { Deferred, Effect, PubSub } from 'effect';
 
 /**
- * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
+ * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
  * credentials, workspace-file writes). Not for run/session progress
  * events — those extend `AgentEvent` (`agent/trace/`) or `SessionFact`
  * (`SessionEvents` in `agent/runtime/`), per the VS Code-free-zone rule in
@@ -60,8 +60,7 @@ export interface AppSignalPayloads {
    * The file-backed finalizer runs on every exit of the write, failure and
    * interruption included, because an interrupted commit may still have
    * landed; the signal means "re-read this key", never "the value changed".
-   * The same stores hold OAuth tokens, sign-in nonces and Overleaf
-   * credentials, so a subscriber filters on `key` and ignores the rest: an
+   * The same stores hold OAuth tokens and Overleaf credentials, so a subscriber filters on `key` and ignores the rest: an
    * OAuth refresh must not repaint the profile tab.
    *
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the

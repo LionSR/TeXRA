@@ -555,9 +555,9 @@ Two more switches live in the environment:
 | `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging ([Usage logging](./configuration.md#usage-logging)) |
 | `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)        |
 
-Usage logging can also be turned off in the workspace file with
-`"texra.telemetry.enabled": false` in `.texra/config.json` (`texra doctor`
-prints this hint). The environment variables override a stored `true`, but
+Usage logging can also be turned off with `"texra.telemetry.enabled": false`
+in your user configuration file, `~/.texra/v1/global-storage/config.json`
+(`texra doctor` prints this hint). The environment variables override a stored `true`, but
 not the reverse: they can only switch logging off.
 
 Both take `1`, `true`, or any other value; `0`, `false`, `no`, `off`, empty,

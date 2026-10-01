@@ -166,8 +166,8 @@ export const promptForCliProviderApiKey = Effect.fn(
  * committed write, whoever made it: `/key`, `/config`, the setup agent's
  * `unset_api_key`. A provider key bumps the subscription-preference level the
  * status bar and model pickers read. A key a tool plugin declares (the GitHub
- * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens,
- * sign-in nonces) are ignored.
+ * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens)
+ * are ignored.
  */
 export function subscribeCliCredentialChanges(
   runtime: ProcessRuntime,

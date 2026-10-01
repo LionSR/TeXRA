@@ -155,7 +155,7 @@ interface RetryBatch {
 
 /**
  * The batch could not be delivered or acknowledged and must be sent again:
- * the token lookup, the request, its body, its parse, or an acknowledgement
+ * the install-ID read, the request, its body, its parse, or an acknowledgement
  * that does not cover the batch. `requeue` is the batch to keep for the
  * retry, or null when it failed before a batch was taken.
  */
