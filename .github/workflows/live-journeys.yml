@@ -35,8 +35,9 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.label.name == 'live-journeys'
     runs-on: ubuntu-latest
-    # Three models, four journeys each, run one after another.
-    timeout-minutes: 75
+    # Three models, four journeys each, run one after another: up to 360 s per
+    # journey for enable + run, 240 s more for its LaTeX build, plus the setup.
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
