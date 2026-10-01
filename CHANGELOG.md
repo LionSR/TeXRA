@@ -247,7 +247,12 @@ All notable changes to this project will be documented in this file.
   now billed at its list price, since the promotional price ended. The Claude
   Code integration offers Sonnet 5.5 (`claude-sonnet-5-5`) in place of
   Sonnet 5 and uses it by default; a saved Sonnet 5 choice falls back to it.
-
+- **Delete a conversation from the desktop sidebar.** Hovering or focusing
+  a finished conversation under a project shows an ×; clicking it removes
+  the conversation and its run folder at once. The conversation menu's
+  Delete session no longer asks for confirmation either. A running
+  conversation shows no × until it is stopped, and deleting the one on
+  screen moves to the project's first remaining conversation.
 - **A customized built-in agent tells you when TeXRA ships a newer version.**
   Built-in agents already update with the app; a custom copy with the same
   name used to override the improved version forever without a word.
