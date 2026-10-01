@@ -299,15 +299,22 @@ export const ToolIntentPayloadSchema = z.strictObject({
 
 /* ----------------------------------------------------------- tool.binding */
 
-/** The approval that guards one outcome-unknown call: the single carrier of
- *  an intent's `approvalRequestId`, committed beside the `request.opened` it
- *  names. `attempt` is the intent attempt the approval admits, so a later
- *  dispatch of the same call needs its own binding. */
+/** The request that guards one call attempt: the single carrier of an
+ *  intent's binding, committed beside the `request.opened` it names, so a
+ *  restart neither cancels the request nor loses the call it parks.
+ *  `attempt` is the intent attempt it guards, so a later dispatch of the same
+ *  call needs its own binding. `role` says what the answer decides: `call`
+ *  is the call's own request (its guard's approval, or the first request its
+ *  body raised), whose answer completes the attempt, and a resume re-enters
+ *  it while it stands; `outcome` is the loop's question for an attempt whose
+ *  outcome is unknown, whose answer re-runs or skips the call. */
 export const ToolBindingPayloadSchema = z.strictObject({
   callId: CallIdSchema,
   attempt: z.int().positive(),
   requestId: z.string().min(1),
+  role: z.enum(['call', 'outcome']),
 });
+export type ToolBindingPayload = z.infer<typeof ToolBindingPayloadSchema>;
 
 /* ------------------------------------------------------------ tool.result */
 

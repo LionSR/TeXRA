@@ -19,7 +19,11 @@ import { z } from 'zod';
 
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import {
+  ToolCall,
+  type CallRequests,
+  type ToolCallShape,
+} from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
 import type { Plan, RunId, ToolResult } from '@shared/schemas';
@@ -38,7 +42,6 @@ import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import type { ToolRun } from '@tools/core/toolRun';
-import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -110,6 +113,8 @@ interface PlanPorts {
   readonly call: ToolCallShape;
   /** The run this call was made under, narrowed once at the entry. */
   readonly run: ToolRun;
+  /** Where the call's approval opens, narrowed with the run. */
+  readonly requests: CallRequests;
 }
 
 /**
@@ -216,13 +221,13 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   runId: RunId,
   workPlanState: WorkPlanState,
 ) {
-  const requestId = `plan-${generateShortId()}`;
+  const requestId = ports.requests.nextId('plan');
 
   yield* Effect.logInfo('Requesting approval for plan objective').pipe(
     withLogChannel(CHANNEL),
   );
 
-  const result = yield* ports.run.session.openRequest(runId, {
+  const result = yield* ports.requests.open({
     kind: 'planApproval',
     // The tool is offered only while the goal plugin is on, so the user can
     // always run an approved plan as a goal.
@@ -417,12 +422,12 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   execute: (input: PlanToolInput) =>
     Effect.gen(function* () {
       const call = yield* ToolCall;
-      const run = call.run;
-      if (!run) {
+      const { run, requests } = call;
+      if (!run || !requests) {
         return yield* Effect.fail(
           new ToolError('plan requires an active agent run.'),
         );
       }
-      return yield* planCommand({ call, run }, input);
+      return yield* planCommand({ call, run, requests }, input);
     }),
 });
