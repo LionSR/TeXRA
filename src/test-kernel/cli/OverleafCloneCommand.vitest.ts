@@ -17,7 +17,7 @@ import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
-import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import type * as ChildProcess from 'effect/process/ChildProcess';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),

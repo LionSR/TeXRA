@@ -11,7 +11,7 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import { POLISH_PROMPT_PREFIX } from './bundledPrompts';
 import { helperCall } from './helperModel';
 import type { SessionHandle } from './SessionHandle';
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'TextEnhancement';
 

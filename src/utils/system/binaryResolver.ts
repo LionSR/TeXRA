@@ -13,7 +13,7 @@ import {
   isPathSafe,
   whichOnExtendedPath,
 } from './platformPaths';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
   'latexdiff',

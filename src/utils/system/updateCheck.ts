@@ -1,5 +1,5 @@
 import { Clock, Duration, Effect } from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
+import { HttpClient, HttpClientResponse } from 'effect/http';
 
 import { withLogChannel } from '@logger/effectLog';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -10,7 +10,7 @@ import {
   isNewerSemverVersion,
 } from './semverUpdateCheck';
 import type { Cause } from 'effect';
-import type { HttpClientError } from 'effect/unstable/http';
+import type { HttpClientError } from 'effect/http';
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {

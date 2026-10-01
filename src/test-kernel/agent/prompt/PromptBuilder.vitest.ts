@@ -6,7 +6,7 @@ import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The system prompt reads `AGENTS.md` through `FileSystem`, so the
  *  standard library's own is what these renders run over. */

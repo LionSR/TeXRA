@@ -41,7 +41,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 

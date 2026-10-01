@@ -29,7 +29,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'latexPreview';
 

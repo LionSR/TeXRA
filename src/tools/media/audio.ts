@@ -13,7 +13,7 @@ import {
   Scope,
   Stream,
 } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import * as ChildProcess from 'effect/process/ChildProcess';
 import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
@@ -30,7 +30,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 import type {
   ChildProcessHandle,
   ChildProcessSpawner,
-} from 'effect/unstable/process/ChildProcessSpawner';
+} from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'AudioUtils';
 

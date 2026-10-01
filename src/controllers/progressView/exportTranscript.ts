@@ -23,7 +23,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,

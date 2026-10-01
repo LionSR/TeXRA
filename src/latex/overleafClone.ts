@@ -13,8 +13,8 @@
  */
 
 import { Data, Effect, type FileSystem, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import * as ChildProcess from 'effect/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
   overleafGitClone,

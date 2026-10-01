@@ -47,7 +47,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { TestClock } from 'effect/testing';
-import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
+import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
@@ -122,7 +122,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`

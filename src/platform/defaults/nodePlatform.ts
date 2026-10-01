@@ -85,10 +85,10 @@ import {
   ChildProcessSpawner,
   make as makeSpawner,
   makeHandle,
-} from 'effect/unstable/process/ChildProcessSpawner';
+} from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
-import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
 
 const CHANNEL = 'ChildProcesses';

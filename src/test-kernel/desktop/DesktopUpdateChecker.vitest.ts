@@ -12,7 +12,7 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
-import type { HttpClient } from 'effect/unstable/http';
+import type { HttpClient } from 'effect/http';
 
 type Options = Parameters<typeof checkForDesktopUpdate>[0];
 const release = { version: '0.40.0' };

@@ -20,7 +20,7 @@
  */
 
 import { Cause, Duration, Effect, Schedule, Scope } from 'effect';
-import { HttpClient, HttpClientError } from 'effect/unstable/http';
+import { HttpClient, HttpClientError } from 'effect/http';
 
 import { ToolError } from '@shared/schemas';
 import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
