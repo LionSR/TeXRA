@@ -30,20 +30,19 @@ import {
 import type { UsageLogEntry } from './usageValidation.ts';
 
 /**
- * Standard-tier catalog entries keyed by API model name. Fast-tier registry
- * entries (`serviceTier: 'fast'`) carry premium rates for the same model id
- * and are skipped; among remaining duplicates (e.g. gpt-5.6-sol standard vs
- * pro mode, which bill identically) the first registry entry wins.
+ * Catalog entries keyed by the provider's API model id, the `model` every
+ * client version sends (llm-zoo 2.0 covers every id 1.x priced). A fast
+ * service tier is a rate table inside the entry, so the entry's own rates
+ * are the standard tier. A short name is the fallback key.
  */
-const [configByFullName, configByShortName] = (() => {
-  const byFull = new Map<string, ModelConfig>();
+const [configById, configByShortName] = (() => {
+  const byId = new Map<string, ModelConfig>();
   const byShort = new Map<string, ModelConfig>();
   for (const config of Object.values(MODEL_CONFIGS)) {
-    if (config.serviceTier === 'fast') continue;
-    if (!byFull.has(config.fullName)) byFull.set(config.fullName, config);
+    if (!byId.has(config.id)) byId.set(config.id, config);
     if (!byShort.has(config.shortName)) byShort.set(config.shortName, config);
   }
-  return [byFull, byShort];
+  return [byId, byShort];
 })();
 
 /**
@@ -63,7 +62,7 @@ export function equivalentListCost(
   >,
 ): number | undefined {
   const config =
-    configByFullName.get(entry.model) ?? configByShortName.get(entry.model);
+    configById.get(entry.model) ?? configByShortName.get(entry.model);
   if (!config) return undefined;
 
   const cached = entry.cachedInputTokens ?? 0;
