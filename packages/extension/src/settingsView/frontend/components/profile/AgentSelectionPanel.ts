@@ -35,7 +35,7 @@ import {
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { AGENT_DECORATORS } from '@ui/wa/icons';
-import { getBasename, groupBy } from '@utils/core';
+import { getBasename } from '@utils/core';
 
 // Local imports - shared schemas and events
 import { pluralize } from '@utils/text/stringUtils';
@@ -99,7 +99,7 @@ export class AgentSelectionPanel extends LitElement {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      this.groupedSources = groupBy(this.agents, (agent) => agent.source);
+      this.groupedSources = Map.groupBy(this.agents, (agent) => agent.source);
 
       const order = this.displayOrder;
       const stillValid = order.some((a) => agentKey(a) === this.selectedKey);

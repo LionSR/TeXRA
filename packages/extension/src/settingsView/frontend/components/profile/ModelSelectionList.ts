@@ -35,7 +35,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 // Local imports - profile view styles and events
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { groupBy } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
@@ -90,7 +89,7 @@ export class ModelSelectionList extends LitElement {
   @state() private expandedDeprecated: Set<string> = new Set();
 
   private getProviderGroups(): ProviderGroup[] {
-    const byProvider = groupBy(this.models, (model) => model.provider);
+    const byProvider = Map.groupBy(this.models, (model) => model.provider);
 
     return MODEL_SOURCE_ORDER.filter((p) => byProvider.has(p)).map(
       (provider) => {

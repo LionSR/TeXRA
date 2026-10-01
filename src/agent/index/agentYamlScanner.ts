@@ -19,7 +19,6 @@ import { withLogChannel } from '@logger/effectLog';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
 import { AgentCategory } from '@shared/schemas';
-import { groupBy } from '@utils/core';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -148,7 +147,7 @@ function entriesWithUniqueNames(
   issues: AgentScanIssue[],
 ): Effect.Effect<ParsedAgentYaml[]> {
   return Effect.gen(function* () {
-    const byName = groupBy(entries, (entry) => entry.name);
+    const byName = Map.groupBy(entries, (entry) => entry.name);
 
     const unique: ParsedAgentYaml[] = [];
     for (const [name, matches] of byName) {

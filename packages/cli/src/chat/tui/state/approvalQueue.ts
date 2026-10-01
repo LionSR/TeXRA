@@ -28,7 +28,7 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-import { assertNever, groupBy } from '@utils/core';
+import { assertNever } from '@utils/core';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
@@ -97,12 +97,14 @@ type PendingApprovalFact = SessionView['requests'][number] & {
 
 /** Each run's pending request kinds in commit order: the badge the session
  *  list and the workflow popup paint on its row. */
-export const pendingApprovalKindsByRun = computed(() =>
-  groupBy(
-    attentionRequests.get(),
-    (request) => request.runId,
-    (request) => request.kind,
-  ),
+export const pendingApprovalKindsByRun = computed(
+  () =>
+    new Map(
+      Array.from(
+        Map.groupBy(attentionRequests.get(), (request) => request.runId),
+        ([runId, requests]) => [runId, requests.map((request) => request.kind)],
+      ),
+    ),
 );
 
 /** One request the user's attention is on: a fold fact, read once. */
