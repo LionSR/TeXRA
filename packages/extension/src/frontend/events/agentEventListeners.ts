@@ -22,6 +22,7 @@ import {
 } from '@agent/runtime';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
@@ -104,12 +105,9 @@ function handleRequestShowInstruction(
     return {
       title: view.title,
       callback: () =>
-        Effect.sync(() => {
-          void vscode.commands.executeCommand(
-            view.command,
-            ...(view.args ?? []),
-          );
-        }),
+        Effect.asVoid(
+          safeExecuteCommand(view.command, [...(view.args ?? [])], CHANNEL),
+        ),
     };
   });
 

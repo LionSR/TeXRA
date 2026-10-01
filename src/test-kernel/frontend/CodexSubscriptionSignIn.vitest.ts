@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   // Answers like the real reporter, which is an `Effect` the sign-in
   // program yields.
   showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
+  showLoggedInfoMessage: vi.fn(() => Effect.succeed('')),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   openExternal: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('@model/subscriptionAccess', async (importOriginal) => ({
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedErrorMessage: mocks.showLoggedErrorMessage,
+  showLoggedInfoMessage: mocks.showLoggedInfoMessage,
 }));
 
 const { testRuntime } = await import('@test/support/testProcessRuntime');

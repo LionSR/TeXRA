@@ -12,7 +12,10 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { withLogChannel } from '@logger/effectLog';
 import type { Secrets } from '@platform/secrets';
@@ -99,9 +102,15 @@ function vscodePresenter(
           { modal: true, items: [OPEN_DEFAULT_BROWSER, COPY_SIGN_IN_LINK] },
         );
         if (choice === COPY_SIGN_IN_LINK) {
-          yield* Effect.promise(() => vscode.env.clipboard.writeText(url));
-          void vscode.window.showInformationMessage(
-            `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
+          yield* Effect.tryPromise({
+            try: () => vscode.env.clipboard.writeText(url),
+            catch: ensureError,
+          });
+          yield* Effect.forkDetach(
+            showLoggedInfoMessage(
+              channel,
+              `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
+            ),
           );
           return;
         }
@@ -164,8 +173,11 @@ export function signInWithSubscription(
         ),
       );
 
-    void vscode.window.showInformationMessage(
-      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
+    yield* Effect.forkDetach(
+      showLoggedInfoMessage(
+        channel,
+        `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
+      ),
     );
     return true;
   }).pipe(

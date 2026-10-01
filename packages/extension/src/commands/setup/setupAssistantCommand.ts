@@ -1,6 +1,5 @@
 // Third-party imports
 import { Cause, Effect } from 'effect';
-import * as vscode from 'vscode';
 
 // Local imports
 import {
@@ -11,6 +10,13 @@ import {
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { quickPick } from '@frontend/ui/dialogs';
+import {
+  announce,
+  showLoggedInfoMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
   hasUsableSetupCredential,
@@ -116,13 +122,11 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 
     // Each option already carries its own description, so the picker needs no
     // second explanation of the same three choices.
-    const picked = yield* Effect.promise(() =>
-      vscode.window.showQuickPick(picks, {
-        title: 'TeXRA setup',
-        placeHolder:
-          'Choose how the setup assistant reaches models before it starts.',
-      }),
-    );
+    const picked = yield* quickPick(picks, {
+      title: 'TeXRA setup',
+      placeHolder:
+        'Choose how the setup assistant reaches models before it starts.',
+    });
 
     if (!picked) return false;
 
@@ -133,15 +137,13 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
         yield* signInWithSubscription(stores, CHANNEL, 'chatgpt');
         break;
       case 'apiKey':
-        yield* Effect.promise(() =>
-          vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY),
-        );
+        yield* safeExecuteCommand(EXTENSION_COMMANDS.SET_API_KEY, [], CHANNEL);
         break;
       case 'walkthrough':
-        yield* Effect.promise(() =>
-          vscode.commands.executeCommand(
-            EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-          ),
+        yield* safeExecuteCommand(
+          EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
+          [],
+          CHANNEL,
         );
         return false;
     }
@@ -172,22 +174,14 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
 ) {
   if (yield* isRoutingConfigured(stores, secrets)) return true;
 
-  const choice = yield* Effect.promise(() =>
-    vscode.window.showWarningMessage(
-      '"Use OpenRouter" is on, but there is no OpenRouter key and no other provider TeXRA can reach. Add an OpenRouter key, or turn off "Use OpenRouter" in the Models tab, then try again.',
-      { modal: true },
-      'Open Models tab',
-      'Add OpenRouter key',
-    ),
+  const choice = yield* vscodeUi.warning(
+    '"Use OpenRouter" is on, but there is no OpenRouter key and no other provider TeXRA can reach. Add an OpenRouter key, or turn off "Use OpenRouter" in the Models tab, then try again.',
+    { modal: true, items: ['Open Models tab', 'Add OpenRouter key'] },
   );
   if (choice === 'Open Models tab') {
-    yield* Effect.promise(() =>
-      vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
-    );
+    yield* safeExecuteCommand('texra.showDashboard', ['models/keys'], CHANNEL);
   } else if (choice === 'Add OpenRouter key') {
-    yield* Effect.promise(() =>
-      vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY),
-    );
+    yield* safeExecuteCommand(EXTENSION_COMMANDS.SET_API_KEY, [], CHANNEL);
   } else {
     return false;
   }
@@ -225,12 +219,13 @@ export function launchSetupAssistant(
             SETUP_AGENT_NAME,
         )
     ) {
-      void vscode.window.showInformationMessage(
-        'The setup assistant is already running. Follow it in the TeXRA panel.',
+      yield* Effect.forkDetach(
+        showLoggedInfoMessage(
+          CHANNEL,
+          'The setup assistant is already running. Follow it in the TeXRA panel.',
+        ),
       );
-      yield* Effect.promise(() =>
-        vscode.commands.executeCommand('texra.showProgressView'),
-      );
+      yield* safeExecuteCommand('texra.showProgressView', [], CHANNEL);
       return 'already-running' as const;
     }
 
@@ -239,16 +234,22 @@ export function launchSetupAssistant(
     // key would otherwise fall into the credential prompt first, because the
     // picker never routes through the subscription while OpenRouter is on.
     if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
-      void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Settings → Models, then run `TeXRA: Run Setup Assistant` again.',
+      yield* Effect.forkDetach(
+        showLoggedInfoMessage(
+          CHANNEL,
+          'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Settings → Models, then run `TeXRA: Run Setup Assistant` again.',
+        ),
       );
       return 'not-started' as const;
     }
 
     const proceed = yield* ensureCredentialOrPrompt(session.roots, secrets);
     if (!proceed) {
-      void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in with your ChatGPT subscription or set an API key.',
+      yield* Effect.forkDetach(
+        showLoggedInfoMessage(
+          CHANNEL,
+          'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in with your ChatGPT subscription or set an API key.',
+        ),
       );
       return 'not-started' as const;
     }
@@ -262,22 +263,18 @@ export function launchSetupAssistant(
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at
       // runtime.
-      const choice = yield* Effect.promise(() =>
-        vscode.window.showWarningMessage(
-          'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
-          { modal: true },
-          'Open Models tab',
-          'Set API key',
-        ),
+      const choice = yield* vscodeUi.warning(
+        'No model is available with your current keys. Add a provider API key or sign in with your ChatGPT subscription, then try again.',
+        { modal: true, items: ['Open Models tab', 'Set API key'] },
       );
       if (choice === 'Open Models tab') {
-        yield* Effect.promise(() =>
-          vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
+        yield* safeExecuteCommand(
+          'texra.showDashboard',
+          ['models/keys'],
+          CHANNEL,
         );
       } else if (choice === 'Set API key') {
-        yield* Effect.promise(() =>
-          vscode.commands.executeCommand(EXTENSION_COMMANDS.SET_API_KEY),
-        );
+        yield* safeExecuteCommand(EXTENSION_COMMANDS.SET_API_KEY, [], CHANNEL);
       }
       return 'not-started' as const;
     }
@@ -312,11 +309,15 @@ export function launchSetupAssistant(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.andThen(
-          Effect.sync(() => {
-            void vscode.window.showErrorMessage(
-              `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-            );
-          }),
+          Effect.forkDetach(
+            announce(
+              CHANNEL,
+              vscodeUi.showErrorMessage(
+                `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+              ),
+              undefined,
+            ),
+          ),
         ),
         Effect.as('not-started' as const),
       );

@@ -9,9 +9,12 @@ import * as vscode from 'vscode';
 import type { LatexRecommendedStatus } from '@controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import type { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
+import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { ensureError } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'latexSettingsHandlers';
 
 type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
 
@@ -149,8 +152,11 @@ export function vscodeLatexSettingsHandlers(
             ),
           catch: ensureError,
         });
-        void vscode.window.showInformationMessage(
-          `Extension "${extensionId}" installed`,
+        yield* Effect.forkDetach(
+          showLoggedInfoMessage(
+            CHANNEL,
+            `Extension "${extensionId}" installed`,
+          ),
         );
         yield* refresh;
       }),
@@ -183,10 +189,13 @@ export function vscodeLatexSettingsHandlers(
 
           yield* body.postLatexStatus;
           const verb = reset ? 'reset' : 'applied';
-          void vscode.window.showInformationMessage(
-            data.field
-              ? `LaTeX setting ${verb}`
-              : `All recommended LaTeX settings ${verb}`,
+          yield* Effect.forkDetach(
+            showLoggedInfoMessage(
+              CHANNEL,
+              data.field
+                ? `LaTeX setting ${verb}`
+                : `All recommended LaTeX settings ${verb}`,
+            ),
           );
         }),
       ),

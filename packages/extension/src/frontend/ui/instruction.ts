@@ -12,6 +12,7 @@ import type {
 } from '@platform/interfaces';
 import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';
@@ -38,7 +39,18 @@ export function showInstructionWithSuppress(
     // Shown here, before the settlement below: a deferred caller returns once
     // VS Code has accepted the dialog, not once the user dismisses it.
     const prompt = vscode.window.showInformationMessage(message, ...buttons);
-    const settle = Effect.promise(() => Promise.resolve(prompt)).pipe(
+    const settle = Effect.tryPromise({
+      try: () => Promise.resolve(prompt),
+      catch: ensureError,
+    }).pipe(
+      // A prompt VS Code would not show is a logged non-answer.
+      Effect.catch((error) =>
+        Effect.logWarning(`Instruction "${key}" was not shown`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.as(undefined),
+        ),
+      ),
       Effect.flatMap((choice): Effect.Effect<void, StateWriteFailed> => {
         if (!choice) return Effect.void;
         // The dismissal write is the caller's own program: this prompt runs
