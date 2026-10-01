@@ -73,9 +73,8 @@ export const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(
 
       const baseName = inputFile ? path.parse(inputFile).name : 'run';
       const cleanAgent = agentFileName(agent);
-      // Include a runId fragment in the destination folder so two packs of
-      // the same input+agent+model within the same second (the timestamp's
-      // granularity) don't collide and silently merge.
+      // Include a runId fragment in the destination folder so two runs packed
+      // within the same second (the timestamp's granularity) don't collide.
       const idFragment = runId.replaceAll('-', '').slice(0, 8);
       const destinationRelative = path.join(
         HISTORY_DIR,
@@ -84,10 +83,11 @@ export const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(
 
       const source = yield* storageFs.resolve(runDirRelative);
       const destination = yield* workspaceFs.resolve(destinationRelative);
-      yield* workspaceFs.makeDirectory(destinationRelative, {
-        recursive: true,
-      });
-      yield* copyDereferenced(source, destination, { overwrite: true });
+      yield* workspaceFs.makeDirectory(HISTORY_DIR, { recursive: true });
+      // The copy creates the folder and fails on an existing one, so a
+      // second pack of the same run within that second reports an error
+      // instead of merging into the first snapshot.
+      yield* copyDereferenced(source, destination);
       yield* Effect.logInfo(`Packed runDir ${source} -> ${destination}`).pipe(
         withLogChannel(CHANNEL),
       );

@@ -277,21 +277,18 @@ export const copyFileExclusive = Effect.fn('fsDurability.copyFileExclusive')(
  * Copy a file or directory tree, replacing symlinks with the content they
  * point at, so the copy is self-contained. `FileSystem.copy` always
  * preserves links; a snapshot that must survive its source's deletion
- * cannot.
+ * cannot. An existing destination fails the copy and is never replaced or
+ * merged into.
  */
 export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
-  function* (
-    from: string,
-    to: string,
-    options?: { readonly overwrite?: boolean },
-  ) {
+  function* (from: string, to: string) {
     yield* Effect.tryPromise({
       try: () =>
         nodeFs.cp(from, to, {
           recursive: true,
           dereference: true,
-          force: options?.overwrite ?? false,
-          errorOnExist: !options?.overwrite,
+          force: false,
+          errorOnExist: true,
         }),
       catch: (cause) => systemErrorFrom('copyDereferenced', from, cause),
     });
