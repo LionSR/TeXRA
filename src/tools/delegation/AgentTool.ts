@@ -607,22 +607,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       return childResult(agent.name, settled.runId, settled.result, key);
   }
 
-  // A script launches at most AGENT_CALL_LIMIT children: a reused or
-  // recovered call launches none, and a resume's replayed calls never reach
-  // here, so neither counts.
-  if (script !== undefined) {
-    const launches = yield* script.shared(
-      'agent:launches',
-      Effect.sync(() => ({ count: 0 })),
-    );
-    if (launches.count >= AGENT_CALL_LIMIT)
-      return errorResult(
-        `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${agent.name}' did not run.`,
-        { name: 'CallLimit' },
-      );
-    launches.count += 1;
-  }
-
   // An unavailable model fails this call, which a script may catch (Q6).
   const selected = yield* Effect.exit(
     selectAvailableDelegationModel({
@@ -688,6 +672,22 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       );
     return decided;
   }
+  // A script launches at most AGENT_CALL_LIMIT children, counted here,
+  // just before a launch: a reused, recovered, refused or unavailable call
+  // launches none, and a resume's replayed calls never reach here.
+  if (script !== undefined) {
+    const launches = yield* script.shared(
+      'agent:launches',
+      Effect.sync(() => ({ count: 0 })),
+    );
+    if (launches.count >= AGENT_CALL_LIMIT)
+      return errorResult(
+        `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${agent.name}' did not run.`,
+        { name: 'CallLimit' },
+      );
+    launches.count += 1;
+  }
+
   const approved = decided.proposal;
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
   const inherit = (childRunId: RunId): void => {
