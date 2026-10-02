@@ -325,13 +325,12 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(`${hook.timeoutSeconds} seconds`),
-    Effect.map(
-      (ended): HookRun =>
-        Option.getOrElse(ended, () => ({
-          kind: 'timeout' as const,
-          stdout: '',
-          stderr: '',
-        })),
+    Effect.map((ended): HookRun =>
+      Option.getOrElse(ended, () => ({
+        kind: 'timeout' as const,
+        stdout: '',
+        stderr: '',
+      })),
     ),
     Effect.catch((error) =>
       Effect.succeed({
