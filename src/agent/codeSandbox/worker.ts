@@ -60,6 +60,7 @@ const BRIDGE_PRELUDE = `
   const log = globalThis.__csLog;
   const done = globalThis.__csDone;
   const config = JSON.parse(globalThis.__csConfig);
+  let currentPhase = null;
   for (const name of ['__csIssue', '__csLog', '__csDone', '__csConfig']) {
     delete globalThis[name];
   }
@@ -90,13 +91,15 @@ const BRIDGE_PRELUDE = `
         new RealTypeError('tools.' + name + '() takes a JSON-serializable argument.'),
       );
     }
-    const seq = issue(name, json);
+    const seq = issue(name, json, currentPhase);
     return new RealPromise((resolve, reject) => pending.set(seq, { resolve, reject }));
   };
   const tools = Object.create(null);
   for (const name of config.tools) tools[name] = (input) => call(name, input);
   define('tools', freeze(tools));
-  define('args', config.argsJson === undefined ? undefined : parse(config.argsJson));
+  define('phase', (title) => {
+    currentPhase = String(title);
+  });
   const show = (value) => {
     if (typeof value === 'string') return value;
     try {
@@ -232,12 +235,16 @@ const openRealm = (
 
     yield* Effect.try({
       try: () => {
-        defineHostFunction(context, '__csIssue', (name, json) => {
+        defineHostFunction(context, '__csIssue', (name, json, phase) => {
           const seq = nextSeq++;
           ops.push({
             seq,
             name: context.getString(name),
             input: context.getString(json),
+            phase:
+              context.typeof(phase) === 'string'
+                ? context.getString(phase)
+                : null,
           });
           return context.newNumber(seq);
         });
@@ -262,11 +269,7 @@ const openRealm = (
           return undefined;
         });
         const config = context.newString(
-          JSON.stringify({
-            tools: input.tools,
-            argsJson: input.argsJson,
-            maxFanout: MAX_FANOUT,
-          }),
+          JSON.stringify({ tools: input.tools, maxFanout: MAX_FANOUT }),
         );
         context.setProp(context.global, '__csConfig', config);
         config.dispose();

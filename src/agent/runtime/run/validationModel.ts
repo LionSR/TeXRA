@@ -84,6 +84,24 @@ const result = yield* attempt(agent('Answer the workflow child task.', { id: 'ch
 return { outcome: result._tag }`;
 
 /**
+ * The golden store's script: two reads and a command in one `Promise.all`.
+ * The command waits for `golden-script.release`, so the generator kills the
+ * process while it runs, after the first read settled; the second read
+ * waits behind it, since the command is a barrier.
+ */
+const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
+const [notes, shell, gate] = await Promise.all([
+  tools.read_file({ path: 'notes.tex' }),
+  tools.bash({
+    command: 'touch golden-script.started; until [ -f golden-script.release ]; do sleep 0.05; done; echo released',
+    description: 'Wait for the release file',
+  }),
+  tools.read_file({ path: 'golden-script.release' }),
+])
+console.log('gathered')
+return { notes: notes.output, shell: shell.output, gate: gate.summary }`;
+
+/**
  * The scripted conversation of the golden 1.0 store
  * (`packages/cli/scripts/generate-golden-store.mjs`): each agent's system
  * prompt names its part, and a part's step is the count of tool results its
@@ -179,6 +197,17 @@ function goldenTurn(
       ),
     );
   }
+  if (system.includes('GOLDEN-SCRIPT'))
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('script', {
+              title: 'Gather the notes',
+              code: GOLDEN_SCRIPT_SOURCE,
+            }),
+          ]
+        : text('Script done.'),
+    );
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),

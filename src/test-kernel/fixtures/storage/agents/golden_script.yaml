@@ -1,0 +1,11 @@
+name: golden_script
+description: The golden store's script run, killed mid-script after one call settled.
+settings:
+  agentCategory: toolUse
+  tools:
+    - read_file
+    - bash
+    - script
+prompts:
+  systemPrompt: 'GOLDEN-SCRIPT: gather in one script.'
+  userRequest: '{{ INSTRUCTION }}'

@@ -3185,7 +3185,11 @@ describe('RunLedger', () => {
         {
           type: 'tool.intent',
           aggregateId: AGGREGATE,
-          payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+          payload: {
+            origin: { kind: 'response', responseId: RESPONSE_ID },
+            callIds: ['call-a'],
+            attempt: 1,
+          },
         },
       ]);
       return state;

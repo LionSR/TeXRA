@@ -152,30 +152,6 @@
       "name": "getSecretStorageMode"
     },
     {
-      "file": "src/agent/codeSandbox/codeSandbox.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/agent/codeSandbox/codeSandbox.ts"
-    },
-    {
-      "file": "src/agent/codeSandbox/protocol.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "StepReportSchema"
-    },
-    {
-      "file": "src/agent/codeSandbox/protocol.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ScriptEnd"
-    },
-    {
-      "file": "src/agent/codeSandbox/protocol.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SettleMessage"
-    },
-    {
       "file": "src/auth/oauth/deviceAuthorization.ts",
       "category": "unused",
       "kind": "exports",

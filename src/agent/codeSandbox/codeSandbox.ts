@@ -12,7 +12,6 @@ import {
   Data,
   Duration,
   Effect,
-  Exit,
   FiberSet,
   Layer,
   Queue,
@@ -92,6 +91,8 @@ export interface ScriptOp {
   readonly seq: number;
   readonly name: string;
   readonly input: unknown;
+  /** The title of the guest's latest `phase()` call, if it made one. */
+  readonly phase: string | null;
 }
 
 /** How a call settles: a JSON value, or an error the guest's `await` throws. */
@@ -103,22 +104,29 @@ export type ScriptSettlement =
       readonly message: string;
     };
 
-interface ScriptRequest<R> {
+interface ScriptRequest<E, R> {
   readonly source: string;
   /**
    * The names the realm installs as `tools.<name>`: data the caller takes
    * from the step's pinned registry snapshot, never a live catalog.
    */
   readonly tools: ReadonlyArray<string>;
-  /** The `args` global; JSON-serializable. */
-  readonly args?: unknown;
   /**
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
    * if the script ends first. Settlements reach the realm one at a time, in
    * the order these effects complete: a caller that completes each at its
-   * ledger commit makes the realm's delivery order the commit order.
+   * ledger commit makes the realm's delivery order the commit order. A
+   * failure is not the guest's to catch: it ends the script with it.
    */
-  readonly call: (op: ScriptOp) => Effect.Effect<ScriptSettlement, never, R>;
+  readonly call: (op: ScriptOp) => Effect.Effect<ScriptSettlement, E, R>;
+  /** Each step's newly logged lines, as the guest logged them. */
+  readonly onLog?: (lines: ReadonlyArray<string>) => Effect.Effect<void>;
+  /**
+   * Runs once each settlement has reached the realm, before the next is
+   * taken: a caller replaying recorded settlements in their recorded order
+   * completes the next one only after the one before it was delivered.
+   */
+  readonly onDelivered?: (seq: number) => Effect.Effect<void>;
   /** The wall deadline for the whole script, host waits included. */
   readonly timeout: Duration.Input;
   /** Guest CPU budget; defaults to {@link GUEST_CPU_BUDGET_MS}. */
@@ -185,26 +193,27 @@ const toSettleMessage = (
 
 const make = Effect.gen(function* () {
   const platform = yield* Worker.WorkerPlatform;
-  // Compiled once and shared: a compiled module crosses to each worker
-  // without a copy, so a worker never compiles QuickJS itself.
-  const wasm = yield* Effect.tryPromise({
-    try: () => WebAssembly.compile(Uint8Array.from(quickJsWasm)),
-    catch: (cause) => new SandboxUnavailable({ cause: ensureError(cause) }),
-  });
+  // Compiled on the first script and shared: a compiled module crosses to
+  // each worker without a copy, so a worker never compiles QuickJS itself.
+  // A session that runs no script never compiles it.
+  const compiled = yield* Effect.cached(
+    Effect.tryPromise({
+      try: () => WebAssembly.compile(Uint8Array.from(quickJsWasm)),
+      catch: (cause) => new SandboxUnavailable({ cause: ensureError(cause) }),
+    }),
+  );
 
-  const run = <R>(
-    request: ScriptRequest<R>,
-  ): Effect.Effect<ScriptResult, ScriptError, R> => {
+  const run = <E, R>(
+    request: ScriptRequest<E, R>,
+  ): Effect.Effect<ScriptResult, ScriptError | E, R> => {
     const cpuBudgetMs = request.cpuBudgetMs ?? GUEST_CPU_BUDGET_MS;
     const timeout = Duration.fromInputUnsafe(request.timeout);
     return Effect.gen(function* () {
+      const wasm = yield* compiled;
       const interrupt = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
       const workerData: WorkerInput = {
         source: request.source,
         tools: [...request.tools],
-        ...(request.args === undefined
-          ? {}
-          : { argsJson: JSON.stringify(request.args) }),
         cpuBudgetMs,
         wasm,
         interrupt,
@@ -248,14 +257,16 @@ const make = Effect.gen(function* () {
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => Atomics.store(new Int32Array(interrupt), 0, 1)),
       );
-      const calls = yield* FiberSet.make<boolean, never>();
-      const settled = yield* Queue.unbounded<SettleMessage>();
+      const calls = yield* FiberSet.make<void, never>();
+      const settled = yield* Queue.unbounded<SettleMessage, E>();
 
       const logs: string[] = [];
       let logsOmitted = 0;
       let open = 0;
       let report = yield* Queue.take(reports);
       for (;;) {
+        if (request.onLog !== undefined && report.logs.length > 0)
+          yield* request.onLog(report.logs);
         logs.push(...report.logs);
         const overflow = Math.max(0, logs.length - RUN_LOG_MAX_LINES);
         logs.splice(0, overflow);
@@ -268,14 +279,15 @@ const make = Effect.gen(function* () {
               Effect.flatMap((settlement) =>
                 Queue.offer(settled, toSettleMessage(op.seq, settlement)),
               ),
-              // A call that dies (its value will not serialize, say) fails
-              // the queue the loop takes from, so the run ends with that
-              // defect rather than waiting out its deadline.
-              Effect.onExit((exit) =>
-                Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
-                  ? Queue.failCause(settled, exit.cause)
-                  : Effect.void,
+              // A call that fails, or dies (its value will not serialize,
+              // say), fails the queue the loop takes from, so the run ends
+              // with that cause rather than waiting out its deadline.
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Queue.failCause(settled, cause),
               ),
+              Effect.asVoid,
             ),
           );
         }
@@ -297,6 +309,8 @@ const make = Effect.gen(function* () {
         yield* worker
           .send(next)
           .pipe(Effect.mapError((cause) => new SandboxUnavailable({ cause })));
+        if (request.onDelivered !== undefined)
+          yield* request.onDelivered(next.seq);
         report = yield* Queue.take(reports);
       }
     }).pipe(
@@ -320,15 +334,15 @@ const make = Effect.gen(function* () {
 export class CodeSandbox extends Context.Service<
   CodeSandbox,
   {
-    readonly run: <R>(
-      request: ScriptRequest<R>,
-    ) => Effect.Effect<ScriptResult, ScriptError, R>;
+    readonly run: <E, R>(
+      request: ScriptRequest<E, R>,
+    ) => Effect.Effect<ScriptResult, ScriptError | E, R>;
   }
 >()('@texra/agent/CodeSandbox') {
   /** Needs the host's worker platform (`NodeWorker.layerPlatform`). */
   static readonly layer: Layer.Layer<
     CodeSandbox,
-    SandboxUnavailable,
+    never,
     Worker.WorkerPlatform
   > = Layer.effect(CodeSandbox)(make);
 }

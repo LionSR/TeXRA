@@ -90,6 +90,7 @@ import {
 import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import { codeSandboxLayer, ScriptTool } from './codemode/ScriptTool';
 import { ExternalInquiryTool } from './inquiry/ExternalInquiryTool';
 import { AskUserQuestionTool } from './userQuestion/UserQuestionTool';
 import { GitHubSubscriptionTool } from './github/githubSubscriptionTool';
@@ -185,6 +186,7 @@ const PLUGIN_TOOLS = {
   codex: { codex: CodexTool },
   'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
   copilot: {},
+  codemode: { script: ScriptTool },
   core: {
     inline_comment: InlineCommentTool,
     open_pdf: OpenPdfTool,
@@ -248,6 +250,7 @@ const PLUGIN_PROCESS_LAYERS = {
 /** The session services of each plugin whose manifest entry declares
  *  `sessionLayer`: one build per open session. */
 const PLUGIN_SESSION_LAYERS = {
+  codemode: codeSandboxLayer,
   codex: codexThreadsLayer,
   'claude-agent': claudeAgentSessionsLayer,
 } as const satisfies {

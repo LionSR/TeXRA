@@ -10,8 +10,6 @@ export const WorkerInputSchema = z.object({
   source: z.string(),
   /** Names the realm installs as `tools.<name>(args)`. */
   tools: z.array(z.string()),
-  /** JSON text for the `args` global; absent installs `args` as undefined. */
-  argsJson: z.string().optional(),
   cpuBudgetMs: z.number().positive(),
   /** The QuickJS module the host compiled once, shared with every worker. */
   wasm: z.instanceof(WebAssembly.Module),
@@ -57,6 +55,8 @@ const IssuedOpSchema = z.object({
   name: z.string(),
   /** The guest's argument, as JSON text on the wire. */
   input: JsonText,
+  /** The title of the guest's latest `phase()` call when it issued this. */
+  phase: z.string().nullable(),
 });
 
 const ScriptEndSchema = z.discriminatedUnion('_tag', [

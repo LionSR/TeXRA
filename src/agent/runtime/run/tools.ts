@@ -132,12 +132,12 @@ export const SKIPPED_NOT_STARTED =
 
 /**
  * Whether an unfinished call re-runs unasked: the replay word its response
- * row saved and its tool's current one both say `safe`, and the stored
+ * row (or `script.call`) saved and its tool's current one both say `safe`, and the stored
  * arguments still validate against the tool's schema (an object, for a tool
  * that carries only JSON Schema).
  */
 export const replayable = Effect.fn('toolUse.replayable')(function* (
-  fact: DispatchFacts,
+  fact: Pick<DispatchFacts, 'toolName' | 'replay'>,
   registry: IToolRegistry,
   input: unknown,
   logger: Pick<AgentTrace, 'warn'>,

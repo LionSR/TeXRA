@@ -19,6 +19,7 @@ import '@test/support/defaultSessionTestSetup';
 // Node imports
 import {
   cpSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -92,6 +93,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { autoDecideRequests } from '@test/agent/progressTestUtils';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -107,7 +109,8 @@ const SELF = JSON.stringify([
 const PARKED = RunIdSchema.parse('a00000000001');
 const PARENT = RunIdSchema.parse('a00000000002');
 const CHAT = RunIdSchema.parse('a00000000009');
-const TOMBSTONED = RunIdSchema.parse('a0000000000a');
+const SCRIPTED = RunIdSchema.parse('a0000000000a');
+const TOMBSTONED = RunIdSchema.parse('a0000000000b');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -222,6 +225,7 @@ describe('the golden 1.0 store', () => {
       'workflow.script',
       'workflow.attempt',
       'workflow.journal',
+      'script.call',
       'run.removed',
     ] as const)
       expect(types, type).toContain(type);
@@ -244,7 +248,7 @@ describe('the golden 1.0 store', () => {
             : [],
         ),
       ),
-    ]).toEqual(['gpt56', 'gemini38f']);
+    ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
     // The plan the chat ran as a goal: the goal plugin's fact, active, then
     // completed.
     expect(
@@ -314,6 +318,8 @@ describe('the golden 1.0 store', () => {
         run('a00000000008', 'review'),
         // The user stopped its held turn with Ctrl-C, then exited.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
+        // Killed mid-script, like the parked run.
+        run(SCRIPTED, 'golden_script', { status: 'running', outcome: null }),
       ]);
       expect(folded.requests).toEqual([]);
       // The message typed behind the stopped turn stays queued for a resume
@@ -336,7 +342,7 @@ describe('the golden 1.0 store', () => {
         at: 'turn.begin',
         phase: 'model.submitted',
         round: 1,
-        modelId: 'gpt56',
+        modelId: 'openai/gpt-5.6-sol@medium',
         messages: ['user'],
         openAttempt: true,
       });
@@ -344,7 +350,7 @@ describe('the golden 1.0 store', () => {
         at: 'halted',
         phase: 'waiting',
         round: 5,
-        modelId: 'gpt56',
+        modelId: 'openai/gpt-5.6-sol@medium',
         messages: [
           'user',
           ...['assistant', 'tool', 'assistant', 'tool'],
@@ -416,6 +422,7 @@ describe('the golden 1.0 store', () => {
           'running',
           ...Array.from({ length: 4 }, () => 'completed'),
           'cancelled',
+          'running',
         ]);
         const db = yield* Database;
         for (const [run, type] of [
@@ -478,13 +485,16 @@ describe('the golden 1.0 store', () => {
 });
 
 /**
- * The parked run resumed by this build, on the scripted model that wrote it
- * (`goldenTurn`, gated as the package validation gates it): the request the
- * resume sends must be the one its rows recorded, down to the address of
- * its recorded context. Under Vitest the invoker also checks, before the
- * request leaves, that the rows rebuild the prepared turn exactly.
+ * The interrupted runs resumed by this build, on the scripted model that
+ * wrote them (`goldenTurn`, gated as the package validation gates it). The
+ * parked run: the request the resume sends must be the one its rows
+ * recorded, down to the address of its recorded context. Under Vitest the
+ * invoker also checks, before the request leaves, that the rows rebuild the
+ * prepared turn exactly. The script killed mid-run: a resume runs it again
+ * from the top, hands its settled call back from its row instead of running
+ * it, asks about the call the kill interrupted, and runs the rest.
  */
-describe('the parked golden run', () => {
+describe('the interrupted golden runs', () => {
   const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
   const tempDirs = useTempDirs();
   setupPlatform(async () => {
@@ -528,14 +538,27 @@ describe('the parked golden run', () => {
     writeFileSync(flag, 'texra-cli-run-validation\n');
     writeFileSync(join(storage, 'golden-park.release'), '');
     // The crash, on this host: an owner whose process identity is gone.
-    raw(storage, (db) =>
-      db
-        .prepare('UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?')
-        .run(
+    // The script's command runs again in this host's workspace, not in the
+    // generator's project the rows name.
+    const { workspace } = testWorkspaceRoots();
+    raw(storage, (db) => {
+      for (const run of [PARKED, SCRIPTED])
+        db.prepare(
+          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+        ).run(
           JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-          PARKED,
-        ),
-    );
+          run,
+        );
+      db.prepare(
+        `UPDATE event SET data = replace(data, ?, ?)
+         WHERE type IN ('run.start', 'run.config') AND aggregate =
+           (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+      ).run(
+        '"workingDirectory":"/golden/project"',
+        `"workingDirectory":${JSON.stringify(workspace)}`,
+        SCRIPTED,
+      );
+    });
     await Effect.runPromise(
       Effect.provide(
         refresh(),
@@ -591,6 +614,94 @@ describe('the parked golden run', () => {
         ...JSON.parse(String(recorded?.invocation)),
         attempt: 2,
       });
+    }),
+  );
+
+  it.live('resumes the killed script, replaying its settled call', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      // The command the kill interrupted waits for this file. `notes.tex`
+      // is not here: the read that settled before the kill would fail if it
+      // ran again.
+      if (workspace === undefined) throw new Error('no test workspace');
+      mkdirSync(workspace, { recursive: true });
+      writeFileSync(join(workspace, 'golden-script.release'), '');
+      const asked = autoDecideRequests(session, (opened) => {
+        if (opened.payload.kind === 'bash') return { action: 'approve' };
+        if (opened.payload.kind !== 'userQuestion') return null;
+        const [question] = opened.payload.data.questions;
+        return {
+          action: 'submit',
+          answers: { [question?.question ?? '']: 'Run again' },
+        };
+      });
+      const result = yield* withProcessServices(
+        testRuntime(),
+        resumeRun(SCRIPTED, { session }),
+      ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+      expect(result).toMatchObject({ started: true, outcome: 'waiting' });
+      const payloads = (type: string) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT json_extract(e.data, '$.payload') AS payload
+               FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = ? ORDER BY e."commit"`,
+            )
+            .all(SCRIPTED, type)
+            .map(
+              (row) =>
+                JSON.parse(String(row.payload)) as {
+                  readonly callId: string;
+                  readonly attempt: number;
+                  readonly disposition: string;
+                  readonly result: { readonly output?: string };
+                  readonly seq: number;
+                  readonly toolName: string;
+                  readonly phase: string | null;
+                },
+            ),
+        );
+      const results = payloads('tool.result');
+      const settled = (callId: string) =>
+        results
+          .filter((row) => row.callId === callId)
+          .map(({ attempt, disposition }) => ({ attempt, disposition }));
+      // The read that settled before the kill keeps its one row.
+      expect(settled('validation-script-1/0')).toEqual([
+        { attempt: 1, disposition: 'executed' },
+      ]);
+      // The command the kill interrupted was asked about, then run again.
+      expect(
+        asked.opened.filter((opened) => opened.payload.kind === 'userQuestion'),
+      ).toHaveLength(1);
+      expect(settled('validation-script-1/1')).toEqual([
+        { attempt: 2, disposition: 'executed' },
+      ]);
+      expect(settled('validation-script-1/2')).toEqual([
+        { attempt: 1, disposition: 'executed' },
+      ]);
+      // The guest issued the calls its rows recorded, and returned what the
+      // replayed read and the live calls gave it.
+      expect(
+        payloads('script.call').map(({ seq, toolName, phase }) => [
+          seq,
+          toolName,
+          phase,
+        ]),
+      ).toEqual([
+        [0, 'read_file', 'Gather'],
+        [1, 'bash', 'Gather'],
+        [2, 'read_file', 'Gather'],
+      ]);
+      const script = results.find(
+        (row) => row.callId === 'validation-script-1',
+      );
+      expect(script).toMatchObject({ attempt: 2, disposition: 'executed' });
+      expect(script?.result.output).toContain(
+        'The golden store reads this file.',
+      );
+      expect(script?.result.output).toContain('released');
     }),
   );
 });

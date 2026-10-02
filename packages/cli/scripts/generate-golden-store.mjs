@@ -34,6 +34,11 @@
  *   without one. Each keystroke
  *   waits for the screen or the store to show the step before it, so the
  *   rows commit in one order.
+ * - `golden_script` (headless, `yolo`): a `script` call whose guest reads
+ *   twice and runs one command in a `Promise.all`, killed (`SIGKILL`) while
+ *   the command waits, after the first read settled: the interrupted script
+ *   the conformance suite resumes. The command is a barrier, so the second
+ *   read waits behind it and every row commits in one order.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -254,7 +259,7 @@ function scenario(root) {
     const [key] = existsSync(dir) ? readdirSync(dir) : [];
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, start, chat, store };
+  return { run, start, chat, store, project };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -457,6 +462,30 @@ async function generate(root) {
   const exit = await tty.exited;
   if (exit.exitCode !== 0)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
+
+  // The interrupted script: killed while its command waits for the release
+  // file, which only the orphaned command reads once the process is gone.
+  const scripted = cli.start([
+    'run',
+    'golden_script',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Gather the notes in one script.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until(
+    'the script command waiting',
+    () => existsSync(path.join(cli.project, 'golden-script.started')),
+    scripted,
+  );
+  scripted.child.kill('SIGKILL');
+  await scripted.exited;
+  writeFileSync(path.join(cli.project, 'golden-script.release'), '');
 
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
