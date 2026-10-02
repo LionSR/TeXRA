@@ -102,8 +102,8 @@ import { requireToolRun } from '@tools/core/toolRun';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import type { RunToolCall } from '@tools/core/toolRun';
 import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
-import { generateRunId } from '@utils/core';
 import { readCompletedRunConversation } from '@transcript';
+import { generateRunId } from '@utils/core';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
 const OUTER_RUN_ID = '0a95310a9531' as RunId;
