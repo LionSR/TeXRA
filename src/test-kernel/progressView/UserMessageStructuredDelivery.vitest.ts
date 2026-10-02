@@ -60,7 +60,7 @@ describe('user-message structured delivery', () => {
     });
   }
 
-  it('renders the typed workflow summary carried beside the text', async () => {
+  it('renders the typed script summary carried beside the text', async () => {
     const summary: ScriptDeliverySummary = {
       name: 'proofread-pipeline',
       outcome: 'completed',
@@ -79,7 +79,6 @@ describe('user-message structured delivery', () => {
       costUsd: 0.19,
       durationMs: 724_000,
       files: [{ path: 'paper.tex', added: 12, removed: 8 }],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
       errorCause: null,
     };
     // The producer logs the collapsed line as the row text and the typed
@@ -115,10 +114,10 @@ describe('user-message structured delivery', () => {
     // structured field they render as an ordinary structured-delivery bubble
     // of that text — no render-time re-parse of <script-summary>.
     const text = [
-      '<workflow-script-result id="abc">',
+      '<script-result id="abc">',
       '<response>raw run log</response>',
       '<script-summary>{&quot;name&quot;:&quot;spoof&quot;}</script-summary>',
-      '</workflow-script-result>',
+      '</script-result>',
     ].join('\n');
 
     const element = await mount(text);

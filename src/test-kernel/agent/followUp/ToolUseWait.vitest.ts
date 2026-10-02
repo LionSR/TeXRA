@@ -749,7 +749,6 @@ describe('the batch a parked run consumes', () => {
         costUsd: 0.19,
         durationMs: 5_000,
         files: [{ path: 'paper.tex', added: 12, removed: 8 }],
-        scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
         errorCause: null,
       };
       const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
@@ -761,10 +760,10 @@ describe('the batch a parked run consumes', () => {
       yield* enqueue(session, runId, [
         {
           text: [
-            '<workflow-script-result id="abc">',
+            '<script-result id="abc">',
             '<response>raw run log</response>',
             `<script-summary>${escaped}</script-summary>`,
-            '</workflow-script-result>',
+            '</script-result>',
           ].join('\n'),
           from: { kind: 'run' as const, runId: child },
         },

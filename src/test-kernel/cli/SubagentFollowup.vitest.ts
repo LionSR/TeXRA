@@ -20,7 +20,7 @@ const CODEX_STREAMING_TEXT = [
   'The response is still streaming.',
 ].join('\n');
 
-// XML-escaped script-summary JSON for the workflow-script-result/error tests.
+// XML-escaped script-summary JSON for the script-result/error tests.
 function tally(ok: number, failed = 0): Record<string, number> {
   return {
     total: ok + failed,
@@ -47,7 +47,6 @@ function scriptSummary(overrides: Record<string, unknown> = {}): string {
       { path: 'paper_A.tex', added: 120, removed: 80 },
       { path: 'notes.txt', added: null, removed: null },
     ],
-    scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
     errorCause: null,
     ...overrides,
   }).replaceAll('"', '&quot;');
@@ -243,14 +242,14 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
-  it('renders the typed workflow summary instead of its raw run-log tail', () => {
+  it('renders the typed script summary instead of its raw run-log tail', () => {
     const xml = [
-      '<workflow-script-result id="abc">',
+      '<script-result id="abc">',
       '<response>result',
       '=== Run log ===',
       'many duplicate lines</response>',
       `<script-summary>${scriptSummary()}</script-summary>`,
-      '</workflow-script-result>',
+      '</script-result>',
     ].join('\n');
 
     expect(summarizeSubagentFollowup(xml)).toBe(
@@ -258,14 +257,13 @@ describe('summarizeSubagentFollowup', () => {
         '✓ proofread-pipeline completed · 2 phases · 4 ok · $0.190 · 12m 4s',
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
-        '  script: .texra/workflow-scripts/proofread-pipeline.mjs',
       ].join('\n'),
     );
   });
 
-  it('keeps the workflow failure cause but omits its duplicate run log', () => {
+  it('keeps the script failure cause but omits its duplicate run log', () => {
     const xml = [
-      '<workflow-script-error id="abc">',
+      '<script-error id="abc">',
       `<script-summary>${scriptSummary({
         outcome: 'failed',
         tally: tally(1, 3),
@@ -280,7 +278,7 @@ describe('summarizeSubagentFollowup', () => {
       'Finished: earlier task',
       '',
       'Script file: .texra/workflow-scripts/proofread-pipeline.mjs</message>',
-      '</workflow-script-error>',
+      '</script-error>',
     ].join('\n');
 
     const rendered = summarizeSubagentFollowup(xml);
@@ -294,7 +292,7 @@ describe('summarizeSubagentFollowup', () => {
 
   it('preserves structured failure text without parsing generated suffixes', () => {
     const xml = [
-      '<workflow-script-error id="abc">',
+      '<script-error id="abc">',
       `<script-summary>${scriptSummary({
         outcome: 'failed',
         phaseCount: 0,
@@ -309,7 +307,7 @@ describe('summarizeSubagentFollowup', () => {
       'generated entry',
       '',
       'Script file: .texra/workflow-scripts/proofread-pipeline.mjs</message>',
-      '</workflow-script-error>',
+      '</script-error>',
     ].join('\n');
 
     const rendered = summarizeSubagentFollowup(xml);

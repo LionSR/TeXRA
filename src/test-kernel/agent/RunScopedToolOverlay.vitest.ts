@@ -270,7 +270,7 @@ describe('run-scoped tool resolution', () => {
       }),
   );
 
-  // Failure modes: a credential added mid-run (1) rewrites delegate_agent's
+  // Failure modes: a credential added mid-run (1) rewrites agent's
   // description, so its `shown` digest and the cached tools change; (2)
   // rewrites the frozen system text; (3) never reaches the model; (4)
   // reaches it as more than one line, or as the whole list again.
@@ -293,7 +293,7 @@ describe('run-scoped tool resolution', () => {
           ...launch,
           setting: AgentSettingSchema.parse({
             agentCategory: AgentCategory.ToolUse,
-            tools: [{ name: 'delegate_agent' }],
+            tools: [{ name: 'agent' }],
           }),
         };
         yield* runToolUse({ resume: false }).pipe(
@@ -314,9 +314,9 @@ describe('run-scoped tool resolution', () => {
         const offered = step.rows.find((row) => row.type === 'tools.offered');
         assert(offered?.type === 'tools.offered');
         expect(offered.payload.tools).toEqual(before.offeredTools);
-        expect(
-          offered.payload.tools.some(({ name }) => name === 'delegate_agent'),
-        ).toBe(true);
+        expect(offered.payload.tools.some(({ name }) => name === 'agent')).toBe(
+          true,
+        );
         expect(offered.payload.system).toBe(before.offeredSystem);
         const told = step.rows.filter((row) => row.type === 'model.message');
         expect(told).toHaveLength(1);

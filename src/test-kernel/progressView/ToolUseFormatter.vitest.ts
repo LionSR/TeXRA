@@ -295,8 +295,8 @@ const SUMMARY_CONTROL_CASES = [
     buildTemplate: () =>
       formatToolUseTemplate(
         toolUseRow('proposal-2', {
-          toolName: 'delegate_agent',
-          input: { agent: 'assistant', instruction: 'do the thing' },
+          toolName: 'agent',
+          input: { agentName: 'assistant', prompt: 'do the thing' },
           output: 'proposed',
         }),
       ),
@@ -352,8 +352,8 @@ const SUMMARY_CONTROL_CASES = [
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Edit as new task") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
     const row = toolUseRow('proposal-1', {
-      toolName: 'delegate_agent',
-      input: { agent: 'assistant', instruction: 'do the thing' },
+      toolName: 'agent',
+      input: { agentName: 'assistant', prompt: 'do the thing' },
       output: 'proposed',
     });
 

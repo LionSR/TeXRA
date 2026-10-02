@@ -46,6 +46,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ToolCall } from '@agent/runtime/ToolCall';
+import { offeredBy } from '@agent/runtime/loop/step';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -98,7 +99,10 @@ import {
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { requireToolRun } from '@tools/core/toolRun';
-import { executeSubagent } from '@tools/delegation/subagentRun';
+import { configureDelegatedChildApprovals } from '@tools/approval';
+import type { RunToolCall } from '@tools/core/toolRun';
+import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
+import { generateRunId } from '@utils/core';
 import { readCompletedRunConversation } from '@transcript';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
@@ -456,6 +460,28 @@ function waitForClaimRelease(runId: RunId): Promise<void> {
   });
 }
 
+/** Launch one detached child of the parent run the way the `agent` tool
+ *  does for a direct call: a fresh child id, the parent step's offered
+ *  tools as the child's ceiling, and inherited approvals. */
+const launchChild = (
+  parent: RunToolCall,
+  payload: Parameters<typeof launchDetachedSubagent>[1],
+) =>
+  Effect.gen(function* () {
+    return yield* launchDetachedSubagent(parent, payload, {
+      parentRunId: PARENT_RUN_ID,
+      runId: generateRunId(),
+      parentOffered: yield* offeredBy(parent.run),
+      inheritChildRunApprovals: (childRunId) =>
+        configureDelegatedChildApprovals(
+          childRunId,
+          PARENT_RUN_ID,
+          'inherit',
+          parent.run.session,
+        ),
+    });
+  });
+
 /**
  * What a follow-up dispatch needs off the parent run: the explicit carriers
  * the delegation tool reads (run identity, owning session, current model).
@@ -468,7 +494,7 @@ interface ParentDelegationContext {
 
 /**
  * Queue the second-assertion follow-up onto a WAITING child through the real
- * DelegateAgentTool path, asserting the queue accepted it.
+ * executions `send` path, asserting the queue accepted it.
  */
 async function queueSecondAssertionFollowUp(
   parentContext: ParentDelegationContext,
@@ -591,19 +617,15 @@ async function launchWaitingChild(options: {
     },
   };
   const launch = await testRuntime().runPromise(
-    executeSubagent(
-      parentCall,
-      {
-        agent: CHILD_AGENT,
-        agentSource: 'custom',
-        agentCategory: AgentCategory.ToolUse,
-        model: CHILD_MODEL,
-        instruction: 'Prove the first assertion.',
-        memories: [],
-        workingDirectory: process.cwd(),
-      },
-      PARENT_RUN_ID,
-    ).pipe(Effect.provideService(Runs, session.runs)),
+    launchChild(parentCall, {
+      agent: CHILD_AGENT,
+      agentSource: 'custom',
+      agentCategory: AgentCategory.ToolUse,
+      model: CHILD_MODEL,
+      instruction: 'Prove the first assertion.',
+      memories: [],
+      workingDirectory: process.cwd(),
+    }).pipe(Effect.provideService(Runs, session.runs)),
   );
   expect(launch.status).toBe('executed');
   const runId = childRunId(launch.output);
@@ -1262,8 +1284,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           await mkdir(workspace, { recursive: true });
           await writeFile(path.join(workspace, 'notes.md'), 'Draft notes.\n');
         });
-        // The delegation primitive `delegate_workflow` launches through, run
-        // on the parent's own tool call.
+        // The delegation primitive the `agent` tool launches through, run on
+        // the parent's own tool call.
         const launchWorkflowChild: ITool = {
           definition: {
             name: 'launch_workflow_child',
@@ -1276,19 +1298,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                 'launch_workflow_child',
                 yield* ToolCall,
               );
-              const launched = yield* executeSubagent(
-                parent,
-                {
-                  agent: WORKFLOW_CHILD_AGENT,
-                  agentSource: 'custom',
-                  agentCategory: AgentCategory.Workflow,
-                  model: CHILD_MODEL,
-                  instruction: 'Polish the notes.',
-                  inputFiles: ['notes.md'],
-                  memories: [],
-                },
-                PARENT_RUN_ID,
-              );
+              const launched = yield* launchChild(parent, {
+                agent: WORKFLOW_CHILD_AGENT,
+                agentSource: 'custom',
+                agentCategory: AgentCategory.Workflow,
+                model: CHILD_MODEL,
+                instruction: 'Polish the notes.',
+                inputFiles: ['notes.md'],
+                memories: [],
+              });
               childId = childRunId(launched.output);
               return launched;
             }) as unknown as ReturnType<ITool['call']>,

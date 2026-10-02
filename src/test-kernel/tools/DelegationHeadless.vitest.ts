@@ -26,11 +26,12 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
+import { AgentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
   SubagentDurabilityError,
 } from '@tools/delegation/inBandSubagentRun';
+import { generateShortId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const mocks = vi.hoisted(() => ({
@@ -177,15 +178,16 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return DelegateAgentTool.call({
-    agent: 'review',
-    model: null,
-    instruction: 'Check the proof.',
-    memories: [],
-    working_directory: null,
+  return AgentTool.call({
+    agentName: 'review',
+    prompt: 'Check the proof.',
   }).pipe(
     Effect.provideService(AgentEngine, testEngine),
-    Effect.provide(nativeToolTestLayer(call)),
+    // The child's run id derives from the call's id: each case is its own
+    // call, so it launches its own child on the shared session.
+    Effect.provide(
+      nativeToolTestLayer({ ...call, toolCallId: `call-${generateShortId()}` }),
+    ),
   );
 }
 
@@ -565,7 +567,6 @@ describe('headless delegation', () => {
             fakeProcessServices(),
           );
         expect(yield* Effect.flip(run())).toMatchObject({
-          name: 'WorkflowRunAbortError',
           message: expect.stringContaining('pass options.inputFiles'),
         });
         expect(mocks.registerRun).not.toHaveBeenCalled();
@@ -632,7 +633,6 @@ describe('headless delegation', () => {
       expect(result.output).toContain('<subagent-result');
       expect(result.output).toContain('<response>');
       expect(result.output).toContain('The proof is correct.');
-      expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
     }),
   );
 
@@ -952,15 +952,9 @@ describe('headless delegation', () => {
         parentRunContext({ stopAfterCycle: true }),
       );
 
-      expect(result.summary).toBe("Subagent 'review' failed");
+      expect(result.summary).toBe("'review' failed");
       expect(result.status).toBe('error');
       expect(result.error).toBe('review model failed');
-      expect(mocks.writeReport).toHaveBeenCalledWith(
-        expect.stringContaining('<subagent-error'),
-      );
-      expect(mocks.writeReport).toHaveBeenCalledWith(
-        expect.stringContaining('review model failed'),
-      );
       expect(mocks.writeResultMeta).toHaveBeenCalledWith(
         expect.objectContaining({
           producer: 'subagent',
@@ -991,7 +985,7 @@ describe('headless delegation', () => {
         Effect.gen(function* () {
           // Headless `--approval-policy never` withholds `requiresApproval` tools up
           // front, so a delegation tool that still executes was deliberately offered
-          // (delegate_multi_agents). The proposal gate must not settle a
+          // (a script's `agent` calls). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
           const session = yield* createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });

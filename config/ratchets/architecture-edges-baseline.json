@@ -81,7 +81,6 @@
     { "from": "tools", "to": "replacement", "kind": "value" },
     { "from": "tools", "to": "shared", "kind": "value" },
     { "from": "tools", "to": "transcript", "kind": "value" },
-    { "from": "tools", "to": "ui", "kind": "value" },
     { "from": "tools", "to": "utils", "kind": "value" },
     { "from": "transcript", "to": "agent", "kind": "value" },
     { "from": "transcript", "to": "shared", "kind": "value" },

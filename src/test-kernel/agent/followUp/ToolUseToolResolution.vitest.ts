@@ -68,7 +68,7 @@ describe('tool-use tool resolution', () => {
         const names = [
           'ask_user_question',
           'bash',
-          'delegate_agent',
+          'agent',
           'grep',
           'inquiry',
           'plan',
@@ -109,7 +109,7 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'drops the workflow script tool when its dashboard switch is disabled',
+    'drops the agent tool when its plugin dashboard switch is disabled',
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
@@ -121,7 +121,7 @@ describe('tool-use tool resolution', () => {
         );
 
         expect(
-          yield* resolveNames(['bash', 'delegate_multi_agents'], {
+          yield* resolveNames(['bash', 'agent'], {
             approvalPromptsUnavailable: false,
           }),
         ).toEqual(['bash']);

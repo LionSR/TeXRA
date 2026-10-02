@@ -115,9 +115,7 @@ vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
 }));
 
 vi.mock('@cli/runtime/scriptPlainOutput', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@cli/runtime/scriptPlainOutput')
-  >()),
+  ...(await importOriginal<typeof import('@cli/runtime/scriptPlainOutput')>()),
   attachScriptPlainOutput: mocks.attachScriptPlainOutput,
 }));
 

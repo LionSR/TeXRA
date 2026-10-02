@@ -114,7 +114,6 @@ function runViewFields(over: RunViewOverrides): RunView {
       rows: [],
       taskGroups: [],
       settledRows: 0,
-      run: null,
     },
   };
   const { category, ...rest } = over;

@@ -21,7 +21,6 @@ import {
   type ExecResult,
   RunIdSchema,
   type RunId,
-  type WorkflowCallProgress,
   AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -35,47 +34,6 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
 import { generateRunId } from '@utils/core';
 import * as execUtils from '@utils/system/execUtils';
-
-const WORKFLOW_ATTEMPT_ID = 'attempt-1';
-
-/**
- * Publish a workflow run's board rows the way the run's own trace does: the
- * plan marker, one opened phase, and a card per call under that phase.
- */
-function publishWorkflowBoard(
-  runId: RunId,
-  board: {
-    readonly phase?: string;
-    readonly calls: readonly WorkflowCallProgress[];
-  },
-) {
-  return Effect.promise(async () => {
-    const session = testDefaultSession();
-    session.publishRunEvent(runId, {
-      type: 'workflow.plan',
-      attemptId: WORKFLOW_ATTEMPT_ID,
-      phases: board.phase === undefined ? [] : [{ title: board.phase }],
-      tasks: [],
-    });
-    if (board.phase !== undefined) {
-      session.publishRunEvent(runId, {
-        type: 'stage.start',
-        id: 'phase-1',
-        label: board.phase,
-        kind: 'phase',
-      });
-    }
-    for (const call of board.calls) {
-      session.publishRunEvent(runId, {
-        type: 'workflow.call',
-        logId: `workflow-task-${call.id}`,
-        call: { ...call, attemptId: WORKFLOW_ATTEMPT_ID },
-        ...(board.phase !== undefined && { stageId: 'phase-1' }),
-      });
-    }
-    await Effect.runPromise(session.settlePublications());
-  });
-}
 
 const PARENT_RUN_ID = RunIdSchema.parse('ba5e00000001');
 
@@ -190,11 +148,11 @@ function registerProcessRun(instruction: string) {
 }
 
 /**
- * Register a multi-agent-workflow run and return its id. A workflow-script
- * run publishes its `run.config` the way `createChildRun` does at launch, so
- * the fold sees the model the launch actually routed.
+ * Register a background script run and return its id. A script run publishes
+ * its `run.config` the way `createChildRun` does at launch, so the fold sees
+ * the model the launch actually routed.
  */
-function registerWorkflowRun(name: string, model?: string) {
+function registerScriptRun(name: string, model?: string) {
   return Effect.gen(function* () {
     const runId = generateRunId();
     yield* registerRun(
@@ -202,10 +160,10 @@ function registerWorkflowRun(name: string, model?: string) {
       runId,
       {
         name,
-        instruction: `Workflow script ${name}`,
+        instruction: `Script ${name}`,
         ...(model === undefined ? {} : { model }),
       },
-      { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
+      { identity: { kind: 'script', title: name } },
     );
     if (model !== undefined) {
       const session = testDefaultSession();
@@ -214,9 +172,9 @@ function registerWorkflowRun(name: string, model?: string) {
         runId,
         config: AgentConfigSchema.parse({
           agent: name,
-          agentCategory: AgentCategory.Workflow,
+          agentCategory: AgentCategory.ToolUse,
           model,
-          instruction: `Workflow script '${name}'`,
+          instruction: `Script '${name}'`,
         }),
       });
       yield* session.settlePublications();
@@ -553,100 +511,11 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     ),
   );
 
-  it.live('bounds the workflow board and keeps attention first', () =>
-    Effect.gen(function* () {
-      const runId = yield* registerWorkflowRun('observable');
-      const longCallId = `call-${'i'.repeat(2_500)}-call-tail`;
-      const longTitle = `Draft ${'t'.repeat(3_000)}-title-tail`;
-      const longError = `Failure ${'e'.repeat(4_000)}-error-tail`;
-      const longFiles = Array.from(
-        { length: 513 },
-        (_, index) => `${'f'.repeat(600)}-${index}-file-tail.tex`,
-      );
-      const files = { input: [], context: [], media: [] };
-      const completed = Array.from(
-        { length: 8 },
-        (_, index): WorkflowCallProgress => ({
-          id: `completed-${index}`,
-          label: `Completed ${index}`,
-          phase: longTitle,
-          kind: 'document',
-          files,
-          status: 'completed',
-        }),
-      );
-      yield* publishWorkflowBoard(runId, {
-        phase: longTitle,
-        calls: [
-          ...completed,
-          {
-            id: longCallId,
-            label: 'Older failed',
-            phase: longTitle,
-            kind: 'document',
-            agent: 'writer',
-            model: 'replacement-model',
-            files: { input: longFiles, context: [], media: [] },
-            childRunId: 'abcdef123456' as RunId,
-            attemptNumber: 3,
-            status: 'failed',
-            error: longError,
-            costUsd: 0.5,
-          },
-          {
-            id: 'earlier-live',
-            label: 'Earlier live',
-            phase: longTitle,
-            kind: 'document',
-            files,
-            status: 'running',
-          },
-        ],
-      });
-
-      const result = yield* ExecutionsTool.call({
-        path: `/executions/${runId}`,
-      });
-      const output = result.output ?? '';
-      assert.equal(result.status, 'executed');
-      assert.ok(output.includes('"tally"'));
-      assert.ok(output.includes('"opened": true'));
-      // Attention first: the live call, then the failure, then the volume.
-      assert.ok(output.includes('"id": "earlier-live"'));
-      assert.ok(output.includes('"childRunId": "abcdef123456"'));
-      assert.ok(output.includes('"attemptNumber": 3'));
-      assert.ok(output.includes('"model": "replacement-model"'));
-      assert.ok(output.includes('"costUsd": 0.5'));
-      assert.ok(output.includes('"error": "Failure '));
-      assert.ok(output.includes('"omittedCalls": 2'));
-      assert.ok(
-        output.indexOf('"id": "earlier-live"') <
-          output.indexOf('"label": "Older failed"'),
-      );
-      assert.ok(!output.includes('"id": "completed-7"'));
-      assert.ok(!output.includes('call-tail'));
-      assert.ok(!output.includes('title-tail'));
-      assert.ok(!output.includes('error-tail'));
-      assert.ok(!output.includes('file-tail'));
-      assert.ok(output.length < 20_000);
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   it.live(
-    'shows one model for a workflow run in both the listing and its summary',
+    'shows one model for a script run in both the listing and its summary',
     () =>
       Effect.gen(function* () {
-        const runId = yield* registerWorkflowRun(
+        const runId = yield* registerScriptRun(
           'model-parity',
           'parity-model-1',
         );
@@ -666,8 +535,8 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         // what the run is or what model it routed to.
         assert.ok(listingOutput.includes('parity-model-1'));
         assert.ok(summaryOutput.includes('Model: parity-model-1'));
-        assert.ok(summaryOutput.includes('Category: multiAgentWorkflow'));
-        assert.ok(listingOutput.includes('multiAgentWorkflow'));
+        assert.ok(summaryOutput.includes('Category: script'));
+        assert.ok(listingOutput.includes('script'));
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({
