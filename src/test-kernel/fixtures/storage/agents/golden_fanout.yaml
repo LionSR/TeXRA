@@ -1,0 +1,10 @@
+name: golden_fanout
+description: The golden store's fan-out, killed while its second child runs.
+settings:
+  agentCategory: toolUse
+  tools:
+    - script
+    - agent
+prompts:
+  systemPrompt: 'GOLDEN-FANOUT: fan out in one script.'
+  userRequest: '{{ INSTRUCTION }}'

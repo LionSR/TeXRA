@@ -68,6 +68,20 @@ export interface ITool<E = Error, R = never> {
    */
   readonly parallelSafe?: boolean;
   /**
+   * In a script, its calls neither wait for the calls issued before them
+   * nor block the ones after, and take no place in the parallel window: the
+   * tool bounds how many of its own calls run at once. For a call that
+   * waits on long-running work it does not perform itself (a child run). A
+   * later barrier still waits for it.
+   */
+  readonly ownsConcurrency?: boolean;
+  /**
+   * The tool is also a global function of a script, taking its `positional`
+   * field as the first argument and the rest as the second:
+   * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
+   */
+  readonly scriptGlobal?: { readonly positional: string };
+  /**
    * Whether a call recorded as started, with no result, may run again on
    * resume without asking: `'safe'` only for a read-only or idempotent tool,
    * whose second run changes nothing the first did not. Omitted is

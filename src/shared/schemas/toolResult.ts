@@ -132,6 +132,14 @@ const ExecutedToolResultSchema = z.object({
   edits: z.array(EditRecordSchema).optional(),
   /** File attachments (may contain binary data) */
   files: z.array(ToolFileAttachmentSchema).optional(),
+  /** What a script's `await` gets for this call in place of
+   *  `{ output, summary }`: a tool whose answer is data, not prose. */
+  value: JsonValueSchema.optional(),
+  /** The key a later call of the same tool in this run may take this result
+   *  under instead of running again; only an executed result carries one. */
+  reuseKey: z.string().min(1).optional(),
+  /** The call whose result this one took under its `reuseKey`. */
+  reusedFrom: z.string().min(1).optional(),
   ...ToolResultSharedFields,
 });
 
@@ -139,6 +147,9 @@ const ErrorToolResultSchema = z.object({
   status: z.literal('error'),
   /** Error message if tool run failed */
   error: z.string().min(1),
+  /** The name of the Error a script's `await` throws; `ToolFailed` when
+   *  absent. */
+  name: z.string().min(1).optional(),
   /** Brief summary for human-facing logs */
   summary: z.string().optional(),
   output: z.undefined().optional(),

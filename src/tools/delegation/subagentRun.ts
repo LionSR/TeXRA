@@ -25,6 +25,7 @@ import {
   AgentCategory,
   TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
+  type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -50,7 +51,7 @@ import type { DelegationParent } from './proposalFlow';
  * progress degrades to the parent run's trace instead of follow-up delivery.
  * Returns undefined for updates with nothing worth a line.
  */
-function describeSubagentProgress(
+export function describeSubagentProgress(
   agentName: string,
   update: SubagentProgressUpdate,
 ): string | undefined {
@@ -73,7 +74,7 @@ function describeSubagentProgress(
 }
 
 /** Metadata about how the delegation was approved, included in the tool result. */
-interface ApprovalMeta {
+export interface ApprovalMeta {
   autoApproved: boolean;
   /** How the child's own grants record the approval; `inherit` when absent. */
   childApproval?: DelegatedChildApproval;
@@ -103,7 +104,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     ...configPayload,
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
-  const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
   const agentName = configPayload.agent;
 
   const inheritChildRunApprovals = (resolvedRunId: RunId): void => {
@@ -154,103 +154,139 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     });
   }
 
-  const runId = generateRunId();
-  const startedAt = Date.now();
-  const definition = yield* prepareAgentDefinition({
-    config: AgentConfigSchema.parse(childConfigPayload),
-    session: parentSession,
-    enforceCategory: childConfigPayload.agentCategory !== undefined,
-    suppressErrorNotification: true,
-  });
-  const { config } = definition;
-  // A detached child launches after this call settles, so a child that needs
-  // a plugin its parent's step lacks is refused here, on the call
-  // that asked for it, before any row records it.
-  const refusal = childToolRefusal(
+  return yield* launchDetachedSubagent(parent, childConfigPayload, {
+    parentRunId,
+    runId: generateRunId(),
     parentOffered,
-    definition.setting.tools,
-    agentName,
-  );
-  if (refusal !== undefined) {
-    return errorResult(refusal, {
-      summary: `Subagent '${agentName}' not launched`,
-    });
-  }
-  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
-  // One decision for the child's follow-up capability: the child row it
-  // registers under and the run it launches must agree.
-  const userFollowUpSupport = isToolUse
-    ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-    : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
-  yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      yield* registerRun(parentSession, runId, config, {
-        identity: { kind: 'agent', agent: config.agent },
-        userFollowUpSupport,
-        parentRunId,
-      });
-
-      const strategyParams = {
-        definition,
-        runId,
-        parentRunId,
-        session: parentSession,
-        startedAt,
-        workingDirectory,
-        parentOffered,
-        onRunResolved: inheritChildRunApprovals,
-      };
-
-      yield* startDetachedChildRunLoop({
-        session: parentSession,
-        runId,
-        parentRunId,
-        agentName,
-        budgeted: true,
-        buildLaunch: () =>
-          restore(Effect.void).pipe(
-            Effect.andThen(
-              Effect.sync(() => ({
-                strategy: createNativeSubagentStrategy(strategyParams),
-                onLoopFailed: (error: unknown) =>
-                  Effect.logError(
-                    `Subagent '${agentName}' run loop failed after launch`,
-                  ).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    withLogChannel('childRunLoop'),
-                  ),
-              })),
-            ),
-          ),
-      });
+    inheritChildRunApprovals,
+    ...(options?.approvalMeta !== undefined && {
+      approvalMeta: options.approvalMeta,
     }),
-  );
-
-  const meta = options?.approvalMeta;
-  const metaLines: string[] = [];
-  if (meta) {
-    const modelInfo = meta.modelOverride
-      ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
-      : `Model: ${childConfigPayload.model}`;
-    const agentInfo = meta.agentOverride
-      ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
-      : '';
-    metaLines.push(
-      `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
-    );
-  }
-  return executed(
-    [
-      `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
-      `Run ID: ${runId}`,
-      ...metaLines,
-      `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-      ...(isToolUse
-        ? [
-            `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
-          ]
-        : []),
-    ].join('\n'),
-    `Launched '${agentName}' (async)`,
-  );
+  });
 });
+
+/**
+ * Launch one detached child under `runId` and return the receipt the model
+ * reads: the child's result arrives later as a follow-up. A child that needs
+ * a plugin its parent's step lacks is refused here, before any row records
+ * it.
+ */
+export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
+  function* (
+    parent: DelegationParent,
+    childConfigPayload: AgentConfigPayload,
+    launch: {
+      readonly parentRunId: RunId;
+      readonly runId: RunId;
+      /** The most the child may be offered: its parent step's tools. */
+      readonly parentOffered: readonly OfferedTool[];
+      readonly inheritChildRunApprovals: (resolvedRunId: RunId) => void;
+      readonly approvalMeta?: ApprovalMeta;
+    },
+  ) {
+    const { parentRunId, runId, parentOffered, inheritChildRunApprovals } =
+      launch;
+    const parentSession = parent.run.session;
+    const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
+    const agentName = childConfigPayload.agent;
+    const startedAt = Date.now();
+    const definition = yield* prepareAgentDefinition({
+      config: AgentConfigSchema.parse(childConfigPayload),
+      session: parentSession,
+      enforceCategory: childConfigPayload.agentCategory !== undefined,
+      suppressErrorNotification: true,
+    });
+    const { config } = definition;
+    // A detached child launches after this call settles, so a child that needs
+    // a plugin its parent's step lacks is refused here, on the call
+    // that asked for it, before any row records it.
+    const refusal = childToolRefusal(
+      parentOffered,
+      definition.setting.tools,
+      agentName,
+    );
+    if (refusal !== undefined) {
+      return errorResult(refusal, {
+        summary: `Subagent '${agentName}' not launched`,
+      });
+    }
+    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
+    // One decision for the child's follow-up capability: the child row it
+    // registers under and the run it launches must agree.
+    const userFollowUpSupport = isToolUse
+      ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+      : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
+    yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        yield* registerRun(parentSession, runId, config, {
+          identity: { kind: 'agent', agent: config.agent },
+          userFollowUpSupport,
+          parentRunId,
+        });
+
+        const strategyParams = {
+          definition,
+          runId,
+          parentRunId,
+          session: parentSession,
+          startedAt,
+          workingDirectory,
+          parentOffered,
+          onRunResolved: inheritChildRunApprovals,
+        };
+
+        yield* startDetachedChildRunLoop({
+          session: parentSession,
+          runId,
+          parentRunId,
+          agentName,
+          budgeted: true,
+          buildLaunch: () =>
+            restore(Effect.void).pipe(
+              Effect.andThen(
+                Effect.sync(() => ({
+                  strategy: createNativeSubagentStrategy(strategyParams),
+                  onLoopFailed: (error: unknown) =>
+                    Effect.logError(
+                      `Subagent '${agentName}' run loop failed after launch`,
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel('childRunLoop'),
+                    ),
+                })),
+              ),
+            ),
+        });
+      }),
+    );
+
+    const meta = launch.approvalMeta;
+    const metaLines: string[] = [];
+    if (meta) {
+      const modelInfo = meta.modelOverride
+        ? `Model: ${meta.modelOverride} (overridden from ${meta.requestedModel ?? 'default'})`
+        : `Model: ${childConfigPayload.model}`;
+      const agentInfo = meta.agentOverride
+        ? ` Agent: ${meta.agentOverride} (overridden from ${meta.requestedAgent ?? 'default'}).`
+        : '';
+      metaLines.push(
+        `Approval: ${meta.autoApproved ? 'auto-approved' : 'user-approved'}. ${modelInfo}.${agentInfo}`,
+      );
+    }
+    const receipt = executed(
+      [
+        `Subagent '${agentName}' launched. Result will be delivered automatically as a follow-up message when complete.`,
+        `Run ID: ${runId}`,
+        ...metaLines,
+        `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
+        ...(isToolUse
+          ? [
+              `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
+            ]
+          : []),
+      ].join('\n'),
+      `Launched '${agentName}' (async)`,
+    );
+    return { ...receipt, value: { runId } };
+  },
+);

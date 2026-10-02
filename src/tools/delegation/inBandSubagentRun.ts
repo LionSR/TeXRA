@@ -23,6 +23,7 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
+import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import {
   AgentConfigSchema,
@@ -112,6 +113,12 @@ interface InBandSubagentDeliveryResult extends InBandSubagentRunResult {
 
 type PersistenceMode = 'required-result' | 'best-effort-delivery';
 
+/** A child launched fresh from its definition, or a persisted one resumed
+ *  where it stopped under the run id it already has. */
+type InBandLaunch =
+  | { readonly kind: 'fresh'; readonly definition: PreparedAgentDefinition }
+  | { readonly kind: 'resume'; readonly identity: ResumeTurnIdentity };
+
 type SettledInBandTurn = Parameters<
   NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
 >[0];
@@ -160,36 +167,41 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
 const executeInBand = Effect.fn('executeInBand')(
   function* (
     options: InBandSubagentRunBaseOptions,
-    definition: PreparedAgentDefinition,
+    launch: InBandLaunch,
     mode: PersistenceMode,
     runId: RunId,
   ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
-    const { config } = definition;
+    const config =
+      launch.kind === 'fresh'
+        ? launch.definition.config
+        : launch.identity.agentConfig;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    // A child that needs a plugin its parent's step lacks is an ordinary
-    // failed call, refused before any row records it.
-    const refusal = childToolRefusal(
-      options.parentOffered,
-      definition.setting.tools,
-      config.agent,
-    );
-    if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
+    if (launch.kind === 'fresh') {
+      // A child that needs a plugin its parent's step lacks is an ordinary
+      // failed call, refused before any row records it.
+      const refusal = childToolRefusal(
+        options.parentOffered,
+        launch.definition.setting.tools,
+        config.agent,
+      );
+      if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
 
-    yield* registerRun(options.session, runId, config, {
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentRunId: options.parentRunId,
-    }).pipe(
-      Effect.mapError((cause) =>
-        mode === 'required-result'
-          ? new SubagentDurabilityError({
-              message: `Failed to register subagent ${runId}.`,
-              cause,
-            })
-          : ensureError(cause),
-      ),
-    );
+      yield* registerRun(options.session, runId, config, {
+        identity: { kind: 'agent', agent: config.agent },
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        parentRunId: options.parentRunId,
+      }).pipe(
+        Effect.mapError((cause) =>
+          mode === 'required-result'
+            ? new SubagentDurabilityError({
+                message: `Failed to register subagent ${runId}.`,
+                cause,
+              })
+            : ensureError(cause),
+        ),
+      );
+    }
     let settledTurn: SettledInBandTurn | undefined;
     const { completion } = yield* startDetachedChildRunLoop({
       session: options.session,
@@ -209,7 +221,19 @@ const executeInBand = Effect.fn('executeInBand')(
         Effect.succeed({
           strategy: createNativeSubagentStrategy({
             ...options,
-            definition,
+            ...(launch.kind === 'fresh'
+              ? { definition: launch.definition }
+              : {
+                  resume: {
+                    identity: launch.identity,
+                    // Single cycle: the resumed turn ends the run, as the
+                    // launch's own would have.
+                    options: {
+                      session: options.session,
+                      stopAfterCycle: true,
+                    },
+                  },
+                }),
             runId,
             startedAt,
             workingDirectory,
@@ -393,20 +417,69 @@ const executeInBand = Effect.fn('executeInBand')(
 export const executeSubagentInBand = (
   options: InBandSubagentLaunchOptions,
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
+  awaitInBand(options.runId, launchSubagentInBand(options));
+
+/**
+ * Resume a persisted child under the run id it already has and await it as
+ * {@link executeSubagentInBand} awaits a launch: the child continues where
+ * its last owner stopped, in one cycle, and its typed result is read back
+ * from the record. Its stored configuration is what it runs under.
+ */
+export const resumeSubagentInBand = (
+  options: Omit<
+    InBandSubagentRunBaseOptions,
+    'configPayload' | 'parentOffered'
+  > & {
+    readonly runId: RunId;
+  },
+): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
+  awaitInBand(
+    options.runId,
+    Effect.gen(function* () {
+      const agentConfig = yield* getRunRecords(
+        options.session,
+        options.runId,
+      ).readConfig();
+      if (agentConfig === null)
+        return yield* new SubagentDurabilityError({
+          message: `Subagent ${options.runId} has no stored configuration to resume.`,
+        });
+      const completed = yield* executeInBand(
+        { ...options, configPayload: agentConfig, parentOffered: [] },
+        { kind: 'resume', identity: { runId: options.runId, agentConfig } },
+        'required-result',
+        options.runId,
+      );
+      return { runId: completed.runId, result: completed.result };
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.fail(ensureError(Cause.squash(cause))),
+      ),
+    ),
+  );
+
+/** Await one in-band child's program; interrupting the caller stops the
+ *  child by its run id and waits for it to settle its own record. */
+const awaitInBand = (
+  runId: RunId,
+  program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,
+): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   Effect.gen(function* () {
     const runs = yield* Runs;
-    const child = yield* Effect.forkChild(launchSubagentInBand(options), {
+    const child = yield* Effect.forkChild(program, {
       startImmediately: true,
     });
     return yield* Fiber.join(child).pipe(
       Effect.onInterrupt(() =>
         Effect.suspend(() =>
-          runs.interruptActive(options.runId)
+          runs.interruptActive(runId)
             ? Fiber.await(child)
             : Fiber.interrupt(child).pipe(
                 Effect.andThen(
                   Effect.sync(() => {
-                    runs.interruptActive(options.runId);
+                    runs.interruptActive(runId);
                   }),
                 ),
               ),
@@ -438,7 +511,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
     }
     const completed = yield* executeInBand(
       prepared,
-      definition,
+      { kind: 'fresh', definition },
       'required-result',
       options.runId,
     );
@@ -460,7 +533,7 @@ export const executeSubagentForDeliveryInBand = Effect.fn(
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(
     options,
-    definition,
+    { kind: 'fresh', definition },
     'best-effort-delivery',
     generateRunId(),
   );

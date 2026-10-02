@@ -105,6 +105,19 @@ console.log('gathered')
 return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, gate: gate.summary }`;
 
 /**
+ * The golden store's fan-out: two `agent()` calls under one `Promise.all`.
+ * The project's child-run budget is 1, so the first child answers before
+ * the second starts; the second waits for `golden-fanout.release`, so the
+ * generator kills the process while it runs.
+ */
+const GOLDEN_FANOUT_SOURCE = `phase('Fan out')
+const [a, b] = await Promise.all([
+  agent('Fan-out child A: answer at once.', { agentName: 'golden_child', label: 'A' }),
+  agent('Fan-out child B: answer once released.', { agentName: 'golden_child', label: 'B' }),
+])
+return { a: a.response, b: b.response }`;
+
+/**
  * The scripted conversation of the golden 1.0 store
  * (`packages/cli/scripts/generate-golden-store.mjs`): each agent's system
  * prompt names its part, and a part's step is the count of tool results its
@@ -143,6 +156,12 @@ function goldenTurn(
         : text('The approved command ran.'),
     );
   if (system.includes('GOLDEN-CHILD')) {
+    if (said.includes('Fan-out child B'))
+      return gate('golden-fanout.release').pipe(
+        Effect.as(text('Fan-out child B answer.')),
+      );
+    if (said.includes('Fan-out child A'))
+      return Effect.succeed(text('Fan-out child A answer.'));
     if (tools.has('submit_output'))
       return Effect.succeed(
         results.length === 0
@@ -219,6 +238,17 @@ function goldenTurn(
           ]
         : text('Script done.'),
     );
+  // The fan-out script, then the same script again: its calls are reused.
+  if (system.includes('GOLDEN-FANOUT')) {
+    const step = [
+      () => call('script', { title: 'Fan out', code: GOLDEN_FANOUT_SOURCE }),
+      () =>
+        call('script', { title: 'Fan out again', code: GOLDEN_FANOUT_SOURCE }),
+    ][results.length];
+    return Effect.succeed(
+      step === undefined ? text('Fan-out done.') : [step()],
+    );
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
