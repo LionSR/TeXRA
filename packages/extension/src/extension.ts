@@ -96,6 +96,7 @@ import { GlobalDatabase } from '@shared/session/database';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import { toolRegistryLayer } from '@tools/registry';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -161,11 +162,14 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const runtime: ProcessRuntime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
-    mcpConfigPath: USER_MCP_CONFIG_PATH,
-    // Copilot's TeXRA tools, where a default session runs their calls.
-    pluginLayers: workspaceRoot
-      ? { copilot: copilotToolsLayer(() => runtime, tryDefaultSession) }
-      : {},
+    // TeXRA's plugin table, with Copilot's TeXRA tools where a default
+    // session runs their calls.
+    tools: toolRegistryLayer(
+      USER_MCP_CONFIG_PATH,
+      workspaceRoot
+        ? { copilot: copilotToolsLayer(() => runtime, tryDefaultSession) }
+        : {},
+    ),
     secrets,
     appState,
     // The editor's LM API on the workspace path, unavailable on the

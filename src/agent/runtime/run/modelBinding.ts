@@ -53,6 +53,7 @@ import { selectModel } from '@shared/model/modelSelection';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type DeclinableUsageRoute,
   type ModelCompatibilityKey,
   type UsageRoute,
@@ -99,6 +100,10 @@ export interface BoundModel {
   /** One connection a failed turn invalidates (the Responses WebSocket): the
    *  invoker rebinds before it tries again. */
   readonly persistentConnection: boolean;
+  /** Automatic retries after a failed attempt, the user's setting read once
+   *  with the binding: the invoker takes it from here, and a rebind (a
+   *  manual retry, a model switch, a resume) reads it again. */
+  readonly automaticRetries: number;
 }
 
 interface BindModelInput {
@@ -749,6 +754,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   compatibilityKey: ModelCompatibilityKey,
   route: CopilotModelRoute,
   reasoning: ReasoningChoice,
+  automaticRetries: number,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | LanguageModel> {
   const editor = yield* LanguageModel;
   // The discovered route carries the editor's own context ceiling and the
@@ -792,6 +798,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     ),
     backgroundCapable: false,
     persistentConnection: false,
+    automaticRetries,
   };
 });
 
@@ -815,6 +822,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     );
   }
   const request: ReasoningRequest = selected?.request ?? {};
+  const automaticRetries = yield* readSettingFrom<number>(
+    input.stores,
+    MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+  );
   // The wire identity the preference promises, applied to the bound config;
   // a request in a provider mode (OpenAI `pro`) keeps the pinned id.
   const requested =
@@ -843,6 +854,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
         protocol,
         codexSubscription: false,
       }),
+      automaticRetries,
     );
   }
   if (protocol === 'validation') {
@@ -869,6 +881,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       ...routeKeys([requested.provider, 'validation'], requested.id),
       backgroundCapable: false,
       persistentConnection: false,
+      automaticRetries,
     };
   }
   if (
@@ -992,5 +1005,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     // The socket carries one turn at a time and submits no background work.
     backgroundCapable: !onWebSocket && backgroundCapable(configuration),
     persistentConnection: onWebSocket,
+    automaticRetries,
   };
 });

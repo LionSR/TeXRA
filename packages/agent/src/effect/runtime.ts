@@ -35,6 +35,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { UsageLog } from '@shared/usageLog';
+import { toolRegistryLayer } from '@tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 import { PlatformConflict } from './errors.js';
@@ -185,7 +186,8 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: platform.roots.globalStorage,
-      mcpConfigPath: platform.mcpConfigPath,
+      // TeXRA's plugin table, until the embedder passes its own plugins.
+      tools: toolRegistryLayer(platform.mcpConfigPath),
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with.

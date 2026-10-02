@@ -301,8 +301,9 @@ export type HostPluginLayers = {
 /**
  * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it,
  * the process layers `hostLayers` adds, and the MCP servers of
- * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`), which
- * `installProcessRuntime` provides. The layer takes the process `FileSystem`
+ * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`): TeXRA's
+ * plugin table, which each entry passes to `installProcessRuntime` as its
+ * `tools`. The layer takes the process `FileSystem`
  * that `installProcessRuntime` serves, to read that file, and its
  * `AppState`, which holds the key MCP env values are digested under, the
  * switches and the plugin install record. A switch flipped or a plugin

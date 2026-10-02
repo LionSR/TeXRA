@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm/turn';
@@ -69,6 +70,7 @@ const boundAnthropic: BoundModel = {
   modelRetryRouteKey: 'test-route/test-model',
   backgroundCapable: false,
   persistentConnection: false,
+  automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
 };
 
 function anthropicUsage(breakdown: {

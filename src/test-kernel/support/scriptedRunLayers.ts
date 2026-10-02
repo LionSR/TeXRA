@@ -30,6 +30,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
   AgentCategory,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type JsonValue,
   type RetryErrorInfo,
   type RunId,
@@ -82,6 +83,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
     persistentConnection: false,
+    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     ...overrides,
   };
 }
