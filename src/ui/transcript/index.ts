@@ -41,6 +41,7 @@ export {
   type WebSearchRow,
 } from './transcriptRow';
 export {
+  dispatchedChildren,
   scriptStages,
   SCRIPT_CALL_STATUS_LABEL,
   SCRIPT_SECTION_LABEL,

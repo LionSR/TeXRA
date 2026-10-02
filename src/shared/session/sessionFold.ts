@@ -103,7 +103,7 @@ import {
 } from './transcriptState';
 
 import { runActions } from './runActions';
-import { emptySessionView, isLiveRun, loopCoordinate } from './sessionView';
+import { emptySessionView, loopCoordinate, rollupOf } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -576,26 +576,13 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const unreadable = run.blocked
     ? runBlockedMessage(run.blocked)
     : local.unreadable.find((u) => u.runId === run.id)?.detail;
-  const rollup = { total: 0, running: 0, finished: 0 };
-  let descendantWaiting = false;
-  let descendantNeedsUser = false;
-  for (const childId of run.childIds) {
+  const children = run.childIds.flatMap((childId) => {
     const child = view.runs.get(childId);
-    if (!child) continue;
-    // A child parked between turns (held) or paused, nothing asked of the
-    // user, has delivered its turn: it counts as finished, not running.
-    const idle =
-      child.status === RUN_PHASE.WAITING &&
-      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
-    rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
-    rollup.finished +=
-      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
-      child.rollup.finished;
-    if (child.approval !== 'none') descendantWaiting = true;
-    if (child.forceExpanded) descendantNeedsUser = true;
-  }
+    return child === undefined ? [] : [child];
+  });
+  const rollup = rollupOf(children);
+  const descendantWaiting = children.some((child) => child.approval !== 'none');
+  const descendantNeedsUser = children.some((child) => child.forceExpanded);
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';

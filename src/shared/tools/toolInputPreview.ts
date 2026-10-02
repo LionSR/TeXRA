@@ -17,6 +17,7 @@ import { isObject } from '@utils/core';
 
 import { executionsAction } from './executionsDisplay';
 import { normalizeToolName } from './toolDisplayName';
+import { toolDisplayKind } from './toolKind';
 
 function executionsInputPreview(input: Record<string, unknown>): string {
   const action = executionsAction(input);
@@ -60,6 +61,11 @@ export function deriveToolInputPreview(
   if (!isObject(input)) return '';
   const name = normalizeToolName(toolName);
   if (name === 'executions') return executionsInputPreview(input);
+  // A script is named by its title; its source is the card's code section.
+  if (toolDisplayKind(name) === 'script')
+    return typeof input.title === 'string' && input.title
+      ? input.title
+      : 'Script';
   const key = TOOL_PREVIEW_INPUT_KEY[name];
   if (key) {
     const value = input[key];

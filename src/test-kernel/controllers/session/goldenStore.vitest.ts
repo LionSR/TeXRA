@@ -105,7 +105,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
-import { scriptStages } from '@ui/transcript';
+import { dispatchedChildren, scriptStages } from '@ui/transcript';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -985,17 +985,17 @@ describe('the interrupted golden runs', () => {
         yield* session.setTranscriptSubscriptions('golden-test', [
           { id: FANOUT, fromSeq: 0 },
         ]);
-        const painted = yield* SubscriptionRef.changes(session.view).pipe(
-          Stream.map((view) => {
+        const [painted] = yield* SubscriptionRef.changes(session.view).pipe(
+          Stream.filter((view) => {
             const run = view.runs.get(FANOUT);
-            return run === undefined ? [] : scriptStages(run, view);
+            return run !== undefined && scriptStages(run, view).length === 2;
           }),
-          Stream.filter((stages) => stages.length === 2),
           Stream.take(1),
           Stream.runCollect,
         );
+        const fanout = painted!.runs.get(FANOUT)!;
         expect(
-          painted[0]?.map((stage) =>
+          scriptStages(fanout, painted!).map((stage) =>
             stage.calls.map(({ label, status, phase, childRunId }) => ({
               label,
               status,
@@ -1032,6 +1032,36 @@ describe('the interrupted golden runs', () => {
               childRunId: null,
             },
           ],
+        ]);
+        // The stage is the children's one home: the dispatch card lists no
+        // awaited call, and the parent's rows carry no progress line of its
+        // children (an awaited child's progress is its card's transient
+        // text). Each script's card is named by its title and shows its
+        // source as JavaScript.
+        expect(dispatchedChildren(fanout, painted!)).toEqual([]);
+        expect(
+          fanout.transcript.rows.flatMap((row) =>
+            row.kind === 'log' && row.text.full.startsWith('Subagent ')
+              ? [row.text.full]
+              : [],
+          ),
+        ).toEqual([]);
+        expect(
+          fanout.transcript.rows.flatMap((row) =>
+            row.kind === 'tool' && row.toolUse.toolName === 'script'
+              ? [
+                  {
+                    preview: row.model.headerPreview,
+                    language: row.model.sections.map((section) =>
+                      section.kind === 'code' ? section.language : section.kind,
+                    ),
+                  },
+                ]
+              : [],
+          ),
+        ).toEqual([
+          { preview: 'Fan out', language: ['javascript'] },
+          { preview: 'Fan out again', language: ['javascript'] },
         ]);
       }),
   );
@@ -1108,6 +1138,26 @@ describe('the interrupted golden runs', () => {
         'Background child answer.',
       );
       expect(rows(SCRIPT_RUN, 'run.end').at(-1)?.outcome).toBe('completed');
+      // The script's run is the parent's dispatched child; the child its
+      // `agent()` awaited is the script's, listed by its stage alone.
+      yield* session.setTranscriptSubscriptions('golden-test', [
+        { id: BACKGROUND, fromSeq: 0 },
+        { id: SCRIPT_RUN, fromSeq: 0 },
+      ]);
+      const [listed] = yield* SubscriptionRef.changes(session.view).pipe(
+        Stream.map((view) =>
+          [BACKGROUND, SCRIPT_RUN].map((id) => {
+            const run = view.runs.get(id);
+            return run === undefined || run.transcript.rows.length === 0
+              ? null
+              : dispatchedChildren(run, view).map((child) => child.id);
+          }),
+        ),
+        Stream.filter((lists) => lists.every((list) => list !== null)),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+      expect(listed).toEqual([[SCRIPT_RUN], []]);
       // One follow-up for the parent: the result, with its summary line.
       const delivered = rows(BACKGROUND, 'followup.queued').filter(
         (row) => row.content.from?.runId === SCRIPT_RUN,
