@@ -1069,8 +1069,8 @@ format retirement").
 ### Context overflow and journey checks (D13-D14)
 
 **Ruling.** A context overflow in a tool-use run becomes a forced compaction
-retry, not a failed run (D13). Nightly and label-triggered journey checks run
-on cheap models only, `deepseek41T` and `glm53` (D14).
+retry, not a failed run (D13). Journey checks, run on demand by label or
+dispatch (no schedule since 2026-10-02), use cheap models only, `deepseek41T` and `glm53` (D14).
 
 **Reopen.** A forced retry loops without shrinking the context (D13); a
 journey needs a model the cheap tier cannot drive (D14).
