@@ -29,6 +29,7 @@ import { AppState } from '@platform/interfaces';
 import { apiKeyEnvName } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -328,6 +329,81 @@ describe('run-scoped tool resolution', () => {
               text: expect.stringMatching(
                 /^Models for delegation now available: deepseek\/[^\n]*\.$/,
               ),
+            },
+          ],
+        });
+        yield* closeSessionOf(session);
+      }),
+  );
+
+  // Failure modes: a plugin switched on mid-run (1) re-renders the script
+  // tool's declarations, so its `shown` digest and the cached tools change;
+  // (2) leaves the new tool uncallable from the step; (3) never reaches the
+  // model; (4) reaches it as more than one line.
+  it.effect(
+    'a plugin switched on mid-run leaves the script description as frozen and tells the model in one line',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const config = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'test-model',
+          agentCategory: AgentCategory.ToolUse,
+          workingDirectory: process.cwd(),
+        });
+        const ctx: AgentLaunchContext = {
+          ...validationLaunch({ runId, session }, config),
+          setting: AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            tools: [
+              { name: 'script' },
+              { name: 'read_file' },
+              { name: 'zotero_search' },
+            ],
+          }),
+        };
+        const switches = ctx.stores.globalState;
+        yield* switches.update(GlobalStateKey.DISABLED_TOOLS, ['zotero']);
+        yield* runToolUse({ resume: false }).pipe(
+          Effect.provide(runLayer(ctx, [])),
+          Effect.orDie,
+        );
+        const before = (yield* session.ledger.load(runId))!;
+
+        const step = yield* Effect.gen(function* () {
+          const run = yield* AgentRun;
+          const system = {
+            base: () => 'base',
+            isChild: () => false,
+            activated: () => [],
+          };
+          // The activation's first step is held to the record; the switch
+          // reaches the one after it.
+          yield* stepFor(run, before, false, 'request', system);
+          yield* switches.update(GlobalStateKey.DISABLED_TOOLS, []);
+          return yield* stepFor(run, before, false, 'request', system);
+        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
+
+        const offered = step.rows.find((row) => row.type === 'tools.offered');
+        assert(offered?.type === 'tools.offered');
+        const script = (tools: readonly { name: string; shown: string }[]) =>
+          tools.find(({ name }) => name === 'script')?.shown;
+        expect(script(offered.payload.tools)).toBeDefined();
+        expect(script(offered.payload.tools)).toBe(
+          script(before.offeredTools ?? []),
+        );
+        expect(step.tools.registry.has('zotero_search')).toBe(true);
+        const told = step.rows.filter((row) => row.type === 'model.message');
+        expect(told).toHaveLength(1);
+        assert(told[0]?.type === 'model.message');
+        expect(told[0].payload).toMatchObject({
+          kind: 'append',
+          messages: [
+            {
+              role: 'system',
+              text: 'These tools are now available: zotero_search.',
             },
           ],
         });

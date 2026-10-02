@@ -15,11 +15,13 @@ import {
   type ScriptOp,
   type ScriptSettlement,
 } from '@agent/codeSandbox/codeSandbox';
-import { ToolCall } from '@agent/runtime/ToolCall';
+import { ToolCall, type ScriptCalls } from '@agent/runtime/ToolCall';
 import { ToolError, type ToolResultPayload } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/define';
+import { declarationOf } from './declarations';
+import { describeTool, searchTools } from './discovery';
 
 /** Most calls one script may issue; a resume reissues the same ones. */
 const SCRIPT_CALL_LIMIT = 1000;
@@ -53,20 +55,76 @@ const ScriptInputSchema = z.strictObject({
 });
 type ScriptInput = z.infer<typeof ScriptInputSchema>;
 
+/** The script's own host functions, which read the pinned catalog: their
+ *  ops are named `<global>()`, which no tool name can be. */
+const SEARCH_TOOLS = 'searchTools';
+const DESCRIBE_TOOL = 'describeTool';
+const DEFAULT_SEARCH_LIMIT = 8;
+
+const SearchArgsSchema = z.tuple([
+  z.string().min(1, 'searchTools(query) takes a non-empty query'),
+  z.object({ limit: z.int().positive().max(50).nullish() }).nullish(),
+]);
+const DescribeArgsSchema = z.tuple([
+  z.string().min(1, 'describeTool(name) takes a tool name'),
+]);
+
+/** What one host-function op answers, as a settled call. */
+const answerOf = (
+  op: ScriptOp,
+  catalog: ScriptCalls['catalog'],
+): ToolResultPayload['result'] => {
+  const failed = (error: string) => ({ status: 'error' as const, error });
+  if (op.name === `${SEARCH_TOOLS}()`) {
+    const args = SearchArgsSchema.safeParse(op.input);
+    if (!args.success) return failed(z.prettifyError(args.error));
+    const [query, options] = args.data;
+    const found = searchTools(
+      catalog,
+      query,
+      options?.limit ?? DEFAULT_SEARCH_LIMIT,
+    );
+    return {
+      status: 'executed',
+      output: JSON.stringify(found),
+      summary: `${found.length} tools for "${query}"`,
+    };
+  }
+  const args = DescribeArgsSchema.safeParse(op.input);
+  if (!args.success) return failed(z.prettifyError(args.error));
+  const [name] = args.data;
+  const declaration = describeTool(catalog, name);
+  return declaration === null
+    ? failed(
+        `No tool named "${name}" is offered to this script; searchTools(query) finds the ones that are.`,
+      )
+    : { status: 'executed', output: declaration, summary: name };
+};
+
 /** A call's result ended the turn: the script ends with it. */
 class EndedTurn extends Data.TaggedError('EndedTurn')<{
   readonly result: Extract<ToolResultPayload['result'], { status: 'executed' }>;
 }> {}
 
-/** What the guest's `await` gets from a settled call. */
+/** What the guest's `await` gets from a settled call: `{ output, summary }`
+ *  of a tool, the list `searchTools` found, the text `describeTool` wrote. */
 const settlementOf = (
   result: ToolResultPayload['result'],
+  op?: ScriptOp,
 ): Effect.Effect<ScriptSettlement, EndedTurn> => {
   if (result.status === 'error')
     return Effect.succeed({
       _tag: 'Failure',
       name: 'ToolFailed',
       message: result.error,
+    });
+  if (op !== undefined)
+    return Effect.succeed({
+      _tag: 'Value',
+      value:
+        op.name === `${SEARCH_TOOLS}()`
+          ? (JSON.parse(result.output ?? '[]') as unknown)
+          : result.output,
     });
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));
   return Effect.succeed({
@@ -94,16 +152,25 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const outcome = yield* sandbox
     .run({
       source: input.code,
-      tools: scriptCalls.tools,
+      tools: scriptCalls.catalog.map(({ definition }) => definition.name),
+      globals: [SEARCH_TOOLS, DESCRIBE_TOOL],
       timeout: Duration.millis(input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-      call: (op: ScriptOp) =>
-        op.seq >= SCRIPT_CALL_LIMIT
-          ? Effect.succeed<ScriptSettlement>({
-              _tag: 'Failure',
-              name: 'CallLimit',
-              message: `A script may issue at most ${SCRIPT_CALL_LIMIT} calls.`,
-            })
-          : Effect.flatMap(scriptCalls.call(op), settlementOf),
+      call: (op: ScriptOp) => {
+        if (op.seq >= SCRIPT_CALL_LIMIT)
+          return Effect.succeed<ScriptSettlement>({
+            _tag: 'Failure',
+            name: 'CallLimit',
+            message: `A script may issue at most ${SCRIPT_CALL_LIMIT} calls.`,
+          });
+        return op.name.endsWith('()')
+          ? Effect.flatMap(
+              scriptCalls.answer(op, () => answerOf(op, scriptCalls.catalog)),
+              (result) => settlementOf(result, op),
+            )
+          : Effect.flatMap(scriptCalls.call(op), (result) =>
+              settlementOf(result),
+            );
+      },
       onLog: (lines) =>
         Effect.sync(() => hooks?.onToolOutput?.(`${lines.join('\n')}\n`)),
       onDelivered: scriptCalls.delivered,
@@ -143,18 +210,39 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   );
 });
 
+/** What every `script` description says, before the declarations. */
+const SURFACE = [
+  'Run a JavaScript program that calls your other tools. `code` is the body of an async function: use `await` at top level and `return` the result (JSON).',
+  [
+    'Globals:',
+    '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
+    '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to `{ name, line }[]`.',
+    "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
+    '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
+  ].join('\n'),
+  'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
+].join('\n\n');
+
 export const ScriptTool = defineTool({
   name: 'script',
   // A resume runs the script again from the top against its recorded calls:
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',
   slow: true,
-  description: [
-    'Run a JavaScript program that calls your other tools. `code` is the body of an async function: use `await` at top level and `return` the result (JSON).',
-    'Each tool you are offered, other than `script`, is `tools.<name>(args)` with the same arguments as a direct call, and resolves to `{ output, summary }`; a failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
-    '`phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
-    'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
-  ].join('\n\n'),
+  description: SURFACE,
+  describe: (declared) =>
+    [
+      SURFACE,
+      'The tools you declared, as TypeScript (more are callable: `searchTools` finds them):',
+      [
+        '```ts',
+        'type ToolOutput = { output: string; summary?: string };',
+        'declare const tools: {',
+        ...declared.map((definition) => declarationOf(definition, false, '  ')),
+        '};',
+        '```',
+      ].join('\n'),
+    ].join('\n\n'),
   schema: ScriptInputSchema,
   execute: runScript,
 });

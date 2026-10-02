@@ -10,6 +10,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   PermissionPayload,
   RequestDecision,
+  ToolDefinition,
   ToolResultPayload,
 } from '@shared/schemas';
 import type {
@@ -39,11 +40,25 @@ export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
  * the rows already settled instead of running it again.
  */
 export interface ScriptCalls {
-  /** The tools the guest may call: the step's offered tools, less `script`. */
-  readonly tools: readonly string[];
+  /** The tools the guest may call, as the step that offered the script
+   *  pinned them: its offered tools, less `script`, each with its plugin. */
+  readonly catalog: readonly {
+    readonly definition: ToolDefinition;
+    readonly plugin: string;
+  }[];
   /** Settles one issued call, at its `tool.result` commit. */
   readonly call: (
     op: ScriptOp,
+  ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
+  /**
+   * Settles one call of the script's own host functions (`searchTools`,
+   * `describeTool`) with `answer`, which reads nothing but {@link catalog}.
+   * It is recorded as a call with no card or tool, so a resume hands the
+   * recorded answer back as it hands back a tool's.
+   */
+  readonly answer: (
+    op: ScriptOp,
+    answer: () => ToolResultPayload['result'],
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;

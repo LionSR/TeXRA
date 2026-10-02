@@ -112,6 +112,12 @@ interface ScriptRequest<E, R> {
    */
   readonly tools: ReadonlyArray<string>;
   /**
+   * The host functions the realm installs as globals: `name(...args)` issues
+   * an op named `name()`, which no tool name can be, with the argument list
+   * as its input, and settles as a tool call does.
+   */
+  readonly globals?: ReadonlyArray<string>;
+  /**
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
    * if the script ends first. Settlements reach the realm one at a time, in
    * the order these effects complete: a caller that completes each at its
@@ -214,6 +220,7 @@ const make = Effect.gen(function* () {
       const workerData: WorkerInput = {
         source: request.source,
         tools: [...request.tools],
+        globals: [...(request.globals ?? [])],
         cpuBudgetMs,
         wasm,
         interrupt,

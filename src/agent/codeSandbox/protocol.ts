@@ -10,6 +10,9 @@ export const WorkerInputSchema = z.object({
   source: z.string(),
   /** Names the realm installs as `tools.<name>(args)`. */
   tools: z.array(z.string()),
+  /** Names the realm installs as global functions: `name(...args)` issues
+   *  an op named `name()` whose input is the argument list. */
+  globals: z.array(z.string()),
   cpuBudgetMs: z.number().positive(),
   /** The QuickJS module the host compiled once, shared with every worker. */
   wasm: z.instanceof(WebAssembly.Module),

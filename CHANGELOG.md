@@ -244,6 +244,17 @@ All notable changes to this project will be documented in this file.
   twice, and a call that was in flight follows the usual rules (re-run when
   it is safe, otherwise ask). No built-in agent offers `script` yet, and
   `run_in_background` is refused until background scripts land.
+- **The `script` tool lists your tools as TypeScript, and finds the rest.**
+  Its description declares each tool the agent lists as a typed function
+  (`read_file(args: { path: string; … }): Promise<ToolOutput>`, a union of
+  branches for a tool with commands), with the first sentence of its
+  description. The text is written once when the run's system text is, so
+  switching a plugin on or off mid-run no longer changes it; the model is
+  told in one line and can call the new tool at once. Inside a script,
+  `searchTools(query)` ranks every tool the run can call, MCP and plugin tools
+  included, and `describeTool(name)` returns a tool's full declaration with
+  each field's description. Both answers are recorded, so a resumed script
+  gets the same ones.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your
