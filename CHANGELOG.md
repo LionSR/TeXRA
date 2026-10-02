@@ -299,7 +299,7 @@ true` returns at once with a run ID, and the script runs as a child run of
 - **Every host shows a script's calls.** In VS Code and the desktop app, a
   script's stage lists its calls by `phase()`, with the calls that need a
   decision, the failed ones and the running ones first; each call says
-  whether it is queued, running, finished, reused, skipped, cancelled, failed
+  whether it is queued, running, interrupted, finished, reused, skipped, cancelled, failed
   or not run, with its agent, model, attempt, files, time and cost. An
   `agent` call opens its child run, **Review** opens the run waiting on you,
   and **Skip** stops a running call's child (the script gets a `Skipped`
@@ -312,7 +312,10 @@ true` returns at once with a run ID, and the script runs as a child run of
   A script's card is named by its title (else "Script") and shows its source
   as JavaScript, and the agents a script calls are listed in its stage alone:
   not among the run's background tasks, and not as "Subagent started" lines
-  in the parent's transcript.
+  in the parent's transcript. On a run whose process stopped,
+  a call that had not finished reads as interrupted until you resume it,
+  with no Skip and no spinner on the script's card. A call's agent and model
+  stay readable beside **Skip**, and drop under the call on a narrow panel.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your

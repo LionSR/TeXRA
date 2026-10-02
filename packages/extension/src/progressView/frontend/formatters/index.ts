@@ -38,8 +38,13 @@ import type { FormatResult } from './baseLogFormatter';
 
 type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;
 
+/** `interrupted`: the row's run is interrupted (its process died), so an
+ *  open call is not running. */
 type RowFormatters = {
-  [K in TranscriptRowKind]: (row: RowOf<K>) => FormatResult;
+  [K in TranscriptRowKind]: (
+    row: RowOf<K>,
+    interrupted: boolean,
+  ) => FormatResult;
 };
 
 /** One painter per row kind. Exhaustive by construction. */
@@ -78,6 +83,7 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
 /** Format a transcript row as a TemplateResult for direct Lit rendering. */
 export function formatLogEntry(
   row: TranscriptRow,
+  interrupted = false,
 ): TemplateResult | typeof nothing {
   try {
     // Runtime lookup preserves the kind/payload correlation encoded by
@@ -85,8 +91,9 @@ export function formatLogEntry(
     // indexed access over the full union.
     const formatter = ROW_FORMATTERS[row.kind] as (
       row: TranscriptRow,
+      interrupted: boolean,
     ) => FormatResult;
-    return formatter(row) ?? nothing;
+    return formatter(row, interrupted) ?? nothing;
   } catch (e) {
     const label = renderLabel(row);
     console.error(`Error rendering ${label}:`, e);

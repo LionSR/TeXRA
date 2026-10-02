@@ -32,6 +32,7 @@ const AGENT_TOOL = 'agent';
 export type ScriptCallStatus =
   | 'queued'
   | 'running'
+  | 'interrupted'
   | 'finished'
   | 'reused'
   | 'skipped'
@@ -42,6 +43,7 @@ export type ScriptCallStatus =
 export const SCRIPT_CALL_STATUS_LABEL = {
   queued: 'Queued',
   running: 'Running',
+  interrupted: 'Interrupted',
   finished: 'Finished',
   reused: 'Reused',
   skipped: 'Skipped',
@@ -64,6 +66,7 @@ const SECTION_ORDER: readonly ScriptSection[] = [
 ];
 
 const NOT_RUN_NOTE = 'The run ended before this call started.';
+const INTERRUPTED_NOTE = 'Stopped with its run. Resume the run to continue.';
 
 export interface ScriptCallView {
   /** The card's id (`logId`). */
@@ -158,6 +161,7 @@ function statusOf(
   row: ToolRow,
   agent: boolean,
   child: RunView | undefined,
+  interrupted: boolean,
 ): ScriptCallStatus {
   const output = isObject(row.log.output) ? row.log.output : {};
   switch (row.toolUse.status) {
@@ -169,6 +173,9 @@ function statusOf(
         return agent && child === undefined ? 'not run' : 'cancelled';
       return 'failed';
     default:
+      // Nothing works on an open call of a run whose process died: it waits
+      // for Resume, which reissues it.
+      if (interrupted) return 'interrupted';
       // An `agent` call waits for its turn under the child-run budget (or
       // for its script's request) until its child starts.
       return agent && child === undefined ? 'queued' : 'running';
@@ -186,7 +193,7 @@ function callView(
   const child = run.childIds
     .map((id) => view.runs.get(id))
     .findLast((candidate) => candidate?.parentCard === row.id);
-  const status = statusOf(row, agent, child);
+  const status = statusOf(row, agent, child, run.group === 'interrupted');
   const asking = child === undefined ? undefined : askingRun(view, child);
   const request =
     asking === undefined
@@ -227,6 +234,8 @@ function callView(
   else if (status === 'failed')
     detail = { kind: 'error', text: row.toolUse.errorText };
   else if (status === 'not run') detail = { kind: 'note', text: NOT_RUN_NOTE };
+  else if (status === 'interrupted')
+    detail = { kind: 'note', text: INTERRUPTED_NOTE };
   let section: ScriptSection | undefined;
   if (request !== undefined) section = 'waiting';
   else if (status === 'failed' || status === 'running') section = status;
