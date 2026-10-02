@@ -79,7 +79,7 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-// `/config` → Tools (sixth row) → Tool integrations (third row, by hotkey).
+// `/config` → Tools (fifth row) → Tool integrations (fourth row, by hotkey).
 const CONFIG_TOOLS_FORM_KEYS = [
   '/config',
   { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
