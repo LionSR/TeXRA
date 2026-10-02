@@ -1,0 +1,9 @@
+name: golden_approval
+description: The golden store's pending command approval, its process killed before anyone answered it.
+settings:
+  agentCategory: toolUse
+  tools:
+    - bash
+prompts:
+  systemPrompt: 'GOLDEN-APPROVAL: run one command, which waits for approval.'
+  userRequest: '{{ INSTRUCTION }}'

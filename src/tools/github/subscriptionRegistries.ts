@@ -9,6 +9,7 @@
  * that graph.
  */
 import { Effect, Layer } from 'effect';
+import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 import {
   issueKeyToString,
@@ -46,7 +47,21 @@ export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
         yield* makePollingLifetime,
         yield* makePollingLifetime,
       ] as const;
-      const pr = new PRPollingSource(lifetimes[0]);
+      const limiter = yield* RateLimiter.RateLimiter;
+      // Bound annotation endpoint traffic across all PR subscriptions in this
+      // process: one unit per annotations page, at most 3,000 requests per
+      // hour, leaving room for the other PR polling endpoints under GitHub's
+      // primary 5,000/hour limit. Independent of the poll interval.
+      const claimAnnotation = limiter
+        .consume({
+          algorithm: 'token-bucket',
+          onExceeded: 'fail',
+          window: '1 minute',
+          limit: 50,
+          key: 'github-annotations',
+        })
+        .pipe(Effect.asVoid);
+      const pr = new PRPollingSource(lifetimes[0], claimAnnotation);
       const repo = new RepoPollingSource(lifetimes[1]);
       const issue = new IssuePollingSource(lifetimes[2]);
       return yield* Effect.acquireRelease(
@@ -80,4 +95,8 @@ export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
           }),
       );
     }),
+  ).pipe(
+    Layer.provide(
+      RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)),
+    ),
   );

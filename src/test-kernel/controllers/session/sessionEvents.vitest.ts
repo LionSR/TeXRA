@@ -3074,7 +3074,7 @@ describe('RunLedger', () => {
   const approvalBinding: RunLedgerDraft = {
     type: 'tool.binding',
     aggregateId: AGGREGATE,
-    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1' },
+    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1', role: 'call' },
   };
   const toolEnd = (callId: string): RunLedgerDraft => ({
     type: 'tool.end',
@@ -3287,7 +3287,9 @@ describe('RunLedger', () => {
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.approvalRequestId).toBe('req-1');
+        expect(state.pendingIntents['call-a']?.binding?.requestId).toBe(
+          'req-1',
+        );
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [

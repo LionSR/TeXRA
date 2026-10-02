@@ -42,6 +42,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import {
   ScriptDiverged,
   ToolCall,
+  type CallRequests,
   type ScriptCalls,
 } from '@agent/runtime/ToolCall';
 import type { AgentTrace } from '@agent/trace';
@@ -419,11 +420,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
 
   /** Execute one call and commit its settlement. Never fails: a throwing
-   *  tool is an error result. Interruption leaves no settlement. */
+   *  tool is an error result. Interruption leaves no settlement. `standing`
+   *  is the call's own request a resumed attempt re-enters: still open, or
+   *  answered since this owner took the run and not yet read. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
     fact: CallFacts,
     parsedInput: unknown,
     attempt: number,
+    standing: {
+      readonly requestId: string;
+      readonly decision: RequestDecision | null;
+    } | null = null,
     /** A call a response issued may issue calls of its own, as a script. */
     scriptCalls?: ScriptCalls,
   ): Effect.fn.Return<
@@ -455,6 +462,96 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ...(stageId !== undefined ? { stageId } : {}),
       });
     };
+    // The call's requests. The first this attempt raises commits with the
+    // `tool.binding` that ties it to the call, so a restart leaves it open
+    // and the resume re-enters the call; a later one parks a body already
+    // past its first answer, which nothing can re-enter, so it stays unbound
+    // and a restart retires it. A resumed attempt re-enters the request it
+    // left standing, under its own id; one it no longer raises is retired
+    // as cancelled, so no surface keeps offering it.
+    let reentering = standing;
+    let bound = standing !== null;
+    // Through the decision authority's own check, so an answer a surface
+    // landed meanwhile stands and the retirement writes nothing.
+    const retireStanding = Effect.suspend(() => {
+      const open = reentering?.decision === null ? reentering : null;
+      reentering = null;
+      if (open === null) return Effect.void;
+      return run.session
+        .decideRequest(runId, open.requestId, {
+          action: 'cancel',
+          cause: 'The resumed call no longer asks it.',
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              logger.warn(
+                `Request ${open.requestId} the resumed call no longer asks stays open: its retirement failed.`,
+                { data: error },
+              ),
+            ),
+          ),
+          Effect.asVoid,
+        );
+    });
+    const requests: CallRequests = {
+      nextId: (prefix) =>
+        reentering?.requestId.startsWith(`${prefix}-`) === true
+          ? reentering.requestId
+          : `${prefix}-${generateShortId()}`,
+      open: (payload, options) =>
+        Effect.suspend(() => {
+          const reentered =
+            payload.data.requestId === reentering?.requestId
+              ? reentering
+              : null;
+          if (reentered !== null) reentering = null;
+          const binds = !bound;
+          bound = true;
+          // Answered before this owner's loop reached the call: the answer
+          // is the row's, and what the host staged for it is released here,
+          // as no later decision will release it.
+          if (reentered?.decision != null)
+            return Effect.as(
+              Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
+              reentered.decision,
+            );
+          return run.session.openRequest(runId, payload, {
+            ...options,
+            open: (rows) => {
+              if (reentered !== null) {
+                // Open already: only what the policy decides commits, and
+                // the decision is read from where the resume read the run.
+                const decided = rows.filter(
+                  (row) => row.type !== 'request.opened',
+                );
+                const from = cell.opened.commit;
+                return decided.length === 0
+                  ? Effect.succeed(from)
+                  : append(decided).pipe(Effect.as(from));
+              }
+              return retireStanding.pipe(
+                Effect.andThen(Effect.sync(() => run.session.now())),
+                Effect.flatMap((from) =>
+                  append([
+                    ...rows,
+                    ...(binds
+                      ? [
+                          bindingRow(runId, {
+                            callId: fact.callId,
+                            attempt,
+                            requestId: payload.data.requestId,
+                            role: 'call',
+                          }),
+                        ]
+                      : []),
+                  ]).pipe(Effect.as(from)),
+                ),
+              );
+            },
+          });
+        }),
+    };
     workspace.interactions.recordToolCall();
     // Its step's PreToolUse hooks, recorded before the approval and the body.
     const pre =
@@ -485,6 +582,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               workPlanState: workspace.workPlan,
               userInstruction,
               toolCallId: fact.callId,
+              requests,
               hooks: { onToolOutput },
               ...(scriptCalls === undefined ? {} : { scriptCalls }),
             }),
@@ -586,6 +684,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     const cards = settledCards(fact, parsedInput, status, editedFiles);
     // An executed call's PostToolUse rows commit with its settlement.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
+    yield* retireStanding;
     yield* settle(
       fact,
       attempt,
@@ -609,10 +708,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     origin: ToolIntentOrigin,
     fact: CallFacts,
     input: unknown,
-    intent: {
-      readonly attempt: number;
-      readonly approvalRequestId: string | null;
-    },
+    intent: Pick<RunState['pendingIntents'][string], 'attempt' | 'binding'>,
   ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     let current = yield* cell.current;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
@@ -632,7 +728,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? 'skip'
         : null;
     };
-    const bound = current.requests[intent.approvalRequestId ?? ''];
+    // Only the loop's own question answers this: the call's own request,
+    // decided, says nothing about whether the body ran.
+    const questionId =
+      intent.binding?.role === 'outcome' ? intent.binding.requestId : null;
+    const bound = current.requests[questionId ?? ''];
     if (bound !== undefined && bound.resolved && bound.decision !== null) {
       const answer = decided(bound.decision);
       if (answer !== null)
@@ -650,10 +750,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // it already carries, so a request retired without a decision cannot be
     // reopened, only replaced (and the binding row below rebinds the intent).
     const standing =
-      intent.approvalRequestId !== null &&
-      bound !== undefined &&
-      !bound.resolved
-        ? intent.approvalRequestId
+      questionId !== null && bound !== undefined && !bound.resolved
+        ? questionId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
     const preview = deriveToolInputPreview(fact.toolName, input);
@@ -694,6 +792,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           callId: fact.callId,
           attempt: intent.attempt,
           requestId,
+          role: 'outcome',
         }),
         // `yolo` or a host that cannot present answers in the same batch.
         ...policyDecidedRows(run.session, runId, payload),
@@ -763,20 +862,44 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     origin: ToolIntentOrigin,
     fact: CallFacts,
     input: unknown,
-    intent: {
-      readonly attempt: number;
-      readonly approvalRequestId: string | null;
-    },
+    intent: RunState['pendingIntents'][string],
     scriptCalls?: ScriptCalls,
   ): Effect.fn.Return<
     void,
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
+    const current = yield* cell.current;
+    // The call's own request, never answered: its body never ran past it,
+    // so the attempt re-enters it and the answer completes the call. One
+    // the run's stop retired as cancelled is asked again the same way.
+    const ownId =
+      intent.binding?.role === 'call' ? intent.binding.requestId : null;
+    const own = ownId === null ? undefined : current.requests[ownId];
+    if (ownId !== null && own !== undefined) {
+      // Answered since this owner took the run, before its loop got here:
+      // no waiter read it, so it is the call's answer too.
+      const unread = own.resolved && current.decidedSinceActivation.has(ownId);
+      if (!own.resolved || unread) {
+        yield* execute(
+          fact,
+          input,
+          intent.attempt,
+          { requestId: ownId, decision: own.decision },
+          scriptCalls,
+        );
+        return;
+      }
+      if (own.decision?.action === 'cancel') {
+        yield* execute(fact, input, intent.attempt, null, scriptCalls);
+        return;
+      }
+    }
     const decision = (yield* replayable(fact, step.registry, input, logger))
       ? yield* recordOutcomeDecision(origin, fact, input, intent, 'rerun')
       : yield* decideOutcomeUnknown(origin, fact, input, intent);
     if (decision === 'skip') {
+      // The skip closes the card the interrupted attempt opened.
       yield* settle(
         fact,
         intent.attempt,
@@ -785,7 +908,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       );
       return;
     }
-    yield* execute(fact, input, intent.attempt + 1, scriptCalls);
+    yield* execute(fact, input, intent.attempt + 1, null, scriptCalls);
   });
 
   /**
@@ -1028,7 +1151,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ]);
     yield* Effect.scoped(
       Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>
-        execute(fact, input, 1, scriptCalls),
+        execute(fact, input, 1, null, scriptCalls),
       ),
     );
   });

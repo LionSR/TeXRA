@@ -131,6 +131,14 @@ function goldenTurn(
     return gate('golden-park.release').pipe(
       Effect.as(text('Parked run released.')),
     );
+  // A command that waits for its approval: the generator kills the process
+  // while it waits, and the conformance suite resumes and approves it.
+  if (system.includes('GOLDEN-APPROVAL'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('bash', { command: 'echo approved >> approved.txt' })]
+        : text('The approved command ran.'),
+    );
   if (system.includes('GOLDEN-CHILD')) {
     if (tools.has('submit_output'))
       return Effect.succeed(

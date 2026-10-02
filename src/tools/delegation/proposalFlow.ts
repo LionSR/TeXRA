@@ -28,6 +28,7 @@ import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import type { RunLedgerRefused } from '@shared/session/runLedger';
 import {
   decideProposalApproval,
   texraApprovalDenialMessage,
@@ -36,7 +37,6 @@ import { refusalOf } from '@shared/session/approvalDecision';
 import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
-import { generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
@@ -189,7 +189,7 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     parent: DelegationParent,
   ): Effect.fn.Return<
     DelegationProposalDecision,
-    DatabaseNotOwner | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseWriteFailed | RunLedgerRefused
   > {
     const { session, runId } = parent.run;
     const decision = decideProposalApproval({
@@ -222,9 +222,15 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
         break;
     }
 
-    const result = yield* session.openRequest(runId, {
+    // A call made under a run opens its requests through the loop's door.
+    const { requests } = parent;
+    if (!requests)
+      return yield* Effect.die(
+        new Error('A delegation proposal is raised outside its tool call.'),
+      );
+    const result = yield* requests.open({
       kind: 'proposal',
-      data: { requestId: generateShortId(), runId, ...proposal },
+      data: { requestId: requests.nextId('proposal'), runId, ...proposal },
     });
     return { result, childApproval: 'inherit' };
   },

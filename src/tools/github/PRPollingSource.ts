@@ -12,6 +12,7 @@
  */
 
 import { Cause, Clock, Effect } from 'effect';
+import { RateLimiterError } from 'effect/persistence/RateLimiter';
 
 import type { Disposable } from '@platform/interfaces';
 import { shouldDropBotEvent } from './botFilter';
@@ -44,10 +45,6 @@ import {
   GitHubRateLimitError,
   type GitHubServices,
 } from './githubClient';
-import {
-  AnnotationFetchBudget,
-  AnnotationFetchBudgetExhaustedError,
-} from './annotationFetchBudget';
 import {
   fetchAllCheckRuns as fetchAllCheckRunsClient,
   fetchAnnotations as fetchAnnotationsClient,
@@ -201,13 +198,13 @@ export class PRPollingSource extends PollingSourceBase<
   private nextAnnotationDrainKey: string | undefined;
 
   /**
-   * `annotationBudget` caps annotation-page requests across every PR this
-   * source polls; the process layer builds the source, so the budget is the
-   * process's.
+   * `claimAnnotation` takes one unit of the annotation-page budget shared by
+   * every PR this source polls; the process layer builds the source, so the
+   * budget is the process's.
    */
   constructor(
-    lifetime?: PollingLifetime,
-    private readonly annotationBudget = new AnnotationFetchBudget(),
+    lifetime: PollingLifetime | undefined,
+    private readonly claimAnnotation: Effect.Effect<void, RateLimiterError>,
   ) {
     super(
       {
@@ -717,7 +714,7 @@ export class PRPollingSource extends PollingSourceBase<
         if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
         // Only `drainNextAnnotationRun`'s own rate-limit re-raise is a
         // typed failure here; a defect stays a defect and ends the round.
-        const drained = yield* this.drainNextAnnotationRun(state, at).pipe(
+        const drained = yield* this.drainNextAnnotationRun(state).pipe(
           Effect.map((value) => ({ ok: true as const, value })),
           Effect.catchCause((cause) => {
             const reason = cause.reasons[0];
@@ -798,7 +795,7 @@ export class PRPollingSource extends PollingSourceBase<
    */
   private readonly drainNextAnnotationRun = Effect.fn(
     'PRPollingSource.drainNextAnnotationRun',
-  )(function* (this: PRPollingSource, state: PRSubscriptionState, now: number) {
+  )(function* (this: PRPollingSource, state: PRSubscriptionState) {
     const run = state.currentShaState?.pendingAnnotationRuns[0];
     if (!run) return true;
     const { pr } = state;
@@ -806,8 +803,7 @@ export class PRPollingSource extends PollingSourceBase<
       pr.owner,
       pr.repo,
       run.id,
-      this.annotationBudget,
-      now,
+      this.claimAnnotation,
     ).pipe(
       this.inLogChannel,
       Effect.map((annotations) => ({ ok: true as const, annotations })),
@@ -833,7 +829,12 @@ export class PRPollingSource extends PollingSourceBase<
       return true;
     }
     const err = fetched.failure;
-    if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
+    if (
+      err instanceof RateLimiterError &&
+      err.reason._tag === 'RateLimitExceeded'
+    ) {
+      return false;
+    }
     if (err instanceof GitHubRateLimitError) {
       return yield* Effect.fail(new PollHookRejected({ cause: err }));
     }

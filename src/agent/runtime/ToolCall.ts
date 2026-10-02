@@ -7,7 +7,16 @@ import type {
 } from '@agent/core/state/AgentWorkspaceState';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { ToolResultPayload } from '@shared/schemas';
+import type {
+  PermissionPayload,
+  RequestDecision,
+  ToolResultPayload,
+} from '@shared/schemas';
+import type {
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import type { RunLedgerRefused } from '@shared/session/runLedger';
 import type { StepRoot } from '@utils/files/externalRoots';
 import type { InvokeError } from './ModelInvoker';
 import type { AgentRunShape } from './run/AgentRun';
@@ -40,6 +49,28 @@ export interface ScriptCalls {
   readonly delivered: (seq: number) => Effect.Effect<void>;
 }
 
+/**
+ * The requests one tool call raises, opened through its run's loop. The first
+ * request an attempt raises commits with the `tool.binding` that ties it to
+ * the call, so a person's pending approval outlives the process that asked:
+ * a resume re-enters the call, and the call re-enters that same request.
+ */
+export interface CallRequests {
+  /** The id the call's next request opens under: the request a resumed call
+   *  left standing, when its id has this prefix, else a fresh
+   *  `<prefix>-<id>`. A request is staged under this id before it opens. */
+  readonly nextId: (prefix: string) => string;
+  /** Open the request (or re-enter the standing one) and wait for its
+   *  decision, as `SessionHandle.openRequest` does. */
+  readonly open: (
+    payload: PermissionPayload,
+    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
+  ) => Effect.Effect<
+    RequestDecision,
+    DatabaseNotOwner | DatabaseWriteFailed | RunLedgerRefused
+  >;
+}
+
 export interface ToolCallShape {
   /** The roots of the workspace the call works on: the run's session roots. */
   readonly roots: WorkspaceRoots;
@@ -59,6 +90,8 @@ export interface ToolCallShape {
   /** The calls a script may issue; absent outside a run's dispatch and for
    *  a call a script issued. */
   readonly scriptCalls?: ScriptCalls;
+  /** Where the call's requests open: present exactly when {@link run} is. */
+  readonly requests?: CallRequests;
   /**
    * Absent for a standalone host invocation outside an agent run. What the run
    * already answers for (its model, its delegation scope, its current step,

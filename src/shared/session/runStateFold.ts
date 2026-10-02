@@ -32,6 +32,7 @@ import {
   type SessionEventDraft,
   type SnapshotRuntime,
   type StateOperation,
+  type ToolBindingPayload,
   type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
@@ -138,9 +139,9 @@ type PendingResponse = {
 type PendingIntent = {
   readonly attempt: number;
   readonly responseId: string;
-  /** The approval that guards this call, when one was raised: the
-   *  `tool.binding` row in the approval's batch is its only carrier. */
-  readonly approvalRequestId: string | null;
+  /** The request that guards this attempt, when one was raised: the
+   *  `tool.binding` row in the request's batch is its only carrier. */
+  readonly binding: Pick<ToolBindingPayload, 'requestId' | 'role'> | null;
 };
 
 /**
@@ -181,6 +182,11 @@ export type RunState = RunPosition & {
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
+  /** The requests decided since the run's latest `run.activate`: answers
+   *  this owner landed before its loop reached the call waiting on them, so
+   *  no waiter has read them. A decision from before the activation was
+   *  read by the process that asked, whose body went on with it. */
+  readonly decidedSinceActivation: ReadonlySet<string>;
   /** Derived (D12): the priced usage on every `response` and `model.compaction`
    *  row plus `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
@@ -210,7 +216,9 @@ type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
-  SharedRunRow['type'] | Exclude<RunLedgerDraft['type'], CardRowType>;
+  | SharedRunRow['type']
+  | Exclude<RunLedgerDraft['type'], CardRowType>
+  | 'run.activate';
 
 /**
  * Display rows ignored by name. Anything on the run aggregate that is neither
@@ -225,7 +233,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'tool.end': true,
   'stream.end': true,
   'run.start': true,
-  'run.activate': true,
   'run.config': true,
   'run.model': true,
   'run.detach': true,
@@ -279,6 +286,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   pendingResponse: null,
   pendingIntents: byId([]),
+  decidedSinceActivation: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   loop: null,
   overflowRecoveredAtTurn: null,
@@ -294,11 +302,13 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
 
 /**
  * The undecided requests nothing can recover: no binding names them, and
- * they are not the one kind that outlives the process that asked. A request
- * the session opened for a tool (a command, an edit, a plan, a delegation,
- * a question) parks that tool, so a new owner can neither answer it nor
- * re-ask it, so a resume retires them as cancelled before it continues the
- * run (`RunLedger.acquire`). An `externalInquiry` is the exception by contract:
+ * they are not the one kind that outlives the process that asked. A tool
+ * call's own request (a command, an edit, a plan, a delegation, a question)
+ * is bound to the call it parks, and a resume re-enters it; what is left
+ * unbound is a later request of an attempt already past its first, which
+ * parks a body nothing can re-enter, so a resume retires those as cancelled
+ * before it continues the run (`RunLedger.acquire`). An `externalInquiry` is
+ * the exception by contract:
  * its tool returns at once and its answer arrives as a follow-up, whichever
  * process is running the run by then, so it stands unbound across every
  * snapshot its run writes.
@@ -306,8 +316,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
 export function unboundRequests(state: RunState): readonly string[] {
   // The recovery bindings the rows carry (R5): the `model.retry` permit's
   // request and every pending intent's `tool.binding`.
-  const bindings = new Set<string | null>(
-    Object.values(state.pendingIntents).map((i) => i.approvalRequestId),
+  const bindings = new Set<string | undefined>(
+    Object.values(state.pendingIntents).map((i) => i.binding?.requestId),
   );
   if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
@@ -419,6 +429,14 @@ function foldRow(
     const at = verdict.rows.at;
     return Result.succeed({
       ...state,
+      ...(row.type === 'request.decided'
+        ? {
+            decidedSinceActivation: new Set([
+              ...state.decidedSinceActivation,
+              row.requestId,
+            ]),
+          }
+        : {}),
       commit,
       // Only the loop's own position is a ledger row; queued input, output
       // and the requests a session opens do not open a run.
@@ -428,6 +446,16 @@ function foldRow(
     });
   }
   switch (row.type) {
+    case 'run.activate':
+      // A new owner's lifecycle: whatever it decides from here, no earlier
+      // process waited on.
+      return current === null
+        ? null
+        : Result.succeed({
+            ...current,
+            commit,
+            decidedSinceActivation: new Set(),
+          });
     case 'run.snapshot': {
       // The loop state and what the loop runs on, and nothing else: no
       // position and no reference set, so there is no way for a snapshot to
@@ -650,9 +678,9 @@ function foldRow(
         pendingIntents[callId] = {
           attempt: p.attempt,
           responseId: pending.responseId,
-          approvalRequestId:
+          binding:
             known !== undefined && known.attempt === p.attempt
-              ? known.approvalRequestId
+              ? known.binding
               : null,
         };
       }
@@ -663,9 +691,11 @@ function foldRow(
     }
     case 'tool.binding': {
       if (!opened(current)) return beforeOpening(row.type);
-      // The approval that guards one outcome-unknown call, committed with
-      // the `request.opened` it names: the intent it binds is the one the
-      // rows already hold, at the attempt the approval admits.
+      // The request that guards one call attempt, committed with the
+      // `request.opened` it names: the intent it binds is the one the rows
+      // already hold, at the attempt the request guards. A later binding of
+      // the same attempt replaces it (a request retired as cancelled, asked
+      // again under a new id).
       const p = row.payload;
       const intent = current.pendingIntents[p.callId];
       if (intent === undefined || intent.attempt !== p.attempt) {
@@ -674,7 +704,10 @@ function foldRow(
         );
       }
       const pendingIntents = writable(pass, current.pendingIntents, copyById);
-      pendingIntents[p.callId] = { ...intent, approvalRequestId: p.requestId };
+      pendingIntents[p.callId] = {
+        ...intent,
+        binding: { requestId: p.requestId, role: p.role },
+      };
       return Result.succeed({ ...advance(current), pendingIntents });
     }
     case 'tools.offered': // a fresh run's comes in its opening batch

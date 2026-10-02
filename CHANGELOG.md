@@ -244,6 +244,12 @@ All notable changes to this project will be documented in this file.
   twice, and a call that was in flight follows the usual rules (re-run when
   it is safe, otherwise ask). No built-in agent offers `script` yet, and
   `run_in_background` is refused until background scripts land.
+- **Pending approvals survive a restart.** When TeXRA exits, crashes or is
+  stopped while a command, an edit, a plan, a delegation or a question waits
+  for you, resuming the run shows you that same request again, and your
+  answer completes the call. Before, the request was cancelled on resume and
+  TeXRA asked instead whether the tool "may have run", even though it never
+  started.
 - **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
   setting picks any model the Codex backend serves (default GPT-6.1 Sol).
 - **OpenAI fast processing** (`model.openaiFastTier` in `.texra/config.json`)

@@ -18,6 +18,7 @@ import {
   type RunOutcome,
   type SessionEventDraft,
   type SnapshotRuntime,
+  type ToolBindingPayload,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import type { MessageSchema } from '@texra-ai/llm/turn';
@@ -147,13 +148,13 @@ export function snapshotRow(
 }
 
 /**
- * The approval that guards one outcome-unknown call: committed in the batch
- * that opens the request it names, and the one carrier of the binding the
- * fold reads back.
+ * The request that guards one call attempt: committed in the batch that
+ * opens the request it names, and the one carrier of the binding the fold
+ * reads back.
  */
 export function bindingRow(
   runId: RunId,
-  binding: { callId: string; attempt: number; requestId: string },
+  binding: ToolBindingPayload,
 ): RunLedgerDraft {
   return {
     type: 'tool.binding',

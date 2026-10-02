@@ -265,8 +265,8 @@ function decide(
     // A request that parks its caller is answered by the fiber waiting on
     // it, and that fiber died with the owner this decision is taking over
     // from: recording a decision would clear the panel without doing what
-    // it says. Resuming the run retires those requests
-    // (`RunLedger.acquire`) and asks again.
+    // it says. Resuming the run re-enters the call, which waits on the
+    // same request again, and the answer is taken then.
     if (!heldHere && requestParksItsCaller(pending.payload)) {
       return yield* Effect.fail(
         new Unavailable({

@@ -345,13 +345,13 @@ export const runLedgerLayer: Layer.Layer<
             : error,
         ),
       );
-      // A request the previous owner opened for a tool (a command, an edit,
-      // a plan, a delegation, a question) carries no recovery binding: only
-      // the loop writes the `tool.binding` that makes one, and the tool that
-      // asked died with that owner. Taking the claim retires exactly those
-      // as cancelled, so the surfaces still offering them settle instead of
-      // outliving the process that asked. Rows that do not fold are `load`'s
-      // refusal, answered here from the same read.
+      // A tool call's own request is bound to the call (`tool.binding`), so
+      // the resume re-enters it; what the previous owner left open unbound
+      // is a later request of an attempt already past its first answer,
+      // whose body died with that owner. Taking the claim retires exactly
+      // those as cancelled, so the surfaces still offering them settle
+      // instead of outliving the process that asked. Rows that do not fold
+      // are `load`'s refusal, answered here from the same read.
       const stored = yield* log.readAggregate(aggregate, 1);
       // The same read seeds the publisher's pending follow-ups: what an
       // earlier owner left queued is delivered by this one.

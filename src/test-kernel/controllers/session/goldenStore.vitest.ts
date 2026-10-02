@@ -11,7 +11,9 @@
  * that rebuilds to other rows than its incremental tables hold; a listing
  * that differs from the fold over the whole history; and a newer or unknown
  * row that blocks more than its own aggregate, lets a claim through, or is
- * rewritten.
+ * rewritten. And a pending approval that does not outlive the process that
+ * asked: a resume that cancels it, asks the outcome question instead, opens
+ * a second request, or runs the command other than once after the approval.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
@@ -32,7 +34,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
@@ -109,8 +111,9 @@ const SELF = JSON.stringify([
 const PARKED = RunIdSchema.parse('a00000000001');
 const PARENT = RunIdSchema.parse('a00000000002');
 const CHAT = RunIdSchema.parse('a00000000009');
-const SCRIPTED = RunIdSchema.parse('a0000000000a');
-const TOMBSTONED = RunIdSchema.parse('a0000000000b');
+const APPROVAL = RunIdSchema.parse('a0000000000a');
+const SCRIPTED = RunIdSchema.parse('a0000000000b');
+const TOMBSTONED = RunIdSchema.parse('a0000000000c');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -318,10 +321,15 @@ describe('the golden 1.0 store', () => {
         run('a00000000008', 'review'),
         // The user stopped its held turn with Ctrl-C, then exited.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
+        // Killed while its command waited for approval.
+        run(APPROVAL, 'golden_approval', { status: 'running', outcome: null }),
         // Killed mid-script, like the parked run.
         run(SCRIPTED, 'golden_script', { status: 'running', outcome: null }),
       ]);
-      expect(folded.requests).toEqual([]);
+      // The approval its process never saw answered, still pending.
+      expect(
+        folded.requests.map((request) => [request.runId, request.payload.kind]),
+      ).toEqual([[APPROVAL, 'bash']]);
       // The message typed behind the stopped turn stays queued for a resume
       // to join. The headless parent holds none: its child's message was
       // refused, since a one-shot run never reads one.
@@ -422,6 +430,7 @@ describe('the golden 1.0 store', () => {
           'running',
           ...Array.from({ length: 4 }, () => 'completed'),
           'cancelled',
+          'running',
           'running',
         ]);
         const db = yield* Database;
@@ -538,26 +547,15 @@ describe('the interrupted golden runs', () => {
     writeFileSync(flag, 'texra-cli-run-validation\n');
     writeFileSync(join(storage, 'golden-park.release'), '');
     // The crash, on this host: an owner whose process identity is gone.
-    // The script's command runs again in this host's workspace, not in the
-    // generator's project the rows name.
-    const { workspace } = testWorkspaceRoots();
     raw(storage, (db) => {
-      for (const run of [PARKED, SCRIPTED])
-        db.prepare(
-          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
-        ).run(
+      const kill = db.prepare(
+        'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+      );
+      for (const run of [PARKED, APPROVAL, SCRIPTED])
+        kill.run(
           JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
           run,
         );
-      db.prepare(
-        `UPDATE event SET data = replace(data, ?, ?)
-         WHERE type IN ('run.start', 'run.config') AND aggregate =
-           (SELECT id FROM event_sequence WHERE logical_id = ?)`,
-      ).run(
-        '"workingDirectory":"/golden/project"',
-        `"workingDirectory":${JSON.stringify(workspace)}`,
-        SCRIPTED,
-      );
     });
     await Effect.runPromise(
       Effect.provide(
@@ -617,6 +615,82 @@ describe('the interrupted golden runs', () => {
     }),
   );
 
+  /**
+   * The command approval its killed process never saw answered: the resume
+   * re-enters the call, which waits on that same request again rather than
+   * on a cancellation or an outcome question, and the approval runs the
+   * command exactly once.
+   */
+  it.live('re-presents the pending approval, and runs it once approved', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      const opened = () =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT e.data FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = 'request.opened'
+               ORDER BY e."commit"`,
+            )
+            .all(APPROVAL)
+            .map((row) => JSON.parse(String(row.data)).payload.data.requestId),
+        );
+      const [requestId] = opened();
+      expect(requestId).toMatch(/^bash-/);
+      // The command runs where the run works: the generator's project, here
+      // this test's workspace.
+      mkdirSync(workspace!, { recursive: true });
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate =
+               (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+          )
+          .run(workspace!, APPROVAL),
+      );
+      const resumed = yield* Effect.forkChild(
+        withProcessServices(testRuntime(), resumeRun(APPROVAL, { session })),
+      );
+      // The resume's own activation: the test's killed owner shares this
+      // process's pid, so the view can call the run this process's before
+      // the resume has taken it, and only an answer after it is the resumed
+      // run's to read.
+      const activated = () =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = 'run.activate'`,
+            )
+            .get(APPROVAL),
+        )?.n === 2;
+      // Re-presented: the run waits on its user, held here, on that request.
+      yield* SubscriptionRef.changes(session.view).pipe(
+        Stream.takeUntil(
+          (view) =>
+            view.runs.get(APPROVAL)?.approval === 'own' &&
+            view.requests.some((request) => request.requestId === requestId) &&
+            activated(),
+        ),
+        Stream.runDrain,
+      );
+      expect(
+        yield* session.decideRequest(APPROVAL, requestId!, {
+          action: 'approve',
+        }),
+      ).toBe(true);
+      expect(yield* Fiber.join(resumed)).toMatchObject({
+        started: true,
+        outcome: 'waiting',
+      });
+      expect(opened()).toEqual([requestId]);
+      expect(readFileSync(join(workspace!, 'approved.txt'), 'utf8')).toBe(
+        'approved\n',
+      );
+    }),
+  );
+
   it.live('resumes the killed script, replaying its settled call', () =>
     Effect.gen(function* () {
       const { storage, workspace } = testWorkspaceRoots();
@@ -626,6 +700,16 @@ describe('the interrupted golden runs', () => {
       if (workspace === undefined) throw new Error('no test workspace');
       mkdirSync(workspace, { recursive: true });
       writeFileSync(join(workspace, 'golden-script.release'), '');
+      // It runs again where the run works: here this test's workspace.
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate =
+               (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+          )
+          .run(workspace, SCRIPTED),
+      );
       const asked = autoDecideRequests(session, (opened) => {
         if (opened.payload.kind === 'bash') return { action: 'approve' };
         if (opened.payload.kind !== 'userQuestion') return null;

@@ -34,6 +34,9 @@
  *   without one. Each keystroke
  *   waits for the screen or the store to show the step before it, so the
  *   rows commit in one order.
+ * - `golden_approval`, a second `texra chat` under a PTY: a `bash` command
+ *   waiting for its approval, bound to its call, killed (`SIGKILL`) before
+ *   anyone answers, the pending approval the conformance suite resumes.
  * - `golden_script` (headless, `yolo`): a `script` call whose guest reads
  *   twice and runs one command in a `Promise.all`, killed (`SIGKILL`) while
  *   the command waits, after the first read settled: the interrupted script
@@ -248,6 +251,7 @@ function scenario(root) {
     };
     return {
       write: (data) => child.write(data),
+      kill: (signal) => child.kill(signal),
       screen,
       exited,
       output: screen,
@@ -463,6 +467,43 @@ async function generate(root) {
   if (exit.exitCode !== 0)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
 
+  // The pending approval: a command waits for its approval in the chat, and
+  // the process is killed before anyone answers it.
+  const asking = await cli.chat([
+    'chat',
+    '--agent',
+    'golden_approval',
+    '--model',
+    'gpt56',
+  ]);
+  await until(
+    'the idle approval chat',
+    () => asking.screen().includes('Ctrl-C exit'),
+    asking,
+  );
+  asking.write('Run the command.');
+  await until(
+    'the typed instruction',
+    () => asking.screen().includes('› Run the command.'),
+    asking,
+  );
+  asking.write('\r');
+  const approvalRun = () =>
+    query(cli.store(), RUN_OF_AGENT, ['golden_approval'])[0]?.id;
+  await until(
+    'the bound command approval',
+    () =>
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND e.type = 'tool.binding'
+           AND json_extract(e.data, '$.payload.role') = 'call'`,
+        [approvalRun()],
+      ).length > 0 && asking.screen().includes('echo approved'),
+    asking,
+  );
+  asking.kill('SIGKILL');
+  await asking.exited;
   // The interrupted script: killed while its command waits for the release
   // file, which only the orphaned command reads once the process is gone.
   const scripted = cli.start([
@@ -663,6 +704,8 @@ function normalize(file, root) {
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
+    // A workflow call's wall time in its run-log line.
+    [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
   const digests = new Map();
   const scrubText = (text) => {

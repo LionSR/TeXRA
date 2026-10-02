@@ -200,14 +200,14 @@ fenced, and the self-tests pin a sibling on each side (`ProgressApp.ts`,
 entry must hold its runtime as a local or take it as a parameter; a module that reaches the
 process-global `effectRuntime()` does not qualify.
 
-## Effect submodules: five families are admitted, each with a stated exit (ruled 2026-09-18; paths updated for 4.0.0 stable 2026-10-01)
+## Effect submodules: six families are admitted, each with a stated exit (ruled 2026-09-18; paths updated for 4.0.0 stable 2026-10-01)
 
 **Question.** The Effect-4 PRD's non-goal 4 and §11 bar `effect/unstable/*`
-"without a separate decision naming its replacement or exit plan". Five
+"without a separate decision naming its replacement or exit plan". Six
 families are in the tree. Which decision admitted them, and what is each
 one's exit?
 
-**Ruling.** All five are admitted. The 2026-09-13 filesystem ruling ("adopt
+**Ruling.** All six are admitted. The 2026-09-13 filesystem ruling ("adopt
 Effect's own file system as much as possible") settled the general question
 the PRD reserved; what was missing is the per-family record the PRD asks for,
 and it is this. Effect 4.0.0 (stable) moved the modules out of the
@@ -215,13 +215,14 @@ and it is this. Effect 4.0.0 (stable) moved the modules out of the
 module is still marked `@stability unstable` upstream, so the exits below
 stay the plan if one is withdrawn.
 
-| Family              | Used for                                                                                 | Stabilization or exit                                                                                                               |
-| ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `effect/http`       | `HttpClient` on the auth, model, tool and telemetry paths                                | Stays; follows the module's stability. Exit is Node `fetch` behind the same typed errors.                                           |
-| `effect/process`    | `ChildProcess` and `ChildProcessSpawner` at every spawn site, MCP stdio servers included | Stays. Exit is `node:child_process` behind the same spawner service.                                                                |
-| `effect/sql`        | `SqlClient` under `@effect/sql-sqlite-node`, the one session database                    | Stays. Exit is the official Node SQLite driver directly, which the client only wraps.                                               |
-| `effect/reactivity` | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`)             | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels it owns. |
-| `effect/testing`    | Test clocks and schedulers in the Vitest suites                                          | Test-only; stays. No production exit needed.                                                                                        |
+| Family               | Used for                                                                                                    | Stabilization or exit                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `effect/http`        | `HttpClient` on the auth, model, tool and telemetry paths                                                   | Stays; follows the module's stability. Exit is Node `fetch` behind the same typed errors.                                           |
+| `effect/process`     | `ChildProcess` and `ChildProcessSpawner` at every spawn site, MCP stdio servers included                    | Stays. Exit is `node:child_process` behind the same spawner service.                                                                |
+| `effect/sql`         | `SqlClient` under `@effect/sql-sqlite-node`, the one session database                                       | Stays. Exit is the official Node SQLite driver directly, which the client only wraps.                                               |
+| `effect/reactivity`  | `Reactivity.layer` behind the database's invalidation signal (`Database.ts`)                                | Stays with `sql`; it is that client's own invalidation contract. Exit is an in-repo emitter over the committed-wake levels it owns. |
+| `effect/persistence` | `RateLimiter` over the memory store: the process-wide annotation-fetch budget (`subscriptionRegistries.ts`) | Stays; memory store only. Exit is a `Ref` token bucket behind the same claim effect.                                                |
+| `effect/testing`     | Test clocks and schedulers in the Vitest suites                                                             | Test-only; stays. No production exit needed.                                                                                        |
 
 `effect/ai` is not used and has no row. `effect/encoding` (`Sse.makeParser`)
 and the `ky` and `execa` exits named in the first version of this row are
@@ -230,14 +231,14 @@ gone: nothing imports the SSE parser, and neither package is in any
 
 **Evidence.** `rg -oN "from 'effect/[A-Za-z]+" src packages/*/src` lists the
 first path segment of every `effect/<subpath>` import: `process`, `http`,
-`testing`, `sql` and `reactivity` (the families above, with their deeper
+`testing`, `sql`, `reactivity` and `persistence` (the families above, with their deeper
 subpaths such as `effect/process/ChildProcess` and `effect/sql/SqlClient`
 counted under the first segment), plus `PlatformError`, a plain core module
 that needs no row. Every
 exit named above is a path the repository has already walked or is still
 standing on, so none of them is speculative.
 
-**Forbids.** A sixth family without its own row here. Adopting one of these
+**Forbids.** A seventh family without its own row here. Adopting one of these
 for a second purpose without checking that the exit still holds. Treating
 "unstable" as a reason to keep a duplicate in-repo implementation warm beside
 it; the exits above are what happens if a module is withdrawn, not a system
@@ -1069,8 +1070,8 @@ format retirement").
 ### Context overflow and journey checks (D13-D14)
 
 **Ruling.** A context overflow in a tool-use run becomes a forced compaction
-retry, not a failed run (D13). Nightly and label-triggered journey checks run
-on cheap models only, `deepseek41T` and `glm53` (D14).
+retry, not a failed run (D13). Journey checks, run on demand by label or
+dispatch (no schedule since 2026-10-02), use cheap models only, `deepseek41T` and `glm53` (D14).
 
 **Reopen.** A forced retry loops without shrinking the context (D13); a
 journey needs a model the cheap tier cannot drive (D14).

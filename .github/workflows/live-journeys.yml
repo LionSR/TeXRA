@@ -4,15 +4,15 @@ name: Live journeys
 # and citations, each run end to end through the real `texra run` headless
 # NDJSON against a cheap model and graded by a LaTeX build of what it leaves
 # behind (`packages/cli/scripts/validate-journeys.mjs`). It spends a few cents
-# and needs the network and a TeX Live, so it is never part of PR validation:
-# it runs nightly, on the `live-journeys` label, or by manual dispatch.
+# and needs the network and a TeX Live, so it is never part of PR validation
+# and has no schedule (owner ruling 2026-10-02): it runs only on demand, on the
+# `live-journeys` label or by manual dispatch.
 #
 # The script owns the model list (`MODEL_KEYS`) and runs every model in it, so
-# this workflow names none. A model whose key is not configured skips itself, as
-# `live-llm.yml` does; on the nightly schedule a missing key fails the run.
+# this workflow names none. Every run here was asked for, so a model whose key
+# is not configured fails the run instead of skipping itself; only a local run
+# skips with a warning.
 on:
-  schedule:
-    - cron: '43 4 * * *'
   pull_request:
     types: [labeled]
   workflow_dispatch:
@@ -30,7 +30,8 @@ jobs:
   journeys:
     name: journeys
     # Secrets are not exposed to pull_request runs from forks, so a fork PR
-    # carrying the label skips the run rather than leaking anything.
+    # carrying the label has no keys and fails loudly rather than leaking
+    # anything.
     if: >-
       github.event_name != 'pull_request' ||
       github.event.label.name == 'live-journeys'
