@@ -551,9 +551,12 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (reused !== null) return reused;
   }
 
+  // An awaited child's progress is what this call prints while it runs:
+  // transient text on its card, never a row of the run. The child's own run
+  // (and, in a script, its stage row) is where its progress is kept.
   const notify = (update: SubagentProgressUpdate): void => {
     const line = describeSubagentProgress(agent.name, update);
-    if (line) run.logger.info(line);
+    if (line) call.hooks?.onToolOutput?.(`${line}\n`);
   };
   const timeoutMs = input.timeoutMs ?? undefined;
   const running = <A, R>(
