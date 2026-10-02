@@ -1,14 +1,18 @@
 ---
 created: 2026-10-02
-status: proposed
+status: accepted
 ---
 
 # The durable harness: one ledger, one script tool, everything else a plugin
 
 Baseline: `main` at `f78a5501ff` (includes #13604, durable approvals). Line
 references point into that tree. References to the code-mode design point to
-`2026-10-01-codemode-everywhere.md` (accepted, branch `docs/codemode-design`),
-called "the codemode doc" below.
+[`2026-10-01-codemode-everywhere.md`](./2026-10-01-codemode-everywhere.md),
+called "the codemode doc" below. Codemode lanes 1–7 have since merged
+(#13616–#13626); "Since the baseline" says what that changed here.
+
+Accepted 2026-10-02 with owner rulings on five of the six questions (see
+"Owner rulings"). The package names (Q5) stay open.
 
 ## Summary
 
@@ -38,8 +42,8 @@ six things:
 - one row kind for every edit of the model's view, which compaction, reset,
   handoff and fork all use;
 - fork as a `run.start.origin` arm;
-- auto-continue when a session opens, opt-in per host, with
-  blocked-until-installed;
+- auto-continue when a session opens, with a per-host default (ruling
+  Q2) and blocked-until-installed;
 - the "extend" half of the SDK, built as Effect values over the plugin table
   that exists today;
 - a crash-point conformance suite in place of a prose specification.
@@ -133,6 +137,30 @@ does not.
 | `Submission` handle                                                         | SDK `Run.result`, `events`, `view`, `interrupt` (`packages/agent/src/effect/sessions.ts:59-89`)                                                                                                                                        | equal for a run started here; missing for reattaching after a reopen (gap 5)                                                        |
 | Kernel, ports, subpath exports, conformance suite                           | `@texra-ai/agent` with `.`, `./schemas`, `./node`; a golden-store suite (`goldenStore.vitest.ts`, 684 lines; `golden-1.0.sql`)                                                                                                         | partly: the boundary is not drawn (Harness boundary below), and conformance covers storage but not crash points (Conformance below) |
 
+## Since the baseline
+
+Codemode lanes 1–7 merged as #13616–#13626. For gap 1 they already deliver:
+
+- **A child's id comes from the call.** `agentChildRunId(call, attempt)`
+  (`src/tools/delegation/agentChild.ts`) derives it from the parent run, the
+  response, the call id and the intent attempt; `earlierChild` finds the
+  child an earlier attempt launched. `agent` and background `script` share
+  that one owner (#13621).
+- **`agent` reattaches.** `recoverAgentChild` settles a resumed call from
+  the child its earlier attempt left before anything is decided again: a
+  settled turn with a manifest is read back, a child cut short resumes in
+  band under its own id, and a child whose rows leave work unaccounted for
+  gets an outcome question bound to the call (#13619). The golden store's
+  `golden_fanout` run is killed mid-fan-out and resumes with no relaunch.
+- **The workflow-script runner is gone,** with its crash refusal and
+  `run.start.checkpointId` (lane 7, #13626). `delegate_multi_agents` and
+  the delegate pair are deleted.
+
+What gap 1 still needs is the durable half: `run.start.parent.callId`, the
+fold's refusal of `run.end` over an open owned call, Resume on an owned child
+routed to its parent, and the remaining paths that mint a fresh child id for
+a call whose earlier child is still live.
+
 ## Gaps worth closing
 
 Ranked by what a user loses today.
@@ -159,8 +187,8 @@ way the old child is an orphan. It can still be resumed by itself
 revived or the delivery is dropped with a warning
 (`childRunLoop.ts:478-492`). The fold has no parent/child check:
 `runStateFold` ignores `run.start`, `run.detach` and `run.end`
-(`runStateFold.ts:221-226`). The workflow-script runner refuses the crash
-case outright (`workflowScriptAgentRunner.ts:415-425`). The edge itself is
+(`runStateFold.ts:221-226`). The workflow-script runner refused the crash
+case outright; it was deleted in codemode lane 7. The edge itself is
 durable (`run.start.parent`, `sessionEvent.ts:261-270`). The live tree is not:
 every run forks on the session `FiberSet` (`sessionLayer.ts:517`;
 `runRegistry.ts:441`), and the parent is data.
@@ -177,13 +205,13 @@ anywhere, and neither are pi's.
 
 ### The gaps
 
-| #   | Gap                                                | Design (Effect-native)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Deletes or replaces                                                                                                                                                          | Rows                                                                  | Before the freeze?                    |
-| --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------- |
-| 1   | Durable child ownership                            | An awaited child belongs to the call that awaits it. Its id derives from `(callId, attempt)`, which codemode lane 3 already does for `agent`, and `run.start.parent` records `callId`. On resume, the parent's open `agent` call reattaches: it awaits the child's durable `run.end` if there is one, and otherwise resumes that child under the call. The call becomes replay-safe because it is idempotent by id. An owned child is never resumed by itself: Resume on it resumes its parent. The fold refuses `run.end` on a parent whose projection holds an open owned call.                                                                                          | The orphan path; "Run again" minting a new child id; the workflow runner's crash refusal (`workflowScriptAgentRunner.ts:415-425`, which moves into `agent` in lane 3 anyway) | `run.start.parent` gains `callId: string \| null` (null for detached) | yes (shape)                           |
-| 2   | Auto-continue on open; blocked-until-installed     | Opening a session reads the listing's interrupted root runs and applies the host's policy (`off \| ask \| auto`, a setting). `auto` calls `resumeRun` per root and owned children follow (gap 1). `ask` shows one prompt that lists them. A resume whose agent is missing, or whose declared plugin is not installed or not trusted, does not fail: the run stays interrupted with a reason in the projection, and a fiber following `AgentCatalog` and the tool registry's `current` (`SubscriptionRef`) retries it when either changes. Tool calls keep `tool_unavailable`.                                                                                              | "Resume" as the only way back after a crash; the per-host startup notices                                                                                                    | none: the reason lives in the projection, not in a row                | no                                    |
-| 3   | Fork, reset, handoff                               | All three are one row (decision D2). **Fork** starts a new run whose `run.start.origin` is `{ kind: 'fork', from, at }` and whose first ledger row is a view edit carrying the source's model view at `at`, as blob references, plus its offered system and tools. The cut must be a settled position: no open attempt, tool intent, request or retry. Pending sets are not copied, so the follow-up queue, requests and retry permits start empty, and usage starts at zero. Plugin facts are not copied; goal mode is paused, as on resume. **Reset** is the same edit on the same run with no messages. **Handoff** is reset plus the handoff text as a user follow-up. | "Edit as new task" becomes fork-at-end; the parked undo note (#13546) uses the same row when it is unparked                                                                  | D2 and D3                                                             | yes (shape); the behaviour can follow |
-| 4   | Background compaction                              | Once the range exists (D2), a compaction can be computed off the loop. A fiber in the run scope summarises the range `[from, to)` of the view as it stands at edit `base`. At the next step boundary the loop applies the result only if no view edit has committed since `base`; otherwise the result is stale, dropped, and its usage still recorded. The blocking path stays for overflow. A `Deferred` hands the result to the step, and the fiber is forked into the run's `Scope`, so a stop interrupts it.                                                                                                                                                          | The inline wait between turns in long conversations                                                                                                                          | none beyond D2                                                        | no; D2 is                             |
-| 5   | The SDK's extend half, `ExecutionEnv` and reattach | Defined under "The harness boundary". The extend half is a `Plugin` value of today's table shape, passed as a layer argument or contributed in a `Scope`. `ChildProcessSpawner` moves from the process layer to the run layer beside `WorkspaceFs`, so the run's file system and shell are one environment an embedder can replace together. `Session.resume(runId)` returns the same `Run` handle as `start`.                                                                                                                                                                                                                                                             | The kernel's import of TeXRA's table (`sessionLayer.ts:1109` → `registry.ts:285`); the ambient spawner                                                                       | none                                                                  | no                                    |
+| #   | Gap                                                | Design (Effect-native)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Deletes or replaces                                                                                                   | Rows                                                                  | Before the freeze?                    |
+| --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------- |
+| 1   | Durable child ownership                            | An awaited child belongs to the call that awaits it. Its id derives from `(callId, attempt)`, which codemode lane 3 already does for `agent`, and `run.start.parent` records `callId`. On resume, the parent's open `agent` call reattaches: it awaits the child's durable `run.end` if there is one, and otherwise resumes that child under the call. The call becomes replay-safe because it is idempotent by id. An owned child is never resumed by itself: Resume on it resumes its parent. The fold refuses `run.end` on a parent whose projection holds an open owned call.                                                                                          | The orphan path; "Run again" minting a new child id; the workflow runner's crash refusal (deleted in codemode lane 7) | `run.start.parent` gains `callId: string \| null` (null for detached) | yes (shape)                           |
+| 2   | Auto-continue on open; blocked-until-installed     | Opening a session reads the listing's interrupted root runs and applies the host's policy (`off \| ask \| auto`; defaults per ruling Q2). `auto` calls `resumeRun` per root and owned children follow (gap 1). `ask` shows one prompt that lists them. A resume whose agent is missing, or whose declared plugin is not installed or not trusted, does not fail: the run stays interrupted with a reason in the projection, and a fiber following `AgentCatalog` and the tool registry's `current` (`SubscriptionRef`) retries it when either changes. Tool calls keep `tool_unavailable`.                                                                                 | "Resume" as the only way back after a crash; the per-host startup notices                                             | none: the reason lives in the projection, not in a row                | no                                    |
+| 3   | Fork, reset, handoff                               | All three are one row (decision D2). **Fork** starts a new run whose `run.start.origin` is `{ kind: 'fork', from, at }` and whose first ledger row is a view edit carrying the source's model view at `at`, as blob references, plus its offered system and tools. The cut must be a settled position: no open attempt, tool intent, request or retry. Pending sets are not copied, so the follow-up queue, requests and retry permits start empty, and usage starts at zero. Plugin facts are not copied; goal mode is paused, as on resume. **Reset** is the same edit on the same run with no messages. **Handoff** is reset plus the handoff text as a user follow-up. | "Edit as new task" becomes fork-at-end; the parked undo note (#13546) uses the same row when it is unparked           | D2 and D3                                                             | yes (shape); the behaviour can follow |
+| 4   | Background compaction                              | Once the range exists (D2), a compaction can be computed off the loop. A fiber in the run scope summarises the range `[from, to)` of the view as it stands at edit `base`. At the next step boundary the loop applies the result only if no view edit has committed since `base`; otherwise the result is stale, dropped, and its usage still recorded. The blocking path stays for overflow. A `Deferred` hands the result to the step, and the fiber is forked into the run's `Scope`, so a stop interrupts it.                                                                                                                                                          | The inline wait between turns in long conversations                                                                   | none beyond D2                                                        | no; D2 is                             |
+| 5   | The SDK's extend half, `ExecutionEnv` and reattach | Defined under "The harness boundary". The extend half is a `Plugin` value of today's table shape, passed as a layer argument or contributed in a `Scope`. `ChildProcessSpawner` moves from the process layer to the run layer beside `WorkspaceFs`, so the run's file system and shell are one environment an embedder can replace together. `Session.resume(runId)` returns the same `Run` handle as `start`.                                                                                                                                                                                                                                                             | The kernel's import of TeXRA's table (`sessionLayer.ts:1109` → `registry.ts:285`); the ambient spawner                | none                                                                  | no                                    |
 
 **Considered and dropped.**
 
@@ -225,7 +253,7 @@ anywhere, and neither are pi's.
 | Kernel           | `src/shared/session/`, the core arms of `src/shared/schemas/`, `src/agent/runtime/` (minus round mode), `src/agent/core/`, `src/agent/followUp/`, `src/agent/trace/`, `src/agent/prompt/`, `src/agent/storage/`, `src/controllers/session/`, `src/platform/`, `src/common/plugins/` (trust), the engine half of `src/tools/` (`liveRegistry`, `liveTools`, `toolTable`, `serverHolds`, `pluginLayers`, `pluginArms`, `catalogEntries`, `core/definition`, `approval/`), `src/agent/codeSandbox/` and `src/tools/codemode/` (codemode), `packages/llm` |
 | Ports            | The codemode doc's table: Storage, Models, Settings, Execution env, Sandbox. This note narrows Execution env to one run-lifetime pair (`WorkspaceFs` + `ChildProcessSpawner`), and Settings to what a binding carries (the codemode doc's "later" item, done in H3)                                                                                                                                                                                                                                                                                   |
 | Extension points | The `ToolTable` fields (`toolTable.ts:167`): tools, continuations, prompt contributions, process layers, session layers. Plus plugin arms (`plugin.fact`), agents and skills (directories as data), MCP servers, and hooks (out of process). Each is read in one place, through the step's snapshot                                                                                                                                                                                                                                                   |
-| Harness plugins  | `file-ops`, `web`, `memory-workflow` (memory, todo, executions, accept_run_files), `goal`, `workflow-script` (contributing `agent` after codemode lane 7), `codemode`, `ask_user_question`; optional: `codex`, `claude-agent`, `github-pr-subscription`, `external-inquiry`                                                                                                                                                                                                                                                                           |
+| Harness plugins  | `file-ops`, `web`, `memory-workflow` (memory, todo, executions, accept_run_files), `goal`, `workflow-script` (contributing `agent`), `codemode`, `ask_user_question`; optional: `codex`, `claude-agent`, `github-pr-subscription`, `external-inquiry`                                                                                                                                                                                                                                                                                                 |
 | App (TeXRA)      | `latex-extract`, `latex-diagnostics`, `arxiv`, `crossref`, `texcount`, `wolfram`, `zotero`, `lean4`; the TeXRA half of `core` (`inline_comment`, `open_pdf`, `lean_loogle`); `setup`; the **documents** plugin (`src/agent/output/`, round mode); `src/latex/`; the agent YAMLs and skills; the hosts. `copilot` belongs to the VS Code host                                                                                                                                                                                                          |
 
 ### Violations and fixes
@@ -314,7 +342,7 @@ This narrows the 2026-09-30 ruling that "`PluginModule` and `Plugin.load`
 are not built" (core-concepts, "Decided 2026-09-30"). The named consumer is
 TeXRA itself as an app on the harness. The value is first-party only: the
 embedder owns the process. Third-party plugins stay data, MCP and hooks, and
-no third-party code loads in process. That is question Q1.
+no third-party code loads in process (ruling Q1).
 
 ### Round mode, the documents plugin, package names
 
@@ -322,7 +350,7 @@ Round mode and `src/agent/output/` become the app's `documents` plugin
 (violation 4). Workflow agents are TeXRA's, and a harness without the
 documents plugin has only tool-use agents.
 
-Proposed names, for the owner to decide (Q5):
+Proposed names, still open (Q5):
 
 - `@texra-ai/agent` is renamed `@texra-ai/harness`. Nothing is published,
   so the rename is free.
@@ -379,53 +407,52 @@ external consumer, the same rule as npm publication.
 | D3  | `run.start.origin`                     | (a) none; (b) a tagged union                                                                                | **(b)**: `origin: { kind: 'fork', from: { id, uid }, at: seq } \| null`, where null means a fresh run. Resume is not an origin, since it is the same run. Later arms widen the union under the per-kind version rule. PRD #13354's origin and wake time are a deferred consumer and are not designed here |
 | D4  | Ownership of an awaited child          | (a) derive it from the parent's ledger; (b) `run.start.parent.callId`                                       | **(b)**, nullable. The session view routes Resume without reading another aggregate's ledger                                                                                                                                                                                                              |
 | D5  | Blocked reason                         | (a) a row; (b) the projection                                                                               | **(b)**. It is a fact about this build and its catalog, not about the run                                                                                                                                                                                                                                 |
-| D6  | `run.start.checkpointId`, `workflow.*` | (unchanged)                                                                                                 | Deleted in codemode lane 7, as ruled                                                                                                                                                                                                                                                                      |
+| D6  | `run.start.checkpointId`, `workflow.*` | (unchanged)                                                                                                 | Deleted in codemode lane 7 (#13626)                                                                                                                                                                                                                                                                       |
 
+D2 is ruled (Q3); D3 follows from the fork ruling (Q4) and D4 from Q6.
 D2–D4 are unreleased shape changes. Under the codemode doc's "the freeze
 waits" ruling, they land in their version-1 shape with no upcaster.
 
 ## Lanes
 
-Sequenced against the codemode lanes. Codemode lanes 1–2 are running;
-lanes 3–8 are next.
+Sequenced against the codemode lanes, of which 1–7 have merged.
 
-| Lane | Work                                                                                                                                                                                                                                                 | Effort | Depends on                                                          | Freeze                |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------- | --------------------- |
-| H1   | Owned children: `parent.callId`; the derived id reattaches on resume; `agent` is replay-safe by id; Resume on an owned child resumes its parent; the fold refuses `run.end` over an open owned call; the orphan path is deleted                      | M      | codemode lane 3 (lands in it or right after)                        | before                |
-| H2   | Row shapes: `context.edit` replaces `model.compaction` (compaction writes the new shape, `range` replaces `keepPrefix`); `run.start.origin` with the `fork` arm; regenerate the golden store                                                         | S      | none; must merge before the freeze, which waits for codemode lane 7 | before                |
-| H3   | The boundary: the table becomes a platform input (violation 5); round mode becomes a documents-plugin contribution (4); `@latex` edges leave `src/agent` (1); `bibPath` (6); the setting moves onto the binding (3); then the kernel/app ESLint zone | M–L    | the table half: none; the rest after codemode lane 7 (fewer edges)  | no                    |
-| H4   | SDK extend: the `Plugin` value, `Sessions.layer({ plugins })`, `Plugins.contribute` in a `Scope`, `Session.resume`; `ChildProcessSpawner` moves onto the run layer                                                                                   | M      | H3's table half                                                     | no                    |
-| H5   | Fork, reset and handoff over `context.edit`; auto-continue on open with the host policy and blocked-until-installed; background compaction                                                                                                           | M      | H1, H2                                                              | no (shapes from H2)   |
-| H6   | The crash-point conformance suite, parameterised by plugin `Layer`; golden-store rows for fork, view edit and owned child                                                                                                                            | S–M    | H1, H2 (the fork case after H5)                                     | the H1/H2 half before |
+| Lane | Work                                                                                                                                                                                                                                                 | Effort | Depends on                         | Freeze                |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------- | --------------------- |
+| H1   | Owned children: `parent.callId`; the derived id reattaches on resume; `agent` is replay-safe by id; Resume on an owned child resumes its parent; the fold refuses `run.end` over an open owned call; the orphan path is deleted                      | M      | none (codemode lane 3 merged)      | before                |
+| H2   | Row shapes: `context.edit` replaces `model.compaction` (compaction writes the new shape, `range` replaces `keepPrefix`); `run.start.origin` with the `fork` arm; regenerate the golden store                                                         | S      | none; must merge before the freeze | before                |
+| H3   | The boundary: the table becomes a platform input (violation 5); round mode becomes a documents-plugin contribution (4); `@latex` edges leave `src/agent` (1); `bibPath` (6); the setting moves onto the binding (3); then the kernel/app ESLint zone | M–L    | none                               | no                    |
+| H4   | SDK extend: the `Plugin` value, `Sessions.layer({ plugins })`, `Plugins.contribute` in a `Scope`, `Session.resume`; `ChildProcessSpawner` moves onto the run layer                                                                                   | M      | H3's table half                    | no                    |
+| H5   | Fork, reset and handoff over `context.edit`; auto-continue on open with the host policy and blocked-until-installed; background compaction                                                                                                           | M      | H1, H2                             | no (shapes from H2)   |
+| H6   | The crash-point conformance suite, parameterised by plugin `Layer`; golden-store rows for fork, view edit and owned child                                                                                                                            | S–M    | H1, H2 (the fork case after H5)    | the H1/H2 half before |
 
-H2 is the only lane on the freeze's critical path that does not depend on
-codemode. H1 joins codemode lane 3, since both change how `agent` recovers a
-child. Everything else follows the freeze.
+H2 and H1 are the lanes on the freeze's critical path, in that order: H2
+lands the shapes, `run.start.parent.callId` included, and H1 enforces
+ownership over them. Everything else follows the freeze.
 
-## Owner questions
+## Owner rulings
 
-1. **Narrow the 2026-09-30 `PluginModule` ruling for first-party plugins?**
-   A `Plugin` value of today's table shape would be passed to the harness or
-   contributed in a `Scope`, with TeXRA as the named consumer. Third-party
-   plugins are unchanged. _Recommend yes._ It is the existing table made an
-   input, not a loader.
-2. **What is each host's auto-continue default?** _Recommend:_ `off` for
-   headless `texra run` and the SDK; `ask` for the TUI, desktop and the
-   extension, as one prompt listing the interrupted runs; `auto` available as
-   a setting.
-3. **Should one `context.edit` kind replace `model.compaction` (D2)?** It
-   would cover compaction, reset, handoff and the fork seed, and leave room
-   for undo. _Recommend yes._
-4. **Fork only at a settled position?** pi allows a cut anywhere and
-   synthesizes results for dangling calls. _Recommend settled only._ Refuse
-   anywhere else, so that a fork never contains a result nobody produced.
-5. **Package names.** The options are `@texra-ai/harness` (renamed from
-   `@texra-ai/agent`), `@texra-ai/llm` and `@texra-ai/theorist`, with the
-   physical split after the freeze. _Recommend these names_, but they are
-   the owner's call.
-6. **Resume of an owned child goes through its parent (D4, gap 1)?** A user
-   could no longer resume an awaited child on its own; a detached child
-   keeps independent resume. _Recommend yes._
+Ruled by the owner on 2026-10-02 (PR #13612).
+
+1. **First-party plugins as code: yes.** The 2026-09-30 `PluginModule`
+   ruling is narrowed for first-party plugins. A `Plugin` value of today's
+   table shape is passed to the harness or contributed in a `Scope`, with
+   TeXRA as the named consumer. Third-party plugins stay data, MCP and
+   hooks.
+2. **Auto-continue defaults.** `off` for headless `texra run` and the SDK;
+   `ask` for the TUI, desktop and the extension, as one prompt listing the
+   interrupted runs; `auto` available as a setting.
+3. **One `context.edit` kind replaces `model.compaction` (D2): yes.** It
+   covers compaction, reset, handoff and the fork seed, and leaves room for
+   undo.
+4. **Fork only at a settled position: yes.** A cut anywhere else is refused,
+   so a fork never contains a result nobody produced.
+5. **Package names: open.** The proposal is `@texra-ai/harness` (renamed
+   from `@texra-ai/agent`), `@texra-ai/llm` and `@texra-ai/theorist`, with
+   the physical split after the freeze.
+6. **Resuming an owned child goes through its parent (D4, gap 1): yes.** A
+   user can no longer resume an awaited child on its own; a detached child
+   keeps independent resume.
 
 ## Verified
 
