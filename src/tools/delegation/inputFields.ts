@@ -68,7 +68,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model. Defaults to the current model when available.',
+      'Model short name from the available models. Omit unless the user explicitly requested a model. Defaults to the current model when available.',
     ),
   instruction: z
     .string()

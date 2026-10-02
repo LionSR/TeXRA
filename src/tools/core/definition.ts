@@ -38,7 +38,7 @@ export type DefineToolOptions<T, R = never> = {
   name: string;
   description: string;
   schema: ZodType<T, unknown>;
-  /** Agent category a delegation tool's description is annotated from. */
+  /** Agent category this delegation tool launches. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** Product hosts this tool definition statically excludes itself from. */
   unavailableHosts?: readonly SettingHost[];
