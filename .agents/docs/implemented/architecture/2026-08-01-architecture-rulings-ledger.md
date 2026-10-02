@@ -29,9 +29,9 @@ one projection, and its own contract comment records why the two values are not
 redundant: a durable `completed` is **never** projected, because the result
 envelope's producer may already have downgraded a nominally completed flow that
 reported an application-level error. That downgrade is
-`buildSubagentFailureResultMeta` (`src/tools/delegation/subagentResults.ts:553`), called from
+`buildSubagentFailureResultMeta` (formerly in `subagentResults.ts`, now `src/agent/runtime/subagentResults.ts`), called from
 both delegation strategies (`nativeSubagentStrategy.ts`,
-`inBandSubagentExecution.ts`) and pinned by `SubagentResultMeta.vitest.ts`. So
+`src/tools/delegation/inBandSubagentRun.ts`) and pinned by `SubagentResultMeta.vitest.ts`. So
 `result.outcome` carries a producer-side subagent-failure downgrade that
 `meta.outcome` does not, and a naive drop would silently flip failed child runs
 to `completed` at every read — the exact wrong-but-quiet class the repo treats

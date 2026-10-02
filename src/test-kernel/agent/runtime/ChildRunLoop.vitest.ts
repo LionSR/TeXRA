@@ -283,6 +283,7 @@ const startLoop = (
     runId,
     parentRunId: PARENT_RUN_ID,
     agentName: 'fake',
+    budgeted: false,
     strategy,
     ...extras,
   }).pipe(Effect.provideService(Runs, session.runs));
