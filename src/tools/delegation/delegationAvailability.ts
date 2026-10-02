@@ -76,6 +76,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
         category,
       );
       agents.push({
+        category,
         tools,
         agents: entries.map(({ name, description, tools: agentTools }) => ({
           name,
@@ -175,10 +176,8 @@ export function delegationUpdate(
   told: DelegationTargets | undefined,
   now: DelegationTargets,
 ): string[] {
-  const lines = now.agents.flatMap(({ tools, agents }) => {
-    const before = told?.agents.find(
-      (group) => group.tools.join('\0') === tools.join('\0'),
-    );
+  const lines = now.agents.flatMap(({ category, tools, agents }) => {
+    const before = told?.agents.find((group) => group.category === category);
     const change = namesChange(
       before?.agents.map(({ name }) => name) ?? [],
       agents.map(({ name }) => name),

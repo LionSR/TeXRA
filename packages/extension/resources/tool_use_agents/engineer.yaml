@@ -50,8 +50,9 @@ prompts:
         still pass. Use it to pay down complexity, not to hunt for bugs.
 
     But the agents you can actually reach are the ones listed for
-    `delegate_agent` under "Available agents". Check that list before your first delegation,
-    read every role named below as shorthand for the closest match in it, and
+    `delegate_agent` under "Available agents". Check that list before your
+    first delegation, read every role named below as shorthand for the
+    closest match in it, and
     if a role has no match, do that work yourself or tell the user. Never hand
     software work to an unrelated agent.
 

@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 
+import { AgentCategorySchema } from './agent';
 import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
@@ -67,6 +68,7 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
 const DelegationTargetsSchema = z.strictObject({
   agents: z.array(
     z.strictObject({
+      category: AgentCategorySchema,
       tools: z.array(z.string().min(1)).min(1),
       agents: z.array(
         z.strictObject({
