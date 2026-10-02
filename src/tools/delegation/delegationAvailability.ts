@@ -217,7 +217,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   /**
    * The setting slots the availability read answers from: the calling run's
    * session roots. Callers that reach this from outside their run — an
-   * approved proposal, a workflow script's per-call model routing — hand in
+   * approved proposal, a script's per-call model routing — hand in
    * the roots of the session the delegation belongs to, so the answer does not
    * depend on which frame the fiber resumed in.
    */

@@ -8,8 +8,8 @@
  * and XML presentation remains a delivery adapter. The child's own run
  * aggregate is the durable record of what happened, so whether an earlier
  * child already answered a logical call belongs to whoever owns that call
- * identity (the workflow-script runner derives the attempt's run id and probes
- * it); this module only ever starts the run it is handed.
+ * identity (the `agent` tool derives the attempt's run id and probes it);
+ * this module only ever starts the run it is handed.
  */
 
 // Third-party imports

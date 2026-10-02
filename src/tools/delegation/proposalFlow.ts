@@ -54,7 +54,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
  * caller carries the resolved `source` onto the proposal so launch pins the
  * exact `(source, name)` entry instead of re-resolving the bare name.
  */
-export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
+const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   stores: WorkspaceAgentsStores,
   category: AgentCategory,
   name: string,
@@ -112,7 +112,7 @@ function summarizeProposal(
 }
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
-export function proposalResultToToolResult(
+function proposalResultToToolResult(
   result: RequestDecision,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -175,7 +175,7 @@ type ProposalRequestError =
 /** Request the shared proposal decision, honoring the run's bypass policy.
  *  `ask` presents it in place of this call's own proposal request: the
  *  calls of one script share one request (`agent`). */
-export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
+const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: WorkflowAgentProposal | ToolUseAgentProposal,
     parent: RunToolCall,

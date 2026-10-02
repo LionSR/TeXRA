@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { LineCountSchema } from './lineChanges';
 
 /** How a background script's calls ended. */
-export const ScriptTallySchema = z.strictObject({
+const ScriptTallySchema = z.strictObject({
   total: z.int().nonnegative(),
   ok: z.int().nonnegative(),
   running: z.int().nonnegative(),

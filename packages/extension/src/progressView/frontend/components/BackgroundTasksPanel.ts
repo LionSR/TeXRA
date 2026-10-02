@@ -243,8 +243,8 @@ export class BackgroundTasksPanel extends LitElement {
   /** The clock a running row's elapsed time ticks on (G4). */
   private readonly _ticker = new TickerController(this, 1000);
 
-  /** The complete card, or only the inquiry threads (the workflow body,
-   *  whose run board already lists every call). */
+  /** The complete card, or only the inquiry threads (a workflow run's
+   *  body, which has no children to list). */
   @property() scope: 'all' | 'inquiries' = 'all';
 
   private childrenOf(run: RunView): RunView[] {

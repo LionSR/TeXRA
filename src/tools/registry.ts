@@ -266,7 +266,6 @@ type _CanonicalDisplayNamesAreRegistered = AssertNever<
   Exclude<CanonicalToolDisplayName, RegisteredToolName>
 >;
 
-
 /**
  * Every plugin's tools, continuation and prompt contribution, which the
  * process serves as the `ToolRegistry` service. Flattening cannot overwrite

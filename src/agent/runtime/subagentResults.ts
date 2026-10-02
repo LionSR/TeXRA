@@ -247,8 +247,8 @@ export function formatSubagentError(
 /**
  * Build the structured result manifest for a finished subagent — the
  * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.
- * Persisted beside the run's `run.end` row so later stages (orchestrator or a
- * workflow script) can chain on outputs and diffs as data instead of parsing
+ * Persisted beside the run's `run.end` row so later stages (an orchestrator
+ * or a script) can chain on outputs and diffs as data instead of parsing
  * prose; how the run ended is the terminal fact's to say, not this record's.
  */
 export function buildSubagentResultMeta(

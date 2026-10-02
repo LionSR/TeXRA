@@ -51,9 +51,7 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from './input/activeDraft';
-import {
-  resolveChildListTarget,
-} from './state/childControls';
+import { resolveChildListTarget } from './state/childControls';
 import { activeForm, closeActiveForm } from './state/formSlot';
 import {
   selectedRunId as selectedRunIdSignal,

@@ -6,11 +6,7 @@ import { type TextChunk } from '@shared/schemas';
 import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
-import {
-  streamingTextRow,
-  toolRow,
-  transcriptText
-} from '@ui/transcript';
+import { streamingTextRow, toolRow, transcriptText } from '@ui/transcript';
 import { appendTranscriptText } from '@ui/transcript/transcriptText';
 
 import {

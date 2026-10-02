@@ -21,7 +21,7 @@ import {
   type SessionEvent,
   type TaskGroup,
   type ToolUseLog,
-  type TranscriptEvent
+  type TranscriptEvent,
 } from '@shared/schemas';
 import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityProjection';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';

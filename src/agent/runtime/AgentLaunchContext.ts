@@ -39,9 +39,12 @@ import {
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { selectModel } from '@shared/model/modelSelection';
+import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { ToolRegistry } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+import { declaredToolNames } from './agentToolResolution';
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
@@ -256,6 +259,22 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
         yield* readInstalledPluginLoad(input.session.roots),
       );
     const { setting, prompt } = agentEntry;
+
+    // A declared tool no plugin registers, and no MCP server could, is a
+    // configuration error (a typo, or a tool retired from the table): the
+    // run is refused rather than started without it. A plugin switched off
+    // still withholds its tools quietly at the step: that is the user's
+    // switch, not the file's.
+    const table = yield* ToolRegistry;
+    const unknown = declaredToolNames(setting.tools).filter(
+      (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
+    );
+    if (unknown.length > 0)
+      return yield* Effect.fail(
+        new AgentError(
+          `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} TeXRA does not have: ${unknown.join(', ')}. Edit ${agentEntry.path} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+        ),
+      );
 
     // Block category mismatch. Resolution is already category-scoped; this
     // catches what the registry's pre-merge category can't see: an agent that

@@ -486,7 +486,7 @@ export class SessionComposer extends LitElement {
 
   /** Where a follow-up goes, shown only when there is a choice: a parent
    *  that takes replies too. A top-level run's name is already in the
-   *  header, and a parent that takes none (a workflow-script run has no
+   *  header, and a parent that takes none (a background script run has no
    *  chat) leaves nothing to choose. */
   private renderRouting(run: RunView): TemplateResult | typeof nothing {
     const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;

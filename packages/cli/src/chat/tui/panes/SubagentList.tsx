@@ -58,7 +58,7 @@ export function RowSegment({
   );
 }
 
-export function ApprovalSegments({
+function ApprovalSegments({
   approval,
   bold,
   color,
@@ -137,9 +137,7 @@ function SessionRow({
       </Text>
       <Text aria-hidden color={color}>
         {'  '.repeat(depth)}
-        {run.childIds.length > 0
-          ? `${expanded ? '▾' : '▸'} `
-          : '  '}
+        {run.childIds.length > 0 ? `${expanded ? '▾' : '▸'} ` : '  '}
         {CHILD_STATUS_MARKER}
       </Text>
       <RowSegment bold={active} color={color} flexShrink={1}>

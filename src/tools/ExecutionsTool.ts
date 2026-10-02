@@ -79,9 +79,7 @@ import { listRuns } from './executions/runListing';
 import { sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
-import {
-  scriptCallsView,
-} from './executions/scriptCallsView';
+import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly session: SessionHandle;

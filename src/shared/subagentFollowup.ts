@@ -238,9 +238,7 @@ export function formatScriptDeliverySummary(
 
 /** The `<script-summary>` element a script's delivery carries, which
  *  {@link parseScriptDeliverySummary} reads back. */
-export function scriptSummaryElement(
-  summary: ScriptDeliverySummary,
-): string {
+export function scriptSummaryElement(summary: ScriptDeliverySummary): string {
   return `<script-summary>${escapeText(JSON.stringify(summary))}</script-summary>`;
 }
 

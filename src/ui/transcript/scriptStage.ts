@@ -109,7 +109,7 @@ export interface ScriptStageView {
 }
 
 /** What a waiting run asks for, in one line. */
-export function pendingRequestLine(payload: PermissionPayload): string {
+function pendingRequestLine(payload: PermissionPayload): string {
   switch (payload.kind) {
     case 'bash':
       return `Wants bash: ${payload.data.command}`;

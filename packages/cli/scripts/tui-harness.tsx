@@ -22,7 +22,6 @@ import React from 'react';
 
 import { refresh } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
-import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';

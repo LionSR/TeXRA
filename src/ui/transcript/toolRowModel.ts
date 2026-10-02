@@ -5,7 +5,7 @@
  * to elide any of them.
  *
  * Before this module the two hosts assembled tool rows independently. The
- * progress view parsed delegation, workflow-script and MCP inputs into typed
+ * progress view parsed delegation and MCP inputs into typed
  * sections while the CLI fell through to `JSON.stringify(input)`; the CLI
  * showed output only for `bash` and MCP while the progress view showed it for
  * everything else. Both halves live here now — sections are data, never

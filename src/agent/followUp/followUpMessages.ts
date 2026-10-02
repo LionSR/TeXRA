@@ -5,10 +5,7 @@ import {
   parseScriptDeliverySummary,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import type {
-  FollowUpContent,
-  ScriptDeliverySummary,
-} from '@shared/schemas';
+import type { FollowUpContent, ScriptDeliverySummary } from '@shared/schemas';
 
 interface FollowUpDisplay {
   readonly text: string;

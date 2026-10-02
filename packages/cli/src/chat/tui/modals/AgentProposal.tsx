@@ -7,7 +7,7 @@ import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSumm
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
-  type AgentProposalPermission
+  type AgentProposalPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';

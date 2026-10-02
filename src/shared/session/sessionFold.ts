@@ -134,10 +134,7 @@ export function fold(
   return next;
 }
 
-function foldWith(
-  view: SessionView,
-  input: FoldInput,
-): SessionView {
+function foldWith(view: SessionView, input: FoldInput): SessionView {
   // The envelope is replaced, never mutated: work on a copy whose containers
   // are shared with the previous value until this call first writes one.
   const next: SessionView = { ...view };
@@ -869,7 +866,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         model,
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
-        inputFiles: config.inputFiles ?? [],
+        inputFiles: 'inputFiles' in config ? config.inputFiles : [],
       };
     }
     case 'run.model':
@@ -1149,8 +1146,7 @@ function foldDurable(
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'run.removed')
-    return foldRunRemoved(view, runId);
+  if (event.type === 'run.removed') return foldRunRemoved(view, runId);
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
@@ -1236,10 +1232,7 @@ function foldTraceEvent(
  * transcript tier. The run's `latest` entries stay: the lifecycle one is what
  * outranks a replayed `run.start` beneath the tombstone.
  */
-function foldRunRemoved(
-  view: SessionView,
-  runId: RunId,
-): boolean {
+function foldRunRemoved(view: SessionView, runId: RunId): boolean {
   const run = view.runs.get(runId);
   if (!run) return false;
   dropRun(view, run);
@@ -1285,10 +1278,7 @@ function foldRunRemoved(
  * set and those entering or leaving `unreadable` (5.2, "Incremental"), so an
  * owner exiting recomputes exactly the runs it owned, never the view.
  */
-function foldLocal(
-  view: SessionView,
-  local: LocalRuntimeState,
-): void {
+function foldLocal(view: SessionView, local: LocalRuntimeState): void {
   const indexes = sessionIndexesOf(view);
   const previous = indexes.local;
   indexes.local = local;

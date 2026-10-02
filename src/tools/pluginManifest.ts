@@ -93,12 +93,7 @@ export const MANIFEST = [
   },
   {
     id: 'memory-workflow',
-    toolNames: [
-      'memory',
-      'todo_write',
-      'executions',
-      'accept_run_files',
-    ],
+    toolNames: ['memory', 'todo_write', 'executions', 'accept_run_files'],
     injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
     promptSection: true,
     name: 'Memory & Tasks',

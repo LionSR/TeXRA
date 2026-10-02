@@ -8,8 +8,7 @@
  */
 
 // Third-party imports
-import { Effect
-} from 'effect';
+import { Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import { registerRun } from '@agent/storage/runLifecycle';
@@ -29,9 +28,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import {
-  type DelegatedChildApproval
-} from '@tools/approval';
+import { type DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import type { RunToolCall } from '@tools/core/toolRun';
 

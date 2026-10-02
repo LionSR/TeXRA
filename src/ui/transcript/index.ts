@@ -41,13 +41,11 @@ export {
   type WebSearchRow,
 } from './transcriptRow';
 export {
-  pendingRequestLine,
   scriptStages,
   SCRIPT_CALL_STATUS_LABEL,
   SCRIPT_SECTION_LABEL,
   TOOL_CUT_BY_RUN_END,
   type ScriptCallView,
-  type ScriptSection,
   type ScriptStageView,
 } from './scriptStage';
 export {

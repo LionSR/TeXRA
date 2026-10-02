@@ -15,10 +15,7 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import {
-  RequestDecisionSchema,
-  RunIdSchema,
-} from '@shared/schemas';
+import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 

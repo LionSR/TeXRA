@@ -93,8 +93,8 @@ function isAgentRunEntry(
 /**
  * True for runs a user should see in a history list, meaning the runs a
  * user started themselves. Excludes non-agent runs (background processes,
- * workflow-script containers — `identity.kind` decides) and runs an agent
- * spawned (delegated subagents, workflow-script children, team members),
+ * background scripts — `identity.kind` decides) and runs an agent
+ * spawned (delegated subagents, a script's children, team members),
  * which belong to their parent's transcript rather than to the history list.
  * A blocked run is kept, as `blocked`.
  *

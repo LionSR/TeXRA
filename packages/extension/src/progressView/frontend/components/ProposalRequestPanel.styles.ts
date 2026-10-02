@@ -37,14 +37,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
     max-width: 8rem;
   }
 
-  /* The workflow-script card (board W0): the lede, one row per phase. */
-  .proposal-card__summary {
-    margin-inline-start: auto;
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-  }
-
+  /* A script request's lede. */
   .proposal-card__lede {
     display: flex;
     flex-wrap: wrap;
@@ -52,43 +45,6 @@ export const proposalRequestPanelStyles: CSSResult = css`
     gap: ${sp.small};
     min-width: 0;
     font-size: var(--font-size-sm);
-  }
-
-  .proposal-card__phases {
-    display: flex;
-    flex-direction: column;
-    margin-block-start: ${sp.small};
-  }
-
-  .proposal-card__phase {
-    display: flex;
-    align-items: center;
-    gap: ${sp.small};
-    min-height: 1.75rem;
-    padding: 0 ${sp.medium};
-    border-top: var(--border-thin) solid var(--wa-color-surface-border);
-    font-size: var(--font-size-sm);
-  }
-
-  .proposal-card__phase wa-icon {
-    color: var(--color-text-muted);
-    flex-shrink: 0;
-  }
-
-  .proposal-card__phase-calls {
-    flex: 0 0 auto;
-    margin-inline-start: auto;
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary);
-  }
-
-  .workflow-proposal__cost-warning {
-    display: flex;
-    align-items: center;
-    gap: ${sp.small};
-    margin-block-start: ${sp.small};
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
   }
 
   .workflow-proposal__workflow-details {

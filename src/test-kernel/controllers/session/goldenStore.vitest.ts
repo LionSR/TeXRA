@@ -120,19 +120,19 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARKED = RunIdSchema.parse('a00000000001');
 const PARENT = RunIdSchema.parse('a00000000002');
-const CHAT = RunIdSchema.parse('a00000000009');
-const APPROVAL = RunIdSchema.parse('a0000000000a');
-const SCRIPTED = RunIdSchema.parse('a0000000000b');
-const FANOUT = RunIdSchema.parse('a0000000000c');
+const CHAT = RunIdSchema.parse('a00000000006');
+const APPROVAL = RunIdSchema.parse('a00000000007');
+const SCRIPTED = RunIdSchema.parse('a00000000008');
+const FANOUT = RunIdSchema.parse('a00000000009');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('8b43f437debd32ffe6d57b3f');
-const RUNNING = RunIdSchema.parse('283494944f1bfdfee431047b');
+const FANNED = RunIdSchema.parse('4e835bb7d9867028dba7d6f0');
+const RUNNING = RunIdSchema.parse('72ce0aa804465ea878a1dda3');
 /** The chat that sent a script to the background, the script's run, and
  *  the script's one `agent()` child, which ran at the kill. */
-const BACKGROUND = RunIdSchema.parse('a0000000000f');
-const SCRIPT_RUN = RunIdSchema.parse('62db81fbc29ce54c703f5b7c');
-const SCRIPT_CHILD = RunIdSchema.parse('303a6ba690cab22c32cb1f77');
-const TOMBSTONED = RunIdSchema.parse('a00000000012');
+const BACKGROUND = RunIdSchema.parse('a0000000000c');
+const SCRIPT_RUN = RunIdSchema.parse('105177049434e8a8ab756af5');
+const SCRIPT_CHILD = RunIdSchema.parse('87265a2be84904789a01d567');
+const TOMBSTONED = RunIdSchema.parse('a0000000000f');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -244,9 +244,6 @@ describe('the golden 1.0 store', () => {
       'tool.result',
       'request.decided',
       'followup.queued',
-      'workflow.script',
-      'workflow.attempt',
-      'workflow.journal',
       'script.call',
       'run.removed',
     ] as const)
@@ -324,20 +321,14 @@ describe('the golden 1.0 store', () => {
         children: [],
         ...rest,
       });
-      const WORKFLOW = 'a00000000000000000000003';
+      const DELEGATED = 'a00000000000000000000003';
       expect(runsOf(folded)).toEqual([
         // Its owner is on another host, so nothing proves it dead.
         run(PARKED, 'golden_park', { status: 'running', outcome: null }),
-        run(PARENT, 'golden_parent', { children: ['a00000000006', WORKFLOW] }),
-        run(WORKFLOW, 'golden-workflow', {
-          category: 'workflow',
-          parent: PARENT,
-          children: ['a00000000000000000000005'],
-        }),
-        run('a00000000000000000000005', 'golden_child', { parent: WORKFLOW }),
-        run('a00000000006', 'golden_child', { parent: PARENT }),
-        run('a00000000007', 'review'),
-        run('a00000000008', 'review'),
+        run(PARENT, 'golden_parent', { children: [DELEGATED] }),
+        run(DELEGATED, 'golden_child', { parent: PARENT }),
+        run('a00000000004', 'review'),
+        run('a00000000005', 'review'),
         // The user stopped its held turn with Ctrl-C, then exited.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
         // Killed while its command waited for approval.
@@ -406,12 +397,12 @@ describe('the golden 1.0 store', () => {
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'halted',
         phase: 'waiting',
-        round: 5,
+        round: 4,
         modelId: 'openai/gpt-5.6-sol@medium',
         messages: [
           'user',
           ...['assistant', 'tool', 'assistant', 'tool'],
-          ...['assistant', 'tool', 'assistant', 'tool'],
+          ...['assistant', 'tool'],
           'assistant',
         ],
         openAttempt: false,
@@ -430,8 +421,8 @@ describe('the golden 1.0 store', () => {
       // one review run, and a core kind this build lacks on the other, each
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
-      const NEWER = RunIdSchema.parse('a00000000007');
-      const UNKNOWN = RunIdSchema.parse('a00000000008');
+      const NEWER = RunIdSchema.parse('a00000000004');
+      const UNKNOWN = RunIdSchema.parse('a00000000005');
       raw(storage, (db) => {
         const inject = (run: RunId, type: string, version: number) => {
           const { id, seq } = db
@@ -477,7 +468,7 @@ describe('the golden 1.0 store', () => {
           runs.filter((run) => run.blocked === null).map((run) => run.status),
         ).toEqual([
           'running',
-          ...Array.from({ length: 4 }, () => 'completed'),
+          ...Array.from({ length: 2 }, () => 'completed'),
           'cancelled',
           ...Array.from({ length: 3 }, () => 'running'),
           'completed',
@@ -1123,14 +1114,13 @@ describe('the interrupted golden runs', () => {
       );
       expect(delivered).toHaveLength(1);
       const text = String(delivered[0]?.content.text);
-      expect(text).toMatch(/^<script-result id="62db81fbc29ce54c703f5b7c"/);
+      expect(text).toMatch(/^<script-result id="105177049434e8a8ab756af5"/);
       expect(text).toContain('Background child answer.');
       expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',
         outcome: 'completed',
         phaseCount: 1,
         tally: { total: 1, ok: 1, failed: 0, cancelled: 0 },
-        scriptPath: null,
         errorCause: null,
       });
       expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);

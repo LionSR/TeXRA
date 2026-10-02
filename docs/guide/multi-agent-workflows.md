@@ -107,7 +107,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 **Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name both `agent` and `script`; `assistant` names both too, and `creator` and `setup` name `agent`. A [custom agent](./custom-agents.md) can list them in its tools.
 
-**The global switch.** The **Multi-Agent Workflow** switch on the **Tools** tab of Settings gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says, and a script cannot launch agents. New installs start with it off, so turn it on before asking a lead to delegate. From the CLI, the same switch is `texra tools enable workflow-script`.
+**The global switch.** The **Multi-Agent Workflow** switch on the **Tools** tab of Settings gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says, and a script cannot launch agents. It is on by default; from the CLI, the same switch is `texra tools enable workflow-script` or `texra tools disable workflow-script`.
 
 **Hosts.** The VS Code extension, the desktop app, and the CLI show the script request, the calls grouped by phase, and the result. In a headless `texra run`, no approval prompt can be shown, so the approval policy you pass decides the script request and what its child agents may edit or execute.
 

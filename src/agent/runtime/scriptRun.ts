@@ -129,7 +129,7 @@ const EnvelopeFilesSchema = z.discriminatedUnion('category', [
  * `original/` snapshot of the input), and then the output's round-relative
  * name is the workspace path.
  */
-export function deliveredFilePath(
+function deliveredFilePath(
   roots: SessionHandle['roots'],
   output: {
     readonly relativePath: string;
@@ -154,7 +154,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   outcome: ScriptDeliverySummary['outcome'],
   errorCause: string | null,
   /** When this launch or resume of the run started: what the duration
-   *  counts from, as a workflow script's does, never an idle gap. */
+   *  counts from, never an idle gap. */
   startedAt: number,
 ) {
   const { calls } = yield* scriptRunCalls(session, runId);
@@ -171,10 +171,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     skipped: 0,
     notRun: 0,
   };
-  const files = new Map<
-    string,
-    ScriptDeliverySummary['files'][number]
-  >();
+  const files = new Map<string, ScriptDeliverySummary['files'][number]>();
   for (const call of calls) {
     switch (call.status) {
       case 'completed':

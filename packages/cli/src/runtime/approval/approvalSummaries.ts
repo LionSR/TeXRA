@@ -5,7 +5,7 @@ import {
   type AgentProposalPermission,
   type BashPermission,
   type RetryPermission,
-  type UserQuestionPermission
+  type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
