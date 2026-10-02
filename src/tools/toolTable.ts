@@ -12,6 +12,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import type { ConfigProvider } from '@platform/interfaces';
 import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
@@ -144,16 +145,17 @@ export interface Continuation {
 
 /**
  * A plugin's section of each request's system text, rendered from the tool
- * names the request's step offers and whether the run is a child ('' for
- * none).
+ * names the request's step offers, whether the run is a child and its
+ * workspace configuration ('' for none).
  */
 export type PromptSection = (ctx: {
   readonly offered: readonly string[];
   readonly isChild: boolean;
   /** The step's bound model is an Anthropic model. */
   readonly isAnthropic: boolean;
-  /** The configured default bibliography, '' when unset. */
-  readonly bibPath: string;
+  /** The run's workspace configuration, for a section that follows a
+   *  setting of its plugin's. */
+  readonly config: ConfigProvider;
 }) => string;
 
 /** What a plugin adds to the system text of each request whose step pins

@@ -51,8 +51,8 @@ Call tools sequentially and wait for the output before calling another.`;
 
 /**
  * The context a step renders: the tools it offers and the sections it adds
- * after the run's recorded prompt, by name, in order: the tool-call mechanics of the step's model and the configured
- * bibliography, the skills the step lists, then each pinned plugin's
+ * after the run's recorded prompt, by name, in order: the tool-call
+ * mechanics of the step's model, the skills the step lists, then each pinned plugin's
  * section, in plugin id order. They are built from the step (its model,
  * settings, offered tools and pinned contributors) and the skill catalog it
  * discovers, so a model switch or a setting change reaches the next request,
@@ -68,14 +68,6 @@ export function stepInstructions(
       'tool-call',
       ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
     ],
-    ...(ctx.bibPath
-      ? [
-          [
-            'bibliography',
-            `The default bibliography file is ${ctx.bibPath}. You can grep or read this file to search for citations and references.`,
-          ],
-        ]
-      : []),
     ...(skills.length > 0
       ? [
           [

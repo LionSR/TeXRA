@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
-import { createLatexRunDiscovery } from '@agent/storage';
+import { runOutputReader } from '@agent/storage';
 import type { WorkflowDiffRequest } from '@controllers/session/hostRunActions';
 import {
   prepareBuildDisplay,
@@ -418,7 +418,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
             runId: request.runId,
             roots: session.roots,
             mathMarkup,
-            runDiscovery: createLatexRunDiscovery(session),
+            runDiscovery: runOutputReader(session),
             channel: CHANNEL,
             progress,
           });
