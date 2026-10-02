@@ -13,6 +13,7 @@ import { Effect, Result, type Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports - utilities
+import { DETERMINISM_PRELUDE } from '@agent/codeSandbox/determinismPrelude';
 import {
   GUEST_CPU_BUDGET_MS,
   MAX_FANOUT,
@@ -20,8 +21,6 @@ import {
   QUICKJS_STACK_LIMIT_BYTES,
 } from '@agent/codeSandbox/limits';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-import { DETERMINISM_PRELUDE } from './determinismPrelude';
 
 export interface SandboxHostBridge {
   /** Sync primitives. Arguments cross as JSON text; results are primitives. */

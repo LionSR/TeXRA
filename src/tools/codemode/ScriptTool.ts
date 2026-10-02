@@ -143,11 +143,12 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         'run_in_background is not supported yet: run the script in the foreground.',
       ),
     );
-  const { scriptCalls, hooks } = yield* ToolCall;
-  if (scriptCalls === undefined)
+  const { scriptCalls: issued, hooks } = yield* ToolCall;
+  if (issued === undefined)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
+  const scriptCalls = yield* issued;
   const sandbox = yield* CodeSandbox;
   const outcome = yield* sandbox
     .run({

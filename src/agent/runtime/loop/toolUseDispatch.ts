@@ -29,6 +29,7 @@ import {
   Exit,
   FileSystem,
   Ref,
+  type Scope,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -433,7 +434,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly decision: RequestDecision | null;
     } | null = null,
     /** A call a response issued may issue calls of its own, as a script. */
-    scriptCalls?: ScriptCalls,
+    scriptCalls?: Effect.Effect<ScriptCalls>,
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -864,7 +865,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     intent: RunState['pendingIntents'][string],
-    scriptCalls?: ScriptCalls,
+    scriptCalls?: Effect.Effect<ScriptCalls>,
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -929,242 +930,266 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     script: DispatchFacts,
   ) {
     const services = yield* Effect.context<
-      ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
+      | ProcessServices
+      | Runs
+      | WorkspaceFs
+      | StorageFs
+      | FileSystem.FileSystem
+      | Scope.Scope
     >();
-    const origin: ToolIntentOrigin = {
-      kind: 'script',
-      scriptCallId: script.callId,
-    };
-    const stageId = `script-${script.logId}`;
-    const recorded = Object.values(
-      (yield* cell.current).pendingResponse?.scriptCalls ?? {},
-    ).filter((call) => call.scriptCallId === script.callId);
-    // The settled calls, in the order their settlements committed: each is
-    // handed back once the one before it reached the guest.
-    const replayOrder = recorded
-      .flatMap((call) =>
-        call.settledAt === null ? [] : [[call.settledAt, call.seq] as const],
-      )
-      .toSorted(([a], [b]) => a - b)
-      .map(([, seq]) => seq);
-    const delivered = new Map(
-      replayOrder.map((seq) => [seq, Deferred.makeUnsafe<void>()]),
-    );
-    const handedBack = (seq: number | undefined) => {
-      const done = seq === undefined ? undefined : delivered.get(seq);
-      return done === undefined ? Effect.void : Deferred.await(done);
-    };
-    // Each call's place in issue order, and the barrier and parallel calls
-    // a later call waits for.
-    const placed = new Map<number, Deferred.Deferred<void>>();
-    const placeOf = (seq: number) => {
-      const existing = placed.get(seq);
-      if (existing !== undefined) return existing;
-      const created = Deferred.makeUnsafe<void>();
-      placed.set(seq, created);
-      return created;
-    };
-    const lanes = yield* SynchronizedRef.make<{
-      readonly barrier: Deferred.Deferred<void> | null;
-      readonly since: readonly Deferred.Deferred<void>[];
-    }>({ barrier: null, since: [] });
-    const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
-    const stageOpened = yield* Ref.make(false);
-    const openStage = Effect.gen(function* () {
-      if (yield* Ref.getAndSet(stageOpened, true)) return;
-      run.session.publishRunEvent(runId, {
-        type: 'stage.start',
-        id: stageId,
-        label: 'Script',
-        kind: 'script',
-        ...(script.stageId !== null ? { parentId: script.stageId } : {}),
-      });
-    });
-    yield* Effect.addFinalizer((exit) =>
+    // Built when the call's tool first asks for it, so a call that issues
+    // none allocates nothing; the dispatch's scope still owns the stage.
+    return yield* Effect.cached(
       Effect.gen(function* () {
-        if (!(yield* Ref.get(stageOpened))) return;
-        const settled = settledOf(yield* cell.current, script.callId);
-        let status: 'completed' | 'failed' | 'cancelled' =
-          settled?.result.status === 'executed' ? 'completed' : 'failed';
-        if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
-          status = 'cancelled';
-        run.session.publishRunEvent(runId, {
-          type: 'stage.end',
-          id: stageId,
-          status,
-        });
-      }),
-    );
-
-    /** Run `body` in `seq`'s place: after the calls it must follow. */
-    const inPlace = <A, E, R>(
-      seq: number,
-      parallelSafe: boolean,
-      body: Effect.Effect<A, E, R>,
-    ) =>
-      Effect.gen(function* () {
-        const done = yield* Deferred.make<void>();
-        const after = yield* SynchronizedRef.modify(lanes, (lane) =>
-          parallelSafe
-            ? [[lane.barrier], { ...lane, since: [...lane.since, done] }]
-            : [[lane.barrier, ...lane.since], { barrier: done, since: [] }],
-        );
-        yield* Deferred.succeed(placeOf(seq), undefined);
-        yield* Effect.forEach(
-          after,
-          (call) => (call === null ? Effect.void : Deferred.await(call)),
-          { discard: true },
-        );
-        return yield* (parallelSafe ? window.withPermits(1)(body) : body).pipe(
-          Effect.ensuring(Deferred.succeed(done, undefined)),
-        );
-      });
-
-    /** `op`'s `script.call` row, first committed with its first intent. */
-    const scriptCallRow = (op: ScriptOp, fact: CallFacts, input: JsonValue) =>
-      ({
-        type: 'script.call',
-        aggregateId,
-        payload: {
+        const origin: ToolIntentOrigin = {
+          kind: 'script',
           scriptCallId: script.callId,
-          seq: op.seq,
-          callId: fact.callId,
-          toolName: fact.toolName,
-          input,
-          replay: fact.replay,
-          logId: fact.logId,
-          stageId,
-          phase: op.phase,
-        },
-      }) satisfies RunLedgerDraft;
-
-    /** Settles `op`: from its rows when they settled it; else by `answer`,
-     *  one of the script's host functions, recorded with no card; else by
-     *  running its tool through the per-call program. */
-    const call = Effect.fn('toolUse.scriptCall')(function* (
-      op: ScriptOp,
-      answer?: () => ToolResultPayload['result'],
-    ) {
-      const callId = `${script.callId}/${op.seq}`;
-      if (op.seq > 0) yield* Deferred.await(placeOf(op.seq - 1));
-      yield* openStage;
-      const input = toJsonValue(op.input);
-      const state = yield* cell.current;
-      const known = state.pendingResponse?.scriptCalls[callId];
-      if (
-        known !== undefined &&
-        (known.toolName !== op.name || !isDeepStrictEqual(known.input, input))
-      ) {
-        return yield* new ScriptDiverged({
-          seq: op.seq,
-          recorded: `${known.toolName}(${JSON.stringify(known.input)})`,
-          issued: `${op.name}(${JSON.stringify(input)})`,
+        };
+        const stageId = `script-${script.logId}`;
+        const recorded = Object.values(
+          (yield* cell.current).pendingResponse?.scriptCalls ?? {},
+        ).filter((call) => call.scriptCallId === script.callId);
+        // The settled calls, in the order their settlements committed: each is
+        // handed back once the one before it reached the guest.
+        const replayOrder = recorded
+          .flatMap((call) =>
+            call.settledAt === null
+              ? []
+              : [[call.settledAt, call.seq] as const],
+          )
+          .toSorted(([a], [b]) => a - b)
+          .map(([, seq]) => seq);
+        const delivered = new Map(
+          replayOrder.map((seq) => [seq, Deferred.makeUnsafe<void>()]),
+        );
+        const handedBack = (seq: number | undefined) => {
+          const done = seq === undefined ? undefined : delivered.get(seq);
+          return done === undefined ? Effect.void : Deferred.await(done);
+        };
+        // Each call's place in issue order, and the barrier and parallel calls
+        // a later call waits for.
+        const placed = new Map<number, Deferred.Deferred<void>>();
+        const placeOf = (seq: number) => {
+          const existing = placed.get(seq);
+          if (existing !== undefined) return existing;
+          const created = Deferred.makeUnsafe<void>();
+          placed.set(seq, created);
+          return created;
+        };
+        const lanes = yield* SynchronizedRef.make<{
+          readonly barrier: Deferred.Deferred<void> | null;
+          readonly since: readonly Deferred.Deferred<void>[];
+        }>({ barrier: null, since: [] });
+        const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
+        const stageOpened = yield* Ref.make(false);
+        const openStage = Effect.gen(function* () {
+          if (yield* Ref.getAndSet(stageOpened, true)) return;
+          run.session.publishRunEvent(runId, {
+            type: 'stage.start',
+            id: stageId,
+            label: 'Script',
+            kind: 'script',
+            ...(script.stageId !== null ? { parentId: script.stageId } : {}),
+          });
         });
-      }
-      const settled = settledOf(state, callId);
-      if (settled !== null) {
-        // Replayed from its row: it takes no lane and does not run.
-        yield* Deferred.succeed(placeOf(op.seq), undefined);
-        yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
-        return settled.result;
-      }
-      if (answer !== undefined) {
-        // It reads the pinned catalog only, and runs no tool: it takes no
-        // lane, and commits whole, in one batch.
-        yield* Deferred.succeed(placeOf(op.seq), undefined);
-        yield* handedBack(replayOrder.at(-1));
-        const result = answer();
-        const intent = (yield* cell.current).pendingIntents[callId];
-        const attempt = intent?.attempt ?? 1;
-        yield* append([
-          ...(known === undefined
-            ? [
-                scriptCallRow(
-                  op,
-                  {
-                    callId,
-                    toolName: op.name,
-                    replay: 'safe',
-                    logId: generateShortId(),
-                    stageId,
-                  },
-                  input,
-                ),
-              ]
-            : []),
-          ...(intent === undefined ? [intentRow(origin, callId, attempt)] : []),
-          {
-            type: 'tool.result',
+        yield* Effect.addFinalizer((exit) =>
+          Effect.gen(function* () {
+            if (!(yield* Ref.get(stageOpened))) return;
+            const settled = settledOf(yield* cell.current, script.callId);
+            let status: 'completed' | 'failed' | 'cancelled' =
+              settled?.result.status === 'executed' ? 'completed' : 'failed';
+            if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
+              status = 'cancelled';
+            run.session.publishRunEvent(runId, {
+              type: 'stage.end',
+              id: stageId,
+              status,
+            });
+          }),
+        );
+
+        /** Run `body` in `seq`'s place: after the calls it must follow. */
+        const inPlace = <A, E, R>(
+          seq: number,
+          parallelSafe: boolean,
+          body: Effect.Effect<A, E, R>,
+        ) =>
+          Effect.gen(function* () {
+            const done = yield* Deferred.make<void>();
+            const after = yield* SynchronizedRef.modify(lanes, (lane) =>
+              parallelSafe
+                ? [[lane.barrier], { ...lane, since: [...lane.since, done] }]
+                : [[lane.barrier, ...lane.since], { barrier: done, since: [] }],
+            );
+            yield* Deferred.succeed(placeOf(seq), undefined);
+            yield* Effect.forEach(
+              after,
+              (call) => (call === null ? Effect.void : Deferred.await(call)),
+              { discard: true },
+            );
+            return yield* (
+              parallelSafe ? window.withPermits(1)(body) : body
+            ).pipe(Effect.ensuring(Deferred.succeed(done, undefined)));
+          });
+
+        /** `op`'s `script.call` row, first committed with its first intent. */
+        const scriptCallRow = (
+          op: ScriptOp,
+          fact: CallFacts,
+          input: JsonValue,
+        ) =>
+          ({
+            type: 'script.call',
             aggregateId,
             payload: {
-              responseId,
-              callId,
-              attempt,
-              disposition: result.status === 'executed' ? 'executed' : 'failed',
-              duplicateOf: null,
-              result,
-              attachments: [],
-              stateMutation: [],
+              scriptCallId: script.callId,
+              seq: op.seq,
+              callId: fact.callId,
+              toolName: fact.toolName,
+              input,
+              replay: fact.replay,
+              logId: fact.logId,
+              stageId,
+              phase: op.phase,
             },
-          },
-        ]);
-        return result;
-      }
-      const tool = step.registry.get(op.name);
-      yield* inPlace(
-        op.seq,
-        tool?.parallelSafe === true,
-        Effect.gen(function* () {
-          // Nothing runs again until the guest holds everything that settled.
-          yield* handedBack(replayOrder.at(-1));
-          const fact: CallFacts = known ?? {
-            callId,
-            toolName: op.name,
-            replay: tool?.replay ?? 'unsafe',
-            logId: generateShortId(),
-            stageId,
-          };
-          const intent = (yield* cell.current).pendingIntents[callId];
-          if (known !== undefined && intent !== undefined) {
-            return yield* resumeIntent(origin, fact, input, intent);
-          }
-          yield* append([
-            ...(known === undefined ? [scriptCallRow(op, fact, input)] : []),
-            intentRow(origin, callId, 1),
-            ...admittedCards(fact, input),
-          ]);
-          yield* execute(fact, input, 1);
-        }),
-      );
-      const result = settledOf(yield* cell.current, callId)?.result;
-      if (result === undefined) {
-        return yield* Effect.die(
-          new Error(`Script call ${callId} is unsettled after its run.`),
-        );
-      }
-      return result;
-    });
+          }) satisfies RunLedgerDraft;
 
-    const plugins = new Map(
-      step.offered.map(({ name, plugin }) => [name, plugin]),
+        /** Settles `op`: from its rows when they settled it; else by `answer`,
+         *  one of the script's host functions, recorded with no card; else by
+         *  running its tool through the per-call program. */
+        const call = Effect.fn('toolUse.scriptCall')(function* (
+          op: ScriptOp,
+          answer?: () => ToolResultPayload['result'],
+        ) {
+          const callId = `${script.callId}/${op.seq}`;
+          if (op.seq > 0) yield* Deferred.await(placeOf(op.seq - 1));
+          yield* openStage;
+          const input = toJsonValue(op.input);
+          const state = yield* cell.current;
+          const known = state.pendingResponse?.scriptCalls[callId];
+          if (
+            known !== undefined &&
+            (known.toolName !== op.name ||
+              !isDeepStrictEqual(known.input, input))
+          ) {
+            return yield* new ScriptDiverged({
+              seq: op.seq,
+              recorded: `${known.toolName}(${JSON.stringify(known.input)})`,
+              issued: `${op.name}(${JSON.stringify(input)})`,
+            });
+          }
+          const settled = settledOf(state, callId);
+          if (settled !== null) {
+            // Replayed from its row: it takes no lane and does not run.
+            yield* Deferred.succeed(placeOf(op.seq), undefined);
+            yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
+            return settled.result;
+          }
+          if (answer !== undefined) {
+            // It reads the pinned catalog only, and runs no tool: it takes no
+            // lane, and commits whole, in one batch.
+            yield* Deferred.succeed(placeOf(op.seq), undefined);
+            yield* handedBack(replayOrder.at(-1));
+            const result = answer();
+            const intent = (yield* cell.current).pendingIntents[callId];
+            const attempt = intent?.attempt ?? 1;
+            yield* append([
+              ...(known === undefined
+                ? [
+                    scriptCallRow(
+                      op,
+                      {
+                        callId,
+                        toolName: op.name,
+                        replay: 'safe',
+                        logId: generateShortId(),
+                        stageId,
+                      },
+                      input,
+                    ),
+                  ]
+                : []),
+              ...(intent === undefined
+                ? [intentRow(origin, callId, attempt)]
+                : []),
+              {
+                type: 'tool.result',
+                aggregateId,
+                payload: {
+                  responseId,
+                  callId,
+                  attempt,
+                  disposition:
+                    result.status === 'executed' ? 'executed' : 'failed',
+                  duplicateOf: null,
+                  result,
+                  attachments: [],
+                  stateMutation: [],
+                },
+              },
+            ]);
+            return result;
+          }
+          const tool = step.registry.get(op.name);
+          yield* inPlace(
+            op.seq,
+            tool?.parallelSafe === true,
+            Effect.gen(function* () {
+              // Nothing runs again until the guest holds everything that settled.
+              yield* handedBack(replayOrder.at(-1));
+              const fact: CallFacts = known ?? {
+                callId,
+                toolName: op.name,
+                replay: tool?.replay ?? 'unsafe',
+                logId: generateShortId(),
+                stageId,
+              };
+              const intent = (yield* cell.current).pendingIntents[callId];
+              if (known !== undefined && intent !== undefined) {
+                return yield* resumeIntent(origin, fact, input, intent);
+              }
+              yield* append([
+                ...(known === undefined
+                  ? [scriptCallRow(op, fact, input)]
+                  : []),
+                intentRow(origin, callId, 1),
+                ...admittedCards(fact, input),
+              ]);
+              yield* execute(fact, input, 1);
+            }),
+          );
+          const result = settledOf(yield* cell.current, callId)?.result;
+          if (result === undefined) {
+            return yield* Effect.die(
+              new Error(`Script call ${callId} is unsettled after its run.`),
+            );
+          }
+          return result;
+        });
+
+        const plugins = new Map(
+          step.offered.map(({ name, plugin }) => [name, plugin]),
+        );
+        return {
+          catalog: step.definitions
+            .filter(({ name }) => name !== script.toolName)
+            .map((definition) => ({
+              definition,
+              plugin: plugins.get(definition.name) ?? 'run',
+            })),
+          call: (op: ScriptOp) =>
+            call(op).pipe(Effect.provideContext(services)),
+          answer: (op: ScriptOp, answer: () => ToolResultPayload['result']) =>
+            call(op, answer).pipe(Effect.provideContext(services)),
+          delivered: (seq: number) => {
+            const done = delivered.get(seq);
+            return done === undefined
+              ? Effect.void
+              : Deferred.succeed(done, undefined).pipe(Effect.asVoid);
+          },
+        } satisfies ScriptCalls;
+      }).pipe(Effect.provideContext(services)),
     );
-    return {
-      catalog: step.definitions
-        .filter(({ name }) => name !== script.toolName)
-        .map((definition) => ({
-          definition,
-          plugin: plugins.get(definition.name) ?? 'run',
-        })),
-      call: (op: ScriptOp) => call(op).pipe(Effect.provideContext(services)),
-      answer: (op: ScriptOp, answer: () => ToolResultPayload['result']) =>
-        call(op, answer).pipe(Effect.provideContext(services)),
-      delivered: (seq: number) => {
-        const done = delivered.get(seq);
-        return done === undefined
-          ? Effect.void
-          : Deferred.succeed(done, undefined).pipe(Effect.asVoid);
-      },
-    } satisfies ScriptCalls;
   });
 
   /** One call of a partition: the resume rules, then execution. */
