@@ -1,9 +1,10 @@
-// Trusted realm-side source the workflow sandbox evaluates before a script
-// body: plain JavaScript compiled inside QuickJS, never host code.
+// Trusted realm-side source the code sandbox worker and the workflow sandbox
+// evaluate before a script body: plain JavaScript compiled inside QuickJS,
+// never host code.
 
 /**
- * Nondeterminism and dynamic-code guards. Journal replay requires stable call
- * order, while workflow scripts have no reason to compile source at runtime.
+ * Nondeterminism and dynamic-code guards. Replay requires stable call order,
+ * while scripts have no reason to compile source at runtime.
  */
 export const DETERMINISM_PRELUDE = `
 'use strict';
@@ -11,11 +12,11 @@ export const DETERMINISM_PRELUDE = `
   const guard = (what, hint) =>
     function () {
       throw new Error(
-        what + ' is unavailable in workflow scripts (breaks resume); ' + hint,
+        what + ' is unavailable in scripts (breaks resume); ' + hint,
       );
     };
   Object.defineProperty(Math, 'random', {
-    value: guard('Math.random()', 'vary prompts by call index instead.'),
+    value: guard('Math.random()', 'vary inputs by their index instead.'),
     writable: false,
     configurable: false,
   });
@@ -24,7 +25,7 @@ export const DETERMINISM_PRELUDE = `
   function GuardedDate(...args) {
     if (args.length === 0) {
       throw new Error(
-        'new Date() without arguments is unavailable in workflow scripts (breaks resume); pass timestamps in via args.',
+        'new Date() without arguments is unavailable in scripts (breaks resume); write timestamps into the script.',
       );
     }
     const instance = Reflect.construct(RealDate, args);
@@ -34,7 +35,7 @@ export const DETERMINISM_PRELUDE = `
   GuardedDate.parse = RealDate.parse;
   GuardedDate.UTC = RealDate.UTC;
   Object.defineProperty(GuardedDate, 'now', {
-    value: guard('Date.now()', 'pass timestamps in via args.'),
+    value: guard('Date.now()', 'write timestamps into the script.'),
     writable: false,
     configurable: false,
   });
@@ -56,7 +57,7 @@ export const DETERMINISM_PRELUDE = `
   });
 
   const dynamicCodeDisabled = function () {
-    throw new TypeError('Dynamic code generation is disallowed in workflow scripts.');
+    throw new TypeError('Dynamic code generation is disallowed in scripts.');
   };
   const constructors = [
     Function,

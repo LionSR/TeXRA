@@ -87,9 +87,9 @@ export interface ToolCallShape {
     /** What the tool prints while it runs, for its card's transient output. */
     readonly onToolOutput?: (chunk: string) => void;
   };
-  /** The calls a script may issue; absent outside a run's dispatch and for
-   *  a call a script issued. */
-  readonly scriptCalls?: ScriptCalls;
+  /** The calls a script may issue, built on the first `yield*`; absent
+   *  outside a run's dispatch and for a call a script issued. */
+  readonly scriptCalls?: Effect.Effect<ScriptCalls>;
   /** Where the call's requests open: present exactly when {@link run} is. */
   readonly requests?: CallRequests;
   /**
