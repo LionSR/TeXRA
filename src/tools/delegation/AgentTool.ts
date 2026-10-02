@@ -302,7 +302,15 @@ const reusable = Effect.fn('agent.reusable')(function* (
     Effect.sync(() => new Map<string, string>()),
   );
   const callId = call.toolCallId ?? '';
+  // Claimed before the read below yields, so two calls of the script
+  // issued together cannot both pass.
   const claimed = siblings.get(key);
+  if (claimed !== undefined && claimed !== callId)
+    return errorResult(
+      'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
+      { name: 'DuplicateCall' },
+    );
+  siblings.set(key, callId);
   const rows = yield* call.run.session.readAggregate(
     aggregateId('run', call.run.runId),
     ['tool.result'],
@@ -321,8 +329,8 @@ const reusable = Effect.fn('agent.reusable')(function* (
       : [],
   );
   const mine = `${script.callId}/`;
+  // A sibling a resume handed back from its row never ran here to claim.
   if (
-    (claimed !== undefined && claimed !== callId) ||
     found.some(
       (row) =>
         row.responseId === call.responseId &&
@@ -334,7 +342,6 @@ const reusable = Effect.fn('agent.reusable')(function* (
       'Another agent call of this script has the same prompt, options and files. Give each a distinct `id` to run both.',
       { name: 'DuplicateCall' },
     );
-  siblings.set(key, callId);
   const origin = found.at(-1);
   if (origin === undefined) return null;
   const from = origin.result.reusedFrom ?? origin.callId;
@@ -671,14 +678,20 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   };
   const parentOffered = yield* offeredBy(run);
 
-  if (!awaited)
-    return yield* launchDetachedSubagent(call, configPayload, {
+  if (!awaited) {
+    const runId = agentChildRunId(parentRunId, id, attempt);
+    const receipt = yield* launchDetachedSubagent(call, configPayload, {
       parentRunId,
-      runId: agentChildRunId(parentRunId, id, attempt),
+      runId,
       parentOffered,
       inheritChildRunApprovals: inherit,
       approvalMeta: decided.approvalMeta,
     });
+    // What a script's `await` gets for a child sent to the background.
+    return receipt.status === 'executed'
+      ? { ...receipt, value: { runId } }
+      : receipt;
+  }
   const launched = yield* Effect.result(
     running(
       launchAgentChild(call, {

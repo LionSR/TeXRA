@@ -287,6 +287,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       ].join('\n'),
       `Launched '${agentName}' (async)`,
     );
-    return { ...receipt, value: { runId } };
+    return receipt;
   },
 );
