@@ -29,6 +29,7 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -43,7 +44,7 @@ import {
   rejectOversizedBibAttachments,
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
+import { requireVisibleAgent } from './proposalFlow';
 import { WorkflowSubagentUnsuccessful } from './workflowScriptRun';
 
 /** Fail the workflow run: the engine reports this call and ends the run. */
@@ -58,7 +59,7 @@ function workflowRunnerError(error: unknown): Error {
 
 function workflowScriptModelSelection(
   invocation: Pick<WorkflowAgentInvocation, 'options'>,
-  parent: DelegationParent,
+  parent: RunToolCall,
   /** The model the dispatching call pinned; never the live cell. */
   parentModel: string,
 ): Effect.Effect<string, Error, Secrets | AppState | LanguageModel> {
@@ -102,7 +103,7 @@ interface WorkflowRunIdentity {
 const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
   function* (
     call: Pick<WorkflowAgentInvocation, 'prompt' | 'options'>,
-    parent: DelegationParent,
+    parent: RunToolCall,
     parentModel: string,
     defaultAgent: AgentEntry,
     runId: RunId,
@@ -746,7 +747,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
  * has committed.
  */
 export function createWorkflowScriptAgentRunner(
-  parent: DelegationParent,
+  parent: RunToolCall,
   /**
    * The model the parent was running when `delegate_multi_agents` was
    * dispatched, read by the dispatching call itself. It cannot be read

@@ -19,11 +19,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
-import {
-  ToolCall,
-  type CallRequests,
-  type ToolCallShape,
-} from '@agent/runtime/ToolCall';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
 import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
 import type { Plan, RunId, ToolResult } from '@shared/schemas';
@@ -41,7 +37,7 @@ import {
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import type { ToolRun } from '@tools/core/toolRun';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
@@ -103,27 +99,12 @@ function buildApprovedResult(): ToolResult {
 }
 
 /**
- * Everything this tool's program needs from its invocation capability: the
- * call, and the run `execute` established — whose session owns this turn, its
- * approval surface and its own goal row (`@shared/plugins/goal`), read and written
- * through `ports.run.session`.
- */
-interface PlanPorts {
-  /** One native tool-call capability, scoped by the dispatcher. */
-  readonly call: ToolCallShape;
-  /** The run this call was made under, narrowed once at the entry. */
-  readonly run: ToolRun;
-  /** Where the call's approval opens, narrowed with the run. */
-  readonly requests: CallRequests;
-}
-
-/**
  * Start an autonomous goal whose objective is the just-approved plan
  * document, verbatim. If one is already in flight for the run, retarget it
  * so future continuations follow the current user decision.
  */
 const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
-  ports: PlanPorts,
+  call: RunToolCall,
   plan: Plan,
   runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
@@ -133,10 +114,10 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   // If a goal is already in flight on this run, retarget it at the
   // newly approved objective instead of silently leaving the loop driving
   // the stale one.
-  if (goalOf(ports.run.session, runId)) {
+  if (goalOf(call.run.session, runId)) {
     return yield* Effect.gen(function* () {
-      const active = yield* retargetGoal(ports.run.session, runId, objective);
-      setGoalSessionAutoApproval(ports.run.session, runId, autoApprovalScope);
+      const active = yield* retargetGoal(call.run.session, runId, objective);
+      setGoalSessionAutoApproval(call.run.session, runId, autoApprovalScope);
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
@@ -177,8 +158,8 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   }
 
   return yield* Effect.gen(function* () {
-    const goal = yield* startGoal(ports.run.session, runId, objective);
-    setGoalSessionAutoApproval(ports.run.session, runId, autoApprovalScope);
+    const goal = yield* startGoal(call.run.session, runId, objective);
+    setGoalSessionAutoApproval(call.run.session, runId, autoApprovalScope);
     return executed(
       `The user approved this plan and started an autonomous goal ` +
         `(${goal.goalId}) toward its stopping condition.\n\n` +
@@ -216,18 +197,18 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
  * Request user approval for a new plan. Pauses run until approved/rejected.
  */
 const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
-  ports: PlanPorts,
+  call: RunToolCall,
   plan: Plan,
   runId: RunId,
   workPlanState: WorkPlanState,
 ) {
-  const requestId = ports.requests.nextId('plan');
+  const requestId = call.requests.nextId('plan');
 
   yield* Effect.logInfo('Requesting approval for plan objective').pipe(
     withLogChannel(CHANNEL),
   );
 
-  const result = yield* ports.requests.open({
+  const result = yield* call.requests.open({
     kind: 'planApproval',
     // The tool is offered only while the goal plugin is on, so the user can
     // always run an approved plan as a goal.
@@ -246,7 +227,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
       withLogChannel(CHANNEL),
     );
     return yield* startGoalForPlan(
-      ports,
+      call,
       plan,
       runId,
       result.autoApproveAll ? 'allAgentWork' : 'commands',
@@ -307,12 +288,10 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 });
 
 const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
-  ports: PlanPorts,
+  call: RunToolCall,
   plan: Plan,
 ) {
-  const callContext = ports.call;
-
-  if (!callContext.workPlanState) {
+  if (!call.workPlanState) {
     return yield* Effect.fail(
       new ToolError(
         'plan(update) requires an active agent tool-use turn: there is no work plan to update.',
@@ -320,25 +299,20 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
     );
   }
 
-  callContext.workPlanState.updatePlan(plan);
+  call.workPlanState.updatePlan(plan);
 
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and
   // that decision belongs to the user.
-  return yield* requestApproval(
-    ports,
-    plan,
-    ports.run.runId,
-    callContext.workPlanState,
-  );
+  return yield* requestApproval(call, plan, call.run.runId, call.workPlanState);
 });
 
 const executePause = Effect.fn('PlanTool.executePause')(function* (
-  ports: PlanPorts,
+  call: RunToolCall,
   runId: RunId,
   reason: string,
 ) {
-  const goal = goalOf(ports.run.session, runId);
+  const goal = goalOf(call.run.session, runId);
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to pause. ' +
@@ -352,8 +326,8 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
       `Goal already ${goal.status}: pause is a no-op.`,
     );
   }
-  const updated = (yield* pauseGoal(ports.run.session, runId)) ?? goal;
-  setGoalSessionAutoApproval(ports.run.session, runId, false);
+  const updated = (yield* pauseGoal(call.run.session, runId)) ?? goal;
+  setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
@@ -361,11 +335,11 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
 });
 
 const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
-  ports: PlanPorts,
+  call: RunToolCall,
   runId: RunId,
   reason: string,
 ) {
-  const goal = goalOf(ports.run.session, runId);
+  const goal = goalOf(call.run.session, runId);
   if (!goal) {
     return executed(
       'No autonomous goal is currently running on this run, so there is nothing to mark complete. ' +
@@ -376,8 +350,8 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // Completing ends the pursuit — a goal is a live one, not an archived one.
   // The autonomous loop stops because the run's next row states that no goal
   // is in flight for the wait-node continuation check.
-  yield* clearGoal(ports.run.session, runId);
-  setGoalSessionAutoApproval(ports.run.session, runId, false);
+  yield* clearGoal(call.run.session, runId);
+  setGoalSessionAutoApproval(call.run.session, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
       `Reason: ${reason}\n\n` +
@@ -391,18 +365,18 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
  * Build the program for one plan command from the invocation capability.
  */
 function planCommand(
-  ports: PlanPorts,
+  call: RunToolCall,
   input: PlanToolInput,
 ): Effect.Effect<ToolResult, Error> {
   switch (input.command) {
     case 'update':
-      return executeUpdate(ports, { objective: input.objective });
+      return executeUpdate(call, { objective: input.objective });
     case 'pause':
     case 'complete': {
       const reason = requireNonEmptyString(input.reason, 'reason');
       return input.command === 'pause'
-        ? executePause(ports, ports.run.runId, reason)
-        : executeComplete(ports, ports.run.runId, reason);
+        ? executePause(call, call.run.runId, reason)
+        : executeComplete(call, call.run.runId, reason);
     }
   }
 }
@@ -422,12 +396,11 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   execute: (input: PlanToolInput) =>
     Effect.gen(function* () {
       const call = yield* ToolCall;
-      const { run, requests } = call;
-      if (!run || !requests) {
+      if (call.run === undefined) {
         return yield* Effect.fail(
           new ToolError('plan requires an active agent run.'),
         );
       }
-      return yield* planCommand({ call, run, requests }, input);
+      return yield* planCommand(call, input);
     }),
 });

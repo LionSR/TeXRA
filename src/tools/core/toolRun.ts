@@ -17,8 +17,11 @@ import { Effect } from 'effect';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import { ToolError } from '@shared/schemas';
 
+/** A tool call made under a run: its run, and where its requests open. */
+export type RunToolCall = Extract<ToolCallShape, { readonly run: object }>;
+
 /** The calling run, once {@link requireToolRun} has established it. */
-export type ToolRun = NonNullable<ToolCallShape['run']>;
+export type ToolRun = RunToolCall['run'];
 
 /**
  * Narrow a tool call to one made under a run, or fail with the shared refusal.
@@ -29,8 +32,8 @@ export type ToolRun = NonNullable<ToolCallShape['run']>;
 export function requireToolRun(
   toolName: string,
   call: ToolCallShape,
-): Effect.Effect<ToolRun, ToolError> {
-  return call.run
-    ? Effect.succeed(call.run)
-    : Effect.fail(new ToolError(`${toolName} requires an active run context.`));
+): Effect.Effect<RunToolCall, ToolError> {
+  return call.run === undefined
+    ? Effect.fail(new ToolError(`${toolName} requires an active run context.`))
+    : Effect.succeed(call);
 }

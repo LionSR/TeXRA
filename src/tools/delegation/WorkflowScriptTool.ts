@@ -51,6 +51,7 @@ import {
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
+import { requireToolRun } from '@tools/core/toolRun';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -78,7 +79,6 @@ import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
   proposalResultToToolResult,
   requestDelegationProposal,
-  requireDelegationParent,
   requireWorkflowOrToolUseAgent,
 } from './proposalFlow';
 
@@ -238,7 +238,7 @@ function executeWorkflowScriptTool(
   input: WorkflowScriptToolInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const parent = yield* requireDelegationParent(
+    const parent = yield* requireToolRun(
       'delegate_multi_agents',
       yield* ToolCall,
     );

@@ -34,7 +34,7 @@ import { testRunFork } from '@test/support/runHandleFixtures';
 import { pinNoPlugins } from '@test/support/testPluginServices';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
-import type { DelegationParent } from '@tools/delegation/proposalFlow';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentRun';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
@@ -283,7 +283,7 @@ let sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
 /** The model the dispatching call pins and hands the runner. */
 const PARENT_MODEL = 'parent-model';
 
-function parentContext(): DelegationParent {
+function parentContext(): RunToolCall {
   // The probe fences an interrupted attempt on its run lane and its run claim
   // before it may advance past it, so the stub session answers both.
   const session = {
@@ -297,6 +297,10 @@ function parentContext(): DelegationParent {
     roots: createFakeWorkspaceRoots(),
     tracker: new FileInteractionState(),
     workingDirectory: WORKSPACE_PATH,
+    requests: {
+      nextId: (prefix: string) => prefix,
+      open: () => Effect.die(new Error('This fixture opens no request.')),
+    },
     run: {
       runId: parentRunId,
       session,

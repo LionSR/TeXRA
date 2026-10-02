@@ -18,7 +18,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import type { DelegationParent } from '@tools/delegation/proposalFlow';
+import type { RunToolCall } from '@tools/core/toolRun';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
@@ -71,9 +71,13 @@ describe('executeSubagent child run launch', () => {
     agentCategory: 'toolUse',
   } as never;
 
-  const parent: DelegationParent = {
+  const parent: RunToolCall = {
     roots: createFakeWorkspaceRoots(),
     tracker: new FileInteractionState(),
+    requests: {
+      nextId: (prefix: string) => prefix,
+      open: () => Effect.die(new Error('This fixture opens no request.')),
+    },
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,

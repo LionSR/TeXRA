@@ -148,12 +148,15 @@ const shown = (value: unknown): string =>
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const toolCall = yield* ToolCall;
-  const { scriptCalls: issued, hooks, run } = toolCall;
+  const { scriptCalls: issued, hooks } = toolCall;
   // A one-shot run has no later turn for a follow-up to reach.
-  const oneShot = run?.toolPolicy.stopAfterCycle === true;
-  if (input.run_in_background === true && run !== undefined && !oneShot)
+  if (
+    input.run_in_background === true &&
+    toolCall.run !== undefined &&
+    toolCall.run.toolPolicy.stopAfterCycle !== true
+  )
     return yield* launchBackgroundScript(
-      { ...toolCall, run },
+      toolCall,
       SCRIPT_TOOL,
       {
         code: input.code,

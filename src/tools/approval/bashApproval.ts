@@ -83,12 +83,12 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     call.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
-  const { run, requests } = call;
-  if (!run || !requests) {
+  if (call.run === undefined) {
     return yield* Effect.fail(
       new Error('A bash approval needs an active run.'),
     );
   }
+  const { run, requests } = call;
   const { session, runId } = run;
   const granted = () =>
     (request.grant === 'shell'

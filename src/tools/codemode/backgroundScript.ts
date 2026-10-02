@@ -12,7 +12,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
-import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -24,6 +23,7 @@ import {
 } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { executed } from '@tools/core/result';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
 import { childRunDescription } from '@tools/delegation/childRun';
 import { startDetachedChildRunLoop } from '@tools/delegation/detachedChildRun';
@@ -49,19 +49,14 @@ const receipt = (title: string, runId: RunId, again: boolean) => ({
  * launched instead of launching a second.
  */
 export const launchBackgroundScript = Effect.fn('script.background')(function* (
-  call: ToolCallShape & { readonly run: NonNullable<ToolCallShape['run']> },
+  call: RunToolCall,
   tool: string,
   input: { readonly [field: string]: JsonValue },
   title: string,
 ) {
   const { run } = call;
   const { session, runId: parentRunId } = run;
-  const id = {
-    responseId: call.responseId ?? '',
-    callId: call.toolCallId ?? parentRunId,
-  };
-  const attempt = call.attempt ?? 1;
-  const earlier = yield* earlierChild(session, parentRunId, id, attempt);
+  const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
   // An editor binding's turns carry no calls for the run to open on.
@@ -71,7 +66,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         'A script cannot run in the background on a VS Code language model. Run it in the foreground.',
       ),
     );
-  const runId = agentChildRunId(parentRunId, id, attempt);
+  const runId = agentChildRunId(call);
   const workingDirectory = call.workingDirectory ?? run.config.workingDirectory;
   // The parent's agent, model and tools, opened on the call rather than on
   // a prompt: it reads no input files and renders no instruction.

@@ -346,9 +346,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    */
   const handedDown = Effect.fn('toolUse.handedDown')(function* (
     state: RunState,
+    call: NonNullable<typeof script>,
   ) {
-    if (script === null)
-      return yield* Effect.die(new Error(`${runId}: not a script run`));
     const bound = yield* SynchronizedRef.get(run.model);
     const origin = bound.origin;
     // An editor binding's turns carry no calls: its launch refuses it.
@@ -357,7 +356,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         new Error(`${runId}: a script cannot run on an editor model binding`),
       );
     const invocation = { invocationId: randomUUID(), attempt: 1 };
-    const argumentsText = JSON.stringify(script.input);
+    const argumentsText = JSON.stringify(call.input);
     const turn: TurnResult = {
       kind: 'http',
       providerResponseId: `script-${runId}`,
@@ -368,7 +367,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         {
           kind: 'local-call',
           providerCallId: SCRIPT_CALL_ID,
-          name: script.tool,
+          name: call.tool,
           argumentsText,
         },
       ],
@@ -457,7 +456,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         ]);
       }
       if (script !== null && state.round === 0)
-        state = yield* cell.append(yield* handedDown(state));
+        state = yield* cell.append(yield* handedDown(state, script));
       let forcedTool: string | null = null;
       /**
        * The policy a text-only response runs once it is committed: a blank

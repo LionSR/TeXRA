@@ -56,7 +56,9 @@ export const testRunTools = (
  *  answers for. The call's `Runs` are its run's session's; a call outside any
  *  run gets a registry over an empty fold, as it tracks no run. */
 export function nativeToolTestLayer(
-  options: Omit<Partial<ToolCallShape>, 'run'> & { run?: TestCallRun } = {},
+  options: Omit<Partial<ToolCallShape>, 'run' | 'requests'> & {
+    run?: TestCallRun;
+  } = {},
 ) {
   const roots = options.roots ?? testWorkspaceRoots();
   const { run, ...call } = options;
@@ -66,28 +68,35 @@ export function nativeToolTestLayer(
     sessionFsLayer(roots).pipe(
       Layer.provide(Layer.effectContext(testRuntime().contextEffect)),
     ),
-    Layer.sync(ToolCall, () => ({
+    Layer.sync(ToolCall, (): ToolCallShape => ({
       roots,
       tracker: new FileInteractionState(),
-      // The run answers for its own config and trace; a fixture that does not
-      // care about either gets the inert pair.
-      run: run && {
-        config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
-        model: testModelCell('test-model'),
-        logger: noopTrace,
-        steps: noStep(),
-        scope: Scope.makeUnsafe(),
-        ...run,
-      },
-      // A run's requests open unbound on its session: a test call has no
-      // loop to bind them to.
-      requests: run && {
-        nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
-        open: (
-          payload: PermissionPayload,
-          opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-        ) => run.session.openRequest(run.runId, payload, opened),
-      },
+      ...(run === undefined
+        ? { run: undefined }
+        : {
+            // The run answers for its own config and trace; a fixture that
+            // does not care about either gets the inert pair.
+            run: {
+              config: AgentConfigSchema.parse({
+                agent: 'test',
+                model: 'test-model',
+              }),
+              model: testModelCell('test-model'),
+              logger: noopTrace,
+              steps: noStep(),
+              scope: Scope.makeUnsafe(),
+              ...run,
+            },
+            // A run's requests open unbound on its session: a test call
+            // has no loop to bind them to.
+            requests: {
+              nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
+              open: (
+                payload: PermissionPayload,
+                opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
+              ) => run.session.openRequest(run.runId, payload, opened),
+            },
+          }),
       ...call,
     })),
     // The session's plugin services, over the same `Runs`, as a step pins
