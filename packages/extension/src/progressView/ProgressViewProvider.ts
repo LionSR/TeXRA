@@ -524,19 +524,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       );
       // The template is read off this tick (it never fails: a failed render
-      // is a logged error page); a port closed before it lands paints nothing.
-      let open = true;
+      // is a logged error page); a port closed before it lands paints nothing,
+      // because closing the port interrupts the render.
+      const portScope = yield* Scope.make();
       const disposables: vscode.Disposable[] = [
         view.webview.onDidReceiveMessage((message) => {
           this.runtime.runFork(attached.receive(message));
         }),
         {
           dispose: () => {
-            open = false;
+            this.runtime.runFork(Scope.close(portScope, Exit.void));
           },
         },
       ];
-      yield* Effect.forkDetach(
+      yield* Effect.forkIn(
         this.contentProvider
           .getHtmlContent(view.webview, {
             sessionKey: this.bridge.key,
@@ -545,10 +546,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           .pipe(
             Effect.flatMap((html) =>
               Effect.sync(() => {
-                if (open) view.webview.html = html;
+                view.webview.html = html;
               }),
             ),
           ),
+        portScope,
       );
       return { attached, disposables };
     });

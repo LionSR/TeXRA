@@ -9,12 +9,13 @@ import {
   resolveModelRoute,
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
+import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { selectModel } from '@shared/model/modelSelection';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import { bindModel } from '../run/modelBinding';
+import { bindModel, PROTOCOL_BY_KEY } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
@@ -97,34 +98,70 @@ export function modelSwitchPort(
   run: AgentRunShape,
   languageModel: LanguageModel['Service'],
 ) {
-  const modelSwitchDisabledReason = Effect.fn(
-    'toolUse.modelSwitchDisabledReason',
-  )(function* (model: string) {
+  /** The switch's route and format, or why it cannot replace the run's. */
+  const admission = Effect.fn('toolUse.modelSwitchAdmission')(function* (
+    model: string,
+  ) {
     const current = SynchronizedRef.getUnsafe(run.model);
-    if (current.modelId === model) return undefined;
+    if (current.modelId === model)
+      return { reason: undefined, admitted: undefined };
     const selected = selectModel(model);
-    if (!selected) return `Model ${model} is not registered`;
+    if (!selected) {
+      return {
+        reason: `Model ${model} is not registered`,
+        admitted: undefined,
+      };
+    }
     const nextConfig = selected.config;
+    // The routes the run declined, so the preflight decides the route the
+    // bind at the next model boundary will.
     const route = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
+      declinedRoutes: run.declinedRoutes,
     }).pipe(Effect.provideService(LanguageModel, languageModel));
     const nextKey = yield* routeCompatibilityKey(nextConfig, route);
-    if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
-    return current.compatibilityKey === nextKey
-      ? undefined
-      : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
+    if (!nextKey) {
+      return {
+        reason: `Unsupported model provider: ${nextConfig.provider}`,
+        admitted: undefined,
+      };
+    }
+    if (current.compatibilityKey !== nextKey) {
+      return {
+        reason: MODEL_SWITCH_DIFFERENT_FORMAT_REASON,
+        admitted: undefined,
+      };
+    }
+    return { reason: undefined, admitted: { selected, route, nextKey } };
   });
+  const modelSwitchDisabledReason = (model: string) =>
+    admission(model).pipe(Effect.map(({ reason }) => reason));
   return {
     modelSwitchDisabledReason,
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const disabledReason = yield* modelSwitchDisabledReason(model);
-      if (disabledReason !== undefined) {
+      const admitted = yield* admission(model);
+      if (admitted.reason !== undefined) {
         return yield* Effect.fail(
           new Error(
-            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+            admitted.reason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
               ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : disabledReason,
+              : admitted.reason,
           ),
+        );
+      }
+      // A reasoning request the route cannot carry (`@none` on a model that
+      // always thinks) is refused here, as the command's error, instead of
+      // failing the bind inside the loop and ending the conversation.
+      if (admitted.admitted !== undefined) {
+        const { selected, route, nextKey } = admitted.admitted;
+        yield* decideReasoning(
+          selected.config,
+          selected.request,
+          run.stores.globalState,
+          {
+            protocol: PROTOCOL_BY_KEY[nextKey],
+            codexSubscription: route.kind === 'chatgpt-subscription',
+          },
         );
       }
       // Bound and recorded by the loop at its next model boundary: the rows

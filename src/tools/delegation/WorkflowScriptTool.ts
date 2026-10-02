@@ -482,6 +482,7 @@ function executeWorkflowScriptTool(
                 runId,
                 parentRunId,
                 agentName: meta.name,
+                budgeted: true,
                 createChildRun: () =>
                   Effect.gen(function* () {
                     yield* restore(Effect.void);

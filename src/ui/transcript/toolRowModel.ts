@@ -29,6 +29,7 @@ import {
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { collapseWhitespace } from '@utils/text/stringUtils';
+import { isObject } from '@utils/core';
 
 import { dispatchSections, inputFilePath } from './toolRowSections';
 import {
@@ -208,9 +209,10 @@ function headerSummaryText(summary: string): string {
 
 /**
  * The header preview both hosts show, and the only statement of its
- * precedence: a shell call is described by its command, so `bash`-kind tools
- * prefer the input preview; every other tool reports its own summary first and
- * falls back to the input preview while it is still in flight. An
+ * precedence: a `bash`-kind call is named by the model's description, else its
+ * command (the input preview), else its summary; every other tool reports its
+ * own summary first and falls back to the input preview while it is still in
+ * flight. An
  * `executions` call names its child runs by label: the session fold passes
  * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
@@ -226,9 +228,14 @@ function toolHeaderPreview(
   const inputPreview =
     labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));
   const summary = headerSummaryText(headerSummary);
-  return toolDisplayKind(toolName) === 'bash'
-    ? inputPreview || summary
-    : summary || inputPreview;
+  if (toolDisplayKind(toolName) !== 'bash') return summary || inputPreview;
+  // The model's description names a command; the command itself stays in the
+  // row's code section.
+  const description =
+    isObject(input) && typeof input.description === 'string'
+      ? collapseWhitespace(input.description).trim()
+      : '';
+  return description || inputPreview || summary;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +306,18 @@ export function toolRowModel(
     failed: normalized.status === TOOL_CALL_STATUS.FAILED,
   });
 
+  // A bash call's output is its result even when it echoes the description,
+  // so the duplicate check compares against the command, as before
+  // descriptions named the row.
+  const echoPreview =
+    toolDisplayKind(normalized.toolName) === 'bash'
+      ? collapseWhitespace(
+          deriveToolInputPreview(normalized.toolName, normalized.input),
+        ) || headerSummaryText(normalized.headerSummary)
+      : headerPreview;
   const suppression = outputSuppression(
     normalized,
-    headerPreview,
+    echoPreview,
     carriesOutput,
     fileLinkKind,
   );

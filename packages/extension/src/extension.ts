@@ -43,6 +43,7 @@ import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSess
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { agentDirectoriesLayer } from '@frontend/agents/agentDirectoriesLayer';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
+import { announce } from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -228,9 +229,15 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             runtime.runFork(
               Effect.logWarning(message).pipe(
                 withLogChannel(EXTENSION_CHANNEL),
+                Effect.andThen(
+                  announce(
+                    EXTENSION_CHANNEL,
+                    vscodeUi.showWarningMessage(message),
+                    undefined,
+                  ),
+                ),
               ),
             );
-            void vscode.window.showWarningMessage(message);
           },
         ),
       );
@@ -451,8 +458,14 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     responseTextProcessing: createTexraResponseTextProcessing(),
   });
   if (runtimeSession.storeMovedAside) {
-    void vscode.window.showWarningMessage(
-      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+    yield* Effect.forkDetach(
+      announce(
+        EXTENSION_CHANNEL,
+        vscodeUi.showWarningMessage(
+          sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+        ),
+        undefined,
+      ),
     );
   }
   runtimeSession.setApprovalPolicy(

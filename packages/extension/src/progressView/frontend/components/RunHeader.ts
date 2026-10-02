@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -21,7 +21,6 @@ import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -57,7 +56,7 @@ export interface HeaderMenuItem {
   readonly activate: () => void;
 }
 
-/** The menu value of the delete item, which asks before it acts. */
+/** The menu value of the delete item. */
 const DELETE_SESSION = 'deleteSession';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
@@ -155,15 +154,6 @@ export class RunHeader extends LitElement {
         white-space: nowrap;
       }
 
-      .delete-confirm {
-        margin: var(--wa-space-2xs) 0;
-      }
-      .delete-confirm-actions {
-        display: flex;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
-      }
-
       /* The ancestors path, root first, capped at 40% of the row; laid out
          in reverse DOM order so an overflow clips the root end and the
          nearest ancestor survives. */
@@ -239,9 +229,6 @@ export class RunHeader extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
-
-  /** The delete item was chosen; the row asks before it acts. */
-  @state() private confirmingDelete: RunId | null = null;
 
   private readonly width = new WideHeaderController(this);
 
@@ -364,7 +351,6 @@ export class RunHeader extends LitElement {
         <slot name="end"></slot>
         ${this.renderMenu(run, statusLabel, progressTitle, canGrant)}
       </div>
-      ${this.confirmingDelete === run.id ? this.renderDeleteConfirm(run) : nothing}
     `;
   }
 
@@ -403,7 +389,9 @@ export class RunHeader extends LitElement {
             return;
           }
           if (value === DELETE_SESSION) {
-            this.confirmingDelete = run.id;
+            this.dispatchEvent(
+              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
+            );
             return;
           }
           const action = actions.find((candidate) => candidate.id === value);
@@ -458,46 +446,13 @@ export class RunHeader extends LitElement {
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
                   >${waIcon('trash', { slot: 'icon' })}Delete
-                  session…</wa-dropdown-item
+                  session</wa-dropdown-item
                 >`
             : nothing
         }
       </wa-dropdown>
       <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
     `;
-  }
-
-  private renderDeleteConfirm(run: RunView): TemplateResult {
-    const cancel = (): void => {
-      this.confirmingDelete = null;
-    };
-    return html`<wa-callout
-      class="delete-confirm"
-      variant="danger"
-      size="small"
-      role="alertdialog"
-      aria-label="Delete session"
-    >
-      ${waIcon('trash', { slot: 'icon' })} Delete “${run.label}”? Its
-      conversation and run folder are removed for good.
-      <div class="delete-confirm-actions">
-        <wa-button
-          id="confirmDeleteSession"
-          variant="danger"
-          size="s"
-          @click=${() => {
-            this.confirmingDelete = null;
-            this.dispatchEvent(
-              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
-            );
-          }}
-          >Delete</wa-button
-        >
-        <wa-button appearance="plain" size="s" @click=${cancel}
-          >Cancel</wa-button
-        >
-      </div>
-    </wa-callout>`;
   }
 
   private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {

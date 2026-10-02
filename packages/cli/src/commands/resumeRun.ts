@@ -71,7 +71,7 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
   const present = yield* Effect.forEach(
     paths,
     (inputPath) => pathExists(fs, path.resolve(cwd, inputPath)),
-    { concurrency: 'unbounded' },
+    { concurrency: 8 },
   );
   return present.every(Boolean);
 });

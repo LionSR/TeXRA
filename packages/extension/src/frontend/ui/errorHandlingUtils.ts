@@ -19,7 +19,7 @@ type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
  * reason for every call site to grow an error arm for something it could
  * only log anyway.
  */
-function announce<A>(
+export function announce<A>(
   channel: string,
   notice: Effect.Effect<A, { readonly message: string }>,
   whenRefused: A,

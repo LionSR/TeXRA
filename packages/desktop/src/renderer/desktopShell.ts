@@ -187,6 +187,7 @@ function projectSection(
               .view=${project.view}
               .surface=${project.surface}
               .topLevelOnly=${true}
+              removable
             ></run-tabs>
           </div>`
     }

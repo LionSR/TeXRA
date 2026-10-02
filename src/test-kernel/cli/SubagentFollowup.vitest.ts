@@ -379,15 +379,43 @@ describe('summarizeSubagentFollowup', () => {
   // the CLI transcript/queued follow-ups panel (codex review, issue #7679).
   // One case per newly-recognized tag family.
 
-  it('summarizes a background-result block, falling back to the tag family name', () => {
-    const xml = [
-      '<background-result id="abc" command="npm test">',
-      '<wall-time>3sec</wall-time>',
-      '</background-result>',
-    ].join('\n');
-    expect(summarizeSubagentFollowup(xml)).toBe(
-      '✓ background completed · 3sec',
+  it('summarizes a background-result block by its command and exit code', () => {
+    const block = (exitCode: number) =>
+      [
+        '<background-result id="abc" command="npm test &amp;&amp; lint">',
+        `<exit-code>${exitCode}</exit-code>`,
+        '<wall-time>3sec</wall-time>',
+        '</background-result>',
+      ].join('\n');
+    expect(summarizeSubagentFollowup(block(0))).toBe(
+      '✓ $ npm test && lint · 3sec',
     );
+    expect(summarizeSubagentFollowup(block(1))).toBe(
+      '✗ $ npm test && lint · exit 1 · 3sec',
+    );
+    expect(
+      summarizeSubagentFollowup(
+        block(0).replace(' command=', ' description="Run the checks" command='),
+      ),
+    ).toBe('✓ Run the checks · 3sec');
+    // A timeout's exit code is synthetic: the summary names the timeout.
+    expect(
+      summarizeSubagentFollowup(
+        block(1).replace(
+          '<wall-time>',
+          '<timed-out>true</timed-out>\n<wall-time>',
+        ),
+      ),
+    ).toBe('✗ $ npm test && lint · timed out · 3sec');
+    // Model-written labels reach terminals: an escape sequence is defused.
+    expect(
+      summarizeSubagentFollowup(
+        block(0).replace(
+          ' command=',
+          ' description="\u001b[2JRun the checks" command=',
+        ),
+      ),
+    ).toBe('✓ [2JRun the checks · 3sec');
   });
 
   it('summarizes a codex-result block without an agent attribute', () => {

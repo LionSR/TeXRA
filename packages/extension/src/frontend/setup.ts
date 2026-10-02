@@ -5,7 +5,7 @@ import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'extension';
@@ -71,6 +71,8 @@ export function initializeLatexSupport(
 
 /** A failed search propagates: `initializeLatexSupport` logs it and skips the
  *  recommendation, rather than reading "the query failed" as "no .tex files". */
-const workspaceContainsLatexFiles = Effect.promise(() =>
-  vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1),
-).pipe(Effect.map((hits) => hits.length > 0));
+const workspaceContainsLatexFiles = Effect.tryPromise({
+  try: async () =>
+    vscode.workspace.findFiles('**/*.tex', '**/node_modules/**', 1),
+  catch: ensureError,
+}).pipe(Effect.map((hits) => hits.length > 0));

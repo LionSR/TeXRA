@@ -29,6 +29,7 @@
  */
 import {
   Cause,
+  Data,
   Effect,
   Exit,
   Fiber,
@@ -114,10 +115,11 @@ export interface AttachedPort {
 }
 
 /** Expected refusal when a host attaches after the bridge has closed. */
-class SessionBridgeClosedError extends Error {
-  constructor() {
-    super('SessionBridge is closed; cannot attach a port');
-    this.name = 'SessionBridgeClosedError';
+class SessionBridgeClosedError extends Data.TaggedError(
+  'SessionBridgeClosedError',
+) {
+  override get message(): string {
+    return 'SessionBridge is closed; cannot attach a port';
   }
 }
 

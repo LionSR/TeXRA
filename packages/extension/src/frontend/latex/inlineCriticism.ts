@@ -141,7 +141,7 @@ function handleAddOutputFiles(
   const allFiles = Object.values(payload.filesByRound).flat();
   runtime.runFork(
     Effect.forEach(allFiles, refreshFileDiagnostics, {
-      concurrency: 'unbounded',
+      concurrency: 8,
       discard: true,
     }).pipe(
       Effect.catchCause((cause) =>
