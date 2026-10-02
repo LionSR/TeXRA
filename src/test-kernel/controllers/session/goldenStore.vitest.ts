@@ -131,7 +131,7 @@ const RUNNING = RunIdSchema.parse('283494944f1bfdfee431047b');
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000f');
 const SCRIPT_RUN = RunIdSchema.parse('62db81fbc29ce54c703f5b7c');
-const SCRIPT_CHILD = RunIdSchema.parse('303a6ba690cab22c32cb1f77');
+const SCRIPT_CHILD = RunIdSchema.parse('05c0820314926d5df2a1d70a');
 const TOMBSTONED = RunIdSchema.parse('a00000000012');
 
 const roots: string[] = [];

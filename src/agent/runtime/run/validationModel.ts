@@ -263,23 +263,26 @@ function goldenTurn(
     );
   }
   // A script sent to the background, then the turn ends: its result comes
-  // back as a follow-up, which the next turn acknowledges.
-  if (system.includes('GOLDEN-BACKGROUND'))
-    return Effect.succeed(
-      results.length === 0
-        ? [
-            call('script', {
-              title: 'Background',
-              code: GOLDEN_BACKGROUND_SOURCE,
-              run_in_background: true,
-            }),
-          ]
-        : text(
-            said.includes('script-result')
-              ? 'Background script reported.'
-              : 'Background script sent.',
-          ),
+  // back as a follow-up, which the next turn acknowledges. The reply that
+  // ends the launching turn waits for `golden-background-reply.release`:
+  // the parent and its script run are two fibers of one process, so the
+  // generator releases it once the script's child waits at its model call,
+  // and the parent's last rows commit after the script's, not raced.
+  if (system.includes('GOLDEN-BACKGROUND')) {
+    if (results.length === 0)
+      return Effect.succeed([
+        call('script', {
+          title: 'Background',
+          code: GOLDEN_BACKGROUND_SOURCE,
+          run_in_background: true,
+        }),
+      ]);
+    if (said.includes('script-result'))
+      return Effect.succeed(text('Background script reported.'));
+    return gate('golden-background-reply.release').pipe(
+      Effect.as(text('Background script sent.')),
     );
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
