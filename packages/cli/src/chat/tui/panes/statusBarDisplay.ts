@@ -287,10 +287,12 @@ function taskCostSegment(
 
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
+  // The task's total is also in `/status` and the exit summary: on a narrow
+  // bar it gives way first.
+  taskCost: 15,
   activeSubagent: 20,
   flow: 30,
   usage: 40,
-  taskCost: 45,
   queuedFollowUp: 50,
   approvalPolicy: 55,
   approvalDepth: 60,
