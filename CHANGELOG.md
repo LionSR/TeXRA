@@ -1279,7 +1279,9 @@ show` print the same notice, and the new `texra agents customize`,
   teams inside the rows left after the Workflows section, which folds to one
   summary row on short terminals instead of disappearing. The status bar
   names a Block policy "Block", as `/approval` does, and `/config` names its
-  two agent categories "Subagents" and "Codex and Claude Code".
+  two agent categories "Subagents" and "Codex and Claude Code". `/approval`
+  shows its auto-approve toggles as unavailable until the chat's run can
+  take the grant, instead of offering toggles that were then refused.
 
 - **Slash-command results no longer read as the model speaking.** In the
   terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)

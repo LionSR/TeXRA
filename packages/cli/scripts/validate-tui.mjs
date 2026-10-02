@@ -1109,6 +1109,7 @@ const SCENARIOS = [
       'Current: chat (hidden from picker)',
       'Tool-use agents',
       '+9 more',
+      'Workflows · texra run <name>',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',

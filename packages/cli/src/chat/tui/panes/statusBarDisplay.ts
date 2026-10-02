@@ -624,12 +624,25 @@ function childListBindingsText(
 function approvalPolicySegment(
   policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
-  if (policy === undefined || policy === 'ask') return undefined;
+  let color: StatusBarColor;
+  switch (policy) {
+    case undefined:
+    case 'ask':
+      return undefined;
+    case 'never':
+      color = COLOR_WARNING;
+      break;
+    case 'yolo':
+      color = COLOR_ERROR;
+      break;
+    default:
+      return policy satisfies never;
+  }
   // The label the /approval picker and every other surface uses for this
   // policy — the bar is how users confirm their selection took effect.
   return {
     text: texraApprovalPolicyLabel(policy),
-    color: policy === 'never' ? COLOR_WARNING : COLOR_ERROR,
+    color,
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
   };
 }

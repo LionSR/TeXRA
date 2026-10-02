@@ -129,16 +129,18 @@ function hiddenCurrentAgentHint(
   return `Current: ${agentName(current)} (hidden from picker)`;
 }
 
-/** How the Workflows section renders: its full list, one summary row, or
- *  not at all when there are no workflows. */
-type WorkflowLayout = 'list' | 'summary' | 'none';
+/** How the Workflows section renders: its full list, one summary row, not at
+ *  all when there are no workflows, or in the compact frame when even one
+ *  select row and the summary row do not fit the full frame. */
+type WorkflowLayout = 'list' | 'summary' | 'none' | 'compact';
 
 /**
  * Window the picker within its sections; never drop one. The selectable list
  * scrolls inside the rows left over once the Workflows section (heading, one
  * row per workflow, the `texra run <name>` hint) has its rows. When that full
  * section would squeeze the selectable list below three rows, it folds into
- * one summary row that still names the section and the run hint.
+ * one summary row that still names the section and the run hint; below that,
+ * the picker takes its compact frame.
  */
 function agentSelectWindow({
   availableRows,
@@ -154,22 +156,24 @@ function agentSelectWindow({
   // Border, title, description, section heading, and key hints are the fixed
   // chrome for the primary selectable list.
   const chromeRows = 8 + extraRows;
-  const list = computeSelectWindowSize({
-    availableRows,
-    itemCount,
-    chromeRows: chromeRows + (workflowCount > 0 ? workflowCount + 2 : 0),
-  });
-  if (workflowCount === 0) return { ...list, workflowLayout: 'none' };
-  if ((list.maxVisibleItems ?? itemCount) >= Math.min(3, itemCount)) {
-    return { ...list, workflowLayout: 'list' };
-  }
-  return {
-    ...computeSelectWindowSize({
+  const window = (workflowRows: number): SelectWindowSize =>
+    computeSelectWindowSize({
       availableRows,
       itemCount,
-      chromeRows: chromeRows + 1,
-    }),
-    workflowLayout: 'summary',
+      chromeRows: chromeRows + workflowRows,
+    });
+  if (workflowCount === 0) return { ...window(0), workflowLayout: 'none' };
+  // Decide on the raw budget: `computeSelectWindowSize` floors its list at
+  // one row, so its result cannot say whether the reserved rows fit.
+  const listRows = workflowCount + 2;
+  const spareRows =
+    availableRows == null ? Infinity : availableRows - chromeRows;
+  if (spareRows - listRows >= Math.min(3, itemCount)) {
+    return { ...window(listRows), workflowLayout: 'list' };
+  }
+  return {
+    ...window(1),
+    workflowLayout: spareRows >= 2 ? 'summary' : 'compact',
   };
 }
 
@@ -254,7 +258,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     </Text>
   ) : null;
 
-  if (isCompactFormRows(props.availableRows) && items.length > 0) {
+  if (
+    (isCompactFormRows(props.availableRows) ||
+      selectWindow.workflowLayout === 'compact') &&
+    items.length > 0
+  ) {
     return (
       <FormFrame title="/agent" showCloseHint={false}>
         {currentAgentHintRow}
