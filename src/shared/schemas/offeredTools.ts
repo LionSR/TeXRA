@@ -58,11 +58,37 @@ export const ToolsOfferedPayloadSchema = z.strictObject({
   hooks: z.array(z.string().min(1)).readonly(),
 });
 
+/**
+ * What the run's delegation tools can launch: per agent category, the
+ * offered delegation tools that launch it and its visible agents; the models
+ * available for delegation (null when they could not be read); and, when a
+ * tool-use agent can be launched, whether worktrees are on.
+ */
+const DelegationTargetsSchema = z.strictObject({
+  agents: z.array(
+    z.strictObject({
+      tools: z.array(z.string().min(1)).min(1),
+      agents: z.array(
+        z.strictObject({
+          name: z.string().min(1),
+          description: z.string(),
+          tools: z.array(z.string()),
+        }),
+      ),
+    }),
+  ),
+  models: z.array(z.string()).nullable(),
+  worktree: z.boolean().nullable(),
+});
+export type DelegationTargets = z.infer<typeof DelegationTargetsSchema>;
+
 /** The context a run's model has been told, as a `tools.offered` row names
- *  it. */
+ *  it: the sections and the delegation targets its system text renders at
+ *  the freeze, and the names of the tools it offers. */
 export const RunContextSchema = z.strictObject({
   sections: z.record(z.string(), z.string()),
   tools: z.array(z.string()),
+  delegation: DelegationTargetsSchema.optional(),
 });
 export type RunContext = z.infer<typeof RunContextSchema>;
 

@@ -426,6 +426,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Adding an API key or enabling an agent mid-run no longer breaks the
+  prompt cache.** The agents and models a delegating agent can use were
+  rewritten into its delegation tools' descriptions at every step, so any
+  change re-sent the whole cached prefix at full price. They are now listed
+  once in the system prompt, and a later change reaches the model as one
+  short message, such as "Models for delegation now available: …".
+
 - **A shell command is named by its description, and a finished background
   command by its result.** The bash tool's `description` (a 5-10 word summary
   the model writes) now heads the command's row in the CLI and the progress

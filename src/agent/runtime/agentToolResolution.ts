@@ -22,9 +22,7 @@
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
- *   4. Delegation tools annotated with the models and agents currently
- *      available for delegation.
- *   5. The run's own tools (caller-supplied, and the structured-output
+ *   4. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
  *      the offered tools only, so dispatch cannot run a tool the model was
@@ -42,21 +40,13 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
-import { withLogChannel } from '@logger/effectLog';
-import {
-  modelOptionsFrom,
-  readModelAvailabilityInputs,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
+import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
   sameIdentity,
-  type AgentDelegationScope,
   type OfferedTool,
   type ToolDefinition,
 } from '@shared/schemas';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   toolDigests,
   type HeldPlugins,
@@ -66,15 +56,7 @@ import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
-import {
-  annotateDelegationAvailability,
-  availableModelNamesFromOptions,
-  readDelegationAnnotationState,
-} from '@tools/delegation/delegationAvailability';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-const CHANNEL = 'AgentToolResolution';
 
 /** What a step resolves its tools from: fixed at the run's open, but the
  *  approval flag the step reads live. */
@@ -84,63 +66,22 @@ export interface StepToolInputs {
   readonly approvalPromptsUnavailable: boolean;
   /** The product host the run's roots name; tools excluded from it are dropped. */
   readonly host: SettingHost;
-  /** Tools only this run holds, laid over the resolved list (step 5). */
+  /** Tools only this run holds, laid over the resolved list (step 4). */
   readonly runTools: readonly ITool[];
   /** Whether the manifest's injected tools join (step 2). */
   readonly injectTools: boolean;
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
    *  unless it is a plugin agent that names its own tools. */
   readonly injectInstalled: boolean;
-  /**
-   * The run's stores: the injections' settings, the delegation annotation's
-   * worktree opt-in and the delegation scope's model availability read
-   * them.
-   */
+  /** The run's stores, which the injections' settings read. */
   readonly stores: ModelOptionStores;
   /** The run's workspace root: the tool-availability probes answer per
    *  workspace. */
   readonly workspaceRoot: string | undefined;
-  /** The run's pinned delegation agent list scope, when this is a delegated run. */
-  readonly delegationScope?: AgentDelegationScope;
   /** What the parent's step offered, when this is a delegated child. */
   readonly parentOffered?: readonly OfferedTool[];
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
-}
-
-/**
- * Probe the models currently available for delegation, but only when the
- * resolved tool list actually contains a delegation tool.
- *
- * Returns `undefined` when no delegation tool is present (nothing to annotate),
- * `null` when the model options could not be loaded, and the list of available
- * model names otherwise.
- */
-function availableDelegationModelNamesForTools(
-  tools: readonly ToolDefinition[],
-  stores: ModelOptionStores,
-): Effect.Effect<readonly string[] | null | undefined, never, LanguageModel> {
-  if (!hasDelegationTool(tools.map((tool) => tool.name))) {
-    return Effect.succeed(undefined);
-  }
-
-  return readModelAvailabilityInputs(stores).pipe(
-    Effect.map((inputs) =>
-      availableModelNamesFromOptions(modelOptionsFrom(inputs)),
-    ),
-    // A failed read (an unreadable store, a host call that rejected) degrades:
-    // skip the delegation annotation rather than fail the run, and log so the
-    // missing "Available models:" line is traceable. `Effect.catch` recovers
-    // typed failures only, which is the whole distinction — the pure finisher's
-    // "provider key status was never read" invariant is a programming error, so
-    // it surfaces as a defect and fails the run rather than being logged as a
-    // degraded annotation.
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Could not load model options for delegation annotation: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-    ),
-  );
 }
 
 /** A declaration's tool names, in order. */
@@ -293,7 +234,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     return [name];
   };
 
-  const resolved: ToolDefinition[] = [];
+  const definitions: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
   const offer = (name: string, source: 'declared' | 'injected'): void => {
     if (resolvedNames.has(name) || !narrowed(name)) return;
@@ -323,7 +264,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     }
     // The contract the model is shown is the catalog's own: a declaration
     // names a tool, it does not redefine it.
-    resolved.push(entry.tool.definition);
+    definitions.push(entry.tool.definition);
     resolvedNames.add(name);
   };
   for (const name of [...new Set(declaredToolNames(input.tools))].flatMap(
@@ -332,27 +273,6 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     offer(name, 'declared');
   for (const name of injected) offer(name, 'injected');
 
-  const availableModelNames = yield* availableDelegationModelNamesForTools(
-    resolved,
-    input.stores,
-  );
-  // Both facts travel into the pure annotation mapping as data: the worktree
-  // opt-in is read from the slots this resolution was given, and the run's
-  // pinned delegation scope is already explicit data from AgentRun.
-  let definitions = resolved;
-  if (availableModelNames !== undefined) {
-    const annotationState = yield* readDelegationAnnotationState(
-      input.stores,
-      input.delegationScope,
-    );
-    definitions = resolved.map((tool) =>
-      annotateDelegationAvailability(
-        tool,
-        availableModelNames,
-        annotationState,
-      ),
-    );
-  }
   const overlay = new Map<string, ITool>();
   for (const tool of input.runTools) {
     const { name } = tool.definition;
@@ -367,7 +287,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool>();
   const offered: OfferedTool[] = [];
-  // Recorded as shown: the definition sent, annotations included.
+  // Recorded as shown: the definition sent.
   for (const definition of definitions) {
     const { name } = definition;
     const own = overlay.get(name);

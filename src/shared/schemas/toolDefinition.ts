@@ -23,9 +23,9 @@ export const ToolDefinitionSchema = z.looseObject({
   /** Runtime-only: original Zod schema for SDK-native conversion */
   zodSchema: z.custom<ZodType>().optional(),
   /**
-   * Agent category this delegation tool's description is annotated from
-   * ("Available agents:"/"Available models:" lines). Declared by the tool
-   * itself — never a side table mapping tool names to categories.
+   * Agent category this delegation tool launches, whose agents the run's
+   * delegation targets list. Declared by the tool itself — never a side
+   * table mapping tool names to categories.
    */
   availabilityCategory: AgentCategorySchema.optional(),
 });

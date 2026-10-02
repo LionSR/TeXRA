@@ -38,6 +38,7 @@ import {
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
+import { delegationSection } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
 
@@ -167,10 +168,10 @@ export function attemptRows(
 
 /**
  * The run's context at a step that renders `context` over the `base` text:
- * the system text its requests send, frozen by the run's first step and the
- * first after a compaction so the cached prefix (tools, system, history)
- * holds, and the system message that tells the model what changed since
- * ('' for nothing).
+ * the system text its requests send, its sections and delegation targets
+ * frozen by the run's first step and the first after a compaction so the
+ * cached prefix (tools, system, history) holds, and the system message that
+ * tells the model what changed since ('' for nothing).
  */
 export function contextAt(
   state: RunState,
@@ -179,7 +180,15 @@ export function contextAt(
 ): { readonly system: string | undefined; readonly update: string } {
   if (state.offeredContext === null)
     return {
-      system: base && [base, ...Object.values(context.sections)].join('\n'),
+      system:
+        base &&
+        [
+          base,
+          ...Object.values(context.sections),
+          ...(context.delegation
+            ? [delegationSection(context.delegation)]
+            : []),
+        ].join('\n'),
       update: '',
     };
   return {

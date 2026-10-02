@@ -81,7 +81,7 @@ export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   if (agent) return agent;
   return yield* Effect.fail(
     new Error(
-      `Unknown ${category} agent '${name}'. Available: ${agents.map((a) => a.name).join(', ')}`,
+      `Unknown ${category} agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
     ),
   );
 });
