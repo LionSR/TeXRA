@@ -45,6 +45,8 @@ import {
   ToolCall,
   type CallRequests,
   type ScriptCalls,
+  type ScriptScope,
+  type ScriptSource,
 } from '@agent/runtime/ToolCall';
 import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -130,6 +132,13 @@ type Settlement = Pick<
 >;
 
 type SettledAttachment = ToolResultPayload['attachments'][number];
+
+/** What a call may reach besides its arguments: the calls it may issue as
+ *  a script, or the script that issued it. */
+interface CallContext {
+  readonly scriptCalls?: Effect.Effect<ScriptCalls>;
+  readonly script?: ScriptScope;
+}
 
 interface DispatchOutcome {
   readonly state: RunState;
@@ -433,8 +442,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly requestId: string;
       readonly decision: RequestDecision | null;
     } | null = null,
-    /** A call a response issued may issue calls of its own, as a script. */
-    scriptCalls?: Effect.Effect<ScriptCalls>,
+    /** A call a response issued may issue calls of its own, as a script;
+     *  a call a script issued knows that script. */
+    context: CallContext = {},
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -584,9 +594,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               workPlanState: workspace.workPlan,
               userInstruction,
               toolCallId: fact.callId,
+              responseId,
+              attempt,
               requests,
               hooks: { onToolOutput },
-              ...(scriptCalls === undefined ? {} : { scriptCalls }),
+              ...context,
             }),
             Effect.provide(step.services),
           ),
@@ -865,7 +877,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     intent: RunState['pendingIntents'][string],
-    scriptCalls?: Effect.Effect<ScriptCalls>,
+    context: CallContext = {},
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -888,12 +900,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           input,
           intent.attempt,
           { requestId: ownId, decision: own.decision },
-          scriptCalls,
+          context,
         );
         return;
       }
       if (own.decision?.action === 'cancel') {
-        yield* execute(fact, input, intent.attempt, null, scriptCalls);
+        yield* execute(fact, input, intent.attempt, null, context);
         return;
       }
     }
@@ -910,7 +922,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       );
       return;
     }
-    yield* execute(fact, input, intent.attempt + 1, null, scriptCalls);
+    yield* execute(fact, input, intent.attempt + 1, null, context);
   });
 
   /**
@@ -1008,16 +1020,20 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           }),
         );
 
-        /** Run `body` in `seq`'s place: after the calls it must follow. */
+        /** Run `body` in `seq`'s place: after the calls it must follow. A
+         *  tool that bounds its own calls runs beside the others, outside
+         *  the window, and a later barrier still waits for it. */
         const inPlace = <A, E, R>(
           seq: number,
-          parallelSafe: boolean,
+          tool: ITool | undefined,
           body: Effect.Effect<A, E, R>,
         ) =>
           Effect.gen(function* () {
             const done = yield* Deferred.make<void>();
+            const beside =
+              tool?.parallelSafe === true || tool?.ownsConcurrency === true;
             const after = yield* SynchronizedRef.modify(lanes, (lane) =>
-              parallelSafe
+              beside
                 ? [[lane.barrier], { ...lane, since: [...lane.since, done] }]
                 : [[lane.barrier, ...lane.since], { barrier: done, since: [] }],
             );
@@ -1028,9 +1044,41 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               { discard: true },
             );
             return yield* (
-              parallelSafe ? window.withPermits(1)(body) : body
+              tool?.parallelSafe === true ? window.withPermits(1)(body) : body
             ).pipe(Effect.ensuring(Deferred.succeed(done, undefined)));
           });
+
+        // What the script's calls share while it runs here
+        // (`ScriptScope.shared`).
+        const sharedValues = new Map<
+          string,
+          Deferred.Deferred<unknown, unknown>
+        >();
+        const shared = <A, E, R>(
+          key: string,
+          make: Effect.Effect<A, E, R>,
+        ): Effect.Effect<A, E, R> =>
+          Effect.suspend(() => {
+            const existing = sharedValues.get(key) as
+              Deferred.Deferred<A, E> | undefined;
+            if (existing !== undefined) return Deferred.await(existing);
+            const made = Deferred.makeUnsafe<A, E>();
+            sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
+            return make.pipe(
+              Effect.onExit((exit) => Deferred.done(made, exit)),
+            );
+          });
+        const scopeOf = (source: ScriptSource): ScriptScope => ({
+          ...source,
+          callId: script.callId,
+          calls: Effect.map(cell.current, (state) =>
+            Object.values(state.pendingResponse?.scriptCalls ?? {})
+              .filter((call) => call.scriptCallId === script.callId)
+              .toSorted((a, b) => a.seq - b.seq)
+              .map(({ toolName, input }) => ({ toolName, input })),
+          ),
+          shared,
+        });
 
         /** `op`'s `script.call` row, first committed with its first intent. */
         const scriptCallRow = (
@@ -1059,6 +1107,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
          *  running its tool through the per-call program. */
         const call = Effect.fn('toolUse.scriptCall')(function* (
           op: ScriptOp,
+          source: ScriptSource | null,
           answer?: () => ToolResultPayload['result'],
         ) {
           const callId = `${script.callId}/${op.seq}`;
@@ -1083,7 +1132,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             // Replayed from its row: it takes no lane and does not run.
             yield* Deferred.succeed(placeOf(op.seq), undefined);
             yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
-            return settled.result;
+            return { result: settled.result, attachments: settled.attachments };
           }
           if (answer !== undefined) {
             // It reads the pinned catalog only, and runs no tool: it takes no
@@ -1128,12 +1177,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 },
               },
             ]);
-            return result;
+            return { result, attachments: [] };
           }
           const tool = step.registry.get(op.name);
+          const context = source === null ? {} : { script: scopeOf(source) };
           yield* inPlace(
             op.seq,
-            tool?.parallelSafe === true,
+            tool,
             Effect.gen(function* () {
               // Nothing runs again until the guest holds everything that settled.
               yield* handedBack(replayOrder.at(-1));
@@ -1146,7 +1196,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               };
               const intent = (yield* cell.current).pendingIntents[callId];
               if (known !== undefined && intent !== undefined) {
-                return yield* resumeIntent(origin, fact, input, intent);
+                return yield* resumeIntent(
+                  origin,
+                  fact,
+                  input,
+                  intent,
+                  context,
+                );
               }
               yield* append([
                 ...(known === undefined
@@ -1155,16 +1211,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 intentRow(origin, callId, 1),
                 ...admittedCards(fact, input),
               ]);
-              yield* execute(fact, input, 1);
+              yield* execute(fact, input, 1, null, context);
             }),
           );
-          const result = settledOf(yield* cell.current, callId)?.result;
-          if (result === undefined) {
+          const settledNow = settledOf(yield* cell.current, callId);
+          if (settledNow === null) {
             return yield* Effect.die(
               new Error(`Script call ${callId} is unsettled after its run.`),
             );
           }
-          return result;
+          return {
+            result: settledNow.result,
+            attachments: settledNow.attachments,
+          };
         });
 
         const plugins = new Map(
@@ -1177,10 +1236,22 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               definition,
               plugin: plugins.get(definition.name) ?? 'run',
             })),
-          call: (op: ScriptOp) =>
-            call(op).pipe(Effect.provideContext(services)),
+          globals: step.definitions.flatMap(({ name }) => {
+            const global =
+              name === script.toolName
+                ? undefined
+                : step.registry.get(name)?.scriptGlobal;
+            return global === undefined
+              ? []
+              : [{ tool: name, positional: global.positional }];
+          }),
+          call: (op: ScriptOp, source: ScriptSource) =>
+            call(op, source).pipe(Effect.provideContext(services)),
           answer: (op: ScriptOp, answer: () => ToolResultPayload['result']) =>
-            call(op, answer).pipe(Effect.provideContext(services)),
+            call(op, null, answer).pipe(
+              Effect.map(({ result }) => result),
+              Effect.provideContext(services),
+            ),
           delivered: (seq: number) => {
             const done = delivered.get(seq);
             return done === undefined
@@ -1216,7 +1287,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (intent !== undefined) {
       yield* Effect.scoped(
         Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>
-          resumeIntent(fromResponse, fact, input, intent, scriptCalls),
+          resumeIntent(fromResponse, fact, input, intent, { scriptCalls }),
         ),
       );
       return;
@@ -1233,7 +1304,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ]);
     yield* Effect.scoped(
       Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>
-        execute(fact, input, 1, null, scriptCalls),
+        execute(fact, input, 1, null, { scriptCalls }),
       ),
     );
   });

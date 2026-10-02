@@ -237,7 +237,7 @@ export const MANIFEST = [
   },
   {
     id: 'workflow-script',
-    toolNames: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
+    toolNames: [DELEGATE_MULTI_AGENTS_TOOL_NAME, 'agent'],
     name: 'Multi-Agent Workflow',
     category: 'workflow',
     description:

@@ -255,6 +255,25 @@ All notable changes to this project will be documented in this file.
   included, and `describeTool(name)` returns a tool's full declaration with
   each field's description. Both answers are recorded, so a resumed script
   gets the same ones.
+- **`agent` tool (code mode, second stage).** One tool runs a named agent as
+  a child run, with the options of `delegate_agent`, `delegate_workflow` and
+  a workflow script's `agent()` together; the agent you name decides which
+  apply. In a script, `agent(prompt, opts)` waits for the child and returns
+  its result (`{ response | outputs, structured, outcome, cost }`), or
+  `{ runId }` with `background: true`; a failure rejects as `AgentFailed`,
+  `TimedOut` (`timeoutMs`) or `Skipped` (you stopped the child). Called
+  directly it runs in the background, as a delegation does. A script's
+  `agent` calls share one approval request that shows the script's source,
+  and run at most the child-run budget at once. A completed call is reused,
+  not run again, by a later call in the same run with the same prompt,
+  options and file contents, so a fixed script re-sent by the model does not
+  pay for finished children twice. If the run is interrupted, a call finds
+  the child it launched: a finished child's answer is read back, and one
+  that was cut short continues under its own run instead of starting over.
+  The tool belongs to the Multi-Agent Workflow plugin; no built-in agent
+  offers it yet, and the `delegate_*` tools stay until it replaces them.
+- **A script's result carries the files its calls attached**, so an image a
+  nested `read_file` returned reaches the model with the script's answer.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your

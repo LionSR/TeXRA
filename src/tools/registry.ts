@@ -88,6 +88,7 @@ import {
   DelegateAgentTool,
 } from './delegation/DelegationTools';
 import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
+import { AgentTool } from './delegation/AgentTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { codeSandboxLayer, ScriptTool } from './codemode/ScriptTool';
@@ -180,7 +181,10 @@ const PLUGIN_TOOLS = {
     lean_project: LeanProjectTool,
     lean_inspect: LeanInspectTool,
   },
-  'workflow-script': { [DELEGATE_MULTI_AGENTS_TOOL_NAME]: WorkflowScriptTool },
+  'workflow-script': {
+    [DELEGATE_MULTI_AGENTS_TOOL_NAME]: WorkflowScriptTool,
+    agent: AgentTool,
+  },
   'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },

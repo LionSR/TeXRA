@@ -43,6 +43,12 @@
  *   the command waits, after the first read settled: the interrupted script
  *   the conformance suite resumes. The command is a barrier, so the second
  *   read waits behind it and every row commits in one order.
+ * - `golden_fanout` (headless, `yolo`): a `script` call whose guest awaits
+ *   two `agent()` calls in one `Promise.all`, one child at a time under a
+ *   project child-run budget of 1, killed (`SIGKILL`) after the first child
+ *   completed and its call settled, while the second child's model call
+ *   waits for `golden-fanout.release`: the interrupted fan-out the
+ *   conformance suite resumes.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -529,6 +535,71 @@ async function generate(root) {
   await scripted.exited;
   writeFileSync(path.join(cli.project, 'golden-script.release'), '');
 
+  // The fan-out: a script's two `agent()` calls under one `Promise.all`,
+  // one child at a time under a project child-run budget of 1, killed after
+  // the first child completed while the second waits on its model call.
+  mkdirSync(path.join(cli.project, '.texra'), { recursive: true });
+  writeFileSync(
+    path.join(cli.project, '.texra/config.json'),
+    `${JSON.stringify({ 'texra.childRunConcurrencyBudget': 1 })}\n`,
+  );
+  const fanout = cli.start([
+    'run',
+    'golden_fanout',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Fan out in one script.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  const fanoutRun = await until(
+    'the fan-out run',
+    () => query(cli.store(), RUN_OF_AGENT, ['golden_fanout'])[0]?.id,
+    fanout,
+  );
+  const fanoutRows = (child, type, extra = '') =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = ? ${extra}`,
+      [child, type],
+    ).length;
+  await until(
+    'the first fan-out child completed and the second waiting',
+    () => {
+      const [first, second] = query(
+        cli.store(),
+        `SELECT s.logical_id AS id FROM event e
+         JOIN event_sequence s ON s.id = e.aggregate
+         WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
+         ORDER BY e."commit"`,
+        [fanoutRun],
+      ).map((row) => row.id);
+      return (
+        first !== undefined &&
+        second !== undefined &&
+        fanoutRows(first, 'run.end') > 0 &&
+        fanoutRows(
+          fanoutRun,
+          'tool.result',
+          `AND json_extract(e.data, '$.payload.callId') LIKE '%/0'`,
+        ) > 0 &&
+        fanoutRows(
+          second,
+          'model.message',
+          `AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
+        ) > 0
+      );
+    },
+    fanout,
+  );
+  fanout.child.kill('SIGKILL');
+  await fanout.exited;
+
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
   const before = new Set(
@@ -663,7 +734,6 @@ function normalize(file, root) {
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
   );
-  for (const row of sequences) ids.get(row.logical_id);
   for (const row of sequences) uuids.get(row.uid);
   const rows = events.map((row) => ({
     ...row,
@@ -684,6 +754,55 @@ function normalize(file, root) {
       collect(v, Array.isArray(value) ? key : k);
   };
   for (const row of rows) collect(row.value, '');
+
+  // An `agent` call's child run is named by the call (`agentChildRunId`:
+  // its run, response, call and attempt), so a resume finds it by deriving
+  // that name again. Such a child is renamed by the same derivation over
+  // the normalized names, not by order, or no resume would find it.
+  const derive = (fields) =>
+    createHash('sha256')
+      .update(stableStringify(fields))
+      .digest('hex')
+      .slice(0, 24);
+  const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
+  const children = new Map();
+  for (const [index, row] of rows.entries()) {
+    if (row.type !== 'script.call' || row.value.payload.toolName !== 'agent')
+      continue;
+    const { scriptCallId, callId } = row.value.payload;
+    const intents = rows.filter(
+      (other) =>
+        other.aggregate === row.aggregate && other.type === 'tool.intent',
+    );
+    const responseId = rows
+      .slice(0, index)
+      .findLast(
+        (other) =>
+          intents.includes(other) &&
+          other.value.payload.origin.kind === 'response' &&
+          other.value.payload.callIds.includes(scriptCallId),
+      )?.value.payload.origin.responseId;
+    for (const intent of intents) {
+      const { origin, callIds, attempt } = intent.value.payload;
+      if (origin.kind !== 'script' || !callIds.includes(callId)) continue;
+      const parentRunId = logicalOf.get(row.aggregate);
+      const fields = { parentRunId, responseId, callId, attempt };
+      children.set(derive(fields), fields);
+    }
+  }
+  for (const row of sequences) {
+    const fields = children.get(row.logical_id);
+    if (fields === undefined) ids.get(row.logical_id);
+    else
+      ids.seen.set(
+        row.logical_id,
+        derive({
+          ...fields,
+          parentRunId: ids.get(fields.parentRunId),
+          responseId: uuids.get(fields.responseId),
+        }),
+      );
+  }
 
   const roots = [...new Set([realpathSync.native(root), root])].sort(
     (a, b) => b.length - a.length,

@@ -14,6 +14,11 @@
  * rewritten. And a pending approval that does not outlive the process that
  * asked: a resume that cancels it, asks the outcome question instead, opens
  * a second request, or runs the command other than once after the approval.
+ * And an `agent` fan-out killed mid-script: a resume that launches the
+ * completed child again, launches a second child beside the running one (a
+ * new id or a second `run.start`) instead of resuming it, asks about a call
+ * whose child exists, or returns without both answers; and a second run of
+ * the same script that launches anything instead of reusing both results.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
@@ -113,7 +118,11 @@ const PARENT = RunIdSchema.parse('a00000000002');
 const CHAT = RunIdSchema.parse('a00000000009');
 const APPROVAL = RunIdSchema.parse('a0000000000a');
 const SCRIPTED = RunIdSchema.parse('a0000000000b');
-const TOMBSTONED = RunIdSchema.parse('a0000000000c');
+const FANOUT = RunIdSchema.parse('a0000000000c');
+/** The fan-out's children: the first completed, the second ran at the kill. */
+const FANNED = RunIdSchema.parse('27b3c9a992404396e31151f1');
+const RUNNING = RunIdSchema.parse('0252d66a846e39d1f7086323');
+const TOMBSTONED = RunIdSchema.parse('a0000000000f');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -325,6 +334,18 @@ describe('the golden 1.0 store', () => {
         run(APPROVAL, 'golden_approval', { status: 'running', outcome: null }),
         // Killed mid-script, like the parked run.
         run(SCRIPTED, 'golden_script', { status: 'running', outcome: null }),
+        // Killed while its second child ran.
+        run(FANOUT, 'golden_fanout', {
+          status: 'running',
+          outcome: null,
+          children: [RUNNING, FANNED],
+        }),
+        run(FANNED, 'golden_child', { parent: FANOUT }),
+        run(RUNNING, 'golden_child', {
+          parent: FANOUT,
+          status: 'running',
+          outcome: null,
+        }),
       ]);
       // The approval its process never saw answered, still pending.
       expect(
@@ -430,7 +451,8 @@ describe('the golden 1.0 store', () => {
           'running',
           ...Array.from({ length: 4 }, () => 'completed'),
           'cancelled',
-          'running',
+          ...Array.from({ length: 3 }, () => 'running'),
+          'completed',
           'running',
         ]);
         const db = yield* Database;
@@ -546,12 +568,13 @@ describe('the interrupted golden runs', () => {
     cpSync(goldenRoot(), storage, { recursive: true });
     writeFileSync(flag, 'texra-cli-run-validation\n');
     writeFileSync(join(storage, 'golden-park.release'), '');
+    writeFileSync(join(storage, 'golden-fanout.release'), '');
     // The crash, on this host: an owner whose process identity is gone.
     raw(storage, (db) => {
       const kill = db.prepare(
         'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
       );
-      for (const run of [PARKED, APPROVAL, SCRIPTED])
+      for (const run of [PARKED, APPROVAL, SCRIPTED, FANOUT, RUNNING])
         kill.run(
           JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
           run,
@@ -793,5 +816,136 @@ describe('the interrupted golden runs', () => {
       expect(script?.result.output).toContain('"found": "read_file"');
       expect(script?.result.output).toContain('"documented": true');
     }),
+  );
+
+  /**
+   * The fan-out killed while its second child ran. The resume runs the
+   * script from the top: the call whose child completed is handed back from
+   * its row, and the call whose child was running finds that child and
+   * resumes it under its own id, asking nobody. Then the model runs the same
+   * script in a new call, whose two calls reuse those results.
+   */
+  it.live(
+    'resumes the killed fan-out, reattaching its child, then reuses',
+    () =>
+      Effect.gen(function* () {
+        const { storage, workspace } = testWorkspaceRoots();
+        if (workspace === undefined) throw new Error('no test workspace');
+        mkdirSync(workspace, { recursive: true });
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate IN
+               (SELECT id FROM event_sequence WHERE logical_id IN (?, ?, ?))`,
+            )
+            .run(workspace, FANOUT, FANNED, RUNNING),
+        );
+        const asked = autoDecideRequests(session, (opened) =>
+          opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
+        );
+        const result = yield* withProcessServices(
+          testRuntime(),
+          resumeRun(FANOUT, { session }),
+        ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+        expect(result).toMatchObject({ started: true, outcome: 'waiting' });
+        const count = (run: RunId, type: string) =>
+          Number(
+            raw(storage, (db) =>
+              db
+                .prepare(
+                  `SELECT count(*) AS n FROM event e
+                 JOIN event_sequence s ON s.id = e.aggregate
+                 WHERE s.logical_id = ? AND e.type = ?`,
+                )
+                .get(run, type),
+            )?.n,
+          );
+        // No child was launched again: the two the kill left, each started
+        // once; the completed one never ran again, the running one resumed.
+        expect(
+          raw(storage, (db) =>
+            db
+              .prepare(
+                `SELECT s.logical_id AS id FROM event e
+               JOIN event_sequence s ON s.id = e.aggregate
+               WHERE e.type = 'run.start'
+                 AND json_extract(e.data, '$.parent.id') = ?
+               ORDER BY e."commit"`,
+              )
+              .all(FANOUT)
+              .map((row) => row.id),
+          ),
+        ).toEqual([FANNED, RUNNING]);
+        expect([FANNED, RUNNING].map((run) => count(run, 'run.start'))).toEqual(
+          [1, 1],
+        );
+        expect(
+          [FANNED, RUNNING].map((run) => count(run, 'run.activate')),
+        ).toEqual([1, 2]);
+        const results = raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT json_extract(e.data, '$.payload') AS payload
+             FROM event e JOIN event_sequence s ON s.id = e.aggregate
+             WHERE s.logical_id = ? AND e.type = 'tool.result'
+             ORDER BY e."commit"`,
+            )
+            .all(FANOUT)
+            .map(
+              (row) =>
+                JSON.parse(String(row.payload)) as {
+                  readonly responseId: string;
+                  readonly callId: string;
+                  readonly attempt: number;
+                  readonly disposition: string;
+                  readonly result: {
+                    readonly output?: string;
+                    readonly reusedFrom?: string;
+                  };
+                },
+            ),
+        );
+        const [first, second] = [
+          ...new Set(results.map((row) => row.responseId)),
+        ];
+        const of = (responseId: string | undefined) =>
+          results.filter((row) => row.responseId === responseId);
+        const script = (responseId: string | undefined) =>
+          of(responseId).find((row) => !row.callId.includes('/'));
+        const nested = (responseId: string | undefined) =>
+          of(responseId)
+            .filter((row) => row.callId.includes('/'))
+            .map(({ callId, attempt, disposition, result: settled }) => ({
+              seq: callId.split('/').at(-1),
+              attempt,
+              disposition,
+              reusedFrom: settled.reusedFrom?.split('/').at(-1) ?? null,
+            }));
+        // The call settled before the kill keeps its one row; the running
+        // one settles at its next attempt, from the same child.
+        expect(nested(first)).toEqual([
+          { seq: '0', attempt: 1, disposition: 'executed', reusedFrom: null },
+          { seq: '1', attempt: 2, disposition: 'executed', reusedFrom: null },
+        ]);
+        expect(script(first)).toMatchObject({
+          attempt: 2,
+          disposition: 'executed',
+        });
+        for (const answer of [
+          'Fan-out child A answer.',
+          'Fan-out child B answer.',
+        ])
+          for (const responseId of [first, second])
+            expect(script(responseId)?.result.output).toContain(answer);
+        // The same script in a new call: both calls reuse, nothing launches.
+        expect(nested(second)).toEqual([
+          { seq: '0', attempt: 1, disposition: 'executed', reusedFrom: '0' },
+          { seq: '1', attempt: 1, disposition: 'executed', reusedFrom: '1' },
+        ]);
+        // Nothing was asked: the resumed child was approved when it
+        // launched, and a reused call runs nothing.
+        expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
+      }),
   );
 });

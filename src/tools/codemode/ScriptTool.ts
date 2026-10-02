@@ -16,7 +16,11 @@ import {
   type ScriptSettlement,
 } from '@agent/codeSandbox/codeSandbox';
 import { ToolCall, type ScriptCalls } from '@agent/runtime/ToolCall';
-import { ToolError, type ToolResultPayload } from '@shared/schemas';
+import {
+  ToolError,
+  type ToolFileAttachment,
+  type ToolResultPayload,
+} from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/define';
@@ -115,7 +119,7 @@ const settlementOf = (
   if (result.status === 'error')
     return Effect.succeed({
       _tag: 'Failure',
-      name: 'ToolFailed',
+      name: result.name ?? 'ToolFailed',
       message: result.error,
     });
   if (op !== undefined)
@@ -129,7 +133,10 @@ const settlementOf = (
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));
   return Effect.succeed({
     _tag: 'Value',
-    value: { output: result.output, summary: result.summary },
+    value:
+      result.value !== undefined
+        ? result.value
+        : { output: result.output, summary: result.summary },
   });
 };
 
@@ -150,11 +157,37 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   const scriptCalls = yield* issued;
   const sandbox = yield* CodeSandbox;
+  const script = { source: input.code, title: input.title ?? null };
+  // The files its calls attached, in the order their results committed:
+  // they reach the model on the script's own result.
+  const files: ToolFileAttachment[] = [];
+  const toolCall = (op: ScriptOp) =>
+    Effect.flatMap(scriptCalls.call(op, script), (settled) => {
+      for (const attached of settled.attachments)
+        if (attached.content.kind === 'base64')
+          files.push({
+            path: attached.path,
+            mimeType: attached.mimeType,
+            ...(attached.description !== undefined && {
+              description: attached.description,
+            }),
+            base64Data: attached.content.data,
+          });
+      return settlementOf(settled.result);
+    });
+  // The tools that are also globals, by the op name a global issues.
+  const globals = new Map(
+    scriptCalls.globals.map((global) => [`${global.tool}()`, global]),
+  );
   const outcome = yield* sandbox
     .run({
       source: input.code,
       tools: scriptCalls.catalog.map(({ definition }) => definition.name),
-      globals: [SEARCH_TOOLS, DESCRIBE_TOOL],
+      globals: [
+        SEARCH_TOOLS,
+        DESCRIBE_TOOL,
+        ...scriptCalls.globals.map(({ tool }) => tool),
+      ],
       timeout: Duration.millis(input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       call: (op: ScriptOp) => {
         if (op.seq >= SCRIPT_CALL_LIMIT)
@@ -163,14 +196,29 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
             name: 'CallLimit',
             message: `A script may issue at most ${SCRIPT_CALL_LIMIT} calls.`,
           });
+        const global = globals.get(op.name);
+        if (global !== undefined) {
+          // `agent(prompt, opts)` is `tools.agent({ ...opts, prompt })`: the
+          // call is the tool's, recorded as the tool's.
+          const [first, rest] = Array.isArray(op.input) ? op.input : [];
+          if (rest != null && (typeof rest !== 'object' || Array.isArray(rest)))
+            return Effect.succeed<ScriptSettlement>({
+              _tag: 'Failure',
+              name: 'TypeError',
+              message: `${global.tool}() takes an options object as its second argument.`,
+            });
+          return toolCall({
+            ...op,
+            name: global.tool,
+            input: { ...rest, [global.positional]: first },
+          });
+        }
         return op.name.endsWith('()')
           ? Effect.flatMap(
               scriptCalls.answer(op, () => answerOf(op, scriptCalls.catalog)),
               (result) => settlementOf(result, op),
             )
-          : Effect.flatMap(scriptCalls.call(op), (result) =>
-              settlementOf(result),
-            );
+          : toolCall(op);
       },
       onLog: (lines) =>
         Effect.sync(() => hooks?.onToolOutput?.(`${lines.join('\n')}\n`)),
@@ -205,10 +253,15 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           `Log (last ${logs.length} lines${logsOmitted > 0 ? `, ${logsOmitted} earlier omitted` : ''}):`,
           ...logs,
         ];
-  return executed(
-    [`The script returned:`, shown(value), ...log].join('\n'),
-    input.title == null ? 'Script finished' : `Script finished: ${input.title}`,
-  );
+  return {
+    ...executed(
+      [`The script returned:`, shown(value), ...log].join('\n'),
+      input.title == null
+        ? 'Script finished'
+        : `Script finished: ${input.title}`,
+    ),
+    ...(files.length > 0 && { files }),
+  };
 });
 
 /** What every `script` description says, before the declarations. */
@@ -219,6 +272,7 @@ const SURFACE = [
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
+    '- `agent(prompt, opts)`, when you are offered `agent`, is `tools.agent({ prompt, ...opts })`: it runs a named agent, waits for it, and resolves to its result `{ response | outputs, structured, outcome, cost }` rather than `{ output, summary }`. It rejects with an Error named `AgentFailed`, `TimedOut` or `Skipped`.',
     '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',

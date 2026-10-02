@@ -18,6 +18,20 @@ export const BaseProposalFieldsSchema = z.object({
   memories: z.array(z.string()).prefault([]),
   /** Working directory override (e.g. a git worktree path). */
   workingDirectory: z.string().nullish(),
+  /**
+   * The script whose `agent` calls one request approves together: its
+   * title, its source, and the calls it had issued when it asked. The
+   * proposal's other fields are its first `agent` call's.
+   */
+  script: z
+    .strictObject({
+      title: z.string().nullable(),
+      source: z.string(),
+      calls: z.array(
+        z.strictObject({ toolName: z.string(), preview: z.string() }),
+      ),
+    })
+    .nullish(),
 });
 
 const FileFieldsSchema = z.object(requiredFileListFields);

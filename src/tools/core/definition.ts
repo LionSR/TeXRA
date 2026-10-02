@@ -54,6 +54,10 @@ export type DefineToolOptions<T, R = never> = {
   guard?: ToolGuard<T, NoInfer<R>>;
   execute: ToolExecute<T, R>;
   parallelSafe?: boolean;
+  /** See {@link ITool.ownsConcurrency}. */
+  ownsConcurrency?: boolean;
+  /** See {@link ITool.scriptGlobal}. */
+  scriptGlobal?: ITool['scriptGlobal'];
   /** See {@link ITool.replay}; omitted is `'unsafe'`. */
   replay?: ITool['replay'];
   requiresApproval?: ITool['requiresApproval'];
@@ -96,6 +100,10 @@ export function defineTool<T, R = never>(
       }),
     },
     parallelSafe: def.parallelSafe,
+    ...(def.ownsConcurrency !== undefined && {
+      ownsConcurrency: def.ownsConcurrency,
+    }),
+    ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),
     replay: def.replay,
     requiresApproval: def.requiresApproval,
     slow: def.slow,

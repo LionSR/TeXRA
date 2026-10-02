@@ -26,6 +26,7 @@ import type {
 import { AgentCategory } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
+  DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RunLedgerRefused } from '@shared/session/runLedger';
@@ -42,7 +43,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import { executeSubagent } from './subagentRun';
+import { executeSubagent, type ApprovalMeta } from './subagentRun';
 
 /** Invocation capabilities required by a delegation tool after its entry check. */
 export interface DelegationParent extends ToolCallShape {
@@ -182,15 +183,21 @@ interface DelegationProposalDecision {
   readonly childApproval: DelegatedChildApproval;
 }
 
-/** Request the shared proposal decision, honoring the run's bypass policy. */
+type ProposalRequestError =
+  | DatabaseNotOwner
+  | DatabaseReadFailed
+  | DatabaseWriteFailed
+  | RunLedgerRefused;
+
+/** Request the shared proposal decision, honoring the run's bypass policy.
+ *  `ask` presents it in place of this call's own proposal request: the
+ *  calls of one script share one request (`agent`). */
 export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: WorkflowAgentProposal | ToolUseAgentProposal,
     parent: DelegationParent,
-  ): Effect.fn.Return<
-    DelegationProposalDecision,
-    DatabaseNotOwner | DatabaseWriteFailed | RunLedgerRefused
-  > {
+    ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
+  ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId } = parent.run;
     const decision = decideProposalApproval({
       policy: session.approvalPolicy,
@@ -221,6 +228,8 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       case 'present':
         break;
     }
+    if (ask !== undefined)
+      return { result: yield* ask, childApproval: 'inherit' };
 
     // A call made under a run opens its requests through the loop's door.
     const { requests } = parent;
@@ -236,27 +245,36 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   },
 );
 
+/** How an approved delegation launches: the proposal with the agent and
+ *  model the approval settled on, and how it was approved. */
+interface ApprovedDelegation {
+  readonly proposal: WorkflowAgentProposal | ToolUseAgentProposal;
+  readonly approvalMeta: ApprovalMeta;
+}
+
 /**
- * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
- *
- * If proposal bypass is active for this stream, skips the proposal and launches immediately.
- * Otherwise, waits for user approval via the session's host interactions.
+ * The proposal-or-bypass decision every delegation takes, and the agent and
+ * model an approval changed, re-checked against the live lists: a declined
+ * or unusable approval is the call's result, an approval is what launches.
+ * A request the calls of one script share (`ask`) approves the script, not
+ * one call's agent or model, so it changes neither.
  */
-export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
+export const decideDelegation = Effect.fn('decideDelegation')(function* (
   parent: DelegationParent,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+  ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
 ) {
-  const decision = yield* requestDelegationProposal(proposal, parent);
-  const { runId } = parent.run;
+  const decision = yield* requestDelegationProposal(proposal, parent, ask);
   if (decision.childApproval !== 'inherit') {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
-    return yield* executeSubagent(parent, proposal, runId, {
+    return {
+      proposal,
       approvalMeta: {
         autoApproved: true,
         childApproval: decision.childApproval,
       },
-    });
+    } satisfies ApprovedDelegation;
   }
 
   const { result } = decision;
@@ -279,8 +297,9 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   // model fails synchronously here instead of launching and then failing
   // asynchronously. Re-selecting the proposed model needs no re-check — it was
   // already resolved when the proposal was built.
+  const changes = ask === undefined;
   let modelOverride: string | undefined;
-  if (result.model && result.model !== proposal.model) {
+  if (changes && result.model && result.model !== proposal.model) {
     const modelExit = yield* Effect.exit(
       selectAvailableDelegationModel({
         requestedModel: result.model,
@@ -300,7 +319,9 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   }
 
   const agentOverride =
-    result.agent && result.agent !== proposal.agent ? result.agent : undefined;
+    changes && result.agent && result.agent !== proposal.agent
+      ? result.agent
+      : undefined;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
         yield* resolveDelegationScopeAgents(
@@ -325,17 +346,17 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
     );
   }
 
-  const effective = {
-    ...proposal,
-    ...(modelOverride && { model: modelOverride }),
-    // Carry the override's resolved source alongside its name so launch pins
-    // the exact entry the re-validation just resolved.
-    ...(resolvedAgentOverride && {
-      agent: resolvedAgentOverride.name,
-      agentSource: resolvedAgentOverride.source,
-    }),
-  };
-  return yield* executeSubagent(parent, effective, runId, {
+  return {
+    proposal: {
+      ...proposal,
+      ...(modelOverride && { model: modelOverride }),
+      // Carry the override's resolved source alongside its name so launch
+      // pins the exact entry the re-validation just resolved.
+      ...(resolvedAgentOverride && {
+        agent: resolvedAgentOverride.name,
+        agentSource: resolvedAgentOverride.source,
+      }),
+    },
     approvalMeta: {
       autoApproved: false,
       ...(modelOverride && {
@@ -347,5 +368,22 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
         requestedAgent: proposal.agent,
       }),
     },
+  } satisfies ApprovedDelegation;
+});
+
+/**
+ * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
+ *
+ * If proposal bypass is active for this stream, skips the proposal and launches immediately.
+ * Otherwise, waits for user approval via the session's host interactions.
+ */
+export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
+  parent: DelegationParent,
+  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
+) {
+  const decided = yield* decideDelegation(parent, proposal);
+  if ('status' in decided) return decided;
+  return yield* executeSubagent(parent, decided.proposal, parent.run.runId, {
+    approvalMeta: decided.approvalMeta,
   });
 });

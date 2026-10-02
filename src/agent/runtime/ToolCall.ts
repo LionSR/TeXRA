@@ -33,6 +33,12 @@ export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
   }
 }
 
+/** The program a `script` call runs, as its call's arguments carry it. */
+export interface ScriptSource {
+  readonly source: string;
+  readonly title: string | null;
+}
+
 /**
  * How a `script` call's guest reaches the run's tools: through the run
  * loop's per-call program, which commits each call's rows (`script.call`,
@@ -46,10 +52,21 @@ export interface ScriptCalls {
     readonly definition: ToolDefinition;
     readonly plugin: string;
   }[];
-  /** Settles one issued call, at its `tool.result` commit. */
+  /** The tools of the catalog that are also script globals, taking their
+   *  `positional` field first (`ITool.scriptGlobal`). */
+  readonly globals: readonly {
+    readonly tool: string;
+    readonly positional: string;
+  }[];
+  /** Settles one issued call, at its `tool.result` commit: its result and
+   *  the attachment bytes that commit captured. */
   readonly call: (
     op: ScriptOp,
-  ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
+    script: ScriptSource,
+  ) => Effect.Effect<
+    Pick<ToolResultPayload, 'result' | 'attachments'>,
+    ScriptDiverged | InvokeError
+  >;
   /**
    * Settles one call of the script's own host functions (`searchTools`,
    * `describeTool`) with `answer`, which reads nothing but {@link catalog}.
@@ -62,6 +79,30 @@ export interface ScriptCalls {
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;
+}
+
+/**
+ * What a call a script issued knows of that script: what a person is shown
+ * of it, and what the script's calls share for as long as it runs here.
+ */
+export interface ScriptScope extends ScriptSource {
+  /** The `script` call that issued this one. */
+  readonly callId: string;
+  /** The calls the script has issued so far, this one included, in issue
+   *  order, as their `script.call` rows record them. */
+  readonly calls: Effect.Effect<
+    readonly { readonly toolName: string; readonly input: unknown }[]
+  >;
+  /**
+   * The value the script's calls share under `key`: the first call to ask
+   * makes it, and every later one, concurrent or not, gets what that made
+   * (its failure included). Held in memory for the script's run in this
+   * process; what must outlive a restart is made from rows.
+   */
+  readonly shared: <A, E, R>(
+    key: string,
+    make: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
 }
 
 /**
@@ -90,6 +131,12 @@ export interface ToolCallShape {
   /** The roots of the workspace the call works on: the run's session roots. */
   readonly roots: WorkspaceRoots;
   readonly toolCallId?: string;
+  /** The response whose call this is; a script's calls are its script's.
+   *  A provider's call ids are unique within one response only. */
+  readonly responseId?: string;
+  /** The intent attempt this execution of the call runs under: 1, then one
+   *  more for each re-run a resume admitted. Absent outside a run. */
+  readonly attempt?: number;
   readonly workingDirectory?: string;
   /** The read-only roots the step that offered the call admits: the skill
    *  directories it lists or its user activated. None outside a run. */
@@ -105,6 +152,8 @@ export interface ToolCallShape {
   /** The calls a script may issue, built on the first `yield*`; absent
    *  outside a run's dispatch and for a call a script issued. */
   readonly scriptCalls?: Effect.Effect<ScriptCalls>;
+  /** The script that issued this call; absent for a call a response issued. */
+  readonly script?: ScriptScope;
   /** Where the call's requests open: present exactly when {@link run} is. */
   readonly requests?: CallRequests;
   /**
