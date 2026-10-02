@@ -1,5 +1,5 @@
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -32,7 +32,7 @@ export function prefixFingerprint(
       );
     },
   );
-  return createHash('sha256').update(encoded, 'utf8').digest('hex');
+  return hash('sha256', encoded, 'hex');
 }
 
 /**

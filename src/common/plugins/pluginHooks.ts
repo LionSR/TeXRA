@@ -7,7 +7,7 @@
 // `./hookProtocol`.
 
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -216,9 +216,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
         path: real ?? word,
         sha256:
           info?.type === 'File' && real !== undefined
-            ? createHash('sha256')
-                .update(yield* fs.readFile(real))
-                .digest('hex')
+            ? hash('sha256', yield* fs.readFile(real), 'hex')
             : null,
       });
     }
@@ -327,12 +325,13 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(`${hook.timeoutSeconds} seconds`),
-    Effect.map((ended): HookRun =>
-      Option.getOrElse(ended, () => ({
-        kind: 'timeout' as const,
-        stdout: '',
-        stderr: '',
-      })),
+    Effect.map(
+      (ended): HookRun =>
+        Option.getOrElse(ended, () => ({
+          kind: 'timeout' as const,
+          stdout: '',
+          stderr: '',
+        })),
     ),
     Effect.catch((error) =>
       Effect.succeed({
