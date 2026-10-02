@@ -1,23 +1,12 @@
 /**
  * Reads and live inputs over a run's transcript working state: live text
- * chunks, compaction settlement, the activity flags, and the run model's
- * inputs.
+ * chunks, compaction settlement, and the activity flags.
  */
-import {
-  type TaskGroup,
-  type TextChunk,
-  type WorkflowDeclaredPlan,
-} from '@shared/schemas';
+import { type TextChunk } from '@shared/schemas';
 import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
-import {
-  streamingTextRow,
-  toolRow,
-  transcriptText,
-  type TranscriptRow,
-  type TranscriptRowKind,
-} from '@ui/transcript';
+import { streamingTextRow, toolRow, transcriptText } from '@ui/transcript';
 import { appendTranscriptText } from '@ui/transcript/transcriptText';
 
 import {
@@ -145,52 +134,5 @@ export function transcriptActivity(transcript: TranscriptView): {
     compactingActive: compactionState.blocks.some(
       (block) => block.status === 'running',
     ),
-  };
-}
-
-/** Canonical dashboard rows a workflow-script run model reads. */
-const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
-  'compactionActivity',
-  'phase',
-  'workflowTask',
-]);
-
-/** Residency cap on one run model's dashboard rows (PRD 5.2). */
-const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
-
-/**
- * The run model's inputs (PRD 5.2, section 4 of the build note): the newest
- * dashboard rows up to the cap, the phase groups those rows still name (a
- * phase whose every card fell off the cap is not shown), and the newest plan.
- */
-export function runModelInputs(transcript: TranscriptView): {
-  rows: TranscriptRow[];
-  taskGroups: TaskGroup[];
-  plan: WorkflowDeclaredPlan | undefined;
-  workflowAttemptId: string | undefined;
-} {
-  const { plan, workflowAttemptId } = indexesOf(transcript);
-  const dashboard = transcript.rows.filter((row) =>
-    WORKFLOW_DASHBOARD_KINDS.has(row.kind),
-  );
-  const rows =
-    dashboard.length > MAX_RUN_MODEL_DASHBOARD_ROWS
-      ? dashboard.slice(-MAX_RUN_MODEL_DASHBOARD_ROWS)
-      : dashboard;
-  if (rows.length === dashboard.length) {
-    return { rows, taskGroups: transcript.taskGroups, plan, workflowAttemptId };
-  }
-  const retainedPhaseIds = new Set<string>();
-  for (const row of rows) {
-    if (row.kind === 'phase') retainedPhaseIds.add(row.id);
-    else if (row.groupId !== undefined) retainedPhaseIds.add(row.groupId);
-  }
-  return {
-    rows,
-    taskGroups: transcript.taskGroups.filter(
-      (group) => group.kind !== 'phase' || retainedPhaseIds.has(group.id),
-    ),
-    plan,
-    workflowAttemptId,
   };
 }

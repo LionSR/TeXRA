@@ -254,7 +254,7 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
  *    redundant only when the header is that command; for any other tool the
  *    dump's `command` is a sub-command name (`list`), never worth a block.
  *
- * A file body (`file` language), a workflow script, and every labeled section
+ * A file body (`file` language), a script, and every labeled section
  * carry content of their own and always paint.
  */
 function isHeaderRedundantSection(

@@ -3,19 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
 
 describe('parseDelegationToolInput', () => {
-  it('routes delegate_agent to a tool-use proposal', () => {
+  it('routes an agent call without input files to a tool-use proposal', () => {
     const proposal = parseDelegationToolInput(
-      { agent: 'orchestrator', instruction: 'do it' },
-      'delegate_agent',
+      { agentName: 'orchestrator', prompt: 'do it' },
+      'agent',
     );
     expect(proposal?.agentCategory).toBe(AgentCategory.ToolUse);
     expect(proposal?.agent).toBe('orchestrator');
   });
 
-  it('routes delegate_workflow to a workflow proposal', () => {
+  it('routes an agent call with input files to a workflow proposal', () => {
     const proposal = parseDelegationToolInput(
-      { agent: 'correct', instruction: 'fix', inputFiles: ['paper.tex'] },
-      'delegate_workflow',
+      { agentName: 'correct', prompt: 'fix', inputFiles: ['paper.tex'] },
+      'agent',
     );
     expect(proposal?.agentCategory).toBe(AgentCategory.Workflow);
     if (proposal?.agentCategory === AgentCategory.Workflow) {
@@ -26,12 +26,13 @@ describe('parseDelegationToolInput', () => {
   it('maps extractFigures / extractTikz shorthand into toolConfig', () => {
     const proposal = parseDelegationToolInput(
       {
-        agent: 'correct',
-        instruction: 'fix',
+        agentName: 'correct',
+        prompt: 'fix',
+        inputFiles: ['paper.tex'],
         extractFigures: true,
         extractTikz: false,
       },
-      'delegate_workflow',
+      'agent',
     );
     expect(proposal?.agentCategory).toBe(AgentCategory.Workflow);
     if (proposal?.agentCategory === AgentCategory.Workflow) {

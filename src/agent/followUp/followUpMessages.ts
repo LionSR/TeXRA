@@ -1,19 +1,16 @@
-import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   deliveryTagOf,
-  formatWorkflowScriptDeliverySummary,
-  parseWorkflowScriptDeliverySummary,
+  SUMMARIZED_TAGS,
+  formatScriptDeliverySummary,
+  parseScriptDeliverySummary,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import type {
-  FollowUpContent,
-  WorkflowScriptDeliverySummary,
-} from '@shared/schemas';
+import type { FollowUpContent, ScriptDeliverySummary } from '@shared/schemas';
 
 interface FollowUpDisplay {
   readonly text: string;
   /** Typed workflow delivery facts logged beside the collapsed row text. */
-  readonly workflowSummary?: WorkflowScriptDeliverySummary;
+  readonly scriptSummary?: ScriptDeliverySummary;
 }
 
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
@@ -26,18 +23,17 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   }
   // This is where a delivery envelope becomes a transcript row: parse the
   // workflow summary once here and carry it structured, so renderers never
-  // re-extract it from the rendered text. Only the workflow envelopes own a
-  // `<workflow-summary>` element — other tags' bodies are entity-escaped.
+  // re-extract it from the rendered text. Only the script envelopes own a
+  // `<script-summary>` element — other tags' bodies are entity-escaped.
   const tag = deliveryTagOf(followUp.text);
-  const workflowSummary =
-    tag === DELIVERY_TAG.workflowScriptResult ||
-    tag === DELIVERY_TAG.workflowScriptError
-      ? parseWorkflowScriptDeliverySummary(followUp.text)
+  const scriptSummary =
+    tag !== undefined && SUMMARIZED_TAGS.has(tag)
+      ? parseScriptDeliverySummary(followUp.text)
       : undefined;
-  if (workflowSummary) {
+  if (scriptSummary) {
     return {
-      text: formatWorkflowScriptDeliverySummary(workflowSummary),
-      workflowSummary,
+      text: formatScriptDeliverySummary(scriptSummary),
+      scriptSummary,
     };
   }
   return { text: summarizeSubagentFollowup(followUp.text) };

@@ -663,10 +663,23 @@ export const createHostRunActions = (
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-        return yield* nativeAgentRun(runId, 'restore').pipe(
+        const config = yield* nativeAgentRun(runId, 'restore').pipe(
           Effect.tap(() => guard.hold(runId)),
           Effect.scoped,
         );
+        // A background script's run has no instruction of its own: its
+        // setup is the parent's agent asked to run the script again.
+        const script =
+          config.agentCategory === AgentCategory.ToolUse
+            ? config.backgroundScript
+            : null;
+        const code = script?.input.code;
+        return script == null || typeof code !== 'string'
+          ? config
+          : {
+              ...config,
+              instruction: `Run this script (${script.title}):\n\n\`\`\`js\n${code}\n\`\`\``,
+            };
       }),
     };
   });

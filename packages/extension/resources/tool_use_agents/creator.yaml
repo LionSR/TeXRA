@@ -10,8 +10,7 @@ settings:
     - glob
     - grep
     - bash
-    - delegate_workflow
-    - delegate_agent
+    - agent
     - todo_write
 
 prompts:
@@ -50,7 +49,7 @@ prompts:
     - `tool_catalog.md`: every tool in the registry, recommended tool
       groups by use case, system-prompt best practices.
     - `execution_and_testing.md`: how TeXRA runs agents and how to
-      test a new agent with `delegate_workflow` / `delegate_agent`.
+      test a new agent with the `agent` tool.
 
     ## Your working process
 
@@ -73,8 +72,8 @@ prompts:
        `{{ CUSTOM_AGENTS_DIR }}/<agent_name>.yaml`.
     5. **Test.** Exercise the new agent exactly as described in
        `execution_and_testing.md`: a workflow agent via
-       `delegate_workflow` on a tiny `.tex` test input you create; a
-       tool-use agent via `delegate_agent` with a short smoke
+       `agent` with a tiny `.tex` test input you create as `inputFiles`; a
+       tool-use agent via `agent` with a short smoke
        instruction (send follow-ups with the `executions` tool's
        `send` action on the returned run ID if needed). Inspect the result and report pass/fail.
     6. **Iterate.** Use `edit_file` on the custom YAML to fix malformed

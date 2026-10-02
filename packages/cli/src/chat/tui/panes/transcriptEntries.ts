@@ -128,7 +128,6 @@ const ROW_KIND_IS_WIDGET = {
   log: false,
   phase: false,
   user: false,
-  workflowTask: false,
   contextManagement: true,
   fileList: true,
   latexdiff: true,

@@ -87,7 +87,7 @@ import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_OPTIONS,
+  texraApprovalPolicyLabel,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
@@ -590,10 +590,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
-    const policyLabel =
-      TEXRA_APPROVAL_POLICY_OPTIONS.find((option) => option.value === policy)
-        ?.label ?? policy;
-    const policyLine = `Approval policy: ${policyLabel} — ${formatTexraApprovalPolicy(policy)}`;
+    const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
     const { cost, inputTokens, outputTokens } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {

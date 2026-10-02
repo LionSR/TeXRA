@@ -5,7 +5,7 @@
  */
 
 // Local imports
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -93,20 +93,13 @@ export const MANIFEST = [
   },
   {
     id: 'memory-workflow',
-    toolNames: [
-      'memory',
-      'todo_write',
-      'delegate_workflow',
-      'delegate_agent',
-      'executions',
-      'accept_run_files',
-    ],
+    toolNames: ['memory', 'todo_write', 'executions', 'accept_run_files'],
     injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
     promptSection: true,
-    name: 'Memory, Tasks & Delegation',
+    name: 'Memory & Tasks',
     category: 'workflow',
     description:
-      'Persistent memory across sessions, task tracking with to-do lists, and delegate work to sub-agents.',
+      'Persistent memory across sessions, task tracking with to-do lists, and the executions view of the runs an agent launched.',
   },
   {
     // The `plan` tool owns planning and the goal lifecycle (update, pause,
@@ -237,16 +230,18 @@ export const MANIFEST = [
   },
   {
     id: 'workflow-script',
-    toolNames: [DELEGATE_MULTI_AGENTS_TOOL_NAME],
+    toolNames: [AGENT_TOOL_NAME],
     name: 'Multi-Agent Workflow',
     category: 'workflow',
     description:
-      'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
+      'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
     setup: Object.freeze({
       configNotes:
-        'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
+        'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
     }),
     toggleable: true,
+    // The one delegation tool: the built-in orchestrators need it.
+    onByDefault: true,
     availability: ALWAYS_AVAILABLE,
     skills: true,
   },
@@ -401,6 +396,19 @@ export const MANIFEST = [
     description:
       'Review annotations, PDF viewing, user questions, and Loogle search.',
     hidden: true,
+  },
+  {
+    // The `script` tool: a program that calls the run's other tools. An
+    // agent gets it only if its configuration names it; its session layer is
+    // the code sandbox the scripts run in.
+    id: 'codemode',
+    toolNames: ['script'],
+    name: 'Code Mode',
+    category: 'workflow',
+    description:
+      "Run a JavaScript program that calls the agent's other tools, resuming after an interruption without running finished calls again.",
+    hidden: true,
+    sessionLayer: true,
   },
   {
     // The onboarding agent's narrow set, one responsibility per tool (see the

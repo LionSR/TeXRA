@@ -1,6 +1,5 @@
-// Regression coverage for `executeSubagent`'s child run launch: it refuses to
-// start a child when the parent run context carries no session, and it reports
-// a detached run-loop rejection through the `childRunLoop` channel log.
+// Regression coverage for `launchDetachedSubagent`'s child run launch: it
+// reports a detached run-loop rejection through the `childRunLoop` channel log.
 
 import { it } from '@effect/vitest';
 import { Effect, Scope } from 'effect';
@@ -18,7 +17,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import type { DelegationParent } from '@tools/delegation/proposalFlow';
+import type { RunToolCall } from '@tools/core/toolRun';
 
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
@@ -46,7 +45,7 @@ vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
 }));
 
-// `executeSubagent` registers through `registerRun`; route the spy through it.
+// `launchDetachedSubagent` registers through `registerRun`; route the spy through it.
 vi.mock('@agent/storage/runLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/runLifecycle')>();
@@ -60,9 +59,9 @@ vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: vi.fn(),
 }));
 
-import { executeSubagent } from '@tools/delegation/subagentRun';
+import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 
-describe('executeSubagent child run launch', () => {
+describe('launchDetachedSubagent child run launch', () => {
   const orchestratorRunId = 'orchestrator-stream' as RunId;
 
   const defaultPayload = {
@@ -71,9 +70,13 @@ describe('executeSubagent child run launch', () => {
     agentCategory: 'toolUse',
   } as never;
 
-  const parent: DelegationParent = {
+  const parent: RunToolCall = {
     roots: createFakeWorkspaceRoots(),
     tracker: new FileInteractionState(),
+    requests: {
+      nextId: (prefix: string) => prefix,
+      open: () => Effect.die(new Error('This fixture opens no request.')),
+    },
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
@@ -93,9 +96,12 @@ describe('executeSubagent child run launch', () => {
 
   function runDefaultSubagent() {
     return Effect.provide(
-      executeSubagent(parent, defaultPayload, orchestratorRunId).pipe(
-        Effect.provideService(Runs, testRunRegistry()),
-      ),
+      launchDetachedSubagent(parent, defaultPayload, {
+        parentRunId: orchestratorRunId,
+        runId: 'child-run' as RunId,
+        parentOffered: [],
+        inheritChildRunApprovals: () => undefined,
+      }).pipe(Effect.provideService(Runs, testRunRegistry())),
       fakeProcessServices(),
     );
   }

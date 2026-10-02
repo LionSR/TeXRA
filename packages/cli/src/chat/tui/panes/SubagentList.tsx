@@ -6,10 +6,9 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
-import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
@@ -59,7 +58,7 @@ export function RowSegment({
   );
 }
 
-export function ApprovalSegments({
+function ApprovalSegments({
   approval,
   bold,
   color,
@@ -121,13 +120,10 @@ function SessionRow({
     : undefined;
   const summary = run.description;
   const color = CHILD_TONE_COLOR[run.tone];
-  // A workflow's children are its calls' attempts, a retry included, so its
-  // count is the run model's tally of calls — the one the popup shows.
-  const workflowTally = run.transcript.run?.tally;
-  let rollup: string | undefined;
-  if (workflowTally) rollup = formatWorkflowTally(workflowTally);
-  else if (!expanded && run.rollup.total > 0)
-    rollup = `${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished`;
+  const rollup =
+    !expanded && run.rollup.total > 0
+      ? `${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished`
+      : undefined;
   return (
     <Box
       flexDirection="row"
@@ -141,9 +137,7 @@ function SessionRow({
       </Text>
       <Text aria-hidden color={color}>
         {'  '.repeat(depth)}
-        {run.category !== AgentCategory.Workflow && run.childIds.length > 0
-          ? `${expanded ? '▾' : '▸'} `
-          : '  '}
+        {run.childIds.length > 0 ? `${expanded ? '▾' : '▸'} ` : '  '}
         {CHILD_STATUS_MARKER}
       </Text>
       <RowSegment bold={active} color={color} flexShrink={1}>

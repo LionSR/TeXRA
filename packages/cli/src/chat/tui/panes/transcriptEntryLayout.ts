@@ -21,10 +21,8 @@ import {
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
-import type { WorkflowCallProgress } from '@shared/schemas';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import type { TranscriptRow, TranscriptRowKind } from '@ui/transcript';
-import { WORKFLOW_CALL_STATUS_GLYPH } from '@ui/copy/workflowCall';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -126,21 +124,10 @@ const ROW_GEOMETRY = {
     marginBottomRows: USER_ENTRY_MARGIN_BOTTOM_ROWS,
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
   },
-  workflowTask: {
-    // Two spaces nest the task under the `◆` phase divider that heads it. The
-    // first-line marker is per-status (WORKFLOW_CALL_STATUS_GLYPH), so
-    // `firstPrefix` carries the indent alone and continuation lines add the
-    // marker's own width on top of it.
-    firstPrefix: '  ',
-    continuationPrefix: '    ',
-    inset: 0,
-    marginBottomRows: 0,
-    marginTopRows: 0,
-  },
 } as const satisfies Record<TranscriptRowKind, RowGeometry>;
 
 /** Marker glyph + color per activity status: compaction activity rows and
- *  workflow task groups (whose RunPhase statuses are a subset) share it. */
+ *  task groups (whose RunPhase statuses are a subset) share it. */
 export const COMPACTION_ACTIVITY_STATUS_STYLE = {
   running: { marker: STATUS_DOT, color: COLOR_HINT },
   completed: { marker: TICK, color: COLOR_SUCCESS },
@@ -152,19 +139,6 @@ export const COMPACTION_ACTIVITY_STATUS_STYLE = {
   CompactionActivityStatus,
   { readonly marker: string; readonly color: string | undefined }
 >;
-
-/** Colour per call status; the glyph beside it is the shared
- *  `WORKFLOW_CALL_STATUS_GLYPH`, read directly wherever a row is painted. */
-export const WORKFLOW_TASK_STATUS_COLOR = {
-  declared: COLOR_BORDER,
-  queued: undefined,
-  running: COLOR_HINT,
-  completed: COLOR_SUCCESS,
-  cached: COLOR_SUCCESS,
-  skipped: COLOR_BORDER,
-  cancelled: COLOR_BORDER,
-  failed: COLOR_ERROR,
-} as const satisfies Record<WorkflowCallProgress['status'], string | undefined>;
 
 export interface TranscriptEntryLayout {
   readonly columns: number;
@@ -325,18 +299,6 @@ function entryLines(
           columns,
           ROW_GEOMETRY.phase.firstPrefix,
           ROW_GEOMETRY.phase.continuationPrefix,
-        ),
-        ...body,
-      ];
-    case 'workflowTask':
-      // The status marker belongs to the layout, not the Ink row: the print-once
-      // scrollback snapshot is built from these lines.
-      return [
-        ...wrapWithPrefix(
-          headline,
-          columns,
-          `${ROW_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_CALL_STATUS_GLYPH[row.call.status]} `,
-          ROW_GEOMETRY.workflowTask.continuationPrefix,
         ),
         ...body,
       ];

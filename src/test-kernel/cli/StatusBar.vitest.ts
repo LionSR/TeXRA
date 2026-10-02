@@ -191,14 +191,14 @@ describe('CLI StatusBar display model', () => {
       ...input,
       approvalPolicy: 'never',
     });
-    expect(leftTexts(deny)).toEqual(['◆', 'Idle', 'never']);
+    expect(leftTexts(deny)).toEqual(['◆', 'Idle', 'Block']);
     expect(deny.left.at(-1)).toMatchObject({ color: 'yellow' });
 
     const yolo = renderBar({
       ...input,
       approvalPolicy: 'yolo',
     });
-    expect(leftTexts(yolo)).toEqual(['◆', 'Idle', 'auto-approve']);
+    expect(leftTexts(yolo)).toEqual(['◆', 'Idle', 'Auto-approve']);
     expect(yolo.left.at(-1)).toMatchObject({ color: 'red' });
   });
 

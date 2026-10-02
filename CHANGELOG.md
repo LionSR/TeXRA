@@ -160,17 +160,22 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
-- **Multi-agent workflow scripts are written in a new form** — a lead's
-  script now writes `yield* agent(...)` and `yield* all([...])` instead of
-  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
-  and `timeout()` around any call. A failed call no longer comes back as an
-  empty result: inside `all()` it stops the other tasks and fails the step,
-  unless the script wraps each task in `attempt()` to keep the ones that
-  succeeded. A retried step reuses the calls it already finished instead of
-  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
-  old form stop with a message saying how to rewrite them; calls they already
-  completed are reused once the lead reruns the rewritten script under the
-  same name.
+- **`delegate_agent`, `delegate_workflow` and `delegate_multi_agents` are
+  gone; `agent` and `script` replace them.** `agent` runs any named agent,
+  workflow or tool-use, with the options of both old delegation tools
+  (`agentName` and `prompt` instead of `agent` and `instruction`). A
+  multi-agent workflow is now a `script` whose `await agent(...)` calls
+  fan out and join in plain JavaScript (`Promise.all`, `try`/`catch`, loops);
+  there are no saved script files, `scriptPath`, `args`, `files`,
+  `yield*` helpers or per-call Restart. The built-in assistant,
+  orchestrator, engineer, Lean orchestrator, creator and setup agents use
+  the new tools, and the multi-agent orchestration skill and the guide are
+  rewritten for scripts. **A custom agent that still lists a removed tool no
+  longer starts**: TeXRA names the tool and the agent's file so you can
+  change it to `agent` (or `script` with `agent`). A customized copy of a
+  changed built-in agent shows the usual "newer built-in" notice. The
+  Multi-Agent Workflow switch now holds `agent`, so it is on by default; if
+  you had switched it off, switch it back on to let agents delegate.
 - **Workflow agents no longer continue a response cut off by the output
   limit** — a round whose response hits the model's max output tokens keeps
   what the model wrote and processes it as that round's output, and warns
@@ -233,6 +238,84 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`script` tool (code mode, first stage).** An agent whose configuration
+  lists `script` can run one JavaScript program that calls its other tools as
+  `await tools.read_file({ path })`, with `Promise.all`, try/catch,
+  `phase(title)` and `console.log`. The program runs in a QuickJS sandbox on
+  a worker thread. Every call it makes is an ordinary tool call, with the
+  same hooks, approvals and card, nested under the script's stage. If the
+  run is interrupted, the script runs again from the top on resume: calls
+  that finished are handed back from the run's history instead of running
+  twice, and a call that was in flight follows the usual rules (re-run when
+  it is safe, otherwise ask).
+- **The `script` tool lists your tools as TypeScript, and finds the rest.**
+  Its description declares each tool the agent lists as a typed function
+  (`read_file(args: { path: string; … }): Promise<ToolOutput>`, a union of
+  branches for a tool with commands), with the first sentence of its
+  description. The text is written once when the run's system text is, so
+  switching a plugin on or off mid-run no longer changes it; the model is
+  told in one line and can call the new tool at once. Inside a script,
+  `searchTools(query)` ranks every tool the run can call, MCP and plugin tools
+  included, and `describeTool(name)` returns a tool's full declaration with
+  each field's description. Both answers are recorded, so a resumed script
+  gets the same ones.
+- **`agent` tool (code mode, second stage).** One tool runs a named agent as
+  a child run, with the options of `delegate_agent`, `delegate_workflow` and
+  a workflow script's `agent()` together; the agent you name decides which
+  apply. In a script, `agent(prompt, opts)` waits for the child and returns
+  its result (`{ response | outputs, structured, outcome, cost }`), or
+  `{ runId }` with `background: true`; a failure rejects as `AgentFailed`,
+  `TimedOut` (`timeoutMs`) or `Skipped` (you stopped the child). Called
+  directly it runs in the background, as a delegation does. A script's
+  `agent` calls share one approval request that shows the script's source,
+  and run at most the child-run budget at once. A completed call is reused,
+  not run again, by a later call in the same run with the same prompt,
+  options and file contents, so a fixed script re-sent by the model does not
+  pay for finished children twice. If the run is interrupted, a call finds
+  the child it launched: a finished child's answer is read back, and one
+  that was cut short continues under its own run instead of starting over.
+  The tool belongs to the Multi-Agent Workflow plugin.
+- **Scripts can run in the background.** `script` with `run_in_background:
+true` returns at once with a run ID, and the script runs as a child run of
+  its own (shown as a Script run) with the same tools, model and working
+  directory. When it ends, the parent receives one follow-up with the
+  script's result and a summary line: how many calls succeeded, failed or
+  were skipped, what its agents cost, how long it took, the files its agents
+  wrote with their line counts, and the cause if it failed. If TeXRA exits
+  or crashes while it runs, resuming that run replays the script from its
+  history: finished calls are not run again, and an agent call that was cut
+  short continues its own child. If you stop it, the parent is told which
+  run to resume. `executions` on the run lists the script's calls by phase,
+  and a one-shot run (`texra run`) still runs the script in the foreground
+  and says so. A completed `agent` call is also reused by the same call in
+  a background script launched by the same run, and the other way round.
+- **The `agent` tool is a delegation tool everywhere.** An agent that offers
+  only `agent` now sees its available agents and models in the system text,
+  counts as an orchestrator, and a script sees what `agent()` resolves to
+  (the child's result, or `{ runId }`) in the tool's declaration instead of
+  `{ output, summary }`.
+- **A script's result carries the files its calls attached**, so an image a
+  nested `read_file` returned reaches the model with the script's answer.
+- **Every host shows a script's calls.** In VS Code and the desktop app, a
+  script's stage lists its calls by `phase()`, with the calls that need a
+  decision, the failed ones and the running ones first; each call says
+  whether it is queued, running, interrupted, finished, reused, skipped, cancelled, failed
+  or not run, with its agent, model, attempt, files, time and cost. An
+  `agent` call opens its child run, **Review** opens the run waiting on you,
+  and **Skip** stops a running call's child (the script gets a `Skipped`
+  error). The calls' full cards fold under **Call details**. In the terminal,
+  **Ctrl-O** opens the same list for the focused run (Enter opens, `s`
+  skips), and `texra run` prints a line per call as it changes. The request a
+  script's first `agent` call opens shows the script's title, source and the
+  calls it made so far. A background script's run offers **Resume** after a
+  stop and **Edit as new task**, which puts its script into the launcher.
+  A script's card is named by its title (else "Script") and shows its source
+  as JavaScript, and the agents a script calls are listed in its stage alone:
+  not among the run's background tasks, and not as "Subagent started" lines
+  in the parent's transcript. On a run whose process stopped,
+  a call that had not finished reads as interrupted until you resume it,
+  with no Skip and no spinner on the script's card. A call's agent and model
+  stay readable beside **Skip**, and drop under the call on a narrow panel.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your
@@ -425,6 +508,13 @@ show` print the same notice, and the new `texra agents customize`,
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **Adding an API key or enabling an agent mid-run no longer breaks the
+  prompt cache.** The agents and models a delegating agent can use were
+  rewritten into its delegation tools' descriptions at every step, so any
+  change re-sent the whole cached prefix at full price. They are now listed
+  once in the system prompt, and a later change reaches the model as one
+  short message, such as "Models for delegation now available: …".
 
 - **A shell command is named by its description, and a finished background
   command by its result.** The bash tool's `description` (a 5-10 word summary
@@ -1186,6 +1276,16 @@ show` print the same notice, and the new `texra agents customize`,
   them: the error names both candidates and their source-qualified spellings.
 
 #### Bug Fixes
+
+- **`/agent` shows workflows again.** Once teams joined the picker its list
+  overflowed at every terminal height, and the Workflows section with its
+  `texra run <name>` hint was dropped. The picker now scrolls its agents and
+  teams inside the rows left after the Workflows section, which folds to one
+  summary row on short terminals instead of disappearing. The status bar
+  names a Block policy "Block", as `/approval` does, and `/config` names its
+  two agent categories "Subagents" and "Codex and Claude Code". `/approval`
+  shows its auto-approve toggles as unavailable until the chat's run can
+  take the grant, instead of offering toggles that were then refused.
 
 - **Slash-command results no longer read as the model speaking.** In the
   terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)

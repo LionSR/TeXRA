@@ -27,6 +27,7 @@ import {
   type RunSnapshotPayload,
   type RetryErrorInfo,
   type RunUsageTotals,
+  type ScriptCallPayload,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -76,6 +77,7 @@ type RunLedgerDraftType =
   | 'model.message'
   | 'model.compaction'
   | 'tool.intent'
+  | 'script.call'
   | 'tool.binding'
   | 'tool.result'
   | 'model.retry'
@@ -114,12 +116,23 @@ type Settlement = Pick<
   'attempt' | 'disposition' | 'duplicateOf' | 'result' | 'attachments'
 >;
 
+/** A call a `script` call's guest issued, as its `script.call` row recorded
+ *  it, and the commit of its settlement once one is recorded: a resumed
+ *  script is handed its settled calls in that order. */
+type ScriptCall = ScriptCallPayload & {
+  readonly settledAt: CommitOrdinal | null;
+};
+
 type PendingResponse = {
   readonly responseId: string;
   readonly invocation: InvocationRef;
   readonly turn: TurnResult;
   readonly calls: readonly DispatchFacts[];
-  /** Committed settlements by call id, exactly one per settled call. */
+  /** The calls its `script` calls issued, by call id. None enters history:
+   *  the delivering append carries the results of `calls` alone. */
+  readonly scriptCalls: Readonly<Record<string, ScriptCall>>;
+  /** Committed settlements by call id, exactly one per settled call, a
+   *  script's calls included. */
   readonly settled: Readonly<Record<string, Settlement>>;
 };
 
@@ -235,8 +248,6 @@ const IGNORED_ROW_TYPES: Readonly<
   log: true,
   'stage.start': true,
   'stage.end': true,
-  'workflow.plan': true,
-  'workflow.call': true,
   usage: true,
   'context.state': true,
   'stream.start': true,
@@ -246,10 +257,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'followup.closed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
-  // Checkpoint-aggregate rows never reach a run fold; total-record members.
-  'workflow.script': true,
-  'workflow.journal': true,
-  'workflow.attempt': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
@@ -537,6 +544,7 @@ function foldRow(
               invocation: p.invocation,
               turn: p.turn,
               calls: p.calls,
+              scriptCalls: byId([]),
               settled: {},
             },
           });
@@ -603,21 +611,56 @@ function foldRow(
           : {}),
       });
     }
+    case 'script.call': {
+      if (!opened(current)) return beforeOpening(row.type);
+      const p = row.payload;
+      const pending = current.pendingResponse;
+      if (
+        pending === null ||
+        !pending.calls.some((call) => call.callId === p.scriptCallId)
+      ) {
+        return outOfOrder(
+          `${p.callId} names no pending call ${p.scriptCallId}`,
+        );
+      }
+      if (Object.hasOwn(pending.scriptCalls, p.callId)) {
+        return outOfOrder(`${p.callId} is already recorded`);
+      }
+      const scriptCalls = writable(pass, pending.scriptCalls, copyById);
+      scriptCalls[p.callId] = { ...p, settledAt: null };
+      return Result.succeed({
+        ...advance(current),
+        pendingResponse: { ...pending, scriptCalls },
+      });
+    }
     case 'tool.intent': {
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
-      if (pending === null || pending.responseId !== p.responseId) {
+      const origin =
+        p.origin.kind === 'response'
+          ? `response ${p.origin.responseId}`
+          : `script ${p.origin.scriptCallId}`;
+      if (
+        pending === null ||
+        (p.origin.kind === 'response' &&
+          pending.responseId !== p.origin.responseId)
+      ) {
         return outOfOrder(
-          `intent names response ${p.responseId}, pending is ${pending?.responseId ?? 'none'}`,
+          `intent names ${origin}, pending is ${pending?.responseId ?? 'none'}`,
         );
       }
+      // A script's call is its `script.call`, which names a call of the
+      // pending response.
+      const issued = (callId: string): boolean =>
+        p.origin.kind === 'response'
+          ? pending.calls.some((fact) => fact.callId === callId)
+          : pending.scriptCalls[callId]?.scriptCallId === p.origin.scriptCallId;
       const pendingIntents = writable(pass, current.pendingIntents, copyById);
       for (const callId of p.callIds) {
-        const call = pending.calls.find((fact) => fact.callId === callId);
-        if (call === undefined) {
+        if (!issued(callId)) {
           return outOfOrder(
-            `intent names ${callId}, which is not a call of ${p.responseId}`,
+            `intent names ${callId}, which is not a call of ${origin}`,
           );
         }
         const known = pendingIntents[callId];
@@ -628,7 +671,7 @@ function foldRow(
         }
         pendingIntents[callId] = {
           attempt: p.attempt,
-          responseId: p.responseId,
+          responseId: pending.responseId,
           binding:
             known !== undefined && known.attempt === p.attempt
               ? known.binding
@@ -704,10 +747,12 @@ function foldRow(
       if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
+      const scriptCall = pending?.scriptCalls[p.callId];
       if (
         pending === null ||
         pending.responseId !== p.responseId ||
-        !pending.calls.some((call) => call.callId === p.callId)
+        (scriptCall === undefined &&
+          !pending.calls.some((call) => call.callId === p.callId))
       ) {
         return refuse(
           'orphan-settlement',
@@ -753,10 +798,16 @@ function foldRow(
         result: p.result,
         attachments: p.attachments,
       };
+      let scriptCalls = pending.scriptCalls;
+      if (scriptCall !== undefined) {
+        const written = writable(pass, scriptCalls, copyById);
+        written[p.callId] = { ...scriptCall, settledAt: commit };
+        scriptCalls = written;
+      }
       return applyMutations(
         {
           ...advance(current),
-          pendingResponse: { ...pending, settled },
+          pendingResponse: { ...pending, scriptCalls, settled },
           pendingIntents,
         },
         p.stateMutation,

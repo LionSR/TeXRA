@@ -91,7 +91,7 @@ interface RingTail {
 export interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
-  readonly childKind: 'workflow script' | 'subagent';
+  readonly childKind: 'script' | 'subagent';
   /** The ancestor's open phase or loop position, when it has one. */
   readonly positionText: string | undefined;
   readonly parentLabel: string;

@@ -2,8 +2,8 @@
  * Shared XML envelope formatting for child-run deliveries — the one
  * result/error builder for every child path: native subagents
  * (`formatSubagentDelivery`/`formatSubagentError` in subagentResults.ts),
- * background bash (bashDelivery.ts), workflow scripts
- * (workflowScriptStrategy.ts) and the agent-CLI tools (codex.ts,
+ * background bash (bashDelivery.ts), background scripts (scriptRun.ts)
+ * and the agent-CLI tools (codex.ts,
  * claudeAgent.ts).
  *
  * The child drivers decide what facts belong in the payload; callers differ

@@ -126,7 +126,8 @@ export const ModelMessagePayloadSchema = z
   .discriminatedUnion('kind', [
     /**
      * A billed request is about to leave the process. Carries no history,
-     * only the address of the rest it sends (`requestContext.ts`).
+     * only the address of the rest it sends (`requestContext.ts`). A
+     * background script run's opening one (`handedDown`) sends nothing.
      */
     z.strictObject({
       kind: z.literal('attempt'),
@@ -286,10 +287,50 @@ export const ModelCompactionPayloadSchema = z.strictObject({
   usage: NormalizedUsageSchema.nullable(),
 });
 
+/* ------------------------------------------------------------ script.call */
+
+/**
+ * One call a `script` call's guest issued: its arguments, which no response
+ * carries, and the facts its dispatch needs, committed with the call's first
+ * `tool.intent`. A resume replays the script against these rows: the call at
+ * `seq` must be this `toolName` with this `input`, or the script diverged.
+ */
+export const ScriptCallPayloadSchema = z
+  .strictObject({
+    /** The `script` call of the pending response that issued this one. */
+    scriptCallId: CallIdSchema,
+    /** Issue order inside the script, from 0. */
+    seq: z.int().nonnegative(),
+    /** `<scriptCallId>/<seq>`. */
+    callId: CallIdSchema,
+    toolName: z.string().min(1),
+    input: JsonValueSchema,
+    /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
+    replay: z.enum(['safe', 'unsafe']),
+    logId: z.string().min(1),
+    /** The script's stage, which its calls' cards open under. */
+    stageId: z.string().min(1),
+    /** The guest's latest `phase()` title when it issued the call. */
+    phase: z.string().nullable(),
+  })
+  .refine(
+    (p) => p.callId === `${p.scriptCallId}/${p.seq}`,
+    'A script call is named by its script and its issue order.',
+  );
+export type ScriptCallPayload = z.infer<typeof ScriptCallPayloadSchema>;
+
 /* ------------------------------------------------------------ tool.intent */
 
+/** What issued the calls an intent admits: a response's dispatch facts, or
+ *  the guest of one of its `script` calls (`script.call`). */
+const ToolIntentOriginSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('response'), responseId: ResponseIdSchema }),
+  z.strictObject({ kind: z.literal('script'), scriptCallId: CallIdSchema }),
+]);
+export type ToolIntentOrigin = z.infer<typeof ToolIntentOriginSchema>;
+
 export const ToolIntentPayloadSchema = z.strictObject({
-  responseId: ResponseIdSchema,
+  origin: ToolIntentOriginSchema,
   callIds: z.array(CallIdSchema).min(1).readonly(),
   /** Increases only after a re-run decision: a person's, or the replay rule
    *  for a call whose saved and current declarations both say `safe`. An

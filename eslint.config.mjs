@@ -930,7 +930,8 @@ export default tseslint.config(
     };
     const runMessage =
       'Effect runs belong at a host entry (packages/{extension,desktop,cli,agent}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
-    const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback)$/';
+    // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
+    const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
     const run = [
       {
         selector: `CallExpression[callee.property.name=${runNames}]`,
@@ -950,6 +951,8 @@ export default tseslint.config(
       'packages/extension/src/progressView/frontend/sessionTransport.ts',
       'src/shared/signals.ts',
       'src/platform/processRuntime.ts',
+      // Worker entry: no process runtime exists in the worker.
+      'src/agent/codeSandbox/worker.ts',
     ];
     const residents = [
       'src/agent/runtime/childRunLoop.ts',

@@ -28,11 +28,13 @@ try {
     { reactCompilerPlugin },
     { esmCjsGlobalsBanner },
     { stubInternalValidationModel },
+    { codeSandboxWorker },
   ] = await Promise.all([
     import('esbuild'),
     import('./reactCompilerPlugin.mjs'),
     import('../../../scripts/esm-cjs-globals-banner.mjs'),
     import('../../../scripts/stub-internal-validation-model.mjs'),
+    import('../../../scripts/code-sandbox-worker.mjs'),
   ]);
 
   await build({
@@ -83,6 +85,7 @@ try {
     // 2026-05-14-20-implementation.md (Phase 0). Risk R12.
     plugins: [
       reactCompilerPlugin(),
+      codeSandboxWorker,
       ...(includeInternalValidationModel ? [] : [stubInternalValidationModel]),
     ],
     // JSX needs to be transformed for ink (which uses React's JSX runtime).

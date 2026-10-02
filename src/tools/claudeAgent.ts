@@ -1,7 +1,7 @@
 /**
  * Claude Code CLI tool — spin off a Claude Code agent via @anthropic-ai/claude-agent-sdk.
  *
- * Mirrors the codex / delegate_agent model: every call is async. Without a
+ * Mirrors the codex / `agent` model: every call is async. Without a
  * session_id, a new Claude Code session is started and the result is delivered
  * as a follow-up to the parent stream. With a session_id, the prompt is
  * enqueued as a follow-up instruction to an existing session via the SDK's
@@ -560,8 +560,8 @@ export const ClaudeAgentTool = defineTool({
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
-    'Pass session_id on a later call to send a follow-up to an existing session, like executions send to a delegate_agent subagent. ' +
-    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
+    'Pass session_id on a later call to send a follow-up to an existing session, like executions send to an `agent` subagent. ' +
+    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like `agent`. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: ClaudeAgentInputSchema,
   guard: {
     bash: (input: ClaudeAgentInput) =>

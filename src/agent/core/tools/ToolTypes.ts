@@ -68,6 +68,20 @@ export interface ITool<E = Error, R = never> {
    */
   readonly parallelSafe?: boolean;
   /**
+   * In a script, its calls neither wait for the calls issued before them
+   * nor block the ones after, and take no place in the parallel window: the
+   * tool bounds how many of its own calls run at once. For a call that
+   * waits on long-running work it does not perform itself (a child run). A
+   * later barrier still waits for it.
+   */
+  readonly ownsConcurrency?: boolean;
+  /**
+   * The tool is also a global function of a script, taking its `positional`
+   * field as the first argument and the rest as the second:
+   * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
+   */
+  readonly scriptGlobal?: { readonly positional: string };
+  /**
    * Whether a call recorded as started, with no result, may run again on
    * resume without asking: `'safe'` only for a read-only or idempotent tool,
    * whose second run changes nothing the first did not. Omitted is
@@ -93,6 +107,16 @@ export interface ITool<E = Error, R = never> {
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never, R>;
+  /**
+   * A description rendered from the other tools the run declares, in place
+   * of `definition.description`: rendered at the step that freezes the
+   * run's system text and kept as that step recorded it until a compaction
+   * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
+   * its text, and the cached prefix through it, as it was.
+   */
+  readonly describe?: (
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+  ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 

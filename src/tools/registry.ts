@@ -12,10 +12,7 @@ import { AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import {
-  DELEGATE_MULTI_AGENTS_TOOL_NAME,
-  type CanonicalDelegationToolName,
-} from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { LiveTools, toolTableLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import {
@@ -83,13 +80,10 @@ import {
   LeanInspectTool,
 } from './lean/LspTools';
 import { LeanLoogleTool } from './lean/LoogleTool';
-import {
-  WorkflowAgentTool,
-  DelegateAgentTool,
-} from './delegation/DelegationTools';
-import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
+import { AgentTool } from './delegation/AgentTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
+import { codeSandboxLayer, ScriptTool } from './codemode/ScriptTool';
 import { ExternalInquiryTool } from './inquiry/ExternalInquiryTool';
 import { AskUserQuestionTool } from './userQuestion/UserQuestionTool';
 import { GitHubSubscriptionTool } from './github/githubSubscriptionTool';
@@ -159,8 +153,6 @@ const PLUGIN_TOOLS = {
   'memory-workflow': {
     memory: MemoryTool,
     todo_write: TodoWriteTool,
-    delegate_workflow: WorkflowAgentTool,
-    delegate_agent: DelegateAgentTool,
     executions: ExecutionsTool,
     accept_run_files: AcceptRunFilesTool,
   },
@@ -179,12 +171,13 @@ const PLUGIN_TOOLS = {
     lean_project: LeanProjectTool,
     lean_inspect: LeanInspectTool,
   },
-  'workflow-script': { [DELEGATE_MULTI_AGENTS_TOOL_NAME]: WorkflowScriptTool },
+  'workflow-script': { [AGENT_TOOL_NAME]: AgentTool },
   'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },
   'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
   copilot: {},
+  codemode: { script: ScriptTool },
   core: {
     inline_comment: InlineCommentTool,
     open_pdf: OpenPdfTool,
@@ -248,6 +241,7 @@ const PLUGIN_PROCESS_LAYERS = {
 /** The session services of each plugin whose manifest entry declares
  *  `sessionLayer`: one build per open session. */
 const PLUGIN_SESSION_LAYERS = {
+  codemode: codeSandboxLayer,
   codex: codexThreadsLayer,
   'claude-agent': claudeAgentSessionsLayer,
 } as const satisfies {
@@ -270,11 +264,6 @@ type RegisteredToolName = {
 type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreRegistered = AssertNever<
   Exclude<CanonicalToolDisplayName, RegisteredToolName>
->;
-
-/** Compile-time guard for canonical delegation names; historical aliases are excluded. */
-type _CanonicalDelegationNamesAreRegistered = AssertNever<
-  Exclude<CanonicalDelegationToolName, RegisteredToolName>
 >;
 
 /**

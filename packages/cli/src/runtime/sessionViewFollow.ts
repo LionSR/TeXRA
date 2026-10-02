@@ -2,7 +2,7 @@
  * What a headless CLI output reads of a session: its view, followed level by
  * level, and the one run it describes. Shared by the stderr status line
  * (`runProgressRenderer.ts`) and the plain-text workflow output
- * (`workflowPlainOutput.ts`), which are otherwise separate renderers.
+ * (`scriptPlainOutput.ts`), which are otherwise separate renderers.
  */
 import type { SessionHandle } from '@agent/runtime';
 import type { RunId } from '@shared/schemas';

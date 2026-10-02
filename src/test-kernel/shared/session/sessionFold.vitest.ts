@@ -1,4 +1,4 @@
-// The pure fold over a recorded fan-out session: a workflow-script root, one
+// The pure fold over a recorded fan-out session: a background script root, one
 // child agent run with a grandchild of its own, a background process run.
 // The scenario (`fanOutScenario.ts`) is the commit-ordered event log a
 // publisher would replay; every assertion compares the fold's output to the
@@ -43,10 +43,6 @@ import {
 } from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 
-import {
-  workflowRunModel,
-  type ChildRunProgress,
-} from '@shared/runs/workflowRunModel';
 import { createExternalLocation } from '@utils/files/fileLocation';
 
 import {
@@ -220,12 +216,12 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, ROOT]);
 
     expect(root.label).toBe(runIdentityDisplayName(ROOT_IDENTITY));
-    expect(root.category).toBe(AgentCategory.Workflow);
+    expect(root.category).toBe(AgentCategory.ToolUse);
     expect(root.worktree).toStrictEqual({
       workingDirectory: '/paper',
       branch: 'main',
     });
-    expect(root.inputFiles).toStrictEqual(['draft.tex']);
+    expect(root.inputFiles).toStrictEqual([]);
     expect(root.childIds).toStrictEqual([CHILD]);
     // The commit ordinal of the run's run.start, never a clock.
     expect(root.createdAt).toBe(1);
@@ -255,62 +251,38 @@ describe('sessionFold', () => {
   it('folds the transcript through the shared row, group, and run reducers', () => {
     const view = foldAll(scenario.events);
     const root = runView(view, ROOT);
-    const child = runView(view, CHILD);
 
-    // The phase the stage pair opened and closed, and the one call card the
-    // workflow rows carry: what the shared group and row reducers make of
-    // the root's trace.
+    // The script stage the pair opened and closed, and the one `agent` call
+    // card under it: what the shared group and row reducers make of the
+    // root's trace.
     expect(root.transcript.taskGroups).toStrictEqual([
       {
-        id: 'phase-Map',
-        name: 'Map',
+        id: 'script-review',
+        name: 'review',
         startTime: T.root + 1,
         status: 'completed',
-        kind: 'phase',
-        index: 0,
-        attemptId: 'attempt-1',
-        total: 1,
+        kind: 'script',
         endTime: T.childDone + 2,
       },
     ]);
-    expect(root.transcript.rows).toStrictEqual([
-      {
-        id: 'phase-Map',
-        seqNo: 1,
-        timestamp: T.root + 1,
-        level: 'info',
-        settlementSeqNo: 1,
-        verbose: false,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        kind: 'phase',
-        heading: 'Map (1/1)',
-        phaseLabel: 'Map',
-        phaseIndex: 0,
-        phaseTotal: 1,
-      },
+    expect(root.transcript.rows).toMatchObject([
+      { id: 'script-review', seqNo: 1, kind: 'log', settlementSeqNo: 1 },
       {
         id: 'call-1',
         seqNo: 2,
         timestamp: T.root + 2,
-        level: 'info',
         settlementSeqNo: 2,
-        verbose: false,
-        groupId: 'phase-Map',
-        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-        kind: 'workflowTask',
-        call: {
-          id: 'inspect',
-          label: 'inspect',
-          phase: 'Map',
-          attemptId: 'attempt-1',
-          childRunId: CHILD,
+        groupId: 'script-review',
+        kind: 'tool',
+        toolUse: {
+          toolName: 'agent',
+          outputText: 'search done',
+          headerSummary: "Completed 'custom:search'",
           status: 'completed',
         },
-        line: 'Finished: inspect',
-        statusLabel: 'Finished',
-        metadataParts: [],
       },
     ]);
+    expect(root.transcript.rows).toHaveLength(2);
     // The transcript tier retained the rows: the aggregate's newest seq.
     expect(view.folded.get(qualifyAggregateId('run', ROOT))).toBe(
       Math.max(
@@ -325,35 +297,12 @@ describe('sessionFold', () => {
           .map((e) => e.seq),
       ),
     );
-    // A settled run has printed every row; its newest card is the status line.
+    // A settled run has printed every row.
     expect(root.transcript.settledRows).toBe(root.transcript.rows.length);
-    expect(root.latestLine).toBe('Finished: inspect');
 
-    const childProgress = new Map<RunId, ChildRunProgress>([
-      [CHILD, { toolCallCount: 3, outputTokens: 0, costUsd: 0 }],
-    ]);
-    expect(root.transcript.run).toStrictEqual(
-      workflowRunModel({
-        taskGroups: root.transcript.taskGroups,
-        rows: root.transcript.rows.filter(
-          (row) => row.kind === 'workflowTask' || row.kind === 'phase',
-        ),
-        workflowAttemptId: undefined,
-        plan: undefined,
-        runPhase: root.status,
-        // No local snapshot in this scenario: nobody holds the owner, so the
-        // ended run is durably final.
-        runDurablyFinal: true,
-        childProgress,
-      }),
-    );
-    expect(root.transcript.run?.childRunOf.get('call-1')).toBe(CHILD);
-    expect(child.transcript.run).toBeNull();
-    // A frame derives each board once at its end and lands the same model.
+    // A frame folds each transcript once at its end and lands the same rows.
     const batched = fold(emptySessionView('paper'), scenario.events);
-    expect(runView(batched, ROOT).transcript.run).toStrictEqual(
-      root.transcript.run,
-    );
+    expect(runView(batched, ROOT).transcript).toStrictEqual(root.transcript);
   });
 
   it('settles status copy, rollups, groups, and the durable outcome from the activation and the end', () => {
@@ -715,7 +664,7 @@ describe('sessionFold', () => {
     const rootEntry = scenario.log.events.find(
       (e) =>
         e.aggregateId === qualifyAggregateId('run', ROOT) &&
-        e.type === 'workflow.call',
+        e.type === 'tool.start',
     )!;
     // An aggregate read replaying an older activation, start, or row after
     // the tail folded the current one changes nothing, and the cursor stays.
@@ -922,7 +871,6 @@ describe('sessionFold', () => {
     const root = runView(evicted, ROOT);
     expect(root.transcript.rows).toStrictEqual([]);
     expect(root.transcript.taskGroups).toStrictEqual([]);
-    expect(root.transcript.run?.phases).toStrictEqual([]);
     expect(root.transcript.settledRows).toBe(0);
     // Listing facts stay exactly as they were.
     expect(root.status).toBe(RUN_PHASE.COMPLETED);
@@ -1085,9 +1033,9 @@ describe('sessionFold', () => {
       }),
     ];
     // The run.start alone states resume eligibility: a plain tool-use agent
-    // can be resumed natively; a workflow root and a process child cannot.
+    // and a background script can be resumed; a process child cannot.
     expect(runView(settled, CHILD).resumeEligible).toBe(true);
-    expect(runView(settled, ROOT).resumeEligible).toBe(false);
+    expect(runView(settled, ROOT).resumeEligible).toBe(true);
     expect(runView(settled, PROCESS).resumeEligible).toBe(false);
     // A fact alone cannot advance the finite-read cursor, and it mints
     // nothing; severing the edge leaves the child top-level.
@@ -1426,7 +1374,11 @@ const TURN_ROWS: readonly RunLedgerRow[] = [
   }),
   {
     type: 'tool.intent',
-    payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+    payload: {
+      origin: { kind: 'response', responseId: RESPONSE_ID },
+      callIds: ['call-a'],
+      attempt: 1,
+    },
   },
   settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
@@ -1763,7 +1715,7 @@ describe('foldRunState', () => {
             {
               type: 'tool.intent',
               payload: {
-                responseId: RESPONSE_ID,
+                origin: { kind: 'response', responseId: RESPONSE_ID },
                 callIds: ['__proto__'],
                 attempt: 1,
               },

@@ -1,31 +1,18 @@
-import {
-  workflowCallStatusLabel,
-  type TaskGroup,
-  type WorkflowCallKind,
-  type WorkflowCallProgress,
-  type WorkflowTally,
-} from '@shared/schemas';
+import { type ScriptTally, type TaskGroup } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
-
-/** Result-contract label of one issued call, shared by every host. */
-const WORKFLOW_CALL_KIND_LABEL = {
-  document: 'Edits files',
-  structured: 'Returns data',
-} as const satisfies Record<WorkflowCallKind, string>;
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
 
 /**
  * The files one issued call was handed, as a single clause: the editable
  * inputs by name (bounded), then how many read-only context/media files ride
- * along. Empty for a declared plan label and for a structured call, which by
- * contract carries no files.
+ * along; undefined when it was handed none.
  */
-function formatWorkflowCallFiles(
-  files: WorkflowCallProgress['files'],
-): string | undefined {
-  if (!files) return undefined;
+export function formatWorkflowCallFiles(files: {
+  readonly input: readonly string[];
+  readonly context: readonly string[];
+  readonly media: readonly string[];
+}): string | undefined {
   const visible = files.input.slice(0, CALL_FILE_PREVIEW_LIMIT);
   const hiddenInputs = files.input.length - visible.length;
   const hiddenSuffix = hiddenInputs > 0 ? ` +${hiddenInputs}` : '';
@@ -35,37 +22,6 @@ function formatWorkflowCallFiles(
     files.media.length > 0 ? `${files.media.length} media` : undefined,
   ].filter(filterNotNullish);
   return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
-/**
- * Canonical metadata copy for workflow-call progress on every host: what the
- * call is (kind · agent · model · files) as soon as the script issues it, and
- * what it cost (duration · spend) once it settles. A declared plan label has
- * neither, so its row stays a bare label.
- */
-export function formatWorkflowCallMetadataParts(
-  call: WorkflowCallProgress,
-): string[] {
-  const terminal =
-    call.status === 'completed' ||
-    call.status === 'failed' ||
-    call.status === 'cancelled' ||
-    (call.status === 'skipped' && call.reason === 'user');
-  return [
-    call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
-    call.agent,
-    call.model,
-    call.attemptNumber === undefined
-      ? undefined
-      : `attempt ${call.attemptNumber}`,
-    formatWorkflowCallFiles(call.files),
-    terminal && call.durationMs !== undefined
-      ? formatCompactDuration(call.durationMs)
-      : undefined,
-    terminal && call.costUsd !== undefined
-      ? formatCostUsd(call.costUsd)
-      : undefined,
-  ].filter(filterNotNullish);
 }
 
 /** One workflow phase as its emitter names and orders it. */
@@ -112,69 +68,9 @@ export function formatWorkflowPhaseHeading(
   return `${phase.phaseLabel} (${phase.phaseIndex + 1}${total})`;
 }
 
-/**
- * What a run that ended first says about a call. `NOT_REACHED` is the note
- * on a declared call the run never issued (`workflowCallDetail` below);
- * `UNFINISHED` has two writers — the engine's terminal sweep and the card
- * projection's own backstop for a transition the writer never landed — so it
- * is spelled once here. Two spellings of one sentence is drift, not two facts.
- */
-const WORKFLOW_CALL_NOT_REACHED_NOTE =
-  'The workflow ended before this call was reached.';
-export const WORKFLOW_CALL_UNFINISHED_NOTE =
-  'The workflow ended before this call completed.';
-
-/**
- * The one explanatory-clause rule for a workflow call, shared by every host: a
- * failure reports its error, and a call the run never reached says so. A user
- * skip is self-explanatory and gets no clause.
- */
-export function workflowCallDetail(
-  call: WorkflowCallProgress,
-): { readonly kind: 'error' | 'note'; readonly text: string } | undefined {
-  if (call.status === 'failed') return { kind: 'error', text: call.error };
-  if (call.status === 'skipped' && call.reason === 'not-reached') {
-    return { kind: 'note', text: WORKFLOW_CALL_NOT_REACHED_NOTE };
-  }
-  return undefined;
-}
-
-/**
- * Canonical plain-text projection for workflow-call progress on every host.
- */
-export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
-  const metadata = formatWorkflowCallMetadataParts(call);
-  const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
-  const detail = workflowCallDetail(call);
-  const explanation = detail ? ` — ${detail.text}` : '';
-  return `${workflowCallStatusLabel(call)}: ${call.label}${suffix}${explanation}`;
-}
-
-/**
- * One glyph per call status — the vocabulary every host paints, so a strip
- * of cells reads the same on the terminal and on the board, and reads
- * without colour: planned, queued and running fill in as the call advances,
- * and done, reused, stopped and failed are all distinct shapes. None of them
- * is a checkbox: nothing here is a thing to tick.
- */
-export const WORKFLOW_CALL_STATUS_GLYPH = {
-  declared: '·',
-  queued: '○',
-  running: '◐',
-  completed: '✓',
-  cached: '↺',
-  skipped: '⊘',
-  cancelled: '⊘',
-  failed: '✗',
-} as const satisfies Record<WorkflowCallProgress['status'], string>;
-
 /** Generated-token marker, prefixed to a compact token count (`↓1.2k`)
  *  wherever a host shows what a run has produced so far. */
 export const TOKENS_GENERATED = '↓';
-
-/** A phase the run has opened, and its hollow twin for one it has only
- *  declared. */
-export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
 
 const WORKFLOW_TALLY_WORDS = [
   ['ok', 'ok'],
@@ -185,11 +81,11 @@ const WORKFLOW_TALLY_WORDS = [
   ['cancelled', 'cancelled'],
   ['skipped', 'skipped'],
   ['notRun', 'not run'],
-] as const satisfies readonly (readonly [keyof WorkflowTally, string])[];
+] as const satisfies readonly (readonly [keyof ScriptTally, string])[];
 
 /** `6 ok · 1 failed · 1 not run` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */
-export function formatWorkflowTally(tally: WorkflowTally): string {
+export function formatScriptTally(tally: ScriptTally): string {
   const parts = WORKFLOW_TALLY_WORDS.filter(([key]) => tally[key] > 0).map(
     ([key, word]) => `${tally[key]} ${word}`,
   );

@@ -11,6 +11,7 @@ import {
   claudeAgentSessionsLayer,
   codexThreadsLayer,
 } from '@tools/agentCliSessionStores';
+import { codeSandboxLayer } from '@tools/codemode/ScriptTool';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import { PluginHold } from '@tools/toolTable';
 
@@ -41,6 +42,7 @@ const unreadGitHubSubscriptions = new Proxy(
 
 /** Every plugin's services over the session's `Runs`, as a step pins them. */
 export const testPluginServicesLayer = Layer.mergeAll(
+  codeSandboxLayer,
   codexThreadsLayer,
   claudeAgentSessionsLayer,
   Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
@@ -52,7 +54,7 @@ export const testPluginServicesLayer = Layer.mergeAll(
  * the unread
  * GitHub tables, which are process services.
  */
-const ALL: ReadonlySet<string> = new Set(['codex', 'claude-agent']);
+const ALL: ReadonlySet<string> = new Set(['codemode', 'codex', 'claude-agent']);
 export const testCallPluginServices = Layer.merge(
   Layer.effectContext(
     Effect.flatMap(Runs, (runs) =>

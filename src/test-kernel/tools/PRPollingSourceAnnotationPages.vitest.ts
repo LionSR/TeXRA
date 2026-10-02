@@ -1,9 +1,13 @@
 // Suites for the annotation-page budget path of @tools/github
-// (PRPollingSource pagination + AnnotationFetchBudget token bucket).
+// (PRPollingSource pagination + annotation claim).
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Duration, Effect, Layer } from 'effect';
+import {
+  RateLimitExceeded,
+  RateLimiterError,
+} from 'effect/persistence/RateLimiter';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
@@ -14,7 +18,6 @@ import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
 // Local imports - tools
-import { AnnotationFetchBudget } from '@tools/github/annotationFetchBudget';
 import { fetchAnnotations } from '@tools/github/checkRunsClient';
 import {
   PRPollingSource,
@@ -103,6 +106,17 @@ function drainState(runs: GhCheckRun[]): PRSubscriptionState {
   });
 }
 
+const exhausted = Effect.fail(
+  new RateLimiterError({
+    reason: new RateLimitExceeded({
+      retryAfter: Duration.seconds(1),
+      key: 'github-annotations',
+      limit: 1,
+      remaining: 0,
+    }),
+  }),
+);
+
 describe('PRPollingSource annotation pagination', () => {
   beforeEach(() => {
     mocks.ghGet.mockReset();
@@ -125,7 +139,7 @@ describe('PRPollingSource annotation pagination', () => {
         'owner',
         'repo',
         42,
-        new AnnotationFetchBudget(2, 60_000),
+        Effect.void,
       );
 
       expect(annotations).toHaveLength(101);
@@ -148,7 +162,7 @@ describe('PRPollingSource annotation pagination', () => {
         'owner',
         'repo',
         42,
-        new AnnotationFetchBudget(50, 60_000),
+        Effect.void,
       );
 
       expect(annotations).toHaveLength(5000);
@@ -165,17 +179,18 @@ describe('PRPollingSource annotation pagination', () => {
         Effect.succeed({ status: 200, data: fullWarningPage() }),
       );
 
+      let claims = 0;
       const error = yield* Effect.flip(
         fetchAnnotations(
           'owner',
           'repo',
           42,
-          new AnnotationFetchBudget(1, 60_000),
+          Effect.suspend(() => (claims++ < 1 ? Effect.void : exhausted)),
         ),
       );
 
       expect(error).toMatchObject({
-        message: expect.stringContaining('Annotation fetch budget exhausted'),
+        reason: { _tag: 'RateLimitExceeded' },
       });
       expect(mocks.ghGet).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(secretsLayer)),
@@ -187,7 +202,7 @@ describe('PRPollingSource annotation pagination', () => {
       Effect.gen(function* () {
         const source = new PRPollingSource(
           undefined,
-          new AnnotationFetchBudget(0, 60_000),
+          exhausted,
         ) as unknown as AnnotationDrainSource;
         source.has = vi.fn().mockReturnValue(true);
         const runs = [checkRun(7), checkRun(8)];
@@ -198,21 +213,5 @@ describe('PRPollingSource annotation pagination', () => {
         expect(mocks.ghGet).not.toHaveBeenCalled();
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual(runs);
       }),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// AnnotationFetchBudget
-// ---------------------------------------------------------------------------
-
-describe('AnnotationFetchBudget', () => {
-  it.effect('does not stall refills after the clock moves backward', () =>
-    Effect.gen(function* () {
-      const budget = new AnnotationFetchBudget(1, 1000);
-
-      expect(yield* budget.tryClaim(1000)).toBe(true);
-      expect(yield* budget.tryClaim(900)).toBe(false);
-      expect(yield* budget.tryClaim(1900)).toBe(true);
-    }),
   );
 });

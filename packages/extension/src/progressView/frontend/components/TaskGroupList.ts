@@ -14,7 +14,12 @@ import {
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import type { TranscriptView } from '@shared/session/sessionView';
+import type {
+  RunView,
+  SessionView,
+  TranscriptView,
+} from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import {
@@ -22,7 +27,11 @@ import {
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
-import type { TranscriptRow } from '@ui/transcript';
+import {
+  scriptStages,
+  type ScriptStageView,
+  type TranscriptRow,
+} from '@ui/transcript';
 import { designTokens } from '@ui/styles';
 import {
   formatWorkflowPhaseHeading,
@@ -53,6 +62,7 @@ import { dispatchGroupToggle } from '../utils';
 // Side-effect import: registers <terminal-output>, which the terminal-stream
 // render path below instantiates.
 import './TerminalOutput';
+import './ScriptStage';
 import type { TerminalOutput } from './TerminalOutput';
 
 const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
@@ -165,6 +175,15 @@ export class TaskGroupList extends LitElement {
     return this.transcript?.rows ?? [];
   }
 
+  /** The run, the session and the surface a script stage reads and acts
+   *  through; absent, a script stage paints as a plain group. */
+  @property({ attribute: false }) run: RunView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
+
+  /** The run's script stages by id (`scriptStages`). */
+  private scripts: ReadonlyMap<string, ScriptStageView> = new Map();
+
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
 
@@ -251,6 +270,17 @@ export class TaskGroupList extends LitElement {
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
+    if (changedProperties.has('run') || changedProperties.has('view')) {
+      this.scripts =
+        this.run && this.view
+          ? new Map(
+              scriptStages(this.run, this.view).map((stage) => [
+                stage.id,
+                stage,
+              ]),
+            )
+          : new Map();
+    }
     const transcriptChanged = changedProperties.has('transcript');
     if (this.terminal || !transcriptChanged) return;
     this.timeline = transcriptTimeline(this.groups, this.rows);
@@ -325,11 +355,13 @@ export class TaskGroupList extends LitElement {
 
   /**
    * Paint one transcript row, guarded against re-render while the row stays
-   * the same object. A row is replaced (never patched) whenever its source
-   * entry changes, so reference identity is the whole freshness test.
+   * the same object and its run's interrupted fact holds. A row is replaced
+   * (never patched) whenever its source entry changes, so reference identity
+   * is the freshness test for the row itself.
    */
   private renderLogEntry(row: TranscriptRow) {
-    return guard([row], () => formatLogEntry(row));
+    const interrupted = this.run?.group === 'interrupted';
+    return guard([row, interrupted], () => formatLogEntry(row, interrupted));
   }
 
   private handleRevealOlderRows(event: Event): void {
@@ -438,12 +470,33 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
-  /** Rows of a group followed by its child groups, in transcript order. */
+  /** Rows of a group followed by its child groups, in transcript order. A
+   *  script stage leads with its calls as the script-stage model reads
+   *  them; the calls' own cards, with their output, fold below it. */
   private renderGroupBody(node: GroupTree): TemplateResult {
-    return html`${this.renderRowEntries(
-      node.rows,
-      `group:${node.group.id}`,
-    )}${repeat(
+    const script = this.scripts.get(node.group.id);
+    const rows = this.renderRowEntries(node.rows, `group:${node.group.id}`);
+    const callsKey = `calls:${node.group.id}`;
+    const callsOpen = this.expanded?.get(callsKey) === true;
+    return html`${
+      script && this.view && this.surface
+        ? html`<script-stage
+              .stage=${script}
+              .view=${this.view}
+              .surface=${this.surface}
+              ?readOnly=${this.run?.readOnly === true}
+            ></script-stage>
+            <wa-details
+              id=${`${GROUP_DOM_IDS.DETAILS_PREFIX}${callsKey}`}
+              class="log-group"
+              summary="Call details"
+              ?open=${callsOpen}
+              @wa-show=${this.handleGroupToggle}
+              @wa-hide=${this.handleGroupToggle}
+              >${callsOpen ? rows : nothing}</wa-details
+            >`
+        : rows
+    }${repeat(
       node.children,
       (c) => c.group.id,
       (c) => this.renderGroupNode(c),

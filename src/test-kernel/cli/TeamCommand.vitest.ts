@@ -123,7 +123,7 @@ const ORCHESTRATOR_AGENT = {
   category: 'toolUse',
   source: 'builtInToolUse',
   path: '/agents/orchestrator.yaml',
-  tools: ['delegate_agent'],
+  tools: ['agent'],
 };
 
 interface TeamPlan {

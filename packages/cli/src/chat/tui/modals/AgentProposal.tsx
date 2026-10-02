@@ -5,7 +5,6 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
-  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -14,9 +13,9 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
-  WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowScriptPlanSummary,
-} from '@ui/copy/workflowScriptProposal';
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -97,40 +96,36 @@ function agentProposalMetadataLines({
   readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
   readonly payload: AgentProposalPermission;
 }): MetadataLine[] {
-  if (
-    payload.agentCategory === AgentCategory.Workflow &&
-    payload.workflowScript
-  ) {
-    const workflow = payload.workflowScript;
+  // A script's request for its `agent` calls: what one approval covers and
+  // the calls it issued first; its source is the scrolling text below.
+  if (payload.script) {
+    const { calls } = payload.script;
     return [
+      { segments: [{ text: SCRIPT_REQUEST_COPY.grant }], tone: 'warning' },
       {
         segments: [
-          { text: workflow.name, bold: true },
-          { text: ` · ${workflowScriptPlanSummary(workflow)}` },
+          { text: 'First agent call: ', bold: true },
+          { text: `${payload.agent} · ${getModelLabel(payload.model)}` },
         ],
       },
+      ...(calls.length > 0
+        ? [
+            {
+              segments: [{ text: `${SCRIPT_REQUEST_COPY.callsHeading}:` }],
+              tone: 'dim' as const,
+            },
+            ...calls.map((call) => ({
+              segments: [{ text: `  ${scriptRequestCallLine(call)}` }],
+              tone: 'dim' as const,
+            })),
+          ]
+        : []),
       {
-        segments: [
-          {
-            text: WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-              payload.agent,
-              getModelLabel(payload.model),
-            ),
-          },
-        ],
-      },
-      {
-        segments: [{ text: WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning }],
-        tone: 'warning',
-      },
-      ...fileGroupLines(fileGroups, WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading),
-      {
-        segments: [{ text: `Script: ${workflow.scriptPath}` }],
+        segments: [{ text: `${SCRIPT_REQUEST_COPY.sourceHeading}:` }],
         tone: 'dim',
       },
     ];
   }
-
   const lines: MetadataLine[] = [
     {
       segments: [
@@ -203,13 +198,9 @@ function MetadataLineRow(props: {
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
-  const workflowScript =
-    props.payload.agentCategory === AgentCategory.Workflow
-      ? props.payload.workflowScript
-      : undefined;
-  const title = workflowScript
-    ? `Approve multi-agent workflow ${workflowScript.name}?`
-    : `Spawn ${props.payload.agent}?`;
+  const { script } = props.payload;
+  let title = `Spawn ${props.payload.agent}?`;
+  if (script) title = `${SCRIPT_REQUEST_COPY.title(script)}?`;
   const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,
@@ -237,10 +228,10 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         ))}
       </Box>
       <ScrollableModalText
-        hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}
+        hiddenNoun={script ? 'source rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
-        scrollHint="scroll prompt"
-        text={props.payload.instruction}
+        scrollHint={script ? 'scroll source' : 'scroll prompt'}
+        text={script ? script.source : props.payload.instruction}
         width={instructionWidth}
       />
     </ConfirmCard>

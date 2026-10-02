@@ -4,7 +4,7 @@
 // the Progress sidebar switches the editor to that specialist's artifact —
 // grounded literature search, a Wolfram cross-check, a Lean 4 proof.
 // Mirrors StreamHeader.ts, TodoList.ts, BackgroundTasksPanel.ts, and the
-// delegate_agent tool-use card from toolFormatters.ts.
+// agent tool-use card from toolFormatters.ts.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
 
@@ -98,7 +98,7 @@ const view = ref('search');
             ></wa-icon>
             <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
             <span class="tc-label"
-              ><span class="tc-tool">delegate_agent</span> — search · arXiv +
+              ><span class="tc-tool">agent</span> — search · arXiv +
               Crossref</span
             >
             <span class="tc-time">0:31</span>
@@ -116,8 +116,8 @@ const view = ref('search');
             ></wa-icon>
             <wa-icon class="tc-ic" library="texra" name="circle-user"></wa-icon>
             <span class="tc-label"
-              ><span class="tc-tool">delegate_agent</span> — research · derive
-              in Wolfram</span
+              ><span class="tc-tool">agent</span> — research · derive in
+              Wolfram</span
             >
             <span class="tc-time">1:12</span>
           </button>
@@ -140,7 +140,7 @@ const view = ref('search');
                 name="circle-user"
               ></wa-icon>
               <span class="tc-label"
-                ><span class="tc-tool">delegate_agent</span> — lean</span
+                ><span class="tc-tool">agent</span> — lean</span
               >
               <span class="tc-time tc-timer">0:24</span>
             </div>

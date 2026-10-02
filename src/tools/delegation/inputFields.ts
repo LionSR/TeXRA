@@ -3,7 +3,6 @@
  */
 
 // Node imports
-import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -12,8 +11,6 @@ import { z } from 'zod';
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage';
-import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
-import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
@@ -60,52 +57,6 @@ export const memoriesField = nullishWithDefault(z.array(z.string()), [])
       }
     }
   });
-
-/** Schema for the delegate_workflow tool (document processing). */
-export const WorkflowAgentInputSchema = z.strictObject({
-  agent: z.string().describe('Name of the workflow agent to execute'),
-  model: z
-    .string()
-    .nullish()
-    .describe(
-      'Model short name from the Available models line. Omit unless the user explicitly requested a model. Defaults to the current model when available.',
-    ),
-  instruction: z
-    .string()
-    .describe(
-      'State what the agent should do in plain prose. Include the document subject, the changes wanted, and any constraints (terminology, scope, sections to prioritize). If you attach context or media files, name each one and explain its role. For example: "preamble.tex defines the math macros; refs.bib is the bibliography to cite from; figure.png shows the panel layout to match". The subagent has no other signal for why each file was attached.',
-    ),
-  inputFiles: z
-    .array(z.string())
-    .min(1)
-    .describe(
-      'Files the agent rewrites. List every file you want it to touch. The agent emits one revised <document> per entry.',
-    ),
-  contextFiles: nullishWithDefault(z.array(z.string()), []).describe(
-    'Read-only context the agent should see but not modify: guidance, examples, related papers, bibliographies (.bib), style/macro definitions (.sty/.cls). Explain each one in the instruction.',
-  ),
-  mediaFiles: nullishWithDefault(z.array(z.string()), []).describe(
-    'Images, figures, PDFs, or audio files the agent should view.',
-  ),
-  extractFigures: z
-    .boolean()
-    .nullish()
-    .describe(
-      'When true, automatically extracts figures referenced by the input LaTeX file(s) (via \\includegraphics, \\begin{overpic}) and attaches them as media files. Merges with any explicitly provided mediaFile/mediaFiles.',
-    ),
-  extractTikz: z
-    .boolean()
-    .nullish()
-    .describe(
-      'When true, extracts TikZ figures from the input LaTeX file(s), compiles them into standalone PDFs, and attaches them as media files.',
-    ),
-  outputFiles: nullishWithDefault(z.array(z.string()), []).describe(
-    'Output file paths. Must be a subset of input files. Never create new files or change format. Leave empty for default suffix-based outputs.',
-  ),
-  memories: memoriesField,
-});
-
-export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
@@ -273,7 +224,7 @@ interface WorkflowFileGroup {
  * `workspaceRoot` is the owning session's workspace folder, handed in as
  * data, so a relative declaration resolves against that session.
  */
-export const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
+const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
   function* (
     workspaceRoot: string | undefined,
     groups: readonly WorkflowFileGroup[],
@@ -400,7 +351,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     }).pipe(
       Effect.mapError(
         (error) =>
-          new WorkflowRunAbortError(
+          new Error(
             formatError(`Workflow ${label} files could not be resolved`, error),
             { cause: error },
           ),
@@ -408,46 +359,3 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     );
   },
 );
-
-/** Hash the bytes behind every file option used by one workflow agent call. */
-export const fingerprintWorkflowAgentDependencies = Effect.fn(
-  'fingerprintWorkflowAgentDependencies',
-)(function* (
-  session: SessionHandle,
-  parentRunId: RunId,
-  options: WorkflowAgentCallOptions,
-): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  const groups = [
-    { kind: 'input', label: 'Input file', files: options.inputFiles ?? [] },
-    {
-      kind: 'context',
-      label: 'Context file',
-      files: options.contextFiles ?? [],
-    },
-    { kind: 'media', label: 'Media file', files: options.mediaFiles ?? [] },
-  ] as const;
-  if (groups.every((group) => group.files.length === 0)) {
-    return yield* Effect.fail(
-      new WorkflowRunAbortError(
-        'Cannot fingerprint a workflow agent call without file dependencies.',
-      ),
-    );
-  }
-
-  const hash = createHash('sha256');
-  for (const { kind, label, files } of groups) {
-    const resolved = yield* resolveInvocationFileList(
-      session,
-      parentRunId,
-      label,
-      files,
-    );
-    for (const [index, { absolutePath }] of resolved.entries()) {
-      const bytes = yield* fs.readFile(absolutePath);
-      hash.update(`${kind}\0${index}\0${bytes.length}\0`);
-      hash.update(bytes);
-    }
-  }
-  return hash.digest('hex');
-});

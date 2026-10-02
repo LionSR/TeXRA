@@ -42,7 +42,7 @@ import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
 import { WorkPlanReader } from './panes/WorkPlanReader';
 import { TranscriptReader } from './panes/TranscriptReader';
-import { WorkflowPopup } from './panes/WorkflowPopup';
+import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
@@ -51,11 +51,7 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from './input/activeDraft';
-import {
-  isWorkflowScriptRun,
-  presentRun,
-  resolveChildListTarget,
-} from './state/childControls';
+import { resolveChildListTarget } from './state/childControls';
 import { activeForm, closeActiveForm } from './state/formSlot';
 import {
   selectedRunId as selectedRunIdSignal,
@@ -67,12 +63,13 @@ import {
   goalAutoApproveAll as goalAutoApproveAllSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
-  openWorkflowPopup,
-  updateWorkflowPopupView,
-  workflowPopupView as workflowPopupViewSignal,
+  openScriptPopup,
+  scriptPopupView as scriptPopupViewSignal,
+  updateScriptPopupView,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
+  focusRun,
 } from './state/cliState';
 import {
   appendLocalNotice,
@@ -105,13 +102,7 @@ interface InputEventEmitterLike {
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
 function focusRunAndPromoteApprovals(runId: RunId): void {
-  const view = currentView();
-  if (presentRun(runId) === 'workflowPopup') {
-    promoteApprovalsForRun(runId, {
-      includeRunIds: new Set(runViewOf(view, runId)?.childIds ?? []),
-    });
-    return;
-  }
+  focusRun(runId);
   promoteApprovalsForRun(runId);
 }
 
@@ -248,7 +239,11 @@ export function App(props: AppProps): React.JSX.Element {
     view,
     runViewOf(view, childListTarget),
   );
-  const workflowPopup = useSignal(workflowPopupViewSignal);
+  const scriptPopup = useSignal(scriptPopupViewSignal);
+  // The active run's transcript holds a script's calls: Ctrl-O shows them.
+  const scriptAvailable =
+    activeRun?.transcript.taskGroups.some((group) => group.kind === 'script') ??
+    false;
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
@@ -323,26 +318,15 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptReader
             availableRows={availableRows}
-            onClose={() => {
-              // A workflow's log is only ever opened from its popup (a
-              // workflow is never a viewport), so closing it goes back there.
-              if (isWorkflowScriptRun(view, reader.runId)) {
-                openWorkflowPopup(reader.runId);
-              } else {
-                closeForegroundReader();
-              }
-            }}
+            onClose={closeForegroundReader}
             runId={reader.runId}
             title={`Transcript: ${label}`}
           />
         );
-      case 'workflow': {
-        const model = run?.transcript.run ?? undefined;
-        if (model === undefined) return null;
+      case 'script':
         return (
-          <WorkflowPopup
+          <ScriptStagePopup
             availableRows={availableRows}
-            model={model}
             onClose={closeForegroundReader}
             onFocusRun={(runId) => {
               closeForegroundReader();
@@ -350,12 +334,11 @@ export function App(props: AppProps): React.JSX.Element {
             }}
             onOpenTranscript={openTranscriptReader}
             onRequest={request}
-            onViewChange={updateWorkflowPopupView}
+            onViewChange={updateScriptPopupView}
             runId={reader.runId}
-            view={workflowPopup}
+            view={scriptPopup}
           />
         );
-      }
       case 'workPlan':
         return (
           <WorkPlanReader
@@ -607,6 +590,11 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
+    if (isCtrlInput(input, key, 'o')) {
+      if (activeRunId && scriptAvailable) openScriptPopup(activeRunId);
+      return;
+    }
+
     // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
       focusChildList();
@@ -671,6 +659,7 @@ export function App(props: AppProps): React.JSX.Element {
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
               transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
+              scriptAvailable={scriptAvailable}
             />
           </>
         )}

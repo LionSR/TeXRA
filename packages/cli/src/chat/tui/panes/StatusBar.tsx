@@ -65,6 +65,8 @@ interface StatusBarProps {
   readonly commandName?: string;
   readonly foregroundInputActive?: boolean;
   readonly transcriptAvailable?: boolean;
+  /** The active run's transcript holds a script's calls (Ctrl-O). */
+  readonly scriptAvailable?: boolean;
 }
 
 /**
@@ -280,6 +282,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,
+      scriptAvailable: props.scriptAvailable,
     },
   });
 

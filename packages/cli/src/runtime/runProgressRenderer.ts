@@ -2,7 +2,7 @@
  * The stderr status line of `texra run` (PRD one-fold-three-renderers,
  * 10.3). It reads the session view and derives nothing the fold already
  * states; the renderer keeps only its own output state (what it last wrote).
- * The plain-text workflow lines are `workflowPlainOutput.ts`.
+ * The plain-text workflow lines are `scriptPlainOutput.ts`.
  */
 import path from 'node:path';
 

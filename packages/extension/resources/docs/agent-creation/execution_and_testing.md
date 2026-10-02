@@ -18,15 +18,17 @@ two flow shapes:
   container / `defaultOutputFiles`.
 - **Tool-use flow** for `agentCategory: toolUse`. Multi-step loop invoking
   declared tools. May WAIT for interim follow-ups, spawn subagents via
-  `delegate_workflow` / `delegate_agent`, and resume.
+  the `agent` tool (directly or from a `script`), and resume.
 
 The creator agent does NOT need to call `executeAgent` directly. Instead it
-delegates through tools that handle everything (including approval and the
+delegates through the `agent` tool, which handles everything (including approval and the
 follow-up queue) the way an ordinary user would.
 
 ## Testing a new agent
 
-Use the `delegate_*` tools in the `tools:` list of `creator.yaml`.
+Use the `agent` tool in the `tools:` list of `creator.yaml`. The named
+agent decides the category: pass `inputFiles` to a workflow agent and none
+to a tool-use agent.
 
 ### Testing a workflow agent
 
@@ -35,12 +37,12 @@ Use the `delegate_*` tools in the `tools:` list of `creator.yaml`.
    bash: mkdir -p test_inputs
    write_file test_inputs/sample.tex with a 5–10 line LaTeX snippet
    ```
-2. Call `delegate_workflow`:
+2. Call `agent`:
    ```
-   delegate_workflow(
-     agent: "my_new_polish",
+   agent(
+     agentName: "my_new_polish",
      model: "<a configured workflow model>",
-     instruction: "Tighten the abstract",
+     prompt: "Tighten the abstract",
      inputFiles: ["./test_inputs/sample.tex"]
    )
    ```
@@ -52,12 +54,12 @@ Use the `delegate_*` tools in the `tools:` list of `creator.yaml`.
 
 ### Testing a tool-use agent
 
-1. Call `delegate_agent`:
+1. Call `agent`:
    ```
-   delegate_agent(
-     agent: "my_new_tool_agent",
+   agent(
+     agentName: "my_new_tool_agent",
      model: "<a configured tool-use model>",
-     instruction: "Do X (small end-to-end smoke test)"
+     prompt: "Do X (small end-to-end smoke test)"
    )
    ```
 2. When the subagent hits WAITING (or finishes), read the output and decide
@@ -76,5 +78,5 @@ plainly in the hand-off message that the agent has not been exercised.
 ## Iterating
 
 If a test fails — invalid YAML, missing tool, unclear prompt, wrong output
-structure — use `edit_file` on the custom YAML and re-run the delegation
-call. Both delegation tools pick up the updated file on the next invocation.
+structure — use `edit_file` on the custom YAML and re-run the `agent`
+call. It picks up the updated file on the next invocation.

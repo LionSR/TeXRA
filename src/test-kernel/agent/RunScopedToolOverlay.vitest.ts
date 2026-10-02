@@ -11,6 +11,7 @@ import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
+  AgentSettingSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -19,13 +20,16 @@ import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
+import { apiKeySecretName } from '@model/apiProviders';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -262,6 +266,147 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
         );
+        yield* closeSessionOf(session);
+      }),
+  );
+
+  // Failure modes: a credential added mid-run (1) rewrites agent's
+  // description, so its `shown` digest and the cached tools change; (2)
+  // rewrites the frozen system text; (3) never reaches the model; (4)
+  // reaches it as more than one line, or as the whole list again.
+  it.effect(
+    'a credential added mid-run leaves the delegation tool and system text as recorded and tells the model in one line',
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv(apiKeyEnvName('deepseek'), '');
+        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const config = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'test-model',
+          agentCategory: AgentCategory.ToolUse,
+          workingDirectory: process.cwd(),
+        });
+        const launch = validationLaunch({ runId, session }, config);
+        const ctx: AgentLaunchContext = {
+          ...launch,
+          setting: AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            tools: [{ name: 'agent' }],
+          }),
+        };
+        yield* runToolUse({ resume: false }).pipe(
+          Effect.provide(runLayer(ctx, [])),
+          Effect.orDie,
+        );
+        const before = (yield* session.ledger.load(runId))!;
+
+        yield* ctx.stores.secrets.set(apiKeySecretName('deepseek'), 'sk-test');
+        const step = yield* Effect.gen(function* () {
+          return yield* stepFor(yield* AgentRun, before, false, 'request', {
+            base: () => 'base',
+            isChild: () => false,
+            activated: () => [],
+          });
+        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
+
+        const offered = step.rows.find((row) => row.type === 'tools.offered');
+        assert(offered?.type === 'tools.offered');
+        expect(offered.payload.tools).toEqual(before.offeredTools);
+        expect(offered.payload.tools.some(({ name }) => name === 'agent')).toBe(
+          true,
+        );
+        expect(offered.payload.system).toBe(before.offeredSystem);
+        const told = step.rows.filter((row) => row.type === 'model.message');
+        expect(told).toHaveLength(1);
+        assert(told[0]?.type === 'model.message');
+        expect(told[0].payload).toMatchObject({
+          kind: 'append',
+          messages: [
+            {
+              role: 'system',
+              text: expect.stringMatching(
+                /^Models for delegation now available: deepseek\/[^\n]*\.$/,
+              ),
+            },
+          ],
+        });
+        yield* closeSessionOf(session);
+      }),
+  );
+
+  // Failure modes: a plugin switched on mid-run (1) re-renders the script
+  // tool's declarations, so its `shown` digest and the cached tools change;
+  // (2) leaves the new tool uncallable from the step; (3) never reaches the
+  // model; (4) reaches it as more than one line.
+  it.effect(
+    'a plugin switched on mid-run leaves the script description as frozen and tells the model in one line',
+    () =>
+      Effect.gen(function* () {
+        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const config = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'test-model',
+          agentCategory: AgentCategory.ToolUse,
+          workingDirectory: process.cwd(),
+        });
+        const ctx: AgentLaunchContext = {
+          ...validationLaunch({ runId, session }, config),
+          setting: AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            tools: [
+              { name: 'script' },
+              { name: 'read_file' },
+              { name: 'zotero_search' },
+            ],
+          }),
+        };
+        const switches = ctx.stores.globalState;
+        yield* switches.update(GlobalStateKey.DISABLED_TOOLS, ['zotero']);
+        yield* runToolUse({ resume: false }).pipe(
+          Effect.provide(runLayer(ctx, [])),
+          Effect.orDie,
+        );
+        const before = (yield* session.ledger.load(runId))!;
+
+        const step = yield* Effect.gen(function* () {
+          const run = yield* AgentRun;
+          const system = {
+            base: () => 'base',
+            isChild: () => false,
+            activated: () => [],
+          };
+          // The activation's first step is held to the record; the switch
+          // reaches the one after it.
+          yield* stepFor(run, before, false, 'request', system);
+          yield* switches.update(GlobalStateKey.DISABLED_TOOLS, []);
+          return yield* stepFor(run, before, false, 'request', system);
+        }).pipe(Effect.provide(runLayer(ctx, [])), Effect.orDie);
+
+        const offered = step.rows.find((row) => row.type === 'tools.offered');
+        assert(offered?.type === 'tools.offered');
+        const script = (tools: readonly { name: string; shown: string }[]) =>
+          tools.find(({ name }) => name === 'script')?.shown;
+        expect(script(offered.payload.tools)).toBeDefined();
+        expect(script(offered.payload.tools)).toBe(
+          script(before.offeredTools ?? []),
+        );
+        expect(step.tools.registry.has('zotero_search')).toBe(true);
+        const told = step.rows.filter((row) => row.type === 'model.message');
+        expect(told).toHaveLength(1);
+        assert(told[0]?.type === 'model.message');
+        expect(told[0].payload).toMatchObject({
+          kind: 'append',
+          messages: [
+            {
+              role: 'system',
+              text: 'These tools are now available: zotero_search.',
+            },
+          ],
+        });
         yield* closeSessionOf(session);
       }),
   );

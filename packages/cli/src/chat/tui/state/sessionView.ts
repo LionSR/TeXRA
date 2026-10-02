@@ -24,7 +24,6 @@ import type {
   RunView,
 } from '@shared/session/sessionView';
 import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
-import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 /** The bound bridge, itself a signal so a computed over the view (the
  *  approval Surface's foreground) re-tracks when a chat session rebinds. */
@@ -149,10 +148,7 @@ export function runningChildCount(
 
 /**
  * The nearest ancestor's position, for a child's location: a workflow
- * ancestor's round off `RunView.position`, and the open phase for a
- * workflow-script ancestor, which drives no loop of its own — its child loop
- * is terminal on the first turn, so it never writes a `run.position` and its
- * `position` stays null. A tool-use ancestor's turn is no position of the child:
+ * ancestor's round off `RunView.position`. A tool-use ancestor's turn is no position of the child:
  * it keeps counting after the child started, and the child's row already
  * shows its own turn, so the header and the status bar would name a third
  * `tN` that disagrees with both.
@@ -165,22 +161,8 @@ export function ancestorPositionLabel(
   // Root first in the view; the nearest ancestor that has a position wins.
   for (const ancestor of ancestors.toReversed()) {
     const run = runViewOf(view, ancestor.id);
-    if (run === undefined) continue;
-    const label =
-      (run.position?.kind === 'round'
-        ? formatLoopPositionLabel(run.position)
-        : undefined) ?? openWorkflowPhaseLabel(run);
-    if (label !== undefined) return label;
+    if (run?.position?.kind === 'round')
+      return formatLoopPositionLabel(run.position);
   }
   return undefined;
-}
-
-/** The phase a workflow-script run has opened most recently, spelled by the
- *  one owner of phase-heading copy. Only a workflow-script run carries a run
- *  model, so every other run has no phase to name. */
-function openWorkflowPhaseLabel(run: RunView): string | undefined {
-  const opened = run.transcript.run?.phases.findLast((phase) => phase.opened);
-  return opened === undefined
-    ? undefined
-    : formatWorkflowPhaseHeading(opened.heading);
 }

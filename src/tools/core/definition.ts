@@ -32,14 +32,17 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
+  readonly describe: ITool['describe'];
 };
 
 export type DefineToolOptions<T, R = never> = {
   name: string;
   description: string;
   schema: ZodType<T, unknown>;
-  /** Agent category a delegation tool's description is annotated from. */
+  /** Agent category this delegation tool launches. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
+  /** See {@link ToolDefinition.scriptReturns}. */
+  scriptReturns?: string;
   /** Product hosts this tool definition statically excludes itself from. */
   unavailableHosts?: readonly SettingHost[];
   /**
@@ -53,10 +56,16 @@ export type DefineToolOptions<T, R = never> = {
   guard?: ToolGuard<T, NoInfer<R>>;
   execute: ToolExecute<T, R>;
   parallelSafe?: boolean;
+  /** See {@link ITool.ownsConcurrency}. */
+  ownsConcurrency?: boolean;
+  /** See {@link ITool.scriptGlobal}. */
+  scriptGlobal?: ITool['scriptGlobal'];
   /** See {@link ITool.replay}; omitted is `'unsafe'`. */
   replay?: ITool['replay'];
   requiresApproval?: ITool['requiresApproval'];
   slow?: boolean;
+  /** See {@link ITool.describe}. */
+  describe?: ITool['describe'];
 };
 
 /**
@@ -91,13 +100,21 @@ export function defineTool<T, R = never>(
       ...(def.availabilityCategory && {
         availabilityCategory: def.availabilityCategory,
       }),
+      ...(def.scriptReturns !== undefined && {
+        scriptReturns: def.scriptReturns,
+      }),
     },
     parallelSafe: def.parallelSafe,
+    ...(def.ownsConcurrency !== undefined && {
+      ownsConcurrency: def.ownsConcurrency,
+    }),
+    ...(def.scriptGlobal !== undefined && { scriptGlobal: def.scriptGlobal }),
     replay: def.replay,
     requiresApproval: def.requiresApproval,
     slow: def.slow,
     unavailableHosts: def.unavailableHosts,
     guard: def.guard,
+    describe: def.describe,
     // Validate lazily in the caller's fiber; interruption never becomes a
     // tool result.
     call: (rawInput) =>

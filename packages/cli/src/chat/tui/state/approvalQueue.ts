@@ -130,13 +130,7 @@ const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
 const decided = signal<ReadonlySet<string>>(new Set());
 
 /** Jump-to-waiting: the focused stream's requests lead the order. */
-const promoted = signal<
-  | {
-      readonly runId: RunId;
-      readonly includeRunIds: ReadonlySet<RunId>;
-    }
-  | undefined
->(undefined);
+const promoted = signal<RunId | undefined>(undefined);
 
 /**
  * The host capabilities a decision can name (`approvalDecisionArms`'s host
@@ -157,11 +151,7 @@ export function useHostCapability(
 
 /** Whether the promoted stream's requests lead `request`'s. */
 function leads(request: { readonly runId: RunId }): boolean {
-  const lead = promoted.get();
-  return (
-    lead !== undefined &&
-    (request.runId === lead.runId || lead.includeRunIds.has(request.runId))
-  );
+  return request.runId === promoted.get();
 }
 
 /** Drop each request-keyed entry whose request is no longer in `live`. */
@@ -274,18 +264,10 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
 /**
  * Stable-partition the pending requests so `runId`'s lead, then re-read
  * the head. Used by jump-to-waiting: focusing a session surfaces that
- * session's request immediately. `includeRunIds` lets a composite surface
- * promote requests owned by the runs it presents, such as a workflow
- * popup's direct children.
+ * session's request immediately.
  */
-export function promoteApprovalsForRun(
-  runId: RunId,
-  options: { readonly includeRunIds?: ReadonlySet<RunId> } = {},
-): void {
-  promoted.set({
-    runId,
-    includeRunIds: options.includeRunIds ?? new Set(),
-  });
+export function promoteApprovalsForRun(runId: RunId): void {
+  promoted.set(runId);
 }
 
 /** Staged presentations whose request the fold has listed at least once. A

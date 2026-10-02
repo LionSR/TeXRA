@@ -24,6 +24,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
 import {
@@ -35,7 +36,7 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { SessionView } from '@shared/session/sessionView';
+import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
@@ -78,7 +79,7 @@ import { listRuns } from './executions/runListing';
 import { sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
-import { workflowBoardView } from './executions/workflowSummaryView';
+import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly session: SessionHandle;
@@ -160,7 +161,7 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
-  const run = yield* requireToolRun('executions', yield* ToolCall);
+  const { run } = yield* requireToolRun('executions', yield* ToolCall);
   const context: RunToolContext = {
     session: run.session,
     runId: run.runId,
@@ -376,13 +377,13 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   const report = yield* getRunRecords(session, runId).readReport();
   const lines = buildSummaryLines(run);
 
-  // Non-null exactly for a workflow-script run: the fold derives the
-  // board every host paints, and this bounds it for a model's context.
-  if (run.transcript.run !== null) {
+  // A background script's calls, from its rows, under the same bounds.
+  if (run.identity.kind === 'script') {
+    const { calls } = yield* scriptRunCalls(session, runId);
     lines.push(
       '',
-      'Workflow:',
-      JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
+      'Script:',
+      JSON.stringify(scriptCallsView(calls, isLiveRun(run)), null, 2),
     );
   }
 

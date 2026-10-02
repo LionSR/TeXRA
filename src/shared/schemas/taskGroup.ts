@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 import { TaskGroupStatusSchema } from './run';
 
-export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
+export const StageKindSchema = z.enum([
+  'run',
+  'round',
+  'phase',
+  'session',
+  'script',
+]);
 
 export const TaskGroupSchema = z.strictObject({
   id: z.string().min(1),
@@ -12,8 +18,6 @@ export const TaskGroupSchema = z.strictObject({
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
   kind: StageKindSchema.optional(),
-  /** Workflow-script projection attempt that opened this phase. */
-  attemptId: z.string().min(1).optional(),
   index: z.int().nonnegative().optional(),
   total: z.int().positive().optional(),
 });

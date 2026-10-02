@@ -29,6 +29,7 @@ import { RunLedgerRefused } from '@shared/session/runLedger';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
+import { createScriptRunStrategy } from './scriptRun';
 
 import { type RunEndResult } from './RunEndResult';
 import {
@@ -341,6 +342,19 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
         completion = root;
       } else {
+        const native = {
+          ...launchOptions,
+          runId,
+          parentRunId,
+          startedAt: Date.now(),
+          workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
+          resume: { identity: resume, options: { ...launchOptions, onIdle } },
+        };
+        // A background script reports once, at its end: no progress.
+        const script =
+          resume.agentConfig.agentCategory === AgentCategory.ToolUse
+            ? (resume.agentConfig.backgroundScript ?? null)
+            : null;
         completion = yield* startChildRunLoop({
           session,
           runId,
@@ -348,14 +362,15 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           queueLease,
           agentName: resume.agentConfig.agent,
           budgeted: true,
-          strategy: createNativeSubagentStrategy({
-            ...launchOptions,
-            runId,
-            parentRunId,
-            startedAt: Date.now(),
-            workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
-            resume: { identity: resume, options: { ...launchOptions, onIdle } },
-          }),
+          ...(script === null
+            ? { strategy: createNativeSubagentStrategy(native) }
+            : {
+                strategy: createScriptRunStrategy({
+                  ...native,
+                  title: script.title,
+                }),
+                notify: () => undefined,
+              }),
         });
       }
       // The run owns this queue until termination. Interrupting either
