@@ -84,7 +84,7 @@
     "@types/turndown": "^5.0.6",
     "@types/vscode": "^1.125.0",
     "@types/write-file-atomic": "^4.0.3",
-    "@types/ws": "8.18.1",
+    "@types/ws": "8.18.2",
     "@typescript/native": "catalog:",
     "@vscode/test-electron": "^3.1.0",
     "citty": "^0.2.2",
