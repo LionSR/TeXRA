@@ -1,5 +1,10 @@
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
+import {
+  isEmptyUsage,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
@@ -41,9 +46,8 @@ export interface CliSessionStatusInput {
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy: TexraApprovalPolicy;
-  /** The task's spend: the root's `treeUsage`, its own calls (`usage`), and
-   *  each agent it started with that agent's `treeUsage`. Undefined before
-   *  anything is metered. */
+  /** The task's spend (`taskCostStatus`); undefined before anything is
+   *  metered. */
   readonly cost?: CliSessionCostStatus;
 }
 
@@ -54,6 +58,30 @@ interface CliSessionCostStatus {
     readonly label: string;
     readonly usage: TokenUsageStats;
   }[];
+}
+
+/**
+ * The spend of the task `run` belongs to, read off the fold: its root's
+ * `treeUsage`, the root's own calls (`usage`), and each agent the root
+ * started that spent anything, with that agent's `treeUsage`.
+ */
+export function taskCostStatus(
+  view: SessionView,
+  run: RunView | undefined,
+): CliSessionCostStatus | undefined {
+  if (run === undefined) return undefined;
+  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
+  if (root === undefined || isEmptyUsage(root.treeUsage)) return undefined;
+  return {
+    total: root.treeUsage,
+    own: root.usage,
+    agents: root.childIds.flatMap((childId) => {
+      const child = view.runs.get(childId);
+      return child === undefined || isEmptyUsage(child.treeUsage)
+        ? []
+        : [{ label: child.label, usage: child.treeUsage }];
+    }),
+  };
 }
 
 function costLabel(usage: TokenUsageStats): string {
