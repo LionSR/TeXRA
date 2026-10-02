@@ -7,12 +7,11 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import type { UserQuestionPermission } from '@shared/schemas';
+import { ToolError, type UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
-import { generateShortId } from '@utils/core';
 
 const CHANNEL = 'UserQuestionTool';
 
@@ -40,11 +39,14 @@ type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
 ) {
-  const { runId, session } = yield* requireToolRun(
-    'ask_user_question',
-    yield* ToolCall,
-  );
-  const requestId = `user-question-${generateShortId()}`;
+  const call = yield* ToolCall;
+  const { runId } = yield* requireToolRun('ask_user_question', call);
+  const requests = call.requests;
+  if (!requests)
+    return yield* Effect.fail(
+      new ToolError('ask_user_question requires an active run context.'),
+    );
+  const requestId = requests.nextId('user-question');
 
   yield* Effect.logInfo('User question requested').pipe(
     Effect.annotateLogs({
@@ -60,7 +62,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     allowBypass: false,
     runId,
   };
-  const decision = yield* session.openRequest(runId, {
+  const decision = yield* requests.open({
     kind: 'userQuestion',
     data: permission,
   });

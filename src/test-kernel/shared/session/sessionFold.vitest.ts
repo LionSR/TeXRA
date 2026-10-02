@@ -1325,7 +1325,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
 /** The binding row an approval commits beside its `request.opened`. */
 const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
-  payload: { callId, attempt, requestId },
+  payload: { callId, attempt, requestId, role: 'call' },
 });
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
@@ -1464,7 +1464,7 @@ describe('foldRunState', () => {
         expect(state?.pendingIntents['call-a']).toEqual({
           attempt: 1,
           responseId: RESPONSE_ID,
-          approvalRequestId: null,
+          binding: null,
         });
         expect(state?.pendingResponse?.settled).toEqual({});
       },
@@ -1510,9 +1510,10 @@ describe('foldRunState', () => {
           ),
         );
         expect(state?.requests['req-1']?.resolved).toBe(false);
-        expect(state?.pendingIntents['call-a']?.approvalRequestId).toBe(
-          'req-1',
-        );
+        expect(state?.pendingIntents['call-a']?.binding).toEqual({
+          requestId: 'req-1',
+          role: 'call',
+        });
       },
     ],
     [

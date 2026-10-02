@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Layer, Scope, SynchronizedRef } from 'effect';
+import { type Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -11,11 +11,13 @@ import type { OpenStep } from '@agent/runtime/loop/step';
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
+import type { PermissionPayload } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
+import { generateShortId } from '@utils/core';
 
 type CallRun = NonNullable<ToolCallShape['run']>;
 
@@ -76,6 +78,15 @@ export function nativeToolTestLayer(
         steps: noStep(),
         scope: Scope.makeUnsafe(),
         ...run,
+      },
+      // A run's requests open unbound on its session: a test call has no
+      // loop to bind them to.
+      requests: run && {
+        nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
+        open: (
+          payload: PermissionPayload,
+          opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
+        ) => run.session.openRequest(run.runId, payload, opened),
       },
       ...call,
     })),
