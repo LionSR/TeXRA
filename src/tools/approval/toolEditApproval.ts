@@ -227,12 +227,12 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       call.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
-    const { run, requests } = call;
-    if (!run || !requests) {
+    if (call.run === undefined) {
       return yield* Effect.fail(
         new Error('A tool-edit approval needs an active run.'),
       );
     }
+    const { run, requests } = call;
     const { session } = run;
     const contextRunId = run.runId;
     const withRunId =

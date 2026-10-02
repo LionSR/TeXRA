@@ -164,7 +164,7 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
-  const run = yield* requireToolRun('executions', yield* ToolCall);
+  const { run } = yield* requireToolRun('executions', yield* ToolCall);
   const context: RunToolContext = {
     session: run.session,
     runId: run.runId,

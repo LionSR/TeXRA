@@ -7,7 +7,7 @@ import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
 } from '@shared/schemas';
-import { ToolError, type UserQuestionPermission } from '@shared/schemas';
+import type { UserQuestionPermission } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -39,13 +39,10 @@ type AskUserQuestionInput = z.infer<typeof AskUserQuestionInputSchema>;
 const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
   input: AskUserQuestionInput,
 ) {
-  const call = yield* ToolCall;
-  const { runId } = yield* requireToolRun('ask_user_question', call);
-  const requests = call.requests;
-  if (!requests)
-    return yield* Effect.fail(
-      new ToolError('ask_user_question requires an active run context.'),
-    );
+  const {
+    run: { runId },
+    requests,
+  } = yield* requireToolRun('ask_user_question', yield* ToolCall);
   const requestId = requests.nextId('user-question');
 
   yield* Effect.logInfo('User question requested').pipe(

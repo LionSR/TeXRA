@@ -26,15 +26,12 @@ import {
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
+import { requireToolRun } from '@tools/core/toolRun';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import {
-  proposeAndExecute,
-  requireDelegationParent,
-  requireVisibleAgent,
-} from './proposalFlow';
+import { proposeAndExecute, requireVisibleAgent } from './proposalFlow';
 import {
   assertWorkflowFilesExist,
   memoriesField,
@@ -55,10 +52,7 @@ function executeWorkflowAgentTool(
   input: WorkflowAgentInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = yield* requireDelegationParent(
-      'delegate_workflow',
-      yield* ToolCall,
-    );
+    const call = yield* requireToolRun('delegate_workflow', yield* ToolCall);
     const agent = yield* requireVisibleAgent(
       call.roots,
       'workflow',
@@ -161,10 +155,7 @@ function executeDelegateAgentTool(
   input: DelegateAgentInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = yield* requireDelegationParent(
-      'delegate_agent',
-      yield* ToolCall,
-    );
+    const call = yield* requireToolRun('delegate_agent', yield* ToolCall);
     // The `working_directory` gate, over this call's project: the schema
     // parses the path, the session it runs on says whether worktrees are
     // enabled for it, and the path must be an existing directory.

@@ -126,7 +126,8 @@ export const ModelMessagePayloadSchema = z
   .discriminatedUnion('kind', [
     /**
      * A billed request is about to leave the process. Carries no history,
-     * only the address of the rest it sends (`requestContext.ts`).
+     * only the address of the rest it sends (`requestContext.ts`). A
+     * background script run's opening one (`handedDown`) sends nothing.
      */
     z.strictObject({
       kind: z.literal('attempt'),

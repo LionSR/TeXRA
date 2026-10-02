@@ -114,7 +114,9 @@ export interface ITool<E = Error, R = never> {
    * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
    * its text, and the cached prefix through it, as it was.
    */
-  readonly describe?: (declared: readonly ToolDefinition[]) => string;
+  readonly describe?: (
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+  ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 

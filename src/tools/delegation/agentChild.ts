@@ -28,46 +28,35 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { deriveRunId } from '@utils/core/idHash';
 
 // Local file imports
-import {
-  executeSubagentInBand,
-  resumeSubagentInBand,
-  type InBandSubagentLaunchOptions,
-} from './inBandSubagentRun';
-import type { DelegationParent } from './proposalFlow';
+import { resumeSubagentInBand } from './inBandSubagentRun';
 
-/** One `agent` call of a run: a provider's call ids are unique within one
- *  response only. */
-export interface AgentCallId {
-  readonly responseId: string;
-  readonly callId: string;
-}
-
-/** The child run one attempt of one `agent` call runs under. */
+/**
+ * The child run one attempt of a call runs under, `call`'s own by default.
+ * A provider's call ids are unique within one response only, so the call is
+ * named by its response too.
+ */
 export const agentChildRunId = (
-  parentRunId: RunId,
-  call: AgentCallId,
-  attempt: number,
+  call: RunToolCall,
+  attempt = call.attempt ?? 1,
 ): RunId =>
   deriveRunId({
-    parentRunId,
-    responseId: call.responseId,
-    callId: call.callId,
+    parentRunId: call.run.runId,
+    responseId: call.responseId ?? '',
+    callId: call.toolCallId ?? call.run.runId,
     attempt,
   });
 
 /** The child the latest earlier attempt of this call launched, if any. */
 export const earlierChild = Effect.fn('agent.earlierChild')(function* (
-  session: SessionHandle,
-  parentRunId: RunId,
-  call: AgentCallId,
-  attempt: number,
+  call: RunToolCall,
 ): Effect.fn.Return<RunId | null, DatabaseReadFailed> {
-  for (let earlier = attempt - 1; earlier >= 1; earlier -= 1) {
-    const runId = agentChildRunId(parentRunId, call, earlier);
-    if (yield* getRunRecords(session, runId).exists()) return runId;
+  for (let earlier = (call.attempt ?? 1) - 1; earlier >= 1; earlier -= 1) {
+    const runId = agentChildRunId(call, earlier);
+    if (yield* getRunRecords(call.run.session, runId).exists()) return runId;
   }
   return null;
 });
@@ -130,15 +119,13 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
   return { kind: 'fresh' };
 });
 
-/** How an awaited child ended for its call. */
-export interface EndedChild {
-  readonly runId: RunId;
-  readonly result: RunEnd;
-}
-
 /** What the child an earlier attempt of the call left settles it to. */
 type Recovered =
-  | ({ readonly kind: 'ended' } & EndedChild)
+  | {
+      readonly kind: 'ended';
+      readonly runId: RunId;
+      readonly result: RunEnd;
+    }
   /** A person chose to skip a call whose child's outcome is unknown. */
   | { readonly kind: 'unknown'; readonly runId: RunId; readonly reason: string }
   /** No child answers the call: this attempt launches its own. */
@@ -152,10 +139,8 @@ type Recovered =
  * asked about, the question bound to the call so it outlives a restart.
  */
 export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
-  call: DelegationParent,
+  call: RunToolCall,
   recovery: {
-    readonly id: AgentCallId;
-    readonly attempt: number;
     readonly agentName: string;
     /** Progress lines for the parent's trace. */
     readonly notify: (update: SubagentProgressUpdate) => void;
@@ -166,12 +151,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
   },
 ): Effect.fn.Return<Recovered, Error, AgentRunServices> {
   const { session, runId: parentRunId } = call.run;
-  const earlier = yield* earlierChild(
-    session,
-    parentRunId,
-    recovery.id,
-    recovery.attempt,
-  );
+  const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
   const standing = yield* standingOf(session, earlier);
   switch (standing.kind) {
@@ -202,10 +182,6 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     }
     case 'unknown': {
       const { requests } = call;
-      if (requests === undefined)
-        return yield* Effect.die(
-          new Error('An agent call asks outside its tool call.'),
-        );
       const question = `Agent run ${earlier} for '${recovery.agentName}' may have done work no result records: ${standing.reason}. Run the call again, or skip it?`;
       const rerun = 'Run again';
       const decision = yield* requests.open({
@@ -237,22 +213,3 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     }
   }
 });
-
-/** Launch this attempt's child under its own id and await it. */
-export const launchAgentChild = (
-  call: DelegationParent,
-  launch: {
-    readonly id: AgentCallId;
-    readonly attempt: number;
-    readonly prepare: InBandSubagentLaunchOptions['prepare'];
-  },
-): Effect.Effect<EndedChild, Error, AgentRunServices> => {
-  const { session, runId: parentRunId } = call.run;
-  const runId = agentChildRunId(parentRunId, launch.id, launch.attempt);
-  return executeSubagentInBand({
-    session,
-    runId,
-    parentRunId,
-    prepare: launch.prepare,
-  }).pipe(Effect.map(({ result }) => ({ runId, result })));
-};

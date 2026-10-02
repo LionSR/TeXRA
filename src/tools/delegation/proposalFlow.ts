@@ -14,11 +14,9 @@ import {
   resolveDelegationScopeAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentRegistry';
-import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
   AgentDelegationScope,
   RequestDecision,
-  ToolError,
   ToolResult,
   ToolUseAgentProposal,
   WorkflowAgentProposal,
@@ -37,28 +35,13 @@ import {
 import { refusalOf } from '@shared/session/approvalDecision';
 import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
-import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
 import { executeSubagent, type ApprovalMeta } from './subagentRun';
-
-/** Invocation capabilities required by a delegation tool after its entry check. */
-export interface DelegationParent extends ToolCallShape {
-  readonly run: ToolRun;
-}
-
-/** Narrow a generic tool call to the capabilities every delegation path needs. */
-export function requireDelegationParent(
-  toolName: string,
-  call: ToolCallShape,
-): Effect.Effect<DelegationParent, ToolError> {
-  return requireToolRun(toolName, call).pipe(
-    Effect.map((run) => ({ ...call, run })),
-  );
-}
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -195,7 +178,7 @@ type ProposalRequestError =
 export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-    parent: DelegationParent,
+    parent: RunToolCall,
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId } = parent.run;
@@ -233,10 +216,6 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 
     // A call made under a run opens its requests through the loop's door.
     const { requests } = parent;
-    if (!requests)
-      return yield* Effect.die(
-        new Error('A delegation proposal is raised outside its tool call.'),
-      );
     const result = yield* requests.open({
       kind: 'proposal',
       data: { requestId: requests.nextId('proposal'), runId, ...proposal },
@@ -260,7 +239,7 @@ interface ApprovedDelegation {
  * one call's agent or model, so it changes neither.
  */
 export const decideDelegation = Effect.fn('decideDelegation')(function* (
-  parent: DelegationParent,
+  parent: RunToolCall,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
   ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
 ) {
@@ -378,7 +357,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
  * Otherwise, waits for user approval via the session's host interactions.
  */
 export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
-  parent: DelegationParent,
+  parent: RunToolCall,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ) {
   const decided = yield* decideDelegation(parent, proposal);

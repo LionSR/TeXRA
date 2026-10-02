@@ -600,7 +600,7 @@ export const GitHubSubscriptionTool = defineTool({
   execute: (input: GitHubSubscriptionInput) =>
     Effect.gen(function* () {
       const toolCall = yield* ToolCall;
-      const run = yield* requireToolRun('github_subscription', toolCall);
+      const { run } = yield* requireToolRun('github_subscription', toolCall);
       switch (input.command) {
         case 'subscribe':
           return yield* execSubscribe(input, run.runId, run.session);

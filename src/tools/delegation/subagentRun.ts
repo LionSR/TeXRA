@@ -34,13 +34,13 @@ import {
   type DelegatedChildApproval,
 } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
+import type { RunToolCall } from '@tools/core/toolRun';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
-import type { DelegationParent } from './proposalFlow';
 
 // ============================================================================
 // Shared utilities
@@ -93,7 +93,7 @@ export interface ApprovalMeta {
  * delivery — the same choreography every child-run type shares.
  */
 export const executeSubagent = Effect.fn('executeSubagent')(function* (
-  parent: DelegationParent,
+  parent: RunToolCall,
   configPayload: AgentConfigPayload,
   parentRunId: RunId,
   options?: { approvalMeta?: ApprovalMeta },
@@ -173,7 +173,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
-    parent: DelegationParent,
+    parent: RunToolCall,
     childConfigPayload: AgentConfigPayload,
     launch: {
       readonly parentRunId: RunId;

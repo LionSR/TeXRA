@@ -182,7 +182,9 @@ function executeAcceptRunFilesTool(
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
     const call = yield* ToolCall;
-    const { session } = yield* requireToolRun('accept_run_files', call);
+    const {
+      run: { session },
+    } = yield* requireToolRun('accept_run_files', call);
     const directory = yield* findExistingRunStoragePathUnder(
       call.roots.storage,
       input.execution_id,

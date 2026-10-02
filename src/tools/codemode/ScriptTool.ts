@@ -25,7 +25,7 @@ import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/define';
 import { launchBackgroundScript } from './backgroundScript';
-import { declarationOf } from './declarations';
+import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
 
 /** Most calls one script may issue; a resume reissues the same ones. */
@@ -148,12 +148,15 @@ const shown = (value: unknown): string =>
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   const toolCall = yield* ToolCall;
-  const { scriptCalls: issued, hooks, run } = toolCall;
+  const { scriptCalls: issued, hooks } = toolCall;
   // A one-shot run has no later turn for a follow-up to reach.
-  const oneShot = run?.toolPolicy.stopAfterCycle === true;
-  if (input.run_in_background === true && run !== undefined && !oneShot)
+  if (
+    input.run_in_background === true &&
+    toolCall.run !== undefined &&
+    toolCall.run.toolPolicy.stopAfterCycle !== true
+  )
     return yield* launchBackgroundScript(
-      { ...toolCall, run },
+      toolCall,
       SCRIPT_TOOL,
       {
         code: input.code,
@@ -209,8 +212,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           });
         const global = globals.get(op.name);
         if (global !== undefined) {
-          // `agent(prompt, opts)` is `tools.agent({ ...opts, prompt })`: the
-          // call is the tool's, recorded as the tool's.
+          // `name(first, opts)` is `tools.name({ ...opts, [positional]: first })`:
+          // the call is the tool's, recorded as the tool's.
           const [first, rest] = Array.isArray(op.input) ? op.input : [];
           if (rest != null && (typeof rest !== 'object' || Array.isArray(rest)))
             return Effect.succeed<ScriptSettlement>({
@@ -290,7 +293,7 @@ const SURFACE = [
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
-    '- `agent(prompt, opts)`, when you are offered `agent`, is `tools.agent({ prompt, ...opts })`: it runs a named agent, waits for it, and resolves to its result `{ response | outputs, structured, outcome, cost }` rather than `{ output, summary }`. It rejects with an Error named `AgentFailed`, `TimedOut` or `Skipped`.',
+    '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
     '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
   'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
@@ -313,8 +316,15 @@ export const ScriptTool = defineTool({
         '```ts',
         'type ToolOutput = { output: string; summary?: string };',
         'declare const tools: {',
-        ...declared.map((definition) => declarationOf(definition, false, '  ')),
+        ...declared.map(({ definition }) =>
+          declarationOf(definition, false, '  '),
+        ),
         '};',
+        ...declared.flatMap(({ definition, scriptGlobal }) =>
+          scriptGlobal === undefined
+            ? []
+            : [globalDeclarationOf(definition, scriptGlobal.positional)],
+        ),
         '```',
       ].join('\n'),
     ].join('\n\n'),

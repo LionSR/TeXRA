@@ -97,7 +97,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { requireDelegationParent } from '@tools/delegation/proposalFlow';
+import { requireToolRun } from '@tools/core/toolRun';
 import { executeSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 
@@ -570,6 +570,10 @@ async function launchWaitingChild(options: {
     roots: session.roots,
     tracker: new FileInteractionState(),
     workingDirectory: process.cwd(),
+    requests: {
+      nextId: (prefix: string) => prefix,
+      open: () => Effect.die(new Error('This fixture opens no request.')),
+    },
     run: {
       runId: PARENT_RUN_ID,
       session,
@@ -1268,7 +1272,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           },
           call: () =>
             Effect.gen(function* () {
-              const parent = yield* requireDelegationParent(
+              const parent = yield* requireToolRun(
                 'launch_workflow_child',
                 yield* ToolCall,
               );

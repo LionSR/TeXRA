@@ -57,20 +57,19 @@ import { configureDelegatedChildApprovals } from '@tools/approval';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
+import { requireToolRun, type RunToolCall } from '@tools/core/toolRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { truncatedHexId } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  agentChildRunId,
-  earlierChild,
-  launchAgentChild,
-  recoverAgentChild,
-} from './agentChild';
+import { agentChildRunId, earlierChild, recoverAgentChild } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { SubagentDurabilityError } from './inBandSubagentRun';
+import {
+  executeSubagentInBand,
+  SubagentDurabilityError,
+} from './inBandSubagentRun';
 import {
   memoriesField,
   rejectOversizedBibAttachments,
@@ -81,9 +80,7 @@ import {
 } from './inputFields';
 import {
   decideDelegation,
-  requireDelegationParent,
   requireWorkflowOrToolUseAgent,
-  type DelegationParent,
 } from './proposalFlow';
 import {
   describeSubagentProgress,
@@ -206,7 +203,7 @@ function optionMisfit(
  * One the run's stop cancelled is asked again under a fresh id.
  */
 const scriptRequest = (
-  call: DelegationParent,
+  call: RunToolCall,
   script: ScriptScope,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
 ) =>
@@ -244,13 +241,8 @@ const scriptRequest = (
         );
       if (decided.decision.action !== 'cancel') return decided.decision;
     }
-    const { requests } = call;
-    if (requests === undefined)
-      return yield* Effect.die(
-        new Error('A script request is raised outside its tool call.'),
-      );
     const calls = yield* script.calls;
-    return yield* requests.open({
+    return yield* call.requests.open({
       kind: 'proposal',
       data: {
         requestId:
@@ -292,9 +284,7 @@ const fingerprint = Effect.fn('agent.fingerprint')(function* (
  * the `script` call, and the background script runs it launched. A call of
  * a background script's run reaches its parent and its siblings this way.
  */
-const reuseScope = Effect.fn('agent.reuseScope')(function* (
-  call: DelegationParent,
-) {
+const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const { session, runId, config } = call.run;
   const view = yield* session.readView([]);
   const root =
@@ -317,7 +307,7 @@ const reuseScope = Effect.fn('agent.reuseScope')(function* (
  * `tool.result` rows; only an executed result carries a key.
  */
 const reusable = Effect.fn('agent.reusable')(function* (
-  call: DelegationParent,
+  call: RunToolCall,
   script: ScriptScope,
   key: string,
 ) {
@@ -427,7 +417,7 @@ function childResult(
 const executeAgentTool = Effect.fn('AgentTool.call')(function* (
   input: AgentInput,
 ) {
-  const call = yield* requireDelegationParent('agent', yield* ToolCall);
+  const call = yield* requireToolRun('agent', yield* ToolCall);
   const { script } = call;
   if (script === undefined || input.background === true)
     return yield* agentCall(call, input);
@@ -455,7 +445,7 @@ function failedResult(agentName: string, error: Error): ToolResult {
 }
 
 const agentCall = Effect.fn('AgentTool.agentCall')(function* (
-  call: DelegationParent,
+  call: RunToolCall,
   input: AgentInput,
 ) {
   const { run, script } = call;
@@ -521,12 +511,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = run.toolPolicy.stopAfterCycle === true;
   const awaited =
     oneShot || (script !== undefined && input.background !== true);
-  const id = {
-    responseId: call.responseId ?? '',
-    callId: call.toolCallId ?? parentRunId,
-  };
-  const attempt = call.attempt ?? 1;
-
   // Q2: a completed call with the same prompt, options and file bytes. The
   // requested model, not the one availability resolves to, so a reuse does
   // not depend on which credentials are configured now.
@@ -588,7 +572,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   // anything about a launch is decided again: it was approved and
   // configured when it launched.
   if (!awaited) {
-    const earlier = yield* earlierChild(session, parentRunId, id, attempt);
+    const earlier = yield* earlierChild(call);
     if (earlier !== null)
       return {
         ...executed(
@@ -600,8 +584,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   } else {
     const recovered = yield* Effect.result(
       recoverAgentChild(call, {
-        id,
-        attempt,
         agentName: agent.name,
         notify,
         running,
@@ -702,7 +684,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const parentOffered = yield* offeredBy(run);
 
   if (!awaited) {
-    const runId = agentChildRunId(parentRunId, id, attempt);
+    const runId = agentChildRunId(call);
     const receipt = yield* launchDetachedSubagent(call, configPayload, {
       parentRunId,
       runId,
@@ -717,9 +699,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   }
   const launched = yield* Effect.result(
     running(
-      launchAgentChild(call, {
-        id,
-        attempt,
+      executeSubagentInBand({
+        session,
+        runId: agentChildRunId(call),
+        parentRunId,
         prepare: () =>
           Effect.succeed({
             configPayload,
