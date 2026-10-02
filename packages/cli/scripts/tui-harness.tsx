@@ -325,6 +325,8 @@ if (SHOW_PROJECT_SKILL) {
 const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
   HARNESS_STORAGE_ROOT,
   {
+    // The built-in agents load from here, as `texra chat` passes it.
+    resourcesPath: HARNESS_RESOURCES_PATH,
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
   },
 ).runPromise(
@@ -1108,7 +1110,10 @@ async function appendHarnessPlanDecision(
 // idle todos instead park the run in a waiting state.
 const HARNESS_RUN_ACTIVE =
   QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS);
-const HARNESS_RUN_IDLE = SHOW_TODOS && SHOW_IDLE_TODOS;
+// A root that has finished a turn and waits, as a real chat after its first
+// message: the state an approval grant applies to.
+const HARNESS_RUN_IDLE =
+  (SHOW_TODOS && SHOW_IDLE_TODOS) || process.env.HARNESS_ROOT_WAITING === '1';
 
 function harnessInitialRunStatus(): RunPhase | undefined {
   if (HARNESS_RUN_ACTIVE) return RUN_PHASE.RUNNING;

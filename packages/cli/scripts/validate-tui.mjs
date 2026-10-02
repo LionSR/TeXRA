@@ -79,7 +79,7 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-// `/config` → Tools (sixth row) → Tool integrations (third row, by hotkey).
+// `/config` → Tools (fifth row) → Tool integrations (fourth row, by hotkey).
 const CONFIG_TOOLS_FORM_KEYS = [
   '/config',
   { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
@@ -87,9 +87,8 @@ const CONFIG_TOOLS_FORM_KEYS = [
   DOWN,
   DOWN,
   DOWN,
-  DOWN,
   '\r',
-  { input: '3', delayMs: ASYNC_FORM_SETTLE_MS },
+  { input: '4', delayMs: ASYNC_FORM_SETTLE_MS },
 ];
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_ENTRIES: '4',
@@ -655,7 +654,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', KITTY_SHIFT_ENTER, 'second line', '\r'],
     frame: 'viewport',
-    expect: ['Harness received: first line\nsecond line'],
+    expect: ['Harness received: first line\n  second line'],
     unexpect: ['first linesecond line', '13;2u', '[13', 'ERROR'],
   },
   {
@@ -664,7 +663,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', LF, 'second line', '\r'],
     frame: 'viewport',
-    expect: ['Harness received: first line\nsecond line'],
+    expect: ['Harness received: first line\n  second line'],
     unexpect: ['first linesecond line', 'ERROR'],
   },
   {
@@ -692,7 +691,7 @@ const SCENARIOS = [
       'polish',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc close',
+      'Esc cancel',
     ],
     unexpect: [
       'Platform not initialized',
@@ -730,7 +729,7 @@ const SCENARIOS = [
       'polish',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc close',
+      'Esc cancel',
     ],
     unexpect: [
       'Platform not initialized',
@@ -954,7 +953,7 @@ const SCENARIOS = [
       '/approval',
       'Choose when commands and edits ask first, or toggle an',
       'Ask',
-      'Never',
+      'Block',
       'Auto-approve',
       'Auto-approve commands — Off · this session',
       'Auto-approve edits — Off · this session',
@@ -969,7 +968,8 @@ const SCENARIOS = [
     // status-bar badge.
     name: 'approval-toggle-auto-bash',
     frame: 'viewport',
-    env: { HARNESS_ENTRIES: '4' },
+    // A grant applies to a root that waits after a turn (`runActions`).
+    env: { HARNESS_ENTRIES: '4', HARNESS_ROOT_WAITING: '1' },
     keys: ['/approval', '\r', '4'],
     expect: ['Auto-approve commands: on', 'AUTO-BASH'],
   },
@@ -979,7 +979,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval never', '\r', '/status', '\r'],
     expect: [
-      'Approval mode: Deny Bash commands and tool edits.',
+      'Approval mode: Block shell commands and file edits.',
       'API keys',
       'never',
       '/ commands',
@@ -1105,7 +1105,7 @@ const SCENARIOS = [
       '/agent',
       'Current: chat (hidden from picker)',
       'Tool-use agents',
-      '+4 more',
+      '+9 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',
@@ -1287,11 +1287,10 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      '… 8 previous rows',
-      '› /status   Show session details',
-      '/config',
-      'View and toggle settings',
-      '/exit',
+      '… 5 previous rows',
+      '› /status    Show session details',
+      '/memory',
+      '… 6 more rows',
       'Esc close',
     ],
   },
@@ -1650,7 +1649,7 @@ const SCENARIOS = [
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: [
-      'approval: Ask before commands and edits.',
+      'approval: Ask before shell commands and file edits.',
       'auto-approvals: commands',
       'AUTO-BASH',
     ],
