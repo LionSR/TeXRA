@@ -42,7 +42,6 @@ import {
   extractionShorthandToolConfig,
   toJsonValue,
   ToolError,
-  type RequestDecision,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
@@ -229,13 +228,17 @@ const scriptRequest = (
         (row) => row.type === 'request.decided' && row.requestId === last,
       );
       if (decided?.type !== 'request.decided')
+        // A plane that closes first decides nothing: the call stays in
+        // flight, and the next resume finds the request still open.
         return yield* session.decisionFor(runId, last, from).pipe(
           Effect.map((row) => row.decision),
           Effect.catch((cause) =>
-            Effect.succeed<RequestDecision>({
-              action: 'cancel',
-              cause: cause.message,
-            }),
+            Effect.logWarning(
+              `The script's agent request ${last} closed without a decision; the call stays in flight and the next resume asks again.`,
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              Effect.andThen(Effect.interrupt),
+            ),
           ),
         );
       if (decided.decision.action !== 'cancel') return decided.decision;
