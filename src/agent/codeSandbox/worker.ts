@@ -25,10 +25,10 @@ import {
 } from 'quickjs-emscripten-core';
 import { z } from 'zod';
 
-import { DETERMINISM_PRELUDE } from '@agent/workflowScript/determinismPrelude';
 import { ensureError } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
 
+import { DETERMINISM_PRELUDE } from './determinismPrelude';
 import {
   MAX_FANOUT,
   QUICKJS_MEMORY_LIMIT_BYTES,
