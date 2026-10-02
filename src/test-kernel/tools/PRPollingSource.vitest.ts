@@ -103,7 +103,7 @@ const secretsLayer = Layer.merge(
 
 /** A source whose subscription states stay active for the whole drain. */
 function createDrainSource(): PRPollingSource {
-  const source = new PRPollingSource();
+  const source = new PRPollingSource(undefined, Effect.void);
   source.has = vi.fn().mockReturnValue(true);
   return source;
 }
@@ -132,7 +132,6 @@ describe('PRPollingSource annotation drain', () => {
           'repo',
           42,
           expect.anything(),
-          expect.any(Number),
         );
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
         expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
@@ -233,7 +232,10 @@ describe('PRPollingSource annotation drain', () => {
 
   it.effect('updates the annotation level for an existing listener', () =>
     Effect.gen(function* () {
-      const source = new PRPollingSource(yield* makePollingLifetime);
+      const source = new PRPollingSource(
+        yield* makePollingLifetime,
+        Effect.void,
+      );
       const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
       const listener = vi.fn<(text: string) => Effect.Effect<void>>(
         () => Effect.void,
