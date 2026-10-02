@@ -65,7 +65,7 @@ export const attachDroppedFiles = Effect.fn('attachDroppedFiles')(function* (
       : yield* Effect.forEach(
           rawPaths,
           (raw) => droppedWorkspaceFile(workspacePath, raw),
-          { concurrency: 'unbounded' },
+          { concurrency: 8 },
         );
   return yield* attachDroppedPaths(resolved, allowedExtensions);
 });

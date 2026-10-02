@@ -41,6 +41,7 @@ import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
 import { readCompletedRunConversation } from '@transcript';
 import { assertNever, unique } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -842,7 +843,13 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* fs.stat(fullPath).pipe(Effect.orDie);
+  // A recorded file the user since deleted is an outcome the model reads, not
+  // a defect.
+  const unreadable = (cause: unknown) =>
+    new ToolError(
+      `Cannot read ${directoryErrorPath}: ${toErrorMessage(cause)}`,
+    );
+  const stats = yield* fs.stat(fullPath).pipe(Effect.mapError(unreadable));
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
@@ -853,7 +860,9 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* readNormalizedFile(fs, fullPath).pipe(Effect.orDie);
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(
+    Effect.mapError(unreadable),
+  );
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

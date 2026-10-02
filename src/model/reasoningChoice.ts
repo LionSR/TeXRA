@@ -7,6 +7,7 @@
  * Code, Codex) goes through it, so the default, the handling of a level a
  * model lacks, and the report of what was changed are the same everywhere.
  */
+import { Data } from 'effect';
 import {
   EFFORT_SCALE,
   ReasoningEffort,
@@ -35,9 +36,9 @@ export interface ReasoningChoice {
 export type ReasoningRequest = Omit<ModelSelection, 'ref'>;
 
 /** A selection the model cannot run as asked. */
-export class ReasoningChoiceError extends Error {
-  override readonly name = 'ReasoningChoiceError';
-}
+export class ReasoningChoiceError extends Data.TaggedError(
+  'ReasoningChoiceError',
+)<{ readonly message: string }> {}
 
 const rank = (effort: ReasoningEffort) => EFFORT_SCALE.indexOf(effort);
 
@@ -75,9 +76,9 @@ function snapped(
   if (accepted.includes(wanted)) return { effort: wanted };
   const effort = nearestEffort(accepted, wanted);
   if (effort === undefined || strict) {
-    throw new ReasoningChoiceError(
-      `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
-    );
+    throw new ReasoningChoiceError({
+      message: `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
+    });
   }
   return {
     effort,
@@ -119,7 +120,9 @@ export function chooseReasoning(
     request.mode !== undefined &&
     !(config.modes ?? []).includes(request.mode)
   ) {
-    throw new ReasoningChoiceError(`${label} has no ${request.mode} mode.`);
+    throw new ReasoningChoiceError({
+      message: `${label} has no ${request.mode} mode.`,
+    });
   }
   const mode = request.mode ?? null;
   const explicit = request.effort;
@@ -127,9 +130,9 @@ export function chooseReasoning(
 
   if (reasoning === undefined) {
     if (explicit !== undefined && explicit !== ReasoningEffort.NONE) {
-      throw new ReasoningChoiceError(
-        `${label} does not reason; it cannot take effort ${explicit}.`,
-      );
+      throw new ReasoningChoiceError({
+        message: `${label} does not reason; it cannot take effort ${explicit}.`,
+      });
     }
     return { thinking: false, effort: null, mode };
   }
@@ -151,7 +154,9 @@ export function chooseReasoning(
           note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
         };
       }
-      throw new ReasoningChoiceError(`${label} cannot turn thinking off.`);
+      throw new ReasoningChoiceError({
+        message: `${label} cannot turn thinking off.`,
+      });
     }
     if (wanted === ReasoningEffort.NONE || reasoning.off.length === 0) {
       return { thinking: false, effort: null, mode };

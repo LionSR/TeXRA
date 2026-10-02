@@ -88,6 +88,22 @@ describe('CLI tool display lines', () => {
     `);
   });
 
+  it('heads a described bash call with its description and paints the command beneath', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'npm test', description: 'Run the unit tests' },
+      { headerSummary: 'npm test', outputText: 'ok' },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● bash (Run the unit tests)",
+        "⎿ npm test",
+        "⎿ ok",
+      ]
+    `);
+  });
+
   it('elides long bash output to a head+tail slice with a line marker', () => {
     const entry = bashOutput('seq 20', numberedLines(20));
 

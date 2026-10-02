@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import type { SessionHandle } from '@agent/runtime';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
+import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   cloneOverleafProject as runOverleafClone,
@@ -21,13 +24,26 @@ import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { executeCommand } from '@utils/system/execUtils';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'gitCommands';
+
+/** Hand a URL to the browser; a refusal is logged, not raised, because the
+ *  dialogs that offer it have nothing further to do about one. */
+const openUrl = (url: string) =>
+  new VscodeExternalOpener()
+    .openExternal(url)
+    .pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(`Could not open ${url}: ${failure.message}`).pipe(
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
 
 export function findCommitInHistory(
   session: SessionHandle,
@@ -80,21 +96,25 @@ function promptInput(
   title: string,
   prompt: string,
   password = false,
-): Effect.Effect<string | null> {
+): Effect.Effect<string | null, HostPromptFailed> {
   return Effect.gen(function* () {
-    const val = yield* Effect.promise(() =>
-      vscode.window.showInputBox({
-        title,
-        prompt,
-        password,
-        ignoreFocusOut: true,
-      }),
-    );
+    const val = yield* inputBox({
+      title,
+      prompt,
+      password,
+      ignoreFocusOut: true,
+    });
     const trimmed = val?.trim() ?? '';
     if (!trimmed) {
       // Show cancellation message only if user dismissed with empty string (not Escape)
       if (val !== undefined) {
-        vscode.window.showWarningMessage('Clone cancelled.');
+        yield* Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showWarningMessage('Clone cancelled.'),
+            undefined,
+          ),
+        );
       }
       return null;
     }
@@ -138,18 +158,29 @@ const promptGitMissing = Effect.fnUntraced(function* () {
     : (['Open git-scm.com'] as const);
 
   yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
-  yield* Effect.promise(async () => {
-    const selected = await vscode.window.showErrorMessage(message, ...actions);
-    if (selected === 'Copy Command' && command) {
-      await vscode.env.clipboard.writeText(command);
-    } else if (selected === 'Run in Terminal' && command) {
-      const terminal = vscode.window.createTerminal('Install Git');
-      terminal.show();
-      terminal.sendText(command);
-    } else if (selected === 'Open git-scm.com') {
-      void vscode.env.openExternal(vscode.Uri.parse(GIT_DOWNLOAD_URL));
-    }
-  });
+  const selected = yield* announce(
+    CHANNEL,
+    vscodeUi.error(message, { items: actions }),
+    undefined,
+  );
+  if (selected === 'Copy Command' && command) {
+    yield* Effect.tryPromise({
+      try: async () => vscode.env.clipboard.writeText(command),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Could not copy the command: ${error.message}`).pipe(
+          withLogChannel(CHANNEL),
+        ),
+      ),
+    );
+  } else if (selected === 'Run in Terminal' && command) {
+    const terminal = vscode.window.createTerminal('Install Git');
+    terminal.show();
+    terminal.sendText(command);
+  } else if (selected === 'Open git-scm.com') {
+    yield* openUrl(GIT_DOWNLOAD_URL);
+  }
 });
 
 /** Wire the shared Overleaf/ShareLaTeX clone workflow to VS Code's secret
@@ -162,12 +193,11 @@ function buildOverleafClonePorts(
   workspaceFs: RootedFileSystem,
 ): OverleafCloneWorkflowPorts {
   return {
-    // `orDie` keeps what `Effect.promise` did with a rejected store call: a
-    // credential store this host cannot reach is a defect here, not a clone
-    // outcome the workflow reports.
-    getStoredToken: (key) => Effect.orDie(secrets.get(key)),
-    deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
-    storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
+    // A credential store this host cannot reach fails the clone with its
+    // `SecretsFailed`, which the workflow's `Error` channel carries.
+    getStoredToken: (key) => secrets.get(key),
+    deleteStoredToken: (key) => secrets.delete(key),
+    storeToken: (key, token) => secrets.set(key, token),
     promptToken: (spec) =>
       promptInput(
         spec.tokenTitle,
@@ -178,17 +208,19 @@ function buildOverleafClonePorts(
       Effect.logError(message).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(
-          Effect.promise(async () => {
-            const action = await vscode.window.showErrorMessage(
-              message,
-              ...(spec.tokenHint ? (['How to get a token'] as const) : []),
-            );
-            if (action === 'How to get a token') {
-              void vscode.env.openExternal(
-                vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
-              );
-            }
-          }),
+          announce(
+            CHANNEL,
+            vscodeUi.error(message, {
+              items: spec.tokenHint ? ['How to get a token'] : [],
+            }),
+            undefined,
+          ).pipe(
+            Effect.flatMap((action) =>
+              action === 'How to get a token'
+                ? openUrl(OVERLEAF_TOKEN_DOCS_URL)
+                : Effect.void,
+            ),
+          ),
         ),
       ),
 
@@ -199,11 +231,13 @@ function buildOverleafClonePorts(
       Effect.logError(`readDir failed: ${toErrorMessage(e)}`).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(
-          Effect.sync(() => {
-            void vscode.window.showErrorMessage(
-              'Cannot read workspace folder.',
-            );
-          }),
+          Effect.forkDetach(
+            announce(
+              CHANNEL,
+              vscodeUi.showErrorMessage('Cannot read workspace folder.'),
+              undefined,
+            ),
+          ),
         ),
       ),
     showWorkspaceNotEmpty: () =>
@@ -220,36 +254,37 @@ function buildOverleafClonePorts(
         () => gitClone(clone, workspacePath),
       ),
     showCloneSucceeded: (label) =>
-      Effect.sync(() => {
-        vscode.window.showInformationMessage(`${label} project cloned.`);
-      }),
+      Effect.forkDetach(
+        announce(
+          CHANNEL,
+          vscodeUi.showInfoMessage(`${label} project cloned.`),
+          undefined,
+        ),
+      ).pipe(Effect.asVoid),
     showAuthFailure: (r) =>
-      Effect.promise(async () => {
+      Effect.gen(function* () {
         const detail = r.isOverleaf
           ? 'Your git token may be invalid or expired.'
           : 'Check your credentials.';
-        const actions = r.isOverleaf
-          ? (['Get New Token', 'How to get a token'] as const)
-          : (['Retry'] as const);
-        const authErrorMessage = `Clone failed: authentication error. ${detail}`;
-        const selected = await vscode.window.showErrorMessage(
-          authErrorMessage,
-          ...actions,
+        const selected = yield* announce(
+          CHANNEL,
+          vscodeUi.error(`Clone failed: authentication error. ${detail}`, {
+            items: r.isOverleaf
+              ? ['Get New Token', 'How to get a token']
+              : ['Retry'],
+          }),
+          undefined,
         );
         if (selected === 'Get New Token') {
-          void vscode.env.openExternal(
-            vscode.Uri.parse(OVERLEAF_GIT_TOKEN_URL),
-          );
+          yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
         } else if (selected === 'How to get a token') {
-          void vscode.env.openExternal(
-            vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
-          );
+          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
         }
       }),
     showCloneFailed: (message) =>
-      Effect.sync(() => {
-        void vscode.window.showErrorMessage(message);
-      }),
+      Effect.forkDetach(
+        announce(CHANNEL, vscodeUi.showErrorMessage(message), undefined),
+      ).pipe(Effect.asVoid),
     logCloneError: (message) =>
       Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
   };

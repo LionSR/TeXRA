@@ -554,7 +554,7 @@ export abstract class PollingSourceBase<
       );
       const failures = exits.filter(Exit.isFailure);
       if (failures.length > 0) {
-        yield* Effect.failCause(
+        return yield* Effect.failCause(
           failures
             .map((exit) => exit.cause)
             .reduce((left, right) => Cause.combine(left, right)),

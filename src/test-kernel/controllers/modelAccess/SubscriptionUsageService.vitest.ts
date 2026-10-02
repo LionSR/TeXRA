@@ -51,6 +51,7 @@ function stubCodexSession(
   overrides: {
     readonly loadSession?: () => Effect.Effect<unknown, unknown>;
     readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
+    readonly refreshRejected?: () => Effect.Effect<void, unknown>;
   } = {},
 ): void {
   vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
@@ -64,6 +65,7 @@ function stubCodexSession(
           accessToken: 'chatgpt-secret',
           accountId: 'account-123',
         })),
+    refreshRejected: overrides.refreshRejected ?? (() => Effect.void),
   } as never);
 }
 
@@ -660,7 +662,14 @@ describe('SubscriptionUsageService', () => {
   ])(
     'maps %s HTTP %s to invalid credentials without exposing details',
     async (provider, status) => {
-      stubCodexSession();
+      let accessToken = 'chatgpt-secret';
+      stubCodexSession({
+        getFreshSession: () => Effect.sync(() => ({ accessToken })),
+        refreshRejected: () =>
+          Effect.sync(() => {
+            accessToken = 'chatgpt-refreshed';
+          }),
+      });
       const http = vi.fn<UsageFetch>(async () =>
         jsonResponse({ secret: 'must not escape' }, status),
       );
@@ -671,6 +680,15 @@ describe('SubscriptionUsageService', () => {
         reason: 'invalid_credentials',
       });
       expect(JSON.stringify(snapshot)).not.toContain('secret');
+      // A ChatGPT 401 is retried once, on the refreshed token.
+      if (provider === 'chatgpt') {
+        expect(
+          http.mock.calls.map(
+            ([, init]) =>
+              (init.headers as Record<string, string>).authorization,
+          ),
+        ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
+      }
     },
   );
 
@@ -683,7 +701,9 @@ describe('SubscriptionUsageService', () => {
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
     stubCodexSession({
       getFreshSession: () =>
-        Effect.fail(new SubscriptionOAuthError('refresh failed', kind)),
+        Effect.fail(
+          new SubscriptionOAuthError({ message: 'refresh failed', kind }),
+        ),
     });
     const http = vi.fn<UsageFetch>();
 

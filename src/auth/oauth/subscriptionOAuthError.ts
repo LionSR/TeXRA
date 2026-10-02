@@ -1,3 +1,5 @@
+import { Data } from 'effect';
+
 /**
  * Shared error kinds for subscription OAuth coordinators (ChatGPT, Grok, …).
  *
@@ -10,22 +12,14 @@
 export type SubscriptionOAuthErrorKind =
   'fatal' | 'expired' | 'transient' | 'config' | 'pending';
 
-export class SubscriptionOAuthError extends Error {
+export class SubscriptionOAuthError extends Data.TaggedError(
+  'SubscriptionOAuthError',
+)<{
+  readonly message: string;
   readonly kind: SubscriptionOAuthErrorKind;
-  readonly status?: number;
-
-  constructor(
-    message: string,
-    kind: SubscriptionOAuthErrorKind,
-    status?: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = 'SubscriptionOAuthError';
-    this.kind = kind;
-    this.status = status;
-  }
-
+  readonly status?: number | undefined;
+  readonly cause?: unknown;
+}> {
   /** Whether the user must re-authenticate (vs. retry). */
   get needsReauth(): boolean {
     return this.kind === 'fatal' || this.kind === 'expired';

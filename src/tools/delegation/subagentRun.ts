@@ -199,7 +199,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         workingDirectory,
         parentOffered,
         onRunResolved: inheritChildRunApprovals,
-        userFollowUpSupport,
       };
 
       yield* startDetachedChildRunLoop({
@@ -207,6 +206,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         runId,
         parentRunId,
         agentName,
+        budgeted: true,
         buildLaunch: () =>
           restore(Effect.void).pipe(
             Effect.andThen(

@@ -38,6 +38,18 @@ export interface BashDeliveryStreamExcerpt {
   elidedChars?: number;
 }
 
+/** The call a background command came from: what it runs, and the
+ *  model's short description of it, which names it in the transcript. */
+export interface BackgroundBashCall {
+  readonly command: string;
+  readonly description?: string | null;
+}
+
+const callAttributes = ({ command, description }: BackgroundBashCall) => [
+  { name: 'command', value: command },
+  ...(description ? [{ name: 'description', value: description }] : []),
+];
+
 /**
  * Format a completed background bash result as a delivery message.
  * Queued as a follow-up for the orchestrator.
@@ -48,7 +60,7 @@ export interface BashDeliveryStreamExcerpt {
  */
 export function formatBashDelivery(
   runId: string,
-  command: string,
+  call: BackgroundBashCall,
   wallTimeMs: number,
   result: ExecResult,
   stdout: BashDeliveryStreamExcerpt,
@@ -56,6 +68,10 @@ export function formatBashDelivery(
 ): string {
   const lines = [
     `<exit-code>${result.exitCode}</exit-code>`,
+    // The code above is synthetic when the process timed out or its exit
+    // status was lost; say which, so no reader takes it for a real exit.
+    ...(result.timedOut ? ['<timed-out>true</timed-out>'] : []),
+    ...(result.noExitCode ? ['<no-exit-code>true</no-exit-code>'] : []),
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
   const outputStreams = [
@@ -84,7 +100,7 @@ export function formatBashDelivery(
   return formatDelivery({
     tag: DELIVERY_TAG.backgroundResult,
     runId,
-    attributes: [{ name: 'command', value: command }],
+    attributes: callAttributes(call),
     lines,
   });
 }
@@ -94,13 +110,13 @@ export function formatBashDelivery(
  */
 export function formatBashError(
   runId: string,
-  command: string,
+  call: BackgroundBashCall,
   err: unknown,
 ): string {
   return formatDelivery({
     tag: DELIVERY_TAG.backgroundError,
     runId,
-    attributes: [{ name: 'command', value: command }],
+    attributes: callAttributes(call),
     message: toErrorMessage(err),
   });
 }

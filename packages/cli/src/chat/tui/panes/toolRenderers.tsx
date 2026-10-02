@@ -248,8 +248,11 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
  *
  *  - a `file` section with no line range — `deriveToolInputPreview` read the
  *    very same `path`/`file_path` key to build the preview;
- *  - the unlabeled `shell`/`yaml` dump the shared default builder emits for a
- *    tool with no structured sections of its own.
+ *  - the unlabeled `yaml` dump the shared default builder emits for a tool
+ *    with no structured sections of its own, and its `shell` dump. A bash
+ *    call keeps its command when a description heads the row, so its dump is
+ *    redundant only when the header is that command; for any other tool the
+ *    dump's `command` is a sub-command name (`list`), never worth a block.
  *
  * A file body (`file` language), a workflow script, and every labeled section
  * carry content of their own and always paint.
@@ -257,16 +260,16 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
 function isHeaderRedundantSection(
   section: ToolSection,
   headerPreview: string,
+  isBashKind: boolean,
 ): boolean {
   if (!headerPreview) return false;
   if (section.kind === 'file') {
     return section.startLine === undefined && section.endLine === undefined;
   }
-  return (
-    section.kind === 'code' &&
-    section.label === '' &&
-    (section.language === 'shell' || section.language === 'yaml')
-  );
+  if (section.kind !== 'code' || section.label !== '') return false;
+  if (section.language === 'yaml') return true;
+  if (section.language !== 'shell') return false;
+  return !isBashKind || section.text.oneLine === headerPreview;
 }
 
 /**
@@ -339,7 +342,7 @@ function buildStyledLines(
 
   const patchGroups = patchGroupsFromSections(model.sections, model.isError);
   const sectionRows = model.sections.flatMap((section) =>
-    isHeaderRedundantSection(section, headerPreview)
+    isHeaderRedundantSection(section, headerPreview, isBashKind)
       ? []
       : // Section values are producer text too (paths, ids, checklist
         // items); a CR in one opens a row rather than moving the cursor.

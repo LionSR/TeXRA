@@ -1212,10 +1212,10 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it.effect('turns manifest-write failures into fatal workflow aborts', () =>
     Effect.gen(function* () {
-      const durabilityError = new SubagentDurabilityError(
-        'result manifest unavailable',
-        { cause: new Error('storage offline') },
-      );
+      const durabilityError = new SubagentDurabilityError({
+        message: 'result manifest unavailable',
+        cause: new Error('storage offline'),
+      });
       mocks.executeSubagentInBand.mockReturnValueOnce(
         Effect.fail(durabilityError),
       );
@@ -1240,7 +1240,9 @@ describe('createWorkflowScriptAgentRunner', () => {
       cause: Cause.fromReasons([
         Cause.makeInterruptReason(),
         Cause.makeFailReason(
-          new SubagentDurabilityError('result manifest unavailable'),
+          new SubagentDurabilityError({
+            message: 'result manifest unavailable',
+          }),
         ),
       ]),
       name: 'an interrupt with a durability failure',

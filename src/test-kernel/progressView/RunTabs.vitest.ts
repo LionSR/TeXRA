@@ -137,4 +137,24 @@ describe('run-tabs over the fold', () => {
     await settleChildRender();
     expect(rowOf(element, ROOT)).toBeTruthy();
   });
+
+  it('sends one run.delete for a double-clicked rail ×', async () => {
+    const base = fanOutView();
+    const root = base.runs.get(ROOT);
+    if (!root) throw new Error('no root run');
+    const view: SessionView = {
+      ...base,
+      runs: new Map(base.runs).set(ROOT, { ...root, actions: ['delete'] }),
+    };
+    const { element, requests } = await mountTabs(
+      view,
+      emptySurface(view.key),
+      { topLevelOnly: true, removable: true },
+    );
+
+    const remove = control(rowOf(element, ROOT), 'delete');
+    remove.click();
+    remove.click();
+    expect(requests).toEqual([{ kind: 'run.delete', runId: ROOT }]);
+  });
 });

@@ -64,6 +64,13 @@ class LeanExtensionUnavailable extends Data.TaggedError(
   readonly cause?: unknown;
 }> {}
 
+/** The Lean server rejected a request, or the extension's client faulted. */
+class LspRequestFailed extends Data.TaggedError('LspRequestFailed')<{
+  readonly method: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
 const LEAN4_NOT_INSTALLED =
   'The Lean 4 extension is not installed. Install it, then try again.';
 
@@ -371,10 +378,17 @@ function sendPositionRequest<T>(
     };
     return yield* Effect.tryPromise({
       try: () => client.sendRequest(method, params),
-      catch: (e) => `LSP request ${method} failed: ${toErrorMessage(e)}`,
+      catch: (cause) =>
+        new LspRequestFailed({
+          method,
+          message: `LSP request ${method} failed: ${toErrorMessage(cause)}`,
+          cause,
+        }),
     }).pipe(
       Effect.map((result) => ({ data: result as T })),
-      Effect.catch((error) => Effect.succeed({ data: null, error })),
+      Effect.catchTag('LspRequestFailed', (failure) =>
+        Effect.succeed({ data: null, error: failure.message }),
+      ),
     );
   });
 }

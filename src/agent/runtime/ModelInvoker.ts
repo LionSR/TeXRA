@@ -76,6 +76,7 @@ import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { policyDecidedRows } from './requestPolicy';
+import { rejectedTokenRecovery } from './rejectedTokenRecovery';
 import { AgentRun } from './run/AgentRun';
 import {
   backgroundDelivery,
@@ -538,9 +539,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         // R4: the run's context size (`contextTokens`: the last response's
         // provider-counted usage plus an estimate of what was added since).
         // An input that alone exceeds the window is refused before it is
-        // billed, and an input that leaves too little room for the requested
-        // output shrinks that output rather than letting the provider reject
-        // the request.
+        // billed; one leaving too little room for the requested output
+        // shrinks that output rather than letting the provider reject it.
         if (resolved.mode === 'foreground' && bound.contextWindow > 0) {
           const inputTokens = contextTokens(state);
           if (inputTokens > bound.contextWindow) {
@@ -581,9 +581,8 @@ export const modelInvokerLayer = (): Layer.Layer<
                 details: request.debugName,
               },
             );
-            // The clamp is part of the request, so the request is prepared
-            // again with it: execution never reapplies defaults over a
-            // resolved turn.
+            // The clamp is part of the request, so it is prepared again:
+            // execution never reapplies defaults over a resolved turn.
             resolved = yield* prepareAttempt(bound, {
               ...turnRequest,
               maxOutputTokens: reduced,
@@ -763,13 +762,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           )
           .pipe(
             Effect.provideContext(binders),
-            Effect.catch((error) =>
+            Effect.tapError((error) =>
               Effect.sync(() =>
                 logger.warn('Failed to refresh the model binding', {
                   data: error,
                 }),
               ),
             ),
+            Effect.result,
           );
 
       type Decision = 'retry' | 'deny' | 'cancel';
@@ -856,8 +856,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         logger.debug('Waiting for manual retry', { data: info.message });
         // The decision is the `request.decided` row (R5): one already landed
         // (the invoker's own, or a surface's before a crash), else the one the
-        // decide command lands while this fiber waits. A plane that closes
-        // first is a cancellation.
+        // decide command lands while this fiber waits; a closing plane cancels.
         let decision = state.requests[requestId]?.decision ?? null;
         if (decision === null) {
           const row = yield* session
@@ -895,8 +894,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               ? [...declined, offer.route]
               : declined;
           // Always rebuild the binding: a key or preference may have changed
-          // while the panel waited, and a personal answer declines the offered
-          // route.
+          // while the panel waited; a personal answer declines the route.
           yield* rebind(selection, failed, declinedRoutes);
           yield* cell.append((state) =>
             retryRows(runId, state, pendingRetry('authorized'), {
@@ -937,6 +935,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
           ));
         let automaticAttempts = 0;
+        const recoverToken = rejectedTokenRecovery(run, cell.current, rebind);
         let sent = request;
         // An open attempt with no response is an invocation the process never
         // saw finish: the next attempt continues its numbering, and its gate
@@ -1027,15 +1026,18 @@ export const modelInvokerLayer = (): Layer.Layer<
           let carried = false;
           let invocation: InvocationRef;
           let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
-          if (observing !== null) {
-            invocation = observing.invocation;
+          // The accepted operation this round observed, if any: a recovered
+          // token re-observes it rather than resubmitting an admitted turn.
+          const observed = observing;
+          if (observed !== null) {
+            invocation = observed.invocation;
             exit = yield* Effect.exit(
               observeAccepted(
                 cell,
                 invocation,
                 request,
                 bound,
-                observing.accepted,
+                observed.accepted,
               ),
             );
             observing = null;
@@ -1065,9 +1067,13 @@ export const modelInvokerLayer = (): Layer.Layer<
               ? Effect.fail(error)
               : Effect.die(error ?? Cause.squash(exit.cause));
           }
-          lastFailure = error.failure.formatted;
+          const failure = yield* recoverToken(error.failure, bound);
+          if (failure === null) {
+            observing = observed;
+            continue;
+          }
+          lastFailure = failure.formatted;
           failedAttempt = invocation;
-          const { failure } = error;
           const dropChain = carried && failure.storedResponseGone;
           if (dropChain) {
             logger.warn(

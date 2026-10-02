@@ -1,5 +1,5 @@
 // Local imports - utilities
-import { Result } from 'effect';
+import { Data, Result } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
@@ -13,12 +13,12 @@ interface ExtractedFrontmatter {
  * plain read/IO errors so consumers can classify malformed frontmatter by
  * type instead of string-matching error messages.
  */
-export class SkillFrontmatterError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.name = 'SkillFrontmatterError';
-  }
-}
+export class SkillFrontmatterError extends Data.TaggedError(
+  'SkillFrontmatterError',
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 /**
  * Extract strict YAML frontmatter from a SKILL.md file.
@@ -30,27 +30,29 @@ export class SkillFrontmatterError extends Error {
 export function extractFrontmatter(content: string): ExtractedFrontmatter {
   const split = splitFrontmatterFence(content);
   if (split.kind === 'no-opening-fence') {
-    throw new SkillFrontmatterError(
-      'SKILL.md must start with YAML frontmatter',
-    );
+    throw new SkillFrontmatterError({
+      message: 'SKILL.md must start with YAML frontmatter',
+    });
   }
   if (split.kind === 'no-closing-fence') {
-    throw new SkillFrontmatterError(
-      'SKILL.md frontmatter is missing a closing delimiter',
-    );
+    throw new SkillFrontmatterError({
+      message: 'SKILL.md frontmatter is missing a closing delimiter',
+    });
   }
 
   const body = split.body.trim();
   if (!body) {
-    throw new SkillFrontmatterError('SKILL.md body must be non-empty');
+    throw new SkillFrontmatterError({
+      message: 'SKILL.md body must be non-empty',
+    });
   }
 
   const parsed = safeParseYaml(split.frontmatterText);
   if (Result.isFailure(parsed)) {
-    throw new SkillFrontmatterError(
-      `Invalid SKILL.md frontmatter: ${parsed.failure.message}`,
-      { cause: parsed.failure },
-    );
+    throw new SkillFrontmatterError({
+      message: `Invalid SKILL.md frontmatter: ${parsed.failure.message}`,
+      cause: parsed.failure,
+    });
   }
 
   return {

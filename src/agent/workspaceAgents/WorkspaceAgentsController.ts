@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
@@ -47,7 +47,9 @@ export interface WorkspaceAgentsEntry {
   readonly category: AgentCategory;
 }
 
-export class InvalidAgentTeamError extends Error {}
+export class InvalidAgentTeamError extends Data.TaggedError(
+  'InvalidAgentTeamError',
+)<{ readonly message: string }> {}
 
 export interface WorkspaceAgentsControllerDeps<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
@@ -310,7 +312,10 @@ export class WorkspaceAgentsController<
     return this.applyTeam(teamId).pipe(
       Effect.filterOrFail(
         (result) => result.status === 'applied',
-        () => new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
+        () =>
+          new InvalidAgentTeamError({
+            message: `Unknown agent team: ${teamId}`,
+          }),
       ),
       Effect.asVoid,
     );
@@ -485,9 +490,9 @@ export class WorkspaceAgentsController<
   ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
     if (!teamPresets(undefined).some((preset) => preset.id === teamId)) {
       return Effect.fail(
-        new InvalidAgentTeamError(
-          `Only a built-in team can be the user default: ${teamId}`,
-        ),
+        new InvalidAgentTeamError({
+          message: `Only a built-in team can be the user default: ${teamId}`,
+        }),
       );
     }
     return setDefaultTeamId(this.deps.globalState, teamId);

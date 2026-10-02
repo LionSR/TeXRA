@@ -20,7 +20,6 @@ import {
   type OfferedTool,
   RUN_OUTCOME,
   type RunId,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -59,12 +58,6 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runMode?: 'single-cycle';
   /** Persist the typed result without constructing fallible prose delivery. */
   readonly resultOnly?: boolean;
-  /**
-   * Whether the launched child can take user follow-ups. Decided by the caller
-   * (which also registers the child's child row with it) so the two can't
-   * disagree about the same run.
-   */
-  readonly userFollowUpSupport: UserFollowUpSupport;
 }
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &

@@ -135,7 +135,8 @@ interface SubscriptionRouteRow {
   /** The API key the subscription stands in for. */
   readonly provider: ApiProvider;
   /**
-   * The session read, the only refresh on this path. Its failure passes
+   * The session read, refreshing an expired session; `refreshRejected`
+   * below is the one forced refresh. Its failure passes
    * through `authFailure`, so a refresh that fails reaches the user as the
    * "sign in again, or turn off the preference" instruction.
    */
@@ -143,6 +144,10 @@ interface SubscriptionRouteRow {
     secrets: PlatformSecrets,
     config: ModelConfig,
   ) => Effect.Effect<SubscriptionSession, Error, HttpClient.HttpClient>;
+  /** Refresh the session after the provider rejected its access token. */
+  readonly refreshRejected: (
+    secrets: PlatformSecrets,
+  ) => Effect.Effect<void, Error, HttpClient.HttpClient>;
   readonly authFailure: (error: Error) => Error;
 }
 
@@ -176,6 +181,7 @@ const SUBSCRIPTION_ROUTES: {
           usageRoute: 'chatgpt-subscription',
         } as const;
       }),
+    refreshRejected: (secrets) => codexCoordinator(secrets).refreshRejected(),
     authFailure: (error) =>
       subscriptionAuthFailure(error, SUBSCRIPTION_AUTH_COPY.chatgpt),
   },
@@ -192,6 +198,7 @@ const SUBSCRIPTION_ROUTES: {
             usageRoute: 'xai-subscription',
           }) as const,
       ),
+    refreshRejected: (secrets) => xaiCoordinator(secrets).refreshRejected(),
     authFailure: (error) =>
       subscriptionAuthFailure(error, SUBSCRIPTION_AUTH_COPY.grok),
   },
@@ -216,6 +223,19 @@ export const resolveSubscriptionCredential = Effect.fn(
     .pipe(Effect.mapError(row.authFailure));
   return { ...session, provider: row.provider };
 });
+
+/**
+ * Refresh a subscription route's session after the provider answered 401
+ * to a token its stored expiry still calls fresh. A refresh that fails
+ * surfaces as the route's "sign in again" instruction.
+ */
+export function refreshRejectedSubscription(
+  route: SubscriptionSession['route'],
+  secrets: PlatformSecrets,
+): Effect.Effect<void, Error, HttpClient.HttpClient> {
+  const row = SUBSCRIPTION_ROUTES[route];
+  return row.refreshRejected(secrets).pipe(Effect.mapError(row.authFailure));
+}
 
 /**
  * Resolve the key and endpoint of an API-key route: the provider key the
@@ -308,8 +328,11 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ? !options.ownApiKeyFallback &&
         (yield* prefersCopilotRoute(config.ref, stores.globalState))
       : key === 'VscodeLm';
+  // A provider mode never takes the Copilot preference (`decideModelRoute`),
+  // so the editor is not asked for a route it would not use.
   const copilotRoute =
-    prefersCopilot || config.provider === ModelProvider.COPILOT
+    (prefersCopilot && options.mode === undefined) ||
+    config.provider === ModelProvider.COPILOT
       ? (yield* discoverCopilotRoutes()).get(config.ref)
       : undefined;
   const route = decideModelRoute(
