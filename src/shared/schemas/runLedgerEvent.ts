@@ -270,22 +270,43 @@ export const ModelMessagePayloadSchema = z
     }
   });
 
-/* ------------------------------------------------------- model.compaction */
+/* ----------------------------------------------------------- context.edit */
 
 /**
- * The only row that shortens history; `usage` is its summary call's priced
- * usage, folded as a response's (`null`: a switch calls no model). `keepPrefix`
- * spares a compaction that keeps the head (a switch keeps all of it) storing
- * the conversation again. Whether the result is preparable is the ledger's
- * check (D11), at write and cold load: a payload cannot see its prefix.
+ * The one row that edits the model's view of the run other than by
+ * appending: the messages in `range` (`[from, to)` of the history it
+ * applies to) are replaced by `messages`. An edit drops the provider-side
+ * continuation, which was over the old view, and the offered system text.
+ * `trigger` says what asked for a compaction: the threshold
+ * (`context-limit`), an overflowed window (`context-window`), a model
+ * switch (`model-switch`, an empty range: the history stays, the
+ * continuation goes) or the user's `/compact` (`user`); null for the other
+ * causes. `base` is the `seq` of the edit the view stood at when this one
+ * was computed (`null`: none), and the fold refuses an edit whose base is no
+ * longer the latest. `usage` is a summary call's priced usage, folded as a
+ * response's (`null` when no model was called). Only `compaction` has a
+ * writer; `reset`, `handoff` and `fork` are the durable harness's shapes. Whether the result is preparable is the
+ * ledger's check (D11), at write and cold load: a payload cannot see the
+ * history it edits.
  */
-export const ModelCompactionPayloadSchema = z.strictObject({
-  keepPrefix: z.int().nonnegative(),
-  messages: z.array(StoredMessageSchema).readonly(),
-  cause: z.enum(['context-limit', 'context-window', 'model-switch']),
-  continuation: ProviderEvidenceSchema.nullable(),
-  usage: NormalizedUsageSchema.nullable(),
-});
+export const ContextEditPayloadSchema = z
+  .strictObject({
+    cause: z.enum(['compaction', 'reset', 'handoff', 'fork']),
+    trigger: z
+      .enum(['context-limit', 'context-window', 'model-switch', 'user'])
+      .nullable(),
+    base: z.int().positive().nullable(),
+    range: z.strictObject({
+      from: z.int().nonnegative(),
+      to: z.int().nonnegative(),
+    }),
+    messages: z.array(StoredMessageSchema).readonly(),
+    usage: NormalizedUsageSchema.nullable(),
+  })
+  .refine(({ range }) => range.from <= range.to, {
+    path: ['range'],
+    message: 'An edit range ends before it starts.',
+  });
 
 /* ------------------------------------------------------------ script.call */
 

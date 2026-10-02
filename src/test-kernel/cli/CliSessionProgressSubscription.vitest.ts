@@ -123,6 +123,7 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
     source: {
       draft: {
         type: 'run.description',
+        by: 'model',
         aggregateId: runAggregate,
         description: 'Checking the compactness lemma',
       },
@@ -229,7 +230,8 @@ describe('attachCliSessionProgressProjection', () => {
               identity: { kind: 'process', tool: 'bash' },
               category: AgentCategory.ToolUse,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parent: { id: runId },
+              parent: { id: runId, callId: null },
+              provenance: null,
             },
           }),
         );
@@ -278,6 +280,7 @@ describe('attachCliSessionProgressProjection', () => {
             category: AgentCategory.ToolUse,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             parent: null,
+            provenance: null,
           },
           {
             type: 'run.activate',
@@ -286,6 +289,7 @@ describe('attachCliSessionProgressProjection', () => {
           },
           {
             type: 'run.description',
+            by: 'model',
             aggregateId: runAggregate,
             description: 'Recorded before the resume',
           },
@@ -297,7 +301,8 @@ describe('attachCliSessionProgressProjection', () => {
             identity: { kind: 'agent', agent: 'review' },
             category: AgentCategory.ToolUse,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-            parent: { id: runId },
+            parent: { id: runId, callId: null },
+            provenance: null,
           },
           {
             type: 'run.end',
@@ -353,7 +358,8 @@ describe('attachCliSessionProgressProjection', () => {
               identity: { kind: 'agent', agent: 'review' },
               category: AgentCategory.ToolUse,
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parent: { id: runId },
+              parent: { id: runId, callId: null },
+              provenance: null,
             },
           }),
         );
@@ -399,6 +405,7 @@ describe('attachCliSessionProgressProjection', () => {
           publish({
             draft: {
               type: 'run.description',
+              by: 'model',
               aggregateId: runAggregate,
               description: 'Checking the compactness lemma',
             },
@@ -433,6 +440,7 @@ describe('attachCliSessionProgressProjection', () => {
         publish({
           draft: {
             type: 'run.description',
+            by: 'model',
             aggregateId: runAggregate,
             description: 'Proofread the introduction',
           },
@@ -446,6 +454,7 @@ describe('attachCliSessionProgressProjection', () => {
         publish({
           draft: {
             type: 'run.description',
+            by: 'model',
             aggregateId: runAggregate,
             description: 'after detach',
           },

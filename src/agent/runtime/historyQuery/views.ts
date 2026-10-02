@@ -57,7 +57,8 @@ SELECT
   ) AS model,
   (SELECT json_extract(x.data, '$.description') FROM events x
     WHERE x.run_id = s.run_id AND x.type = 'run.description'
-    ORDER BY x.position DESC LIMIT 1) AS description,
+    ORDER BY json_extract(x.data, '$.by') = 'user' DESC, x.position DESC
+    LIMIT 1) AS description,
   s.at AS started_at,
   CASE l.type WHEN 'run.end' THEN 'ended' WHEN 'run.activate' THEN 'activated'
     ELSE 'created' END AS lifecycle,

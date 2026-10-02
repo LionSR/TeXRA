@@ -86,6 +86,22 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
+/**
+ * A call whose outcome is unknown: it may have run before the run was
+ * interrupted, and no result was recorded. Decided `retry` (run it again)
+ * or `skip` (its outcome stays unknown). `childRunId` is the run an `agent`
+ * call's earlier attempt left, when the question is about one.
+ */
+export const ToolOutcomePermissionSchema = z.strictObject({
+  requestId: z.string(),
+  runId: RunIdSchema,
+  toolName: z.string(),
+  /** What the call was: its tool and input, or the agent and why. */
+  title: z.string(),
+  childRunId: RunIdSchema.nullable(),
+});
+export type ToolOutcomePermission = z.infer<typeof ToolOutcomePermissionSchema>;
+
 /** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
   WorkflowSpecificFieldsSchema.shape,

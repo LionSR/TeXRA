@@ -44,7 +44,7 @@ import { RunIdentitySchema } from './runIdentity';
 import {
   RunSnapshotPayloadSchema,
   RunPositionPayloadSchema,
-  ModelCompactionPayloadSchema,
+  ContextEditPayloadSchema,
   ModelMessagePayloadSchema,
   ModelRetryPayloadSchema,
   ToolBindingPayloadSchema,
@@ -239,8 +239,26 @@ function durable<T extends string, S extends z.ZodRawShape>(
 const RunParentSchema = z.object({
   id: RunIdSchema,
   uid: z.uuid(),
+  /** The parent's tool call that launched this run (an `agent` call's
+   *  child, a background `script` run), which owns it until it detaches;
+   *  null for a child no call launched. */
+  callId: z.string().min(1).nullable(),
 });
 export type RunParent = z.infer<typeof RunParentSchema>;
+
+/**
+ * Where a run's history came from, when not from its own launch: a fork
+ * copies the model view of run `from` at its settled `seq` `at`. Resume is
+ * not a provenance; it is the same run. (Not `origin`: the envelope's
+ * `origin` is the process that wrote the row.)
+ */
+const RunProvenanceSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('fork'),
+    from: RunParentSchema.pick({ id: true, uid: true }),
+    at: z.int().positive(),
+  }),
+]);
 
 /**
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`
@@ -265,6 +283,8 @@ const RunStartEventSchema = durable('run.start', {
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
   parent: RunParentSchema.nullable(),
+  /** Null for a run that starts fresh. */
+  provenance: RunProvenanceSchema.nullable(),
   /** The parent's tool card (its `logId`) whose call launched this run: an
    *  `agent` call's child, a `script` call's background run. Absent for a
    *  root and for a child no card launched. */
@@ -280,7 +300,7 @@ const RunRemovedEventSchema = durable('run.removed', {
 
 /** A launcher names the parent; the database stamps its creation commit. */
 const RunStartDraftSchema = RunStartEventSchema.omit({ parent: true }).extend({
-  parent: RunParentSchema.pick({ id: true }).nullable(),
+  parent: RunParentSchema.omit({ uid: true }).nullable(),
 });
 const RunRemovedDraftSchema = RunRemovedEventSchema.omit({
   runIds: true,
@@ -337,7 +357,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
-  durable('run.description', { description: z.string() }),
+  /** A run's title, and who gave it: the model's summary, or the user's
+   *  rename, which a later model title does not replace. */
+  durable('run.description', {
+    description: z.string(),
+    by: z.enum(['model', 'user']),
+  }),
   /** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
    *  latest per (plugin, kind) and never reads it; the plugin decodes it. */
   durable('plugin.fact', {
@@ -425,7 +450,7 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
  */
 const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
-  durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
+  durable('context.edit', { payload: ContextEditPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
   /** A call a script issued, with its arguments: committed with its intent. */
   durable('script.call', { payload: ScriptCallPayloadSchema }),
@@ -573,7 +598,7 @@ export function listingTypeOf(
     case 'response.finalized':
     case 'usage':
     case 'model.message':
-    case 'model.compaction':
+    case 'context.edit':
     case 'tool.intent':
     case 'script.call':
     case 'tool.binding':
@@ -618,6 +643,9 @@ export function listingKeyOf(event: SessionEvent): string | null {
   if (type === null) return null;
   if (event.type === 'plugin.fact')
     return `${type}/${event.plugin}/${event.kind}`;
+  // Both a run's latest model title and its latest user title are kept:
+  // the fold lets the user's win.
+  if (event.type === 'run.description') return `${type}/${event.by}`;
   return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
 }
 

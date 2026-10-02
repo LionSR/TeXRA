@@ -35,6 +35,7 @@ import {
   type TurnResult,
 } from '@texra-ai/llm/turn';
 import { envVar } from '@utils/system/envFlags';
+import { COMPACTION_SYSTEM_PROMPT } from './compaction';
 import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
@@ -131,6 +132,9 @@ function goldenTurn(
   const tools = new Set(turn.tools.map((tool) => tool.name));
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
+  // The golden chat's `/compact`: its summary replaces the history.
+  if (system === COMPACTION_SYSTEM_PROMPT)
+    return Effect.succeed(text('The golden chat so far.'));
   if (system.includes('GOLDEN-PARK'))
     return gate('golden-park.release').pipe(
       Effect.as(text('Parked run released.')),
@@ -185,8 +189,16 @@ function goldenTurn(
     );
   }
   // The interactive chat: a plan the user runs as a goal, the goal
-  // completed, and a reply to the message sent after a `/model` switch.
+  // completed, a reply to the message sent after a `/model` switch, and one
+  // to the message a `/compact` summarized. The compacted history has no
+  // tool results, so its turns are told apart by what they say.
   if (system.includes('GOLDEN-CHAT')) {
+    // The last turn is held until the user stops it, so the message typed
+    // behind it stays queued on the stopped run.
+    if (said.includes('Hold this turn.'))
+      return gate('golden-chat.release').pipe(Effect.as(text('Released.')));
+    if (said.includes('The golden chat so far.'))
+      return Effect.succeed(text('Answered after the compaction.'));
     const steps = [
       () =>
         call('plan', {
@@ -201,10 +213,6 @@ function goldenTurn(
     ];
     const step = steps[results.length];
     if (step !== undefined) return Effect.succeed([step()]);
-    // The last turn is held until the user stops it, so the message typed
-    // behind it stays queued on the stopped run.
-    if (said.includes('Hold this turn.'))
-      return gate('golden-chat.release').pipe(Effect.as(text('Released.')));
     return Effect.succeed(
       text(
         said.includes('After the model switch.')

@@ -517,7 +517,10 @@ function seedRun(
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
-      options.parentRunId === undefined ? null : { id: options.parentRunId },
+      options.parentRunId === undefined
+        ? null
+        : { id: options.parentRunId, callId: null },
+    provenance: null,
   });
   if (identity.kind === 'agent') {
     publish({
@@ -595,6 +598,7 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
 function seedDescription(runId: RunId, description: string): void {
   publish({
     type: 'run.description',
+    by: 'model',
     aggregateId: qualifyAggregateId('run', runId),
     description,
   });
@@ -1760,6 +1764,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         // The creation commit the database stamps, not a guess: `Log.parent`
         // refuses a parent that never started.
         parent: parentId === null ? null : log.parent(parentId),
+        provenance: null,
       },
       owner,
     );

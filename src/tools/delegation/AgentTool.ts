@@ -732,6 +732,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
             session,
             parentOffered,
             ...(call.logId !== undefined && { parentCard: call.logId }),
+            ...(call.toolCallId !== undefined && {
+              parentCallId: call.toolCallId,
+            }),
             onRunResolved: inherit,
             notify,
           }),

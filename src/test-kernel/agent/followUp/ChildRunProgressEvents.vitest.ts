@@ -332,6 +332,7 @@ describe('child run progress events', () => {
             aggregateId: qualifyAggregateId('run', runId),
             category: AgentCategory.ToolUse,
             parent: expect.objectContaining({ id: parentRunId }),
+            provenance: null,
           }),
         ]);
 

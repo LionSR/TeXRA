@@ -31,6 +31,7 @@ describe('run metadata updates', () => {
             session.commit([
               {
                 type: 'run.description',
+                by: 'model',
                 aggregateId: aggregateId('run', id),
                 description: 'A described session',
               },

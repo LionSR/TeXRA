@@ -94,6 +94,7 @@ describe('sessionFold', () => {
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
       parent: null,
+      provenance: null,
     });
     const stage = log.emit(CHILD, 1010, {
       type: 'stage.start',
@@ -430,12 +431,14 @@ describe('sessionFold', () => {
       category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
+      provenance: null,
     });
     log.emit(PROCESS, 1650, {
       type: 'run.start',
       identity: { kind: 'process', tool: 'bash' },
       category: AgentCategory.ToolUse,
       parent: null,
+      provenance: null,
       userFollowUpSupport: 'unsupported',
     });
     const open = (id: RunId) =>
@@ -508,6 +511,7 @@ describe('sessionFold', () => {
       category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
+      provenance: null,
     });
     const chunk = (from: number, to: number, text: string): FoldInput => ({
       _tag: 'chunk',
@@ -566,6 +570,7 @@ describe('sessionFold', () => {
       category: AgentCategory.ToolUse,
       userFollowUpSupport: 'unsupported',
       parent: null,
+      provenance: null,
     });
     const chunk = (
       rowId: string,
@@ -699,6 +704,7 @@ describe('sessionFold', () => {
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
       parent: null,
+      provenance: null,
     });
     const rounds = [
       { inputTokens: 100, outputTokens: 10, cost: 0.25 },
@@ -758,6 +764,7 @@ describe('sessionFold', () => {
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
       parent: null,
+      provenance: null,
     });
     const outputOf = (round: number): OutputFileInfo => ({
       source: `paper_r${round}.tex`,
@@ -889,6 +896,7 @@ describe('sessionFold', () => {
       userFollowUpSupport: 'unsupported',
       category: AgentCategory.ToolUse,
       parent: null,
+      provenance: null,
     });
     const row = early.emit(PROCESS, 5010, {
       type: 'log',
@@ -1013,6 +1021,28 @@ describe('sessionFold', () => {
     ]);
   });
 
+  it("keeps a user's title over a later model title", () => {
+    const settled = foldAll(scenario.events);
+    const child = qualifyAggregateId('run', CHILD);
+    const next = settled.folded.get(child)! + 1;
+    const title = (seq: number, by: 'model' | 'user', description: string) =>
+      tail({
+        seq,
+        commit: 300 + seq,
+        origin: OWNER,
+        at: 5000 + seq,
+        aggregateId: child,
+        type: 'run.description',
+        by,
+        description,
+      });
+    const renamed = [
+      title(next, 'user', 'Renamed'),
+      title(next + 1, 'model', 'Summary'),
+    ].reduce(fold, settled);
+    expect(runView(renamed, CHILD).description).toBe('Renamed');
+  });
+
   it('mints a run from run.start alone', () => {
     const ghost = 'eeeeeeeeeeee' as RunId;
     const settled = foldAll(scenario.events);
@@ -1022,6 +1052,7 @@ describe('sessionFold', () => {
         ...stamp,
         aggregateId: qualifyAggregateId('run', ghost),
         type: 'run.description',
+        by: 'model',
         description: 'boo',
       }),
       tail({
@@ -1519,23 +1550,27 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'compaction that replaced history mid-run: keepPrefix plus the row',
+      'an edit that replaced history mid-run: the range spliced by the row',
       () => {
-        const compacted = (cause: 'context-limit' | 'context-window') =>
+        const held = stateOf(through(11))?.messages.length ?? 0;
+        const compacted = (trigger: 'context-limit' | 'context-window') =>
           stateOf(
             through(11, {
-              type: 'model.compaction',
+              type: 'context.edit',
               payload: {
-                keepPrefix: 1,
+                cause: 'compaction',
+                trigger,
+                base: null,
+                range: { from: 1, to: held },
                 messages: [USER('summary')],
-                cause,
-                continuation: null,
                 usage: null,
               },
             }),
           );
         const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
+        // The edit is the next one's base.
+        expect(state?.lastEdit).toBe(12);
         // Only an overflow compaction spends the round's one overflow retry.
         expect(state?.overflowRecoveredAtTurn).toBeNull();
         const overflow = compacted('context-window');
@@ -1566,12 +1601,13 @@ describe('foldRunState', () => {
           },
         };
         const compaction = {
-          type: 'model.compaction',
+          type: 'context.edit',
           payload: {
-            keepPrefix: 1,
+            cause: 'compaction',
+            trigger: 'context-limit',
+            base: null,
+            range: { from: 0, to: 1 },
             messages: [USER('summary')],
-            cause: 'context-limit',
-            continuation: null,
             usage: null,
           },
         };
@@ -1740,6 +1776,7 @@ describe('foldRunState', () => {
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
                 parent: null,
+                provenance: null,
               }),
               ledgerRow(2, {
                 type: 'run.activate',
@@ -1836,7 +1873,7 @@ describe('foldRunState', () => {
   it('keeps the private ledger types out of the listing and off the transport, and lists run.position', () => {
     const ledgerTypes = [
       'model.message',
-      'model.compaction',
+      'context.edit',
       'tool.intent',
       'tool.binding',
       'tool.result',

@@ -83,6 +83,7 @@ async function writeCanonicalRunFixtures(
             category: 'toolUse',
             userFollowUpSupport: 'nativeInteractive',
             parent: null,
+            provenance: null,
           },
           {
             type: 'run.activate',

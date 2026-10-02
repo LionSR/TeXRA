@@ -95,6 +95,7 @@ const runStart: SessionEventDraft = {
   userFollowUpSupport: 'unsupported',
   category: AgentCategory.ToolUse,
   parent: null,
+  provenance: null,
 };
 
 /** The loop parked on a request: the fold reads the phase off this row. */
@@ -722,6 +723,7 @@ describe('session framer', () => {
               runStart,
               {
                 type: 'run.description',
+                by: 'model',
                 aggregateId: qualifyAggregateId('run', RUN),
                 description: 'framing',
               },

@@ -287,6 +287,7 @@ function blockedInputs(verdicts: readonly BlockedAggregate[]): FoldInput[] {
               userFollowUpSupport: 'unsupported',
               category: AgentCategory.ToolUse,
               parent: null,
+              provenance: null,
             },
           },
           verdict,

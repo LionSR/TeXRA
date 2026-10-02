@@ -805,6 +805,10 @@ export const databaseLayer = (
             parent = {
               id: RunIdSchema.parse(aggregateTarget(edges.parent).id),
               uid: parentState.uid,
+              callId:
+                draft.type === 'run.start'
+                  ? (draft.parent?.callId ?? null)
+                  : null,
             };
           }
           // A tombstone names only run directories this lifecycle owns,

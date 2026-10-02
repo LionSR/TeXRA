@@ -133,6 +133,7 @@ async function seedRunRecord(seed: {
         category: seed.config?.agentCategory ?? AgentCategory.ToolUse,
         userFollowUpSupport: 'unsupported',
         parent: null,
+        provenance: null,
       },
     ]),
   );

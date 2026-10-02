@@ -1,8 +1,9 @@
 /**
  * Conversation compaction for the tool-use loop: a run-scoped step beside
- * the loop that writes the one row that shortens history, `model.compaction`
- * with cause `context-limit` (or `context-window` when a turn overflowed the
- * window), from the ledger-retained history and nothing else. The trigger is
+ * the loop that writes a `context.edit` with cause `compaction` (triggered
+ * by `context-limit`, `context-window` when a turn overflowed the window, or
+ * `user` for a `/compact`), replacing the whole history, from the
+ * ledger-retained history and nothing else. The trigger is
  * the compaction threshold setting measured against the bound model's
  * context window (the run's `contextTokens`), a `/compact` request, or an
  * overflow; the replacement is a summary the bound model produces through the
@@ -46,7 +47,7 @@ import type { BoundModel } from './modelBinding';
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 
 /** System prompt used for conversation compaction. */
-const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
+export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 - The original user request and goals
 - All key decisions made
 - File paths and code changes discussed or made
@@ -105,12 +106,19 @@ interface CompactionInput {
   readonly stores: SettingsStores;
   /**
    * Compact regardless of the threshold: a `/compact` request, or a turn that
-   * overflowed the context window (recorded as cause `context-window`, which
+   * overflowed the context window (recorded as trigger `context-window`, which
    * the fold reads as the round's one overflow recovery). `null` leaves the
    * decision to the threshold.
    */
   readonly force: 'request' | 'overflow' | null;
 }
+
+/** Why a compaction runs, as its `context.edit` records it. */
+const COMPACTION_TRIGGER = {
+  request: 'user',
+  overflow: 'context-window',
+  threshold: 'context-limit',
+} as const;
 
 /** Why a compaction runs, as its debug line names it. */
 const COMPACTION_REASON = {
@@ -122,7 +130,7 @@ const COMPACTION_REASON = {
 /**
  * Compact the run's history when it reaches the configured share of the
  * bound model's context window, or when the user asked for it. Returns the
- * folded state after the `model.compaction` row, or the state unchanged when
+ * folded state after the `context.edit` row, or the state unchanged when
  * nothing was compacted (below the threshold, too short to summarize, or a
  * summary attempt that failed, which is logged and shown, never a stop).
  */
@@ -224,18 +232,18 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     content: [{ kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` }],
   };
   const tokensAfter = Math.max(1, estimateMessageTokens([replacement]));
-  // The only row that shortens history: the whole conversation is replaced
-  // by the summary, and a provider-side continuation over the old history is
-  // dropped with it.
+  // The whole conversation is replaced by the summary, and a provider-side
+  // continuation over the old history is dropped with it.
   const compacted = yield* ledger.appendBatch(runId, state, [
     {
-      type: 'model.compaction',
+      type: 'context.edit',
       aggregateId: rowAggregate(runId),
       payload: {
-        keepPrefix: 0,
+        cause: 'compaction',
+        trigger: COMPACTION_TRIGGER[force ?? 'threshold'],
+        base: state.lastEdit,
+        range: { from: 0, to: conversation.length },
         messages: [replacement],
-        cause: force === 'overflow' ? 'context-window' : 'context-limit',
-        continuation: null,
         usage: summarized.value.usage,
       },
     },

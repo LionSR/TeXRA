@@ -13,6 +13,7 @@ import { BashApproval } from './BashApproval';
 import { EditApproval } from './EditApproval';
 import { PlanApproval } from './PlanApproval';
 import { RetryRequest } from './RetryRequest';
+import { ToolOutcomeRequest } from './ToolOutcomeRequest';
 import { UserQuestion } from './UserQuestion';
 import type { PendingApproval } from '../state/approvalQueue';
 
@@ -74,6 +75,14 @@ export function ApprovalModal(
         <RetryRequest
           availableRows={availableRows}
           payload={payload}
+          onDecide={onDecide}
+        />
+      );
+    case 'toolOutcome':
+      return (
+        <ToolOutcomeRequest
+          availableRows={availableRows}
+          payload={payload.data}
           onDecide={onDecide}
         />
       );

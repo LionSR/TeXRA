@@ -203,6 +203,7 @@ describe('session isolation', () => {
               userFollowUpSupport: 'unsupported',
               category: 'toolUse',
               parent: null,
+              provenance: null,
             },
           ]);
           return {

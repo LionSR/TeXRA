@@ -50,6 +50,7 @@ function statusKindForApproval(
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
     case 'userQuestion':
+    case 'toolOutcome':
       return 'question';
     case 'bash':
     case 'toolEdit':

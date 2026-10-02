@@ -336,6 +336,7 @@ function createRun(
     ownerId: sessionIndexesOf(view).claims.get(event.aggregateId) ?? null,
     label: runIdentityDisplayName(identity),
     description: null,
+    descriptionBy: null,
     model: null,
     modelLabel: null,
     command: null,
@@ -899,7 +900,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       // The edge severed (one run model, 3.2); a run never gets a new parent.
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
-      return { ...run, description: event.description };
+      // A user's title stands until the user renames again: the next AI
+      // summary does not overwrite it.
+      return event.by === 'model' && run.descriptionBy === 'user'
+        ? run
+        : { ...run, description: event.description, descriptionBy: event.by };
     case 'run.end':
       // The terminal fact: the phase is its outcome (one run model, section
       // 3.3). The caller records that the run ended.

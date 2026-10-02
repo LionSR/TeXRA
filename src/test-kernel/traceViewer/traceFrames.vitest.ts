@@ -74,6 +74,7 @@ function runStart(
     category,
     worktree: null,
     parent: null,
+    provenance: null,
   };
 }
 

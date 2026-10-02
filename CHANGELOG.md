@@ -238,6 +238,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **An interrupted call asks one plain question.** When a call may have run
+  before a run was interrupted and left no result, the request now names the
+  tool (and the agent run it left, for an `agent` call) and offers Run again
+  or Skip, in the progress view and the terminal alike, instead of a generic
+  question with a run id in its text.
 - **`script` tool (code mode, first stage).** An agent whose configuration
   lists `script` can run one JavaScript program that calls its other tools as
   `await tools.read_file({ path })`, with `Promise.all`, try/catch,

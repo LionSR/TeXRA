@@ -260,6 +260,18 @@ export function createHeadlessCliHostInteractions(
           requestId,
           yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
+      case 'toolOutcome': {
+        const decision = yield* ask({
+          summary: `${payload.data.title}\nIt may have run before the run was interrupted, and no result was recorded. Run it again?`,
+        });
+        return yield* decide(
+          runId,
+          requestId,
+          decision.action === 'approve'
+            ? { action: 'retry' }
+            : { action: 'skip' },
+        );
+      }
     }
   });
 

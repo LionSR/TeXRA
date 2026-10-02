@@ -123,8 +123,10 @@ const RunViewCommonSchema = z.object({
   ownedHere: z.boolean(),
   /** The run identity's display name: agent, tool, or workflow name. */
   label: z.string(),
-  /** The AI one-liner; title when present. */
+  /** The run's title: the user's rename, else the AI one-liner. */
   description: z.string().nullable(),
+  /** Who wrote `description`: a user title outlives later model ones. */
+  descriptionBy: z.enum(['model', 'user']).nullable(),
   model: z.string().nullable(),
   modelLabel: z.string().nullable(),
   /** Full, untruncated command that spawned a process run. */

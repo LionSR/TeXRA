@@ -11,7 +11,7 @@ import { runToolUse } from '@agent/runtime/loop/toolUse';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   type RequestDecision,
-  type UserQuestionPermission,
+  type ToolOutcomePermission,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -85,11 +85,11 @@ function executedTool(name: string) {
  */
 function askedQuestions(
   session: SessionHandle,
-  answer: (question: UserQuestionPermission) => RequestDecision,
-): { readonly questions: UserQuestionPermission[] } {
-  const questions: UserQuestionPermission[] = [];
+  answer: (question: ToolOutcomePermission) => RequestDecision,
+): { readonly questions: ToolOutcomePermission[] } {
+  const questions: ToolOutcomePermission[] = [];
   autoDecideRequests(session, (opened) => {
-    if (opened.payload.kind !== 'userQuestion') return null;
+    if (opened.payload.kind !== 'toolOutcome') return null;
     questions.push(opened.payload.data);
     return answer(opened.payload.data);
   });
@@ -125,10 +125,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         publishTestRunStart(session, runId);
         // The person answers "Skip": the model is told the call was skipped
         // rather than being handed a blind second run.
-        const asked = askedQuestions(session, (question) => ({
-          action: 'submit',
-          answers: { [question.questions[0].question]: 'Skip' },
-        }));
+        const asked = askedQuestions(session, () => ({ action: 'skip' }));
 
         const toolA = executedTool('toolA');
         const toolB = blockingTool('toolB');
@@ -189,7 +186,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         // The outcome-unknown barrier asked before anything re-ran, and was
         // not re-run when the answer was "skip".
         expect(asked.questions).toHaveLength(1);
-        expect(asked.questions[0].questions[0].question).toContain('toolB');
+        expect(asked.questions[0].toolName).toBe('toolB');
         expect(toolB.call).toHaveBeenCalledTimes(1);
         // The call that never started is not run blind: the model is told
         // so and decides whether to retry it.
@@ -276,10 +273,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         const session = yield* sessionWithInteractions({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
-        const asked = askedQuestions(session, (question) => ({
-          action: 'submit',
-          answers: { [question.questions[0].question]: 'Skip' },
-        }));
+        const asked = askedQuestions(session, () => ({ action: 'skip' }));
         const toolB = blockingTool('toolB');
         const tools = { toolB: { ...toolB.tool, parallelSafe: true } };
         const calls = [{ id: 'call-b', name: 'toolB' }];
@@ -396,7 +390,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       Effect.gen(function* () {
         // The first ask is closed automatically, not answered by a person.
         let answer: (
-          question: UserQuestionPermission,
+          question: ToolOutcomePermission,
         ) => RequestDecision = () => ({
           action: 'cancel',
           cause: 'Run interrupted.',
@@ -462,10 +456,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(toolC.call).not.toHaveBeenCalled();
 
         // The next resume asks again, and the answer decides.
-        answer = (question) => ({
-          action: 'submit',
-          answers: { [question.questions[0].question]: 'Skip' },
-        });
+        answer = () => ({ action: 'skip' });
         const resumed = yield* runToolUse({ resume: true }).pipe(
           Effect.provide(
             loopLayer({
@@ -488,7 +479,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
         expect(
           delivered?.requests[asked.questions[1].requestId]?.decision,
-        ).toMatchObject({ action: 'submit' });
+        ).toMatchObject({ action: 'skip' });
         const group = delivered?.messages.find(
           (message) => message.role === 'tool',
         );

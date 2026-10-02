@@ -25,6 +25,7 @@ export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
   planApproval: undefined,
   retry: undefined,
   userQuestion: undefined,
+  toolOutcome: undefined,
 };
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two

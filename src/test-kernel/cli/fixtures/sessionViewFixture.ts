@@ -75,6 +75,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     ownedHere: false,
     label: over.id,
     description: null,
+    descriptionBy: null,
     model: null,
     modelLabel: null,
     command: null,

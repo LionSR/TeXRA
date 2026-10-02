@@ -45,7 +45,7 @@ import {
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { appendRow, rowAggregate, snapshotRow } from '@agent/runtime/loop/rows';
+import { appendRow, snapshotRow } from '@agent/runtime/loop/rows';
 import {
   ModelInvoker,
   modelInvokerLayer,
@@ -989,15 +989,30 @@ describe('ModelInvoker retry', () => {
         const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
         const chained: boolean[] = [];
+        // The first response is stored and anchors the next request to it.
+        const anchored = TurnResultSchema.parse({
+          ...completedTurn('first'),
+          continuation: {
+            origin: { ...ORIGIN, protocol: 'openai-responses' },
+            coveredMessages: 2,
+            prefixFingerprint: 'a'.repeat(64),
+            anchor: {
+              kind: 'stored',
+              responseId: 'resp-0',
+              coveredItems: 2,
+            },
+          },
+        });
         const model: Model = {
           prepareTurn: (request) =>
             Effect.succeed(
-              request.continuation === undefined
-                ? PREPARED
-                : ResolvedTurnSchema.parse({
-                    ...PREPARED,
-                    continuation: request.continuation,
-                  }),
+              ResolvedTurnSchema.parse({
+                ...PREPARED,
+                messages: request.messages,
+                ...(request.continuation === undefined
+                  ? {}
+                  : { continuation: request.continuation }),
+              }),
             ),
           streamTurn: (turn) =>
             Stream.unwrap(
@@ -1018,39 +1033,32 @@ describe('ModelInvoker retry', () => {
                         requestedOrigin: ORIGIN,
                         returnedModel: null,
                       },
-                      { kind: 'completed', result: completedTurn('full') },
+                      {
+                        kind: 'completed',
+                        result:
+                          chained.length === 1
+                            ? anchored
+                            : completedTurn('full'),
+                      },
                     ]);
               }),
             ),
         };
         const kit = yield* openRun(session, model);
-        const state = yield* session.ledger.appendBatch(kit.runId, kit.state, [
-          {
-            type: 'model.compaction',
-            aggregateId: rowAggregate(kit.runId),
-            payload: {
-              keepPrefix: 1,
-              messages: [],
-              cause: 'model-switch',
-              continuation: {
-                origin: { ...ORIGIN, protocol: 'openai-responses' },
-                coveredMessages: 1,
-                prefixFingerprint: 'a'.repeat(64),
-                anchor: {
-                  kind: 'stored',
-                  responseId: 'resp-0',
-                  coveredItems: 1,
-                },
-              },
-              usage: null,
-            },
-          },
-        ]);
+        const first = yield* invokeOn(kit);
+        if (first.kind !== 'response') throw new Error('no first response');
+        expect(first.state.continuation).not.toBeNull();
 
-        const outcome = yield* invokeOn({ ...kit, state });
+        // The next turn's message, sent on top of the stored response.
+        const next = yield* session.ledger.appendBatch(kit.runId, first.state, [
+          appendRow(kit.runId, [
+            { role: 'user', content: [{ kind: 'text', text: 'again' }] },
+          ]),
+        ]);
+        const outcome = yield* invokeOn({ ...kit, state: next });
 
         expect(outcome.kind).toBe('response');
-        expect(chained).toEqual([true, false]);
+        expect(chained).toEqual([false, true, false]);
         const rows = yield* session.ledger.load(kit.runId);
         expect(
           Object.values(rows?.contents ?? {}).filter(

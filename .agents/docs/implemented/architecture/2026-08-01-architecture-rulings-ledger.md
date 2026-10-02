@@ -112,9 +112,10 @@ and `run.swapModel` is its one writer:
   editor model, and its uploaded files. A failed or interrupted bind closes
   its fork and leaves the binding in force. Nothing retired waits for the
   run to end.
-- A host-admitted model switch commits its rows (the `model-switch`
-  compaction and the snapshot naming the new model) inside the swap, so the
-  new binding is in force only once its rows are. A manual retry's rebind
+- A host-admitted model switch commits its row (the snapshot naming the
+  new model, whose fold drops the old model's continuation and offered
+  system text) inside the swap, so the new binding is in force only once
+  its row is. A manual retry's rebind
   and the reacquisition of a failed WebSocket binding go through the same
   swap.
 - The run's model is its latest snapshot's `modelId`. The switch does not

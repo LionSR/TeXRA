@@ -740,22 +740,16 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     intent: Pick<RunState['pendingIntents'][string], 'attempt' | 'binding'>,
   ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     let current = yield* cell.current;
-    const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
-    const rerunOption = 'Run again';
-    // A person decides this barrier: the answer's chosen option, or a
-    // `skip` (the host's own word for a person declining to answer), both
-    // land as the request's `request.decided` (R5). A `deny` is a policy or
-    // headless host with nobody to ask (yolo, never): it denies again on
-    // every resume, so it is a skip, which never re-runs the call blindly.
-    // A `cancel` was written by a cleanup (the run stopped, the session
-    // closed), so it decides nothing and the barrier is asked again.
+    // A person decides this barrier: `retry`, or `skip` (a card's decline,
+    // `reject`, is the same answer), landed as the request's
+    // `request.decided` (R5). A `deny` is a policy or headless host with
+    // nobody to ask (yolo, never): it denies again on every resume, so it
+    // is a skip, which never re-runs the call blindly. A `cancel` was
+    // written by a cleanup (the run stopped, the session closed), so it
+    // decides nothing and the barrier is asked again.
     const decided = (decision: RequestDecision): 'rerun' | 'skip' | null => {
-      if (decision.action === 'submit') {
-        return decision.answers[question] === rerunOption ? 'rerun' : 'skip';
-      }
-      return decision.action === 'skip' || decision.action === 'deny'
-        ? 'skip'
-        : null;
+      if (decision.action === 'retry') return 'rerun';
+      return decision.action === 'cancel' ? null : 'skip';
     };
     // Only the loop's own question answers this: the call's own request,
     // decided, says nothing about whether the body ran.
@@ -784,31 +778,21 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
     const preview = deriveToolInputPreview(fact.toolName, input);
-    const request = {
-      requestId,
-      allowBypass: false,
-      runId,
-      questions: [
-        {
-          question,
-          header: 'Tool outcome',
-          options: [
-            { label: rerunOption, description: 'Execute the call once more.' },
-            {
-              label: 'Skip',
-              description: 'Tell the model its outcome is unknown.',
-            },
-          ],
-        },
-      ],
-      context: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
-    };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
     // and this opens its replacement, bound to the same call by the
     // `tool.binding` committed with it.
     if (standing === null) {
-      const payload = { kind: 'userQuestion' as const, data: request };
+      const payload = {
+        kind: 'toolOutcome' as const,
+        data: {
+          requestId,
+          runId,
+          toolName: fact.toolName,
+          title: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
+          childRunId: null,
+        },
+      };
       yield* append([
         {
           type: 'request.opened',

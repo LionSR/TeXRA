@@ -305,6 +305,7 @@ function publishRun(
       category: overrides.agentCategory ?? AgentCategory.Workflow,
       worktree: null,
       parent: null,
+      provenance: null,
       approvalPolicy: null,
     },
   ]);
@@ -1029,7 +1030,8 @@ describe('CLI run progress renderer', () => {
                 identity: { kind: 'agent', agent: 'review' },
                 userFollowUpSupport: 'unsupported',
                 category: AgentCategory.ToolUse,
-                parent: { id: parentRunId },
+                parent: { id: parentRunId, callId: null },
+                provenance: null,
               },
             ]);
             yield* Effect.promise(() => settle());
