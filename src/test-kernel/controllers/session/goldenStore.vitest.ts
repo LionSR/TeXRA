@@ -751,18 +751,20 @@ describe('the interrupted golden runs', () => {
         results
           .filter((row) => row.callId === callId)
           .map(({ attempt, disposition }) => ({ attempt, disposition }));
-      // The read that settled before the kill keeps its one row.
-      expect(settled('validation-script-1/0')).toEqual([
-        { attempt: 1, disposition: 'executed' },
-      ]);
+      // The discovery calls and the read that settled before the kill keep
+      // their one row each: the resumed guest was handed their answers.
+      for (const seq of [0, 1, 2])
+        expect(settled(`validation-script-1/${seq}`)).toEqual([
+          { attempt: 1, disposition: 'executed' },
+        ]);
       // The command the kill interrupted was asked about, then run again.
       expect(
         asked.opened.filter((opened) => opened.payload.kind === 'userQuestion'),
       ).toHaveLength(1);
-      expect(settled('validation-script-1/1')).toEqual([
+      expect(settled('validation-script-1/3')).toEqual([
         { attempt: 2, disposition: 'executed' },
       ]);
-      expect(settled('validation-script-1/2')).toEqual([
+      expect(settled('validation-script-1/4')).toEqual([
         { attempt: 1, disposition: 'executed' },
       ]);
       // The guest issued the calls its rows recorded, and returned what the
@@ -774,9 +776,11 @@ describe('the interrupted golden runs', () => {
           phase,
         ]),
       ).toEqual([
-        [0, 'read_file', 'Gather'],
-        [1, 'bash', 'Gather'],
+        [0, 'searchTools()', 'Gather'],
+        [1, 'describeTool()', 'Gather'],
         [2, 'read_file', 'Gather'],
+        [3, 'bash', 'Gather'],
+        [4, 'read_file', 'Gather'],
       ]);
       const script = results.find(
         (row) => row.callId === 'validation-script-1',
@@ -786,6 +790,8 @@ describe('the interrupted golden runs', () => {
         'The golden store reads this file.',
       );
       expect(script?.result.output).toContain('released');
+      expect(script?.result.output).toContain('"found": "read_file"');
+      expect(script?.result.output).toContain('"documented": true');
     }),
   );
 });

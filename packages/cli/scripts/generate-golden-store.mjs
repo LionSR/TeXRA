@@ -37,8 +37,9 @@
  * - `golden_approval`, a second `texra chat` under a PTY: a `bash` command
  *   waiting for its approval, bound to its call, killed (`SIGKILL`) before
  *   anyone answers, the pending approval the conformance suite resumes.
- * - `golden_script` (headless, `yolo`): a `script` call whose guest reads
- *   twice and runs one command in a `Promise.all`, killed (`SIGKILL`) while
+ * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
+ *   its read tool with `searchTools` and `describeTool`, then reads twice
+ *   and runs one command in a `Promise.all`, killed (`SIGKILL`) while
  *   the command waits, after the first read settled: the interrupted script
  *   the conformance suite resumes. The command is a barrier, so the second
  *   read waits behind it and every row commits in one order.

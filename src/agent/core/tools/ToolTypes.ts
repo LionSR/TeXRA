@@ -93,6 +93,14 @@ export interface ITool<E = Error, R = never> {
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never, R>;
+  /**
+   * A description rendered from the other tools the run declares, in place
+   * of `definition.description`: rendered at the step that freezes the
+   * run's system text and kept as that step recorded it until a compaction
+   * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
+   * its text, and the cached prefix through it, as it was.
+   */
+  readonly describe?: (declared: readonly ToolDefinition[]) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
 

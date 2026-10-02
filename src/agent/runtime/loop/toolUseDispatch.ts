@@ -53,6 +53,7 @@ import {
   type DispatchFacts,
   type FileListEntry,
   type FileLocation,
+  type JsonValue,
   type RequestDecision,
   type StateOperation,
   type ToolCallStatus,
@@ -1031,7 +1032,35 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             ).pipe(Effect.ensuring(Deferred.succeed(done, undefined)));
           });
 
-        const call = Effect.fn('toolUse.scriptCall')(function* (op: ScriptOp) {
+        /** `op`'s `script.call` row, first committed with its first intent. */
+        const scriptCallRow = (
+          op: ScriptOp,
+          fact: CallFacts,
+          input: JsonValue,
+        ) =>
+          ({
+            type: 'script.call',
+            aggregateId,
+            payload: {
+              scriptCallId: script.callId,
+              seq: op.seq,
+              callId: fact.callId,
+              toolName: fact.toolName,
+              input,
+              replay: fact.replay,
+              logId: fact.logId,
+              stageId,
+              phase: op.phase,
+            },
+          }) satisfies RunLedgerDraft;
+
+        /** Settles `op`: from its rows when they settled it; else by `answer`,
+         *  one of the script's host functions, recorded with no card; else by
+         *  running its tool through the per-call program. */
+        const call = Effect.fn('toolUse.scriptCall')(function* (
+          op: ScriptOp,
+          answer?: () => ToolResultPayload['result'],
+        ) {
           const callId = `${script.callId}/${op.seq}`;
           if (op.seq > 0) yield* Deferred.await(placeOf(op.seq - 1));
           yield* openStage;
@@ -1056,6 +1085,51 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
             return settled.result;
           }
+          if (answer !== undefined) {
+            // It reads the pinned catalog only, and runs no tool: it takes no
+            // lane, and commits whole, in one batch.
+            yield* Deferred.succeed(placeOf(op.seq), undefined);
+            yield* handedBack(replayOrder.at(-1));
+            const result = answer();
+            const intent = (yield* cell.current).pendingIntents[callId];
+            const attempt = intent?.attempt ?? 1;
+            yield* append([
+              ...(known === undefined
+                ? [
+                    scriptCallRow(
+                      op,
+                      {
+                        callId,
+                        toolName: op.name,
+                        replay: 'safe',
+                        logId: generateShortId(),
+                        stageId,
+                      },
+                      input,
+                    ),
+                  ]
+                : []),
+              ...(intent === undefined
+                ? [intentRow(origin, callId, attempt)]
+                : []),
+              {
+                type: 'tool.result',
+                aggregateId,
+                payload: {
+                  responseId,
+                  callId,
+                  attempt,
+                  disposition:
+                    result.status === 'executed' ? 'executed' : 'failed',
+                  duplicateOf: null,
+                  result,
+                  attachments: [],
+                  stateMutation: [],
+                },
+              },
+            ]);
+            return result;
+          }
           const tool = step.registry.get(op.name);
           yield* inPlace(
             op.seq,
@@ -1076,23 +1150,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               }
               yield* append([
                 ...(known === undefined
-                  ? [
-                      {
-                        type: 'script.call' as const,
-                        aggregateId,
-                        payload: {
-                          scriptCallId: script.callId,
-                          seq: op.seq,
-                          callId,
-                          toolName: fact.toolName,
-                          input,
-                          replay: fact.replay,
-                          logId: fact.logId,
-                          stageId,
-                          phase: op.phase,
-                        },
-                      },
-                    ]
+                  ? [scriptCallRow(op, fact, input)]
                   : []),
                 intentRow(origin, callId, 1),
                 ...admittedCards(fact, input),
@@ -1109,12 +1167,20 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           return result;
         });
 
+        const plugins = new Map(
+          step.offered.map(({ name, plugin }) => [name, plugin]),
+        );
         return {
-          tools: step.definitions
-            .map((definition) => definition.name)
-            .filter((name) => name !== script.toolName),
+          catalog: step.definitions
+            .filter(({ name }) => name !== script.toolName)
+            .map((definition) => ({
+              definition,
+              plugin: plugins.get(definition.name) ?? 'run',
+            })),
           call: (op: ScriptOp) =>
             call(op).pipe(Effect.provideContext(services)),
+          answer: (op: ScriptOp, answer: () => ToolResultPayload['result']) =>
+            call(op, answer).pipe(Effect.provideContext(services)),
           delivered: (seq: number) => {
             const done = delivered.get(seq);
             return done === undefined

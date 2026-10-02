@@ -32,6 +32,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
+  readonly describe: ITool['describe'];
 };
 
 export type DefineToolOptions<T, R = never> = {
@@ -57,6 +58,8 @@ export type DefineToolOptions<T, R = never> = {
   replay?: ITool['replay'];
   requiresApproval?: ITool['requiresApproval'];
   slow?: boolean;
+  /** See {@link ITool.describe}. */
+  describe?: ITool['describe'];
 };
 
 /**
@@ -98,6 +101,7 @@ export function defineTool<T, R = never>(
     slow: def.slow,
     unavailableHosts: def.unavailableHosts,
     guard: def.guard,
+    describe: def.describe,
     // Validate lazily in the caller's fiber; interruption never becomes a
     // tool result.
     call: (rawInput) =>

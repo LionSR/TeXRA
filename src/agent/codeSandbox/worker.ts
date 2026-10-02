@@ -74,7 +74,7 @@ const BRIDGE_PRELUDE = `
     Object.defineProperty(globalThis, name, { value, writable: false, configurable: false });
 
   const pending = new Map();
-  const call = (name, input) => {
+  const call = (name, input, label) => {
     if (pending.size >= config.maxFanout) {
       return RealPromise.reject(
         new RealError('A script may have at most ' + config.maxFanout + ' calls outstanding.'),
@@ -88,15 +88,16 @@ const BRIDGE_PRELUDE = `
     }
     if (typeof json !== 'string') {
       return RealPromise.reject(
-        new RealTypeError('tools.' + name + '() takes a JSON-serializable argument.'),
+        new RealTypeError(label + '() takes a JSON-serializable argument.'),
       );
     }
     const seq = issue(name, json, currentPhase);
     return new RealPromise((resolve, reject) => pending.set(seq, { resolve, reject }));
   };
   const tools = Object.create(null);
-  for (const name of config.tools) tools[name] = (input) => call(name, input);
+  for (const name of config.tools) tools[name] = (input) => call(name, input, 'tools.' + name);
   define('tools', freeze(tools));
+  for (const name of config.globals) define(name, (...args) => call(name + '()', args, name));
   define('phase', (title) => {
     currentPhase = String(title);
   });
@@ -269,7 +270,11 @@ const openRealm = (
           return undefined;
         });
         const config = context.newString(
-          JSON.stringify({ tools: input.tools, maxFanout: MAX_FANOUT }),
+          JSON.stringify({
+            tools: input.tools,
+            globals: input.globals,
+            maxFanout: MAX_FANOUT,
+          }),
         );
         context.setProp(context.global, '__csConfig', config);
         config.dispose();

@@ -84,22 +84,25 @@ const result = yield* attempt(agent('Answer the workflow child task.', { id: 'ch
 return { outcome: result._tag }`;
 
 /**
- * The golden store's script: two reads and a command in one `Promise.all`.
- * The command waits for `golden-script.release`, so the generator kills the
- * process while it runs, after the first read settled; the second read
- * waits behind it, since the command is a barrier.
+ * The golden store's script: it finds the reading tool with `searchTools`
+ * and `describeTool`, then makes two reads with it and runs a command in one
+ * `Promise.all`. The command waits for `golden-script.release`, so the
+ * generator kills the process while it runs, after the first read settled;
+ * the second read waits behind it, since the command is a barrier.
  */
 const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
+const [found] = await searchTools('read a file', { limit: 1 })
+const declaration = await describeTool(found.name)
 const [notes, shell, gate] = await Promise.all([
-  tools.read_file({ path: 'notes.tex' }),
+  tools[found.name]({ path: 'notes.tex' }),
   tools.bash({
     command: 'touch golden-script.started; until [ -f golden-script.release ]; do sleep 0.05; done; echo released',
     description: 'Wait for the release file',
   }),
-  tools.read_file({ path: 'golden-script.release' }),
+  tools[found.name]({ path: 'golden-script.release' }),
 ])
 console.log('gathered')
-return { notes: notes.output, shell: shell.output, gate: gate.summary }`;
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, gate: gate.summary }`;
 
 /**
  * The scripted conversation of the golden 1.0 store
