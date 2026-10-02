@@ -127,7 +127,9 @@ export interface CallRequests {
   >;
 }
 
-export interface ToolCallShape {
+/** A call made under a run has its requests; a standalone host invocation
+ *  outside an agent run has neither. */
+export type ToolCallShape = {
   /** The roots of the workspace the call works on: the run's session roots. */
   readonly roots: WorkspaceRoots;
   readonly toolCallId?: string;
@@ -154,17 +156,16 @@ export interface ToolCallShape {
   readonly scriptCalls?: Effect.Effect<ScriptCalls>;
   /** The script that issued this call; absent for a call a response issued. */
   readonly script?: ScriptScope;
-  /** Where the call's requests open: present exactly when {@link run} is. */
-  readonly requests?: CallRequests;
-  /**
-   * Absent for a standalone host invocation outside an agent run. What the run
-   * already answers for (its model, its delegation scope, its current step,
-   * its approval-denial observer, its trace, its tool policy, its scope) is read from here rather
-   * than copied onto the call. A tool that starts something the run should
-   * stop at its end registers that stop on the run's scope.
-   */
-  readonly run:
-    | Pick<
+} & (
+  | {
+      /**
+       * What the run already answers for (its model, its delegation scope,
+       * its current step, its approval-denial observer, its trace, its tool
+       * policy, its scope) is read from here rather than copied onto the
+       * call. A tool that starts something the run should stop at its end
+       * registers that stop on the run's scope.
+       */
+      readonly run: Pick<
         AgentRunShape,
         | 'session'
         | 'runId'
@@ -175,9 +176,12 @@ export interface ToolCallShape {
         | 'delegationAgentScope'
         | 'steps'
         | 'scope'
-      >
-    | undefined;
-}
+      >;
+      /** Where the call's requests open. */
+      readonly requests: CallRequests;
+    }
+  | { readonly run: undefined; readonly requests?: undefined }
+);
 
 export class ToolCall extends Context.Service<ToolCall, ToolCallShape>()(
   '@texra/agent/ToolCall',

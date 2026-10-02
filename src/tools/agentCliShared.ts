@@ -298,7 +298,7 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
   toolCall: ToolCallShape,
   run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
 ): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
-  const activeRun = yield* requireToolRun(toolName, toolCall);
+  const { run: activeRun } = yield* requireToolRun(toolName, toolCall);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
       new ToolError(

@@ -379,7 +379,7 @@ function executeBashTool(input: BashInput) {
     const cwd = toolCall.workingDirectory ?? toolCall.roots.workspace;
 
     if (input.run_in_background) {
-      const run = yield* requireToolRun('bash run_in_background', toolCall);
+      const { run } = yield* requireToolRun('bash run_in_background', toolCall);
       return yield* executeBackground(
         run.session,
         input,
