@@ -1,10 +1,11 @@
 /**
  * The process's plugin table: every plugin's tools, continuation, prompt
- * contribution and layers by plugin id, which the built-in plugins contribute to the live catalog
- * (`@tools/liveTools`). The `ToolRegistry` service holds it, provided once
- * per process by `installProcessRuntime` from `@tools/registry`, beside the
- * catalog built over it. This module imports no tool, manifest or plugin layer, so a
- * reader of the tag loads none of them.
+ * contribution and layers by plugin id, which the built-in plugins
+ * contribute to the live catalog (`@tools/liveTools`). The `ToolRegistry`
+ * service holds it, beside the catalog built over it: an input of
+ * `installProcessRuntime`, which names no table of its own (each TeXRA entry
+ * passes `@tools/registry`'s). This module imports no tool, manifest or
+ * plugin layer, so a reader of the tag loads none of them.
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';

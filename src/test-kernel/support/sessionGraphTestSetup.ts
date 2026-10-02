@@ -5,6 +5,7 @@ import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { UsageLog } from '@shared/usageLog';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
+import { toolRegistryLayer } from '@tools/registry';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import { createFakeWorkspaceRoots } from './FakePlatform';
@@ -55,7 +56,7 @@ const runtime = installProcessRuntime({
   }),
   globalStorage,
   // Under the fake global root, never the developer's `~/.texra/mcp.json`.
-  mcpConfigPath: mcpConfigPathOf(globalStorage),
+  tools: toolRegistryLayer(mcpConfigPathOf(globalStorage)),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   languageModel: fakeHostLanguageModel,
