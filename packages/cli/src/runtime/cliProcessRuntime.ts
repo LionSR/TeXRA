@@ -60,6 +60,7 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import { toolRegistryLayer } from '@tools/registry';
 
 import { readCliVersion } from './cliContext';
 import { CliSecrets, cliSecretsPath } from './cliSecrets';
@@ -223,7 +224,7 @@ export function installCliProcessRuntime(
   const runtime: ProcessRuntime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage: globalStoragePath,
-    mcpConfigPath: USER_MCP_CONFIG_PATH,
+    tools: toolRegistryLayer(USER_MCP_CONFIG_PATH),
     secrets,
     appState: options?.appState
       ? AppState.layer(options.appState)

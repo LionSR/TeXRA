@@ -19,14 +19,12 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type AgentCategory,
   type NormalizedUsage,
   type RunId,
 } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { classifyModelFailure, type ModelRouteVerdict } from './modelFailure';
@@ -170,10 +168,10 @@ export interface ModelCall<R = never> {
   readonly request: TurnRequest;
   /** The session's retry gate: sibling calls on one credential share it. */
   readonly gate: ModelRetryGate;
-  /** The session's settings: the retry limit and usage consent read them. */
+  /** The session's settings: usage consent reads them. */
   readonly settings: SettingsStores;
   readonly attribution: UsageAttribution;
-  /** Automatic retries; the configured batch when absent. */
+  /** Automatic retries; the binding's when absent. */
   readonly retries?: number;
   /** A run's trace; without one, diagnostics go to the Effect logger. */
   readonly logger: Pick<AgentTrace, 'warn' | 'debug'> | null;
@@ -189,12 +187,7 @@ export interface ModelCall<R = never> {
 export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
   call: ModelCall<R>,
 ): Effect.fn.Return<CallResult, Error, UsageLog | R> {
-  const retries =
-    call.retries ??
-    (yield* readSettingFrom<number>(
-      call.settings,
-      MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-    ));
+  const retries = call.retries ?? (yield* call.binding).automaticRetries;
   // The trace's sinks are synchronous; with no trace, lines queue here and
   // leave through the Effect logger at the next step.
   const queued: Effect.Effect<void>[] = [];

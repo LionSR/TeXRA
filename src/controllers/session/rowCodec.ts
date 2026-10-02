@@ -20,7 +20,7 @@
  * - **Aggregates.** An `AggregateId` is stored as two columns, `kind` and
  *   `logical_id`, and composed back from them here.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { constants, zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect } from 'effect';
@@ -52,8 +52,7 @@ if (typeof zstdCompressSync !== 'function')
 /** A payload key shaped `$b`, `$$b`, …: stored with one more `$`. */
 const REF_SHAPED = /^\$+b$/;
 const ZSTD_LEVEL_3 = { params: { [constants.ZSTD_c_compressionLevel]: 3 } };
-const sha256 = (text: string) =>
-  createHash('sha256').update(text).digest('hex');
+const sha256 = (text: string) => hash('sha256', text, 'hex');
 /** An object with its keys of the reference's shape renamed, or itself. */
 const renameRefShaped = (value: object, rename: (key: string) => string) =>
   Object.keys(value).some((key) => REF_SHAPED.test(key))

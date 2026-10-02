@@ -4,7 +4,7 @@
  * that identity is made of.
  */
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 // Third-party imports
 import stableStringify from 'safe-stable-stringify';
@@ -50,9 +50,7 @@ export interface HeldPlugins {
 }
 
 export const sha256 = (value: unknown): string =>
-  createHash('sha256')
-    .update(stableStringify(value) ?? '')
-    .digest('hex');
+  hash('sha256', stableStringify(value) ?? '', 'hex');
 
 /**
  * A tool's identity digest (its name and input schema only, so a reworded

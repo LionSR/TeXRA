@@ -2,7 +2,7 @@
  * PKCE (RFC 7636) + CSRF-state generation for subscription OAuth flows
  * (ChatGPT/Codex, Grok/xAI, …). Shared so providers do not re-roll crypto.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { hash, randomBytes } from 'node:crypto';
 
 export interface PkcePair {
   /** The high-entropy secret carried through the loopback round-trip. */
@@ -30,7 +30,7 @@ export function generateOAuthState(): string {
 
 /** base64url(SHA-256(verifier)), no padding. */
 function computeCodeChallenge(verifier: string): string {
-  return createHash('sha256').update(verifier).digest('base64url');
+  return hash('sha256', verifier, 'base64url');
 }
 
 /** A fresh PKCE pair (verifier + S256 challenge). */

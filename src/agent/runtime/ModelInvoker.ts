@@ -56,7 +56,6 @@ import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   AgentCategory,
   MESSAGE_TYPES,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   toRetryErrorInfo,
   type DeclinableUsageRoute,
   type InvocationRef,
@@ -73,7 +72,6 @@ import {
 import type { RunState } from '@shared/session/runStateFold';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { policyDecidedRows } from './requestPolicy';
 import { rejectedTokenRecovery } from './rejectedTokenRecovery';
@@ -926,14 +924,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
       > {
         const state = yield* cell.current;
-        // One initial attempt plus the configured automatic retries; the
+        // One initial attempt plus the binding's automatic retries; the
         // setting is bounded to [0, 5], so the limit is always >= 1.
         const limit =
-          1 +
-          (yield* readSettingFrom<number>(
-            session.roots,
-            MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-          ));
+          1 + (yield* SynchronizedRef.get(run.model)).automaticRetries;
         let automaticAttempts = 0;
         const recoverToken = rejectedTokenRecovery(run, cell.current, rebind);
         let sent = request;

@@ -83,6 +83,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import {
@@ -249,6 +250,7 @@ function boundModel(
     ]),
     backgroundCapable: false,
     persistentConnection: false,
+    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     ...overrides,
   };
 }
@@ -330,7 +332,15 @@ const openRun = Effect.fn('openRun')(function* (
       },
     }),
   ]);
-  const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
+  // The retries the binding carries, read from the session as `bindModel`
+  // reads them.
+  const automaticRetries = yield* readSettingFrom<number>(
+    session.roots,
+    MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+  ).pipe(Effect.orDie);
+  const bound = yield* SynchronizedRef.make(
+    boundModel(model, { automaticRetries, ...overrides }),
+  );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
       Layer.mergeAll(

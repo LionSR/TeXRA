@@ -5,7 +5,7 @@
 // for trust again.
 
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -30,8 +30,7 @@ import { envDigest, type McpServerConfig } from './mcpServers';
 import { pinHook } from './pluginHooks';
 import { PluginError, type ResolvedPlugin } from './pluginManifest';
 
-const sha256 = (value: string | Uint8Array) =>
-  createHash('sha256').update(value).digest('hex');
+const sha256 = (value: string | Uint8Array) => hash('sha256', value, 'hex');
 
 /** How recent a modification keeps a file out of the hash cache. */
 const RACY_MS = 2_000;

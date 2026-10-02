@@ -114,6 +114,7 @@ import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { LiveTools } from '@tools/liveTools';
+import type { ToolRegistry } from '@tools/toolTable';
 import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -121,7 +122,6 @@ import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
-import { toolRegistryLayer, type HostPluginLayers } from '@tools/registry';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -970,9 +970,17 @@ const closeSession = (root: string) =>
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
-  readonly mcpConfigPath: string;
-  /** The plugins' process layers this host supplies (Copilot's, in VS Code). */
-  readonly pluginLayers?: HostPluginLayers;
+  /**
+   * The app's plugin table, served as `ToolRegistry`, and the live catalog
+   * over it (`LiveTools`): the harness names no tool of its own. Every TeXRA
+   * entry passes `toolRegistryLayer` (`@tools/registry`) with its MCP config
+   * and host plugin layers.
+   */
+  readonly tools: Layer.Layer<
+    LiveTools | ToolRegistry,
+    never,
+    FileSystem.FileSystem | AppState | ChildProcessSpawner
+  >;
   readonly secrets: PlatformSecrets;
   /**
    * The host's agent-directory layer, which can capture AppState at construction
@@ -1063,8 +1071,7 @@ interface ProcessRuntimeOptions {
 export function installProcessRuntime({
   processStart,
   globalStorage,
-  mcpConfigPath,
-  pluginLayers,
+  tools,
   secrets,
   appState,
   languageModel,
@@ -1098,7 +1105,7 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    toolRegistryLayer(mcpConfigPath, pluginLayers),
+    tools,
     Layer.succeed(AgentEngine)({
       executeAgent,
       resumeToolUseFromResumeData,

@@ -62,6 +62,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
 import { chooseReasoning } from '@model/reasoningChoice';
 import type { PluginServices } from '@platform/processRuntime';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -189,6 +190,7 @@ function boundModel(): BoundModel {
     modelRetryRouteKey: `wire:${GPT54}`,
     backgroundCapable: false,
     persistentConnection: false,
+    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
   };
 }
 

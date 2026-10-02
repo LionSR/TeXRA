@@ -64,6 +64,7 @@ import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { chooseReasoning } from '@model/reasoningChoice';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -318,6 +319,7 @@ function scriptedBoundModel(
     ]),
     backgroundCapable: false,
     persistentConnection: false,
+    automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
   };
 }
 

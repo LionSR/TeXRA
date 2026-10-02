@@ -1,5 +1,5 @@
 // Node imports
-import { createHash, type BinaryLike } from 'node:crypto';
+import { hash, type BinaryLike } from 'node:crypto';
 
 // Third-party imports
 import stableStringify from 'safe-stable-stringify';
@@ -11,7 +11,7 @@ type RunIdFields = Readonly<Record<string, string | number>>;
 
 /** Stable hex prefix of a sha256 digest. */
 export function truncatedHexId(source: BinaryLike, length: number): string {
-  return createHash('sha256').update(source).digest('hex').slice(0, length);
+  return hash('sha256', source, 'hex').slice(0, length);
 }
 
 /** Derive a stable run id from named identity fields: one of the two
