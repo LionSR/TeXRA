@@ -598,6 +598,11 @@ function buildCodexTurnSections(ctx: SectionContext): ToolSection[] {
   return sections;
 }
 
+function buildScriptSections(ctx: SectionContext): ToolSection[] {
+  const code = isObject(ctx.input) ? asString(ctx.input.code) : undefined;
+  return code === undefined ? [] : [codeSection('', code, 'javascript')];
+}
+
 function buildDefaultSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (input == null) return [];
@@ -645,6 +650,10 @@ const SECTION_BUILDERS: readonly {
       toolDisplayKind(ctx.toolName) === 'write' && Boolean(ctx.filePath),
     build: buildWriteSections,
     fileLinkKind: 'write',
+  },
+  {
+    match: (ctx) => toolDisplayKind(ctx.toolName) === 'script',
+    build: buildScriptSections,
   },
   {
     match: (ctx) => normalizeToolName(ctx.toolName) === 'memory',

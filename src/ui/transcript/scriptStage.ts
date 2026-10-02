@@ -261,6 +261,40 @@ function phasesOf(calls: readonly ScriptCallView[]): ScriptPhaseView[] {
 }
 
 /**
+ * The runs `run` launched that are not a script's calls: what its dispatch
+ * card lists (a direct `agent` call that detached, a background script's
+ * run). A child whose card (`parentCard`) sits under a script stage, awaited
+ * or sent to the background, has its one home in that stage's rows.
+ */
+export function dispatchedChildren(
+  run: RunView,
+  view: Pick<SessionView, 'runs'>,
+): RunView[] {
+  const { taskGroups, rows } = run.transcript;
+  const stageIds = new Set(
+    taskGroups
+      .filter((group) => group.kind === 'script')
+      .map((group) => group.id),
+  );
+  const scriptCards = new Set(
+    rows.flatMap((row) =>
+      row.kind === 'tool' &&
+      row.groupId !== undefined &&
+      stageIds.has(row.groupId)
+        ? [row.id]
+        : [],
+    ),
+  );
+  return run.childIds.flatMap((id) => {
+    const child = view.runs.get(id);
+    return child === undefined ||
+      (child.parentCard !== null && scriptCards.has(child.parentCard))
+      ? []
+      : [child];
+  });
+}
+
+/**
  * The script stages of a run's transcript, oldest first: one per `script`
  * call that issued a call, its calls in issue order (first appearance) and
  * grouped by phase.

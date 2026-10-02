@@ -15,7 +15,7 @@ import { safeLookup } from '@utils/core';
 
 import { normalizeToolName } from './toolDisplayName';
 
-export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
+export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash' | 'script';
 
 /**
  * Tool name -> display kind, for the tools whose display treatment is not the
@@ -24,6 +24,7 @@ export type ToolDisplayKind = 'edit' | 'read' | 'write' | 'bash';
  *  - `read`: shows a file link instead of the raw input/output.
  *  - `write`: shows a file link plus syntax-highlighted content.
  *  - `bash`: shows a shell-style command/output block.
+ *  - `script`: shows its JavaScript source, and is named by its title.
  */
 const TOOL_DISPLAY_KIND = {
   edit_file: 'edit',
@@ -33,6 +34,8 @@ const TOOL_DISPLAY_KIND = {
   write_file: 'write',
 
   bash: 'bash',
+
+  script: 'script',
 } as const satisfies Readonly<Record<string, ToolDisplayKind>>;
 
 /** Canonical mapped keys that must remain present in the tool registry. */

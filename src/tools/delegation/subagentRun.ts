@@ -47,9 +47,10 @@ import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
 // ============================================================================
 
 /**
- * One compact trace line per child progress update, for the in-band arm where
- * progress degrades to the parent run's trace instead of follow-up delivery.
- * Returns undefined for updates with nothing worth a line.
+ * One compact line per child progress update, for an awaited child: the
+ * `agent` call streams it to its card, the delegation tools' in-band arm to
+ * the parent run's trace. Returns undefined for updates with nothing worth a
+ * line.
  */
 export function describeSubagentProgress(
   agentName: string,
