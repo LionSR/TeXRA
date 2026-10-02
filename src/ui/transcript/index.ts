@@ -43,6 +43,7 @@ export {
   type WorkflowTaskRow,
 } from './transcriptRow';
 export {
+  dispatchedChildren,
   pendingRequestLine,
   scriptStages,
   SCRIPT_CALL_STATUS_LABEL,

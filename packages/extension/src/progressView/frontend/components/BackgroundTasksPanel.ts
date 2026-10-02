@@ -1,10 +1,11 @@
 /**
  * The dispatch card (board E2): what a run has fanned out, in its
  * conversation prelude. A `<wa-details>` headed "Dispatched N subagents"
- * with the parent's `rollup` as badges and "since <time>" from the earliest
- * child still running (the fold clears `runStartedAt` when a run ends, so a
- * settled fan-out carries no since), one row per child run (nested children
- * indented under theirs), the inquiry threads the run opened, and a
+ * with the `rollup` of the children it lists as badges and "since <time>"
+ * from the earliest child still running (the fold clears `runStartedAt` when
+ * a run ends, so a settled fan-out carries no since), one row per dispatched
+ * child run (`dispatchedChildren`: a script's calls are listed by its stage;
+ * nested children indented under theirs), the inquiry threads the run opened, and a
  * "Waiting on N subagents" line while any run. The `inquiries` scope is the
  * same card over the inquiry threads alone (the workflow body, whose run
  * board already lists every call). Every row is a child of the fold: label,
@@ -31,6 +32,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
   descendantRuns,
+  rollupOf,
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
@@ -38,6 +40,7 @@ import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { TickerController } from '@shared/litControllers/TickerController';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { dispatchedChildren } from '@ui/transcript';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
@@ -234,7 +237,8 @@ export class BackgroundTasksPanel extends LitElement {
     `,
   ];
 
-  /** The dispatching run: its `childIds` are the rows. */
+  /** The dispatching run: the children it dispatched are the rows
+   *  (`dispatchedChildren`: a script's calls live in its stage). */
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   /** The card's open state lives here (`groups`, key `dispatch`). */
@@ -248,11 +252,7 @@ export class BackgroundTasksPanel extends LitElement {
   @property() scope: 'all' | 'inquiries' = 'all';
 
   private childrenOf(run: RunView): RunView[] {
-    const view = this.view;
-    if (!view) return [];
-    return run.childIds
-      .map((id) => view.runs.get(id))
-      .filter((child): child is RunView => child !== undefined);
+    return this.view ? dispatchedChildren(run, this.view) : [];
   }
 
   /** Every descendant `rollup` counts, so the card's running badge and its
@@ -281,7 +281,10 @@ export class BackgroundTasksPanel extends LitElement {
     const inquiries = this.inquiriesOf(run);
     if (children.length === 0 && inquiries.length === 0) return nothing;
 
-    const { rollup } = run;
+    // Over the children this card lists, not every descendant the run's
+    // own `rollup` counts: a script's calls are its stage's.
+    const rollup = rollupOf(children);
+    const approval = children.some((child) => child.approval !== 'none');
     // When the fan-out began: the earliest descendant still running, over
     // the set `rollup.running` counts. The fold clears `runStartedAt` on a
     // terminal status, so a settled fan-out has no start to name and the
@@ -304,7 +307,7 @@ export class BackgroundTasksPanel extends LitElement {
                 >`
               : nothing
           }${
-            run.approval === 'descendant'
+            approval
               ? html`<wa-badge variant="warning" pill
                   >${waIcon('triangle-exclamation')}</wa-badge
                 >`

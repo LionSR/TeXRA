@@ -305,6 +305,10 @@ true` returns at once with a run ID, and the script runs as a child run of
   script's first `agent` call opens shows the script's title, source and the
   calls it made so far. A background script's run offers **Resume** after a
   stop and **Edit as new task**, which puts its script into the launcher.
+  A script's card is named by its title (else "Script") and shows its source
+  as JavaScript, and the agents a script calls are listed in its stage alone:
+  not among the run's background tasks, and not as "Subagent started" lines
+  in the parent's transcript.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your

@@ -33,6 +33,7 @@ import {
   RunIdentitySchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
+  RUN_PHASE,
   RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
@@ -265,6 +266,28 @@ export function isLiveRun(
 ): boolean {
   if (run.substate === RUN_SUBSTATE.PAUSED) return false;
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
+}
+
+/**
+ * What `children` and their descendants count toward a parent's `rollup`:
+ * the fold's count, and the dispatch card's over the children it lists. A
+ * child parked between turns (held) or paused, nothing asked of the user,
+ * has delivered its turn: it counts as finished, not running.
+ */
+export function rollupOf(children: readonly RunView[]): RunView['rollup'] {
+  const rollup = { total: 0, running: 0, finished: 0 };
+  for (const child of children) {
+    const idle =
+      child.status === RUN_PHASE.WAITING &&
+      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
+    rollup.total += 1 + child.rollup.total;
+    rollup.running +=
+      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
+    rollup.finished +=
+      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
+      child.rollup.finished;
+  }
+  return rollup;
 }
 
 /** What a host can do with a follow-up, the only input the host brings to
