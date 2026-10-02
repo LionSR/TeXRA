@@ -268,6 +268,10 @@ const RunStartEventSchema = durable('run.start', {
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
   parent: RunParentSchema.nullable(),
+  /** The parent's tool card (its `logId`) whose call launched this run: an
+   *  `agent` call's child, a `script` call's background run. Absent for a
+   *  root and for a child no card launched. */
+  parentCard: z.string().min(1).nullish(),
   /** The run's approval policy at launch, from the session's single authority. */
   approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
   /** Workflow-script runs: the checkpoint this run journals into. */

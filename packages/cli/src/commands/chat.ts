@@ -83,6 +83,7 @@ export const chatCommand = withUsageSections(
           'Ctrl-T',
           "open the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
         ],
+        ['Ctrl-O', "list the calls of the focused run's script"],
         ['Tab', 'select a visible child session or process'],
         [
           focusShortcut,

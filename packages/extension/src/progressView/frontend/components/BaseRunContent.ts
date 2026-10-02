@@ -56,7 +56,11 @@ export abstract class BaseRunContent extends LitElement {
 
   protected renderLog(): TemplateResult {
     return html`<div class="conversation-log">
-      <log-list .run=${this.run} .surface=${this.surface}></log-list>
+      <log-list
+        .run=${this.run}
+        .view=${this.view}
+        .surface=${this.surface}
+      ></log-list>
     </div>`;
   }
 
@@ -80,7 +84,10 @@ export abstract class BaseRunContent extends LitElement {
         }</span
       >
       ${
-        run.actions.includes('resume') && run.group === 'interrupted'
+        run.actions.includes('resume') &&
+        // A background script resumes after a stop too: its finished calls
+        // are handed back from its rows (`runActions`).
+        (run.group === 'interrupted' || run.identity.kind === 'script')
           ? html`<wa-button
               id="resumeRunBtn"
               variant="brand"

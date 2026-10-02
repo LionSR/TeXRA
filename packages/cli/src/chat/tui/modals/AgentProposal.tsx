@@ -14,6 +14,10 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 import {
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
+import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@ui/copy/workflowScriptProposal';
@@ -97,6 +101,36 @@ function agentProposalMetadataLines({
   readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
   readonly payload: AgentProposalPermission;
 }): MetadataLine[] {
+  // A script's request for its `agent` calls: what one approval covers and
+  // the calls it issued first; its source is the scrolling text below.
+  if (payload.script) {
+    const { calls } = payload.script;
+    return [
+      { segments: [{ text: SCRIPT_REQUEST_COPY.grant }], tone: 'warning' },
+      {
+        segments: [
+          { text: 'First agent call: ', bold: true },
+          { text: `${payload.agent} · ${getModelLabel(payload.model)}` },
+        ],
+      },
+      ...(calls.length > 0
+        ? [
+            {
+              segments: [{ text: `${SCRIPT_REQUEST_COPY.callsHeading}:` }],
+              tone: 'dim' as const,
+            },
+            ...calls.map((call) => ({
+              segments: [{ text: `  ${scriptRequestCallLine(call)}` }],
+              tone: 'dim' as const,
+            })),
+          ]
+        : []),
+      {
+        segments: [{ text: `${SCRIPT_REQUEST_COPY.sourceHeading}:` }],
+        tone: 'dim',
+      },
+    ];
+  }
   if (
     payload.agentCategory === AgentCategory.Workflow &&
     payload.workflowScript
@@ -207,9 +241,11 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     props.payload.agentCategory === AgentCategory.Workflow
       ? props.payload.workflowScript
       : undefined;
-  const title = workflowScript
-    ? `Approve multi-agent workflow ${workflowScript.name}?`
-    : `Spawn ${props.payload.agent}?`;
+  const { script } = props.payload;
+  let title = `Spawn ${props.payload.agent}?`;
+  if (script) title = `${SCRIPT_REQUEST_COPY.title(script)}?`;
+  else if (workflowScript)
+    title = `Approve multi-agent workflow ${workflowScript.name}?`;
   const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,
@@ -237,10 +273,10 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         ))}
       </Box>
       <ScrollableModalText
-        hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}
+        hiddenNoun={script ? 'source rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
-        scrollHint="scroll prompt"
-        text={props.payload.instruction}
+        scrollHint={script ? 'scroll source' : 'scroll prompt'}
+        text={script ? script.source : props.payload.instruction}
         width={instructionWidth}
       />
     </ConfirmCard>

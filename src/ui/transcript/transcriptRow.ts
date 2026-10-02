@@ -116,7 +116,14 @@ export interface ErrorRow extends TranscriptRowBase {
   readonly detailText: TranscriptText;
 }
 
-export interface ToolRow extends TranscriptRowBase {
+/** What a card's `tool.start` says of its call beyond the tool and input:
+ *  a script's call's phase, and the attempt from the second on. */
+export interface ToolCallFacts {
+  readonly phase?: string;
+  readonly attempt?: number;
+}
+
+export interface ToolRow extends TranscriptRowBase, ToolCallFacts {
   readonly kind: 'tool';
   readonly toolUse: NormalizedToolUse;
   readonly model: ToolRowModel;

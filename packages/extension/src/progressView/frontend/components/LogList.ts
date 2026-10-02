@@ -16,7 +16,7 @@ import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
 import type { RunId } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
@@ -34,6 +34,7 @@ export class LogList extends LitElement {
   static override styles = [designTokens, ...logStyles];
 
   @property({ attribute: false }) run: RunView | null = null;
+  @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
 
   private static readonly MAX_CACHED_RUNS = 5;
@@ -86,6 +87,9 @@ export class LogList extends LitElement {
             aria-relevant=${terminal ? nothing : 'additions'}
             ?hidden=${id !== this.activeRunId}
             .runId=${id}
+            .run=${run}
+            .view=${id === this.activeRunId ? this.view : null}
+            .surface=${this.surface}
             .transcript=${run.transcript}
             .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}

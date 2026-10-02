@@ -124,7 +124,10 @@ const SKIPPED_AFTER_END_TURN =
 type CallFacts = Pick<
   DispatchFacts,
   'callId' | 'toolName' | 'replay' | 'logId' | 'stageId'
->;
+> & {
+  /** A script's call: its guest's `phase()` title when it was issued. */
+  readonly phase?: string | null;
+};
 
 type Settlement = Pick<
   ToolResultPayload,
@@ -375,12 +378,18 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   /** The row that opens a call's card. A slow tool's is committed with the
    *  row that admits the attempt, so a resume finds the card its settlement
    *  closes; a fast tool's rides the settlement batch itself. */
-  const cardStart = (fact: CallFacts, input: unknown): RunLedgerDraft =>
+  const cardStart = (
+    fact: CallFacts,
+    input: unknown,
+    attempt: number,
+  ): RunLedgerDraft =>
     displayRow(runId, {
       type: 'tool.start',
       logId: fact.logId,
       toolName: fact.toolName,
       input: toJsonValue(input),
+      ...(fact.phase != null ? { phase: fact.phase } : {}),
+      ...(attempt > 1 ? { attempt } : {}),
       ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
     });
   /** The card rows a settlement commits: a slow tool's card is open already
@@ -391,11 +400,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     status: ToolCallStatus,
+    attempt: number,
     files: readonly FileListEntry[] = [],
   ): RunLedgerDraft[] => [
     ...(step.registry.get(fact.toolName)?.slow === true
       ? []
-      : [cardStart(fact, input)]),
+      : [cardStart(fact, input, attempt)]),
     displayRow(runId, {
       type: 'tool.end',
       logId: fact.logId,
@@ -405,9 +415,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }),
   ];
   /** The card rows an admitted attempt opens: a slow tool's, before it runs. */
-  const admittedCards = (fact: CallFacts, input: unknown): RunLedgerDraft[] =>
+  const admittedCards = (
+    fact: CallFacts,
+    input: unknown,
+    attempt: number,
+  ): RunLedgerDraft[] =>
     step.registry.get(fact.toolName)?.slow === true
-      ? [cardStart(fact, input)]
+      ? [cardStart(fact, input, attempt)]
       : [];
 
   /** The row that admits an attempt of the calls an origin issued. */
@@ -594,6 +608,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               workPlanState: workspace.workPlan,
               userInstruction,
               toolCallId: fact.callId,
+              logId: fact.logId,
               responseId,
               attempt,
               requests,
@@ -695,7 +710,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // in this same batch under the id its dispatch facts carry. Publishing a
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
-    const cards = settledCards(fact, parsedInput, status, editedFiles);
+    const cards = settledCards(fact, parsedInput, status, attempt, editedFiles);
     // An executed call's PostToolUse rows commit with its settlement.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     yield* retireStanding;
@@ -861,7 +876,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (decision === 'rerun') {
       yield* append([
         intentRow(origin, fact.callId, intent.attempt + 1),
-        ...admittedCards(fact, input),
+        ...admittedCards(fact, input, intent.attempt + 1),
       ]);
     }
     return decision;
@@ -918,7 +933,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         fact,
         intent.attempt,
         syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-        settledCards(fact, input, 'failed'),
+        settledCards(fact, input, 'failed', intent.attempt),
       );
       return;
     }
@@ -1193,6 +1208,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 replay: tool?.replay ?? 'unsafe',
                 logId: generateShortId(),
                 stageId,
+                phase: op.phase,
               };
               const intent = (yield* cell.current).pendingIntents[callId];
               if (known !== undefined && intent !== undefined) {
@@ -1209,7 +1225,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   ? [scriptCallRow(op, fact, input)]
                   : []),
                 intentRow(origin, callId, 1),
-                ...admittedCards(fact, input),
+                ...admittedCards(fact, input, 1),
               ]);
               yield* execute(fact, input, 1, null, context);
             }),
@@ -1300,7 +1316,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // tool's card opens in the same batch.
     yield* append([
       intentRow(fromResponse, fact.callId, 1),
-      ...admittedCards(fact, input),
+      ...admittedCards(fact, input, 1),
     ]);
     yield* Effect.scoped(
       Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>

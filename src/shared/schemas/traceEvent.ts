@@ -43,6 +43,11 @@ export const TranscriptEventSchemas = {
     logId: z.string(),
     toolName: z.string(),
     input: JsonValueSchema,
+    /** A script's call: the guest's latest `phase()` title when it issued
+     *  the call (`script.call.phase`). */
+    phase: z.string().optional(),
+    /** The intent attempt the card opens for, from the second on. */
+    attempt: z.int().min(2).optional(),
   }),
   /**
    * On a run with a ledger the card stores no output: `result` is projected

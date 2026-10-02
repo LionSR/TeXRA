@@ -105,6 +105,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
+import { scriptStages } from '@ui/transcript';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -986,6 +987,61 @@ describe('the interrupted golden runs', () => {
         // Nothing was asked: the resumed child was approved when it
         // launched, and a reused call runs nothing.
         expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
+        // What every host paints of the two scripts (`scriptStages`): each
+        // call under its phase, the first script's linked to the child its
+        // card launched (the one launched before the kill included), the
+        // second's reused with no child of their own.
+        yield* session.setTranscriptSubscriptions('golden-test', [
+          { id: FANOUT, fromSeq: 0 },
+        ]);
+        const painted = yield* SubscriptionRef.changes(session.view).pipe(
+          Stream.map((view) => {
+            const run = view.runs.get(FANOUT);
+            return run === undefined ? [] : scriptStages(run, view);
+          }),
+          Stream.filter((stages) => stages.length === 2),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        expect(
+          painted[0]?.map((stage) =>
+            stage.calls.map(({ label, status, phase, childRunId }) => ({
+              label,
+              status,
+              phase,
+              childRunId: childRunId ?? null,
+            })),
+          ),
+        ).toEqual([
+          [
+            {
+              label: 'A',
+              status: 'finished',
+              phase: 'Fan out',
+              childRunId: FANNED,
+            },
+            {
+              label: 'B',
+              status: 'finished',
+              phase: 'Fan out',
+              childRunId: RUNNING,
+            },
+          ],
+          [
+            {
+              label: 'A',
+              status: 'reused',
+              phase: 'Fan out',
+              childRunId: null,
+            },
+            {
+              label: 'B',
+              status: 'reused',
+              phase: 'Fan out',
+              childRunId: null,
+            },
+          ],
+        ]);
       }),
   );
 

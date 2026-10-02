@@ -382,6 +382,7 @@ function createRun(
       (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
+    parentCard: event.parentCard ?? null,
     ancestors: [],
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },

@@ -133,6 +133,9 @@ export type ToolCallShape = {
   /** The roots of the workspace the call works on: the run's session roots. */
   readonly roots: WorkspaceRoots;
   readonly toolCallId?: string;
+  /** The card this call's rows open under (its `logId`): what a run the
+   *  call launches names as its `parentCard`. Absent outside a run. */
+  readonly logId?: string;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId?: string;

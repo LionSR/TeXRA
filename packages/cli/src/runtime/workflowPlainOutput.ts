@@ -9,8 +9,13 @@ import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import type { RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { descendantRuns, type RunView } from '@shared/session/sessionView';
+import {
+  descendantRuns,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
+import { scriptStages } from '@ui/transcript';
 
 import { claimRootRun } from './sessionViewFollow';
 
@@ -28,6 +33,23 @@ interface WorkflowPlainOutputOptions {
   readonly runId?: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
+}
+
+/** The lines a run's script stages say (`scriptStages`): each phase's
+ *  heading and each call's line, keyed by the stage, phase and call. */
+function scriptPlainLines(
+  run: RunView,
+  view: SessionView,
+): ReadonlyMap<string, string> {
+  const lines = new Map<string, string>();
+  for (const stage of scriptStages(run, view)) {
+    for (const call of stage.calls) {
+      if (call.phase !== null)
+        lines.set(`${stage.id}:phase:${call.phase}`, `◆ ${call.phase}`);
+      lines.set(call.id, call.line);
+    }
+  }
+  return lines;
 }
 
 /** The lines one workflow-script run's view level says: phase headings,
@@ -83,9 +105,12 @@ export function attachWorkflowPlainOutput(
       options.beforeWrite?.();
       options.writeLine(line);
     };
-    const printRun = (run: RunView): void => {
+    const printRun = (run: RunView, view: SessionView): void => {
       const before = previous.get(run.id);
-      const lines = workflowPlainLines(run);
+      const lines =
+        run.identity.kind === 'multiAgentWorkflow'
+          ? workflowPlainLines(run)
+          : scriptPlainLines(run, view);
       previous.set(run.id, lines);
       for (const [id, line] of lines) {
         if (before?.get(id) !== line) write(line);
@@ -109,13 +134,17 @@ export function attachWorkflowPlainOutput(
             root === undefined
               ? undefined
               : new Set(descendantRuns(view, root, { includeRoot: true }));
+          // Workflow runs, and the runs a script can run in: the launched
+          // run itself and the background script runs under it.
           const workflows =
             rootedIds === undefined
               ? []
               : [...view.runs.values()].filter(
                   (run) =>
-                    run.identity?.kind === 'multiAgentWorkflow' &&
-                    rootedIds.has(run.id),
+                    rootedIds.has(run.id) &&
+                    (run.identity?.kind === 'multiAgentWorkflow' ||
+                      run.identity?.kind === 'script' ||
+                      run.id === root),
                 );
           const key = workflows.map((run) => run.id).join('\0');
           if (key !== subscribed) {
@@ -125,7 +154,7 @@ export function attachWorkflowPlainOutput(
               workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
             );
           }
-          for (const run of workflows) printRun(run);
+          for (const run of workflows) printRun(run, view);
         }),
       ),
       { startImmediately: true },

@@ -116,6 +116,21 @@ export const proposalRequestPanelStyles: CSSResult = css`
     white-space: pre-wrap;
   }
 
+  /* A script request shows the whole source and the calls it issued. */
+  .script-proposal__source {
+    max-height: 10em;
+    font-family: var(--wa-font-family-code);
+    font-size: var(--font-size-xs);
+  }
+
+  .script-proposal__calls {
+    margin: 0;
+    padding-inline-start: 1.5em;
+    font-family: var(--wa-font-family-code);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+  }
+
   .workflow-proposal__extract-flags {
     display: flex;
     gap: ${sp.small};

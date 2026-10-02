@@ -29,6 +29,7 @@ import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityPro
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
+import { TOOL_CUT_BY_RUN_END } from '@ui/transcript';
 import { isObject } from '@utils/core';
 
 import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
@@ -138,10 +139,15 @@ function record(d: Draft, event: TranscriptEvent): void {
         input: event.input,
         status: TOOL_CALL_STATUS.IN_PROGRESS,
       } satisfies ToolUseLog;
+      const call = {
+        ...(event.phase !== undefined ? { phase: event.phase } : {}),
+        ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
+      };
       const slot = ix.slots.get(event.logId);
       if (slot) {
         if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
           slot.log = log;
+          slot.call = call;
           write(d, slot);
         }
         return;
@@ -156,6 +162,7 @@ function record(d: Draft, event: TranscriptEvent): void {
           false,
         ),
         log,
+        call,
       });
       ix.activeTools.add(event.logId);
       return;
@@ -321,7 +328,7 @@ function moveBoundary(d: Draft, phase: RunPhase): void {
     slot.log = {
       ...slot.log,
       status: TOOL_CALL_STATUS.FAILED,
-      error: 'The run ended before this tool completed.',
+      error: TOOL_CUT_BY_RUN_END,
     };
     write(d, slot);
   }
