@@ -10,6 +10,7 @@
  */
 
 import { Cause, Effect } from 'effect';
+import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -18,7 +19,6 @@ import {
   type ConditionalResponse,
   type GitHubServices,
 } from './githubClient';
-import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 import type { GhCheckAnnotation, GhCheckRun } from './prTypes';
 
 // GitHub caps the check-runs endpoint at 100 per page.
