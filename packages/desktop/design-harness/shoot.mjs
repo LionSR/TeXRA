@@ -23,6 +23,7 @@ const scenes = process.env.SCENES
       'ext-inline',
       'ext-process',
       'ext-cost',
+      'ext-script-running',
       'desktop-projects',
       'desktop-one-project',
       'desktop-empty-project',

@@ -1,11 +1,10 @@
 // The script popup: the calls a run's `script` call issued, painted from the
 // shared script-stage model (`scriptStages` in `@ui/transcript`), the one the
 // progress view paints. A foreground surface like the Ctrl-T reader:
-// row-budgeted, and Esc restores the conversation untouched. Each phase
-// leads with the calls that need a decision, then the failed and running
-// ones, then the rest in issue order. Enter opens a call's child run (or the
-// run asking under it); `s` stops a running call's child, which the script
-// sees as `Skipped`.
+// row-budgeted, and Esc restores the conversation untouched. Its title is
+// the card's summary line; each phase lists its calls in issue order. Enter
+// opens a call's child run (or the run asking under it); `s` stops a running
+// call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
 import { Box, Text, useInput, useWindowSize } from 'ink';
@@ -29,11 +28,9 @@ import type { RunId } from '@shared/schemas';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  SCRIPT_SECTION_LABEL,
   scriptStages,
   type ScriptCallView,
 } from '@ui/transcript';
-import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
@@ -68,7 +65,7 @@ const STATUS_COLOR = {
   'not run': COLOR_BORDER,
 } as const satisfies Record<ScriptCallView['status'], string | undefined>;
 
-/** One list entry: a phase or section heading, or a call. */
+/** One list entry: a phase heading, or a call. */
 type Entry =
   | { readonly kind: 'heading'; readonly key: string; readonly text: string }
   | {
@@ -79,13 +76,11 @@ type Entry =
 
 function CallRow({
   call,
-  latestLine,
 }: {
   readonly call: ScriptCallView;
-  readonly latestLine: string | undefined;
 }): React.JSX.Element {
-  const waiting = call.section === 'waiting';
-  const last = call.detail?.text ?? latestLine;
+  const waiting = call.needsYou;
+  const last = call.summary;
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
@@ -117,7 +112,7 @@ interface ScriptStagePopupProps {
   readonly view: ScriptPopupView;
   readonly onClose: () => void;
   readonly onFocusRun: (runId: RunId) => void;
-  /** Issue a skip (`run.stop` of the call's child). */
+  /** Stop a call's agent (`run.stop` of the call's child). */
   readonly onRequest: (request: RuntimeRequest) => void;
   readonly onOpenTranscript: (runId: RunId) => void;
   readonly onViewChange: (patch: Partial<ScriptPopupView>) => void;
@@ -156,22 +151,11 @@ export function ScriptStagePopup({
             text: `◆ ${phase.title}`,
           },
         ]),
-    ...phase.sections.flatMap((group) => [
-      ...(group.section === null
-        ? []
-        : [
-            {
-              kind: 'heading' as const,
-              key: `section:${phase.title ?? ''}:${group.section}`,
-              text: `${SCRIPT_SECTION_LABEL[group.section]} (${group.calls.length})`,
-            },
-          ]),
-      ...group.calls.map((call) => ({
-        kind: 'call' as const,
-        key: call.id,
-        call,
-      })),
-    ]),
+    ...phase.calls.map((call) => ({
+      kind: 'call' as const,
+      key: call.id,
+      call,
+    })),
   ]);
   const byKey = new Map(entries.map((entry) => [entry.key, entry] as const));
   const remembered =
@@ -184,7 +168,7 @@ export function ScriptStagePopup({
     selectedKey === undefined ? undefined : byKey.get(selectedKey);
   const call = selected?.kind === 'call' ? selected.call : undefined;
   const child = runViewOf(session, call?.childRunId);
-  const skippable =
+  const stoppable =
     call?.status === 'running' && killableRunId(child) !== undefined;
   const target = call?.askingRunId ?? child?.id;
 
@@ -199,17 +183,16 @@ export function ScriptStagePopup({
           },
         ]
       : []),
-    ...(skippable ? [{ key: 's', action: 'skip' }] : []),
+    ...(stoppable ? [{ key: 's', action: 'stop agent' }] : []),
     { key: 'Ctrl-T', action: 'transcript' },
     { key: 'Esc', action: 'close' },
   ];
   const title = [
     'Script',
     stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
-    `${stage?.calls.length ?? 0} calls`,
-    stage !== undefined && stage.costUsd > 0
-      ? formatCostUsd(stage.costUsd)
-      : undefined,
+    stage === undefined || stage.summary === ''
+      ? `${stage?.calls.length ?? 0} calls`
+      : stage.summary,
   ]
     .filter((part) => part !== undefined)
     .join(' · ');
@@ -240,7 +223,7 @@ export function ScriptStagePopup({
       onViewChange({ stageId: stages[next]?.id, selectedId: undefined });
       return;
     }
-    if (input === 's' && skippable && child !== undefined) {
+    if (input === 's' && stoppable && child !== undefined) {
       onRequest({ kind: 'run.stop', runId: child.id, reason: 'user' });
     }
   });
@@ -262,14 +245,7 @@ export function ScriptStagePopup({
         </Box>
       );
     }
-    return (
-      <CallRow
-        call={entry.call}
-        latestLine={
-          runViewOf(session, entry.call.childRunId)?.latestLine ?? undefined
-        }
-      />
-    );
+    return <CallRow call={entry.call} />;
   };
   const activate = (selectedValue: string): void => {
     const entry = byKey.get(selectedValue);

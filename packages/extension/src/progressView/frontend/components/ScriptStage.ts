@@ -1,11 +1,11 @@
 /**
  * `<script-stage>`: the calls one `script` call issued, painted from the
- * shared script-stage model (`scriptStages` in `@ui/transcript`). Each phase
- * leads with the calls that need a decision, then the failed and the running
- * ones, then the rest in issue order. An `agent` row opens its child run;
- * Review opens the run that is asking; Skip stops a running call's child,
- * which the call then answers as `Skipped`. Holds no state: every send is a
- * surface or runtime event.
+ * shared script-stage model (`scriptStages` in `@ui/transcript`): the card's
+ * summary line, then each phase's calls as plain rows in issue order. An
+ * `agent` row opens its child run; Review opens the run that is asking;
+ * "Stop this agent", in a running row's menu, stops the call's child, which
+ * the call then answers as `Skipped`. "Log" opens the calls' own cards
+ * below the card. Holds no state: every send is a surface or runtime event.
  */
 
 // Third-party imports
@@ -16,24 +16,29 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
 import type { RunId } from '@shared/schemas';
+import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import {
   SCRIPT_CALL_STATUS_LABEL,
-  SCRIPT_SECTION_LABEL,
   type ScriptCallView,
   type ScriptStageView,
 } from '@ui/transcript';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
-import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+
+/** The row menu's one item: stop the call's child run. */
+const STOP_AGENT = 'stop-agent';
 
 function statusIcon(
   status: ScriptCallView['status'],
@@ -62,7 +67,7 @@ function statusIcon(
   }
 }
 
-/** The runtime's refusal of a skip, in the runtime's words. */
+/** The runtime's refusal of a stop, in the runtime's words. */
 function refusalText(error: SurfaceRefusal): string {
   switch (error._tag) {
     case 'NotOwner':
@@ -88,19 +93,16 @@ const scriptStageStyles = css`
     font-weight: var(--wa-font-weight-semibold);
   }
 
-  .section {
-    display: flex;
-    gap: var(--wa-space-2xs);
-    padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    font-weight: var(--wa-font-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+  .summary {
+    padding: var(--wa-space-2xs) var(--wa-space-s);
     color: var(--wa-color-text-quiet);
+    font-variant-numeric: tabular-nums;
   }
 
-  .section .count {
-    font-weight: var(--wa-font-weight-normal);
+  .log {
+    display: flex;
+    padding: var(--wa-space-2xs) var(--wa-space-s);
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .row {
@@ -139,7 +141,7 @@ const scriptStageStyles = css`
   }
 
   .status-interrupted .row-icon,
-  .is-waiting .row-icon {
+  .needs-you .row-icon {
     color: var(--wa-color-warning-on-quiet);
   }
 
@@ -217,13 +219,17 @@ export class ScriptStage extends LitElement {
   @property({ attribute: false }) surface!: Surface;
   /** The run the stage belongs to cannot act here (another owner, ended). */
   @property({ type: Boolean }) readOnly = false;
+  /** The run whose transcript holds the stage: the Log toggle's key. */
+  @property({ attribute: false }) runId: RunId | null = null;
+  /** The calls' own cards are open below the card. */
+  @property({ type: Boolean }) logOpen = false;
 
   private select(runId: RunId): void {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
   }
 
-  /** Skip: stop the call's child run; the call answers `Skipped`. */
-  private skip(runId: RunId): void {
+  /** Stop the call's child run; the call answers `Skipped`. */
+  private stop(runId: RunId): void {
     this.dispatchEvent(
       SessionUiEvents.runtime({ kind: 'run.stop', runId, reason: 'user' }),
     );
@@ -249,18 +255,26 @@ export class ScriptStage extends LitElement {
         ? undefined
         : this.view.runs.get(call.childRunId);
     if (call.status !== 'running' || child === undefined) return nothing;
-    return html`<span class="row-actions"
+    return html`<wa-dropdown
+      class="row-actions"
+      placement="bottom-end"
+      @click=${(event: Event) => event.stopPropagation()}
+      @wa-select=${(event: WaSelectEvent) => {
+        if ((event.detail.item as WaDropdownItem).value === STOP_AGENT)
+          this.stop(child.id);
+      }}
       ><wa-button
+        slot="trigger"
         size="s"
-        appearance="outlined"
+        appearance="plain"
+        variant="neutral"
+        aria-label="More"
+        >${waIcon('ellipsis')}</wa-button
+      ><wa-dropdown-item
+        value=${STOP_AGENT}
         ?disabled=${this.readOnly || child.readOnly}
-        title="Stop this call's agent run; the script gets a Skipped error"
-        @click=${(event: Event) => {
-          event.stopPropagation();
-          this.skip(child.id);
-        }}
-        >${waIcon('forward-step', { slot: 'start' })} Skip</wa-button
-      ></span
+        >${waIcon('circle-stop', { slot: 'icon' })}Stop this agent</wa-dropdown-item
+      ></wa-dropdown
     >`;
   }
 
@@ -271,14 +285,14 @@ export class ScriptStage extends LitElement {
         : this.view.runs.get(call.childRunId);
     // A row opens the run that is asking, else its child.
     const target = call.askingRunId ?? child?.id;
-    const last = call.detail?.text ?? child?.latestLine ?? '';
+    const last = call.summary ?? '';
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div
       class=${classMap({
         row: true,
         [`status-${call.status.replace(' ', '-')}`]: true,
-        'is-waiting': call.section === 'waiting',
+        'needs-you': call.needsYou,
         'is-linked': target !== undefined,
       })}
       role="listitem"
@@ -297,7 +311,7 @@ export class ScriptStage extends LitElement {
     >
       <span class="row-icon"
         >${waIcon(
-          call.section === 'waiting' ? 'circle-dot' : statusIcon(call.status),
+          call.needsYou ? 'circle-dot' : statusIcon(call.status),
           { label: SCRIPT_CALL_STATUS_LABEL[call.status] },
         )}</span
       >
@@ -326,43 +340,51 @@ export class ScriptStage extends LitElement {
     </div>`;
   }
 
+  private toggleLog(): void {
+    if (this.runId === null) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'group',
+        runId: this.runId,
+        key: `calls:${this.stage.id}`,
+        expanded: !this.logOpen,
+      }),
+    );
+  }
+
   override render(): TemplateResult {
-    return html`<div role="list">
-      ${repeat(
-        this.stage.phases,
-        (phase) => phase.title ?? '',
-        (phase) =>
-          html`${
-            phase.title === null
-              ? nothing
-              : html`<div class="phase"><bdi>${phase.title}</bdi></div>`
-          }${repeat(
-            phase.sections,
-            (group) => group.section ?? 'rest',
-            (group) =>
-              html`${
-                group.section === null
-                  ? nothing
-                  : html`<div class="section">
-                      <span>${SCRIPT_SECTION_LABEL[group.section]}</span>
-                      <span class="count">${group.calls.length}</span>
-                    </div>`
-              }${repeat(
-                group.calls,
-                (call) => call.id,
-                (call) => this.renderCall(call),
-              )}`,
-          )}`,
-      )}
-      ${
-        this.stage.costUsd > 0
-          ? html`<div class="section">
-              <span>Total</span>
-              <span class="count">${formatCostUsd(this.stage.costUsd)}</span>
-            </div>`
-          : nothing
-      }
-    </div>`;
+    return html`${
+      this.stage.summary === ''
+        ? nothing
+        : html`<div class="summary">${this.stage.summary}</div>`
+    }<div role="list">
+        ${repeat(
+          this.stage.phases,
+          (phase) => phase.title ?? '',
+          (phase) =>
+            html`${
+              phase.title === null
+                ? nothing
+                : html`<div class="phase"><bdi>${phase.title}</bdi></div>`
+            }${repeat(
+              phase.calls,
+              (call) => call.id,
+              (call) => this.renderCall(call),
+            )}`,
+        )}
+      </div>
+      <div class="log">
+        <wa-button
+          size="s"
+          appearance="plain"
+          variant="neutral"
+          aria-expanded=${this.logOpen ? 'true' : 'false'}
+          @click=${() => this.toggleLog()}
+          >${waIcon(this.logOpen ? 'chevron-down' : 'chevron-right', {
+            slot: 'start',
+          })}Log</wa-button
+        >
+      </div>`;
   }
 }
 

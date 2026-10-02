@@ -8,7 +8,8 @@
  * Nothing here is a fact of its own: a status is the card's, read with its
  * settlement (`reusedFrom`, a `Skipped` error) and whether a child exists;
  * a row's agent, model, files and attempt are its input's and its card's;
- * its duration and cost are its child's rows.
+ * its answer is its card's delivery (`deliveredResponse`); its duration and
+ * cost are its child's rows.
  */
 import {
   TOOL_CALL_STATUS,
@@ -19,7 +20,12 @@ import {
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import { formatWorkflowCallFiles } from '@ui/copy/workflowCall';
 import { assertNever, getBasename, isObject } from '@utils/core';
-import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
+import { deliveredResponse } from '@shared/subagentFollowup';
+import {
+  formatCompactDuration,
+  formatCostUsd,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 import type { ToolRow, TranscriptRow } from './transcriptRow';
 
@@ -52,19 +58,6 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   'not run': 'Not run',
 } as const satisfies Record<ScriptCallStatus, string>;
 
-/** The sections a phase leads with, in this order; quiet rows follow. */
-export type ScriptSection = 'waiting' | 'failed' | 'running';
-export const SCRIPT_SECTION_LABEL = {
-  waiting: 'Needs a decision',
-  failed: 'Failed',
-  running: 'Running',
-} as const satisfies Record<ScriptSection, string>;
-const SECTION_ORDER: readonly ScriptSection[] = [
-  'waiting',
-  'failed',
-  'running',
-];
-
 const NOT_RUN_NOTE = 'The run ended before this call started.';
 const INTERRUPTED_NOTE = 'Stopped with its run. Resume the run to continue.';
 
@@ -76,14 +69,19 @@ export interface ScriptCallView {
   readonly label: string;
   readonly status: ScriptCallStatus;
   readonly phase: string | null;
-  /** `drafter · gpt-5 · attempt 2 · a.tex · 1m 12s · $0.31` */
+  /** `drafter · gpt-5 · retried · a.tex · 1m 12s · $0.31` */
   readonly facts: readonly string[];
   readonly detail?: { readonly kind: 'error' | 'note'; readonly text: string };
   /** The child run an `agent` call launched: the row opens it. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
   readonly askingRunId?: RunId;
-  readonly section?: ScriptSection;
+  /** A run under the call waits on the user. */
+  readonly needsYou: boolean;
+  /** The row's one line: its `detail`, else a finished agent's answer, else
+   *  what its child last said, each cut to its first line. Never the
+   *  delivery envelope or the instruction's later paragraphs. */
+  readonly summary?: string;
   /** `Running: drafter · gpt-5 — Wants bash: make` */
   readonly line: string;
 }
@@ -91,12 +89,8 @@ export interface ScriptCallView {
 interface ScriptPhaseView {
   /** The guest's `phase()` title; null before its first. */
   readonly title: string | null;
-  /** Attention first (`SECTION_ORDER`), then the quiet rows in issue order
-   *  under a null section. */
-  readonly sections: readonly {
-    readonly section: ScriptSection | null;
-    readonly calls: readonly ScriptCallView[];
-  }[];
+  /** The phase's calls, in issue order. */
+  readonly calls: readonly ScriptCallView[];
 }
 
 export interface ScriptStageView {
@@ -106,6 +100,8 @@ export interface ScriptStageView {
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
+  /** `3 agents · 1 needs you · $0.840`: what the collapsed card says. */
+  readonly summary: string;
   /** What every child its calls launched has cost so far, their own
    *  agents included (`treeUsage`), discarded attempts included. */
   readonly costUsd: number;
@@ -208,7 +204,7 @@ function callView(
   const facts = [
     agent ? stringOf(input.agentName) : undefined,
     agent ? (child?.modelLabel ?? stringOf(input.model)) : undefined,
-    row.attempt === undefined ? undefined : `attempt ${row.attempt}`,
+    row.attempt !== undefined && row.attempt > 1 ? 'retried' : undefined,
     agent
       ? formatWorkflowCallFiles({
           input: namesOf(input.inputFiles),
@@ -236,9 +232,13 @@ function callView(
   else if (status === 'not run') detail = { kind: 'note', text: NOT_RUN_NOTE };
   else if (status === 'interrupted')
     detail = { kind: 'note', text: INTERRUPTED_NOTE };
-  let section: ScriptSection | undefined;
-  if (request !== undefined) section = 'waiting';
-  else if (status === 'failed' || status === 'running') section = status;
+  const answer = deliveredResponse(row.toolUse.outputText);
+  const said =
+    detail?.text ??
+    (agent && status === 'finished'
+      ? (answer ?? child?.latestLine)
+      : child?.latestLine);
+  const summary = said == null ? undefined : firstLine(said);
   const suffix = facts.length > 0 ? ` · ${facts.join(' · ')}` : '';
   return {
     id: row.id,
@@ -250,26 +250,42 @@ function callView(
     ...(detail !== undefined && detail.text.length > 0 ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
-    ...(section !== undefined ? { section } : {}),
+    needsYou: request !== undefined,
+    ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
     line: `${SCRIPT_CALL_STATUS_LABEL[status]}: ${label}${suffix}${detail ? ` — ${detail.text}` : ''}`,
   };
 }
 
 function phasesOf(calls: readonly ScriptCallView[]): ScriptPhaseView[] {
-  const byPhase = Map.groupBy(calls, (call) => call.phase);
-  return [...byPhase].map(([title, members]) => ({
-    title,
-    sections: [
-      ...SECTION_ORDER.map((section) => ({
-        section,
-        calls: members.filter((call) => call.section === section),
-      })),
-      {
-        section: null,
-        calls: members.filter((call) => call.section === undefined),
-      },
-    ].filter((group) => group.calls.length > 0),
-  }));
+  return [...Map.groupBy(calls, (call) => call.phase)].map(
+    ([title, members]) => ({ title, calls: members }),
+  );
+}
+
+/** The first non-blank line of `text`, trimmed. */
+function firstLine(text: string): string {
+  return (
+    text
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? ''
+  );
+}
+
+/** `3 agents · 1 needs you · $0.840`; a count or cost of zero is left out. */
+function stageSummary(
+  calls: readonly ScriptCallView[],
+  costUsd: number,
+): string {
+  const agents = calls.filter((call) => call.toolName === AGENT_TOOL).length;
+  const needsYou = calls.filter((call) => call.needsYou).length;
+  return [
+    agents > 0 ? formatResultCount(agents, 'agent') : undefined,
+    needsYou > 0 ? `${needsYou} needs you` : undefined,
+    costUsd > 0 ? formatCostUsd(costUsd) : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(' · ');
 }
 
 /**
@@ -341,6 +357,7 @@ export function scriptStages(
       status: stage.status,
       calls,
       phases: phasesOf(calls),
+      summary: stageSummary(calls, costUsd),
       costUsd,
     };
   });
