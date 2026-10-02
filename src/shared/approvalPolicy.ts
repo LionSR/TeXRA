@@ -71,6 +71,11 @@ export const TEXRA_APPROVAL_POLICY_OPTIONS = Object.freeze(
   ),
 );
 
+/** The policy's user-facing name: `never` reads "Block" on every surface. */
+export function texraApprovalPolicyLabel(policy: TexraApprovalPolicy): string {
+  return TEXRA_APPROVAL_POLICY_COPY[policy].label;
+}
+
 export function formatTexraApprovalPolicy(policy: TexraApprovalPolicy): string {
   return TEXRA_APPROVAL_POLICY_COPY[policy].description;
 }

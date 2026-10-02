@@ -19,7 +19,7 @@ export const APPROVAL_BYPASS_LABEL = {
 export type ApprovalFormValue = TexraApprovalPolicy | ApprovalToggle;
 
 interface ApprovalToggleState {
-  /** Undefined until the chat has a run to carry the bypass. */
+  /** Undefined while the chat's run takes no grant (not yet active). */
   readonly bash: boolean | undefined;
   readonly toolEdit: boolean | undefined;
   readonly goal: boolean;
@@ -46,7 +46,7 @@ function bypassItem(
     ? {
         value,
         label,
-        description: 'available once the chat has started',
+        description: 'available while the chat is active',
         disabled: true,
       }
     : { value, label, description: `${onOff(enabled)} · this session` };

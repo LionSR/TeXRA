@@ -4,7 +4,10 @@ import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
-  'ai-agents': 'AI agents',
+  // The `Agents` row above the categories opens the agent library; these two
+  // hold child-run policy and the external coding agents' options.
+  agents: 'Subagents',
+  'ai-agents': 'Codex and Claude Code',
   workflow: 'Workflow run',
   model: 'Models and providers',
   latex: 'LaTeX',
