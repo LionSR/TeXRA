@@ -62,11 +62,9 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   ) {
     const launchers = new Map<AgentCategory, string[]>();
     for (const { name, availabilityCategory } of definitions)
-      if (DELEGATION_TOOLS.has(name) && availabilityCategory)
-        launchers.set(availabilityCategory, [
-          ...(launchers.get(availabilityCategory) ?? []),
-          name,
-        ]);
+      if (DELEGATION_TOOLS.has(name) && availabilityCategory !== undefined)
+        for (const category of [availabilityCategory].flat())
+          launchers.set(category, [...(launchers.get(category) ?? []), name]);
     if (launchers.size === 0) return undefined;
     const agents: DelegationTargets['agents'] = [];
     for (const [category, tools] of launchers) {

@@ -49,6 +49,12 @@
  *   completed and its call settled, while the second child's model call
  *   waits for `golden-fanout.release`: the interrupted fan-out the
  *   conformance suite resumes.
+ * - `golden_background`, a third `texra chat` under a PTY (`yolo`): a
+ *   `script` call sent to the background, whose run (`{ kind: 'script' }`)
+ *   awaits one `agent()` call, and the parent's turn ended; killed
+ *   (`SIGKILL`) while that child's model call waits for
+ *   `golden-background.release`: the background script the conformance
+ *   suite resumes.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -600,6 +606,72 @@ async function generate(root) {
   fanout.child.kill('SIGKILL');
   await fanout.exited;
 
+  // The background script: the parent's turn ends while its script's one
+  // `agent()` child waits for its release, and the chat is killed there.
+  const background = await cli.chat([
+    'chat',
+    '--agent',
+    'golden_background',
+    '--model',
+    'gpt56',
+    '--approval-policy',
+    'yolo',
+  ]);
+  await until(
+    'the idle background chat',
+    () => background.screen().includes('Ctrl-C exit'),
+    background,
+  );
+  background.write('Send the script to the background.');
+  await until(
+    'the typed background instruction',
+    () => background.screen().includes('› Send the script to the background.'),
+    background,
+  );
+  background.write('\r');
+  const childOf = (parent) =>
+    query(
+      cli.store(),
+      `SELECT s.logical_id AS id FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
+       ORDER BY e."commit"`,
+      [parent],
+    )[0]?.id;
+  await until(
+    'the parent waiting and the background child at its model call',
+    () => {
+      const parent = query(cli.store(), RUN_OF_AGENT, ['golden_background'])[0]
+        ?.id;
+      const script = parent && childOf(parent);
+      const child = script && childOf(script);
+      const rows = (run, sql) =>
+        query(
+          cli.store(),
+          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND ${sql}`,
+          [run],
+        ).length;
+      return (
+        child !== undefined &&
+        rows(
+          parent,
+          `e.type = 'run.position'
+           AND json_extract(e.data, '$.payload.at') = 'waiting'
+           AND json_extract(e.data, '$.payload.turn') = 1`,
+        ) > 0 &&
+        rows(
+          child,
+          `e.type = 'model.message'
+           AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
+        ) > 0
+      );
+    },
+    background,
+  );
+  background.kill('SIGKILL');
+  await background.exited;
+
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
   const before = new Set(
@@ -789,6 +861,27 @@ function normalize(file, root) {
       const fields = { parentRunId, responseId, callId, attempt };
       children.set(derive(fields), fields);
     }
+  }
+  // A background script's run is named by the `script` call that sent it,
+  // the same derivation: the parent's settled call names the run it
+  // launched (`{ runId }`).
+  for (const row of rows) {
+    if (row.type !== 'run.start' || row.value.identity?.kind !== 'script')
+      continue;
+    const runId = logicalOf.get(row.aggregate);
+    const parentRunId = row.value.parent?.id;
+    const launch = rows.find(
+      (other) =>
+        other.type === 'tool.result' &&
+        logicalOf.get(other.aggregate) === parentRunId &&
+        other.value.payload.result.value?.runId === runId,
+    );
+    if (launch === undefined) fail(`no launching call for script run ${runId}`);
+    const { responseId, callId, attempt } = launch.value.payload;
+    const fields = { parentRunId, responseId, callId, attempt };
+    if (derive(fields) !== runId)
+      fail(`script run ${runId} is not named by its launching call`);
+    children.set(runId, fields);
   }
   for (const row of sequences) {
     const fields = children.get(row.logical_id);

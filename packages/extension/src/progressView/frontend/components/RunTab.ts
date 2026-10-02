@@ -83,9 +83,9 @@ function rollupLabel(run: RunView): string {
 
 function runDecorator(run: RunView) {
   const kind = run.identity.kind;
-  return kind === 'multiAgentWorkflow' || kind === 'process'
-    ? AGENT_DECORATORS.streamKinds[kind]
-    : getAgentCategoryDecorator(run.category);
+  return kind === 'agent'
+    ? getAgentCategoryDecorator(run.category)
+    : AGENT_DECORATORS.streamKinds[kind];
 }
 
 /**

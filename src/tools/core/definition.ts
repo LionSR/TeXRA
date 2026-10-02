@@ -41,6 +41,8 @@ export type DefineToolOptions<T, R = never> = {
   schema: ZodType<T, unknown>;
   /** Agent category this delegation tool launches. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
+  /** See {@link ToolDefinition.scriptReturns}. */
+  scriptReturns?: string;
   /** Product hosts this tool definition statically excludes itself from. */
   unavailableHosts?: readonly SettingHost[];
   /**
@@ -97,6 +99,9 @@ export function defineTool<T, R = never>(
       zodSchema: def.schema,
       ...(def.availabilityCategory && {
         availabilityCategory: def.availabilityCategory,
+      }),
+      ...(def.scriptReturns !== undefined && {
+        scriptReturns: def.scriptReturns,
       }),
     },
     parallelSafe: def.parallelSafe,

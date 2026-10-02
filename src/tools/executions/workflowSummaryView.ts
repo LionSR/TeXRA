@@ -1,5 +1,6 @@
 /**
- * Bounded projection of a workflow run's board — the `workflowRunModel` fold
+ * Bounded projection of a workflow run's board, and of a background script's
+ * calls, — the `workflowRunModel` fold
  * every host paints — for the executions tool's `/executions/{id}` summary.
  *
  * A board is unbounded in phases, cards, and file lists; this renders the
@@ -10,6 +11,7 @@
  */
 
 // Local imports
+import type { ScriptCallCard } from '@agent/runtime/scriptRun';
 import type {
   WorkflowPhaseModel,
   WorkflowRunModel,
@@ -138,6 +140,63 @@ export function workflowBoardView(model: WorkflowRunModel): unknown {
       maxPhases: WORKFLOW_SUMMARY_MAX_ENTRIES,
       maxTasksPerPhase: WORKFLOW_SUMMARY_MAX_ENTRIES,
       maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
+    },
+  };
+}
+
+/** A background script's calls by phase, bounded as a workflow board is:
+ *  phases still working first, then those with a failure, then issue
+ *  order; within a phase, the calls needing attention first. */
+export function scriptCallsView(
+  calls: readonly ScriptCallCard[],
+  live: boolean,
+): unknown {
+  const unsettled = live ? 'running' : 'interrupted';
+  const status = (call: ScriptCallCard) =>
+    call.status === 'unsettled' ? unsettled : call.status;
+  const rank = (call: ScriptCallCard) => {
+    if (call.status === 'unsettled') return 0;
+    if (call.status === 'failed' || call.status === 'cancelled') return 1;
+    return 2;
+  };
+  const phases = [
+    ...Map.groupBy(calls, (call) => call.phase ?? '').entries(),
+  ].map(([title, members]) => ({
+    title,
+    members,
+    rank: Math.min(...members.map(rank)),
+  }));
+  const shown = phases
+    .toSorted((left, right) => left.rank - right.rank)
+    .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES);
+  const callView = (call: ScriptCallCard) => ({
+    seq: call.seq,
+    tool: call.toolName,
+    status: status(call),
+    attempt: call.attempt,
+    ...(call.reusedFrom !== null && { reusedFrom: call.reusedFrom }),
+    ...(call.error !== null && { error: compactWorkflowText(call.error) }),
+  });
+  return {
+    calls: calls.length,
+    phases: shown.map(({ title, members }) => {
+      const listed = members
+        .toSorted((left, right) => rank(left) - rank(right))
+        .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES);
+      return {
+        title: title === '' ? null : compactWorkflowText(title),
+        calls: listed.map(callView),
+        ...(members.length > listed.length && {
+          omittedCalls: members.length - listed.length,
+        }),
+      };
+    }),
+    ...(phases.length > shown.length && {
+      omittedPhases: phases.length - shown.length,
+    }),
+    responseBounds: {
+      maxPhases: WORKFLOW_SUMMARY_MAX_ENTRIES,
+      maxCallsPerPhase: WORKFLOW_SUMMARY_MAX_ENTRIES,
     },
   };
 }

@@ -242,8 +242,7 @@ All notable changes to this project will be documented in this file.
   run is interrupted, the script runs again from the top on resume: calls
   that finished are handed back from the run's history instead of running
   twice, and a call that was in flight follows the usual rules (re-run when
-  it is safe, otherwise ask). No built-in agent offers `script` yet, and
-  `run_in_background` is refused until background scripts land.
+  it is safe, otherwise ask). No built-in agent offers `script` yet.
 - **The `script` tool lists your tools as TypeScript, and finds the rest.**
   Its description declares each tool the agent lists as a typed function
   (`read_file(args: { path: string; … }): Promise<ToolOutput>`, a union of
@@ -272,6 +271,25 @@ All notable changes to this project will be documented in this file.
   that was cut short continues under its own run instead of starting over.
   The tool belongs to the Multi-Agent Workflow plugin; no built-in agent
   offers it yet, and the `delegate_*` tools stay until it replaces them.
+- **Scripts can run in the background.** `script` with `run_in_background:
+true` returns at once with a run ID, and the script runs as a child run of
+  its own (shown as a Script run) with the same tools, model and working
+  directory. When it ends, the parent receives one follow-up with the
+  script's result and a summary line: how many calls succeeded, failed or
+  were skipped, what its agents cost, how long it took, the files its agents
+  wrote with their line counts, and the cause if it failed. If TeXRA exits
+  or crashes while it runs, resuming that run replays the script from its
+  history: finished calls are not run again, and an agent call that was cut
+  short continues its own child. If you stop it, the parent is told which
+  run to resume. `executions` on the run lists the script's calls by phase,
+  and a one-shot run (`texra run`) still runs the script in the foreground
+  and says so. A completed `agent` call is also reused by the same call in
+  a background script launched by the same run, and the other way round.
+- **The `agent` tool is a delegation tool everywhere.** An agent that offers
+  only `agent` now sees its available agents and models in the system text,
+  counts as an orchestrator, and a script sees what `agent()` resolves to
+  (the child's result, or `{ runId }`) in the tool's declaration instead of
+  `{ output, summary }`.
 - **A script's result carries the files its calls attached**, so an image a
   nested `read_file` returned reaches the model with the script's answer.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is

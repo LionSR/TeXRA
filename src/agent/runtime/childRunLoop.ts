@@ -137,6 +137,21 @@ export interface ChildRunStrategy<TTurn, R = never> {
   pauseNotice?(): ChildRunPause | undefined;
 
   /**
+   * A native child a user stopped, directly or by stopping its parent: the
+   * notice its parent reads, saying what it had done and which run to
+   * resume. Queued for the parent's next input without waking it. A process
+   * child says this through `pauseNotice`.
+   */
+  stopNotice?(): Effect.Effect<string, Error, R>;
+
+  /**
+   * The one id this child's result is admitted under, for a child that
+   * delivers once in its life: a resumed child's delivery is then judged a
+   * replay of one its earlier owner admitted. Absent: each turn's own.
+   */
+  readonly deliveryId?: string;
+
+  /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the
    * process services a turn reads, forwarded to the loop's caller.
    */
@@ -280,9 +295,18 @@ class ChildRunInterruptible {
     private readonly interruptsRunFiber: boolean,
   ) {}
 
+  /** The stop was a user's, read when it lands: the registry forgets the
+   *  reason once the run has unwound. */
+  private stoppedByUser = false;
+
   interrupt(): void {
+    this.stoppedByUser ||= this.runs.stopReason(this.runId) === 'user';
     this.controller.abort();
     if (this.interruptsRunFiber) this.runs.interrupt(this.runId);
+  }
+
+  get userStopped(): boolean {
+    return this.stoppedByUser;
   }
 
   isInterrupted(): boolean {
@@ -559,7 +583,8 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const followUp: FollowUpQueueInput = {
     text: msg,
     from: { kind: 'run', runId },
-    deliveryId: turnDeliveryId(runId, turnKey, params.consumed),
+    deliveryId:
+      strategy.deliveryId ?? turnDeliveryId(runId, turnKey, params.consumed),
   };
   let pending: PendingChildDelivery | undefined;
   if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
@@ -1128,20 +1153,44 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                       pauseNotice: strategy.pauseNotice,
                     }),
                   });
-                } else if (
-                  (stoppedAtExit || sawTurnFailure) &&
-                  (yield* runSession.ownsRun(runId))
-                ) {
-                  // A native run's lifecycle is its one terminal writer, and
-                  // its fiber has exited by now (this loop's scope awaited
-                  // it). A failure or stop can precede that lifecycle; one
-                  // that ran has already ended the run, which this keeps.
-                  yield* endRunOutsideLifecycle(
-                    runSession,
-                    runId,
-                    outcome,
-                    lastTurnErr,
-                  );
+                } else {
+                  if (
+                    (stoppedAtExit || sawTurnFailure) &&
+                    (yield* runSession.ownsRun(runId))
+                  ) {
+                    // A native run's lifecycle is its one terminal writer,
+                    // and its fiber has exited by now (this loop's scope
+                    // awaited it). A failure or stop can precede that
+                    // lifecycle; one that ran has already ended the run,
+                    // which this keeps.
+                    yield* endRunOutsideLifecycle(
+                      runSession,
+                      runId,
+                      outcome,
+                      lastTurnErr,
+                    );
+                  }
+                  // A user's stop, not a shutdown: what the child left for
+                  // its parent to resume, read with the parent's next input.
+                  const target = parent.current;
+                  if (
+                    strategy.stopNotice !== undefined &&
+                    strategy.deliveryMode !== 'persistOnly' &&
+                    loop.userStopped &&
+                    target !== null
+                  ) {
+                    const text = yield* strategy.stopNotice();
+                    yield* runSession.followUps.submit(
+                      target,
+                      {
+                        text,
+                        from: { kind: 'run', runId },
+                        deliveryId: `${runId}:${attemptId}:stopped`,
+                      },
+                      'recoverable',
+                      { liveOffer: 'none' },
+                    );
+                  }
                 }
               }),
             );

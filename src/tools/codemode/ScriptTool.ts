@@ -24,6 +24,7 @@ import {
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/define';
+import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
 
@@ -47,7 +48,9 @@ const ScriptInputSchema = z.strictObject({
   run_in_background: z
     .boolean()
     .nullish()
-    .describe('Not supported yet: a script runs in the foreground.'),
+    .describe(
+      'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
+    ),
   timeoutMs: z
     .int()
     .min(1000)
@@ -144,13 +147,21 @@ const shown = (value: unknown): string =>
   value === undefined ? 'undefined' : JSON.stringify(value, null, 2);
 
 const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
-  if (input.run_in_background === true)
-    return yield* Effect.fail(
-      new ToolError(
-        'run_in_background is not supported yet: run the script in the foreground.',
-      ),
+  const toolCall = yield* ToolCall;
+  const { scriptCalls: issued, hooks, run } = toolCall;
+  // A one-shot run has no later turn for a follow-up to reach.
+  const oneShot = run?.toolPolicy.stopAfterCycle === true;
+  if (input.run_in_background === true && run !== undefined && !oneShot)
+    return yield* launchBackgroundScript(
+      { ...toolCall, run },
+      SCRIPT_TOOL,
+      {
+        code: input.code,
+        ...(input.title != null && { title: input.title }),
+        ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
+      },
+      input.title ?? 'Script',
     );
-  const { scriptCalls: issued, hooks } = yield* ToolCall;
   if (issued === undefined)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
@@ -161,7 +172,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   // The files its calls attached, in the order their results committed:
   // they reach the model on the script's own result.
   const files: ToolFileAttachment[] = [];
-  const toolCall = (op: ScriptOp) =>
+  const issue = (op: ScriptOp) =>
     Effect.flatMap(scriptCalls.call(op, script), (settled) => {
       for (const attached of settled.attachments)
         if (attached.content.kind === 'base64')
@@ -207,7 +218,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
               name: 'TypeError',
               message: `${global.tool}() takes an options object as its second argument.`,
             });
-          return toolCall({
+          return issue({
             ...op,
             name: global.tool,
             input: { ...rest, [global.positional]: first },
@@ -218,7 +229,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
               scriptCalls.answer(op, () => answerOf(op, scriptCalls.catalog)),
               (result) => settlementOf(result, op),
             )
-          : toolCall(op);
+          : issue(op);
       },
       onLog: (lines) =>
         Effect.sync(() => hooks?.onToolOutput?.(`${lines.join('\n')}\n`)),
@@ -253,9 +264,16 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           `Log (last ${logs.length} lines${logsOmitted > 0 ? `, ${logsOmitted} earlier omitted` : ''}):`,
           ...logs,
         ];
+  const foreground =
+    input.run_in_background === true
+      ? [
+          'This run is one-shot, so the script ran in the foreground: no later turn would read a follow-up.',
+          '',
+        ]
+      : [];
   return {
     ...executed(
-      [`The script returned:`, shown(value), ...log].join('\n'),
+      [...foreground, `The script returned:`, shown(value), ...log].join('\n'),
       input.title == null
         ? 'Script finished'
         : `Script finished: ${input.title}`,
@@ -278,8 +296,10 @@ const SURFACE = [
   'There are no timers, no `Date.now()`, no `Math.random()` and no imports: the script replays exactly after an interruption, and calls that finished are not run again.',
 ].join('\n\n');
 
+const SCRIPT_TOOL = 'script';
+
 export const ScriptTool = defineTool({
-  name: 'script',
+  name: SCRIPT_TOOL,
   // A resume runs the script again from the top against its recorded calls:
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',

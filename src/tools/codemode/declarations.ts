@@ -1,6 +1,7 @@
 /**
  * Tools as TypeScript, the way a `script` sees them: `name(args: T):
- * Promise<ToolOutput>`, with `T` rendered from the JSON Schema the tool's
+ * Promise<ToolOutput>` (or the type the tool declares it resolves to,
+ * `scriptReturns`), with `T` rendered from the JSON Schema the tool's
  * Zod input converts to (`convertToolSchema` before the flattening a wire
  * declaration needs, so a discriminated union stays a union of its
  * branches, and a field with a default is an optional input). The short
@@ -180,6 +181,6 @@ export function declarationOf(
     : firstSentence(definition.description);
   return [
     ...docComment(description, indent),
-    `${indent}${name}(args: ${args}): Promise<ToolOutput>;`,
+    `${indent}${name}(args: ${args}): Promise<${definition.scriptReturns ?? 'ToolOutput'}>;`,
   ].join('\n');
 }

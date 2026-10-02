@@ -19,6 +19,9 @@
  * new id or a second `run.start`) instead of resuming it, asks about a call
  * whose child exists, or returns without both answers; and a second run of
  * the same script that launches anything instead of reusing both results.
+ * And a background script killed while its child ran: a resume that
+ * launches its child again, leaves the parent's turn open, delivers no
+ * result or more than one, or delivers one without its summary line.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
@@ -82,6 +85,7 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { parseWorkflowScriptDeliverySummary } from '@shared/subagentFollowup';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -120,9 +124,14 @@ const APPROVAL = RunIdSchema.parse('a0000000000a');
 const SCRIPTED = RunIdSchema.parse('a0000000000b');
 const FANOUT = RunIdSchema.parse('a0000000000c');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('27b3c9a992404396e31151f1');
-const RUNNING = RunIdSchema.parse('0252d66a846e39d1f7086323');
-const TOMBSTONED = RunIdSchema.parse('a0000000000f');
+const FANNED = RunIdSchema.parse('8b43f437debd32ffe6d57b3f');
+const RUNNING = RunIdSchema.parse('283494944f1bfdfee431047b');
+/** The chat that sent a script to the background, the script's run, and
+ *  the script's one `agent()` child, which ran at the kill. */
+const BACKGROUND = RunIdSchema.parse('a0000000000f');
+const SCRIPT_RUN = RunIdSchema.parse('62db81fbc29ce54c703f5b7c');
+const SCRIPT_CHILD = RunIdSchema.parse('303a6ba690cab22c32cb1f77');
+const TOMBSTONED = RunIdSchema.parse('a00000000012');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -346,6 +355,24 @@ describe('the golden 1.0 store', () => {
           status: 'running',
           outcome: null,
         }),
+        // Its turn ended with the script in the background, and the chat
+        // was killed while the script's child ran.
+        run(BACKGROUND, 'golden_background', {
+          status: 'waiting',
+          outcome: null,
+          children: [SCRIPT_RUN],
+        }),
+        run(SCRIPT_RUN, 'Background', {
+          parent: BACKGROUND,
+          status: 'running',
+          outcome: null,
+          children: [SCRIPT_CHILD],
+        }),
+        run(SCRIPT_CHILD, 'golden_child', {
+          parent: SCRIPT_RUN,
+          status: 'running',
+          outcome: null,
+        }),
       ]);
       // The approval its process never saw answered, still pending.
       expect(
@@ -453,6 +480,9 @@ describe('the golden 1.0 store', () => {
           'cancelled',
           ...Array.from({ length: 3 }, () => 'running'),
           'completed',
+          'running',
+          'waiting',
+          'running',
           'running',
         ]);
         const db = yield* Database;
@@ -569,12 +599,22 @@ describe('the interrupted golden runs', () => {
     writeFileSync(flag, 'texra-cli-run-validation\n');
     writeFileSync(join(storage, 'golden-park.release'), '');
     writeFileSync(join(storage, 'golden-fanout.release'), '');
+    writeFileSync(join(storage, 'golden-background.release'), '');
     // The crash, on this host: an owner whose process identity is gone.
     raw(storage, (db) => {
       const kill = db.prepare(
         'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
       );
-      for (const run of [PARKED, APPROVAL, SCRIPTED, FANOUT, RUNNING])
+      for (const run of [
+        PARKED,
+        APPROVAL,
+        SCRIPTED,
+        FANOUT,
+        RUNNING,
+        BACKGROUND,
+        SCRIPT_RUN,
+        SCRIPT_CHILD,
+      ])
         kill.run(
           JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
           run,
@@ -947,5 +987,97 @@ describe('the interrupted golden runs', () => {
         // launched, and a reused call runs nothing.
         expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
       }),
+  );
+
+  /**
+   * The script sent to the background, killed while its one child ran. The
+   * parent's turn had ended; `resumeRun` on the script's run replays the
+   * script from its rows, its `agent()` call finds the running child and
+   * resumes it under its own id, and the parent gets one follow-up: the
+   * script's result with its summary line.
+   */
+  it.live('resumes the killed background script, and reports it once', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      if (workspace === undefined) throw new Error('no test workspace');
+      mkdirSync(workspace, { recursive: true });
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate IN
+               (SELECT id FROM event_sequence WHERE logical_id IN (?, ?, ?))`,
+          )
+          .run(workspace, BACKGROUND, SCRIPT_RUN, SCRIPT_CHILD),
+      );
+      const rows = (run: RunId, type: string) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT e.data FROM event e
+               JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = ? ORDER BY e."commit"`,
+            )
+            .all(run, type)
+            .map((row) => JSON.parse(String(row.data))),
+        );
+      // The parent's turn ended on the launch: the call returned the run.
+      const [launch] = rows(BACKGROUND, 'tool.result');
+      expect(launch.payload.result.value).toEqual({ runId: SCRIPT_RUN });
+      expect(rows(BACKGROUND, 'run.position').at(-1)?.payload.at).toBe(
+        'waiting',
+      );
+      const asked = autoDecideRequests(session, (opened) =>
+        opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
+      );
+      const result = yield* withProcessServices(
+        testRuntime(),
+        resumeRun(SCRIPT_RUN, { session }),
+      ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+      expect(result).toMatchObject({ started: true, outcome: 'completed' });
+      // The child the kill left resumed under its own id: one start, a
+      // second activation, nothing launched beside it.
+      expect(rows(SCRIPT_CHILD, 'run.start')).toHaveLength(1);
+      expect(rows(SCRIPT_CHILD, 'run.activate')).toHaveLength(2);
+      expect(rows(SCRIPT_RUN, 'run.start').map((row) => row.identity)).toEqual([
+        { kind: 'script', title: 'Background' },
+      ]);
+      // The script ran again from its rows: its call settled at its next
+      // attempt with the child's answer.
+      const settled = rows(SCRIPT_RUN, 'tool.result').map(
+        ({ payload }) => payload,
+      );
+      expect(
+        settled.map(({ callId, attempt, disposition }) => ({
+          callId,
+          attempt,
+          disposition,
+        })),
+      ).toEqual([
+        { callId: 'script/0', attempt: 2, disposition: 'executed' },
+        { callId: 'script', attempt: 2, disposition: 'executed' },
+      ]);
+      expect(settled.at(-1)?.result.output).toContain(
+        'Background child answer.',
+      );
+      expect(rows(SCRIPT_RUN, 'run.end').at(-1)?.outcome).toBe('completed');
+      // One follow-up for the parent: the result, with its summary line.
+      const delivered = rows(BACKGROUND, 'followup.queued').filter(
+        (row) => row.content.from?.runId === SCRIPT_RUN,
+      );
+      expect(delivered).toHaveLength(1);
+      const text = String(delivered[0]?.content.text);
+      expect(text).toMatch(/^<script-result id="62db81fbc29ce54c703f5b7c"/);
+      expect(text).toContain('Background child answer.');
+      expect(parseWorkflowScriptDeliverySummary(text)).toMatchObject({
+        name: 'Background',
+        outcome: 'completed',
+        phaseCount: 1,
+        tally: { total: 1, ok: 1, failed: 0, cancelled: 0 },
+        scriptPath: null,
+        errorCause: null,
+      });
+      expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
+    }),
   );
 });

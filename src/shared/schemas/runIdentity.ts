@@ -27,6 +27,8 @@ export const RunIdentitySchema = z.discriminatedUnion('kind', [
     kind: z.literal('multiAgentWorkflow'),
     workflowName: z.string().min(1),
   }),
+  /** A `script` call sent to the background: one run that runs it. */
+  z.strictObject({ kind: z.literal('script'), title: z.string().min(1) }),
 ]);
 
 export type RunIdentity = z.infer<typeof RunIdentitySchema>;
@@ -47,6 +49,8 @@ export function runIdentityName(id: RunIdentity): string {
       return id.tool;
     case 'multiAgentWorkflow':
       return id.workflowName;
+    case 'script':
+      return id.title;
   }
 }
 

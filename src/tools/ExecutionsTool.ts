@@ -24,6 +24,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
 import {
@@ -35,7 +36,7 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { SessionView } from '@shared/session/sessionView';
+import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
@@ -78,7 +79,10 @@ import { listRuns } from './executions/runListing';
 import { sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
-import { workflowBoardView } from './executions/workflowSummaryView';
+import {
+  scriptCallsView,
+  workflowBoardView,
+} from './executions/workflowSummaryView';
 
 interface RunToolContext {
   readonly session: SessionHandle;
@@ -383,6 +387,16 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
       '',
       'Workflow:',
       JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
+    );
+  }
+
+  // A background script's calls, from its rows, under the same bounds.
+  if (run.identity.kind === 'script') {
+    const { calls } = yield* scriptRunCalls(session, runId);
+    lines.push(
+      '',
+      'Script:',
+      JSON.stringify(scriptCallsView(calls, isLiveRun(run)), null, 2),
     );
   }
 

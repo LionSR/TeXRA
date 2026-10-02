@@ -21,6 +21,8 @@
  * A workflow agent's run is this loop in round mode (`./rounds`): the same
  * turn, run once per round by the round loop, with no tools and no input.
  */
+import { randomUUID } from 'node:crypto';
+
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
@@ -40,19 +42,24 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { type RunState } from '@shared/session/runStateFold';
+import {
+  type RunLedgerDraft,
+  type RunState,
+} from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
+import { generateShortId } from '@utils/core';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
-import { toolDefinitionsFor } from '../run/tools';
+import { dispatchFactsFor, toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
+  rowAggregate,
   snapshotRow,
   positionRow,
   type SnapshotPatch,
@@ -72,6 +79,7 @@ import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
+import type { TurnResult } from '@texra-ai/llm/turn';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
@@ -80,6 +88,9 @@ const IMMEDIATE_COMPACTION_FOLLOW_UP =
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
+/** The call id of a script run's one call: its nested calls are
+ *  `script/<seq>`. */
+const SCRIPT_CALL_ID = 'script';
 
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -133,6 +144,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ? yield* roundsContinuation(run)
       : null;
   const rounds = roundPolicy?.rounds ?? null;
+  // A background script's run: it opens on the call its parent handed down
+  // and ends when that call settles.
+  const script =
+    run.config.agentCategory === AgentCategory.ToolUse
+      ? (run.config.backgroundScript ?? null)
+      : null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = rounds ? null : yield* claimFollowUps(run, ledger);
 
@@ -224,6 +241,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A round-mode run opens with no message and offers no tools. A
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
+        // A script's run renders no prompt: what it runs is its call.
+        if (script !== null) {
+          const step = yield* openStep(opening, 'request');
+          const content: InputPart[] = [
+            { kind: 'text', text: `Run the script "${script.title}".` },
+          ];
+          return { bound, content, offered: step.rows };
+        }
         const { inputs } =
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
         const prompts = yield* buildInitialToolUsePrompts(
@@ -312,6 +337,78 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     logger.debug('Resuming tool-use run from the ledger.');
   };
 
+  /**
+   * A script's run's one response: the call its parent's model made, handed
+   * down to run here. Its origin is the run's binding and it carries no
+   * usage: no model is asked, and the parent's response paid for the call.
+   * Committed once, at its first turn, so a resume finds it pending or
+   * delivered like any response.
+   */
+  const handedDown = Effect.fn('toolUse.handedDown')(function* (
+    state: RunState,
+  ) {
+    if (script === null)
+      return yield* Effect.die(new Error(`${runId}: not a script run`));
+    const bound = yield* SynchronizedRef.get(run.model);
+    const origin = bound.origin;
+    // An editor binding's turns carry no calls: its launch refuses it.
+    if (origin.protocol === 'vscode-lm')
+      return yield* Effect.die(
+        new Error(`${runId}: a script cannot run on an editor model binding`),
+      );
+    const invocation = { invocationId: randomUUID(), attempt: 1 };
+    const argumentsText = JSON.stringify(script.input);
+    const turn: TurnResult = {
+      kind: 'http',
+      providerResponseId: `script-${runId}`,
+      requestedOrigin: origin,
+      returnedModel: null,
+      modelFingerprint: null,
+      content: [
+        {
+          kind: 'local-call',
+          providerCallId: SCRIPT_CALL_ID,
+          name: script.tool,
+          argumentsText,
+        },
+      ],
+      finishReason: 'tool-calls',
+      usage: null,
+    };
+    const aggregateId = rowAggregate(runId);
+    return [
+      {
+        type: 'model.message',
+        aggregateId,
+        payload: {
+          kind: 'attempt',
+          invocation,
+          request: sha256(argumentsText),
+          origin,
+          delivery: 'blocking',
+        },
+      },
+      {
+        type: 'model.message',
+        aggregateId,
+        payload: {
+          kind: 'response',
+          responseId: randomUUID(),
+          invocation,
+          turn,
+          calls: dispatchFactsFor(
+            turn,
+            (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+            logger,
+            generateShortId,
+          ),
+          usage: null,
+        },
+      },
+      positionRow(runId, state, 'response.ready'),
+    ] satisfies readonly RunLedgerDraft[];
+  });
+
   // ------------------------------------------------------------ the turn
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
@@ -359,6 +456,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
       }
+      if (script !== null && state.round === 0)
+        state = yield* cell.append(yield* handedDown(state));
       let forcedTool: string | null = null;
       /**
        * The policy a text-only response runs once it is committed: a blank
@@ -444,7 +543,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
           state = dispatched.state;
           joined?.delivered();
-          if (dispatched.endTurn && !joined) return completeTurn(state);
+          // A script's run ends with its one call.
+          if ((dispatched.endTurn || script !== null) && !joined)
+            return completeTurn(state);
           continue;
         }
         if (replayCommitted) {

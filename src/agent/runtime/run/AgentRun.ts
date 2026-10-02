@@ -239,10 +239,13 @@ export const agentRunLayer = (
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         // The installed plugins' tools reach a top-level run of any agent but
         // a plugin agent that names its tools; a child gets what it declares,
-        // narrowed to its parent's.
+        // narrowed to its parent's. A background script's run is its
+        // parent's agent with its parent's tools, installed ones included.
         injectInstalled:
           setting.agentCategory === AgentCategory.ToolUse &&
-          parentOffered === undefined &&
+          (parentOffered === undefined ||
+            (config.agentCategory === AgentCategory.ToolUse &&
+              config.backgroundScript != null)) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,

@@ -198,6 +198,14 @@ export function parseWorkflowScriptDeliverySummary(
   return Result.getOrUndefined(parsed);
 }
 
+/** The envelopes that carry a `<workflow-summary>` element. */
+export const SUMMARIZED_TAGS: ReadonlySet<DeliveryTagName> = new Set([
+  DELIVERY_TAG.workflowScriptResult,
+  DELIVERY_TAG.workflowScriptError,
+  DELIVERY_TAG.scriptResult,
+  DELIVERY_TAG.scriptError,
+]);
+
 /** Collapse a parsed workflow delivery summary to its transcript lines. The
  *  tick is earned only by a run whose every call succeeded; a completed run
  *  with a failed, stopped, or unreached call says so in its marker too. */
@@ -227,8 +235,16 @@ export function formatWorkflowScriptDeliverySummary(
       ? [truncatedResultResponsePreview(summary.errorCause)]
       : []),
     ...fileLines,
-    `  script: ${summary.scriptPath}`,
+    ...(summary.scriptPath === null ? [] : [`  script: ${summary.scriptPath}`]),
   ].join('\n');
+}
+
+/** The `<workflow-summary>` element a script's delivery carries, which
+ *  {@link parseWorkflowScriptDeliverySummary} reads back. */
+export function workflowSummaryElement(
+  summary: WorkflowScriptDeliverySummary,
+): string {
+  return `<workflow-summary>${escapeText(JSON.stringify(summary))}</workflow-summary>`;
 }
 
 /** The child run a progress envelope reports on, or undefined for any
@@ -313,10 +329,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return detail === undefined ? normalized : `⟳ ${agent} · ${detail}`;
   }
 
-  if (
-    tag === DELIVERY_TAG.workflowScriptResult ||
-    tag === DELIVERY_TAG.workflowScriptError
-  ) {
+  if (SUMMARIZED_TAGS.has(tag)) {
     const summary = parseWorkflowScriptDeliverySummary(trimmed);
     if (summary) return formatWorkflowScriptDeliverySummary(summary);
   }
