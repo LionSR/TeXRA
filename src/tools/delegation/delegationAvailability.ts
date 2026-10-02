@@ -35,7 +35,7 @@ import type {
   ToolDefinition,
 } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { modelRefOf } from '@shared/model/modelSelection';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
@@ -62,7 +62,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   ) {
     const launchers = new Map<AgentCategory, string[]>();
     for (const { name, availabilityCategory } of definitions)
-      if (DELEGATION_TOOLS.has(name) && availabilityCategory !== undefined)
+      if (name === AGENT_TOOL_NAME && availabilityCategory !== undefined)
         for (const category of [availabilityCategory].flat())
           launchers.set(category, [...(launchers.get(category) ?? []), name]);
     if (launchers.size === 0) return undefined;
@@ -116,8 +116,8 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
 
 const worktreeLine = (enabled: boolean): string =>
   enabled
-    ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to delegate_agent to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to delegate_agent because the call will be rejected. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
+    ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
+    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {

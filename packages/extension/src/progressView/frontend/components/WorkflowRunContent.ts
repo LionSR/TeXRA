@@ -1,8 +1,7 @@
 /**
  * A workflow run's conversation: the header, its pending requests, the
- * inquiries it is waiting on, then the run board for a workflow-script run
- * or the transcript log for any other, the files and usage it closes
- * with, and once it has ended, what the user can do next. Reads the view
+ * inquiries it is waiting on, then the transcript log, the files and usage
+ * it closes with, and once it has ended, what the user can do next. Reads the view
  * and the surface; every send is a child's event.
  */
 
@@ -19,7 +18,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 // Side-effect imports - register the elements rendered below
 import './BackgroundTasksPanel';
 import './FileList';
-import './WorkflowRunBoard';
 
 @customElement('workflow-run-content')
 export class WorkflowRunContent extends BaseRunContent {
@@ -30,7 +28,6 @@ export class WorkflowRunContent extends BaseRunContent {
     if (!run || !view || !surface || run.category !== 'workflow') {
       return nothing;
     }
-    const { transcript } = run;
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()}
@@ -44,15 +41,7 @@ export class WorkflowRunContent extends BaseRunContent {
           ></background-tasks-panel>
         </div>
 
-        ${
-          transcript.run
-            ? html`<workflow-run-board
-                .run=${run}
-                .view=${view}
-                .surface=${surface}
-              ></workflow-run-board>`
-            : this.renderLog()
-        }
+        ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
           <file-list

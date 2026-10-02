@@ -16,14 +16,12 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
-  isTerminalWorkflowCallProgress,
   isTranscriptEvent,
-  type LogLevel,
   type RunPhase,
   type SessionEvent,
   type TaskGroup,
   type ToolUseLog,
-  type TranscriptEvent,
+  type TranscriptEvent
 } from '@shared/schemas';
 import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityProjection';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -61,7 +59,6 @@ function foldTaskGroup(
     at === undefined ? undefined : d.next.taskGroups[at],
     event,
     d.at,
-    d.ix.workflowAttemptId,
   );
   if (!group) return;
   const groups = writableArray(d.next, 'taskGroups');
@@ -189,45 +186,6 @@ function record(d: Draft, event: TranscriptEvent): void {
       write(d, slot);
       return;
     }
-
-    case 'workflow.call': {
-      const { call, logId, stageId } = event;
-      const level: LogLevel = call.status === 'failed' ? 'error' : 'info';
-      const terminal = isTerminalWorkflowCallProgress(call);
-      const slot = ix.slots.get(logId);
-      if (slot?.kind === 'call') {
-        // The latest call names the card's level and stage.
-        const { groupId: _stage, ...rest } = slot.base;
-        const base = {
-          ...rest,
-          level,
-          ...(stageId !== undefined ? { groupId: stageId } : {}),
-        };
-        slot.base = terminal ? settle(ix, base) : base;
-        slot.call = call;
-        write(d, slot);
-        return;
-      }
-      write(d, {
-        kind: 'call',
-        base: open(
-          d,
-          logId,
-          stageId,
-          MESSAGE_TYPES.WORKFLOW_TASK,
-          terminal,
-          level,
-        ),
-        call,
-      });
-      return;
-    }
-
-    case 'workflow.plan':
-      ix.workflowAttemptId = event.attemptId;
-      ix.plan = { phases: [...event.phases], tasks: [...event.tasks] };
-      d.touched = true;
-      return;
 
     // A run fact, not a transcript row: it folds into `RunView.context`.
     case 'context.state':

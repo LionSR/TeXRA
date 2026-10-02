@@ -29,7 +29,6 @@ import type {
   PhaseRow,
   ProgressStatusRow,
   UserRow,
-  WorkflowTaskRow,
 } from '@ui/transcript';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -49,9 +48,9 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
-  const { id, timestamp, workflowSummary } = row;
+  const { id, timestamp, scriptSummary } = row;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .workflowSummary=${workflowSummary ?? null}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
@@ -119,28 +118,22 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details banner-details--error" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
-function plainLineText(row: LogRow | PhaseRow | WorkflowTaskRow): string {
+function plainLineText(row: LogRow | PhaseRow): string {
   switch (row.kind) {
     case 'phase':
       return row.heading;
-    case 'workflowTask':
-      return row.line;
     case 'log':
       return row.text.full;
   }
 }
 
 /**
- * Format a plain log line as TemplateResult. `PhaseRow` and
- * `WorkflowTaskRow` share the shape and are in the union to keep the row
- * dispatch exhaustive; this host routes every phase heading to its
- * task-group surface and every workflow call to the run board
- * (`workflow-run-board`, painted whenever the fold set `transcript.run`),
- * so a workflowTask row reaches this line only on a run without
- * `transcript.run`.
+ * Format a plain log line as TemplateResult. `PhaseRow` shares the shape and
+ * is in the union to keep the row dispatch exhaustive; this host routes every
+ * phase heading to its task-group surface.
  */
 export function formatDefaultLogMessageTemplate(
-  row: LogRow | PhaseRow | WorkflowTaskRow,
+  row: LogRow | PhaseRow,
 ): FormatResult {
   const { id, level, timestamp, groupId, verbose } = row;
   const text = plainLineText(row);

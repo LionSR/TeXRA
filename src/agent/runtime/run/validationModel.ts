@@ -19,7 +19,7 @@
  * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
  * environment-opened gate ships. The
  * runtime keys (the per-run switch, the flag-file path, and the per-turn
- * workflow-script switch) go through the ambient Effect `ConfigProvider`
+ * script fan-out switch) go through the ambient Effect `ConfigProvider`
  * (`envVar`), read when the program runs, never at module load.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -42,17 +42,9 @@ const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 This document was produced by the internal TeXRA CLI validation model.
 `;
 
-const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
-  name: 'cli-workflow-script-validation-v2',
-  description: 'Solve three mathematical problems through the CLI',
-  phases: [{ title: 'Solve' }],
-  tasks: [
-    { id: 'number-theory', label: 'Solve the Diophantine equation', phase: 'Solve' },
-    { id: 'linear-algebra', label: 'Classify the matrix', phase: 'Solve' },
-    { id: 'probability', label: 'Compute the stopping probability', phase: 'Solve' },
-  ],
-}
-const schema = {
+/** The validation fan-out: three structured `agent()` calls under one
+ *  `Promise.allSettled`, each answered by the `prover` agent's schema. */
+const SCRIPT_FANOUT_VALIDATION_SOURCE = `const schema = {
   type: 'object',
   additionalProperties: false,
   required: ['answer', 'derivation', 'check'],
@@ -63,25 +55,12 @@ const schema = {
   },
 }
 phase('Solve')
-const results = yield* all([
-  attempt(agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', schema })),
-  attempt(agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', schema })),
-  attempt(agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema })),
+const results = await Promise.allSettled([
+  agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', label: 'Solve the Diophantine equation', schema }),
+  agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', label: 'Classify the matrix', schema }),
+  agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', label: 'Compute the stopping probability', schema }),
 ])
-return { solutions: results.map((result) => result._tag === 'Success' ? result.value.structured : null) }`;
-
-/** The golden store's workflow script: one attempt of one agent, so its
- *  child runs alone and its rows commit in one order. */
-const GOLDEN_WORKFLOW_SOURCE = `export const meta = {
-  name: 'golden-workflow',
-  description: 'One child through the workflow runner',
-  phases: [{ title: 'Solve' }],
-  tasks: [{ id: 'child', label: 'Answer the child task', phase: 'Solve' }],
-}
-phase('Solve')
-const schema = { type: 'object', additionalProperties: false, required: ['answer'], properties: { answer: { type: 'string' } } }
-const result = yield* attempt(agent('Answer the workflow child task.', { id: 'child', agentName: 'golden_child', schema }))
-return { outcome: result._tag }`;
+return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
 /**
  * The golden store's script: it finds the reading tool with `searchTools`
@@ -175,12 +154,6 @@ function goldenTurn(
       );
     if (said.includes('Fan-out child A'))
       return Effect.succeed(text('Fan-out child A answer.'));
-    if (tools.has('submit_output'))
-      return Effect.succeed(
-        results.length === 0
-          ? [call('submit_output', { answer: 'Workflow child answer.' })]
-          : text('Workflow child done.'),
-      );
     // The delegated child looks its parent up and messages it while the
     // parent waits on the delegation: refused, since the headless parent
     // ends after its turn and would never read it.
@@ -286,17 +259,12 @@ function goldenTurn(
     () =>
       call('plan', {
         command: 'update',
-        objective: 'Read the notes, run the workflow, and ask a child.',
+        objective: 'Read the notes and ask a child.',
       }),
     () =>
-      call('delegate_multi_agents', {
-        agent: 'correct',
-        script: GOLDEN_WORKFLOW_SOURCE,
-      }),
-    () =>
-      call('delegate_agent', {
-        agent: 'golden_child',
-        instruction: 'Answer the delegated child task.',
+      call('agent', {
+        agentName: 'golden_child',
+        prompt: 'Answer the delegated child task.',
       }),
   ];
   const step = steps[results.length];
@@ -402,7 +370,7 @@ export function validationModel(config: ModelConfig): {
     }) as const;
   const complete = (
     turn: ResolvedTurn,
-    workflowScript: boolean,
+    scriptFanout: boolean,
     historyQuery: boolean,
     golden: TurnResult['content'] | null,
   ): TurnResult => {
@@ -413,23 +381,36 @@ export function validationModel(config: ModelConfig): {
     let content: TurnResult['content'];
     if (golden !== null) {
       content = golden;
-    } else if (workflowScript && toolNames.has('submit_output')) {
+    } else if (scriptFanout && toolNames.has('submit_output')) {
       content = [
         call(
           'submit_output',
           mathematicalValidationOutput(JSON.stringify(turn.messages)),
         ),
       ];
-    } else if (
-      workflowScript &&
-      !hasToolResult &&
-      toolNames.has('delegate_multi_agents')
-    ) {
+    } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
       content = [
-        call('delegate_multi_agents', {
-          agent: 'correct',
-          script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
+        call('script', {
+          title: 'Solve the validation problems',
+          code: SCRIPT_FANOUT_VALIDATION_SOURCE,
         }),
+      ];
+    } else if (scriptFanout && toolNames.has('script')) {
+      // Hand the script's result back verbatim, so the run's report shows
+      // what its children answered.
+      const results = turn.messages.flatMap((message) =>
+        message.role === 'tool' ? message.results : [],
+      );
+      content = [
+        {
+          kind: 'message',
+          content: [
+            {
+              kind: 'text',
+              text: `Script result: ${JSON.stringify(results)}`,
+            },
+          ],
+        },
       ];
     } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
       content = [
@@ -514,9 +495,9 @@ export function validationModel(config: ModelConfig): {
     Stream.fromEffect(
       Effect.gen(function* () {
         responses += 1;
-        const [workflowScript, historyQuery, golden, flagPath] =
+        const [scriptFanout, historyQuery, golden, flagPath] =
           yield* Effect.all([
-            envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'),
+            envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
             envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
             envVar(
@@ -525,7 +506,7 @@ export function validationModel(config: ModelConfig): {
           ]);
         return complete(
           turn,
-          workflowScript === '1',
+          scriptFanout === '1',
           historyQuery === '1',
           golden === '1' && flagPath
             ? yield* goldenTurn(turn, flagPath, call)

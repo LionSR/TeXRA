@@ -85,7 +85,7 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { parseWorkflowScriptDeliverySummary } from '@shared/subagentFollowup';
+import { parseScriptDeliverySummary } from '@shared/subagentFollowup';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -1125,7 +1125,7 @@ describe('the interrupted golden runs', () => {
       const text = String(delivered[0]?.content.text);
       expect(text).toMatch(/^<script-result id="62db81fbc29ce54c703f5b7c"/);
       expect(text).toContain('Background child answer.');
-      expect(parseWorkflowScriptDeliverySummary(text)).toMatchObject({
+      expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',
         outcome: 'completed',
         phaseCount: 1,

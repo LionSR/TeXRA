@@ -20,7 +20,7 @@ const CODEX_STREAMING_TEXT = [
   'The response is still streaming.',
 ].join('\n');
 
-// XML-escaped workflow-summary JSON for the workflow-script-result/error tests.
+// XML-escaped script-summary JSON for the workflow-script-result/error tests.
 function tally(ok: number, failed = 0): Record<string, number> {
   return {
     total: ok + failed,
@@ -35,7 +35,7 @@ function tally(ok: number, failed = 0): Record<string, number> {
   };
 }
 
-function workflowSummary(overrides: Record<string, unknown> = {}): string {
+function scriptSummary(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     name: 'proofread-pipeline',
     outcome: 'completed',
@@ -249,7 +249,7 @@ describe('summarizeSubagentFollowup', () => {
       '<response>result',
       '=== Run log ===',
       'many duplicate lines</response>',
-      `<workflow-summary>${workflowSummary()}</workflow-summary>`,
+      `<script-summary>${scriptSummary()}</script-summary>`,
       '</workflow-script-result>',
     ].join('\n');
 
@@ -266,14 +266,14 @@ describe('summarizeSubagentFollowup', () => {
   it('keeps the workflow failure cause but omits its duplicate run log', () => {
     const xml = [
       '<workflow-script-error id="abc">',
-      `<workflow-summary>${workflowSummary({
+      `<script-summary>${scriptSummary({
         outcome: 'failed',
         tally: tally(1, 3),
         costUsd: 0.03,
         durationMs: 5_000,
         files: [],
         errorCause: 'Model request failed: quota exhausted',
-      })}</workflow-summary>`,
+      })}</script-summary>`,
       '<message>Model request failed: quota exhausted',
       '',
       '=== Run log ===',
@@ -295,7 +295,7 @@ describe('summarizeSubagentFollowup', () => {
   it('preserves structured failure text without parsing generated suffixes', () => {
     const xml = [
       '<workflow-script-error id="abc">',
-      `<workflow-summary>${workflowSummary({
+      `<script-summary>${scriptSummary({
         outcome: 'failed',
         phaseCount: 0,
         tally: tally(0),
@@ -304,7 +304,7 @@ describe('summarizeSubagentFollowup', () => {
         files: [],
         errorCause:
           'Literal &amp;lt;tag&amp;gt;\n\n=== Run log belongs to the error\nScript file: user note',
-      })}</workflow-summary>`,
+      })}</script-summary>`,
       '<message>=== Run log ===',
       'generated entry',
       '',

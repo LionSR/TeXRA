@@ -1,8 +1,9 @@
 /**
- * The plain-text workflow progress of `texra run` (PRD
- * one-fold-three-renderers, 10.3): what the session view's workflow runs say,
- * printed as their lines change. It reads `SessionHandle.view` and derives
- * nothing the fold already states; it keeps only what it last printed.
+ * The plain-text script progress of `texra run` (PRD
+ * one-fold-three-renderers, 10.3): what the session view's script stages
+ * say, printed as their lines change. It reads `SessionHandle.view` and
+ * derives nothing the fold already states; it keeps only what it last
+ * printed.
  */
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
@@ -14,30 +15,29 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import { scriptStages } from '@ui/transcript';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
 
-/** The plain workflow output also subscribes the workflow transcripts it
- *  prints, since transcript rows fold only for subscribed aggregates. */
-export type WorkflowPlainSession = Pick<
+/** The plain script output also subscribes the transcripts it prints,
+ *  since transcript rows fold only for subscribed aggregates. */
+type ScriptPlainSession = Pick<
   SessionHandle,
   'view' | 'viewChanges' | 'setTranscriptSubscriptions'
 >;
 
-interface WorkflowPlainOutputOptions {
+interface ScriptPlainOutputOptions {
   /** The launched run when the request names it, else the first top-level
-   *  run created after attach: the output prints the workflow runs
-   *  under it. */
+   *  run created after attach: the output prints the script runs under it. */
   readonly runId?: RunId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
 
 /** The lines a run's script stages say (`scriptStages`): each phase's
- *  heading and each call's line, keyed by the stage, phase and call. */
+ *  heading and each call's line, keyed by the stage, phase and call, and a
+ *  background script run's outcome. */
 function scriptPlainLines(
   run: RunView,
   view: SessionView,
@@ -56,52 +56,21 @@ function scriptPlainLines(
         `Script total: ${formatCostUsd(stage.costUsd)}`,
       );
   }
-  return lines;
-}
-
-/** The lines one workflow-script run's view level says: phase headings,
- *  task lines, log lines, and its outcome, keyed by the row they come from. */
-function workflowPlainLines(run: RunView): ReadonlyMap<string, string> {
-  const lines = new Map<string, string>();
-  const model = run.transcript.run;
-  for (const phase of model?.phases ?? []) {
-    if (phase.opened) {
-      lines.set(
-        `phase:${phase.key}`,
-        `◆ ${formatWorkflowPhaseHeading(phase.heading)}`,
-      );
-    }
-  }
-  for (const row of run.transcript.rows) {
-    if (row.kind === 'workflowTask') {
-      lines.set(row.id, row.line);
-    } else if (row.kind === 'log' && row.text.full.trim().length > 0) {
-      lines.set(row.id, row.text.full);
-    }
-  }
-  if (
-    isTerminalOutcomePhase(run.status) &&
-    run.identity?.kind === 'multiAgentWorkflow'
-  ) {
-    // `run.status` is a run phase, so the word comes from the fold's own
-    // run-status label, never from the workflow-*call* status table the two
-    // vocabularies happen to share four key names with.
-    lines.set('outcome', `${run.statusLabel}: ${run.identity.workflowName}`);
-  }
+  if (isTerminalOutcomePhase(run.status) && run.identity.kind === 'script')
+    lines.set('outcome', `${run.statusLabel}: ${run.identity.title}`);
   return lines;
 }
 
 /**
- * The plain-text workflow progress of `texra run` (text output): what
- * `transcript.run` and the run's rows say, printed as they change
- * between consecutive view levels (PRD 10.3), for the workflow runs in
- * the launched run's subtree. A line prints when its entry is new or
- * reads differently than at the previous level; nothing here folds, gates,
- * or relabels.
+ * The plain-text script progress of `texra run` (text output): what the
+ * script stages of the launched run and the background script runs under it
+ * say, printed as they change between consecutive view levels (PRD 10.3).
+ * A line prints when its entry is new or reads differently than at the
+ * previous level; nothing here folds, gates, or relabels.
  */
-export function attachWorkflowPlainOutput(
-  session: WorkflowPlainSession,
-  options: WorkflowPlainOutputOptions,
+export function attachScriptPlainOutput(
+  session: ScriptPlainSession,
+  options: ScriptPlainOutputOptions,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
@@ -114,17 +83,14 @@ export function attachWorkflowPlainOutput(
     };
     const printRun = (run: RunView, view: SessionView): void => {
       const before = previous.get(run.id);
-      const lines =
-        run.identity.kind === 'multiAgentWorkflow'
-          ? workflowPlainLines(run)
-          : scriptPlainLines(run, view);
+      const lines = scriptPlainLines(run, view);
       previous.set(run.id, lines);
       for (const [id, line] of lines) {
         if (before?.get(id) !== line) write(line);
       }
     };
     yield* Effect.addFinalizer(() =>
-      session.setTranscriptSubscriptions('workflow-plain-output', []),
+      session.setTranscriptSubscriptions('script-plain-output', []),
     );
     yield* Effect.forkScoped(
       Stream.runForEach(session.viewChanges, (view) =>
@@ -141,27 +107,25 @@ export function attachWorkflowPlainOutput(
             root === undefined
               ? undefined
               : new Set(descendantRuns(view, root, { includeRoot: true }));
-          // Workflow runs, and the runs a script can run in: the launched
-          // run itself and the background script runs under it.
-          const workflows =
+          // The runs a script can run in: the launched run itself and the
+          // background script runs under it.
+          const scriptRuns =
             rootedIds === undefined
               ? []
               : [...view.runs.values()].filter(
                   (run) =>
                     rootedIds.has(run.id) &&
-                    (run.identity?.kind === 'multiAgentWorkflow' ||
-                      run.identity?.kind === 'script' ||
-                      run.id === root),
+                    (run.identity?.kind === 'script' || run.id === root),
                 );
-          const key = workflows.map((run) => run.id).join('\0');
+          const key = scriptRuns.map((run) => run.id).join('\0');
           if (key !== subscribed) {
             subscribed = key;
             yield* session.setTranscriptSubscriptions(
-              'workflow-plain-output',
-              workflows.map((run) => ({ id: run.id, fromSeq: 0 })),
+              'script-plain-output',
+              scriptRuns.map((run) => ({ id: run.id, fromSeq: 0 })),
             );
           }
-          for (const run of workflows) printRun(run, view);
+          for (const run of scriptRuns) printRun(run, view);
         }),
       ),
       { startImmediately: true },

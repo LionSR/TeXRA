@@ -4,7 +4,7 @@
 // text, which the host starts with `new Worker(source, { eval: true })`.
 //
 // Embedding the text rather than emitting a second file is what the QuickJS
-// WASM bytes already do (src/agent/workflowScript/sandbox.ts): no host
+// WASM bytes already do (src/agent/codeSandbox/codeSandbox.ts): no host
 // resolves a worker path at run time, so the extension's CJS bundle, the
 // CLI's single ESM file, the desktop's split ESM chunks and the desktop's
 // app.asar all start the same worker without a per-host lookup table.

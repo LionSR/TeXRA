@@ -106,8 +106,8 @@ const view = defineModel('view', { type: String, default: 'diff' });
           ></wa-icon>
           <wa-icon class="tc-ic" library="texra" name="account"></wa-icon>
           <span class="tc-label"
-            ><span class="tc-tool">delegate_agent</span> — derive the
-            spectral-gap bound, then verify it in Wolfram and Lean</span
+            ><span class="tc-tool">agent</span> — derive the spectral-gap bound,
+            then verify it in Wolfram and Lean</span
           >
           <span class="tc-time">11:14:38</span>
         </button>
@@ -122,8 +122,8 @@ const view = defineModel('view', { type: String, default: 'diff' });
             ></wa-icon>
             <span class="tc-sp"></span>
             <span class="tc-label"
-              ><span class="tc-tool">delegate_workflow</span> — unify λ₂
-              notation across §2–3</span
+              ><span class="tc-tool">agent</span> — unify λ₂ notation across
+              §2–3</span
             >
             <span class="tc-time tc-timer">0:18</span>
           </div>

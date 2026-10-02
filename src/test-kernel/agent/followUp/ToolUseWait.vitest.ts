@@ -763,7 +763,7 @@ describe('the batch a parked run consumes', () => {
           text: [
             '<workflow-script-result id="abc">',
             '<response>raw run log</response>',
-            `<workflow-summary>${escaped}</workflow-summary>`,
+            `<script-summary>${escaped}</script-summary>`,
             '</workflow-script-result>',
           ].join('\n'),
           from: { kind: 'run' as const, runId: child },
@@ -781,7 +781,7 @@ describe('the batch a parked run consumes', () => {
 
       expect(info).toHaveBeenCalledWith(
         expect.stringContaining('✓ proofread-pipeline completed'),
-        expect.objectContaining({ data: { workflowSummary: summary } }),
+        expect.objectContaining({ data: { scriptSummary: summary } }),
       );
     }),
   );

@@ -26,7 +26,6 @@ import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and model
 import type { RunId } from '@shared/schemas';
-import { formatCostUsd } from '@utils/text/stringUtils';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
@@ -34,6 +33,7 @@ import {
   scriptStages,
   type ScriptCallView,
 } from '@ui/transcript';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';

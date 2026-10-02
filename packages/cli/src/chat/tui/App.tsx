@@ -42,7 +42,6 @@ import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
 import { WorkPlanReader } from './panes/WorkPlanReader';
 import { TranscriptReader } from './panes/TranscriptReader';
-import { WorkflowPopup } from './panes/WorkflowPopup';
 import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -53,8 +52,6 @@ import {
   createActiveDraftRegistry,
 } from './input/activeDraft';
 import {
-  isWorkflowScriptRun,
-  presentRun,
   resolveChildListTarget,
 } from './state/childControls';
 import { activeForm, closeActiveForm } from './state/formSlot';
@@ -69,14 +66,12 @@ import {
   infoPane as infoPaneSignal,
   openTranscriptReader,
   openScriptPopup,
-  openWorkflowPopup,
   scriptPopupView as scriptPopupViewSignal,
   updateScriptPopupView,
-  updateWorkflowPopupView,
-  workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
+  focusRun,
 } from './state/cliState';
 import {
   appendLocalNotice,
@@ -109,13 +104,7 @@ interface InputEventEmitterLike {
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
 function focusRunAndPromoteApprovals(runId: RunId): void {
-  const view = currentView();
-  if (presentRun(runId) === 'workflowPopup') {
-    promoteApprovalsForRun(runId, {
-      includeRunIds: new Set(runViewOf(view, runId)?.childIds ?? []),
-    });
-    return;
-  }
+  focusRun(runId);
   promoteApprovalsForRun(runId);
 }
 
@@ -252,7 +241,6 @@ export function App(props: AppProps): React.JSX.Element {
     view,
     runViewOf(view, childListTarget),
   );
-  const workflowPopup = useSignal(workflowPopupViewSignal);
   const scriptPopup = useSignal(scriptPopupViewSignal);
   // The active run's transcript holds a script's calls: Ctrl-O shows them.
   const scriptAvailable =
@@ -332,39 +320,11 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptReader
             availableRows={availableRows}
-            onClose={() => {
-              // A workflow's log is only ever opened from its popup (a
-              // workflow is never a viewport), so closing it goes back there.
-              if (isWorkflowScriptRun(view, reader.runId)) {
-                openWorkflowPopup(reader.runId);
-              } else {
-                closeForegroundReader();
-              }
-            }}
+            onClose={closeForegroundReader}
             runId={reader.runId}
             title={`Transcript: ${label}`}
           />
         );
-      case 'workflow': {
-        const model = run?.transcript.run ?? undefined;
-        if (model === undefined) return null;
-        return (
-          <WorkflowPopup
-            availableRows={availableRows}
-            model={model}
-            onClose={closeForegroundReader}
-            onFocusRun={(runId) => {
-              closeForegroundReader();
-              focusRunAndPromoteApprovals(runId);
-            }}
-            onOpenTranscript={openTranscriptReader}
-            onRequest={request}
-            onViewChange={updateWorkflowPopupView}
-            runId={reader.runId}
-            view={workflowPopup}
-          />
-        );
-      }
       case 'script':
         return (
           <ScriptStagePopup

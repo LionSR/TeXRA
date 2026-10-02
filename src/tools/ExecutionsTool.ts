@@ -81,8 +81,7 @@ import { turnAttributionNote } from './executions/turnAttribution';
 import { shouldSkipWait } from './executions/waitCoordination';
 import {
   scriptCallsView,
-  workflowBoardView,
-} from './executions/workflowSummaryView';
+} from './executions/scriptCallsView';
 
 interface RunToolContext {
   readonly session: SessionHandle;
@@ -379,16 +378,6 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(session, runId).readReport();
   const lines = buildSummaryLines(run);
-
-  // Non-null exactly for a workflow-script run: the fold derives the
-  // board every host paints, and this bounds it for a model's context.
-  if (run.transcript.run !== null) {
-    lines.push(
-      '',
-      'Workflow:',
-      JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
-    );
-  }
 
   // A background script's calls, from its rows, under the same bounds.
   if (run.identity.kind === 'script') {

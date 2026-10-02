@@ -13,26 +13,18 @@
  */
 import {
   MESSAGE_TYPES,
-  workflowCallStatusLabel,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
   type FileListEntry,
   type LogPayload,
   type ToolUseLog,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
-import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUse } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import {
-  formatWorkflowCallLine,
-  formatWorkflowCallMetadataParts,
-  formatWorkflowPhaseHeading,
-  workflowCallDetail,
-} from '@ui/copy/workflowCall';
+import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import { assertNever } from '@utils/core';
 import {
   formatCompactTokenCount,
@@ -53,7 +45,6 @@ import type {
   ToolRow,
   TranscriptRow,
   TranscriptRowBase,
-  WorkflowTaskRow,
 } from './transcriptRow';
 
 // ---------------------------------------------------------------------------
@@ -275,32 +266,12 @@ export function toolRow(
   };
 }
 
-export function workflowTaskRow(
-  base: TranscriptRowBase,
-  progress: WorkflowCallProgress,
-): WorkflowTaskRow {
-  const call =
-    progress.model === undefined
-      ? progress
-      : { ...progress, model: getModelLabel(progress.model) };
-  const detail = workflowCallDetail(call);
-  return {
-    ...base,
-    kind: 'workflowTask',
-    call,
-    line: formatWorkflowCallLine(call),
-    statusLabel: workflowCallStatusLabel(call),
-    metadataParts: formatWorkflowCallMetadataParts(call),
-    ...(detail ? { detail } : {}),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Log payload rows
 // ---------------------------------------------------------------------------
 
 /** The decoded `log` payloads the fold routes here: every one but the
- *  streaming text, tool, and workflow-call payloads, which it keeps open. */
+ *  streaming text and tool payloads, which it keeps open. */
 export type LogRowPayload = Exclude<
   LogPayload,
   {
@@ -308,8 +279,7 @@ export type LogRowPayload = Exclude<
       | typeof MESSAGE_TYPES.MODEL_RESPONSE
       | typeof MESSAGE_TYPES.THINKING
       | typeof MESSAGE_TYPES.SCRATCHPAD
-      | typeof MESSAGE_TYPES.TOOL_USE
-      | typeof MESSAGE_TYPES.WORKFLOW_TASK;
+      | typeof MESSAGE_TYPES.TOOL_USE;
   }
 >;
 
@@ -326,8 +296,8 @@ export function logPayloadRow(
         kind: 'user',
         text: measured,
         summary: transcriptText(summarizeSubagentFollowup(measured.full)),
-        ...(payload.data?.workflowSummary
-          ? { workflowSummary: payload.data.workflowSummary }
+        ...(payload.data?.scriptSummary
+          ? { scriptSummary: payload.data.scriptSummary }
           : {}),
         ...(payload.data?.attachments
           ? { attachments: payload.data.attachments }

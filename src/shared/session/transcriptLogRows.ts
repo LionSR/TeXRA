@@ -68,9 +68,6 @@ function appendLog(
     case MESSAGE_TYPES.TOOL_USE:
       write(d, { kind: 'tool', base, log: payload.data, call: {} });
       return;
-    case MESSAGE_TYPES.WORKFLOW_TASK:
-      write(d, { kind: 'call', base, call: payload.data });
-      return;
     default:
       write(d, { kind: 'log', base, text, payload });
   }

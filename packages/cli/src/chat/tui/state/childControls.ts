@@ -7,8 +7,7 @@
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { formatCompactDuration } from '@utils/text/stringUtils';
-import { focusRun, openWorkflowPopup } from './cliState';
-import { currentView, runViewOf } from './sessionView';
+import { runViewOf } from './sessionView';
 
 /**
  * How long a running child has been at it, formatted: the caller selects the
@@ -52,22 +51,3 @@ export function resolveChildListTarget(
   return activeRunId;
 }
 
-export function isWorkflowScriptRun(view: SessionView, runId: RunId): boolean {
-  return runViewOf(view, runId)?.identity?.kind === 'multiAgentWorkflow';
-}
-
-/**
- * A workflow-script run is presented through its popup over its parent;
- * every other stream becomes the active conversation.
- */
-export function presentRun(runId: RunId): 'run' | 'workflowPopup' {
-  const view = currentView();
-  if (isWorkflowScriptRun(view, runId)) {
-    const parentId = runViewOf(view, runId)?.parentId;
-    if (parentId) focusRun(parentId);
-    openWorkflowPopup(runId);
-    return 'workflowPopup';
-  }
-  focusRun(runId);
-  return 'run';
-}

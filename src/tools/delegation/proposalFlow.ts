@@ -41,7 +41,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import { executeSubagent, type ApprovalMeta } from './subagentRun';
+import type { ApprovalMeta } from './subagentRun';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -348,21 +348,4 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       }),
     },
   } satisfies ApprovedDelegation;
-});
-
-/**
- * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
- *
- * If proposal bypass is active for this stream, skips the proposal and launches immediately.
- * Otherwise, waits for user approval via the session's host interactions.
- */
-export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
-  parent: RunToolCall,
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-) {
-  const decided = yield* decideDelegation(parent, proposal);
-  if ('status' in decided) return decided;
-  return yield* executeSubagent(parent, decided.proposal, parent.run.runId, {
-    approvalMeta: decided.approvalMeta,
-  });
 });

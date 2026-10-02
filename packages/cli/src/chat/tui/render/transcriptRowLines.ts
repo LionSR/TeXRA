@@ -128,7 +128,6 @@ export function transcriptRowBodyLines(
       case 'user':
       case 'tool':
       case 'webSearch':
-      case 'workflowTask':
       case 'compactionActivity':
       case 'phase':
       case 'log':

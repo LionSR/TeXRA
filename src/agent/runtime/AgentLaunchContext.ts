@@ -265,13 +265,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       input.enforceCategory &&
       fullConfig.agentCategory !== setting.agentCategory
     ) {
-      const suggestion =
-        setting.agentCategory === AgentCategory.ToolUse
-          ? 'delegate_agent'
-          : 'delegate_workflow';
       return yield* Effect.fail(
         new AgentError(
-          `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}. Use ${suggestion} instead.`,
+          `Agent '${fullConfig.agent}' is a ${setting.agentCategory} agent but was launched as ${fullConfig.agentCategory}.`,
         ),
       );
     }

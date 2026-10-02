@@ -31,7 +31,6 @@ import {
   OWNER,
   ROOT,
   tail,
-  withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -391,41 +390,10 @@ function sceneDesktopSubagents(): TemplateResult {
   );
 }
 
-/** W2: the run board with its summary line in the conversation pane; the
- *  rail shows the parent only. */
-function sceneDesktopRun(): TemplateResult {
-  const view = withWaitingCall();
-  const rootId = view.order.find(
-    (id) => view.runs.get(id)?.category === 'workflow',
-  );
-  const co = project(CO, view, rootId ?? null);
-  const projects = [co, project(LP, fanOutView())];
-  const run = rootId ? view.runs.get(rootId) : undefined;
-  return desktopFrame(
-    '288px minmax(0,1fr)',
-    rail(projects, shellOf('CO', ['CO', 'LP'])),
-    conversationPane(
-      projects,
-      co,
-      run,
-      run?.category === 'workflow'
-        ? html`<workflow-run-board
-            summary
-            .run=${run}
-            .view=${view}
-            .surface=${co.surface}
-          ></workflow-run-board>`
-        : nothing,
-      { chip: false, dock: false },
-    ),
-  );
-}
-
 export const desktopScenes: Record<string, () => TemplateResult> = {
   'desktop-projects': sceneDesktopProjects,
   'desktop-one-project': sceneDesktopOneProject,
   'desktop-empty-project': sceneDesktopEmptyProject,
   'desktop-narrow': sceneDesktopNarrow,
   'desktop-subagents': sceneDesktopSubagents,
-  'desktop-run': sceneDesktopRun,
 };

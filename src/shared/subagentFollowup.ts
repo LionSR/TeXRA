@@ -21,16 +21,16 @@ import {
 } from '@shared/deliveryTags';
 import type {
   SubagentProgressUpdate,
-  WorkflowScriptDeliverySummary,
+  ScriptDeliverySummary,
 } from '@shared/schemas';
 import {
   countByStatus,
   planSummaryLine,
   STATUS_DISPLAY,
-  WorkflowScriptDeliverySummarySchema,
+  ScriptDeliverySummarySchema,
 } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
-import { formatWorkflowTally } from '@ui/copy/workflowCall';
+import { formatScriptTally } from '@ui/copy/workflowCall';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -186,22 +186,20 @@ function truncatedResultResponsePreview(response: string): string {
  * producer and the CLI summarizer — never at render time: renderers receive
  * the parsed summary carried beside the row text.
  */
-export function parseWorkflowScriptDeliverySummary(
+export function parseScriptDeliverySummary(
   xml: string,
-): WorkflowScriptDeliverySummary | undefined {
-  const rawSummary = innerTag(xml, 'workflow-summary');
+): ScriptDeliverySummary | undefined {
+  const rawSummary = innerTag(xml, 'script-summary');
   if (!rawSummary) return undefined;
   const parsed = parseJsonWith(
     decodeXmlEntities(rawSummary),
-    WorkflowScriptDeliverySummarySchema,
+    ScriptDeliverySummarySchema,
   );
   return Result.getOrUndefined(parsed);
 }
 
-/** The envelopes that carry a `<workflow-summary>` element. */
+/** The envelopes that carry a `<script-summary>` element. */
 export const SUMMARIZED_TAGS: ReadonlySet<DeliveryTagName> = new Set([
-  DELIVERY_TAG.workflowScriptResult,
-  DELIVERY_TAG.workflowScriptError,
   DELIVERY_TAG.scriptResult,
   DELIVERY_TAG.scriptError,
 ]);
@@ -209,8 +207,8 @@ export const SUMMARIZED_TAGS: ReadonlySet<DeliveryTagName> = new Set([
 /** Collapse a parsed workflow delivery summary to its transcript lines. The
  *  tick is earned only by a run whose every call succeeded; a completed run
  *  with a failed, stopped, or unreached call says so in its marker too. */
-export function formatWorkflowScriptDeliverySummary(
-  summary: WorkflowScriptDeliverySummary,
+export function formatScriptDeliverySummary(
+  summary: ScriptDeliverySummary,
 ): string {
   const { tally } = summary;
   const clean = tally.ok === tally.total;
@@ -218,7 +216,7 @@ export function formatWorkflowScriptDeliverySummary(
   if (summary.outcome === 'completed') marker = clean ? '✓' : '!';
   const facts = [
     `${formatResultCount(summary.phaseCount, 'phase')}`,
-    formatWorkflowTally(tally),
+    formatScriptTally(tally),
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
@@ -235,16 +233,15 @@ export function formatWorkflowScriptDeliverySummary(
       ? [truncatedResultResponsePreview(summary.errorCause)]
       : []),
     ...fileLines,
-    ...(summary.scriptPath === null ? [] : [`  script: ${summary.scriptPath}`]),
   ].join('\n');
 }
 
-/** The `<workflow-summary>` element a script's delivery carries, which
- *  {@link parseWorkflowScriptDeliverySummary} reads back. */
-export function workflowSummaryElement(
-  summary: WorkflowScriptDeliverySummary,
+/** The `<script-summary>` element a script's delivery carries, which
+ *  {@link parseScriptDeliverySummary} reads back. */
+export function scriptSummaryElement(
+  summary: ScriptDeliverySummary,
 ): string {
-  return `<workflow-summary>${escapeText(JSON.stringify(summary))}</workflow-summary>`;
+  return `<script-summary>${escapeText(JSON.stringify(summary))}</script-summary>`;
 }
 
 /** The child run a progress envelope reports on, or undefined for any
@@ -330,8 +327,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
   }
 
   if (SUMMARIZED_TAGS.has(tag)) {
-    const summary = parseWorkflowScriptDeliverySummary(trimmed);
-    if (summary) return formatWorkflowScriptDeliverySummary(summary);
+    const summary = parseScriptDeliverySummary(trimmed);
+    if (summary) return formatScriptDeliverySummary(summary);
   }
 
   // A background shell command (bashDelivery.ts) is named by the model's

@@ -149,8 +149,8 @@ import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
 const HARNESS_MODEL = 'harness-model';
-const RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
-const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
+const RUNNING_SCRIPT_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
+const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
@@ -911,8 +911,8 @@ function makeBashApprovalPayload(index = 1) {
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
     allowBypass: true,
-    runId: SHOW_WORKFLOW_RUNNING
-      ? RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID
+    runId: SHOW_SCRIPT_RUNNING
+      ? RUNNING_SCRIPT_FIRST_AGENT_RUN_ID
       : HARNESS_RUN_ID,
   };
 }
@@ -1160,71 +1160,26 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
 }
 
-async function seedRunningWorkflow(): Promise<void> {
-  const childRunId = RunIdSchema.parse('aaaa0002f10e');
-  const firstAgentRunId = RUNNING_WORKFLOW_FIRST_AGENT_RUN_ID;
-  const secondAgentRunId = RunIdSchema.parse('aaaa000bf10e');
-  seedRun(childRunId, {
-    category: AgentCategory.Workflow,
-    identity: {
-      kind: 'multiAgentWorkflow',
-      workflowName: 'live-workflow-validation',
-    },
+/** A background script run with two `agent` children still running. */
+function seedRunningScript(): void {
+  const scriptRunId = RunIdSchema.parse('aaaa0002f10e');
+  seedRun(scriptRunId, {
+    identity: { kind: 'script', title: 'live-script-validation' },
     parentRunId: HARNESS_RUN_ID,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
-  seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const trace = new TraceEmitter((event) =>
-    session().publishRunEvent(childRunId, event),
-  );
-  const runStage = trace.openStage(
-    "Workflow script 'live-workflow-validation'",
-    { kind: 'run' },
-  );
-  const phaseStage = trace.openStage('Proofread', {
-    index: 0,
-    kind: 'phase',
-    parent: runStage,
-    total: 1,
-  });
-  trace.emit({
-    type: 'workflow.call',
-    logId: 'harness-workflow-running-task-a',
-    call: {
-      id: 'proofread-a',
-      label: 'Proofread paper A',
-      phase: 'Proofread',
-      status: 'running',
-      childRunId: firstAgentRunId,
-    },
-    stageId: phaseStage.id,
-  });
-  trace.emit({
-    type: 'workflow.call',
-    logId: 'harness-workflow-running-task-b',
-    call: {
-      id: 'proofread-b',
-      label: 'Proofread paper B',
-      phase: 'Proofread',
-      status: 'running',
-      childRunId: secondAgentRunId,
-    },
-    stageId: phaseStage.id,
-  });
-  for (const agentRunId of [firstAgentRunId, secondAgentRunId]) {
+  seedPhase(scriptRunId, RUN_PHASE.RUNNING);
+  for (const agentRunId of [
+    RUNNING_SCRIPT_FIRST_AGENT_RUN_ID,
+    RunIdSchema.parse('aaaa000bf10e'),
+  ]) {
     seedRun(agentRunId, {
-      category: AgentCategory.Workflow,
       identity: { kind: 'agent', agent: 'correct' },
-      parentRunId: childRunId,
+      parentRunId: scriptRunId,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     });
     seedPhase(agentRunId, RUN_PHASE.RUNNING);
   }
-  HARNESS_DISPOSERS.push(() => {
-    phaseStage.end('cancelled');
-    runStage.end('cancelled');
-    trace.close();
-  });
 }
 
 function seedRunningProcessChild(): void {
@@ -1381,10 +1336,10 @@ if (SHOW_EDIT_APPROVAL) {
   showApproval();
 }
 
-// The running workflow exists before its agent asks below: a request names
+// The running script exists before its agent asks below: a request names
 // a run the fold already holds, the way a real run's does.
-if (SHOW_WORKFLOW_RUNNING) {
-  await seedRunningWorkflow();
+if (SHOW_SCRIPT_RUNNING) {
+  seedRunningScript();
 }
 
 if (SHOW_BASH_APPROVAL) {

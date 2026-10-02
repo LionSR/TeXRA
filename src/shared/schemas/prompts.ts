@@ -16,7 +16,6 @@ import {
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
-import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 import type { ApiKeyProviderId } from '../constants/modelProviderPlugins';
 
 /** Common permission request fields */
@@ -87,18 +86,11 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-const WorkflowScriptProposalDetailsSchema = WorkflowDeclaredPlanSchema.extend({
-  name: z.string().min(1),
-  description: z.string().min(1),
-  scriptPath: z.string().min(1),
-});
-
 /** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
   WorkflowSpecificFieldsSchema.shape,
 ).extend({
   agentCategory: z.literal(AgentCategory.Workflow),
-  workflowScript: WorkflowScriptProposalDetailsSchema.optional(),
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 

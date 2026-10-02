@@ -1,58 +1,12 @@
-import { AgentCategory } from '../schemas/agent';
+/** The tool that runs a named agent as a child of the calling run. */
+export const AGENT_TOOL_NAME = 'agent' as const;
 
-export const DELEGATE_MULTI_AGENTS_TOOL_NAME = 'delegate_multi_agents' as const;
-
-/** The first line of a detached `delegate_multi_agents` launch's output. The
- *  lines after it instruct the invoking model, so the transcript row that
- *  recognizes this line shows its header alone (`isWorkflowLaunchOutput`). */
-export function formatWorkflowLaunchLead(name: string, runId: string): string {
-  return `Workflow script '${name}' launched as run ${runId}.`;
-}
-
-export function isWorkflowLaunchOutput(output: string): boolean {
-  return /^Workflow script '.*' launched as run \S+\./.test(output);
-}
-
-const CANONICAL_DELEGATION_TOOL_NAMES = [
-  'delegate_workflow',
-  DELEGATE_MULTI_AGENTS_TOOL_NAME,
-  'delegate_agent',
-  'agent',
-] as const;
-
-export type CanonicalDelegationToolName =
-  (typeof CANONICAL_DELEGATION_TOOL_NAMES)[number];
-
-/**
- * Tools that delegate work to sub-agents.
- *
- * Defined in shared/ so both extension-host code and webview bundles
- * can import without pulling in tool class constructors.
- *
- */
-export const DELEGATION_TOOLS: ReadonlySet<string> = new Set(
-  CANONICAL_DELEGATION_TOOL_NAMES,
-);
-
-/**
- * Maps each delegation tool whose input is a child run config to the agent
- * category it launches. Single source of truth for routing raw delegation tool
- * input to the matching proposal schema. `delegate_multi_agents` is absent on
- * purpose: it runs a saved script and has no run config to restore.
- */
-export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
-  {
-    delegate_workflow: AgentCategory.Workflow,
-    delegate_agent: AgentCategory.ToolUse,
-  };
-
-/** True when any of the given tool names is a delegation tool. */
+/** True when the given tool names include the delegation tool: an agent
+ *  that names it is an orchestrator. */
 export function hasDelegationTool(
   toolNames: Iterable<string> | undefined,
 ): boolean {
   if (!toolNames) return false;
-  for (const name of toolNames) {
-    if (DELEGATION_TOOLS.has(name)) return true;
-  }
+  for (const name of toolNames) if (name === AGENT_TOOL_NAME) return true;
   return false;
 }

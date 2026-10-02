@@ -18,9 +18,9 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import {
   decodeXmlEntities,
   deliveryTagOf,
-  formatWorkflowScriptDeliverySummary,
+  formatScriptDeliverySummary,
 } from '@shared/subagentFollowup';
-import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
+import type { ScriptDeliverySummary } from '@shared/schemas';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
@@ -191,7 +191,7 @@ export class UserMessage extends LitElement {
    * the text is never re-parsed for structured data.
    */
   @property({ attribute: false })
-  workflowSummary: WorkflowScriptDeliverySummary | null = null;
+  scriptSummary: ScriptDeliverySummary | null = null;
 
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
@@ -203,7 +203,7 @@ export class UserMessage extends LitElement {
 
   private displayCache: DisplayState & {
     text: string;
-    summary: WorkflowScriptDeliverySummary | null;
+    summary: ScriptDeliverySummary | null;
   } = {
     text: '',
     summary: null,
@@ -217,27 +217,27 @@ export class UserMessage extends LitElement {
   private getDisplayState(): DisplayState {
     if (
       this.displayCache.text === this.text &&
-      this.displayCache.summary === this.workflowSummary
+      this.displayCache.summary === this.scriptSummary
     ) {
       return this.displayCache;
     }
 
     const tag = deliveryTagOf(this.text);
     const isStructuredDelivery =
-      tag !== undefined || this.workflowSummary !== null;
+      tag !== undefined || this.scriptSummary !== null;
     const hasRawMessage = tag !== undefined && XML_ESCAPED_TAGS.has(tag);
     const displayText = hasRawMessage
       ? decodeXmlEntities(this.text)
       : this.text;
     // A workflow delivery renders its typed summary from the row's structured
     // field; the text is never mined for presentation metadata.
-    const structuredDisplayText = this.workflowSummary
-      ? formatWorkflowScriptDeliverySummary(this.workflowSummary)
+    const structuredDisplayText = this.scriptSummary
+      ? formatScriptDeliverySummary(this.scriptSummary)
       : displayText;
 
     this.displayCache = {
       text: this.text,
-      summary: this.workflowSummary,
+      summary: this.scriptSummary,
       isStructuredDelivery,
       hasRawMessage,
       displayText,

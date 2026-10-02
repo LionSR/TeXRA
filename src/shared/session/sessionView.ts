@@ -49,7 +49,6 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
-import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 import type { TranscriptRow } from '@ui/transcript';
 
 /** Which session (paper) a view is of: the session's storage root. */
@@ -58,15 +57,14 @@ const SessionKeySchema = z.string().min(1);
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the measured live text per streaming row, the
- * newest plan marker) beside the value in a module-private map, so a host
+ * projection's working state, the measured live text per streaming row)
+ * beside the value in a module-private map, so a host
  * can neither depend on nor mutate them. The slice value is replaced on every
  * change and `rows` and `taskGroups` are never written after the fold that
  * produced them returns (D5); hosts read, never write.
  *
- * The row, block, and run-model elements are the shared renderers' own
- * TypeScript shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`,
- * `workflowRunModel.ts`); they have no schema of their own yet, so the
+ * The row and block elements are the shared renderers' own TypeScript
+ * shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`); they have no schema of their own yet, so the
  * element types are stated rather than re-declared here.
  */
 const TranscriptViewSchema = z.object({
@@ -78,8 +76,6 @@ const TranscriptViewSchema = z.object({
   /** The contiguous leading prefix of rows whose finalizing event has
    *  folded: what an append-only scrollback may print. */
   settledRows: z.int().nonnegative(),
-  /** `workflowRunModel`, for a workflow-script run; null for every other. */
-  run: z.custom<WorkflowRunModel>().nullable(),
 });
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 

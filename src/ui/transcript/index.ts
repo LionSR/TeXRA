@@ -14,7 +14,6 @@ export {
   plainLogRow,
   streamingTextRow,
   toolRow,
-  workflowTaskRow,
   type LogRowPayload,
 } from './projectTranscriptRow';
 export {
@@ -40,7 +39,6 @@ export {
   type TranscriptRowKind,
   type UserRow,
   type WebSearchRow,
-  type WorkflowTaskRow,
 } from './transcriptRow';
 export {
   pendingRequestLine,

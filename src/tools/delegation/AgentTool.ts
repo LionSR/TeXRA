@@ -1,7 +1,7 @@
 /**
- * The `agent` tool: run a named agent as a child of the calling run. It
- * takes the options of `delegate_agent`, `delegate_workflow` and a workflow
- * script's `agent()`, and the named agent decides which apply.
+ * The `agent` tool: run a named agent as a child of the calling run. The
+ * named agent decides which of its options apply: a workflow agent takes
+ * files, a tool-use agent a schema or a working directory.
  *
  * Called from a script it awaits the child and returns the child's envelope
  * (`{ ...output, outcome, cost }`), unless `background` detaches it; called

@@ -18,10 +18,8 @@
  * - `golden_park`: killed (`SIGKILL`) while its model call is open, the
  *   parked run the conformance suite resumes.
  * - `golden_parent` (headless, `yolo`): a `read_file` call; a `plan` update
- *   the policy approves (a decided `planApproval` request); a workflow
- *   script with one attempt of one child (`workflow.script`,
- *   `workflow.attempt`, `workflow.journal` and the child run); and a
- *   `delegate_agent` child that looks its parent up and messages it, which
+ *   the policy approves (a decided `planApproval` request); and an
+ *   `agent` child that looks its parent up and messages it, which
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
@@ -917,7 +915,7 @@ function normalize(file, root) {
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
-    // A workflow call's wall time in its run-log line.
+    // A call's wall time in its run-log line.
     [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
   const digests = new Map();
