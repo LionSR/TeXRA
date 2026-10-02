@@ -1,13 +1,14 @@
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import type { UsageRoute } from '@shared/schemas';
+import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
+import { usageCostLabel } from '@ui/copy/modelAccess';
 import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { formatCostUsd, truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
 import type { BypassState } from './panes/statusBarDisplay';
@@ -40,6 +41,38 @@ export interface CliSessionStatusInput {
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /** The task's spend: the root's `treeUsage`, its own calls (`usage`), and
+   *  each agent it started with that agent's `treeUsage`. Undefined before
+   *  anything is metered. */
+  readonly cost?: CliSessionCostStatus;
+}
+
+interface CliSessionCostStatus {
+  readonly total: TokenUsageStats;
+  readonly own: TokenUsageStats;
+  readonly agents: readonly {
+    readonly label: string;
+    readonly usage: TokenUsageStats;
+  }[];
+}
+
+function costLabel(usage: TokenUsageStats): string {
+  return (
+    usageCostLabel(usage.cost, usage.usageRoute, usage.usagePlan) ??
+    formatCostUsd(usage.cost)
+  );
+}
+
+function costStatusLines(cost: CliSessionCostStatus | undefined): string[] {
+  if (cost === undefined) return [];
+  if (cost.agents.length === 0) return [`cost: ${costLabel(cost.total)}`];
+  return [
+    `cost: ${costLabel(cost.total)}, agents included`,
+    `  own model calls: ${costLabel(cost.own)}`,
+    ...cost.agents.map(
+      (agent) => `  ${agent.label}: ${costLabel(agent.usage)}`,
+    ),
+  ];
 }
 
 function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
@@ -80,6 +113,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${input.statusLabel ?? 'not started'}`,
+    ...costStatusLines(input.cost),
     ...((input.activeChildSessions ?? 0) > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),

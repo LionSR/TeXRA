@@ -24,7 +24,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { goalStateOf } from '@shared/plugins/goal';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import { AgentCategory, isEmptyUsage, type RunId } from '@shared/schemas';
 import { runRelation } from '@shared/session/runRelation';
 import type { RunView } from '@shared/session/sessionView';
 
@@ -88,6 +88,8 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         ? runViewOf(view, run.parentId)
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
+    // The task the focused run belongs to: its root's tree total.
+    const root = runViewOf(view, run?.ancestors[0]?.id ?? run?.id);
     const model = run?.model ?? (meta.model || context.initialModel);
     const activeSkills = yield* activeSkillNamesFor(
       context.runtimeSession,
@@ -118,6 +120,19 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         cwd: context.cliContext.cwd,
         processCwd: context.processCwd,
         approvalPolicy: context.getApprovalPolicy(),
+        cost:
+          root === undefined || isEmptyUsage(root.treeUsage)
+            ? undefined
+            : {
+                total: root.treeUsage,
+                own: root.usage,
+                agents: root.childIds.flatMap((childId) => {
+                  const child = runViewOf(view, childId);
+                  return child === undefined
+                    ? []
+                    : [{ label: child.label, usage: child.treeUsage }];
+                }),
+              },
         queuedFollowUpMessages: (activeRunId === undefined
           ? []
           : (view.queuedFollowUps.get(activeRunId) ?? [])

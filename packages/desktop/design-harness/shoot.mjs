@@ -22,6 +22,7 @@ const scenes = process.env.SCENES
       'ext-proposal',
       'ext-inline',
       'ext-process',
+      'ext-cost',
       'desktop-projects',
       'desktop-one-project',
       'desktop-empty-project',

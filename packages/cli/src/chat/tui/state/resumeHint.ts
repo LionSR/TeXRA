@@ -7,11 +7,7 @@ import {
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
-import {
-  descendantRuns,
-  runTreeUsage,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 
 import { runViewOf } from './sessionView';
@@ -69,8 +65,8 @@ export function collectResumeUsage(
   view: SessionView,
   rootRunId: RunId | undefined,
 ): TokenUsageStats | undefined {
-  const total = runTreeUsage(view, rootRunId);
-  return isEmptyUsage(total) ? undefined : total;
+  const total = runViewOf(view, rootRunId)?.treeUsage;
+  return total === undefined || isEmptyUsage(total) ? undefined : total;
 }
 
 function formatResumeUsage(

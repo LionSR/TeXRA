@@ -99,7 +99,9 @@ import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { usageCostLabel } from '@ui/copy/modelAccess';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
+import { formatCostUsd } from '@utils/text/stringUtils';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -591,7 +593,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     if (!statusBarItem) return;
     const policy = runtimeSession.approvalPolicy;
     const policyLine = `Approval policy: ${texraApprovalPolicyLabel(policy)} — ${formatTexraApprovalPolicy(policy)}`;
-    const { cost, inputTokens, outputTokens } =
+    const { cost, inputTokens, outputTokens, usageRoute, usagePlan } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
       statusBarItem.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
@@ -603,7 +605,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         '',
         '| TeXRA usage | |',
         '| --- | ---: |',
-        `| Cost | $${cost.toFixed(4)} |`,
+        `| Cost | ${usageCostLabel(cost, usageRoute, usagePlan) ?? formatCostUsd(cost)} |`,
         `| Input tokens | ${inputTokens.toLocaleString()} |`,
         `| Output tokens | ${outputTokens.toLocaleString()} |`,
         '',

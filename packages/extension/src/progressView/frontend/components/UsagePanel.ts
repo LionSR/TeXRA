@@ -153,7 +153,12 @@ export class UsagePanel extends LitElement {
     `,
   ];
 
+  /** The total this footer shows: the run and every agent under it
+   *  (`RunView.treeUsage`). */
   @property({ attribute: false }) usage: TokenUsageStats | null = null;
+  /** The run's own model calls (`RunView.usage`): its share of `usage`,
+   *  named on hover when its agents spent too. */
+  @property({ attribute: false }) ownUsage: TokenUsageStats | null = null;
   @property({ attribute: false }) contextState: ContextStateData | null = null;
 
   /** Whether the usage stats have any non-zero values worth displaying. */
@@ -243,13 +248,27 @@ export class UsagePanel extends LitElement {
       (stat) => !stat.onlyWhenPositive || stat.value > 0,
     );
 
+    const ownShare = this.ownShareLabel();
+    // prettier-ignore
+    const costRoute = ownShare === undefined
+      ? this.renderCostRoute(cost)
+      : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
     return html`
       ${waIcon('chart-pie')}
       <span class="run-summary__value">
-        ${join(visible.map(renderTokenStat), ' · ')} ·
-        ${this.renderCostRoute(cost)}
+        ${join(visible.map(renderTokenStat), ' · ')} · ${costRoute}
       </span>
     `;
+  }
+
+  /** The run's own share, when its agents spent too; undefined otherwise. */
+  private ownShareLabel(): string | undefined {
+    const own = this.ownUsage;
+    if (!this.usage || !own || own.cost === this.usage.cost) return undefined;
+    const ownCost =
+      usageCostLabel(own.cost, own.usageRoute, own.usagePlan) ??
+      formatCostUsd(own.cost);
+    return `Own model calls: ${ownCost}. The total includes its agents.`;
   }
 
   /**
@@ -340,6 +359,7 @@ export class UsagePanel extends LitElement {
       parts.push(`${formatCompactTokenCount(reasoning)} reasoning tokens`);
     }
     parts.push(costLabel);
-    return `Total usage: ${parts.join(', ')}`;
+    const ownShare = this.ownShareLabel();
+    return `Total usage: ${parts.join(', ')}${ownShare === undefined ? '' : `. ${ownShare}`}`;
   }
 }

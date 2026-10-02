@@ -8,9 +8,9 @@
  * Pure in the sense that matters: no IO, no clock, no platform, no store reads,
  * and the same input sequence yields the same view. Incremental in the sense
  * the PRD requires: an event recomputes the arm for its run, walks `parentId`
- * to the root refreshing each ancestor's `childIds`, `rollup`, `approval`,
- * `group`, and `forceExpanded`, then touches `order` only when a top-level run
- * appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
+ * to the root refreshing each ancestor's `childIds`, `rollup`, `treeUsage`,
+ * `approval`, `group`, and `forceExpanded`, then touches `order` only when a
+ * top-level run appeared, moved, or left. O(depth) per event, never a whole-view pass. A text
  * chunk costs the chunk, never the row's text.
  *
  * Three rules govern the event arm before any fact applies (5.2). A listing
@@ -55,6 +55,7 @@ import {
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
+  type TokenUsageStats,
   type AggregateId,
   type FoldInput,
   type ExistenceReconciliation,
@@ -371,6 +372,7 @@ function createRun(
     forceExpanded: false,
     group: 'recent' as const,
     usage: emptyUsageStats(),
+    treeUsage: emptyUsageStats(),
     thinkingActive: false,
     compactingActive: false,
     latestLine: null,
@@ -545,7 +547,7 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 
 /**
  * `group`, `approval`, `readOnly`, `actions`, `forceExpanded`, `rollup`,
- * `durableOutcome` and the status copy, from the run's facts, the local
+ * `treeUsage`, `durableOutcome` and the status copy, from the run's facts, the local
  * snapshot and its children (5.2). Interrupted is owner loss: a non-terminal
  * run nobody holds (this process, or one whose lease this one may not
  * touch), pending approval or not. Waiting needs a held owner and a request
@@ -581,6 +583,10 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     return child === undefined ? [] : [child];
   });
   const rollup = rollupOf(children);
+  const treeUsage = sumUsageStats([
+    run.usage,
+    ...children.map((child) => child.treeUsage),
+  ]);
   const descendantWaiting = children.some((child) => child.approval !== 'none');
   const descendantNeedsUser = children.some((child) => child.forceExpanded);
   let group: RunView['group'] = 'recent';
@@ -613,6 +619,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     run.rollup.total === rollup.total &&
     run.rollup.running === rollup.running &&
     run.rollup.finished === rollup.finished &&
+    sameUsage(run.treeUsage, treeUsage) &&
     run.statusLabel === copy.statusLabel &&
     run.tone === copy.tone &&
     run.statusDetail === statusDetail
@@ -629,9 +636,24 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     forceExpanded,
     durableOutcome,
     rollup,
+    treeUsage,
     ...copy,
     statusDetail,
   };
+}
+
+function sameUsage(a: TokenUsageStats, b: TokenUsageStats): boolean {
+  return (
+    a.cost === b.cost &&
+    a.inputTokens === b.inputTokens &&
+    a.outputTokens === b.outputTokens &&
+    a.cacheReadInputTokens === b.cacheReadInputTokens &&
+    a.cacheMissInputTokens === b.cacheMissInputTokens &&
+    a.cacheCreationInputTokens === b.cacheCreationInputTokens &&
+    a.reasoningTokens === b.reasoningTokens &&
+    a.usageRoute === b.usageRoute &&
+    a.usagePlan === b.usagePlan
+  );
 }
 
 /** Re-derive the aggregates of `startId` and every ancestor above it. */
