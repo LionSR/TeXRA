@@ -17,7 +17,7 @@
  * no tools, with a warning in the process log; the run that names it shows
  * the failure in its transcript.
  */
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 import { Data, Duration, Effect, Exit, Ref, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
@@ -124,11 +124,11 @@ function mcpToolName(server: string, tool: string): string {
   const normalized = joined.replaceAll(INVALID_NAME_CHARS, '_');
   if (normalized === joined && normalized.length <= MAX_TOOL_NAME_LENGTH)
     return normalized;
-  const hash = createHash('sha256')
-    .update(`${server}\0${tool}`)
-    .digest('hex')
-    .slice(0, NAME_HASH_LENGTH);
-  return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${hash}`;
+  const suffix = hash('sha256', `${server}\0${tool}`, 'hex').slice(
+    0,
+    NAME_HASH_LENGTH,
+  );
+  return `${normalized.slice(0, MAX_TOOL_NAME_LENGTH - NAME_HASH_LENGTH - 1)}_${suffix}`;
 }
 
 /** The parent environment minus credential-shaped names, plus the entry's. */

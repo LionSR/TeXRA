@@ -1,5 +1,5 @@
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -101,9 +101,7 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
   const normalizedConfigDir = path.resolve(configDir);
   const usesDefaultConfigDir =
     normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
-  const configDirHash = createHash('sha256')
-    .update(normalizedConfigDir)
-    .digest('hex');
+  const configDirHash = hash('sha256', normalizedConfigDir, 'hex');
   const keychainProfiles = [normalizedConfigDir, configDirHash];
   const legacyProbes: string[][] = usesDefaultConfigDir
     ? [['find-generic-password', '-s', 'Claude Code-credentials']]

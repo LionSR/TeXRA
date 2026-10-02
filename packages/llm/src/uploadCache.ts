@@ -1,5 +1,5 @@
 // Node imports
-import { createHash } from 'node:crypto';
+import { hash } from 'node:crypto';
 
 // Third-party imports
 import { Effect } from 'effect';
@@ -48,8 +48,7 @@ export interface UploadCache {
   readonly releaseUploads: () => Effect.Effect<readonly UnreleasedUpload[]>;
 }
 
-const digestOf = (base64: string): string =>
-  createHash('sha256').update(base64).digest('hex');
+const digestOf = (base64: string): string => hash('sha256', base64, 'hex');
 
 function uploadCache(provider: {
   readonly send: (file: FileUpload) => Effect.Effect<Uploaded, ModelError>;
