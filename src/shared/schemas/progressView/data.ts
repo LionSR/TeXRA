@@ -18,7 +18,7 @@ import {
   ToolEditPermissionSchema,
   UserQuestionPermissionSchema,
 } from '../prompts';
-import { WorkflowScriptDeliverySummarySchema } from '../workflowScriptDelivery';
+import { ScriptDeliverySummarySchema } from '../scriptDelivery';
 
 // ============================================================
 // Shared Field Schemas
@@ -42,13 +42,13 @@ export type MediaAttachmentKind = z.infer<typeof MediaAttachmentKindSchema>;
  * bytes — so the archived conversation can render `[image attachment]` /
  * `[document attachment]` markers for media that was sent to the model but
  * only ever lived in the provider message, not the transcript row.
- * `workflowSummary` carries a workflow delivery's typed presentation facts
+ * `scriptSummary` carries a workflow delivery's typed presentation facts
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
  */
 export const UserMessagePayloadSchema = z.object({
   attachments: z.array(MediaAttachmentKindSchema).optional(),
-  workflowSummary: WorkflowScriptDeliverySummarySchema.optional(),
+  scriptSummary: ScriptDeliverySummarySchema.optional(),
 });
 
 /**

@@ -199,7 +199,11 @@ export function registerBuiltinSlashCommands(options: {
     const current = options.getApprovalPolicy?.() ?? 'ask';
     // The run the status bar describes: its bypass badges are how a toggle
     // here reads as applied.
-    const runId = runViewOf(currentView(), selectedRunId.get())?.id;
+    // The toggles are offered only while that run's `actions` takes a grant
+    // (the gate `policy.set` is refused by), so a run still activating never
+    // shows a toggle that would be refused.
+    const run = runViewOf(currentView(), selectedRunId.get());
+    const runId = run?.actions.includes('grant') === true ? run.id : undefined;
     const bypasses =
       runId === undefined
         ? undefined

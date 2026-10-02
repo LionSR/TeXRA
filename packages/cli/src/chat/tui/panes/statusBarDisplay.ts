@@ -7,7 +7,10 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  texraApprovalPolicyLabel,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
@@ -179,6 +182,7 @@ interface StatusBarShortcutsInput {
   readonly childNavigationAvailable?: boolean;
   /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
+  readonly scriptAvailable?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -523,6 +527,7 @@ function statusBarBindingsText(
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     transcriptAvailable = false,
+    scriptAvailable = false,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
@@ -536,13 +541,24 @@ function statusBarBindingsText(
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
+  const script = scriptAvailable
+    ? keyHintText({ key: 'Ctrl-O', action: 'script' })
+    : undefined;
   const commands = chatInputAvailable
     ? keyHintText({ key: '/', action: 'commands' })
     : undefined;
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   return firstFittingCandidate({
     candidates: [
-      statusBarBindingRow([parentBack, childList, fullOutput, commands, ctrlC]),
+      statusBarBindingRow([
+        parentBack,
+        childList,
+        fullOutput,
+        script,
+        commands,
+        ctrlC,
+      ]),
+      statusBarBindingRow([parentBack, childList, fullOutput, script, ctrlC]),
       statusBarBindingRow([parentBack, childList, fullOutput, ctrlC]),
       statusBarBindingRow([parentBack, childList, ctrlC]),
       parentBack && statusBarBindingRow([parentBack, ctrlC]),
@@ -608,27 +624,27 @@ function childListBindingsText(
 function approvalPolicySegment(
   policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
+  let color: StatusBarColor;
   switch (policy) {
     case undefined:
     case 'ask':
       return undefined;
     case 'never':
-      // Same word the /approval picker uses for this policy — the bar is how
-      // users confirm their selection took effect.
-      return {
-        text: 'never',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
-      };
+      color = COLOR_WARNING;
+      break;
     case 'yolo':
-      return {
-        text: 'auto-approve',
-        color: COLOR_ERROR,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
-      };
+      color = COLOR_ERROR;
+      break;
     default:
       return policy satisfies never;
   }
+  // The label the /approval picker and every other surface uses for this
+  // policy — the bar is how users confirm their selection took effect.
+  return {
+    text: texraApprovalPolicyLabel(policy),
+    color,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
+  };
 }
 
 interface StatusBarRunTarget {

@@ -11,7 +11,17 @@
  * that rebuilds to other rows than its incremental tables hold; a listing
  * that differs from the fold over the whole history; and a newer or unknown
  * row that blocks more than its own aggregate, lets a claim through, or is
- * rewritten.
+ * rewritten. And a pending approval that does not outlive the process that
+ * asked: a resume that cancels it, asks the outcome question instead, opens
+ * a second request, or runs the command other than once after the approval.
+ * And an `agent` fan-out killed mid-script: a resume that launches the
+ * completed child again, launches a second child beside the running one (a
+ * new id or a second `run.start`) instead of resuming it, asks about a call
+ * whose child exists, or returns without both answers; and a second run of
+ * the same script that launches anything instead of reusing both results.
+ * And a background script killed while its child ran: a resume that
+ * launches its child again, leaves the parent's turn open, delivers no
+ * result or more than one, or delivers one without its summary line.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
@@ -19,6 +29,7 @@ import '@test/support/defaultSessionTestSetup';
 // Node imports
 import {
   cpSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -31,7 +42,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { refresh } from '@agent/index';
@@ -74,6 +85,7 @@ import {
   emptySessionView,
   type SessionView,
 } from '@shared/session/sessionView';
+import { parseScriptDeliverySummary } from '@shared/subagentFollowup';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -92,6 +104,8 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { autoDecideRequests } from '@test/agent/progressTestUtils';
+import { dispatchedChildren, scriptStages } from '@ui/transcript';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -106,8 +120,19 @@ const SELF = JSON.stringify([
 /** The runs, by the ids the generator normalizes them to, in start order. */
 const PARKED = RunIdSchema.parse('a00000000001');
 const PARENT = RunIdSchema.parse('a00000000002');
-const CHAT = RunIdSchema.parse('a00000000009');
-const TOMBSTONED = RunIdSchema.parse('a0000000000a');
+const CHAT = RunIdSchema.parse('a00000000006');
+const APPROVAL = RunIdSchema.parse('a00000000007');
+const SCRIPTED = RunIdSchema.parse('a00000000008');
+const FANOUT = RunIdSchema.parse('a00000000009');
+/** The fan-out's children: the first completed, the second ran at the kill. */
+const FANNED = RunIdSchema.parse('4e835bb7d9867028dba7d6f0');
+const RUNNING = RunIdSchema.parse('72ce0aa804465ea878a1dda3');
+/** The chat that sent a script to the background, the script's run, and
+ *  the script's one `agent()` child, which ran at the kill. */
+const BACKGROUND = RunIdSchema.parse('a0000000000c');
+const SCRIPT_RUN = RunIdSchema.parse('105177049434e8a8ab756af5');
+const SCRIPT_CHILD = RunIdSchema.parse('15dc5082e0b4ba50b0121909');
+const TOMBSTONED = RunIdSchema.parse('a0000000000f');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -219,9 +244,7 @@ describe('the golden 1.0 store', () => {
       'tool.result',
       'request.decided',
       'followup.queued',
-      'workflow.script',
-      'workflow.attempt',
-      'workflow.journal',
+      'script.call',
       'run.removed',
     ] as const)
       expect(types, type).toContain(type);
@@ -244,7 +267,7 @@ describe('the golden 1.0 store', () => {
             : [],
         ),
       ),
-    ]).toEqual(['gpt56', 'gemini38f']);
+    ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
     // The plan the chat ran as a goal: the goal plugin's fact, active, then
     // completed.
     expect(
@@ -298,24 +321,55 @@ describe('the golden 1.0 store', () => {
         children: [],
         ...rest,
       });
-      const WORKFLOW = 'a00000000000000000000003';
+      const DELEGATED = 'a00000000000000000000003';
       expect(runsOf(folded)).toEqual([
         // Its owner is on another host, so nothing proves it dead.
         run(PARKED, 'golden_park', { status: 'running', outcome: null }),
-        run(PARENT, 'golden_parent', { children: ['a00000000006', WORKFLOW] }),
-        run(WORKFLOW, 'golden-workflow', {
-          category: 'workflow',
-          parent: PARENT,
-          children: ['a00000000000000000000005'],
-        }),
-        run('a00000000000000000000005', 'golden_child', { parent: WORKFLOW }),
-        run('a00000000006', 'golden_child', { parent: PARENT }),
-        run('a00000000007', 'review'),
-        run('a00000000008', 'review'),
+        run(PARENT, 'golden_parent', { children: [DELEGATED] }),
+        run(DELEGATED, 'golden_child', { parent: PARENT }),
+        run('a00000000004', 'review'),
+        run('a00000000005', 'review'),
         // The user stopped its held turn with Ctrl-C, then exited.
         run(CHAT, 'golden_chat', { status: 'cancelled', outcome: 'cancelled' }),
+        // Killed while its command waited for approval.
+        run(APPROVAL, 'golden_approval', { status: 'running', outcome: null }),
+        // Killed mid-script, like the parked run.
+        run(SCRIPTED, 'golden_script', { status: 'running', outcome: null }),
+        // Killed while its second child ran.
+        run(FANOUT, 'golden_fanout', {
+          status: 'running',
+          outcome: null,
+          children: [RUNNING, FANNED],
+        }),
+        run(FANNED, 'golden_child', { parent: FANOUT }),
+        run(RUNNING, 'golden_child', {
+          parent: FANOUT,
+          status: 'running',
+          outcome: null,
+        }),
+        // Its turn ended with the script in the background, and the chat
+        // was killed while the script's child ran.
+        run(BACKGROUND, 'golden_background', {
+          status: 'waiting',
+          outcome: null,
+          children: [SCRIPT_RUN],
+        }),
+        run(SCRIPT_RUN, 'Background', {
+          parent: BACKGROUND,
+          status: 'running',
+          outcome: null,
+          children: [SCRIPT_CHILD],
+        }),
+        run(SCRIPT_CHILD, 'golden_child', {
+          parent: SCRIPT_RUN,
+          status: 'running',
+          outcome: null,
+        }),
       ]);
-      expect(folded.requests).toEqual([]);
+      // The approval its process never saw answered, still pending.
+      expect(
+        folded.requests.map((request) => [request.runId, request.payload.kind]),
+      ).toEqual([[APPROVAL, 'bash']]);
       // The message typed behind the stopped turn stays queued for a resume
       // to join. The headless parent holds none: its child's message was
       // refused, since a one-shot run never reads one.
@@ -336,19 +390,19 @@ describe('the golden 1.0 store', () => {
         at: 'turn.begin',
         phase: 'model.submitted',
         round: 1,
-        modelId: 'gpt56',
+        modelId: 'openai/gpt-5.6-sol@medium',
         messages: ['user'],
         openAttempt: true,
       });
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'halted',
         phase: 'waiting',
-        round: 5,
-        modelId: 'gpt56',
+        round: 4,
+        modelId: 'openai/gpt-5.6-sol@medium',
         messages: [
           'user',
           ...['assistant', 'tool', 'assistant', 'tool'],
-          ...['assistant', 'tool', 'assistant', 'tool'],
+          ...['assistant', 'tool'],
           'assistant',
         ],
         openAttempt: false,
@@ -367,8 +421,8 @@ describe('the golden 1.0 store', () => {
       // one review run, and a core kind this build lacks on the other, each
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
-      const NEWER = RunIdSchema.parse('a00000000007');
-      const UNKNOWN = RunIdSchema.parse('a00000000008');
+      const NEWER = RunIdSchema.parse('a00000000004');
+      const UNKNOWN = RunIdSchema.parse('a00000000005');
       raw(storage, (db) => {
         const inject = (run: RunId, type: string, version: number) => {
           const { id, seq } = db
@@ -414,8 +468,14 @@ describe('the golden 1.0 store', () => {
           runs.filter((run) => run.blocked === null).map((run) => run.status),
         ).toEqual([
           'running',
-          ...Array.from({ length: 4 }, () => 'completed'),
+          ...Array.from({ length: 2 }, () => 'completed'),
           'cancelled',
+          ...Array.from({ length: 3 }, () => 'running'),
+          'completed',
+          'running',
+          'waiting',
+          'running',
+          'running',
         ]);
         const db = yield* Database;
         for (const [run, type] of [
@@ -478,13 +538,16 @@ describe('the golden 1.0 store', () => {
 });
 
 /**
- * The parked run resumed by this build, on the scripted model that wrote it
- * (`goldenTurn`, gated as the package validation gates it): the request the
- * resume sends must be the one its rows recorded, down to the address of
- * its recorded context. Under Vitest the invoker also checks, before the
- * request leaves, that the rows rebuild the prepared turn exactly.
+ * The interrupted runs resumed by this build, on the scripted model that
+ * wrote them (`goldenTurn`, gated as the package validation gates it). The
+ * parked run: the request the resume sends must be the one its rows
+ * recorded, down to the address of its recorded context. Under Vitest the
+ * invoker also checks, before the request leaves, that the rows rebuild the
+ * prepared turn exactly. The script killed mid-run: a resume runs it again
+ * from the top, hands its settled call back from its row instead of running
+ * it, asks about the call the kill interrupted, and runs the rest.
  */
-describe('the parked golden run', () => {
+describe('the interrupted golden runs', () => {
   const AGENTS = resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/agents');
   const tempDirs = useTempDirs();
   setupPlatform(async () => {
@@ -527,15 +590,28 @@ describe('the parked golden run', () => {
     cpSync(goldenRoot(), storage, { recursive: true });
     writeFileSync(flag, 'texra-cli-run-validation\n');
     writeFileSync(join(storage, 'golden-park.release'), '');
+    writeFileSync(join(storage, 'golden-fanout.release'), '');
+    writeFileSync(join(storage, 'golden-background.release'), '');
     // The crash, on this host: an owner whose process identity is gone.
-    raw(storage, (db) =>
-      db
-        .prepare('UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?')
-        .run(
+    raw(storage, (db) => {
+      const kill = db.prepare(
+        'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+      );
+      for (const run of [
+        PARKED,
+        APPROVAL,
+        SCRIPTED,
+        FANOUT,
+        RUNNING,
+        BACKGROUND,
+        SCRIPT_RUN,
+        SCRIPT_CHILD,
+      ])
+        kill.run(
           JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-          PARKED,
-        ),
-    );
+          run,
+        );
+    });
     await Effect.runPromise(
       Effect.provide(
         refresh(),
@@ -591,6 +667,555 @@ describe('the parked golden run', () => {
         ...JSON.parse(String(recorded?.invocation)),
         attempt: 2,
       });
+    }),
+  );
+
+  /**
+   * The command approval its killed process never saw answered: the resume
+   * re-enters the call, which waits on that same request again rather than
+   * on a cancellation or an outcome question, and the approval runs the
+   * command exactly once.
+   */
+  it.live('re-presents the pending approval, and runs it once approved', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      const opened = () =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT e.data FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = 'request.opened'
+               ORDER BY e."commit"`,
+            )
+            .all(APPROVAL)
+            .map((row) => JSON.parse(String(row.data)).payload.data.requestId),
+        );
+      const [requestId] = opened();
+      expect(requestId).toMatch(/^bash-/);
+      // The command runs where the run works: the generator's project, here
+      // this test's workspace.
+      mkdirSync(workspace!, { recursive: true });
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate =
+               (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+          )
+          .run(workspace!, APPROVAL),
+      );
+      const resumed = yield* Effect.forkChild(
+        withProcessServices(testRuntime(), resumeRun(APPROVAL, { session })),
+      );
+      // The resume's own activation: the test's killed owner shares this
+      // process's pid, so the view can call the run this process's before
+      // the resume has taken it, and only an answer after it is the resumed
+      // run's to read.
+      const activated = () =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = 'run.activate'`,
+            )
+            .get(APPROVAL),
+        )?.n === 2;
+      // Re-presented: the run waits on its user, held here, on that request.
+      yield* SubscriptionRef.changes(session.view).pipe(
+        Stream.takeUntil(
+          (view) =>
+            view.runs.get(APPROVAL)?.approval === 'own' &&
+            view.requests.some((request) => request.requestId === requestId) &&
+            activated(),
+        ),
+        Stream.runDrain,
+      );
+      expect(
+        yield* session.decideRequest(APPROVAL, requestId!, {
+          action: 'approve',
+        }),
+      ).toBe(true);
+      expect(yield* Fiber.join(resumed)).toMatchObject({
+        started: true,
+        outcome: 'waiting',
+      });
+      expect(opened()).toEqual([requestId]);
+      expect(readFileSync(join(workspace!, 'approved.txt'), 'utf8')).toBe(
+        'approved\n',
+      );
+    }),
+  );
+
+  it.live('resumes the killed script, replaying its settled call', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      // The command the kill interrupted waits for this file. `notes.tex`
+      // is not here: the read that settled before the kill would fail if it
+      // ran again.
+      if (workspace === undefined) throw new Error('no test workspace');
+      mkdirSync(workspace, { recursive: true });
+      writeFileSync(join(workspace, 'golden-script.release'), '');
+      // It runs again where the run works: here this test's workspace.
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate =
+               (SELECT id FROM event_sequence WHERE logical_id = ?)`,
+          )
+          .run(workspace, SCRIPTED),
+      );
+      const asked = autoDecideRequests(session, (opened) => {
+        if (opened.payload.kind === 'bash') return { action: 'approve' };
+        if (opened.payload.kind !== 'userQuestion') return null;
+        const [question] = opened.payload.data.questions;
+        return {
+          action: 'submit',
+          answers: { [question?.question ?? '']: 'Run again' },
+        };
+      });
+      const result = yield* withProcessServices(
+        testRuntime(),
+        resumeRun(SCRIPTED, { session }),
+      ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+      expect(result).toMatchObject({ started: true, outcome: 'waiting' });
+      const payloads = (type: string) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT json_extract(e.data, '$.payload') AS payload
+               FROM event e JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = ? ORDER BY e."commit"`,
+            )
+            .all(SCRIPTED, type)
+            .map(
+              (row) =>
+                JSON.parse(String(row.payload)) as {
+                  readonly callId: string;
+                  readonly attempt: number;
+                  readonly disposition: string;
+                  readonly result: { readonly output?: string };
+                  readonly seq: number;
+                  readonly toolName: string;
+                  readonly phase: string | null;
+                },
+            ),
+        );
+      const results = payloads('tool.result');
+      const settled = (callId: string) =>
+        results
+          .filter((row) => row.callId === callId)
+          .map(({ attempt, disposition }) => ({ attempt, disposition }));
+      // The discovery calls and the read that settled before the kill keep
+      // their one row each: the resumed guest was handed their answers.
+      for (const seq of [0, 1, 2])
+        expect(settled(`validation-script-1/${seq}`)).toEqual([
+          { attempt: 1, disposition: 'executed' },
+        ]);
+      // The command the kill interrupted was asked about, then run again.
+      expect(
+        asked.opened.filter((opened) => opened.payload.kind === 'userQuestion'),
+      ).toHaveLength(1);
+      expect(settled('validation-script-1/3')).toEqual([
+        { attempt: 2, disposition: 'executed' },
+      ]);
+      expect(settled('validation-script-1/4')).toEqual([
+        { attempt: 1, disposition: 'executed' },
+      ]);
+      // The guest issued the calls its rows recorded, and returned what the
+      // replayed read and the live calls gave it.
+      expect(
+        payloads('script.call').map(({ seq, toolName, phase }) => [
+          seq,
+          toolName,
+          phase,
+        ]),
+      ).toEqual([
+        [0, 'searchTools()', 'Gather'],
+        [1, 'describeTool()', 'Gather'],
+        [2, 'read_file', 'Gather'],
+        [3, 'bash', 'Gather'],
+        [4, 'read_file', 'Gather'],
+      ]);
+      const script = results.find(
+        (row) => row.callId === 'validation-script-1',
+      );
+      expect(script).toMatchObject({ attempt: 2, disposition: 'executed' });
+      expect(script?.result.output).toContain(
+        'The golden store reads this file.',
+      );
+      expect(script?.result.output).toContain('released');
+      expect(script?.result.output).toContain('"found": "read_file"');
+      expect(script?.result.output).toContain('"documented": true');
+    }),
+  );
+
+  /**
+   * The fan-out killed while its second child ran. The resume runs the
+   * script from the top: the call whose child completed is handed back from
+   * its row, and the call whose child was running finds that child and
+   * resumes it under its own id, asking nobody. Then the model runs the same
+   * script in a new call, whose two calls reuse those results.
+   */
+  it.live(
+    'resumes the killed fan-out, reattaching its child, then reuses',
+    () =>
+      Effect.gen(function* () {
+        const { storage, workspace } = testWorkspaceRoots();
+        if (workspace === undefined) throw new Error('no test workspace');
+        mkdirSync(workspace, { recursive: true });
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate IN
+               (SELECT id FROM event_sequence WHERE logical_id IN (?, ?, ?))`,
+            )
+            .run(workspace, FANOUT, FANNED, RUNNING),
+        );
+        // Before the resume the run is interrupted (its owner proved dead):
+        // nothing works on the call whose child was running, so it reads as
+        // interrupted, not running, under no Running section.
+        yield* session.setTranscriptSubscriptions('golden-test', [
+          { id: FANOUT, fromSeq: 0 },
+        ]);
+        const [killed] = yield* SubscriptionRef.changes(session.view).pipe(
+          Stream.filter((view) => {
+            const run = view.runs.get(FANOUT);
+            return (
+              run?.group === 'interrupted' &&
+              scriptStages(run, view).length === 1
+            );
+          }),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const interrupted = killed!.runs.get(FANOUT)!;
+        expect(
+          scriptStages(interrupted, killed!)[0]!.calls.map(
+            ({ label, status, section, line }) => ({
+              label,
+              status,
+              section: section ?? null,
+              line: line.split(' · ')[0],
+            }),
+          ),
+        ).toEqual([
+          {
+            label: 'A',
+            status: 'finished',
+            section: null,
+            line: 'Finished: A',
+          },
+          {
+            label: 'B',
+            status: 'interrupted',
+            section: null,
+            line: 'Interrupted: B',
+          },
+        ]);
+        yield* session.setTranscriptSubscriptions('golden-test', []);
+        const asked = autoDecideRequests(session, (opened) =>
+          opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
+        );
+        const result = yield* withProcessServices(
+          testRuntime(),
+          resumeRun(FANOUT, { session }),
+        ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+        expect(result).toMatchObject({ started: true, outcome: 'waiting' });
+        const count = (run: RunId, type: string) =>
+          Number(
+            raw(storage, (db) =>
+              db
+                .prepare(
+                  `SELECT count(*) AS n FROM event e
+                 JOIN event_sequence s ON s.id = e.aggregate
+                 WHERE s.logical_id = ? AND e.type = ?`,
+                )
+                .get(run, type),
+            )?.n,
+          );
+        // No child was launched again: the two the kill left, each started
+        // once; the completed one never ran again, the running one resumed.
+        expect(
+          raw(storage, (db) =>
+            db
+              .prepare(
+                `SELECT s.logical_id AS id FROM event e
+               JOIN event_sequence s ON s.id = e.aggregate
+               WHERE e.type = 'run.start'
+                 AND json_extract(e.data, '$.parent.id') = ?
+               ORDER BY e."commit"`,
+              )
+              .all(FANOUT)
+              .map((row) => row.id),
+          ),
+        ).toEqual([FANNED, RUNNING]);
+        expect([FANNED, RUNNING].map((run) => count(run, 'run.start'))).toEqual(
+          [1, 1],
+        );
+        expect(
+          [FANNED, RUNNING].map((run) => count(run, 'run.activate')),
+        ).toEqual([1, 2]);
+        const results = raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT json_extract(e.data, '$.payload') AS payload
+             FROM event e JOIN event_sequence s ON s.id = e.aggregate
+             WHERE s.logical_id = ? AND e.type = 'tool.result'
+             ORDER BY e."commit"`,
+            )
+            .all(FANOUT)
+            .map(
+              (row) =>
+                JSON.parse(String(row.payload)) as {
+                  readonly responseId: string;
+                  readonly callId: string;
+                  readonly attempt: number;
+                  readonly disposition: string;
+                  readonly result: {
+                    readonly output?: string;
+                    readonly reusedFrom?: string;
+                  };
+                },
+            ),
+        );
+        const [first, second] = [
+          ...new Set(results.map((row) => row.responseId)),
+        ];
+        const of = (responseId: string | undefined) =>
+          results.filter((row) => row.responseId === responseId);
+        const script = (responseId: string | undefined) =>
+          of(responseId).find((row) => !row.callId.includes('/'));
+        const nested = (responseId: string | undefined) =>
+          of(responseId)
+            .filter((row) => row.callId.includes('/'))
+            .map(({ callId, attempt, disposition, result: settled }) => ({
+              seq: callId.split('/').at(-1),
+              attempt,
+              disposition,
+              reusedFrom: settled.reusedFrom?.split('/').at(-1) ?? null,
+            }));
+        // The call settled before the kill keeps its one row; the running
+        // one settles at its next attempt, from the same child.
+        expect(nested(first)).toEqual([
+          { seq: '0', attempt: 1, disposition: 'executed', reusedFrom: null },
+          { seq: '1', attempt: 2, disposition: 'executed', reusedFrom: null },
+        ]);
+        expect(script(first)).toMatchObject({
+          attempt: 2,
+          disposition: 'executed',
+        });
+        for (const answer of [
+          'Fan-out child A answer.',
+          'Fan-out child B answer.',
+        ])
+          for (const responseId of [first, second])
+            expect(script(responseId)?.result.output).toContain(answer);
+        // The same script in a new call: both calls reuse, nothing launches.
+        expect(nested(second)).toEqual([
+          { seq: '0', attempt: 1, disposition: 'executed', reusedFrom: '0' },
+          { seq: '1', attempt: 1, disposition: 'executed', reusedFrom: '1' },
+        ]);
+        // Nothing was asked: the resumed child was approved when it
+        // launched, and a reused call runs nothing.
+        expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
+        // What every host paints of the two scripts (`scriptStages`): each
+        // call under its phase, the first script's linked to the child its
+        // card launched (the one launched before the kill included), the
+        // second's reused with no child of their own.
+        yield* session.setTranscriptSubscriptions('golden-test', [
+          { id: FANOUT, fromSeq: 0 },
+        ]);
+        const [painted] = yield* SubscriptionRef.changes(session.view).pipe(
+          Stream.filter((view) => {
+            const run = view.runs.get(FANOUT);
+            return run !== undefined && scriptStages(run, view).length === 2;
+          }),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const fanout = painted!.runs.get(FANOUT)!;
+        expect(
+          scriptStages(fanout, painted!).map((stage) =>
+            stage.calls.map(({ label, status, phase, childRunId }) => ({
+              label,
+              status,
+              phase,
+              childRunId: childRunId ?? null,
+            })),
+          ),
+        ).toEqual([
+          [
+            {
+              label: 'A',
+              status: 'finished',
+              phase: 'Fan out',
+              childRunId: FANNED,
+            },
+            {
+              label: 'B',
+              status: 'finished',
+              phase: 'Fan out',
+              childRunId: RUNNING,
+            },
+          ],
+          [
+            {
+              label: 'A',
+              status: 'reused',
+              phase: 'Fan out',
+              childRunId: null,
+            },
+            {
+              label: 'B',
+              status: 'reused',
+              phase: 'Fan out',
+              childRunId: null,
+            },
+          ],
+        ]);
+        // The stage is the children's one home: the dispatch card lists no
+        // awaited call, and the parent's rows carry no progress line of its
+        // children (an awaited child's progress is its card's transient
+        // text). Each script's card is named by its title and shows its
+        // source as JavaScript.
+        expect(dispatchedChildren(fanout, painted!)).toEqual([]);
+        expect(
+          fanout.transcript.rows.flatMap((row) =>
+            row.kind === 'log' && row.text.full.startsWith('Subagent ')
+              ? [row.text.full]
+              : [],
+          ),
+        ).toEqual([]);
+        expect(
+          fanout.transcript.rows.flatMap((row) =>
+            row.kind === 'tool' && row.toolUse.toolName === 'script'
+              ? [
+                  {
+                    preview: row.model.headerPreview,
+                    language: row.model.sections.map((section) =>
+                      section.kind === 'code' ? section.language : section.kind,
+                    ),
+                  },
+                ]
+              : [],
+          ),
+        ).toEqual([
+          { preview: 'Fan out', language: ['javascript'] },
+          { preview: 'Fan out again', language: ['javascript'] },
+        ]);
+      }),
+  );
+
+  /**
+   * The script sent to the background, killed while its one child ran. The
+   * parent's turn had ended; `resumeRun` on the script's run replays the
+   * script from its rows, its `agent()` call finds the running child and
+   * resumes it under its own id, and the parent gets one follow-up: the
+   * script's result with its summary line.
+   */
+  it.live('resumes the killed background script, and reports it once', () =>
+    Effect.gen(function* () {
+      const { storage, workspace } = testWorkspaceRoots();
+      if (workspace === undefined) throw new Error('no test workspace');
+      mkdirSync(workspace, { recursive: true });
+      raw(storage, (db) =>
+        db
+          .prepare(
+            `UPDATE event SET data = replace(data, '/golden/project', ?)
+             WHERE type IN ('run.start', 'run.config') AND aggregate IN
+               (SELECT id FROM event_sequence WHERE logical_id IN (?, ?, ?))`,
+          )
+          .run(workspace, BACKGROUND, SCRIPT_RUN, SCRIPT_CHILD),
+      );
+      const rows = (run: RunId, type: string) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `SELECT e.data FROM event e
+               JOIN event_sequence s ON s.id = e.aggregate
+               WHERE s.logical_id = ? AND e.type = ? ORDER BY e."commit"`,
+            )
+            .all(run, type)
+            .map((row) => JSON.parse(String(row.data))),
+        );
+      // The parent's turn ended on the launch: the call returned the run.
+      const [launch] = rows(BACKGROUND, 'tool.result');
+      expect(launch.payload.result.value).toEqual({ runId: SCRIPT_RUN });
+      expect(rows(BACKGROUND, 'run.position').at(-1)?.payload.at).toBe(
+        'waiting',
+      );
+      const asked = autoDecideRequests(session, (opened) =>
+        opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
+      );
+      const result = yield* withProcessServices(
+        testRuntime(),
+        resumeRun(SCRIPT_RUN, { session }),
+      ).pipe(Effect.ensuring(Effect.sync(asked.detach)));
+      expect(result).toMatchObject({ started: true, outcome: 'completed' });
+      // The child the kill left resumed under its own id: one start, a
+      // second activation, nothing launched beside it.
+      expect(rows(SCRIPT_CHILD, 'run.start')).toHaveLength(1);
+      expect(rows(SCRIPT_CHILD, 'run.activate')).toHaveLength(2);
+      expect(rows(SCRIPT_RUN, 'run.start').map((row) => row.identity)).toEqual([
+        { kind: 'script', title: 'Background' },
+      ]);
+      // The script ran again from its rows: its call settled at its next
+      // attempt with the child's answer.
+      const settled = rows(SCRIPT_RUN, 'tool.result').map(
+        ({ payload }) => payload,
+      );
+      expect(
+        settled.map(({ callId, attempt, disposition }) => ({
+          callId,
+          attempt,
+          disposition,
+        })),
+      ).toEqual([
+        { callId: 'script/0', attempt: 2, disposition: 'executed' },
+        { callId: 'script', attempt: 2, disposition: 'executed' },
+      ]);
+      expect(settled.at(-1)?.result.output).toContain(
+        'Background child answer.',
+      );
+      expect(rows(SCRIPT_RUN, 'run.end').at(-1)?.outcome).toBe('completed');
+      // The script's run is the parent's dispatched child; the child its
+      // `agent()` awaited is the script's, listed by its stage alone.
+      yield* session.setTranscriptSubscriptions('golden-test', [
+        { id: BACKGROUND, fromSeq: 0 },
+        { id: SCRIPT_RUN, fromSeq: 0 },
+      ]);
+      const [listed] = yield* SubscriptionRef.changes(session.view).pipe(
+        Stream.map((view) =>
+          [BACKGROUND, SCRIPT_RUN].map((id) => {
+            const run = view.runs.get(id);
+            return run === undefined || run.transcript.rows.length === 0
+              ? null
+              : dispatchedChildren(run, view).map((child) => child.id);
+          }),
+        ),
+        Stream.filter((lists) => lists.every((list) => list !== null)),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+      expect(listed).toEqual([[SCRIPT_RUN], []]);
+      // One follow-up for the parent: the result, with its summary line.
+      const delivered = rows(BACKGROUND, 'followup.queued').filter(
+        (row) => row.content.from?.runId === SCRIPT_RUN,
+      );
+      expect(delivered).toHaveLength(1);
+      const text = String(delivered[0]?.content.text);
+      expect(text).toMatch(/^<script-result id="105177049434e8a8ab756af5"/);
+      expect(text).toContain('Background child answer.');
+      expect(parseScriptDeliverySummary(text)).toMatchObject({
+        name: 'Background',
+        outcome: 'completed',
+        phaseCount: 1,
+        tally: { total: 1, ok: 1, failed: 0, cancelled: 0 },
+        errorCause: null,
+      });
+      expect(asked.opened.map((opened) => opened.payload.kind)).toEqual([]);
     }),
   );
 });

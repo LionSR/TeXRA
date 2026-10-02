@@ -15,8 +15,6 @@ import {
   type TurnTotals,
   type MessageType,
   type ToolUseLog,
-  type WorkflowCallProgress,
-  type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import {
   createCompactionActivityProjection,
@@ -31,9 +29,9 @@ import {
   plainLogRow,
   streamingTextRow,
   toolRow,
-  workflowTaskRow,
   type LogRowPayload,
   type StreamingTextRow,
+  type ToolCallFacts,
   type TranscriptRow,
   type TranscriptRowBase,
   transcriptText,
@@ -99,11 +97,12 @@ export type Slot =
       text: string;
       running: boolean;
     }
-  | { readonly kind: 'tool'; base: TranscriptRowBase; log: ToolUseLog }
   | {
-      readonly kind: 'call';
+      readonly kind: 'tool';
       base: TranscriptRowBase;
-      call: WorkflowCallProgress;
+      log: ToolUseLog;
+      /** What the card's `tool.start` says of a script's call. */
+      call: ToolCallFacts;
     }
   | {
       readonly kind: 'log';
@@ -142,9 +141,6 @@ export interface TranscriptIndexes {
   readonly cursors: Map<string, TranscriptText>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
-  /** The newest `workflow.plan`, for the run model. */
-  plan: WorkflowDeclaredPlan | undefined;
-  workflowAttemptId: string | undefined;
   /** The newest run stage, the home of a workflow run's statistics rows. */
   runStage: string | undefined;
   /** The run's priced turns so far, which its statistics rows show. */
@@ -179,7 +175,6 @@ export function emptyTranscript(): TranscriptView {
     rows: [],
     taskGroups: [],
     settledRows: 0,
-    run: null,
   };
   INDEXES.set(transcript, {
     rowIndex: new Map(),
@@ -195,8 +190,6 @@ export function emptyTranscript(): TranscriptView {
     live: new Map(),
     cursors: new Map(),
     thinkingRowId: undefined,
-    plan: undefined,
-    workflowAttemptId: undefined,
     runStage: undefined,
     spend: EMPTY_TURN_TOTALS,
     model: undefined,
@@ -379,9 +372,7 @@ function rowOf(
         : plainLogRow(slot.base, text);
     }
     case 'tool':
-      return toolRow(slot.base, slot.log, live, ctx.runLabels);
-    case 'call':
-      return workflowTaskRow(slot.base, slot.call);
+      return toolRow(slot.base, slot.log, live, ctx.runLabels, slot.call);
     case 'log':
       return logPayloadRow(slot.base, slot.text, slot.payload);
   }

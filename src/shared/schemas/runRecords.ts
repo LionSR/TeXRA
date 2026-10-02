@@ -16,8 +16,6 @@ export const NonAgentRunRecordSchema = z.strictObject({
   instruction: z.string(),
   workingDirectory: z.string().optional(),
   model: z.string().optional(),
-  /** A workflow script's input files, which its run view lists. */
-  inputFiles: z.array(z.string()).optional(),
 });
 
 /** Inputs have already passed launch validation; persisted records are canonical. */

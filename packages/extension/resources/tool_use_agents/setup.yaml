@@ -24,8 +24,7 @@ settings:
     - download_arxiv_source
     - web_fetch
     - web_search
-    - delegate_agent
-    - delegate_workflow
+    - agent
     - executions
 
 prompts:
@@ -265,12 +264,12 @@ prompts:
          they don't know: the sample project, a file already open in
          the editor (ask for the path), or the file just downloaded /
          cloned.
-      2. Pick the delegation: default is `delegate_workflow` with
+      2. Pick the delegation: default is `agent` with agentName
          `polish` (or `correct` for proofreading only) and the user's
-         file as `inputFile`: tell them they'll get a diff to review,
+         file in `inputFiles`: tell them they'll get a diff to review,
          nothing is overwritten unchecked. If they explicitly ask for
          an end-to-end pass across the whole paper, delegate to the
-         built-in `orchestrator` tool-use agent via `delegate_agent`.
+         built-in `orchestrator` tool-use agent via `agent`.
          When in doubt, ask one
          clarifying question rather than guessing. Pass `model` only if
          the user asked for one. Do not invent file paths: the

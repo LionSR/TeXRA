@@ -1,6 +1,5 @@
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
-  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -11,9 +10,9 @@ import {
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
-  WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowScriptPlanSummary,
-} from '@ui/copy/workflowScriptProposal';
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import { type CliApprovalContent } from './approvalPrompts';
@@ -125,42 +124,36 @@ function agentProposalApprovalSummary(
   boundFileGroups: boolean,
 ): string {
   const workingDirectory = proposal.workingDirectory?.trim();
-  const workflow =
-    proposal.agentCategory === AgentCategory.Workflow
-      ? proposal.workflowScript
-      : undefined;
   const fileGroups = getProposalFileGroups(proposal).map((group) =>
     boundFileGroups
       ? formatAgentProposalFileGroup(group.label, group.files)
       : formatAgentProposalFileGroup(group.label, group.files, Infinity),
   );
-  // A multi-agent workflow is a container, not one agent run: its agent and
-  // model are defaults each call may override, and its files are what the
-  // script may hand to calls, not every call's inputs.
-  const header = workflow
-    ? [
-        `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-          proposal.agent,
-          getModelLabel(proposal.model),
-        ),
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
-        `Script: ${workflow.scriptPath}`,
-      ]
-    : [
-        `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
-          proposal.agentCategory,
-        )})`,
-        `Model: ${getModelLabel(proposal.model)}`,
-      ];
+  // A script's request covers every `agent` call it makes: it names what it
+  // asks for first, the calls it issued before it asked, and its source.
+  const script = proposal.script;
+  if (script)
+    return [
+      `Script agent request: ${SCRIPT_REQUEST_COPY.title(script)}`,
+      SCRIPT_REQUEST_COPY.grant,
+      `First agent call: ${proposal.agent} · ${getModelLabel(proposal.model)}`,
+      ...(script.calls.length > 0
+        ? [
+            `${SCRIPT_REQUEST_COPY.callsHeading}:`,
+            ...script.calls.map((call) => `  ${scriptRequestCallLine(call)}`),
+          ]
+        : []),
+      `${SCRIPT_REQUEST_COPY.sourceHeading}:`,
+      ...instructionLines.map((line) => `  ${line}`),
+    ].join('\n');
   return [
-    ...header,
+    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
+      proposal.agentCategory,
+    )})`,
+    `Model: ${getModelLabel(proposal.model)}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
-    ...(workflow && fileGroups.length > 0
-      ? [`${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:`]
-      : []),
     ...fileGroups,
-    workflow ? 'Description:' : 'Instruction:',
+    'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
 }
@@ -168,7 +161,10 @@ function agentProposalApprovalSummary(
 export function buildAgentProposalApprovalContent(
   proposal: AgentProposalPermission,
 ): CliApprovalContent {
-  const instructionLines = agentProposalInstructionLines(proposal.instruction);
+  // A script's request shows its source where a proposal shows its prompt.
+  const instructionLines = agentProposalInstructionLines(
+    proposal.script?.source ?? proposal.instruction,
+  );
   const boundedInstructionLines =
     boundedAgentProposalInstructionLines(instructionLines);
   const fileGroups = getProposalFileGroups(proposal);

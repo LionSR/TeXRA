@@ -5,6 +5,7 @@ import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { AgentCategory, AgentSourceSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
+import { JsonValueSchema } from './jsonValue';
 import { ToolConfigSchema } from './toolConfig';
 
 /** Agent selected when launch input omits its workflow agent. */
@@ -74,6 +75,21 @@ const toolUseFields = AgentConfigSharedFieldsSchema.extend({
    * for ordinary tool-use runs.
    */
   outputSchema: z.record(z.string(), z.unknown()).nullish(),
+  /**
+   * The `script` call a parent sent to the background, which this run makes:
+   * it opens with that call as its one response, runs it as the parent's
+   * dispatch would have, and ends when it settles. Absent for every other
+   * run.
+   */
+  backgroundScript: z
+    .strictObject({
+      /** The tool the parent called, and the arguments this run calls it
+       *  with. */
+      tool: z.string().min(1),
+      input: z.record(z.string(), JsonValueSchema),
+      title: z.string().min(1),
+    })
+    .nullish(),
 });
 
 function validateOutputFileCount(

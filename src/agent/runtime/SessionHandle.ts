@@ -94,7 +94,6 @@ import {
 } from './HostInteractions';
 import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
-import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { presentTerminalResult } from './terminalResultToast';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionGraph } from './sessionGraph';
@@ -102,6 +101,13 @@ import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { ModelRetryGate } from './ModelRetryGate';
+
+/** The rows that open a request: its `request.opened`, and the
+ *  `request.decided` the policy lands beside it. */
+type RequestRow = Extract<
+  RunLedgerDraft,
+  { type: 'request.opened' | 'request.decided' }
+>;
 
 const CHANNEL = 'sessionHandle';
 
@@ -293,13 +299,6 @@ export class SessionHandle {
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
   /**
-   * Session-owned bridge from a workflow-script grandchild's run id to
-   * its run's engine skip/retry control. Populated by the workflow-script
-   * strategy while a run is in flight; a host (the CLI child list) consumes it
-   * to skip/retry a focused grandchild `agent()` call.
-   */
-  readonly workflowControls: WorkflowControlRegistry;
-  /**
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
    * request handler admits on the session, so the graph is bound to the
@@ -350,7 +349,6 @@ export class SessionHandle {
     this.history = init.history;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
-    this.workflowControls = new WorkflowControlRegistry();
   }
 
   /**
@@ -535,8 +533,7 @@ export class SessionHandle {
   }
 
   /** Admit an aggregate's existing claim before this process appends to it:
-   *  a run's before resume reads or mutations, a workflow checkpoint's
-   *  before a relaunch journals into it. */
+   *  a run's, before resume reads or mutations. */
   acquireClaims(
     id: AggregateId,
     options: { readonly ends?: boolean } = {},
@@ -679,9 +676,9 @@ export class SessionHandle {
 
   /**
    * Ask a person: open the request on its run and wait for the decision. The
-   * one door for a request outside the loop's own batches (a command, an
-   * edit, a plan, a delegation, a question); a loop-owned request commits
-   * its row with its recovery binding through the ledger and waits with
+   * one door for a request a tool raises (a command, an edit, a plan, a
+   * delegation, a question); the loop's own outcome question commits its row
+   * with its recovery binding through the ledger and waits with
    * {@link decisionFor} directly. An interruption anywhere in the call (the
    * run stopped, the session unwound) closes the request as cancelled, so a
    * pending set is never left behind in the fold; a cancel for a request
@@ -691,10 +688,20 @@ export class SessionHandle {
    * so it owns `onNeverCommitted`: whatever the caller staged for a request
    * the fold never listed is released from here, and from nowhere else.
    */
-  openRequest(
+  openRequest<E = never>(
     runId: RunId,
     payload: PermissionPayload,
     options: {
+      /**
+       * How the request's rows commit, answering the commit its decision is
+       * read from: a tool call's request commits through its run's ledger,
+       * beside the `tool.binding` that lets it outlive this process, and a
+       * request a resumed call re-enters commits only what the policy
+       * decides. Omitted, this session commits them.
+       */
+      readonly open?: (
+        rows: readonly RequestRow[],
+      ) => Effect.Effect<CommitOrdinal, E>;
       readonly thread?: string | null;
       /**
        * Cleanup for what the caller staged before the request opened, run
@@ -707,24 +714,41 @@ export class SessionHandle {
        */
       readonly onNeverCommitted?: Effect.Effect<void>;
     } = {},
-  ): Effect.Effect<RequestDecision, DatabaseNotOwner | DatabaseWriteFailed> {
+  ): Effect.Effect<
+    RequestDecision,
+    DatabaseNotOwner | DatabaseWriteFailed | E
+  > {
     const requestId = payload.data.requestId;
     const aggregateId = qualifyAggregateId('run', runId);
     const releaseUncommitted = Effect.uninterruptible(
       options.onNeverCommitted ?? Effect.void,
     );
+    const rows: RequestRow[] = [
+      {
+        type: 'request.opened',
+        aggregateId,
+        requestId,
+        payload,
+        thread: options.thread ?? null,
+      },
+      ...policyDecidedRows(this, runId, payload),
+    ];
+    const open: (
+      opened: readonly RequestRow[],
+    ) => Effect.Effect<
+      CommitOrdinal,
+      E | DatabaseNotOwner | DatabaseWriteFailed
+    > =
+      options.open ??
+      ((opened) =>
+        Effect.suspend(() => {
+          const from = this.now();
+          return this.commit(opened).pipe(Effect.as(from));
+        }));
     return Effect.gen({ self: this }, function* () {
-      const from = this.now();
-      yield* this.commit([
-        {
-          type: 'request.opened',
-          aggregateId,
-          requestId,
-          payload,
-          thread: options.thread ?? null,
-        },
-        ...policyDecidedRows(this, runId, payload),
-      ]).pipe(Effect.tapError(() => releaseUncommitted));
+      const from = yield* open(rows).pipe(
+        Effect.tapError(() => releaseUncommitted),
+      );
       return yield* this.decisionFor(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
@@ -1016,11 +1040,10 @@ export class SessionHandle {
    *
    *  A session-wide settle is the session's own drain, not a drain of every
    *  run at once: it awaits every publication — callers queue an operation and
-   *  wait on it as a barrier (`createChildRun`, a workflow checkpoint's
-   *  journal write) — and reports the session-scoped failures only. A run's
-   *  lost fact is that run's outcome to carry, and a barrier that reported it
-   *  would fail a child creation, or a journal entry that committed, over
-   *  another run's rollback. Whoever hears a failure is who clears it, so a
+   *  wait on it as a barrier (`createChildRun`) — and reports the
+   *  session-scoped failures only. A run's lost fact is that run's outcome
+   *  to carry, and a barrier that reported it would fail a child creation
+   *  over another run's rollback. Whoever hears a failure is who clears it, so a
    *  run-tagged one stays tracked until that run's own drain takes it: that
    *  drain is what stamps the `artifact-drain` marker on the row it decides,
    *  and a session close settling a run past its budget settles the session

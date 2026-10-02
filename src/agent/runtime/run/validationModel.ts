@@ -19,7 +19,7 @@
  * (`scripts/stub-internal-validation-model.mjs`), so no canned output and no
  * environment-opened gate ships. The
  * runtime keys (the per-run switch, the flag-file path, and the per-turn
- * workflow-script switch) go through the ambient Effect `ConfigProvider`
+ * script fan-out switch) go through the ambient Effect `ConfigProvider`
  * (`envVar`), read when the program runs, never at module load.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -42,17 +42,9 @@ const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 This document was produced by the internal TeXRA CLI validation model.
 `;
 
-const WORKFLOW_SCRIPT_VALIDATION_SOURCE = `export const meta = {
-  name: 'cli-workflow-script-validation-v2',
-  description: 'Solve three mathematical problems through the CLI',
-  phases: [{ title: 'Solve' }],
-  tasks: [
-    { id: 'number-theory', label: 'Solve the Diophantine equation', phase: 'Solve' },
-    { id: 'linear-algebra', label: 'Classify the matrix', phase: 'Solve' },
-    { id: 'probability', label: 'Compute the stopping probability', phase: 'Solve' },
-  ],
-}
-const schema = {
+/** The validation fan-out: three structured `agent()` calls under one
+ *  `Promise.allSettled`, each answered by the `prover` agent's schema. */
+const SCRIPT_FANOUT_VALIDATION_SOURCE = `const schema = {
   type: 'object',
   additionalProperties: false,
   required: ['answer', 'derivation', 'check'],
@@ -63,25 +55,55 @@ const schema = {
   },
 }
 phase('Solve')
-const results = yield* all([
-  attempt(agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', schema })),
-  attempt(agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', schema })),
-  attempt(agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema })),
+const results = await Promise.allSettled([
+  agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', label: 'Solve the Diophantine equation', schema }),
+  agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', label: 'Classify the matrix', schema }),
+  agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', label: 'Compute the stopping probability', schema }),
 ])
-return { solutions: results.map((result) => result._tag === 'Success' ? result.value.structured : null) }`;
+return { solutions: results.map((result) => result.status === 'fulfilled' ? result.value.structured : null) }`;
 
-/** The golden store's workflow script: one attempt of one agent, so its
- *  child runs alone and its rows commit in one order. */
-const GOLDEN_WORKFLOW_SOURCE = `export const meta = {
-  name: 'golden-workflow',
-  description: 'One child through the workflow runner',
-  phases: [{ title: 'Solve' }],
-  tasks: [{ id: 'child', label: 'Answer the child task', phase: 'Solve' }],
-}
-phase('Solve')
-const schema = { type: 'object', additionalProperties: false, required: ['answer'], properties: { answer: { type: 'string' } } }
-const result = yield* attempt(agent('Answer the workflow child task.', { id: 'child', agentName: 'golden_child', schema }))
-return { outcome: result._tag }`;
+/**
+ * The golden store's script: it finds the reading tool with `searchTools`
+ * and `describeTool`, then makes two reads with it and runs a command in one
+ * `Promise.all`. The command waits for `golden-script.release`, so the
+ * generator kills the process while it runs, after the first read settled;
+ * the second read waits behind it, since the command is a barrier.
+ */
+const GOLDEN_SCRIPT_SOURCE = `phase('Gather')
+const [found] = await searchTools('read a file', { limit: 1 })
+const declaration = await describeTool(found.name)
+const [notes, shell, gate] = await Promise.all([
+  tools[found.name]({ path: 'notes.tex' }),
+  tools.bash({
+    command: 'touch golden-script.started; until [ -f golden-script.release ]; do sleep 0.05; done; echo released',
+    description: 'Wait for the release file',
+  }),
+  tools[found.name]({ path: 'golden-script.release' }),
+])
+console.log('gathered')
+return { found: found.name, documented: declaration.includes('path: string'), notes: notes.output, shell: shell.output, gate: gate.summary }`;
+
+/**
+ * The golden store's fan-out: two `agent()` calls under one `Promise.all`.
+ * The project's child-run budget is 1, so the first child answers before
+ * the second starts; the second waits for `golden-fanout.release`, so the
+ * generator kills the process while it runs.
+ */
+const GOLDEN_FANOUT_SOURCE = `phase('Fan out')
+const [a, b] = await Promise.all([
+  agent('Fan-out child A: answer at once.', { agentName: 'golden_child', label: 'A' }),
+  agent('Fan-out child B: answer once released.', { agentName: 'golden_child', label: 'B' }),
+])
+return { a: a.response, b: b.response }`;
+
+/**
+ * The golden store's background script: one `agent()` call, whose child
+ * waits for `golden-background.release`, so the generator kills the process
+ * while it runs, after the parent's turn has ended.
+ */
+const GOLDEN_BACKGROUND_SOURCE = `phase('Background')
+const answer = await agent('Background child: answer once released.', { agentName: 'golden_child', label: 'Child' })
+return { answer: answer.response }`;
 
 /**
  * The scripted conversation of the golden 1.0 store
@@ -113,13 +135,25 @@ function goldenTurn(
     return gate('golden-park.release').pipe(
       Effect.as(text('Parked run released.')),
     );
+  // A command that waits for its approval: the generator kills the process
+  // while it waits, and the conformance suite resumes and approves it.
+  if (system.includes('GOLDEN-APPROVAL'))
+    return Effect.succeed(
+      results.length === 0
+        ? [call('bash', { command: 'echo approved >> approved.txt' })]
+        : text('The approved command ran.'),
+    );
   if (system.includes('GOLDEN-CHILD')) {
-    if (tools.has('submit_output'))
-      return Effect.succeed(
-        results.length === 0
-          ? [call('submit_output', { answer: 'Workflow child answer.' })]
-          : text('Workflow child done.'),
+    if (said.includes('Background child'))
+      return gate('golden-background.release').pipe(
+        Effect.as(text('Background child answer.')),
       );
+    if (said.includes('Fan-out child B'))
+      return gate('golden-fanout.release').pipe(
+        Effect.as(text('Fan-out child B answer.')),
+      );
+    if (said.includes('Fan-out child A'))
+      return Effect.succeed(text('Fan-out child A answer.'));
     // The delegated child looks its parent up and messages it while the
     // parent waits on the delegation: refused, since the headless parent
     // ends after its turn and would never read it.
@@ -179,23 +213,61 @@ function goldenTurn(
       ),
     );
   }
+  if (system.includes('GOLDEN-SCRIPT'))
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('script', {
+              title: 'Gather the notes',
+              code: GOLDEN_SCRIPT_SOURCE,
+            }),
+          ]
+        : text('Script done.'),
+    );
+  // The fan-out script, then the same script again: its calls are reused.
+  if (system.includes('GOLDEN-FANOUT')) {
+    const step = [
+      () => call('script', { title: 'Fan out', code: GOLDEN_FANOUT_SOURCE }),
+      () =>
+        call('script', { title: 'Fan out again', code: GOLDEN_FANOUT_SOURCE }),
+    ][results.length];
+    return Effect.succeed(
+      step === undefined ? text('Fan-out done.') : [step()],
+    );
+  }
+  // A script sent to the background, then the turn ends: its result comes
+  // back as a follow-up, which the next turn acknowledges. The reply that
+  // ends the launching turn waits for `golden-background-reply.release`:
+  // the parent and its script run are two fibers of one process, so the
+  // generator releases it once the script's child waits at its model call,
+  // and the parent's last rows commit after the script's, not raced.
+  if (system.includes('GOLDEN-BACKGROUND')) {
+    if (results.length === 0)
+      return Effect.succeed([
+        call('script', {
+          title: 'Background',
+          code: GOLDEN_BACKGROUND_SOURCE,
+          run_in_background: true,
+        }),
+      ]);
+    if (said.includes('script-result'))
+      return Effect.succeed(text('Background script reported.'));
+    return gate('golden-background-reply.release').pipe(
+      Effect.as(text('Background script sent.')),
+    );
+  }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),
     () =>
       call('plan', {
         command: 'update',
-        objective: 'Read the notes, run the workflow, and ask a child.',
+        objective: 'Read the notes and ask a child.',
       }),
     () =>
-      call('delegate_multi_agents', {
-        agent: 'correct',
-        script: GOLDEN_WORKFLOW_SOURCE,
-      }),
-    () =>
-      call('delegate_agent', {
-        agent: 'golden_child',
-        instruction: 'Answer the delegated child task.',
+      call('agent', {
+        agentName: 'golden_child',
+        prompt: 'Answer the delegated child task.',
       }),
   ];
   const step = steps[results.length];
@@ -301,7 +373,7 @@ export function validationModel(config: ModelConfig): {
     }) as const;
   const complete = (
     turn: ResolvedTurn,
-    workflowScript: boolean,
+    scriptFanout: boolean,
     historyQuery: boolean,
     golden: TurnResult['content'] | null,
   ): TurnResult => {
@@ -312,23 +384,36 @@ export function validationModel(config: ModelConfig): {
     let content: TurnResult['content'];
     if (golden !== null) {
       content = golden;
-    } else if (workflowScript && toolNames.has('submit_output')) {
+    } else if (scriptFanout && toolNames.has('submit_output')) {
       content = [
         call(
           'submit_output',
           mathematicalValidationOutput(JSON.stringify(turn.messages)),
         ),
       ];
-    } else if (
-      workflowScript &&
-      !hasToolResult &&
-      toolNames.has('delegate_multi_agents')
-    ) {
+    } else if (scriptFanout && !hasToolResult && toolNames.has('script')) {
       content = [
-        call('delegate_multi_agents', {
-          agent: 'correct',
-          script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
+        call('script', {
+          title: 'Solve the validation problems',
+          code: SCRIPT_FANOUT_VALIDATION_SOURCE,
         }),
+      ];
+    } else if (scriptFanout && toolNames.has('script')) {
+      // Hand the script's result back verbatim, so the run's report shows
+      // what its children answered.
+      const results = turn.messages.flatMap((message) =>
+        message.role === 'tool' ? message.results : [],
+      );
+      content = [
+        {
+          kind: 'message',
+          content: [
+            {
+              kind: 'text',
+              text: `Script result: ${JSON.stringify(results)}`,
+            },
+          ],
+        },
       ];
     } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
       content = [
@@ -413,9 +498,9 @@ export function validationModel(config: ModelConfig): {
     Stream.fromEffect(
       Effect.gen(function* () {
         responses += 1;
-        const [workflowScript, historyQuery, golden, flagPath] =
+        const [scriptFanout, historyQuery, golden, flagPath] =
           yield* Effect.all([
-            envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'),
+            envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
             envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
             envVar(
@@ -424,7 +509,7 @@ export function validationModel(config: ModelConfig): {
           ]);
         return complete(
           turn,
-          workflowScript === '1',
+          scriptFanout === '1',
           historyQuery === '1',
           golden === '1' && flagPath
             ? yield* goldenTurn(turn, flagPath, call)

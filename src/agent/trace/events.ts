@@ -53,8 +53,6 @@ export type AgentEvent =
       | 'stage.end'
       | 'tool.start'
       | 'tool.end'
-      | 'workflow.plan'
-      | 'workflow.call'
       | 'usage'
       | 'conversation.progress'
       | 'run.fact'

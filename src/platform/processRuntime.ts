@@ -19,6 +19,7 @@ import {
   type ManagedRuntime,
   type Path,
 } from 'effect';
+import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
@@ -94,7 +95,7 @@ export type ProcessServices =
  * plugin, which provides the pinned layers' services to the call.
  */
 export type PluginServices =
-  GitHubSubscriptions | CodexThreads | ClaudeAgentSessions;
+  GitHubSubscriptions | CodexThreads | ClaudeAgentSessions | CodeSandbox;
 
 /** No plugin service is a process service (compile-time guard). */
 type AssertNever<T extends never> = T;

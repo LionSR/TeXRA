@@ -1,5 +1,5 @@
 // The recorded fan-out session every renderer is checked against: a
-// workflow-script root, one child agent run with a grandchild of its own, a
+// background script root, one child agent run with a grandchild of its own, a
 // process run. `buildScenario` is the commit-ordered event log a
 // publisher would replay; `fanOutView` and its variants fold it into the
 // `SessionView` the fold test asserts on and the design harness renders, so
@@ -20,7 +20,6 @@ import {
   type DisplaySessionEvent,
   type RunId,
   type RunParent,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -59,10 +58,7 @@ export const T = {
   rootDone: BOARD_NOW - sec(8),
 } as const;
 
-export const ROOT_IDENTITY: RunIdentity = {
-  kind: 'multiAgentWorkflow',
-  workflowName: 'review',
-};
+export const ROOT_IDENTITY: RunIdentity = { kind: 'script', title: 'review' };
 export const CHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:search',
@@ -71,6 +67,8 @@ const GRANDCHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:lint',
 };
+/** The root script's stage: its calls' cards carry it as their group. */
+const SCRIPT_STAGE = 'script-review';
 export const ROOT_POLICY: ApprovalPolicySnapshot = {
   policy: 'ask',
   bypasses: { bash: false, toolEdit: true, superYolo: false },
@@ -166,20 +164,6 @@ export class Log {
   }
 }
 
-function call(
-  status: 'queued' | 'running' | 'completed',
-  childRunId?: RunId,
-): WorkflowCallProgress {
-  return {
-    id: 'inspect',
-    label: 'inspect',
-    phase: 'Map',
-    attemptId: 'attempt-1',
-    ...(childRunId ? { childRunId } : {}),
-    status,
-  };
-}
-
 export const tail = (event: DisplaySessionEvent): FoldInput => ({
   _tag: 'event',
   read: 'all',
@@ -206,8 +190,8 @@ export function foldAll(
 }
 
 /**
- * The fan-out log. With `proposal`, the root also records a workflow-script
- * proposal awaiting approval (`req-plan`) in the pending prefix.
+ * The fan-out log. With `proposal`, the root also records its script's
+ * agent request awaiting approval (`req-plan`) in the pending prefix.
  */
 export function buildScenario({ proposal = false } = {}) {
   const log = new Log();
@@ -215,46 +199,40 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.root, {
     type: 'run.start',
     identity: ROOT_IDENTITY,
-    category: AgentCategory.Workflow,
+    category: AgentCategory.ToolUse,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     parent: null,
     userFollowUpSupport: 'unsupported',
     approvalPolicy: ROOT_POLICY,
-    checkpointId: 'review@chat',
   });
   log.emit(ROOT, T.root, {
     type: 'run.activate',
-    category: AgentCategory.Workflow,
+    category: AgentCategory.ToolUse,
   });
   log.emit(ROOT, T.root, {
     type: 'run.config',
     config: AgentConfigFieldsSchema.parse({
-      agentCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.ToolUse,
       model: 'claude-sonnet-4-5',
       instruction: 'review the draft',
       agent: 'review',
-      inputFiles: ['draft.tex'],
     }),
   });
   log.emit(ROOT, T.root + 1, {
-    type: 'workflow.plan',
-    attemptId: 'attempt-1',
-    phases: [{ title: 'Map' }],
-    tasks: [{ id: 'inspect', label: 'inspect', phase: 'Map' }],
-  });
-  log.emit(ROOT, T.root + 1, {
     type: 'stage.start',
-    id: 'phase-Map',
-    label: 'Map',
-    kind: 'phase',
-    index: 0,
-    total: 1,
+    id: SCRIPT_STAGE,
+    label: 'review',
+    kind: 'script',
   });
+  // The script's one `agent` call: its card opens under the script's stage
+  // and launches the child.
   log.emit(ROOT, T.root + 2, {
-    type: 'workflow.call',
+    type: 'tool.start',
     logId: 'call-1',
-    stageId: 'phase-Map',
-    call: call('queued'),
+    stageId: SCRIPT_STAGE,
+    toolName: 'agent',
+    input: { agentName: 'custom:search', prompt: 'search', label: 'inspect' },
+    phase: 'Map',
   });
 
   // The child agent run: its run.start carries the whole parent edge.
@@ -263,6 +241,7 @@ export function buildScenario({ proposal = false } = {}) {
     identity: CHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     parent: log.parent(ROOT),
+    parentCard: 'call-1',
     userFollowUpSupport: 'nativeInteractive',
   });
   log.emit(CHILD, T.child, {
@@ -276,12 +255,6 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.activate',
     category: AgentCategory.ToolUse,
-  });
-  log.emit(ROOT, T.child + 1, {
-    type: 'workflow.call',
-    logId: 'call-1',
-    stageId: 'phase-Map',
-    call: call('running', CHILD),
   });
   // The loop's position: an agent run reads as initializing until its first
   // step, so a mid-flight fixture carries one (one run model, 3.3).
@@ -311,8 +284,8 @@ export function buildScenario({ proposal = false } = {}) {
   // that starts and finishes while the child waits, and one empty-round file
   // fact the tab must not show.
   const dispatchData = {
-    toolName: 'delegate_agent',
-    input: { agent: 'lint', instruction: 'lint appendix B' },
+    toolName: 'agent',
+    input: { agentName: 'lint', prompt: 'lint appendix B' },
   };
   log.emit(CHILD, T.grandchild - 1, {
     type: 'tool.start',
@@ -406,31 +379,25 @@ export function buildScenario({ proposal = false } = {}) {
           agentCategory: AgentCategory.Workflow,
           agent: 'review',
           model: 'claude-sonnet-4-5',
-          instruction: 'review the draft',
+          instruction: 'Review the draft.',
           memories: [],
           inputFiles: ['draft.tex'],
           contextFiles: ['refs.bib'],
           mediaFiles: [],
           outputFiles: [],
           toolConfig: ToolConfigSchema.parse(undefined),
-          workflowScript: {
-            name: 'review',
-            description:
-              'Scout the draft, review every section in parallel, verify the fixes, report.',
-            scriptPath: '.texra/workflows/review.mjs',
-            phases: [
-              { title: 'Scout' },
-              { title: 'Review' },
-              { title: 'Verify' },
-              { title: 'Report' },
-            ],
-            tasks: [
-              { id: 'scout', label: 'scout', phase: 'Scout' },
-              { id: 'review:agent', label: 'review:agent', phase: 'Review' },
-              { id: 'review:model', label: 'review:model', phase: 'Review' },
-              { id: 'verify', label: 'verify', phase: 'Verify' },
-              { id: 'report', label: 'report', phase: 'Report' },
-            ],
+          script: {
+            title: 'review',
+            source: [
+              "phase('Review')",
+              'const reviews = await Promise.all(',
+              "  ['agent', 'model'].map((part) =>",
+              "    agent(`Review the ${part} section.`, { agentName: 'review', inputFiles: ['draft.tex'] }),",
+              '  ),',
+              ')',
+              'return reviews.map((review) => review.outputs)',
+            ].join('\n'),
+            calls: [],
           },
         },
       },
@@ -450,20 +417,20 @@ export function buildScenario({ proposal = false } = {}) {
     output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
   log.emit(ROOT, T.childDone + 1, {
-    type: 'workflow.call',
+    type: 'tool.end',
     logId: 'call-1',
-    stageId: 'phase-Map',
-    call: call('completed', CHILD),
+    status: 'completed',
+    result: { output: 'search done', summary: "Completed 'custom:search'" },
   });
   log.emit(ROOT, T.childDone + 2, {
     type: 'stage.end',
-    id: 'phase-Map',
+    id: SCRIPT_STAGE,
     status: 'completed',
   });
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: { category: 'workflow' },
+    output: emptyRunEndOutput(AgentCategory.ToolUse),
   });
 
   const events = log.events.map(tail);
@@ -577,451 +544,10 @@ export function withWaitingGrandchild(): SessionView {
   ]);
 }
 
-/** `fanOutView` plus a workflow-script proposal pending on the root. */
+/** `fanOutView` plus its script's agent request pending on the root. */
 export function withProposal(): SessionView {
   return foldAll([
     ...buildScenario({ proposal: true }).pending,
     local({ self: [OWNER] }),
-  ]);
-}
-
-interface BoardCall {
-  readonly id: string;
-  readonly phase: string;
-  readonly status: WorkflowCallProgress['status'];
-  /** The child run the call opened; its label doubles as the run's. */
-  readonly child?: {
-    readonly id: RunId;
-    readonly startedAt: number;
-    readonly latest?: string;
-    readonly outputTokens?: number;
-    readonly toolCalls?: number;
-    /** A bash approval the child is waiting on. */
-    readonly wantsBash?: string;
-  };
-  readonly error?: string;
-  readonly attemptNumber?: number;
-  readonly durationMs?: number;
-  readonly costUsd?: number;
-}
-
-/** A run id for a board call: the call id's characters as hex, so calls
- *  that share a prefix still get distinct ids. */
-const runIdOf = (id: string): RunId =>
-  RunIdSchema.parse(
-    [...id].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
-  );
-
-const child = (
-  id: string,
-  startedAt: number,
-  extra: Omit<NonNullable<BoardCall['child']>, 'id' | 'startedAt'> = {},
-): NonNullable<BoardCall['child']> => ({
-  id: runIdOf(id),
-  startedAt,
-  ...extra,
-});
-
-/**
- * Two calls in `Scout`, every kind of row in `Review`, `Verify` and `Report`
- * only declared: a waiting call (its child holds a bash approval), a failed
- * one on its second attempt, four running with live lines and tokens, five
- * finished (one a saved result), two planned, and one plan task unissued.
- */
-const BOARD_CALLS: readonly BoardCall[] = [
-  {
-    id: 'scout:tree',
-    phase: 'Scout',
-    status: 'completed',
-    durationMs: min(3),
-    costUsd: 0.21,
-  },
-  {
-    id: 'scout:deps',
-    phase: 'Scout',
-    status: 'completed',
-    durationMs: min(2),
-    costUsd: 0.12,
-  },
-  {
-    id: 'review:agent',
-    phase: 'Review',
-    status: 'running',
-    child: child('review:agent', BOARD_NOW - min(2), {
-      wantsBash: 'pnpm vitest src/agent',
-      toolCalls: 4,
-    }),
-  },
-  {
-    id: 'review:model',
-    phase: 'Review',
-    status: 'failed',
-    error: 'Context budget exceeded',
-    attemptNumber: 2,
-    child: child('review:model', BOARD_NOW - min(9)),
-  },
-  {
-    id: 'review:tools',
-    phase: 'Review',
-    status: 'running',
-    child: child('review:tools', BOARD_NOW - min(6), {
-      latest: 'Reading 14 files',
-      outputTokens: 4100,
-      toolCalls: 14,
-    }),
-  },
-  {
-    id: 'review:cli',
-    phase: 'Review',
-    status: 'running',
-    child: child('review:cli', BOARD_NOW - min(5), {
-      latest: 'grep dead exports',
-      outputTokens: 2800,
-      toolCalls: 9,
-    }),
-  },
-  {
-    id: 'review:desktop',
-    phase: 'Review',
-    status: 'running',
-    child: child('review:desktop', BOARD_NOW - min(3), {
-      latest: 'typecheck',
-      outputTokens: 1100,
-      toolCalls: 2,
-    }),
-  },
-  {
-    id: 'review:shared',
-    phase: 'Review',
-    status: 'running',
-    child: child('review:shared', BOARD_NOW - min(1)),
-  },
-  {
-    id: 'review:latex',
-    phase: 'Review',
-    status: 'completed',
-    durationMs: min(4),
-    costUsd: 0.4,
-  },
-  {
-    id: 'review:docs',
-    phase: 'Review',
-    status: 'completed',
-    durationMs: min(2),
-    costUsd: 0.18,
-  },
-  {
-    id: 'review:tests',
-    phase: 'Review',
-    status: 'completed',
-    durationMs: min(5),
-    costUsd: 0.33,
-  },
-  {
-    id: 'review:scripts',
-    phase: 'Review',
-    status: 'completed',
-    durationMs: min(1),
-    costUsd: 0.09,
-  },
-  { id: 'review:legal', phase: 'Review', status: 'cached' },
-  { id: 'review:relay', phase: 'Review', status: 'queued' },
-  { id: 'review:auth', phase: 'Review', status: 'queued' },
-];
-
-function boardProgress(entry: BoardCall): WorkflowCallProgress {
-  const base = {
-    id: entry.id,
-    label: entry.id,
-    phase: entry.phase,
-    attemptId: 'attempt-1',
-    kind: 'structured' as const,
-    agent: 'review',
-    model: 'claude-sonnet-4-5',
-    ...(entry.attemptNumber === undefined
-      ? {}
-      : { attemptNumber: entry.attemptNumber }),
-    ...(entry.child ? { childRunId: entry.child.id } : {}),
-  };
-  const terminal = {
-    ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
-    ...(entry.costUsd === undefined ? {} : { costUsd: entry.costUsd }),
-  };
-  switch (entry.status) {
-    case 'failed':
-      return { ...base, status: 'failed', error: entry.error ?? 'failed' };
-    case 'completed':
-      return { ...base, status: 'completed', ...terminal };
-    case 'cancelled':
-      return { ...base, status: 'cancelled', ...terminal };
-    case 'skipped':
-      return { ...base, status: 'skipped', reason: 'user', ...terminal };
-    case 'cached':
-    case 'declared':
-    case 'queued':
-    case 'running':
-      return { ...base, status: entry.status };
-  }
-}
-
-/**
- * A workflow run mid-flight for the run board: the `review` root with its
- * `Scout` phase closed, `Review` open with every row kind, `Verify` and
- * `Report` declared by the plan marker. Each running call's child run
- * carries the facts the board joins (start time, tokens, tool calls, the
- * latest line); the waiting call's child holds a bash approval.
- */
-export function withWaitingCall(): SessionView {
-  return boardView({});
-}
-
-/** The same run with every call finished or failed and the root failed:
- *  a settled board, whose per-call controls have nothing left to act on. */
-export function withSettledRun(): SessionView {
-  return boardView({ settled: true });
-}
-
-/** The same run with `review:model` finished instead of failed: a board
- *  with no failed row and nothing for Next failed to reach. */
-export function withNoFailedCalls(): SessionView {
-  return boardView({ failed: false });
-}
-
-/** The same run held by another live process: every row read-only. */
-export function withForeignOwner(): SessionView {
-  return boardView({ foreign: true });
-}
-
-interface BoardOptions {
-  /** Keep the failed call (default) or finish it. */
-  readonly failed?: boolean;
-  /** Close every open call and the run. */
-  readonly settled?: boolean;
-  /** Another live process holds the run. */
-  readonly foreign?: boolean;
-}
-
-function boardView({
-  failed = true,
-  settled = false,
-  foreign = false,
-}: BoardOptions): SessionView {
-  const calls: readonly BoardCall[] = failed
-    ? BOARD_CALLS
-    : BOARD_CALLS.map((entry) =>
-        entry.status === 'failed'
-          ? { ...entry, status: 'completed', durationMs: min(3), costUsd: 0.2 }
-          : entry,
-      );
-  const log = new Log();
-  const startedAt = BOARD_NOW - min(38);
-  log.emit(ROOT, startedAt, {
-    type: 'run.start',
-    identity: { kind: 'multiAgentWorkflow', workflowName: 'review' },
-    category: AgentCategory.Workflow,
-    worktree: { workingDirectory: '/paper', branch: 'main' },
-    parent: null,
-    userFollowUpSupport: 'unsupported',
-    approvalPolicy: ROOT_POLICY,
-    checkpointId: 'review@chat',
-  });
-  log.emit(ROOT, startedAt, {
-    type: 'run.activate',
-    category: AgentCategory.Workflow,
-  });
-  log.emit(ROOT, startedAt, {
-    type: 'run.config',
-    config: AgentConfigFieldsSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-      model: 'claude-sonnet-4-5',
-      instruction: 'simplification survey over the draft',
-      agent: 'review',
-      inputFiles: ['draft.tex'],
-    }),
-  });
-  log.emit(ROOT, startedAt, {
-    type: 'usage',
-    usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
-  });
-  const phases = ['Scout', 'Review', 'Verify', 'Report'];
-  log.emit(ROOT, startedAt + 1, {
-    type: 'workflow.plan',
-    attemptId: 'attempt-1',
-    phases: phases.map((title) => ({ title })),
-    tasks: [
-      ...calls.map((entry) => ({
-        id: entry.id,
-        label: entry.id,
-        phase: entry.phase,
-      })),
-      { id: 'review:release', label: 'review:release', phase: 'Review' },
-      { id: 'verify', label: 'verify', phase: 'Verify' },
-      { id: 'report', label: 'report', phase: 'Report' },
-    ],
-  });
-
-  const openPhase = (title: string, at: number): void => {
-    log.emit(ROOT, at, {
-      type: 'stage.start',
-      id: `phase-${title}`,
-      label: title,
-      kind: 'phase',
-      index: phases.indexOf(title),
-      total: phases.length,
-    });
-  };
-  const closePhase = (title: string, at: number): void => {
-    log.emit(ROOT, at, {
-      type: 'stage.end',
-      id: `phase-${title}`,
-      status: 'completed',
-    });
-  };
-  const card = (entry: BoardCall, at: number): void => {
-    log.emit(ROOT, at, {
-      type: 'workflow.call',
-      logId: `call-${entry.id}`,
-      stageId: `phase-${entry.phase}`,
-      call: boardProgress(entry),
-    });
-  };
-
-  openPhase('Scout', startedAt + 2);
-  for (const entry of calls.filter((c) => c.phase === 'Scout')) {
-    card(entry, startedAt + 3);
-  }
-  closePhase('Scout', startedAt + min(5));
-  openPhase('Review', startedAt + min(5) + 1);
-  let at = startedAt + min(5) + 2;
-  for (const entry of calls.filter((c) => c.phase === 'Review')) {
-    at += 1;
-    if (entry.child) {
-      const { child: kid } = entry;
-      log.emit(kid.id, kid.startedAt, {
-        type: 'run.start',
-        identity: { kind: 'agent', agent: `custom:${entry.id}` },
-        category: AgentCategory.ToolUse,
-        parent: log.parent(ROOT),
-        userFollowUpSupport: 'unsupported',
-      });
-      log.emit(kid.id, kid.startedAt, {
-        type: 'run.config',
-        config: AgentConfigFieldsSchema.parse({
-          agentCategory: AgentCategory.ToolUse,
-          model: 'claude-sonnet-4-5',
-          instruction: entry.id,
-        }),
-      });
-      log.emit(kid.id, kid.startedAt, {
-        type: 'run.activate',
-        category: AgentCategory.ToolUse,
-      });
-      log.emit(kid.id, kid.startedAt, {
-        type: 'run.position',
-        payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
-      });
-      if (kid.latest) {
-        log.emit(kid.id, kid.startedAt + 1, {
-          type: 'log',
-          level: 'info',
-          messageType: MESSAGE_TYPES.USER_MESSAGE,
-          message: kid.latest,
-        });
-      }
-      if (kid.toolCalls !== undefined) {
-        log.emit(kid.id, kid.startedAt + 2, {
-          type: 'conversation.progress',
-          progress: { toolCallCount: kid.toolCalls },
-        });
-      }
-      if (kid.outputTokens !== undefined) {
-        log.emit(kid.id, kid.startedAt + 3, {
-          type: 'usage',
-          usage: {
-            inputTokens: kid.outputTokens * 5,
-            outputTokens: kid.outputTokens,
-            cost: kid.outputTokens / 20_000,
-          },
-        });
-      }
-      if (kid.wantsBash) {
-        log.emit(kid.id, kid.startedAt + 4, {
-          type: 'request.opened',
-          requestId: `req-${entry.id}`,
-          payload: {
-            kind: 'bash',
-            data: {
-              requestId: `req-${entry.id}`,
-              allowBypass: true,
-              runId: kid.id,
-              command: kid.wantsBash,
-            },
-          },
-        });
-      }
-      // A call already terminal when the board opens carries its child's
-      // outcome too: the row's status and the child run's phase are one
-      // fact, so the tree never reads "Running" under a finished call.
-      if (entry.status === 'failed' || entry.status === 'completed') {
-        log.emit(kid.id, kid.startedAt + min(2), {
-          type: 'run.end',
-          outcome: entry.status === 'completed' ? 'completed' : 'failed',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
-        });
-      }
-    }
-    card(entry, at);
-  }
-  if (settled) {
-    // Every open call closes: the running children finish, the waiting one
-    // gets its answer, the planned calls never issue; the failed call stays
-    // failed and takes the run down with it.
-    const closedAt = BOARD_NOW - sec(30);
-    for (const entry of calls.filter((c) => c.phase === 'Review')) {
-      if (entry.status === 'running' && entry.child) {
-        const { child: kid } = entry;
-        if (kid.wantsBash) {
-          log.emit(kid.id, closedAt - 2, {
-            type: 'request.decided',
-            requestId: `req-${entry.id}`,
-            decision: { action: 'approve' },
-          });
-        }
-        log.emit(kid.id, closedAt - 1, {
-          type: 'run.end',
-          outcome: 'completed',
-          output: emptyRunEndOutput(AgentCategory.ToolUse),
-        });
-        card(
-          {
-            ...entry,
-            status: 'completed',
-            durationMs: closedAt - kid.startedAt,
-            costUsd: (kid.outputTokens ?? 500) / 20_000,
-          },
-          closedAt,
-        );
-      } else if (entry.status === 'queued') {
-        card({ ...entry, status: 'cancelled' }, closedAt);
-      }
-    }
-    const outcome = failed ? 'failed' : 'completed';
-    log.emit(ROOT, closedAt + 1, {
-      type: 'stage.end',
-      id: 'phase-Review',
-      status: outcome,
-    });
-    log.emit(ROOT, closedAt + 2, {
-      type: 'run.end',
-      outcome,
-      output: { category: 'workflow' },
-    });
-  }
-  const ids = [ROOT, ...calls.flatMap((c) => c.child?.id ?? [])];
-  return foldAll([
-    subscribe(...ids),
-    ...log.events.map(tail),
-    log.drained(),
-    local(foreign ? { self: [], dead: [] } : { self: [OWNER] }),
   ]);
 }

@@ -18,10 +18,6 @@ import { html, nothing, type TemplateResult } from 'lit';
 // Local imports - shared utilities
 import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import {
-  DELEGATE_MULTI_AGENTS_TOOL_NAME,
-  DELEGATION_TOOL_CATEGORY,
-} from '@shared/constants/delegationTools';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { normalizeToolName } from '@shared/tools/toolDisplayName';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
@@ -53,9 +49,18 @@ import '@progressView/frontend/components/ToolTimer';
 /** Header width for this surface; the model carries the preview untruncated. */
 const HEADER_PREVIEW_MAX_CHARS = 120;
 
-/** Format tool use log entry as TemplateResult. */
-export function formatToolUseTemplate(row: ToolRow): FormatResult {
+/**
+ * Format tool use log entry as TemplateResult. On a run that is
+ * `interrupted` (its process died), an open call is not running: nothing
+ * works on it until Resume, so it shows no spinner or timer.
+ */
+export function formatToolUseTemplate(
+  row: ToolRow,
+  interrupted = false,
+): FormatResult {
   const { toolUse, model } = row;
+  const running = model.isInProgress && !interrupted;
+  const stopped = model.isInProgress && interrupted;
   const { toolName, input } = toolUse;
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
@@ -64,8 +69,10 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   let iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   if (model.isUserFeedback) {
     iconName = 'comment';
-  } else if (model.isInProgress) {
+  } else if (running) {
     iconName = SPINNER_ICON_NAME;
+  } else if (stopped) {
+    iconName = 'circle-exclamation';
   } else {
     iconName = getToolIconName(normalizedToolName, showAsError);
   }
@@ -126,33 +133,25 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }
 
-  // Workflow scripts already have a compact live summary and can be very
-  // large, so keep their source behind disclosure even while launching.
-  const shouldOpen =
-    model.isInProgress && toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME;
+  const shouldOpen = running;
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);
   // prettier-ignore
-  const timerTemplate = model.isInProgress ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
+  const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
 
   // Delegation row extra: "Edit as new task" loads the subagent's agent,
   // model, instruction and files into the launcher (shown in summary row)
-  const isProposalBearingDelegation = Object.hasOwn(
-    DELEGATION_TOOL_CATEGORY,
-    toolName,
-  );
-  const proposal =
-    isProposalBearingDelegation && !model.isInProgress
-      ? parseDelegationToolInput(input, toolName)
-      : null;
+  const proposal = model.isInProgress
+    ? null
+    : parseDelegationToolInput(input, toolName);
 
   // A real <button> (not a role="button" span) so wa-details' own summary
   // click handler recognizes it as interactive and skips its toggle — see
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation. The click binding carries the parsed proposal
   // itself, so nothing has to survive a round trip through a DOM attribute.
-  // A workflow proposal carries its files; a delegate_agent input has none.
+  // A workflow proposal carries its files; a tool-use one has none.
   const copied =
     proposal?.agentCategory === AgentCategory.Workflow
       ? 'agent, model, instruction and files'
@@ -162,7 +161,9 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's ${copied} into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Edit as new task</button>`
     : nothing;
   // prettier-ignore
-  const extraContent = html`${timerTemplate}${setupButton}`;
+  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">Interrupted</span>` : nothing;
+  // prettier-ignore
+  const extraContent = html`${timerTemplate}${stoppedTemplate}${setupButton}`;
 
   return buildToolUseDetails({
     row,
@@ -173,7 +174,8 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     defaultOpen: shouldOpen,
     extraClasses: {
       'tool-use-user-feedback': model.isUserFeedback,
-      'tool-use-in-progress': model.isInProgress,
+      'tool-use-in-progress': running,
+      'tool-use-interrupted': stopped,
     },
     extraContent,
   });

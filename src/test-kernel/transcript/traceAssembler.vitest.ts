@@ -148,7 +148,6 @@ describe('assembleTrace', () => {
         type: 'run.start',
         origin: null,
         parent: null,
-        checkpointId: null,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       });
       expect(trace.events).toContainEqual(

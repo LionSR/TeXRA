@@ -58,42 +58,34 @@ recommended groups at the bottom are a good starting point.
 
 ## Agent delegation
 
-- `delegate_workflow` — delegate to a workflow agent for whole-document
-  operations. Pass `agent`, `model`, `instruction`, `inputFiles`. Returns
-  asynchronously via the follow-up queue.
-- `delegate_multi_agents` — advanced opt-in tool for a durable sequence of
-  workflow-agent calls with predetermined branching and fan-out. Pass a default
-  `agent` and exactly one of the complete `script` source or an existing
-  `scriptPath`. Submitted source is saved as an
-  editable, non-overwriting workspace draft and its path is returned for later
-  path-based retries. Optional JSON `args` and role-separated `files` apply in
-  either mode. The selected workspace files are fixed for the run and available
-  through the immutable `files.inputFiles`, `files.contextFiles`, and
-  `files.mediaFiles` arrays. The script begins with an exported `meta` object
-  containing `name` and `description`. The body is a generator: `agent`,
-  `all`, `forEach`, `attempt`, `retry`, and `timeout` build operations that
-  run when the script writes `yield*` before them (`await` is a syntax error),
-  and `phase`, `log`, and ordinary JavaScript control flow do the rest. A
-  failed call throws `AgentFailed` (a skipped one `Skipped`), `all` fails fast,
-  and `attempt` turns a failure into a value. Workflow-agent calls accept the same
-  three file roles. Any call may declare an available model short name with
-  `model`; omitted models follow ordinary delegation policy.
-  `agent(prompt, { agentName, model, schema })` instead runs a named tool-use
-  agent with no file options; it finishes by calling
-  `submit_output`, and the call resolves to an envelope whose `.structured`
-  contains the validated object. The optional
-  `meta.tasks` plan declares `{ id, label, phase? }` records so progress views
-  can show pending work before any model call starts. A task phase must name a
-  title in `meta.phases`, which accepts either title strings or
-  `{ title, detail? }` objects; calls reference the plan with
-  `agent(prompt, { id })`. Matching repeated labels or phases are tolerated,
-  while conflicts fail. Scripts with a data-dependent call set omit the plan.
-  Present in the
-  built-in `orchestrator` agent's tool list, but gated by the "Workflow
-  Script" switch in Settings → Tools (off by default for new installs), which
-  disables the tool for every agent regardless of its configured tool list.
-- `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
-  `model`, and `instruction`.
+- `agent` — run a named agent as a child of this run. Pass `prompt` and
+  `agentName`; the named agent decides the category. A workflow agent takes
+  `inputFiles` (rewritten, one revised document each) plus optional
+  `contextFiles`, `mediaFiles`, `outputFiles`, `extractFigures`, and
+  `extractTikz`; a tool-use agent works with its own tools and may take
+  `schema` (a JSON Schema object; its value returns as `structured`) and
+  `working_directory`. Both take `model` (with an `@effort` suffix),
+  `memories`, `label`, and `timeoutMs`. Called directly, the child runs in
+  the background and its result arrives as a follow-up message (a one-shot
+  run waits). Gated by the "Multi-Agent Workflow" switch in Settings → Tools,
+  which removes it from every agent when off.
+- `script` — run a JavaScript program that calls the agent's other tools.
+  `code` is the body of an async function: `await tools.<name>(args)` or
+  `await agent(prompt, opts)`, `Promise.all` / `Promise.allSettled`,
+  `try`/`catch`, `phase(title)`, and `console.log`. In a script, `agent()`
+  waits for the child and resolves to
+  `{ category, response | outputs, structured?, outcome, cost }`, or rejects
+  with an Error named `AgentFailed`, `TimedOut`, `Skipped`,
+  `ModelUnavailable`, `CallLimit`, or `DuplicateCall`; give otherwise
+  identical calls distinct `id`s. One approval request covers every `agent`
+  call in the script and shows its source. There are no timers, no
+  `Date.now()`, no `Math.random()`, and no imports, so an interrupted script
+  replays exactly and finished calls are not run again. `run_in_background:
+true` runs it as its own background run that delivers one result and a
+  summary as a follow-up; `timeoutMs` is the wall clock (1 s to 24 h,
+  default 60 min). Use it when the whole fan-out and join is known up front;
+  call `agent` directly when the next step depends on reading the last
+  result.
 - `executions` — view execution history and manage running executions;
   `action: "send"` on `/executions/<id>` messages another run, such as a
   follow-up to a WAITING subagent.
@@ -103,14 +95,14 @@ recommended groups at the bottom are a good starting point.
 
 - `codex` — spin off an OpenAI Codex coding agent in its own sandbox
   (separate CLI process, `sandbox_mode`-controlled). Async and multi-turn
-  like `delegate_agent`; requires the Codex CLI and `codex login` (or
+  like a tool-use `agent` call; requires the Codex CLI and `codex login` (or
   `OPENAI_API_KEY`).
 - `claude_code` — spin off a separate Claude Code agent via the Claude Agent
   SDK, with independent file editing, search, and shell access in its own
   workspace (permission-mode controlled, not sandboxed). Async and
-  multi-turn like `delegate_agent`; requires the Claude Code CLI and an
+  multi-turn like a tool-use `agent` call; requires the Claude Code CLI and an
   Anthropic API key or OAuth session. `codex` and `claude_code` are both
-  independent external coders distinct from the in-process `delegate_agent`
+  independent external coders distinct from the in-process `agent`
   specialists — for parallel or isolated edits, run them against a git
   worktree.
 
@@ -166,10 +158,9 @@ crossref_search, web_search, zotero_search, zotero_add,
 zotero_export`
 
 **Orchestrator agent:**
-`bash, read_file, write_file, glob, grep, delegate_workflow,
-delegate_agent, executions, accept_run_files, todo_write`, optionally
-`delegate_multi_agents` for pipelines with a predetermined fan-out/join
-structure (off by default — see above).
+`bash, read_file, write_file, glob, grep, agent, script, executions,
+accept_run_files, todo_write`. `agent` needs the "Multi-Agent Workflow"
+switch on (see above).
 
 **Computation agent:**
 `bash, read_file, write_file, glob, grep, wolfram`

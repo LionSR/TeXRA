@@ -5,7 +5,7 @@
  * to elide any of them.
  *
  * Before this module the two hosts assembled tool rows independently. The
- * progress view parsed delegation, workflow-script and MCP inputs into typed
+ * progress view parsed delegation and MCP inputs into typed
  * sections while the CLI fell through to `JSON.stringify(input)`; the CLI
  * showed output only for `bash` and MCP while the progress view showed it for
  * everything else. Both halves live here now — sections are data, never
@@ -210,7 +210,8 @@ function headerSummaryText(summary: string): string {
 /**
  * The header preview both hosts show, and the only statement of its
  * precedence: a `bash`-kind call is named by the model's description, else its
- * command (the input preview), else its summary; every other tool reports its
+ * command (the input preview), else its summary; a `script` by its title, else
+ * "Script"; every other tool reports its
  * own summary first and falls back to the input preview while it is still in
  * flight. An
  * `executions` call names its child runs by label: the session fold passes
@@ -228,7 +229,10 @@ function toolHeaderPreview(
   const inputPreview =
     labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));
   const summary = headerSummaryText(headerSummary);
-  if (toolDisplayKind(toolName) !== 'bash') return summary || inputPreview;
+  const kind = toolDisplayKind(toolName);
+  // A script is named by its title (the input preview) in every state.
+  if (kind === 'script') return inputPreview;
+  if (kind !== 'bash') return summary || inputPreview;
   // The model's description names a command; the command itself stays in the
   // row's code section.
   const description =

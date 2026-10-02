@@ -26,7 +26,6 @@ import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
   isDisplaySessionEvent,
-  isTerminalWorkflowCallProgress,
   type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
@@ -169,11 +168,10 @@ export const sessionEventsLayer = Layer.effect(
     // What each aggregate has open, kept as this publisher commits it, so
     // closing it at a park, an end or a host exit reads no rows. The fold
     // closes every stream at a phase move that rests or ends the run, and so
-    // does this; stages and workflow calls close only on their own rows,
-    // there and here. Work some earlier process opened is not here: its
-    // streams close at that same phase move, and a stage or call it left
-    // open reads as its run's settled outcome once the run is durably final
-    // (`taskGroupDisplayStatus`, `workflowRunModel`'s interrupted card).
+    // does this; stages close only on their own rows, there and here. Work
+    // some earlier process opened is not here: its streams close at that
+    // same phase move, and a stage it left open reads as its run's settled
+    // outcome once the run is durably final (`taskGroupDisplayStatus`).
     const open = new Map<AggregateId, Map<string, OpenWork>>();
     // Each run's follow-ups, kept the same way by the one reducer
     // (`applyRunRow`). Rows an earlier owner committed enter where a claim
@@ -233,13 +231,6 @@ export const sessionEventsLayer = Layer.effect(
           close('stream', row.id);
         } else if (row.type === 'stage.end') {
           close('stage', row.id);
-        } else if (row.type === 'workflow.call') {
-          if (isTerminalWorkflowCallProgress(row.call)) {
-            close('call', row.logId);
-          } else {
-            const { logId: id, stageId, call } = row;
-            work.set(id, { kind: 'call', id, stageId, call });
-          }
         } else {
           continue;
         }

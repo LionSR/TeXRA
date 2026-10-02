@@ -26,12 +26,6 @@
  * (7.2): at the replay marker every run no listing row of that sequence
  * named is removed the way a tombstone removes it.
  *
- * The run model (`transcript.run`) is derived only when one of its inputs
- * moved: the run's own `run.start`, a status change, a transcript entry the
- * model reads (a workflow card, a group boundary, a plan), or a
- * direct child's progress. Folding a frame defers that derivation to the
- * end of the frame, so a replay of R events derives each board once.
- *
  * Publication (D5): returned views are immutable; untouched branches retain
  * identity. writableMap and the transcript fold copy each changed container
  * at most once per fold, and writes stop when fold returns. No-op writes keep
@@ -85,10 +79,6 @@ import {
   runInterruptedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
-import {
-  workflowRunModel,
-  type ChildRunProgress,
-} from '@shared/runs/workflowRunModel';
 import { isSettledRow, rowHeadline, type TranscriptRow } from '@ui/transcript';
 import {
   applyRunRow,
@@ -102,7 +92,6 @@ import { foldTranscriptEvent } from './transcriptFold';
 import {
   clearLiveText,
   foldLiveText,
-  runModelInputs,
   settleTranscript,
   transcriptActivity,
 } from './transcriptReads';
@@ -114,16 +103,13 @@ import {
 } from './transcriptState';
 
 import { runActions } from './runActions';
-import { emptySessionView, isLiveRun, loopCoordinate } from './sessionView';
+import { emptySessionView, loopCoordinate, rollupOf } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
-/** Workflow-script run ids whose run model a batch derives at its end. */
-type DeferredRunModels = Set<RunId> | null;
 /** One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
- *  replay: every input in order, with each touched workflow board's run
- *  model derived once at the end instead of once per event. */
+ *  replay: every input in order. */
 export function fold(
   view: SessionView,
   input: FoldInput | readonly FoldInput[],
@@ -136,15 +122,11 @@ export function fold(
   // One call publishes one level: nothing this call did not copy is written.
   owned = new WeakSet();
   resetTranscriptOwnership();
-  const frame = Array.isArray(input);
-  const deferred = frame ? new Set<RunId>() : null;
   let next = view;
-  for (const each of frame ? (input as readonly FoldInput[]) : [input]) {
-    next = foldWith(next, each as FoldInput, deferred);
-  }
-  for (const runId of deferred ?? []) {
-    const run = next.runs.get(runId);
-    if (run) setRun(next, withRunModel(next, run));
+  for (const each of Array.isArray(input)
+    ? (input as readonly FoldInput[])
+    : [input]) {
+    next = foldWith(next, each as FoldInput);
   }
   // A `debug` input starts fresh indexes; the ones it left name `next` too.
   indexes.head = next;
@@ -152,11 +134,7 @@ export function fold(
   return next;
 }
 
-function foldWith(
-  view: SessionView,
-  input: FoldInput,
-  deferred: DeferredRunModels,
-): SessionView {
+function foldWith(view: SessionView, input: FoldInput): SessionView {
   // The envelope is replaced, never mutated: work on a copy whose containers
   // are shared with the previous value until this call first writes one.
   const next: SessionView = { ...view };
@@ -168,18 +146,18 @@ function foldWith(
       if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);
       }
-      return foldDurable(next, input.event, deferred, input.read) ? next : view;
+      return foldDurable(next, input.event, input.read) ? next : view;
     }
     case 'chunk':
       return foldTextChunk(next, input) ? next : view;
     case 'local':
-      foldLocal(next, input.local, deferred);
+      foldLocal(next, input.local);
       return next;
     case 'subscriptions':
-      foldSubscriptions(next, input.set, deferred);
+      foldSubscriptions(next, input.set);
       return next;
     case 'drained':
-      reconcileExistence(next, input.existence, deferred);
+      reconcileExistence(next, input.existence);
       next.cursor = input.cursor;
       return next;
     case 'blocked': {
@@ -187,7 +165,7 @@ function foldWith(
       const run = runId === null ? undefined : next.runs.get(runId);
       if (run === undefined || run.blocked !== null) return view;
       setRun(next, { ...run, blocked: input.reason });
-      walkUp(next, run.id, run.id, deferred);
+      walkUp(next, run.id);
       return next;
     }
     case 'replay.complete': {
@@ -198,10 +176,10 @@ function foldWith(
       const { listed } = sessionIndexesOf(next);
       for (const id of [...next.runs.keys()]) {
         if (!listed.has(qualifyAggregateId('run', id)))
-          foldRunRemoved(next, id, deferred);
+          foldRunRemoved(next, id);
       }
       listed.clear();
-      reconcileExistence(next, input.existence, deferred);
+      reconcileExistence(next, input.existence);
       return next;
     }
   }
@@ -211,7 +189,6 @@ function foldWith(
 function reconcileExistence(
   view: SessionView,
   existence: ExistenceReconciliation,
-  deferred: DeferredRunModels,
 ): void {
   const { claims } = sessionIndexesOf(view);
   for (const { aggregateId, ownerId } of existence.claims) {
@@ -221,7 +198,7 @@ function reconcileExistence(
     const run = view.runs.get(target.id);
     if (!run || run.ownerId === ownerId) continue;
     setRun(view, { ...run, ownerId });
-    walkUp(view, run.id, run.id, deferred);
+    walkUp(view, run.id);
   }
   for (const id of existence.removedAggregateIds) {
     claims.delete(id);
@@ -232,7 +209,7 @@ function reconcileExistence(
     // not started yet, so ending the tier here would drop the rows of a
     // stream a subscription named before its `run.start` committed.
     const target = aggregateTarget(id);
-    if (target.kind === 'run') foldRunRemoved(view, target.id, deferred);
+    if (target.kind === 'run') foldRunRemoved(view, target.id);
     if (
       target.kind === 'inquiry' &&
       view.inquiries.some((inquiry) => inquiry.threadId === target.id)
@@ -379,9 +356,10 @@ function createRun(
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
-      isPlainAgentIdentity(identity),
+      (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
+    parentCard: event.parentCard ?? null,
     ancestors: [],
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
@@ -598,26 +576,13 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const unreadable = run.blocked
     ? runBlockedMessage(run.blocked)
     : local.unreadable.find((u) => u.runId === run.id)?.detail;
-  const rollup = { total: 0, running: 0, finished: 0 };
-  let descendantWaiting = false;
-  let descendantNeedsUser = false;
-  for (const childId of run.childIds) {
+  const children = run.childIds.flatMap((childId) => {
     const child = view.runs.get(childId);
-    if (!child) continue;
-    // A child parked between turns (held) or paused, nothing asked of the
-    // user, has delivered its turn: it counts as finished, not running.
-    const idle =
-      child.status === RUN_PHASE.WAITING &&
-      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
-    rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
-    rollup.finished +=
-      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
-      child.rollup.finished;
-    if (child.approval !== 'none') descendantWaiting = true;
-    if (child.forceExpanded) descendantNeedsUser = true;
-  }
+    return child === undefined ? [] : [child];
+  });
+  const rollup = rollupOf(children);
+  const descendantWaiting = children.some((child) => child.approval !== 'none');
+  const descendantNeedsUser = children.some((child) => child.forceExpanded);
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
@@ -669,93 +634,15 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Workflow-script run model
-// ---------------------------------------------------------------------------
-
-function isWorkflowScriptRun(run: RunView): boolean {
-  return run.identity.kind === 'multiAgentWorkflow';
-}
-
-function childProgressOf(child: RunView): ChildRunProgress {
-  const totals = child.usage;
-  return {
-    ...(child.runStartedAt === null
-      ? {}
-      : { runStartedAt: child.runStartedAt }),
-    toolCallCount: child.conversationProgress.toolCallCount,
-    outputTokens: totals.outputTokens,
-    costUsd: totals.cost,
-  };
-}
-
-/** Whether a child's change moved a value its parent's run board reads. */
-function childProgressChanged(prev: RunView, next: RunView): boolean {
-  if (prev === next) return false;
-  return (
-    prev.runStartedAt !== next.runStartedAt ||
-    prev.conversationProgress.toolCallCount !==
-      next.conversationProgress.toolCallCount ||
-    prev.usage.outputTokens !== next.usage.outputTokens ||
-    prev.usage.cost !== next.usage.cost
-  );
-}
-
-/** `transcript.run` for a workflow-script run, derived now. */
-function withRunModel(view: SessionView, run: RunView): RunView {
-  if (!isWorkflowScriptRun(run)) return run;
-  const childProgress = new Map<RunId, ChildRunProgress>();
-  for (const childId of run.childIds) {
-    const child = view.runs.get(childId);
-    if (child) childProgress.set(childId, childProgressOf(child));
-  }
-  const transcript = run.transcript;
-  const runModel = workflowRunModel({
-    ...runModelInputs(transcript),
-    runPhase: run.status,
-    // A terminal outcome with nothing left to settle its cards.
-    runDurablyFinal: run.durableOutcome !== null,
-    childProgress,
-  });
-  return {
-    ...run,
-    transcript: replaceTranscript(transcript, { run: runModel }),
-  };
-}
-
-/** Derive the run model now, or note the run for the end of the batch. */
-function runModelAt(
-  view: SessionView,
-  run: RunView,
-  deferred: DeferredRunModels,
-): RunView {
-  if (!isWorkflowScriptRun(run)) return run;
-  if (deferred) {
-    deferred.add(run.id);
-    return run;
-  }
-  return withRunModel(view, run);
-}
-
-/**
- * Re-derive the aggregates of `startId` and every ancestor above it. The run
- * model is re-derived at `boardId` only: a board joins its direct children's
- * progress, so a grandchild's change stops at its own parent.
- */
-function walkUp(
-  view: SessionView,
-  startId: RunId | null,
-  boardId: RunId | null,
-  deferred: DeferredRunModels,
-): void {
+/** Re-derive the aggregates of `startId` and every ancestor above it. */
+function walkUp(view: SessionView, startId: RunId | null): void {
   const seen = new Set<RunId>();
   let id = startId;
   while (id !== null && !seen.has(id)) {
     seen.add(id);
     const current = view.runs.get(id);
     if (!current) return;
-    let next = withAggregates(view, current);
-    if (id === boardId) next = runModelAt(view, next, deferred);
+    const next = withAggregates(view, current);
     if (next !== current) setRun(view, next);
     id = current.parentId;
   }
@@ -796,7 +683,6 @@ function workflowOperationalLatestLine(
     }
     if (
       row.kind === 'error' ||
-      row.kind === 'workflowTask' ||
       ((row.kind === 'assistant' || row.kind === 'log') &&
         row.messageType === MESSAGE_TYPES.DEFAULT)
     ) {
@@ -835,8 +721,7 @@ function latestConversationLine(
  * an append-only scrollback prints rows in order, so a row is settled for
  * printing only once every row before it is. Only the tail past the previous
  * frontier is walked. A final run settles every open row except the two
- * kinds whose state bridge cleanup can still replace (a compaction block, a
- * workflow card).
+ * kind whose state bridge cleanup can still replace (a compaction block).
  */
 function advanceSettledRows(
   rows: readonly TranscriptRow[],
@@ -847,16 +732,10 @@ function advanceSettledRows(
   while (index < rows.length) {
     const row = rows[index];
     if (!isSettledRow(row, index < rows.length - 1)) {
-      // Bridge cleanup can still replace a planned/running compaction or
-      // workflow call after a cancellation, so those two settle only on their
-      // own typed terminal state, never on the final stream status.
-      if (
-        row.kind === 'compactionActivity' ||
-        row.kind === 'workflowTask' ||
-        !runFinal
-      ) {
-        break;
-      }
+      // Bridge cleanup can still replace a planned/running compaction after
+      // a cancellation, so it settles only on its own typed terminal state,
+      // never on the final stream status.
+      if (row.kind === 'compactionActivity' || !runFinal) break;
     }
     index += 1;
   }
@@ -935,8 +814,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
-    case 'workflow.plan':
-    case 'workflow.call':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
@@ -976,7 +853,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         model,
         modelLabel: model === null ? null : getModelLabel(model),
         command: run.identity.kind === 'process' ? config.instruction : null,
-        inputFiles: config.inputFiles ?? [],
+        inputFiles: 'inputFiles' in config ? config.inputFiles : [],
       };
     }
     case 'run.model':
@@ -1225,7 +1102,6 @@ function relink(
 function foldDurable(
   view: SessionView,
   event: DisplaySessionEvent,
-  deferred: DeferredRunModels,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
   const traceChanged =
@@ -1233,7 +1109,7 @@ function foldDurable(
     (isTranscriptEvent(event) ||
       phaseMoveOf(event) !== null ||
       ['run.config', 'run.model'].includes(event.type))
-      ? foldTraceEvent(view, event, deferred)
+      ? foldTraceEvent(view, event)
       : false;
   const listingType = listingKeyOf(event);
   if (listingType === null) return traceChanged;
@@ -1257,8 +1133,7 @@ function foldDurable(
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'run.removed')
-    return foldRunRemoved(view, runId, deferred);
+  if (event.type === 'run.removed') return foldRunRemoved(view, runId);
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
@@ -1295,7 +1170,7 @@ function foldDurable(
 
   if (created || next.parentId !== before.parentId) {
     relink(view, next, created ? null : before.parentId);
-    if (!created) walkUp(view, before.parentId, before.parentId, deferred);
+    if (!created) walkUp(view, before.parentId);
   }
   if (next.label !== before.label)
     for (const childId of next.childIds) refreshAncestors(view, childId);
@@ -1304,24 +1179,8 @@ function foldDurable(
   const aggregated = statusMoved
     ? withAggregates(view, withTranscriptFacts(next))
     : withAggregates(view, next);
-  // The run model's own inputs: the run's existence and status.
-  const runInputsMoved = created || statusMoved;
-  setRun(
-    view,
-    runInputsMoved ? runModelAt(view, aggregated, deferred) : aggregated,
-  );
-  // A board's inputs from a child: the child being under it (created, or
-  // moved there by `relink` above) and the child's progress.
-  walkUp(
-    view,
-    next.parentId,
-    created ||
-      next.parentId !== before.parentId ||
-      childProgressChanged(before, next)
-      ? next.parentId
-      : null,
-    deferred,
-  );
+  setRun(view, aggregated);
+  walkUp(view, next.parentId);
   return true;
 }
 
@@ -1329,7 +1188,6 @@ function foldDurable(
 function foldTraceEvent(
   view: SessionView,
   event: DisplaySessionEvent,
-  deferred: DeferredRunModels,
 ): boolean {
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
@@ -1350,11 +1208,7 @@ function foldTraceEvent(
   if (transcript === run.transcript) return true;
   setRun(
     view,
-    runModelAt(
-      view,
-      withTranscriptFacts({ ...run, transcript, lastTimestamp: event.at }),
-      deferred,
-    ),
+    withTranscriptFacts({ ...run, transcript, lastTimestamp: event.at }),
   );
   return true;
 }
@@ -1365,11 +1219,7 @@ function foldTraceEvent(
  * transcript tier. The run's `latest` entries stay: the lifecycle one is what
  * outranks a replayed `run.start` beneath the tombstone.
  */
-function foldRunRemoved(
-  view: SessionView,
-  runId: RunId,
-  deferred: DeferredRunModels,
-): boolean {
+function foldRunRemoved(view: SessionView, runId: RunId): boolean {
   const run = view.runs.get(runId);
   if (!run) return false;
   dropRun(view, run);
@@ -1396,7 +1246,7 @@ function foldRunRemoved(
       ...parent,
       childIds: withoutId(parent.childIds, run.id),
     });
-    walkUp(view, parent.id, parent.id, deferred);
+    walkUp(view, parent.id);
   }
   // A child whose parent is gone is top-level: no dangling edge, no
   // ancestors (5.2, `ancestors`).
@@ -1415,11 +1265,7 @@ function foldRunRemoved(
  * set and those entering or leaving `unreadable` (5.2, "Incremental"), so an
  * owner exiting recomputes exactly the runs it owned, never the view.
  */
-function foldLocal(
-  view: SessionView,
-  local: LocalRuntimeState,
-  deferred: DeferredRunModels,
-): void {
+function foldLocal(view: SessionView, local: LocalRuntimeState): void {
   const indexes = sessionIndexesOf(view);
   const previous = indexes.local;
   indexes.local = local;
@@ -1443,7 +1289,7 @@ function foldLocal(
   const [before, after] = [details(previous), details(local)];
   for (const runId of new Set([...before.keys(), ...after.keys()]))
     if (before.get(runId) !== after.get(runId)) touched.add(runId);
-  for (const runId of touched) walkUp(view, runId, runId, deferred);
+  for (const runId of touched) walkUp(view, runId);
 }
 
 /**
@@ -1455,7 +1301,6 @@ function foldLocal(
 function foldSubscriptions(
   view: SessionView,
   set: readonly TranscriptSubscription[],
-  deferred: DeferredRunModels,
 ): void {
   const subscribed = new Map(set.map((s) => [s.id, s.fromSeq]));
   for (const [id, fromSeq] of subscribed) {
@@ -1472,6 +1317,6 @@ function foldSubscriptions(
       ...run,
       transcript: emptyTranscript(),
     });
-    setRun(view, runModelAt(view, evicted, deferred));
+    setRun(view, evicted);
   }
 }

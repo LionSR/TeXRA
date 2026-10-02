@@ -15,24 +15,16 @@ import {
 
 import { App, type AppProps } from '@cli/chat/tui/App';
 import { ESC_META_CHORD_INTERRUPT_DELAY_MS } from '@cli/chat/tui/appInteractionPolicy';
-import {
-  currentApproval,
-  type ApprovalPayload,
-} from '@cli/chat/tui/state/approvalQueue';
 import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import {
   selectedRunId,
-  closeForegroundReader,
   focusRun,
   foregroundReader,
   infoPane,
   openInfoPane,
-  openWorkflowPopup,
   resetCliState,
   rootRunId,
-  updateWorkflowPopupView,
-  workflowPopupView,
   actOnSurface,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -42,11 +34,9 @@ import {
   type RunId,
   type RunIdentity,
   type RunPhase,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { runUnreadableMessage } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -58,8 +48,6 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import type { TranscriptRow } from '@ui/transcript';
-import type { WorkflowTaskRow } from '@ui/transcript';
 import {
   bindTestSessionView,
   makeRunView,
@@ -105,19 +93,6 @@ let seededRequests: SessionView['requests'] = [];
 function syncSeededView(): void {
   seedView(viewWith([...seeded.values()], { requests: seededRequests }));
 }
-/** One pending request as its `request.opened` fact folds. */
-function seedRequest(payload: ApprovalPayload): void {
-  seededRequests = [
-    ...seededRequests,
-    {
-      runId: payload.data.runId as RunId,
-      requestId: payload.data.requestId,
-      payload,
-      thread: null,
-    },
-  ];
-  syncSeededView();
-}
 /** Every pending request decided: the runtime's `request.decided` folded. */
 function clearSeededRequests(): void {
   seededRequests = [];
@@ -132,21 +107,6 @@ function seedRun(
   const current = seeded.get(id);
   seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
   syncSeededView();
-}
-function transcriptOf(rows: readonly TranscriptRow[]): RunView['transcript'] {
-  return {
-    rows: [...rows],
-    taskGroups: [],
-    settledRows: rows.length,
-    run: workflowRunModel({
-      taskGroups: [],
-      rows,
-      plan: undefined,
-      runPhase: RUN_PHASE.RUNNING,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    }),
-  };
 }
 function setRunning(...runIds: RunId[]): void {
   for (const runId of runIds) {
@@ -184,22 +144,6 @@ function markToolUseAgent(...runIds: RunId[]): void {
     });
   }
 }
-/** A workflow-task row as the projector builds one, for the suites that seed
- *  a dashboard directly instead of replaying a stream log. */
-function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
-  const statusLabel = call.status === 'running' ? 'Running' : 'Queued';
-  return {
-    kind: 'workflowTask',
-    id,
-    timestamp: 0,
-    level: 'info',
-    call,
-    line: `${statusLabel}: ${call.label}`,
-    statusLabel,
-    metadataParts: [],
-  };
-}
-
 /** A child the fold holds under its parent, as these cases name one. */
 type ChildRow = {
   readonly childRunId: RunId;
@@ -344,7 +288,6 @@ describe('App foreground Escape ownership', () => {
             ],
             settledRows: 0,
             taskGroups: [],
-            run: null,
           },
         });
         await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -390,129 +333,6 @@ describe('App foreground Escape ownership', () => {
 
       expect(selectedRunId.get()).toBe(CHILD);
     } finally {
-      instance.unmount();
-    }
-  });
-
-  it('opens a workflow as a popup over its parent, never as a viewport', async () => {
-    const WORKFLOW = 'escape-workflow' as RunId;
-    seedRootRun();
-    setRunning(WORKFLOW, CHILD);
-    seedChildRows(ROOT, [
-      {
-        ...runningChild(WORKFLOW, 'workflow'),
-        identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
-      },
-    ]);
-    seedParentEdge(WORKFLOW, ROOT);
-    seedRunMeta(WORKFLOW, {
-      identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
-      agentCategory: AgentCategory.Workflow,
-    });
-    seedRun(WORKFLOW, {
-      transcript: transcriptOf([
-        taskRow('task-child', {
-          id: 'inspect',
-          label: 'Inspect',
-          status: 'running',
-          childRunId: CHILD,
-        }),
-      ]),
-    });
-    seedChildRows(WORKFLOW, [runningChild(CHILD, 'inspect')]);
-    seedParentEdge(CHILD, WORKFLOW);
-    markToolUseAgent(CHILD);
-    const { instance, stdin, stdout } = await renderRoutingApp();
-    const emit = vi.spyOn(testDefaultSession(), 'publish');
-
-    try {
-      actOnSurface({ kind: 'expand', runId: ROOT, expanded: true });
-      stdin.write('\t');
-      await waitFor(() => stdout.output.includes('workflow Running'));
-      stdin.write(ARROW_KEYS.Down);
-      stdin.write('\r');
-      // The workflow row opens the popup over main, promotes direct-child
-      // approvals, and keeps main as the underlying viewport.
-      await waitFor(() => foregroundReader.get()?.kind === 'workflow');
-      seedRequest({
-        kind: 'planApproval',
-        data: {
-          requestId: 'plan-unrelated',
-          runId: GRANDCHILD,
-          plan: { objective: 'Keep this unrelated request queued.' },
-        },
-      });
-      seedRequest({
-        kind: 'planApproval',
-        data: {
-          requestId: 'plan-queued-workflow-child',
-          runId: CHILD,
-          plan: { objective: 'Promote the queued workflow child.' },
-        },
-      });
-
-      await waitFor(() =>
-        stdout.output.includes('Promote the queued workflow child.'),
-      );
-      expect(stdout.output).not.toContain(
-        'Keep this unrelated request queued.',
-      );
-      clearSeededRequests();
-      await waitFor(() => currentApproval.get() === undefined);
-      await waitFor(() => stdout.output.includes('Inspect · Running'));
-      expect(selectedRunId.get()).toBe(ROOT);
-      // View state the user set inside the popup survives the round trips
-      // below; only opening a different workflow would start fresh.
-      updateWorkflowPopupView({ expanded: new Set(['queued']) });
-
-      // An approval bound to the workflow stream surfaces over the popup,
-      // and the popup comes back once it is answered.
-      seedRequest({
-        kind: 'planApproval',
-        data: {
-          requestId: 'plan-workflow-popup',
-          runId: WORKFLOW,
-          plan: { objective: 'Verify the workflow.' },
-        },
-      });
-      await waitFor(() => stdout.output.includes('Approve plan?'));
-      clearSeededRequests();
-      await waitFor(() => currentApproval.get() === undefined);
-      expect(foregroundReader.get()?.kind).toBe('workflow');
-
-      // A real announcement from one of the workflow's own agent calls takes
-      // the same foreground modal without moving the viewport underneath it.
-      seedRequest({
-        kind: 'planApproval',
-        data: {
-          requestId: 'plan-workflow-child',
-          runId: CHILD,
-          plan: { objective: 'Verify the child result.' },
-        },
-      });
-      await waitFor(() => stdout.output.includes('Verify the child result.'));
-      expect(selectedRunId.get()).toBe(ROOT);
-      expect(emit).not.toHaveBeenCalled();
-      clearSeededRequests();
-      await waitFor(() => currentApproval.get() === undefined);
-      expect(foregroundReader.get()?.kind).toBe('workflow');
-      closeForegroundReader();
-      expect(selectedRunId.get()).toBe(ROOT);
-      openWorkflowPopup(WORKFLOW);
-
-      // Enter on the task focuses that agent; Esc returns to main with the
-      // popup back where it was.
-      stdin.write('\r');
-      await waitFor(() => selectedRunId.get() === CHILD);
-      expect(foregroundReader.get()).toBeUndefined();
-      stdin.write(ESC);
-      await waitFor(() => selectedRunId.get() === ROOT, {
-        timeoutMs: 1_000,
-      });
-      await waitFor(() => foregroundReader.get()?.kind === 'workflow');
-      expect(workflowPopupView.get().expanded.has('queued')).toBe(true);
-    } finally {
-      emit.mockRestore();
       instance.unmount();
     }
   });
@@ -805,13 +625,10 @@ describe('App foreground Escape ownership', () => {
       agentCategory: AgentCategory.Workflow,
     },
     {
-      name: 'multi-agent workflow',
-      identity: {
-        kind: 'multiAgentWorkflow' as const,
-        workflowName: 'workflow-child',
-      },
+      name: 'background script',
+      identity: { kind: 'script' as const, title: 'workflow-child' },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      agentCategory: AgentCategory.Workflow,
+      agentCategory: AgentCategory.ToolUse,
     },
     {
       name: 'background bash process',

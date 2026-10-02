@@ -29,14 +29,6 @@ export const RunFactSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
 ]);
 
-/** A value as the workflow journal keeps it: `undefined` is not JSON, so
- *  absence is an arm rather than a missing field. */
-export const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('undefined') }),
-  z.strictObject({ kind: z.literal('json'), value: JsonValueSchema }),
-]);
-export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
-
 /**
  * The families of the current-value table: application state, not history.
  * One row per family and key, replaced in place by each write and kept

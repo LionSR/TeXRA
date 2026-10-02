@@ -39,7 +39,7 @@ import {
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
-import { attachWorkflowPlainOutput } from './workflowPlainOutput';
+import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
@@ -317,7 +317,7 @@ export function executeCliRequest(
       );
     }
     if (renderWorkflowPlainProgress) {
-      yield* attachWorkflowPlainOutput(session, {
+      yield* attachScriptPlainOutput(session, {
         runId: request.runId,
         beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
         writeLine: writeTextStderr,

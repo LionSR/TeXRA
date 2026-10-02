@@ -65,7 +65,7 @@ function planRun(
 // The full tool-use agent list of a preset, with only `root` able to delegate.
 function toolUseTeam(preset: TeamPreset, root: string): AgentEntry[] {
   return preset.agents.toolUse.map((name) =>
-    agent(name, AgentCategory.ToolUse, name === root ? ['delegate_agent'] : []),
+    agent(name, AgentCategory.ToolUse, name === root ? ['agent'] : []),
   );
 }
 
@@ -88,7 +88,7 @@ function partialPhysicistPlan(): CliTeamRunPlan {
     ],
     toolUse: [
       agent('review', AgentCategory.ToolUse),
-      agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+      agent('orchestrator', AgentCategory.ToolUse, ['agent']),
     ],
   });
 }
@@ -235,7 +235,7 @@ describe('CLI teams', () => {
           agent(
             member,
             AgentCategory.ToolUse,
-            delegating.includes(member) ? ['delegate_agent'] : [],
+            delegating.includes(member) ? ['agent'] : [],
           ),
         ),
       },

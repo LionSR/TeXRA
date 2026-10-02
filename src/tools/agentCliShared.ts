@@ -298,11 +298,11 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
   toolCall: ToolCallShape,
   run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
 ): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
-  const activeRun = yield* requireToolRun(toolName, toolCall);
+  const { run: activeRun } = yield* requireToolRun(toolName, toolCall);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
       new ToolError(
-        `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
+        `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
       ),
     );
   }

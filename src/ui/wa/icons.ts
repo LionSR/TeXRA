@@ -94,8 +94,8 @@ export const AGENT_DECORATORS = {
     toolUse: { icon: 'screwdriver-wrench', label: 'Tool Use' },
   },
   streamKinds: {
-    multiAgentWorkflow: { icon: 'list-ul', label: 'Multi-Agent Workflow' },
     process: { icon: 'terminal', label: 'Process' },
+    script: { icon: 'code', label: 'Script' },
   },
   /** Classification not known yet (or absent): neutral chrome, never a
    *  fabricated category default. */

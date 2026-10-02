@@ -15,11 +15,7 @@
 import { z } from 'zod';
 
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import {
-  RequestDecisionSchema,
-  RunIdSchema,
-  WorkflowControlActionSchema,
-} from '@shared/schemas';
+import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 
@@ -78,17 +74,6 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
        *  approval. */
       exceptRequestId: z.string().optional(),
     }),
-  }),
-  /** A workflow-script run's grandchild `agent()` call. `childRunId` is
-   *  that call's own run, never the workflow run's: the control acts on one
-   *  call, so concurrent skips and retries stay one request per target and
-   *  the runtime's refusal names the call it acted on. It is the id the
-   *  child list, focus, and kill already share. */
-  z.object({
-    kind: z.literal('workflow.control'),
-    ...runScoped,
-    childRunId: RunIdSchema,
-    action: WorkflowControlActionSchema,
   }),
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;

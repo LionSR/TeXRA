@@ -22,7 +22,6 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
 import { selectStyles } from '@ui/styles';
@@ -33,10 +32,9 @@ import {
 
 // Local imports - shared utils
 import {
-  WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowScriptPlanSummary,
-  workflowScriptStepCount,
-} from '@ui/copy/workflowScriptProposal';
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import {
   readSelectValue,
@@ -95,10 +93,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
    */
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
-    if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
-      return html`Start a team run:
-        <strong>${data.workflowScript.name}</strong> with ${data.agent} on
-        ${getModelLabel(data.model)}`;
+    if (data.script) {
+      return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
     const agent =
       (this.permission.agentOptionsData ?? []).length > 0
@@ -143,7 +139,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const modelOptions = this.permission.modelOptionsData ?? [];
     const agentOptions = this.permission.agentOptionsData ?? [];
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
-    const workflowScript = isWorkflow ? data.workflowScript : undefined;
 
     // The transport ships option data only for proposals whose approval
     // honors a model/agent override; the pickers render iff it arrived.
@@ -179,12 +174,15 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           </div>`
         : nothing;
 
+    let body: TemplateResult;
+    if (data.script)
+      body = html`${pickers} ${this.renderScriptSummary(data, data.script)}`;
+    else
+      body = html`${pickers} ${this.renderInstruction(data.instruction)}
+      ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+      ${this.renderProposalFiles(data)}`;
     return this.renderCard(
-      workflowScript
-        ? this.renderWorkflowScriptSummary(data, workflowScript)
-        : html`${pickers} ${this.renderInstruction(data.instruction)}
-          ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-          ${this.renderProposalFiles(data)}`,
+      body,
       renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
@@ -202,74 +200,44 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // ===========================================================================
 
   /**
-   * The proposal card (board W0): what the run will be, as the run model
-   * folds the plan for a run that has not started. Every declared phase in
-   * order with its declared calls (the model is in the ask above), and,
-   * above the phases so the sticky action row never covers it, the
-   * honest note that calls may run concurrently. No cost estimate
-   * (the fold has none) and no script link (the file list below has it).
+   * A script's request for its `agent` calls (Q5): what one approval
+   * covers, the whole source, the calls it issued before it asked, and,
+   * folded, the first `agent` call it is asking for.
    */
-  private renderWorkflowScriptSummary(
+  private renderScriptSummary(
     data: AgentProposalPermission,
-    workflow: NonNullable<WorkflowAgentProposalPermission['workflowScript']>,
+    script: NonNullable<AgentProposalPermission['script']>,
   ): TemplateResult {
-    const { phases } = workflowRunModel({
-      taskGroups: [],
-      rows: [],
-      plan: workflow,
-      runPhase: undefined,
-      runDurablyFinal: false,
-      childProgress: new Map(),
-    });
-
     return html`
       <div class="proposal-card__lede">
-        <span>${workflow.description}</span>
-        <span class="proposal-card__summary"
-          >${workflowScriptPlanSummary(workflow)}</span
-        >
+        <span>${SCRIPT_REQUEST_COPY.grant}</span>
       </div>
-      <div class="workflow-proposal__cost-warning">
-        ${waIcon('triangle-exclamation')}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
+      <div class="workflow-proposal__plan-note">
+        ${SCRIPT_REQUEST_COPY.sourceHeading}:
+      </div>
+      <div class="workflow-proposal__instruction script-proposal__source">
+        <pre><code>${script.source}</code></pre>
       </div>
       ${
-        phases.length > 0
-          ? html`<div class="proposal-card__phases" role="list">
-              ${repeat(
-                phases,
-                (phase) => phase.key,
-                (phase) => html`
-                  <div class="proposal-card__phase" role="listitem">
-                    ${waIcon('diagram-project')}
-                    <strong>${phase.heading.phaseLabel}</strong>
-                    <span class="proposal-card__phase-calls"
-                      >${
-                        phase.declaredTasks.length > 0
-                          ? workflowScriptStepCount(phase.declaredTasks.length)
-                          : ''
-                      }</span
-                    >
-                  </div>
-                `,
-              )}
-            </div>`
+        script.calls.length > 0
+          ? html`<div class="workflow-proposal__plan-note">
+                ${SCRIPT_REQUEST_COPY.callsHeading}:
+              </div>
+              <ol class="script-proposal__calls">
+                ${repeat(
+                  script.calls,
+                  (_call, index) => index,
+                  (call) => html`<li>${scriptRequestCallLine(call)}</li>`,
+                )}
+              </ol>`
           : nothing
       }
       <wa-details
         class="workflow-proposal__workflow-details"
-        summary="Instruction and files"
+        summary=${`First agent call: ${data.agent}`}
       >
         ${this.renderInstruction(data.instruction)}
-        ${
-          getProposalFileGroups(data).length > 0
-            ? html`<div class="workflow-proposal__plan-note">
-                ${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:
-              </div>`
-            : nothing
-        }
         ${this.renderProposalFiles(data)}
-        ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
       </wa-details>
     `;
   }

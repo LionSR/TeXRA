@@ -18,10 +18,8 @@
  * - `golden_park`: killed (`SIGKILL`) while its model call is open, the
  *   parked run the conformance suite resumes.
  * - `golden_parent` (headless, `yolo`): a `read_file` call; a `plan` update
- *   the policy approves (a decided `planApproval` request); a workflow
- *   script with one attempt of one child (`workflow.script`,
- *   `workflow.attempt`, `workflow.journal` and the child run); and a
- *   `delegate_agent` child that looks its parent up and messages it, which
+ *   the policy approves (a decided `planApproval` request); and an
+ *   `agent` child that looks its parent up and messages it, which
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
@@ -34,6 +32,29 @@
  *   without one. Each keystroke
  *   waits for the screen or the store to show the step before it, so the
  *   rows commit in one order.
+ * - `golden_approval`, a second `texra chat` under a PTY: a `bash` command
+ *   waiting for its approval, bound to its call, killed (`SIGKILL`) before
+ *   anyone answers, the pending approval the conformance suite resumes.
+ * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
+ *   its read tool with `searchTools` and `describeTool`, then reads twice
+ *   and runs one command in a `Promise.all`, killed (`SIGKILL`) while
+ *   the command waits, after the first read settled: the interrupted script
+ *   the conformance suite resumes. The command is a barrier, so the second
+ *   read waits behind it and every row commits in one order.
+ * - `golden_fanout` (headless, `yolo`): a `script` call whose guest awaits
+ *   two `agent()` calls in one `Promise.all`, one child at a time under a
+ *   project child-run budget of 1, killed (`SIGKILL`) after the first child
+ *   completed and its call settled, while the second child's model call
+ *   waits for `golden-fanout.release`: the interrupted fan-out the
+ *   conformance suite resumes.
+ * - `golden_background`, a third `texra chat` under a PTY (`yolo`): a
+ *   `script` call sent to the background, whose run (`{ kind: 'script' }`)
+ *   awaits one `agent()` call, and the parent's turn ended; killed
+ *   (`SIGKILL`) while that child's model call waits for
+ *   `golden-background.release`: the background script the conformance
+ *   suite resumes. The parent's reply waits for
+ *   `golden-background-reply.release` until that child is at its model
+ *   call, so the two runs of one process do not race their rows.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -243,6 +264,7 @@ function scenario(root) {
     };
     return {
       write: (data) => child.write(data),
+      kill: (signal) => child.kill(signal),
       screen,
       exited,
       output: screen,
@@ -254,7 +276,7 @@ function scenario(root) {
     const [key] = existsSync(dir) ? readdirSync(dir) : [];
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, start, chat, store };
+  return { run, start, chat, store, project };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -458,6 +480,212 @@ async function generate(root) {
   if (exit.exitCode !== 0)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
 
+  // The pending approval: a command waits for its approval in the chat, and
+  // the process is killed before anyone answers it.
+  const asking = await cli.chat([
+    'chat',
+    '--agent',
+    'golden_approval',
+    '--model',
+    'gpt56',
+  ]);
+  await until(
+    'the idle approval chat',
+    () => asking.screen().includes('Ctrl-C exit'),
+    asking,
+  );
+  asking.write('Run the command.');
+  await until(
+    'the typed instruction',
+    () => asking.screen().includes('› Run the command.'),
+    asking,
+  );
+  asking.write('\r');
+  const approvalRun = () =>
+    query(cli.store(), RUN_OF_AGENT, ['golden_approval'])[0]?.id;
+  await until(
+    'the bound command approval',
+    () =>
+      query(
+        cli.store(),
+        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND e.type = 'tool.binding'
+           AND json_extract(e.data, '$.payload.role') = 'call'`,
+        [approvalRun()],
+      ).length > 0 && asking.screen().includes('echo approved'),
+    asking,
+  );
+  asking.kill('SIGKILL');
+  await asking.exited;
+  // The interrupted script: killed while its command waits for the release
+  // file, which only the orphaned command reads once the process is gone.
+  const scripted = cli.start([
+    'run',
+    'golden_script',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Gather the notes in one script.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until(
+    'the script command waiting',
+    () => existsSync(path.join(cli.project, 'golden-script.started')),
+    scripted,
+  );
+  scripted.child.kill('SIGKILL');
+  await scripted.exited;
+  writeFileSync(path.join(cli.project, 'golden-script.release'), '');
+
+  // The fan-out: a script's two `agent()` calls under one `Promise.all`,
+  // one child at a time under a project child-run budget of 1, killed after
+  // the first child completed while the second waits on its model call.
+  mkdirSync(path.join(cli.project, '.texra'), { recursive: true });
+  writeFileSync(
+    path.join(cli.project, '.texra/config.json'),
+    `${JSON.stringify({ 'texra.childRunConcurrencyBudget': 1 })}\n`,
+  );
+  const fanout = cli.start([
+    'run',
+    'golden_fanout',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Fan out in one script.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  const fanoutRun = await until(
+    'the fan-out run',
+    () => query(cli.store(), RUN_OF_AGENT, ['golden_fanout'])[0]?.id,
+    fanout,
+  );
+  const fanoutRows = (child, type, extra = '') =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND e.type = ? ${extra}`,
+      [child, type],
+    ).length;
+  await until(
+    'the first fan-out child completed and the second waiting',
+    () => {
+      const [first, second] = query(
+        cli.store(),
+        `SELECT s.logical_id AS id FROM event e
+         JOIN event_sequence s ON s.id = e.aggregate
+         WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
+         ORDER BY e."commit"`,
+        [fanoutRun],
+      ).map((row) => row.id);
+      return (
+        first !== undefined &&
+        second !== undefined &&
+        fanoutRows(first, 'run.end') > 0 &&
+        fanoutRows(
+          fanoutRun,
+          'tool.result',
+          `AND json_extract(e.data, '$.payload.callId') LIKE '%/0'`,
+        ) > 0 &&
+        fanoutRows(
+          second,
+          'model.message',
+          `AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
+        ) > 0
+      );
+    },
+    fanout,
+  );
+  fanout.child.kill('SIGKILL');
+  await fanout.exited;
+
+  // The background script: the parent's turn ends while its script's one
+  // `agent()` child waits for its release, and the chat is killed there.
+  const background = await cli.chat([
+    'chat',
+    '--agent',
+    'golden_background',
+    '--model',
+    'gpt56',
+    '--approval-policy',
+    'yolo',
+  ]);
+  await until(
+    'the idle background chat',
+    () => background.screen().includes('Ctrl-C exit'),
+    background,
+  );
+  background.write('Send the script to the background.');
+  await until(
+    'the typed background instruction',
+    () => background.screen().includes('› Send the script to the background.'),
+    background,
+  );
+  background.write('\r');
+  const childOf = (parent) =>
+    query(
+      cli.store(),
+      `SELECT s.logical_id AS id FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'run.start' AND json_extract(e.data, '$.parent.id') = ?
+       ORDER BY e."commit"`,
+      [parent],
+    )[0]?.id;
+  const backgroundRows = (run, sql) =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND ${sql}`,
+      [run],
+    ).length;
+  // The parent and its script run are two fibers of one process: the
+  // parent's reply is held (`golden-background-reply.release`) until the
+  // script's child waits at its model call, then the parent ends its turn
+  // alone, so the two runs' rows commit in one order.
+  const backgroundParent = await until(
+    'the background child at its model call',
+    () => {
+      const parent = query(cli.store(), RUN_OF_AGENT, ['golden_background'])[0]
+        ?.id;
+      const script = parent && childOf(parent);
+      const child = script && childOf(script);
+      return (
+        child !== undefined &&
+        backgroundRows(
+          child,
+          `e.type = 'model.message'
+           AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
+        ) > 0 &&
+        parent
+      );
+    },
+    background,
+  );
+  writeFileSync(path.join(root, 'golden-background-reply.release'), '');
+  // The turn's last row is its `conversation.progress`, published after
+  // `waiting`: the kill waits for it too.
+  await until(
+    'the background parent waiting',
+    () =>
+      backgroundRows(
+        backgroundParent,
+        `e.type = 'run.position'
+         AND json_extract(e.data, '$.payload.at') = 'waiting'
+         AND json_extract(e.data, '$.payload.turn') = 1`,
+      ) > 0 &&
+      backgroundRows(backgroundParent, `e.type = 'conversation.progress'`) > 0,
+    background,
+  );
+  background.kill('SIGKILL');
+  await background.exited;
+
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
   const before = new Set(
@@ -592,7 +820,6 @@ function normalize(file, root) {
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
   );
-  for (const row of sequences) ids.get(row.logical_id);
   for (const row of sequences) uuids.get(row.uid);
   const rows = events.map((row) => ({
     ...row,
@@ -614,6 +841,76 @@ function normalize(file, root) {
   };
   for (const row of rows) collect(row.value, '');
 
+  // An `agent` call's child run is named by the call (`agentChildRunId`:
+  // its run, response, call and attempt), so a resume finds it by deriving
+  // that name again. Such a child is renamed by the same derivation over
+  // the normalized names, not by order, or no resume would find it.
+  const derive = (fields) =>
+    createHash('sha256')
+      .update(stableStringify(fields))
+      .digest('hex')
+      .slice(0, 24);
+  const logicalOf = new Map(sequences.map((row) => [row.id, row.logical_id]));
+  const children = new Map();
+  for (const [index, row] of rows.entries()) {
+    if (row.type !== 'script.call' || row.value.payload.toolName !== 'agent')
+      continue;
+    const { scriptCallId, callId } = row.value.payload;
+    const intents = rows.filter(
+      (other) =>
+        other.aggregate === row.aggregate && other.type === 'tool.intent',
+    );
+    const responseId = rows
+      .slice(0, index)
+      .findLast(
+        (other) =>
+          intents.includes(other) &&
+          other.value.payload.origin.kind === 'response' &&
+          other.value.payload.callIds.includes(scriptCallId),
+      )?.value.payload.origin.responseId;
+    for (const intent of intents) {
+      const { origin, callIds, attempt } = intent.value.payload;
+      if (origin.kind !== 'script' || !callIds.includes(callId)) continue;
+      const parentRunId = logicalOf.get(row.aggregate);
+      const fields = { parentRunId, responseId, callId, attempt };
+      children.set(derive(fields), fields);
+    }
+  }
+  // A background script's run is named by the `script` call that sent it,
+  // the same derivation: the parent's settled call names the run it
+  // launched (`{ runId }`).
+  for (const row of rows) {
+    if (row.type !== 'run.start' || row.value.identity?.kind !== 'script')
+      continue;
+    const runId = logicalOf.get(row.aggregate);
+    const parentRunId = row.value.parent?.id;
+    const launch = rows.find(
+      (other) =>
+        other.type === 'tool.result' &&
+        logicalOf.get(other.aggregate) === parentRunId &&
+        other.value.payload.result.value?.runId === runId,
+    );
+    if (launch === undefined) fail(`no launching call for script run ${runId}`);
+    const { responseId, callId, attempt } = launch.value.payload;
+    const fields = { parentRunId, responseId, callId, attempt };
+    if (derive(fields) !== runId)
+      fail(`script run ${runId} is not named by its launching call`);
+    children.set(runId, fields);
+  }
+  for (const row of sequences) {
+    const fields = children.get(row.logical_id);
+    if (fields === undefined) ids.get(row.logical_id);
+    else
+      ids.seen.set(
+        row.logical_id,
+        derive({
+          ...fields,
+          parentRunId: ids.get(fields.parentRunId),
+          responseId: uuids.get(fields.responseId),
+        }),
+      );
+  }
+
   const roots = [...new Set([realpathSync.native(root), root])].sort(
     (a, b) => b.length - a.length,
   );
@@ -634,6 +931,8 @@ function normalize(file, root) {
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
+    // A call's wall time in its run-log line.
+    [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
   const digests = new Map();
   const scrubText = (text) => {

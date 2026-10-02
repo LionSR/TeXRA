@@ -22,6 +22,7 @@ import type {
   RunOutcome,
 } from '@shared/schemas';
 import {
+  AgentCategory,
   agentName as baseAgentName,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -327,10 +328,19 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   const { runId, session } = ctx;
   const runs = yield* Runs;
   const agentIdentifier = ctx.config.agent;
+  const script =
+    ctx.config.agentCategory === AgentCategory.ToolUse
+      ? ctx.config.backgroundScript
+      : null;
   const handle = new RunHandle(
     {
       runId,
-      identity: { kind: 'agent', agent: agentIdentifier },
+      // The identity its launch registered: a background script's run is
+      // the parent's agent making one call.
+      identity:
+        script == null
+          ? { kind: 'agent', agent: agentIdentifier }
+          : { kind: 'script', title: script.title },
       category: ctx.setting.agentCategory,
     },
     options?.parentRunId ?? null,

@@ -14,7 +14,6 @@ import {
   WebSearchPayloadSchema,
 } from './progressView/data';
 import { ExtendedTokenUsageStatsSchema } from './usage';
-import { WorkflowCallProgressSchema } from './workflowCallProgress';
 
 const StreamingTextDataSchema = z.looseObject({
   status: z.enum(['running', 'completed']).optional(),
@@ -41,7 +40,6 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
   [MESSAGE_TYPES.ERROR]: ErrorLogDataSchema.optional(),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
-  [MESSAGE_TYPES.WORKFLOW_TASK]: WorkflowCallProgressSchema,
   [MESSAGE_TYPES.DEFAULT]: z.unknown().optional(),
 } satisfies Record<MessageType, z.ZodType>;
 

@@ -14,14 +14,11 @@ import { Cause, Effect } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import {
-  AnnotationFetchBudget,
-  AnnotationFetchBudgetExhaustedError,
-} from './annotationFetchBudget';
-import {
   ghGet,
   type ConditionalResponse,
   type GitHubServices,
 } from './githubClient';
+import type { RateLimiterError } from 'effect/persistence/RateLimiter';
 import type { GhCheckAnnotation, GhCheckRun } from './prTypes';
 
 // GitHub caps the check-runs endpoint at 100 per page.
@@ -334,23 +331,20 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
 /**
  * Fetch all annotations for a check-run, walking pages until a short page or
  * the per-run page cap. Each page claims one unit from the shared annotation
- * fetch `budget`; when the budget is exhausted mid-walk we throw
- * `AnnotationFetchBudgetExhaustedError` so the caller can defer the run rather
- * than partially emit.
+ * fetch budget (`claim`); when the budget is exhausted mid-walk the claim
+ * fails with `RateLimiterError` so the caller can defer the run rather than
+ * partially emit.
  */
 export const fetchAnnotations = Effect.fn('fetchAnnotations')(
   function* (
     owner: string,
     repo: string,
     checkRunId: number,
-    budget: AnnotationFetchBudget,
-    now?: number,
+    claim: Effect.Effect<void, RateLimiterError>,
   ): Effect.fn.Return<GhCheckAnnotation[], Error, GitHubServices> {
     const annotations: GhCheckAnnotation[] = [];
     for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
-      if (!(yield* budget.tryClaim(now))) {
-        return yield* Effect.fail(new AnnotationFetchBudgetExhaustedError());
-      }
+      yield* claim;
       const path = `/repos/${owner}/${repo}/check-runs/${checkRunId}/annotations?per_page=${ANNOTATIONS_PAGE_SIZE}&page=${page}`;
       const res = yield* ghGet<GhCheckAnnotation[]>(path);
       if (res.status !== 200) return annotations;

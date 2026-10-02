@@ -1,7 +1,7 @@
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
- * Mirrors the `delegate_agent` model: every call is async. Without a
+ * Mirrors the `agent` model: every call is async. Without a
  * thread_id, a new Codex session is launched and the result is delivered
  * as a follow-up to the parent stream. With a thread_id, the prompt is
  * enqueued as a follow-up instruction to an existing session. If a turn is
@@ -488,10 +488,10 @@ export const CodexTool = defineTool({
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like executions send to a delegate_agent subagent. ' +
-    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
+    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like executions send to an `agent` subagent. ' +
+    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
     'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
+    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: CodexInputSchema,
   guard: {
     bash: (input: CodexInput) =>

@@ -33,6 +33,7 @@ import {
   RunIdentitySchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
+  RUN_PHASE,
   RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
@@ -49,7 +50,6 @@ import {
 } from '@shared/schemas';
 import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
-import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 import type { TranscriptRow } from '@ui/transcript';
 
 /** Which session (paper) a view is of: the session's storage root. */
@@ -58,15 +58,14 @@ const SessionKeySchema = z.string().min(1);
 /**
  * A run's transcript slice: what hosts paint, and nothing else. The fold
  * keeps its incremental indexes (row and group positions, the compaction
- * projection's working state, the measured live text per streaming row, the
- * newest plan marker) beside the value in a module-private map, so a host
+ * projection's working state, the measured live text per streaming row)
+ * beside the value in a module-private map, so a host
  * can neither depend on nor mutate them. The slice value is replaced on every
  * change and `rows` and `taskGroups` are never written after the fold that
  * produced them returns (D5); hosts read, never write.
  *
- * The row, block, and run-model elements are the shared renderers' own
- * TypeScript shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`,
- * `workflowRunModel.ts`); they have no schema of their own yet, so the
+ * The row and block elements are the shared renderers' own TypeScript
+ * shapes (`transcriptRow.ts`, `compactionActivityProjection.ts`); they have no schema of their own yet, so the
  * element types are stated rather than re-declared here.
  */
 const TranscriptViewSchema = z.object({
@@ -78,8 +77,6 @@ const TranscriptViewSchema = z.object({
   /** The contiguous leading prefix of rows whose finalizing event has
    *  folded: what an append-only scrollback may print. */
   settledRows: z.int().nonnegative(),
-  /** `workflowRunModel`, for a workflow-script run; null for every other. */
-  run: z.custom<WorkflowRunModel>().nullable(),
 });
 export type TranscriptView = z.infer<typeof TranscriptViewSchema>;
 
@@ -181,12 +178,15 @@ const RunViewCommonSchema = z.object({
    *  which carries a phase and no position. */
   position: LoopCoordinateSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
-  /** A native tool-use resume can target this run: a plain agent identity in
-   *  the tool-use category. The rule lives here so no host restates it. */
+  /** A native tool-use resume can target this run: a plain agent identity,
+   *  or a background script, in the tool-use category. The rule lives here
+   *  so no host restates it. */
   resumeEligible: z.boolean(),
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: RunIdSchema.nullable(),
+  /** The parent's tool card that launched this run (`run.start.parentCard`). */
+  parentCard: z.string().nullable(),
   /** Root first. */
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */
@@ -262,6 +262,32 @@ export function isLiveRun(
 ): boolean {
   if (run.substate === RUN_SUBSTATE.PAUSED) return false;
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
+}
+
+/**
+ * What `children` and their descendants count toward a parent's `rollup`:
+ * the fold's count over the run tree (each child's own `rollup` below it),
+ * and the dispatch card's over the tree it lists (`below` recurses through
+ * the children it lists instead). A child parked between turns (held) or
+ * paused, nothing asked of the user, has delivered its turn: it counts as
+ * finished, not running.
+ */
+export function rollupOf(
+  children: readonly RunView[],
+  below: (child: RunView) => RunView['rollup'] = (child) => child.rollup,
+): RunView['rollup'] {
+  const rollup = { total: 0, running: 0, finished: 0 };
+  for (const child of children) {
+    const idle =
+      child.status === RUN_PHASE.WAITING &&
+      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
+    const under = below(child);
+    rollup.total += 1 + under.total;
+    rollup.running += (isLiveRun(child) && !idle ? 1 : 0) + under.running;
+    rollup.finished +=
+      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) + under.finished;
+  }
+  return rollup;
 }
 
 /** What a host can do with a follow-up, the only input the host brings to

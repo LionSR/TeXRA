@@ -126,10 +126,13 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** A second OS process's writer: this build's `Database` over the store at
  *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`
- *  exists, appending `rows` positions to it, one transaction each. */
+ *  exists, holding the write lock for `hold` ms (a slow writer, announced by
+ *  `<storage>/held`), then appending `rows` positions to it, one
+ *  transaction each. */
 const STORE_WRITER = `
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -138,7 +141,7 @@ import { aggregateId, AgentCategory } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
-const [storage, owner, run, rows] = process.argv.slice(2);
+const [storage, owner, run, rows, hold] = process.argv.slice(2);
 const id = aggregateId('run', run);
 const append = Effect.gen(function* () {
   const db = yield* Database;
@@ -146,6 +149,12 @@ const append = Effect.gen(function* () {
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
     category: AgentCategory.ToolUse, parent: null }]);
   while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
+  const slow = new DatabaseSync(join(storage, 'texra.db'));
+  slow.exec('BEGIN IMMEDIATE');
+  writeFileSync(join(storage, 'held'), '');
+  yield* Effect.sleep(Number(hold));
+  slow.exec('COMMIT');
+  slow.close();
   for (let i = 0; i < Number(rows); i += 1)
     yield* db.appendAll([{ type: 'run.position', aggregateId: id,
       payload: { family: 'toolUse', at: 'waiting' } }]);
@@ -450,37 +459,6 @@ describe('session events and view', () => {
       expect(rows.map(({ type, seq }) => ({ type, seq }))).toEqual([
         { type: 'inquiryThreadUpdated', seq: 1 },
       ]);
-    }).pipe(Effect.provide(graph([]))),
-  );
-
-  it.effect('hangs a workflow checkpoint under the run that invoked it', () =>
-    Effect.gen(function* () {
-      const events = yield* SessionEvents;
-      const log = yield* Database;
-      const checkpoint = qualifyAggregateId(
-        'workflow-checkpoint',
-        'cp-000000000000',
-      );
-      yield* events.publish([
-        runStart,
-        {
-          type: 'workflow.script',
-          aggregateId: checkpoint,
-          parentRunId: RUN,
-          script: 'return 1',
-          args: { kind: 'undefined' },
-          files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
-        },
-      ]);
-      // Without the edge the journal is unreachable once the run is gone:
-      // deletion follows `parent_id`, and nothing else names this id.
-      expect((yield* log.aggregateState([checkpoint]))[0]?.parentId).toBe(
-        qualifyAggregateId('run', RUN),
-      );
-      yield* events.publish([
-        { type: 'run.removed', aggregateId: qualifyAggregateId('run', RUN) },
-      ]);
-      expect((yield* log.aggregateState([checkpoint]))[0]?.closed).toBe(true);
     }).pipe(Effect.provide(graph([]))),
   );
 
@@ -2308,23 +2286,18 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       const shared = `${'\\frac{a}{b} — ünïcode\n'.repeat(300)}end`;
       const solo = `\uD800${'y'.repeat(4096)}`;
-      const script = (
-        id: string,
-        run: RunId,
-        args: object,
-      ): SessionEventDraft => ({
-        type: 'workflow.script',
-        aggregateId: qualifyAggregateId('workflow-checkpoint', id),
-        parentRunId: run,
-        script: shared,
-        args: { kind: 'json', value: { ...args, $b: 'mine', $$b: [shared] } },
-        files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+      const card = (run: RunId, args: object): SessionEventDraft => ({
+        type: 'tool.start',
+        aggregateId: qualifyAggregateId('run', run),
+        logId: 'call-1',
+        toolName: 'script',
+        input: { script: shared, args: { ...args, $b: 'mine', $$b: [shared] } },
       });
       const drafts = [
         runStart,
         olderStart,
-        script('cp-000000000001', RUN, { solo }),
-        script('cp-000000000002', OLDER, {}),
+        card(RUN, { solo }),
+        card(OLDER, {}),
       ];
       const count = (table: string) =>
         Effect.sync(() => {
@@ -2349,23 +2322,18 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         yield* db.appendAll(drafts);
-        const scripts = (yield* db.readAll(0)).filter(
-          (event) => event.type === 'workflow.script',
+        const cards = (yield* db.readAll(0)).filter(
+          (event) => event.type === 'tool.start',
         );
-        expect(
-          scripts.map(({ script, args }) => JSON.stringify({ script, args })),
-        ).toEqual(
-          drafts.slice(2).map((draft) =>
-            JSON.stringify({
-              script: shared,
-              args: 'args' in draft && draft.args,
-            }),
-          ),
+        expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
+          drafts
+            .slice(2)
+            .map((draft) => JSON.stringify('input' in draft && draft.input)),
         );
         const raw = reader(storage);
         try {
           const data = raw
-            .prepare("SELECT data FROM event WHERE type = 'workflow.script'")
+            .prepare("SELECT data FROM event WHERE type = 'tool.start'")
             .all()
             .map((row) => String(row.data));
           expect(data.every((text) => !text.includes(shared))).toBe(true);
@@ -2393,10 +2361,7 @@ describe('the C1 event table and the C6 publisher', () => {
         const reopened = yield* Effect.gen(function* () {
           const fresh = yield* Database;
           return yield* Effect.flip(
-            fresh.readAggregate(
-              qualifyAggregateId('workflow-checkpoint', 'cp-000000000002'),
-              0,
-            ),
+            fresh.readAggregate(qualifyAggregateId('run', OLDER), 0),
           );
         }).pipe(Effect.provide(substrate(storage)));
         expect(reopened).toMatchObject({ cause: { reason: 'corrupt' } });
@@ -2741,64 +2706,83 @@ describe('the C1 event table and the C6 publisher', () => {
    * reads. Failure modes: an append lost to `SQLITE_BUSY`; a seq or commit
    * skipped or reused; a commit this connection observed going backwards;
    * and this process's thread held in SQLite's busy wait past the 25 ms
-   * slice instead of retrying on its fiber schedule.
+   * slice instead of retrying on its fiber schedule. The child first holds
+   * the write lock for `HOLD_MS`, so that last mode stalls this thread for
+   * about the whole hold, a signal far above a shared runner's scheduling
+   * noise (one 429 ms stall on CI), which an absolute bound over ordinary
+   * contention could not tell apart from it.
    */
-  it.live('shares one store with another OS process', () => {
-    const storage = workspace();
-    const ROWS = 400;
-    const own = qualifyAggregateId('run', RUN);
-    const theirs = qualifyAggregateId('run', OLDER);
-    return Effect.gen(function* () {
-      const writer = yield* Effect.promise(() => bundleStoreWriter(storage));
-      const db = yield* Database;
-      const observed: number[] = [];
-      yield* SubscriptionRef.changes(db.observedCommit).pipe(
-        Stream.runForEach((commit) => Effect.sync(() => observed.push(commit))),
-        Effect.forkScoped,
-      );
-      yield* db.appendAll([runStart]);
-      const child = spawn(
-        process.execPath,
-        [writer, storage, OTHER, OLDER, String(ROWS)],
-        { stdio: ['ignore', 'inherit', 'inherit'] },
-      );
-      const exited = new Promise<number | null>((done) =>
-        child.on('exit', (code) => done(code)),
-      );
-      // The child has opened the store and created its run; both then start
-      // appending at once, so the two contend for the lock.
-      while ((yield* db.aggregateState([theirs])).length === 0) {
-        expect(child.exitCode, 'the writer exited before writing').toBeNull();
-        yield* Effect.sleep('5 millis');
-      }
-      const delay = monitorEventLoopDelay({ resolution: 5 });
-      delay.enable();
-      writeFileSync(join(storage, 'go'), '');
-      for (let i = 0; i < ROWS; i += 1) {
-        yield* db.appendAll([waiting]);
-        yield* db.readAggregate(own, i + 1);
-      }
-      const code = yield* Effect.promise(() => exited);
-      delay.disable();
-      expect(code).toBe(0);
-      const total = 2 * (ROWS + 1);
-      while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
-        yield* Effect.sleep('50 millis');
-      const rows = yield* db.readAll(0);
-      expect(rows.map((row) => row.commit)).toEqual(
-        Array.from({ length: total }, (_, i) => i + 1),
-      );
-      for (const id of [own, theirs])
-        expect(
-          rows.filter((row) => row.aggregateId === id).map((row) => row.seq),
-        ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
-      expect(observed).toEqual(observed.toSorted((a, b) => a - b));
-      expect(observed.at(-1)).toBe(total);
-      // The busy slice bounds one wait in SQLite; the retry sleeps on the
-      // fiber. A thread held for the whole contention fails this.
-      expect(delay.max / 1e6).toBeLessThan(250);
-    }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
-  });
+  it.live(
+    'shares one store with another OS process',
+    () => {
+      const storage = workspace();
+      const ROWS = 400;
+      const HOLD_MS = 2000;
+      const own = qualifyAggregateId('run', RUN);
+      const theirs = qualifyAggregateId('run', OLDER);
+      return Effect.gen(function* () {
+        const writer = yield* Effect.promise(() => bundleStoreWriter(storage));
+        const db = yield* Database;
+        const observed: number[] = [];
+        yield* SubscriptionRef.changes(db.observedCommit).pipe(
+          Stream.runForEach((commit) =>
+            Effect.sync(() => observed.push(commit)),
+          ),
+          Effect.forkScoped,
+        );
+        yield* db.appendAll([runStart]);
+        const child = spawn(
+          process.execPath,
+          [writer, storage, OTHER, OLDER, String(ROWS), String(HOLD_MS)],
+          { stdio: ['ignore', 'inherit', 'inherit'] },
+        );
+        const exited = new Promise<number | null>((done) =>
+          child.on('exit', (code) => done(code)),
+        );
+        // The child has opened the store and created its run; it then holds
+        // the write lock, and both append at once, so the two contend for it.
+        while ((yield* db.aggregateState([theirs])).length === 0) {
+          expect(child.exitCode, 'the writer exited before writing').toBeNull();
+          yield* Effect.sleep('5 millis');
+        }
+        writeFileSync(join(storage, 'go'), '');
+        while (!existsSync(join(storage, 'held')))
+          yield* Effect.sleep('1 millis');
+        const delay = monitorEventLoopDelay({ resolution: 5 });
+        delay.enable();
+        // The histogram records a stall only after its first sample.
+        yield* Effect.sleep('20 millis');
+        const blocked = performance.now();
+        for (let i = 0; i < ROWS; i += 1) {
+          yield* db.appendAll([waiting]);
+          // The first append waited out the hold: the stall bound is not vacuous.
+          if (i === 0)
+            expect(performance.now() - blocked).toBeGreaterThan(HOLD_MS / 2);
+          yield* db.readAggregate(own, i + 1);
+        }
+        const code = yield* Effect.promise(() => exited);
+        delay.disable();
+        expect(code).toBe(0);
+        const total = 2 * (ROWS + 1);
+        while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
+          yield* Effect.sleep('50 millis');
+        const rows = yield* db.readAll(0);
+        expect(rows.map((row) => row.commit)).toEqual(
+          Array.from({ length: total }, (_, i) => i + 1),
+        );
+        for (const id of [own, theirs])
+          expect(
+            rows.filter((row) => row.aggregateId === id).map((row) => row.seq),
+          ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
+        expect(observed).toEqual(observed.toSorted((a, b) => a - b));
+        expect(observed.at(-1)).toBe(total);
+        // The busy slice bounds one wait in SQLite; the retry sleeps on the
+        // fiber. A thread held in SQLite for the hold stalls about HOLD_MS.
+        expect(delay.max / 1e6).toBeLessThan(HOLD_MS / 2);
+      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
+    },
+    30_000,
+  );
 
   /**
    * C14: the lease file is gone, so the only thing that frees a crashed
@@ -3074,7 +3058,7 @@ describe('RunLedger', () => {
   const approvalBinding: RunLedgerDraft = {
     type: 'tool.binding',
     aggregateId: AGGREGATE,
-    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1' },
+    payload: { callId: 'call-a', attempt: 1, requestId: 'req-1', role: 'call' },
   };
   const toolEnd = (callId: string): RunLedgerDraft => ({
     type: 'tool.end',
@@ -3185,7 +3169,11 @@ describe('RunLedger', () => {
         {
           type: 'tool.intent',
           aggregateId: AGGREGATE,
-          payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+          payload: {
+            origin: { kind: 'response', responseId: RESPONSE_ID },
+            callIds: ['call-a'],
+            attempt: 1,
+          },
         },
       ]);
       return state;
@@ -3283,7 +3271,9 @@ describe('RunLedger', () => {
           approvalBinding,
         ]);
         expect(state.requests['req-1']?.resolved).toBe(false);
-        expect(state.pendingIntents['call-a']?.approvalRequestId).toBe('req-1');
+        expect(state.pendingIntents['call-a']?.binding?.requestId).toBe(
+          'req-1',
+        );
         // A real attachment carries loose keys and binary fields: accepted, and
         // the binary fields never reach the row.
         state = yield* run.appendBatch(RUN, state, [

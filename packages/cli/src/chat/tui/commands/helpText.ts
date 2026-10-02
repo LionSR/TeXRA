@@ -65,6 +65,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     `- ${textInputEditingHelp()}`,
     '- `Esc` closes panels, returns to the parent session, and rejects an open approval · `Ctrl-C` stops the active response, or exits when idle',
     "- `Ctrl-T` opens the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
+    "- `Ctrl-O` lists the calls of the focused run's script: open a call's agent, review what it waits on, or skip it",
     `- \`Tab\` ${SESSION_LIST.openHelp}`,
     `- \`${focusChord}\` focuses a run in the visible session-list order`,
   ].join('\n');

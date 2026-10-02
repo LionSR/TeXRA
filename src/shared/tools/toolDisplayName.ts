@@ -19,9 +19,7 @@
 /** Friendly labels for tool names that shouldn't be shown verbatim, keyed by
  *  normalized name. */
 const TOOL_LABEL = new Map<string, string>([
-  ['delegate_multi_agents', 'Multi-agent workflow'],
-  ['delegate_agent', 'Subagent'],
-  ['delegate_workflow', 'Delegate workflow'],
+  ['agent', 'Subagent'],
   ['codex_patch', 'Codex Files'],
   ['codex_thread', 'Codex Thread'],
   ['codex_todo', 'Codex Plan'],

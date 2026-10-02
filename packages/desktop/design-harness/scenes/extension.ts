@@ -325,13 +325,13 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       ),
     );
   },
-  // Real-ExtensionProposal: the workflow-script proposal card on the root.
+  // Real-ExtensionProposal: the script's agent request on the root.
   'ext-proposal': () => {
     const view = withProposal();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // Real-ExtensionInline: the dispatch card inside the child that fanned
-  // out (the root is a workflow run, whose calls the run board lists).
+  // out (the root is a background script, whose calls its stage lists).
   'ext-inline': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));

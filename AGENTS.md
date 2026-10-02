@@ -112,8 +112,9 @@ route's key, and CI runs it only on the `live-llm` label
 (`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
 is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
 journeys run through the real `texra run` NDJSON on each cheap model the script lists. It runs
-nightly and on the `live-journeys` label (`.github/workflows/live-journeys.yml`),
-never in `npm test`.
+only on demand, on the `live-journeys` label or by dispatch
+(`.github/workflows/live-journeys.yml`), never on a schedule or in `npm test`;
+in CI a missing model key fails the run, locally it skips that model.
 
 ### Scoping the test run
 
@@ -410,7 +411,7 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **Run loop architecture**

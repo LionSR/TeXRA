@@ -20,7 +20,7 @@ import {
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
-import { clamp, generateShortId } from '@utils/core';
+import { clamp } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
@@ -227,12 +227,12 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       call.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
-    const run = call.run;
-    if (!run) {
+    if (call.run === undefined) {
       return yield* Effect.fail(
         new Error('A tool-edit approval needs an active run.'),
       );
     }
+    const { run, requests } = call;
     const { session } = run;
     const contextRunId = run.runId;
     const withRunId =
@@ -273,7 +273,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     }
 
     const { permission, diffTimeout } = prepareToolEditApprovalPrompt(session, {
-      requestId: `approval-${generateShortId()}`,
+      requestId: requests.nextId('approval'),
       request: preparedRequest,
       // The call's own workspace root, as data: the display path a host shows
       // is relative to the session that raised the request, not to whichever
@@ -295,9 +295,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // `openRequest` owns and runs this for.
       prompt: session.interactions.presentToolEdit(staged).pipe(
         Effect.flatMap((releaseStaged) =>
-          session
-            .openRequest(
-              runId,
+          requests
+            .open(
               { kind: 'toolEdit', data: permission },
               {
                 // The host's own cleanup program, composed into the open:

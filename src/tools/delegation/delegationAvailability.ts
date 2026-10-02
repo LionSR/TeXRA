@@ -1,26 +1,16 @@
 /**
- * Live availability annotations for delegation tool descriptions, and the
- * agent list/model resolution behind them.
+ * What the delegation tools can launch, and the text that tells the model.
  *
- * The delegate_agent / delegate_workflow descriptions ship with placeholder
- * "Available agents:", "Available models:", and "Git worktree support:" lines.
- * All three depend on state the user can change after the tool registry is
- * built (agent visibility, a team swap, model credentials, the
- * worktree setting), so each line is resolved per run at the `resolveStepTools`
- * boundary instead of being frozen into the tool definition at first access.
- *
- * Keeping the agent list current is what lets the agent-native delegation
- * convention work: delegating agents (orchestrator, engineer, …) are told to
- * pick from the tool description's "Available agents" list, so a stale list
- * made them attempt agents that are no longer in the agent list and discover the
- * mismatch only via a failed delegate call.
- *
- * Each annotation owns its anchor pattern and copy; they share one injection
- * contract (`replaceDelegationDescriptionBlock`): only touch delegation tools
- * that have a description, replace the matched block in place (via a replacer
- * function so a `$` in the replacement is never read as a pattern token), and —
- * for annotations that must default onto a description with no anchor — append
- * the block instead.
+ * The agents a delegation tool can launch, the models a child can run and
+ * whether worktrees are on all change while a run lives (agent visibility, a
+ * team swap, a new credential, the worktree setting). The step reads them
+ * (`readDelegationTargets`) into the run's context; the system text renders
+ * them once, at the step that freezes it (`delegationSection`), and a later
+ * change reaches the model as lines of the context update
+ * (`delegationUpdate`). The tool descriptions never change with them, so
+ * neither does the cached prefix. A launch is checked against the live lists
+ * when it is called (`requireVisibleAgent`, `selectAvailableDelegationModel`),
+ * and a refusal names the current ones.
  */
 
 // Third-party imports
@@ -28,167 +18,190 @@ import { Effect } from 'effect';
 
 // Local imports
 import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
-import type { AgentEntry } from '@agent/index/agentEntry';
+import { withLogChannel } from '@logger/effectLog';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
+  AgentCategory,
   AgentDelegationScope,
+  DelegationTargets,
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
-import { AgentCategory, isModelOptionAvailable } from '@shared/schemas';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { isModelOptionAvailable } from '@shared/schemas';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { modelRefOf } from '@shared/model/modelSelection';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-/**
- * Replace `pattern`'s match in a delegation tool's description with
- * `replacement`, returning a new definition. Non-delegation tools and tools
- * without a description are returned untouched.
- *
- * When the pattern does not match:
- *   - `appendIfMissing: true` appends the block as a trailing paragraph.
- *   - `appendIfMissing: false` leaves the description unchanged (replace-only,
- *     for annotations that must never be added where the anchor is absent).
- *
- * `replacement` may be a thunk so the caller can defer any config/registry read
- * until the tool is confirmed to need the block (matched, or appended).
- */
-function replaceDelegationDescriptionBlock(
-  tool: ToolDefinition,
-  pattern: RegExp,
-  replacement: string | (() => string),
-  { appendIfMissing }: { appendIfMissing: boolean },
-): ToolDefinition {
-  if (!DELEGATION_TOOLS.has(tool.name) || !tool.description) return tool;
-
-  const matched = pattern.test(tool.description);
-  if (!matched && !appendIfMissing) return tool;
-
-  const text = typeof replacement === 'function' ? replacement() : replacement;
-  const description = matched
-    ? tool.description.replace(pattern, () => text)
-    : `${tool.description}\n\n${text}`;
-  return { ...tool, description };
-}
+const availableModelNames = (models: readonly ModelOptionData[]): string[] =>
+  models.filter(isModelOptionAvailable).map((model) => model.value);
 
 /* -------------------------------------------------------------------------
- * Agents
+ * Reading
  * ---------------------------------------------------------------------- */
 
-/** Matches the "Available agents:" header plus its contiguous (non-blank) list
- * lines, stopping at the first blank line or end of string. Anchored to a line
- * start so it can't match the substring inside surrounding prose. Terminating on
- * a non-blank run (rather than a `(?=\n\n)` lookahead) means a block at the very
- * end of a description still matches, so it is replaced rather than duplicated. */
-const AVAILABLE_AGENTS_BLOCK = /^Available agents:.*(?:\n(?!\n).+)*/m;
-
-const NO_AGENTS_LINE =
-  'Available agents: none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.';
-
 /**
- * Format an agent list for a delegation tool's "Available agents:" block.
- *
- * Newlines inside a description are collapsed to single spaces so each agent
- * stays one paragraph — a blank line in a (e.g. user- or remote-defined)
- * description would otherwise look like the end of the block to a reader or
- * the block regex.
+ * The targets the offered `definitions` can launch, or `undefined` when they
+ * hold no delegation tool. A delegation tool declares the agent category it
+ * launches (`availabilityCategory`); the agents are the run's pinned
+ * delegation scope's, or the workspace's visible ones.
  */
-function formatAgentList(
-  agents: readonly { name: string; description?: string; tools?: string[] }[],
-): string {
-  return agents
-    .map((agent) => {
-      const desc = (agent.description || 'No description').replaceAll(
-        /\s*\n\s*/g,
-        ' ',
+export const readDelegationTargets = Effect.fn('readDelegationTargets')(
+  function* (
+    definitions: readonly ToolDefinition[],
+    stores: ModelOptionStores,
+    scope: AgentDelegationScope | undefined,
+  ) {
+    const launchers = new Map<AgentCategory, string[]>();
+    for (const { name, availabilityCategory } of definitions)
+      if (name === AGENT_TOOL_NAME && availabilityCategory !== undefined)
+        for (const category of [availabilityCategory].flat())
+          launchers.set(category, [...(launchers.get(category) ?? []), name]);
+    if (launchers.size === 0) return undefined;
+    const agents: DelegationTargets['agents'] = [];
+    for (const [category, tools] of launchers) {
+      const entries = yield* resolveDelegationScopeAgents(
+        stores,
+        scope,
+        category,
       );
-      const toolsSuffix = agent.tools?.length
-        ? `\n  Tools: ${agent.tools.join(', ')}`
-        : '';
-      return `- ${agent.name}: ${desc}${toolsSuffix}`;
-    })
-    .join('\n');
-}
-
-/**
- * Build the "Available agents:" block for a delegation tool's category from the
- * currently visible agents. An empty agent list yields a single actionable line
- * rather than a bare header, mirroring the empty-state messaging on the models
- * line. Annotation runs inside an agent flow that has already loaded the
- * registry, so an empty result means the user genuinely has no visible agents
- * in this category — not a not-yet-loaded cache.
- */
-function visibleDelegationAgentsBlock(agents: readonly AgentEntry[]): string {
-  if (agents.length === 0) return NO_AGENTS_LINE;
-  return `Available agents:\n${formatAgentList(agents)}`;
-}
-
-/**
- * The annotation facts that depend on where the reader is standing: the run's
- * pinned delegation scope, the worktree opt-in, and the slots the durable
- * agent list answers from — all of them the calling session's, carried as data so
- * the annotation itself is pure over them.
- */
-export interface DelegationAnnotationState {
-  readonly worktreeEnabled: boolean;
-  readonly agents: Readonly<Record<AgentCategory, readonly AgentEntry[]>>;
-}
-
-/** Resolve the agent list and workspace setting before pure annotation. */
-export const readDelegationAnnotationState = Effect.fn(
-  'readDelegationAnnotationState',
-)(function* (stores: SettingsStores, delegationScope?: AgentDelegationScope) {
-  const agents = yield* Effect.all({
-    workflow: resolveDelegationScopeAgents(
-      stores,
-      delegationScope,
-      AgentCategory.Workflow,
-    ),
-    toolUse: resolveDelegationScopeAgents(
-      stores,
-      delegationScope,
-      AgentCategory.ToolUse,
-    ),
-  });
-  return {
-    agents,
-    worktreeEnabled: yield* isWorktreeSupportEnabled(stores),
-  } satisfies DelegationAnnotationState;
-});
+      agents.push({
+        category,
+        tools,
+        agents: entries.map(({ name, description, tools: agentTools }) => ({
+          name,
+          // One line per agent: a blank line in a (user-defined) description
+          // would otherwise read as the end of the list.
+          description: (description || 'No description').replaceAll(
+            /\s*\n\s*/g,
+            ' ',
+          ),
+          tools: agentTools ?? [],
+        })),
+      });
+    }
+    const models = yield* readModelAvailabilityInputs(stores).pipe(
+      Effect.map((inputs) => availableModelNames(modelOptionsFrom(inputs))),
+      // A failed read (an unreadable store, a host call that rejected) tells
+      // the model the list is unknown rather than failing the step, and is
+      // logged. `Effect.catch` recovers typed failures only: the finisher's
+      // invariant is a programming error and fails the run as a defect.
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Could not load the models available for delegation: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel('DelegationTargets'), Effect.as(null)),
+      ),
+    );
+    return {
+      agents,
+      models,
+      worktree: launchers.has('toolUse')
+        ? yield* isWorktreeSupportEnabled(stores)
+        : null,
+    } satisfies DelegationTargets;
+  },
+);
 
 /* -------------------------------------------------------------------------
- * Models
+ * Rendering
  * ---------------------------------------------------------------------- */
 
-const AVAILABLE_MODELS_LINE = /^Available models:.*$/m;
+const worktreeLine = (enabled: boolean): string =>
+  enabled
+    ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
+    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
+
+/** The system text's delegation section, rendered once, at the freeze. */
+export function delegationSection(targets: DelegationTargets): string {
+  const lines = targets.agents.flatMap(({ tools, agents }) => {
+    const head = `Available agents for ${tools.join(', ')}:`;
+    if (agents.length === 0)
+      return [
+        `${head} none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.`,
+      ];
+    return [
+      head,
+      ...agents.map(
+        ({ name, description, tools: agentTools }) =>
+          `- ${name}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
+      ),
+    ];
+  });
+  if (targets.models === null)
+    lines.push(
+      'Available models: unavailable to load; omit model unless the user explicitly requested one.',
+    );
+  else if (targets.models.length === 0)
+    lines.push(
+      'Available models: none currently available. Ask the user to configure model access before delegating.',
+    );
+  else lines.push(`Available models: ${targets.models.join(', ')}`);
+  if (targets.worktree !== null) lines.push(worktreeLine(targets.worktree));
+  return `<delegation_targets>\n${lines.join('\n')}\n</delegation_targets>`;
+}
+
+/** `now` against `told`, as "now available: …; no longer available: …", or
+ *  null when they hold the same names. */
+function namesChange(
+  told: readonly string[],
+  now: readonly string[],
+): string | null {
+  const added = now.filter((name) => !told.includes(name));
+  const removed = told.filter((name) => !now.includes(name));
+  const parts = [
+    ...(added.length > 0 ? [`now available: ${added.join(', ')}`] : []),
+    ...(removed.length > 0
+      ? [`no longer available: ${removed.join(', ')}`]
+      : []),
+  ];
+  return parts.length === 0 ? null : parts.join('; ');
+}
+
+/**
+ * The lines that tell the model how the delegation targets changed since it
+ * was told `told` (undefined: none). A delegation tool that left is reported
+ * with the tools, not here.
+ */
+export function delegationUpdate(
+  told: DelegationTargets | undefined,
+  now: DelegationTargets,
+): string[] {
+  const lines = now.agents.flatMap(({ category, tools, agents }) => {
+    const before = told?.agents.find((group) => group.category === category);
+    const change = namesChange(
+      before?.agents.map(({ name }) => name) ?? [],
+      agents.map(({ name }) => name),
+    );
+    return change === null ? [] : [`Agents for ${tools.join(', ')} ${change}.`];
+  });
+  if (now.models === null) {
+    if (told?.models !== null)
+      lines.push(
+        'The models available for delegation could not be loaded; omit model unless the user explicitly requested one.',
+      );
+  } else {
+    const change = namesChange(told?.models ?? [], now.models);
+    if (change !== null) lines.push(`Models for delegation ${change}.`);
+  }
+  if (now.worktree !== null && now.worktree !== (told?.worktree ?? null))
+    lines.push(worktreeLine(now.worktree));
+  return lines;
+}
+
+/* -------------------------------------------------------------------------
+ * Launch-time model choice
+ * ---------------------------------------------------------------------- */
 
 const NO_DELEGATION_MODELS_MESSAGE =
   'No models are currently available for delegation. Review or configure model access before delegating.';
-
-export function availableModelNamesFromOptions(
-  models: readonly ModelOptionData[],
-): string[] {
-  return models.filter(isModelOptionAvailable).map((model) => model.value);
-}
-
-function formatAvailableModelsLine(
-  modelNames: readonly string[] | null,
-): string {
-  if (modelNames === null) {
-    return 'Available models: unavailable to load; omit model unless the user explicitly requested one.';
-  }
-  if (modelNames.length === 0) {
-    return 'Available models: none currently available. Ask the user to configure model access before delegating.';
-  }
-  return `Available models: ${modelNames.join(', ')}`;
-}
 
 /**
  * Decide which model a delegated run uses: an explicit override, else the
@@ -204,7 +217,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   /**
    * The setting slots the availability read answers from: the calling run's
    * session roots. Callers that reach this from outside their run — an
-   * approved proposal, a workflow script's per-call model routing — hand in
+   * approved proposal, a script's per-call model routing — hand in
    * the roots of the session the delegation belongs to, so the answer does not
    * depend on which frame the fiber resumed in.
    */
@@ -216,7 +229,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   });
   const models = modelOptionsFrom(inputs);
   const availableModels = unique(
-    availableModelNamesFromOptions(models)
+    availableModelNames(models)
       .map((model) => model.trim())
       .filter(Boolean),
   );
@@ -250,78 +263,3 @@ export const selectAvailableDelegationModel = Effect.fn(
   }
   return decision.model;
 });
-
-/* -------------------------------------------------------------------------
- * Worktree support
- * ---------------------------------------------------------------------- */
-
-/** The single "Git worktree support:" line, anchored to a line start. */
-const WORKTREE_LINE = /^Git worktree support:.*$/m;
-
-const WORKTREE_ENABLED_LINE =
-  'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.';
-
-const WORKTREE_DISABLED_LINE =
-  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because the call will be rejected when the tool runs. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
-
-/* -------------------------------------------------------------------------
- * Annotation
- * ---------------------------------------------------------------------- */
-
-/**
- * Refresh a delegation tool's "Available models:", "Available agents:", and
- * "Git worktree support:" lines from current state. A tool declaring no
- * `availabilityCategory` returns untouched at the early guard.
- * `availableModelNames` is `undefined` only when the resolved list held no
- * delegation tool at all, so in that case every tool reaching this function is a
- * non-delegation tool that returns early — `category` and `availableModelNames`
- * are independent (one keys off the tool name, the other off the whole list),
- * not causally linked.
- *
- * The workspace agents slots, the agent list scope and the worktree switch arrive as `state`
- * rather than being read here — see {@link readDelegationAnnotationState} for
- * why the caller resolves them — so everything below is pure over its
- * arguments.
- *
- * The agent list block is appended when its anchor is missing; the worktree line is
- * replace-only, because a tool without that line (e.g. delegate_workflow, which
- * has no `working_directory`) takes no working directory and must never be told
- * it does. The tool rejects a `working_directory` it cannot use when it runs
- * (`rejectUnusableWorkingDirectory`); this only keeps the guidance in step
- * with that check. A `$` in an agent description (e.g. inline LaTeX math) stays
- * literal.
- */
-export function annotateDelegationAvailability(
-  tool: ToolDefinition,
-  availableModelNames: readonly string[] | null | undefined,
-  state: DelegationAnnotationState,
-): ToolDefinition {
-  const category = tool.availabilityCategory;
-  if (!category) return tool;
-  const withModels =
-    availableModelNames === undefined
-      ? tool
-      : replaceDelegationDescriptionBlock(
-          tool,
-          AVAILABLE_MODELS_LINE,
-          () => formatAvailableModelsLine(availableModelNames),
-          { appendIfMissing: true },
-        );
-  // The replacements no-op without a description, and resolving the agent list /
-  // worktree state reaches platform state — skip those lookups when there is
-  // nothing to annotate (e.g. a tool config that carries only a name).
-  if (!withModels.description) return withModels;
-  const withAgents = replaceDelegationDescriptionBlock(
-    withModels,
-    AVAILABLE_AGENTS_BLOCK,
-    () => visibleDelegationAgentsBlock(state.agents[category]),
-    { appendIfMissing: true },
-  );
-  return replaceDelegationDescriptionBlock(
-    withAgents,
-    WORKTREE_LINE,
-    () =>
-      state.worktreeEnabled ? WORKTREE_ENABLED_LINE : WORKTREE_DISABLED_LINE,
-    { appendIfMissing: false },
-  );
-}

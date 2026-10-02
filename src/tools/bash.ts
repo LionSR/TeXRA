@@ -362,8 +362,8 @@ function executeBashTool(input: BashInput) {
     // A background shell delivers its result as a follow-up message; a
     // one-shot run ends after the current cycle, so nothing is left to collect
     // it. Every other child type already answers this case — agent-CLI
-    // refuses, native subagents degrade to the parent trace, workflow-script
-    // awaits — and a background shell cannot degrade, because the follow-up
+    // refuses, native subagents degrade to the parent trace, a script runs in
+    // the foreground — and a background shell cannot degrade, because the follow-up
     // IS its delivery. The approval the loop already took is spent by the
     // time this refuses: in the SDK path (`packages/agent/src/effect/sessionPrograms.ts`)
     // the `finally` kills the process group, so launching here would run the
@@ -379,7 +379,7 @@ function executeBashTool(input: BashInput) {
     const cwd = toolCall.workingDirectory ?? toolCall.roots.workspace;
 
     if (input.run_in_background) {
-      const run = yield* requireToolRun('bash run_in_background', toolCall);
+      const { run } = yield* requireToolRun('bash run_in_background', toolCall);
       return yield* executeBackground(
         run.session,
         input,

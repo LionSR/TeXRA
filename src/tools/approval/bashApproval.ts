@@ -17,7 +17,6 @@ import {
 } from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
-import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -55,12 +54,13 @@ export type BashDecision =
  */
 function prepareBashApprovalPrompt(
   request: BashApprovalRequest,
+  requestId: string,
   runId: RunId,
   session: SessionHandle,
 ): BashPermission {
   const cwd = request.cwd?.trim();
   return {
-    requestId: `bash-${generateShortId()}`,
+    requestId,
     command: request.command,
     ...(cwd && { cwd }),
     allowBypass:
@@ -83,12 +83,12 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     call.roots,
     BASH_APPROVAL_CONFIG_KEY,
   );
-  const run = call.run;
-  if (!run) {
+  if (call.run === undefined) {
     return yield* Effect.fail(
       new Error('A bash approval needs an active run.'),
     );
   }
+  const { run, requests } = call;
   const { session, runId } = run;
   const granted = () =>
     (request.grant === 'shell'
@@ -108,9 +108,14 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
     return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
   }
 
-  const permission = prepareBashApprovalPrompt(request, runId, session);
-  const prompt = session
-    .openRequest(runId, { kind: 'bash', data: permission })
+  const permission = prepareBashApprovalPrompt(
+    request,
+    requests.nextId('bash'),
+    runId,
+    session,
+  );
+  const prompt = requests
+    .open({ kind: 'bash', data: permission })
     .pipe(
       Effect.map((decided): BashDecision =>
         decided.action === 'approve' ? decided : refusalOf('bash', decided),

@@ -1,15 +1,15 @@
 /**
- * Reconstruct a canonical {@link AgentProposal} from the raw delegation/proposal
- * tool input captured in a progress-view log entry.
+ * Reconstruct a canonical {@link AgentProposal} from the raw `agent` tool
+ * input captured in a progress-view log entry.
  *
  * The progress view's "Edit as new task" link replays a past delegation into the main view.
  * To do that it must rebuild the typed proposal from the raw tool-call input that
  * was logged. This parser owns that reconstruction.
  *
  * It lives in the schema layer (not the renderer) because it encodes domain
- * knowledge rather than presentation: which delegation tools map to which agent
- * category and the `extractFigures` / `extractTikz` shorthand → `toolConfig`
- * mapping. The renderer calls `parseDelegationToolInput` from
+ * knowledge rather than presentation: how the `agent` input's names map onto
+ * a proposal's, and the `extractFigures` / `extractTikz` shorthand →
+ * `toolConfig` mapping. The renderer calls `parseDelegationToolInput` from
  * `toolFormatters.ts`.
  *
  * The schemas here are deliberately lenient: the LLM may omit fields the
@@ -17,17 +17,16 @@
  * ({@link DEFAULT_AGENT_MODEL}, empty file lists) are layered on top of the
  * shared proposal schemas.
  *
- * Note: at runtime `DelegationTools.execute` also inherits extraction flags from
- * the parent agent's `toolConfig` when omitted. That parent context is not
- * available here, so the reconstruction reflects only what the tool input
- * explicitly carried.
+ * The input does not say which category its agent was; a call that handed
+ * the agent `inputFiles` launched a workflow agent, since only a workflow
+ * agent takes them, and any other a tool-use agent.
  */
 import { z } from 'zod';
 
-import { isObject, safeLookup } from '@utils/core';
+import { isObject } from '@utils/core';
 
 import { DEFAULT_AGENT_MODEL } from '../constants/providers';
-import { DELEGATION_TOOL_CATEGORY } from '../constants/delegationTools';
+import { AGENT_TOOL_NAME } from '../constants/delegationTools';
 import { AgentCategory } from './agent';
 import { fileListFields } from './fileFields';
 import {
@@ -54,7 +53,7 @@ const LenientWorkflowProposalSchema = WorkflowAgentProposalSchema.extend({
 /**
  * Fold the `extractFigures` / `extractTikz` delegation shorthand into the
  * canonical `toolConfig.autoExtract*` flags. The single mapping shared by
- * `DelegationTools.execute` (runtime) and {@link parseDelegationToolInput}
+ * the `agent` tool (runtime) and {@link parseDelegationToolInput}
  * (replay): only a flag the input explicitly carried is set (absent stays
  * undefined so the caller's defaults/prefaults apply).
  */
@@ -74,7 +73,7 @@ export function extractionShorthandToolConfig(
 
 /**
  * Parse `data` against `schema`, warning and returning `null` on failure
- * instead of throwing. Shared by both delegation-tool branches below so a
+ * instead of throwing. Shared by both category branches below so a
  * reconstruction failure is reported identically regardless of category.
  */
 function parseOrWarn<T>(
@@ -93,21 +92,31 @@ function parseOrWarn<T>(
 }
 
 /**
- * Parse raw delegation/proposal tool input into a canonical {@link AgentProposal},
- * or `null` when the tool is not proposal-bearing or the input fails validation.
+ * Parse a raw `agent` tool input into a canonical {@link AgentProposal}, or
+ * `null` when the tool is another or the input fails validation.
  */
 export function parseDelegationToolInput(
   input: unknown,
   toolName: string,
 ): AgentProposal | null {
-  // toolName derives from untrusted logged input, so a value like
-  // 'constructor' must not resolve to an inherited Object member.
-  const category = safeLookup(DELEGATION_TOOL_CATEGORY, toolName);
-  if (!category) return null;
+  if (toolName !== AGENT_TOOL_NAME) return null;
+  const raw: Record<string, unknown> = isObject(input) ? input : {};
+  const {
+    agentName,
+    prompt,
+    working_directory: workingDirectory,
+    ...rest
+  } = raw;
+  const spread: Record<string, unknown> = {
+    ...rest,
+    agent: agentName,
+    instruction: prompt,
+    ...(workingDirectory != null && { workingDirectory }),
+  };
+  const workflow =
+    Array.isArray(spread.inputFiles) && spread.inputFiles.length > 0;
 
-  const spread = isObject(input) ? input : {};
-
-  if (category === AgentCategory.ToolUse) {
+  if (!workflow) {
     return parseOrWarn(
       LenientToolUseProposalSchema,
       { agentCategory: AgentCategory.ToolUse, ...spread },

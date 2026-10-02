@@ -23,11 +23,20 @@ export const ToolDefinitionSchema = z.looseObject({
   /** Runtime-only: original Zod schema for SDK-native conversion */
   zodSchema: z.custom<ZodType>().optional(),
   /**
-   * Agent category this delegation tool's description is annotated from
-   * ("Available agents:"/"Available models:" lines). Declared by the tool
-   * itself — never a side table mapping tool names to categories.
+   * Agent category this delegation tool launches, or the categories when it
+   * launches either (`agent`), whose agents the run's delegation targets
+   * list. Declared by the tool itself — never a side table mapping tool
+   * names to categories.
    */
-  availabilityCategory: AgentCategorySchema.optional(),
+  availabilityCategory: z
+    .union([AgentCategorySchema, z.array(AgentCategorySchema).readonly()])
+    .optional(),
+  /**
+   * What a script's call of the tool resolves to, as a TypeScript type, when
+   * it is not `ToolOutput` (`{ output, summary }`): a tool whose result
+   * carries a `value` declares that value's type here.
+   */
+  scriptReturns: z.string().optional(),
 });
 
 /** Tool definition type - derived from schema */

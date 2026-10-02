@@ -30,7 +30,7 @@ import {
   type FileListEntry,
   type MediaAttachmentKind,
   type ProviderError,
-  type WorkflowScriptDeliverySummary,
+  type ScriptDeliverySummary,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -159,7 +159,7 @@ export function startCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message (#7508). `workflowSummary` carries a workflow delivery's typed
+ * message (#7508). `scriptSummary` carries a workflow delivery's typed
  * presentation facts beside the row text (`UserMessagePayloadSchema`), so
  * renderers never re-parse them out of the text.
  */
@@ -167,11 +167,11 @@ export function logUserMessage(
   trace: AgentTrace,
   message: string,
   attachments?: readonly MediaAttachmentKind[],
-  workflowSummary?: WorkflowScriptDeliverySummary,
+  scriptSummary?: ScriptDeliverySummary,
 ): void {
   const data = {
     ...(attachments?.length ? { attachments } : {}),
-    ...(workflowSummary ? { workflowSummary } : {}),
+    ...(scriptSummary ? { scriptSummary } : {}),
   };
   trace.info(message, {
     messageType: MESSAGE_TYPES.USER_MESSAGE,

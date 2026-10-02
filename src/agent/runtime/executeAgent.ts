@@ -450,7 +450,7 @@ export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 export interface ResumeToolUseFromResumeDataOptions
   extends
     SubagentRunOptions,
-    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
+    Pick<ExecuteAgentOptions, 'publishWorkflowOutput' | 'stopAfterCycle'>,
     RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
@@ -504,6 +504,7 @@ export function resumeToolUseFromResumeData(
       toolPolicy: {
         approvalPromptsUnavailable:
           runSession.interactions.approvalPromptsUnavailable,
+        stopAfterCycle: options.stopAfterCycle,
       },
     });
     return yield* runWithLifecycle(

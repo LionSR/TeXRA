@@ -137,7 +137,6 @@ describe('selectWorkflowRunDetailLines', () => {
               },
             ],
             settledRows: 0,
-            run: null,
           },
         }),
       ]),

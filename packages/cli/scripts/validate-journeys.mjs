@@ -8,8 +8,8 @@
  * journey passes on simple invariants over the files it leaves behind and on a
  * real LaTeX build of them, never on how the prose reads.
  *
- * Nightly and label-triggered only (`.github/workflows/live-journeys.yml`): it
- * spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
+ * On demand only, by label or dispatch (`.github/workflows/live-journeys.yml`):
+ * it spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
@@ -283,13 +283,13 @@ if (unknown.length > 0) {
 }
 const funded = models.filter((model) => {
   if (process.env[MODEL_KEYS[model]]) return true;
-  // A fork PR or an unconfigured repo has no secret; live-llm skips the same way.
   console.warn(`[journeys] ${MODEL_KEYS[model]} is not set: skipping ${model}`);
   return false;
 });
-// The nightly run must not stay green after a secret is rotated or removed.
+// Every CI run was asked for (label or dispatch), so a missing key must not
+// leave it green; a local run only warns and skips that model.
 const missingKeyFails =
-  funded.length < models.length && process.env.GITHUB_EVENT_NAME === 'schedule';
+  funded.length < models.length && process.env.GITHUB_ACTIONS === 'true';
 if (funded.length === 0) process.exit(missingKeyFails ? 1 : 0);
 
 if (!values['no-build']) {

@@ -16,9 +16,11 @@
  * step has pinned its own, so the calls a response makes run against the
  * tools its request offered, and a generation no step holds drains.
  *
- * The step renders the run's context: the sections its system text adds,
- * frozen at the first step and after a compaction, a later change appended
- * to the history as a system message. When the offered set, the
+ * The step renders the run's context: the sections its system text adds and
+ * the delegation targets its delegation tools can launch, frozen at the
+ * first step and after a compaction, a later change appended to the history
+ * as a system message. A tool's description never carries live state, so a
+ * new credential or agent does not rewrite the cached tools. When the offered set, the
  * continuation, the hooks or that context differ from what the run last
  * recorded, the step returns a `tools.offered` row, preceded by the
  * `context.blob` rows of the content it names that the run has not stored
@@ -34,6 +36,7 @@
  */
 import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
 import { ModelProvider } from 'llm-zoo';
+import { z } from 'zod';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
@@ -52,15 +55,21 @@ import {
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
-import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
+import {
+  sha256,
+  toolDigests,
+  type ContinuationEntry,
+} from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
+import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
+import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { PromptContribution } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
 
-import { resolveStepTools } from '../agentToolResolution';
+import { declaredToolNames, resolveStepTools } from '../agentToolResolution';
 import { withholdsApprovalTools } from '../requestPolicy';
-import { blobRows, contextAt } from '../run/requestContext';
+import { blobRows, contextAt, stored } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { appendRow, rowAggregate } from './rows';
 import { stepHooks, type StepHook } from './hooks';
@@ -178,6 +187,69 @@ function heldToRecord(
 }
 
 /**
+ * The offered tools with each that renders its description from the run's
+ * declared tools (`ITool.describe`, the `script` tool's declarations)
+ * described: at the step that freezes the system text, from the tools the
+ * run declares (an MCP server's and the injected ones are left to
+ * discovery); at any later step, as the run's last offered set recorded it,
+ * so the text holds until a compaction opens the freeze again.
+ */
+function describedAtFreeze<
+  T extends Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>,
+>(
+  tools: T,
+  state: RunState,
+  declaration: AgentRunShape['toolInputs']['tools'],
+): T {
+  const describes = (name: string) =>
+    tools.registry.get(name)?.describe !== undefined;
+  if (!tools.definitions.some(({ name }) => describes(name))) return tools;
+  const names = new Set(
+    declaredToolNames(declaration).filter(
+      (name) => mcpServerOfToolName(name) === undefined,
+    ),
+  );
+  const declared = tools.definitions
+    .filter(({ name }) => names.has(name) && !describes(name))
+    .map((definition) => ({
+      definition,
+      scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
+    }));
+  const recorded = (name: string) => {
+    const shown =
+      state.offeredContext === null
+        ? undefined
+        : state.offeredTools?.find((tool) => tool.name === name)?.shown;
+    return shown === undefined
+      ? undefined
+      : stored(state, shown, z.object({ description: z.string() })).description;
+  };
+  const definitions = tools.definitions.map((definition) => {
+    const describe = tools.registry.get(definition.name)?.describe;
+    return describe === undefined
+      ? definition
+      : {
+          ...definition,
+          description: recorded(definition.name) ?? describe(declared),
+        };
+  });
+  const shown = new Map(
+    definitions.map((definition) => [
+      definition.name,
+      toolDigests({ definition }).shown,
+    ]),
+  );
+  return {
+    ...tools,
+    definitions,
+    offered: tools.offered.map((tool) => ({
+      ...tool,
+      shown: shown.get(tool.name) ?? tool.shown,
+    })),
+  };
+}
+
+/**
  * Open the run's next step: apply the switches and pin the generation they
  * produce, as one step (`LiveTools.pinSwitched`), release the previous
  * step's pin, and resolve what it offers.
@@ -215,7 +287,11 @@ const openStep = Effect.fn('Step.open')(function* (
       approvalPromptsUnavailable: withholdsApprovalTools(run.session),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
-    const tools = held?.tools ?? resolved;
+    const tools = describedAtFreeze(
+      held?.tools ?? resolved,
+      state,
+      run.toolInputs.tools,
+    );
     const continuation =
       pinned.continuations.entries.get(run.config.agentCategory) ?? null;
     // Only the plugins this step uses hold services: a parked run keeps up
@@ -334,12 +410,20 @@ const openStep = Effect.fn('Step.open')(function* (
   if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
-  const context = stepInstructions(step.prompt, listed, {
-    offered: step.tools.definitions.map(({ name }) => name),
-    isChild: runSystem.isChild(),
-    isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-    bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
-  });
+  const delegation = yield* readDelegationTargets(
+    step.tools.definitions,
+    run.toolInputs.stores,
+    run.delegationAgentScope ?? undefined,
+  );
+  const context = {
+    ...stepInstructions(step.prompt, listed, {
+      offered: step.tools.definitions.map(({ name }) => name),
+      isChild: runSystem.isChild(),
+      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
+      bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
+    }),
+    ...(delegation && { delegation }),
+  };
   const base = runSystem.base();
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
