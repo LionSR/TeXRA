@@ -15,8 +15,6 @@ import {
   type TurnTotals,
   type MessageType,
   type ToolUseLog,
-  type WorkflowCallProgress,
-  type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import {
   createCompactionActivityProjection,
@@ -31,7 +29,6 @@ import {
   plainLogRow,
   streamingTextRow,
   toolRow,
-  workflowTaskRow,
   type LogRowPayload,
   type StreamingTextRow,
   type ToolCallFacts,
@@ -108,11 +105,6 @@ export type Slot =
       call: ToolCallFacts;
     }
   | {
-      readonly kind: 'call';
-      base: TranscriptRowBase;
-      call: WorkflowCallProgress;
-    }
-  | {
       readonly kind: 'log';
       readonly base: TranscriptRowBase;
       readonly text: string;
@@ -149,9 +141,6 @@ export interface TranscriptIndexes {
   readonly cursors: Map<string, TranscriptText>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
-  /** The newest `workflow.plan`, for the run model. */
-  plan: WorkflowDeclaredPlan | undefined;
-  workflowAttemptId: string | undefined;
   /** The newest run stage, the home of a workflow run's statistics rows. */
   runStage: string | undefined;
   /** The run's priced turns so far, which its statistics rows show. */
@@ -186,7 +175,6 @@ export function emptyTranscript(): TranscriptView {
     rows: [],
     taskGroups: [],
     settledRows: 0,
-    run: null,
   };
   INDEXES.set(transcript, {
     rowIndex: new Map(),
@@ -202,8 +190,6 @@ export function emptyTranscript(): TranscriptView {
     live: new Map(),
     cursors: new Map(),
     thinkingRowId: undefined,
-    plan: undefined,
-    workflowAttemptId: undefined,
     runStage: undefined,
     spend: EMPTY_TURN_TOTALS,
     model: undefined,
@@ -387,8 +373,6 @@ function rowOf(
     }
     case 'tool':
       return toolRow(slot.base, slot.log, live, ctx.runLabels, slot.call);
-    case 'call':
-      return workflowTaskRow(slot.base, slot.call);
     case 'log':
       return logPayloadRow(slot.base, slot.text, slot.payload);
   }

@@ -58,9 +58,8 @@ interface ChildTurnState {
  * Fold the run's `child.turn` rows through the shared attempt fold:
  * `accepted` opens the turn, `settled` closes it and becomes the last
  * completed one. Reads every `child.turn` row, because the last completed
- * turn can belong to an earlier attempt than the active one — which is also why
- * it reads the fold's open/settled pair rather than its high-water mark: a
- * child's series restarts with every attempt.
+ * turn can belong to an earlier attempt than the active one: a child's series
+ * restarts with every attempt.
  */
 export function readChildTurnState(
   session: SessionHandle,

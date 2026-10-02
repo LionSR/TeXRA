@@ -45,9 +45,8 @@ export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
 
 /** Right-aligned metadata column for a child row: elapsed time, the number of
  *  tool calls the child has made, and its generated tokens so far (e.g.
- *  `2m 30s · 5 tool calls · ↓40k`). This is the per-agent stats summary a
- *  workflow-script run's `agent()` grandchildren surface when the run is
- *  focused; a plain subagent with no tool calls yet just shows elapsed/tokens.
+ *  `2m 30s · 5 tool calls · ↓40k`); a subagent with no tool calls yet just
+ *  shows elapsed/tokens.
  *  Output tokens are the "work produced" figure — deliberately not the
  *  context-fill number the status bar reports for the focused stream. */
 export function childRowMetadataText({

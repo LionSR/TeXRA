@@ -215,7 +215,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   ): void => {
     for (const { content } of followUps) {
       const display = followUpDisplay(content);
-      logUserMessage(logger, display.text, kinds, display.workflowSummary);
+      logUserMessage(logger, display.text, kinds, display.scriptSummary);
     }
   };
 

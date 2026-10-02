@@ -25,7 +25,6 @@ export const MESSAGE_TYPES = {
   CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
   CONTEXT_MANAGEMENT: 'contextManagement',
-  WORKFLOW_TASK: 'workflowTask',
   DEFAULT: 'default',
 } as const;
 

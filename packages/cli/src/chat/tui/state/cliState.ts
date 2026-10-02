@@ -9,7 +9,6 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  AgentCategory,
   RunIdSchema,
   type AgentDelegationScope,
   type AgentSource,
@@ -26,7 +25,6 @@ import {
 } from '@shared/session/surface';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
-import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
 import { sessionView } from './sessionView';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
@@ -184,11 +182,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     if (included.has(run.id)) groups[run.group].push(run);
   }
   const append = (run: RunView, depth: number): void => {
-    const open =
-      run.category !== AgentCategory.Workflow &&
-      (run.forceExpanded || expanded.get(run.id) === true);
+    const open = run.forceExpanded || expanded.get(run.id) === true;
     rows.push({ kind: 'run', run, depth, expanded: open });
-    // A workflow's calls belong to its existing popup.
     if (open) {
       for (const id of run.childIds) {
         if (included.has(id)) append(view.runs.get(id)!, depth + 1);
@@ -267,7 +262,6 @@ export function closeInfoPane(): void {
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
-  | { readonly kind: 'workflow'; readonly runId: RunId }
   | { readonly kind: 'script'; readonly runId: RunId }
   | { readonly kind: 'workPlan'; readonly runId: RunId };
 
@@ -287,58 +281,10 @@ export function openTranscriptReader(runId: RunId): void {
   FOREGROUND_READER.set({ kind: 'transcript', runId });
 }
 
-/** View state of the workflow popup — the phase tab (unset follows the run's
- *  active phase), the highlighted row, the unfolded groups and the filter.
- *  Held here, not in the component, so a repaint or a foreground surface
- *  taking over (an approval) hands the popup back exactly as it was. */
-export interface WorkflowPopupView {
-  readonly phaseKey: string | undefined;
-  readonly selectedKey: string | undefined;
-  readonly expanded: ReadonlySet<WorkflowRowGroup>;
-  /** Live filter text; empty means none. */
-  readonly filter: string;
-  /** True while keystrokes edit the filter instead of moving the selection. */
-  readonly filterEditing: boolean;
-}
-
-const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
-  phaseKey: undefined,
-  selectedKey: undefined,
-  expanded: new Set(),
-  filter: '',
-  filterEditing: false,
-};
-
-/** The view belongs to the workflow run, not to the mounted reader:
- *  closing the popup to look at one of its agents and coming back lands
- *  where the user left it; only a different workflow starts fresh. */
-const WORKFLOW_POPUP_VIEW = signal<{
-  readonly runId: RunId | undefined;
-  readonly view: WorkflowPopupView;
-}>({ runId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
-export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
-  () => WORKFLOW_POPUP_VIEW.get().view,
-);
-
-/** Open the workflow popup on a workflow-script run. A workflow is never
- *  a viewport: this is the one way to look inside one (see
- *  `presentRun`). */
-export function openWorkflowPopup(runId: RunId): void {
-  if (WORKFLOW_POPUP_VIEW.get().runId !== runId) {
-    WORKFLOW_POPUP_VIEW.set({ runId, view: INITIAL_WORKFLOW_POPUP_VIEW });
-  }
-  FOREGROUND_READER.set({ kind: 'workflow', runId });
-}
-
-export function updateWorkflowPopupView(
-  patch: Partial<WorkflowPopupView>,
-): void {
-  const current = WORKFLOW_POPUP_VIEW.get();
-  WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
-}
-
 /** View state of the script popup: which of the run's scripts it shows
- *  (unset, the newest) and the highlighted call. */
+ *  (unset, the newest) and the highlighted call. Held here, not in the
+ *  component, so a repaint or a foreground surface taking over (an
+ *  approval) hands the popup back exactly as it was. */
 export interface ScriptPopupView {
   readonly stageId: string | undefined;
   readonly selectedId: string | undefined;
@@ -349,8 +295,8 @@ const INITIAL_SCRIPT_POPUP_VIEW: ScriptPopupView = {
   selectedId: undefined,
 };
 
-/** Held per run, like the workflow popup's: closing it to look at a call's
- *  child and coming back lands where the user left it. */
+/** Held per run: closing it to look at a call's child and coming back
+ *  lands where the user left it. */
 const SCRIPT_POPUP_VIEW = signal<{
   readonly runId: RunId | undefined;
   readonly view: ScriptPopupView;
@@ -534,10 +480,6 @@ export function resetCliState(
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
-  WORKFLOW_POPUP_VIEW.set({
-    runId: undefined,
-    view: INITIAL_WORKFLOW_POPUP_VIEW,
-  });
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   draftRestoreRequest.set([]);

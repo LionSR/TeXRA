@@ -68,10 +68,7 @@ function childHeaderFor(
   return {
     label: child.label,
     modelLabel: child.modelLabel,
-    childKind:
-      child.identity?.kind === 'multiAgentWorkflow'
-        ? 'workflow script'
-        : 'subagent',
+    childKind: child.identity?.kind === 'script' ? 'script' : 'subagent',
     positionText: ancestorPositionLabel(view, child.id),
     parentLabel: parent === undefined ? 'main' : runLabelOf(parent),
   };

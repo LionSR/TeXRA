@@ -41,7 +41,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
-import { executeSubagent, type ApprovalMeta } from './subagentRun';
+import type { ApprovalMeta } from './subagentRun';
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'No feedback provided.',
@@ -54,7 +54,7 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
  * caller carries the resolved `source` onto the proposal so launch pins the
  * exact `(source, name)` entry instead of re-resolving the bare name.
  */
-export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
+const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   stores: WorkspaceAgentsStores,
   category: AgentCategory,
   name: string,
@@ -112,7 +112,7 @@ function summarizeProposal(
 }
 
 /** Convert proposal result to ToolResult. Returns null if approved. */
-export function proposalResultToToolResult(
+function proposalResultToToolResult(
   result: RequestDecision,
   agentName: string,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
@@ -175,7 +175,7 @@ type ProposalRequestError =
 /** Request the shared proposal decision, honoring the run's bypass policy.
  *  `ask` presents it in place of this call's own proposal request: the
  *  calls of one script share one request (`agent`). */
-export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
+const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
   function* (
     proposal: WorkflowAgentProposal | ToolUseAgentProposal,
     parent: RunToolCall,
@@ -348,21 +348,4 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       }),
     },
   } satisfies ApprovedDelegation;
-});
-
-/**
- * Shared proposal-or-bypass flow used by both delegate_workflow and delegate_agent.
- *
- * If proposal bypass is active for this stream, skips the proposal and launches immediately.
- * Otherwise, waits for user approval via the session's host interactions.
- */
-export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
-  parent: RunToolCall,
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-) {
-  const decided = yield* decideDelegation(parent, proposal);
-  if ('status' in decided) return decided;
-  return yield* executeSubagent(parent, decided.proposal, parent.run.runId, {
-    approvalMeta: decided.approvalMeta,
-  });
 });

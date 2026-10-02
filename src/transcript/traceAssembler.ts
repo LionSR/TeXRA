@@ -99,7 +99,6 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
             ...event,
             origin: null,
             parent: null,
-            checkpointId: null,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           };
         if (event.type === 'request.decided')

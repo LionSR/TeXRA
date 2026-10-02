@@ -18,7 +18,6 @@ import type {
   SessionEvent,
   DisplaySessionEvent,
   SessionEventDraft,
-  WorkflowCallLiveProgress,
 } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
@@ -29,15 +28,10 @@ import type {
 import type { QueuedFollowUp } from './runRows';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
-export type OpenWork =
-  | { readonly kind: 'stage'; readonly id: string }
-  | { readonly kind: 'stream'; readonly id: string }
-  | {
-      readonly kind: 'call';
-      readonly id: string;
-      readonly stageId: string | undefined;
-      readonly call: WorkflowCallLiveProgress;
-    };
+export interface OpenWork {
+  readonly kind: 'stage' | 'stream';
+  readonly id: string;
+}
 
 /** One ordered append to the log, as the publisher hands it to a job. */
 export type Append = (
@@ -127,8 +121,7 @@ export class SessionEvents extends Context.Service<
     /** What this publisher committed open on one aggregate and nothing has
      *  closed since, in first-appearance order: a stream until its
      *  `stream.end` or a phase move that rests or ends its run, a stage
-     *  until its `stage.end`, a workflow call until a terminal
-     *  `workflow.call`. What a park (streams) or a host exit (all three)
+     *  until its `stage.end`. What a park (streams) or a host exit (both)
      *  closes. Read on the publisher fiber (inside a job) or after a
      *  settle, it counts every commit before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];

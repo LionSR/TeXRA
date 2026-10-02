@@ -94,7 +94,6 @@ import {
 } from './HostInteractions';
 import { policyDecidedRows } from './requestPolicy';
 import { runEventDraft } from './SessionEvents';
-import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { presentTerminalResult } from './terminalResultToast';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionGraph } from './sessionGraph';
@@ -300,13 +299,6 @@ export class SessionHandle {
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
   /**
-   * Session-owned bridge from a workflow-script grandchild's run id to
-   * its run's engine skip/retry control. Populated by the workflow-script
-   * strategy while a run is in flight; a host (the CLI child list) consumes it
-   * to skip/retry a focused grandchild `agent()` call.
-   */
-  readonly workflowControls: WorkflowControlRegistry;
-  /**
    * Built by the session owner alone (`sessionLayer.ts`), inside the root's
    * graph, with that graph handed over as a function of the session: the
    * request handler admits on the session, so the graph is bound to the
@@ -357,7 +349,6 @@ export class SessionHandle {
     this.history = init.history;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
-    this.workflowControls = new WorkflowControlRegistry();
   }
 
   /**
@@ -542,8 +533,7 @@ export class SessionHandle {
   }
 
   /** Admit an aggregate's existing claim before this process appends to it:
-   *  a run's before resume reads or mutations, a workflow checkpoint's
-   *  before a relaunch journals into it. */
+   *  a run's, before resume reads or mutations. */
   acquireClaims(
     id: AggregateId,
     options: { readonly ends?: boolean } = {},
@@ -1050,11 +1040,10 @@ export class SessionHandle {
    *
    *  A session-wide settle is the session's own drain, not a drain of every
    *  run at once: it awaits every publication — callers queue an operation and
-   *  wait on it as a barrier (`createChildRun`, a workflow checkpoint's
-   *  journal write) — and reports the session-scoped failures only. A run's
-   *  lost fact is that run's outcome to carry, and a barrier that reported it
-   *  would fail a child creation, or a journal entry that committed, over
-   *  another run's rollback. Whoever hears a failure is who clears it, so a
+   *  wait on it as a barrier (`createChildRun`) — and reports the
+   *  session-scoped failures only. A run's lost fact is that run's outcome
+   *  to carry, and a barrier that reported it would fail a child creation
+   *  over another run's rollback. Whoever hears a failure is who clears it, so a
    *  run-tagged one stays tracked until that run's own drain takes it: that
    *  drain is what stamps the `artifact-drain` marker on the row it decides,
    *  and a session close settling a run past its budget settles the session

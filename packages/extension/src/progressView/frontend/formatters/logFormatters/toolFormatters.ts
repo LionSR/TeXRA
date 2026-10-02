@@ -18,10 +18,6 @@ import { html, nothing, type TemplateResult } from 'lit';
 // Local imports - shared utilities
 import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import {
-  DELEGATE_MULTI_AGENTS_TOOL_NAME,
-  DELEGATION_TOOL_CATEGORY,
-} from '@shared/constants/delegationTools';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { normalizeToolName } from '@shared/tools/toolDisplayName';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
@@ -137,9 +133,7 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }
 
-  // Workflow scripts already have a compact live summary and can be very
-  // large, so keep their source behind disclosure even while launching.
-  const shouldOpen = running && toolName !== DELEGATE_MULTI_AGENTS_TOOL_NAME;
+  const shouldOpen = running;
 
   // Live timer for in-progress tools, with timeout limit when available
   const toolTimeoutMs = getToolTimeoutMs(toolName, input);
@@ -148,21 +142,16 @@ export function formatToolUseTemplate(
 
   // Delegation row extra: "Edit as new task" loads the subagent's agent,
   // model, instruction and files into the launcher (shown in summary row)
-  const isProposalBearingDelegation = Object.hasOwn(
-    DELEGATION_TOOL_CATEGORY,
-    toolName,
-  );
-  const proposal =
-    isProposalBearingDelegation && !model.isInProgress
-      ? parseDelegationToolInput(input, toolName)
-      : null;
+  const proposal = model.isInProgress
+    ? null
+    : parseDelegationToolInput(input, toolName);
 
   // A real <button> (not a role="button" span) so wa-details' own summary
   // click handler recognizes it as interactive and skips its toggle — see
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation. The click binding carries the parsed proposal
   // itself, so nothing has to survive a round trip through a DOM attribute.
-  // A workflow proposal carries its files; a delegate_agent input has none.
+  // A workflow proposal carries its files; a tool-use one has none.
   const copied =
     proposal?.agentCategory === AgentCategory.Workflow
       ? 'agent, model, instruction and files'

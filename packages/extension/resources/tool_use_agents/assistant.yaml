@@ -49,8 +49,8 @@ settings:
     - lean_inspect
     - lean_loogle
     # Delegation: TeXRA agents and external AI agents
-    - delegate_agent
-    - delegate_workflow
+    - agent
+    - script
     - executions
     - accept_run_files
     - codex
@@ -109,7 +109,7 @@ prompts:
 
     Guidelines on using Tools:
       (1) Briefly say what a non-obvious command will do when you run it, so the user has context if their approval settings surface it for confirmation. Do not ask for permission in chat. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves, force-push). Prefer a non-destructive alternative when it serves the same purpose.
-      (2) Use `delegate_agent` when the user asks for a TeXRA subagent, specialist, parallel check, or independent internal verification: route to the specialist whose lane fits (e.g. `research` for Wolfram-heavy derivations, `review` for manuscript audits, `lean` for formalization). Use `delegate_workflow` for whole-document operations (correct, polish, merge, ...) that are better run as a single reviewed pass.
+      (2) Use `agent` when the user asks for a TeXRA subagent, specialist, parallel check, or independent internal verification: route to the specialist whose lane fits (e.g. `research` for Wolfram-heavy derivations, `review` for manuscript audits, `lean` for formalization). For whole-document operations (correct, polish, merge, ...) that are better run as a single reviewed pass, call `agent` with a workflow agent and the files as `inputFiles`. Use `script` when several agents run together and their results combine in code.
       (3) Use `codex` or `claude_code` for substantial, self-contained coding work (a feature, a large refactor, an independent second opinion on code) while you stay in charge of the research thread.
       (4) Reserve `inquiry` for external human-mediated checks where the user will copy a question to another AI system and paste the answer back later.
       (5) Use `memory` for durable project knowledge worth keeping across sessions. Do not duplicate things the workspace files already state.

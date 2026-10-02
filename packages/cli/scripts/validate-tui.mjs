@@ -196,7 +196,7 @@ const SCENARIOS = [
     expect: ['TeXRA', 'chat history line to grow the transcript pane'],
   },
   {
-    name: 'workflow-running',
+    name: 'script-running',
     smoke: true,
     frame: 'viewport',
     rows: 30,
@@ -204,15 +204,15 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '0',
       HARNESS_BASH_APPROVAL: '1',
-      HARNESS_WORKFLOW_RUNNING: '1',
+      HARNESS_SCRIPT_RUNNING: '1',
     },
-    // The workflow's agent asks while main is selected. Its decision shows
-    // over main right away (the asking stream is a descendant of the
-    // selection) and the selection stays on main: no child focus, so no
-    // "Esc parent".
+    // The background script's agent asks while main is selected. Its
+    // decision shows over main right away (the asking stream is a
+    // descendant of the selection) and the selection stays on main: no
+    // child focus, so no "Esc parent".
     bootExpect: 'Run command?',
     expect: ['Run command?', '$ npm run compile:safe', 'y approve'],
-    unexpect: ['Proofread paper B · Running · bash', 'Esc parent'],
+    unexpect: ['Esc parent'],
   },
   {
     name: 'process-child-composer-hidden',
@@ -1017,7 +1017,7 @@ const SCENARIOS = [
       '/config · Tools',
       'Toggle available external integrations',
       'always on ·',
-      'Multi-Agent Workflow — disabled · detected · Ready',
+      'Multi-Agent Workflow — enabled · detected · Ready',
       'disabled · detected · Ready',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
@@ -2057,9 +2057,6 @@ const SCENARIOS = [
       'Recent',
       'nested Interrupted',
       'Resume',
-      // A workflow run counts its calls (the run model's tally), not the
-      // child runs its attempts opened.
-      '[1 ok]',
     ],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },

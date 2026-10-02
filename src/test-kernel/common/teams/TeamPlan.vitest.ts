@@ -25,7 +25,7 @@ import {
   type ByCategory,
 } from '@shared/schemas';
 
-const delegateTools = ['delegate_agent'];
+const delegateTools = ['agent'];
 
 function agent(
   name: string,

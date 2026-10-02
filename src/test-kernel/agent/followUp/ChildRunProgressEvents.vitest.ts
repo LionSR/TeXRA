@@ -216,7 +216,7 @@ describe('child run progress events', () => {
         workflowRelaunchRunId,
         parentRunId,
         {
-          run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+          run: { kind: 'script', title: 'draft-sections' },
           userFollowUpSupport: 'unsupported',
           description: 'Run a named child task',
           config,
@@ -233,7 +233,7 @@ describe('child run progress events', () => {
         workflowRelaunchRunId,
         parentRunId,
         {
-          run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
+          run: { kind: 'script', title: 'draft-sections' },
           userFollowUpSupport: 'unsupported',
           description: 'Resume the named child task',
           config,
@@ -266,54 +266,49 @@ describe('child run progress events', () => {
     }),
   );
 
-  it.effect(
-    'emits workflow-script identity independently of its worker config',
-    () =>
-      Effect.gen(function* () {
-        const recorded = recordSessionEvents(testDefaultSession());
-        const workerConfig = {
-          ...config,
-          agent: 'generic',
-          agentCategory: AgentCategory.Workflow,
-        };
+  it.effect('emits script identity independently of its worker config', () =>
+    Effect.gen(function* () {
+      const recorded = recordSessionEvents(testDefaultSession());
+      const workerConfig = {
+        ...config,
+        agent: 'generic',
+        agentCategory: AgentCategory.Workflow,
+      };
 
-        const childRun = yield* createRegisteredChildRun(
-          testDefaultSession(),
-          workflowRelaunchRunId,
-          parentRunId,
-          {
-            run: {
-              kind: 'multiAgentWorkflow',
-              workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-            },
-            userFollowUpSupport: 'unsupported',
-            description: 'Audit the repository without editing',
-            config: workerConfig,
+      const childRun = yield* createRegisteredChildRun(
+        testDefaultSession(),
+        workflowRelaunchRunId,
+        parentRunId,
+        {
+          run: {
+            kind: 'script',
+            title: 'repo-cleanup-readonly-pilot-2026-07-24',
           },
-        );
+          userFollowUpSupport: 'unsupported',
+          description: 'Audit the repository without editing',
+          config: workerConfig,
+        },
+      );
 
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.start',
-          ),
-        ).toContainEqual(
-          expect.objectContaining({
-            identity: {
-              kind: 'multiAgentWorkflow',
-              workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-            },
-          }),
-        );
-        expect(
-          testDefaultSession().runs.getHandle(workflowRelaunchRunId),
-        ).toMatchObject({
-          agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
-          category: AgentCategory.Workflow,
-        });
+      expect(
+        eventsOfType(yield* Effect.promise(() => recorded.read()), 'run.start'),
+      ).toContainEqual(
+        expect.objectContaining({
+          identity: {
+            kind: 'script',
+            title: 'repo-cleanup-readonly-pilot-2026-07-24',
+          },
+        }),
+      );
+      expect(
+        testDefaultSession().runs.getHandle(workflowRelaunchRunId),
+      ).toMatchObject({
+        agentName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        category: AgentCategory.Workflow,
+      });
 
-        yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }),
+      yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
+    }),
   );
 
   it.effect(

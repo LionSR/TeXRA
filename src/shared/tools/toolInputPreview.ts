@@ -33,8 +33,7 @@ function executionsInputPreview(input: Record<string, unknown>): string {
 const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   bash: 'command',
   codex: 'prompt',
-  delegate_agent: 'agent',
-  delegate_workflow: 'agent',
+  agent: 'agentName',
 };
 
 /** Input keys that name what a call is acting on, for tools with no entry of
@@ -67,13 +66,6 @@ export function deriveToolInputPreview(
     return typeof input.title === 'string' && input.title
       ? input.title
       : 'Script';
-  if (name === 'delegate_multi_agents') {
-    const script = typeof input.script === 'string' ? input.script : '';
-    const workflowName = script.match(/\bname\s*:\s*(['"])(?<name>.*?)\1/)
-      ?.groups?.name;
-    if (workflowName) return workflowName;
-    return typeof input.scriptPath === 'string' ? input.scriptPath : '';
-  }
   const key = TOOL_PREVIEW_INPUT_KEY[name];
   if (key) {
     const value = input[key];

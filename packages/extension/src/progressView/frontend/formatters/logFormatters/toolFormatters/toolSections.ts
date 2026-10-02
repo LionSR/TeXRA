@@ -62,7 +62,7 @@ function codeLanguage(
 
 /**
  * A code section carrying the call's own source — a shell command or a
- * workflow script — wraps instead of scrolling sideways, so a long one-liner
+ * script — wraps instead of scrolling sideways, so a long one-liner
  * stays readable inside the card.
  */
 function isCommandInput(language: string): boolean {

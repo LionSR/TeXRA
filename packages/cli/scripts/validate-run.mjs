@@ -932,43 +932,28 @@ prompts:
   }
 }
 
-function validateWorkflowScriptAgentRunCommand() {
-  const cwd = mkdtempSync(
-    path.join(tmpdir(), 'texra-cli-workflow-script-run-'),
-  );
+function validateScriptFanoutRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-script-fanout-run-'));
   try {
     const home = path.join(cwd, 'home');
     const globalStorage = path.join(home, '.texra', 'v1', 'global-storage');
     const customAgents = path.join(globalStorage, 'custom_agents');
     const validationFlagPath = path.join(cwd, validationFlagName);
     mkdirSync(customAgents, { recursive: true });
-    const enableWorkflow = run(
-      process.execPath,
-      [
-        binaryPath,
-        'tools',
-        'enable',
-        'workflow-script',
-        '--cwd',
-        cwd,
-        '--print',
-      ],
-      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
-    );
-    assertSuccess(enableWorkflow, 'texra tools enable workflow-script');
     writeFileSync(
-      path.join(customAgents, 'workflow-script-validation.yaml'),
-      `name: workflow_script_validation
-description: Exercise workflow-script dispatch from the headless CLI.
+      path.join(customAgents, 'script-fanout-validation.yaml'),
+      `name: script_fanout_validation
+description: Exercise a script's agent fan-out from the headless CLI.
 
 settings:
   agentCategory: toolUse
   tools:
-    - delegate_multi_agents
+    - script
+    - agent
 
 prompts:
   systemPrompt: |
-    Call the requested workflow script exactly once, then finish.
+    Run the requested script exactly once, then finish.
   userRequest: |
     {{ INSTRUCTION }}
 `,
@@ -980,16 +965,16 @@ prompts:
       [
         binaryPath,
         'run',
-        'workflow_script_validation',
+        'script_fanout_validation',
         '--model',
         'openai/gpt-5.6-sol',
         '--instruction',
-        'Solve the validation problems through workflow-script dispatch.',
+        'Solve the validation problems through a script fan-out.',
         '--cwd',
         cwd,
-        // A workflow-script proposal is an approval request, and `never`
+        // A script's agent request is an approval request, and `never`
         // denies it like every other kind (#13376); `yolo` is the explicit
-        // grant a headless run needs to dispatch the script at all.
+        // grant a headless run needs to launch the children at all.
         '--approval-policy',
         'yolo',
         '--output-format',
@@ -1001,27 +986,15 @@ prompts:
         validationModel: true,
         validationFlagPath,
         env: isolatedCliHomeEnv(home, {
-          TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT: '1',
+          TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT: '1',
         }),
       },
     );
-    assertSuccess(result, 'texra run workflow script NDJSON');
-    const records = parseNdjson(result.stdout, 'workflow-script run NDJSON');
+    assertSuccess(result, 'texra run script fan-out NDJSON');
+    const records = parseNdjson(result.stdout, 'script fan-out run NDJSON');
     assert(
       records.every((record) => record.contract === 2),
       'every NDJSON line should carry the version-2 contract stamp',
-    );
-    // A run id is opaque: the workflow-script child is the child row its
-    // parent reports with the workflow identity, never a name parsed out of
-    // the id.
-    const workflowChildIds = new Set(
-      records.flatMap((record) =>
-        record.kind === 'progress' && record.event === 'run.children'
-          ? (record.payload?.children ?? [])
-              .filter((child) => child.identity?.kind === 'multiAgentWorkflow')
-              .map((child) => child.childRunId)
-          : [],
-      ),
     );
     // A progress record carries the session row: its run is the `run`
     // aggregate key, `["run", <run id>]`.
@@ -1029,53 +1002,39 @@ prompts:
       const [kind, id] = JSON.parse(record.payload.aggregateId);
       return kind === 'run' ? id : undefined;
     };
-    const workflowCompletedIndex = records.findIndex(
-      (record) =>
-        record.kind === 'progress' &&
-        record.event === 'run.end' &&
-        workflowChildIds.has(runIdOf(record)) &&
-        record.payload?.outcome === 'completed',
+    // A run id is opaque: the script's children are the child rows its
+    // parent reports, never names parsed out of an id.
+    const childIds = new Set(
+      records.flatMap((record) =>
+        record.kind === 'progress' && record.event === 'run.children'
+          ? (record.payload?.children ?? []).map((child) => child.childRunId)
+          : [],
+      ),
+    );
+    const completedChildren = records.flatMap((record, index) =>
+      record.kind === 'progress' &&
+      record.event === 'run.end' &&
+      childIds.has(runIdOf(record)) &&
+      record.payload?.outcome === 'completed'
+        ? [index]
+        : [],
     );
     const parentResultIndex = records.findIndex(
       (record) => record.kind === 'agent-result',
     );
     assert(
-      workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
-      'workflow-script run should wait for and return the terminal child report to the headless parent',
+      completedChildren.length === 3 &&
+        completedChildren.every((index) => index < parentResultIndex),
+      'the script should await its three children before the headless parent returns',
     );
-    const childId = runIdOf(records[workflowCompletedIndex]);
-    const history = run(
-      process.execPath,
-      [
-        binaryPath,
-        'history',
-        'show',
-        childId,
-        '--cwd',
-        cwd,
-        '--output-format',
-        'json',
-      ],
-      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
-    );
-    assertSuccess(history, 'texra history show workflow-script child');
-    const { report } = parseJson(
-      history.stdout,
-      'workflow-script child history',
+    const response = String(
+      records[parentResultIndex]?.result?.output?.response ?? '',
     );
     assert(
-      typeof report === 'string',
-      'workflow-script child history should contain its saved report',
-    );
-    assert(
-      report.includes('<workflow-script-result'),
-      'workflow-script run should persist its terminal child report',
-    );
-    assert(
-      report.includes('(±23,±22)') &&
-        report.includes('det(I+A)=4') &&
-        report.includes('1/4'),
-      `workflow-script run should contain all structured mathematical results\nreport:\n${report}`,
+      response.includes('(±23,±22)') &&
+        response.includes('det(I+A)=4') &&
+        response.includes('1/4'),
+      `the script result should carry all structured mathematical results\nresponse:\n${response}`,
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -1206,7 +1165,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
-  validateWorkflowScriptAgentRunCommand();
+  validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');
 }

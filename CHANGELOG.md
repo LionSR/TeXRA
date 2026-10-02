@@ -160,17 +160,22 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
-- **Multi-agent workflow scripts are written in a new form** — a lead's
-  script now writes `yield* agent(...)` and `yield* all([...])` instead of
-  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
-  and `timeout()` around any call. A failed call no longer comes back as an
-  empty result: inside `all()` it stops the other tasks and fails the step,
-  unless the script wraps each task in `attempt()` to keep the ones that
-  succeeded. A retried step reuses the calls it already finished instead of
-  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
-  old form stop with a message saying how to rewrite them; calls they already
-  completed are reused once the lead reruns the rewritten script under the
-  same name.
+- **`delegate_agent`, `delegate_workflow` and `delegate_multi_agents` are
+  gone; `agent` and `script` replace them.** `agent` runs any named agent,
+  workflow or tool-use, with the options of both old delegation tools
+  (`agentName` and `prompt` instead of `agent` and `instruction`). A
+  multi-agent workflow is now a `script` whose `await agent(...)` calls
+  fan out and join in plain JavaScript (`Promise.all`, `try`/`catch`, loops);
+  there are no saved script files, `scriptPath`, `args`, `files`,
+  `yield*` helpers or per-call Restart. The built-in assistant,
+  orchestrator, engineer, Lean orchestrator, creator and setup agents use
+  the new tools, and the multi-agent orchestration skill and the guide are
+  rewritten for scripts. **A custom agent that still lists a removed tool no
+  longer starts**: TeXRA names the tool and the agent's file so you can
+  change it to `agent` (or `script` with `agent`). A customized copy of a
+  changed built-in agent shows the usual "newer built-in" notice. The
+  Multi-Agent Workflow switch now holds `agent`, so it is on by default; if
+  you had switched it off, switch it back on to let agents delegate.
 - **Workflow agents no longer continue a response cut off by the output
   limit** — a round whose response hits the model's max output tokens keeps
   what the model wrote and processes it as that round's output, and warns
@@ -242,7 +247,7 @@ All notable changes to this project will be documented in this file.
   run is interrupted, the script runs again from the top on resume: calls
   that finished are handed back from the run's history instead of running
   twice, and a call that was in flight follows the usual rules (re-run when
-  it is safe, otherwise ask). No built-in agent offers `script` yet.
+  it is safe, otherwise ask).
 - **The `script` tool lists your tools as TypeScript, and finds the rest.**
   Its description declares each tool the agent lists as a typed function
   (`read_file(args: { path: string; … }): Promise<ToolOutput>`, a union of
@@ -269,8 +274,7 @@ All notable changes to this project will be documented in this file.
   pay for finished children twice. If the run is interrupted, a call finds
   the child it launched: a finished child's answer is read back, and one
   that was cut short continues under its own run instead of starting over.
-  The tool belongs to the Multi-Agent Workflow plugin; no built-in agent
-  offers it yet, and the `delegate_*` tools stay until it replaces them.
+  The tool belongs to the Multi-Agent Workflow plugin.
 - **Scripts can run in the background.** `script` with `run_in_background:
 true` returns at once with a run ID, and the script runs as a child run of
   its own (shown as a Script run) with the same tools, model and working

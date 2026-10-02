@@ -5,9 +5,8 @@ settings:
   tools:
     - read_file
     - plan
-    - delegate_multi_agents
-    - delegate_agent
+    - agent
     - executions
 prompts:
-  systemPrompt: 'GOLDEN-PARENT: read the notes, plan, run the workflow, delegate.'
+  systemPrompt: 'GOLDEN-PARENT: read the notes, plan, delegate.'
   userRequest: '{{ INSTRUCTION }}'

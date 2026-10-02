@@ -15,7 +15,6 @@ import {
   CodexThreadToolInputSchema,
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
-  WorkflowScriptFilesSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
 } from '@shared/schemas';
@@ -23,11 +22,7 @@ import {
   executionsWaitTimeoutSeconds,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
-import {
-  DELEGATE_MULTI_AGENTS_TOOL_NAME,
-  DELEGATION_TOOLS,
-  isWorkflowLaunchOutput,
-} from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {
   isMcpToolName,
@@ -339,16 +334,15 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
 }
 
 /**
- * `DelegateAgentInput`/`WorkflowAgentInput` derive from host-only schemas, so
- * each displayed field is read with its own guard.
+ * The `agent` tool's input derives from a host-only schema, so each
+ * displayed field is read with its own guard.
  */
 function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
 
-  // `agent` names its agent and task as `agentName` and `prompt`.
-  const agent = asString(input.agent) ?? asString(input.agentName);
+  const agent = asString(input.agentName);
   const model = asString(input.model);
   if (agent || model) {
     sections.push({
@@ -359,7 +353,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
     });
   }
 
-  const instruction = asString(input.instruction) ?? asString(input.prompt);
+  const instruction = asString(input.prompt);
   if (instruction) sections.push(textSection('Instruction:', instruction));
 
   const badges = [
@@ -380,37 +374,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
     }),
   );
   if (files) sections.push(files);
-  return sections;
-}
-
-function buildWorkflowScriptSections(ctx: SectionContext): ToolSection[] {
-  const { input } = ctx;
-  if (!isObject(input)) {
-    return [textSection('Input:', 'Workflow script input is unavailable.')];
-  }
-  const sections: ToolSection[] = [];
-
-  const agent = asString(input.agent);
-  const label = 'Default agent:'; // each call may name its own agent
-  if (agent !== undefined) {
-    sections.push({ kind: 'identifier', label, value: agent });
-  }
-
-  const script = asString(input.script);
-  if (script !== undefined) {
-    sections.push(codeSection('Script:', script, 'javascript'));
-  }
-
-  if (Object.hasOwn(input, 'args')) {
-    const args = input.args ?? null;
-    sections.push(codeSection('Args:', JSON.stringify(args, null, 2), 'json'));
-  }
-
-  const files = WorkflowScriptFilesSchema.safeParse(input.files);
-  const filesSection = files.success
-    ? fileGroupsSection(getProposalFileGroups(files.data))
-    : undefined;
-  if (filesSection) sections.push(filesSection);
   return sections;
 }
 
@@ -668,11 +631,7 @@ const SECTION_BUILDERS: readonly {
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) => ctx.toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME,
-    build: buildWorkflowScriptSections,
-  },
-  {
-    match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),
+    match: (ctx) => ctx.toolName === AGENT_TOOL_NAME && isObject(ctx.input),
     build: buildDelegationSections,
   },
   { match: (ctx) => isMcpToolName(ctx.toolName), build: buildMcpSections },
@@ -714,17 +673,12 @@ export function dispatchSections(ctx: SectionContext): {
     if (sections.length === 0) break;
     return {
       sections,
-      // `delegate_multi_agents` carries its output only for a detached launch
-      // (model instructions; the result is its own delivery row), not the
-      // awaited run's real result, which its sections do not show. A diff
-      // shows what an edit changed, so it stands for the output only when the
-      // edit applied: a failed edit's output is its failure, which no diff
-      // shows, and a host may paint no diff for it at all.
+      // A diff shows what an edit changed, so it stands for the output only
+      // when the edit applied: a failed edit's output is its failure, which
+      // no diff shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
-        (!ctx.failed && sections.some((section) => section.kind === 'diff')) ||
-        (ctx.toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME &&
-          isWorkflowLaunchOutput(ctx.outputText)),
+        (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };
   }

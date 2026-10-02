@@ -1,19 +1,16 @@
 import {
   deliveryTagOf,
   SUMMARIZED_TAGS,
-  formatWorkflowScriptDeliverySummary,
-  parseWorkflowScriptDeliverySummary,
+  formatScriptDeliverySummary,
+  parseScriptDeliverySummary,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-import type {
-  FollowUpContent,
-  WorkflowScriptDeliverySummary,
-} from '@shared/schemas';
+import type { FollowUpContent, ScriptDeliverySummary } from '@shared/schemas';
 
 interface FollowUpDisplay {
   readonly text: string;
   /** Typed workflow delivery facts logged beside the collapsed row text. */
-  readonly workflowSummary?: WorkflowScriptDeliverySummary;
+  readonly scriptSummary?: ScriptDeliverySummary;
 }
 
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
@@ -27,16 +24,16 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   // This is where a delivery envelope becomes a transcript row: parse the
   // workflow summary once here and carry it structured, so renderers never
   // re-extract it from the rendered text. Only the script envelopes own a
-  // `<workflow-summary>` element — other tags' bodies are entity-escaped.
+  // `<script-summary>` element — other tags' bodies are entity-escaped.
   const tag = deliveryTagOf(followUp.text);
-  const workflowSummary =
+  const scriptSummary =
     tag !== undefined && SUMMARIZED_TAGS.has(tag)
-      ? parseWorkflowScriptDeliverySummary(followUp.text)
+      ? parseScriptDeliverySummary(followUp.text)
       : undefined;
-  if (workflowSummary) {
+  if (scriptSummary) {
     return {
-      text: formatWorkflowScriptDeliverySummary(workflowSummary),
-      workflowSummary,
+      text: formatScriptDeliverySummary(scriptSummary),
+      scriptSummary,
     };
   }
   return { text: summarizeSubagentFollowup(followUp.text) };

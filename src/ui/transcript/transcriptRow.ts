@@ -11,7 +11,6 @@
  */
 import {
   TOOL_CALL_STATUS,
-  isTerminalWorkflowCallProgress,
   type ContextManagementData,
   type DiffResultDisplay,
   type ErrorLogData,
@@ -22,8 +21,7 @@ import {
   type MessageType,
   type NormalizedToolUse,
   type ToolUseLog,
-  type WorkflowCallProgress,
-  type WorkflowScriptDeliverySummary,
+  type ScriptDeliverySummary,
 } from '@shared/schemas';
 import {
   COMPACTION_ACTIVITY_LABEL,
@@ -91,7 +89,7 @@ export interface UserRow extends TranscriptRowBase {
   /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
    *  truncation of `text`: hosts choose which of the two to paint. */
   readonly summary: TranscriptText;
-  readonly workflowSummary?: WorkflowScriptDeliverySummary;
+  readonly scriptSummary?: ScriptDeliverySummary;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];
 }
@@ -201,16 +199,6 @@ export interface ProgressStatusRow extends TranscriptRowBase {
   readonly detail?: TranscriptText;
 }
 
-export interface WorkflowTaskRow extends TranscriptRowBase {
-  readonly kind: 'workflowTask';
-  readonly call: WorkflowCallProgress;
-  /** `Finished: Draft · claude-opus-4 · 1m 12s · $0.31` */
-  readonly line: string;
-  readonly statusLabel: string;
-  readonly metadataParts: readonly string[];
-  readonly detail?: { readonly kind: 'error' | 'note'; readonly text: string };
-}
-
 export interface CompactionActivityRow extends TranscriptRowBase {
   readonly kind: 'compactionActivity';
   readonly block: CompactionActivityBlock;
@@ -245,7 +233,6 @@ export type TranscriptRow =
   | StatisticsRow
   | ContextManagementRow
   | ProgressStatusRow
-  | WorkflowTaskRow
   | CompactionActivityRow
   | PhaseRow
   | LogRow;
@@ -322,8 +309,6 @@ export function isSettledRow(
         row.toolUse.status === TOOL_CALL_STATUS.COMPLETED ||
         row.toolUse.status === TOOL_CALL_STATUS.FAILED
       );
-    case 'workflowTask':
-      return isTerminalWorkflowCallProgress(row.call);
     case 'compactionActivity':
       return row.block.finalized;
     case 'webSearch':
@@ -354,8 +339,6 @@ export function rowHeadline(row: TranscriptRow): string {
     case 'error':
     case 'progressStatus':
       return row.summary.full;
-    case 'workflowTask':
-      return row.line;
     case 'phase':
       return row.heading;
     case 'thinking':

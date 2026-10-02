@@ -5,7 +5,6 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
-  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -17,10 +16,6 @@ import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
 } from '@ui/copy/scriptRequest';
-import {
-  WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowScriptPlanSummary,
-} from '@ui/copy/workflowScriptProposal';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -131,40 +126,6 @@ function agentProposalMetadataLines({
       },
     ];
   }
-  if (
-    payload.agentCategory === AgentCategory.Workflow &&
-    payload.workflowScript
-  ) {
-    const workflow = payload.workflowScript;
-    return [
-      {
-        segments: [
-          { text: workflow.name, bold: true },
-          { text: ` · ${workflowScriptPlanSummary(workflow)}` },
-        ],
-      },
-      {
-        segments: [
-          {
-            text: WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-              payload.agent,
-              getModelLabel(payload.model),
-            ),
-          },
-        ],
-      },
-      {
-        segments: [{ text: WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning }],
-        tone: 'warning',
-      },
-      ...fileGroupLines(fileGroups, WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading),
-      {
-        segments: [{ text: `Script: ${workflow.scriptPath}` }],
-        tone: 'dim',
-      },
-    ];
-  }
-
   const lines: MetadataLine[] = [
     {
       segments: [
@@ -237,15 +198,9 @@ function MetadataLineRow(props: {
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
-  const workflowScript =
-    props.payload.agentCategory === AgentCategory.Workflow
-      ? props.payload.workflowScript
-      : undefined;
   const { script } = props.payload;
   let title = `Spawn ${props.payload.agent}?`;
   if (script) title = `${SCRIPT_REQUEST_COPY.title(script)}?`;
-  else if (workflowScript)
-    title = `Approve multi-agent workflow ${workflowScript.name}?`;
   const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,

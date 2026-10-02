@@ -23,11 +23,11 @@ import {
   OutputFileSummarySchema,
   type RunId,
   type ToolResultPayload,
-  type WorkflowScriptDeliverySummary,
-  type WorkflowTally,
+  type ScriptDeliverySummary,
+  type ScriptTally,
 } from '@shared/schemas';
 import { runTreeUsage } from '@shared/session/sessionView';
-import { workflowSummaryElement } from '@shared/subagentFollowup';
+import { scriptSummaryElement } from '@shared/subagentFollowup';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -129,7 +129,7 @@ const EnvelopeFilesSchema = z.discriminatedUnion('category', [
  * `original/` snapshot of the input), and then the output's round-relative
  * name is the workspace path.
  */
-export function deliveredFilePath(
+function deliveredFilePath(
   roots: SessionHandle['roots'],
   output: {
     readonly relativePath: string;
@@ -151,16 +151,16 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   session: SessionHandle,
   runId: RunId,
   name: string,
-  outcome: WorkflowScriptDeliverySummary['outcome'],
+  outcome: ScriptDeliverySummary['outcome'],
   errorCause: string | null,
   /** When this launch or resume of the run started: what the duration
-   *  counts from, as a workflow script's does, never an idle gap. */
+   *  counts from, never an idle gap. */
   startedAt: number,
 ) {
   const { calls } = yield* scriptRunCalls(session, runId);
   const view = yield* session.readView([]);
   const now = yield* Clock.currentTimeMillis;
-  const tally: WorkflowTally = {
+  const tally: ScriptTally = {
     total: calls.length,
     ok: 0,
     running: 0,
@@ -171,10 +171,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     skipped: 0,
     notRun: 0,
   };
-  const files = new Map<
-    string,
-    WorkflowScriptDeliverySummary['files'][number]
-  >();
+  const files = new Map<string, ScriptDeliverySummary['files'][number]>();
   for (const call of calls) {
     switch (call.status) {
       case 'completed':
@@ -210,9 +207,8 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
     costUsd: runTreeUsage(view, runId).cost,
     durationMs: Math.max(0, Math.round(now - startedAt)),
     files: [...files.values()],
-    scriptPath: null,
     errorCause,
-  } satisfies WorkflowScriptDeliverySummary;
+  } satisfies ScriptDeliverySummary;
 });
 
 const resumeHint = (runId: RunId): string =>
@@ -246,7 +242,7 @@ export function createScriptRunStrategy(
             attributes,
             response: script.result.output ?? '',
             lines: [
-              workflowSummaryElement(
+              scriptSummaryElement(
                 yield* scriptRunSummary(
                   session,
                   runId,
@@ -267,7 +263,7 @@ export function createScriptRunStrategy(
           runId,
           attributes,
           lines: [
-            workflowSummaryElement(
+            scriptSummaryElement(
               yield* scriptRunSummary(
                 session,
                 runId,
@@ -302,7 +298,7 @@ export function createScriptRunStrategy(
           tag: DELIVERY_TAG.scriptError,
           runId,
           attributes,
-          lines: [workflowSummaryElement(summary)],
+          lines: [scriptSummaryElement(summary)],
           message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
         });
       }),

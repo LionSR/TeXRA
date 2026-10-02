@@ -83,14 +83,14 @@ function control(row: HTMLElement, action: string): HTMLElement {
 }
 
 describe('run-tabs over the fold', () => {
-  it("renders every top-level stream with a workflow run's calls beneath it, and the rail without them", async () => {
+  it("renders every top-level stream with a script run's calls beneath it, and the rail without them", async () => {
     const view = fanOutView();
     const { element } = await mountTabs(view, emptySurface(view.key));
 
     for (const id of view.order) expect(rowOf(element, id)).toBeTruthy();
-    // The root is a workflow run: its calls are reachable under it in the
-    // tree (the issue's decision), so the child's own subagent is a row.
-    expect(view.runs.get(ROOT)?.category).toBe('workflow');
+    // The root is a background script run: its calls are reachable under it
+    // in the tree (the issue's decision), so the child's own subagent is a row.
+    expect(view.runs.get(ROOT)?.identity.kind).toBe('script');
     expect(rowOf(element, CHILD)).toBeTruthy();
     expect(rowOf(element, GRANDCHILD)).toBeTruthy();
 

@@ -96,7 +96,7 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  *
  * Every category qualifies. Workflow runs were excluded while "session" meant
  * a tool-use conversation, which left the whole workflow-subagent population —
- * the rows a workflow script's `agent()` calls create, and the ones a reader
+ * the rows a script's `agent()` calls create, and the ones a reader
  * can least tell apart — labelled by nothing but their agent name.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold

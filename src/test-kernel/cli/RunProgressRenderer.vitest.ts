@@ -306,7 +306,6 @@ function publishRun(
       worktree: null,
       parent: null,
       approvalPolicy: null,
-      checkpointId: null,
     },
   ]);
   session.publishRunEvent(runId, {

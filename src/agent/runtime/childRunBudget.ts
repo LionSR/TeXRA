@@ -26,9 +26,9 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  * core count, clamped to the schema range. Model conversations are network
  * bound, so the core count is a floor for useful parallelism rather than a
  * ceiling — which is why the setting stays overridable up to `max`. This is
- * the one host-side owner of the number: the session's semaphore (re-pinned by the child-run loop) and
- * the workflow engine's per-run semaphore (`workflowScriptStrategy`) both
- * read it here. Resolved host-side because `src/shared` is loaded by the settings
+ * the one host-side owner of the number: the session's semaphore
+ * (re-pinned by the child-run loop) and the `agent` tool's per-script
+ * semaphore both read it here. Resolved host-side because `src/shared` is loaded by the settings
  * webview and must stay free of `node:os`.
  */
 export const resolveChildRunConcurrencyBudget = Effect.fn(

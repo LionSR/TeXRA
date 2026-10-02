@@ -411,7 +411,7 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- Launch executions via `runAgent` and resume via `resumeRun` (see CLAUDE.md "Agent system"); use the lower-level `executeAgent` only when you already own the `runId` (e.g. subagent dispatch in `src/tools/delegation/inBandSubagentRun.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **Run loop architecture**

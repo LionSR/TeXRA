@@ -52,15 +52,13 @@ type StageEvent = Extract<
 /**
  * The task group one stage event writes over `current`, the group it names
  * (undefined when none is open), at the event's clock `at`. A start opens
- * the group whole, tagging a workflow phase with `attemptId`, the attempt the
- * newest `workflow.plan` declared; an end closes the group its start opened
+ * the group whole; an end closes the group its start opened
  * and writes nothing for a group no start opened.
  */
 export function taskGroupOnStage(
   current: TaskGroup | undefined,
   event: StageEvent,
   at: number,
-  attemptId: string | undefined,
 ): TaskGroup | undefined {
   if (event.type === 'stage.end') {
     return current && { ...current, status: event.status, endTime: at };
@@ -73,7 +71,6 @@ export function taskGroupOnStage(
     ...(event.parentId ? { parentGroupId: event.parentId } : {}),
     ...(event.kind != null ? { kind: event.kind } : {}),
     ...(event.index != null ? { index: event.index } : {}),
-    ...(event.kind === 'phase' && attemptId !== undefined ? { attemptId } : {}),
     ...(event.total != null ? { total: event.total } : {}),
   };
 }

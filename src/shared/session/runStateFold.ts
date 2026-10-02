@@ -248,8 +248,6 @@ const IGNORED_ROW_TYPES: Readonly<
   log: true,
   'stage.start': true,
   'stage.end': true,
-  'workflow.plan': true,
-  'workflow.call': true,
   usage: true,
   'context.state': true,
   'stream.start': true,
@@ -259,10 +257,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'followup.closed': true,
   // The child loop's own bookkeeping: folded by its readers, not the loop.
   'child.turn': true,
-  // Checkpoint-aggregate rows never reach a run fold; total-record members.
-  'workflow.script': true,
-  'workflow.journal': true,
-  'workflow.attempt': true,
 };
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 

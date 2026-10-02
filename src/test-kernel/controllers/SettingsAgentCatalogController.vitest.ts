@@ -196,7 +196,7 @@ describe('SettingsAgentCatalogController', () => {
           source: 'builtInToolUse',
           name,
           category: 'toolUse',
-          tools: ['delegate_agent'],
+          tools: ['agent'],
         });
         const { controller } = createController({
           agents: {
@@ -230,13 +230,13 @@ describe('SettingsAgentCatalogController', () => {
           source: 'plugin',
           name: 'lean',
           category: 'toolUse',
-          tools: ['delegate_agent'],
+          tools: ['agent'],
         };
         const orchestrator: SettingsAgentCatalogEntry = {
           source: 'builtInToolUse',
           name: 'orchestrator',
           category: 'toolUse',
-          tools: ['delegate_agent'],
+          tools: ['agent'],
         };
         const { controller } = createController({
           agents: { toolUse: [delegatingLean, orchestrator] },
@@ -291,7 +291,7 @@ describe('SettingsAgentCatalogController', () => {
                 source: 'custom',
                 name: 'teamLead',
                 category: 'toolUse',
-                tools: ['delegate_agent'],
+                tools: ['agent'],
               },
             ],
           },
