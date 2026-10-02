@@ -1,6 +1,6 @@
 ---
 created: 2026-10-01
-status: proposed
+status: accepted
 ---
 
 # Codemode everywhere: every tool call goes through one script tool
@@ -73,8 +73,8 @@ real but waits until after the flip, listed under "Later".
 | Three-arm Q4 comparison (typed core list, pi's 3,000-token budget)                                                                                          | Q4 is ruled; the flip only needs `direct` against `only`                                                                                                                                                                               | later         |
 | Harness-boundary lint (old lane 14) and the split seams list                                                                                                | Two new directories with no domain imports need no rule yet; the split doc owns the boundary                                                                                                                                           | pointer       |
 | Durable approvals (old lane 1)                                                                                                                              | Its own PR, #13604; code mode works without it, as direct calls do                                                                                                                                                                     | pointer       |
-| `call.control` and the session request for per-call skip and retry                                                                                          | Skip is a stop of the child run, which every host already offers; per-call restart is Q9                                                                                                                                               | deleted       |
-| `script.source`, drafts under `.texra/scripts/`, `path`, `args`, `files`                                                                                    | Only needed to rerun a saved file; Q8 asks to drop them                                                                                                                                                                                | Q8            |
+| `call.control` and the session request for per-call skip and retry                                                                                          | Skip is a stop of the child run, which every host already offers; per-call restart is dropped (Q9)                                                                                                                                     | deleted       |
+| `script.source`, drafts under `.texra/scripts/`, `path`, `args`, `files`                                                                                    | Only needed to rerun a saved file; dropped (Q8)                                                                                                                                                                                        | deleted       |
 | Board cosmetics: tab tallies and badges, next-failed, filter, glyph strip, phase and row keys, live counters                                                | Not capabilities; the capabilities they sat on stay in the inventory                                                                                                                                                                   | deleted       |
 | Peer comparison table, pi's `store()` and `models.*` divergence                                                                                             | Prior art, not design; two sentences remain under "Prior art"                                                                                                                                                                          | deleted       |
 | Nightly matrix fixes                                                                                                                                        | Landed in #13599                                                                                                                                                                                                                       | deleted       |
@@ -134,9 +134,9 @@ Line counts come from `wc -l` at the baseline.
   `WorkflowScriptTool` (1,079), `WorkflowScriptStrategy` (782),
   `WorkflowRunModel` (465), `WorkflowScriptCost` (282), `WorkflowPopup` (187).
   `WorkflowScriptSandboxBundle` (88) is retargeted at the worker entry.
-- **If Q7 is yes,** `delegate_agent` and `delegate_workflow` go in the same
-  change set (`DelegationTools.ts`, 237; net about −200 once their launch code
-  lives in `agent`).
+- **Delegation tools (Q7).** `delegate_agent` and `delegate_workflow` go in
+  the same change set (`DelegationTools.ts`, 237; net about −200 once their
+  launch code lives in `agent`).
 - **Never built.** Phase 2 of the history-query note (`query()` as a workflow
   operation, a journal discriminant and a format bump,
   `2026-09-26-executions-history-query.md` §6). A script calls
@@ -230,8 +230,8 @@ One tool, `script`, takes a plain JSON object:
 }
 ```
 
-If the owner keeps script files (Q8), `code` becomes optional and `path`,
-`args` and `files` return. The code may use `await` at top level, and
+There are no script files (Q8): no `path`, `args`, `files` or drafts; inputs
+are literals in `code`. The code may use `await` at top level, and
 `return` gives the result. The globals:
 
 ```ts
@@ -313,7 +313,7 @@ form of the promise bridge the 2026-09-25 generator ruling removed
 (`2026-09-25-workflow-script-generator-protocol.md`); the owner accepted the
 reversal (Q1).
 
-What the script gives up against `yield*` is listed in Q6.
+What the script gives up against `yield*` is the six narrowings ruled in Q6.
 
 ## Approvals, cards and the ledger
 
@@ -603,7 +603,7 @@ pattern.
 ## Parity inventory
 
 `delegate_multi_agents` is deleted only when every row is delivered (lane 7).
-The `delegate_*` subsection gates their deletion if Q7 is yes. Paths are under
+The `delegate_*` subsection gates their deletion (Q7). Paths are under
 `src/` unless they name a package. `Tool` is
 `tools/delegation/WorkflowScriptTool.ts`, `Runner` is
 `workflowScriptAgentRunner.ts`, `Strategy` is `workflowScriptStrategy.ts`,
@@ -617,17 +617,17 @@ option, and an effort option beyond the `@effort` suffix.
 
 ### Input and launch
 
-| Capability                                                | Today                                       | New home                                                       | Lane |
-| --------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------- | ---- |
-| Inline script source                                      | `Tool:100-106`                              | `script.code`                                                  | 2    |
-| Source saved as a draft; rerun a saved file by path       | `Tool:107-113`, `:166-201`, `:251-263`      | **Dropped if Q8 is yes**; else `path` plus a pinned source row | 2    |
-| JSON `args`; files bound by role as `files`               | `Tool:93-99`; `workflowScriptFiles.ts:8-14` | **Dropped if Q8 is yes** (literals in `code`); else fields     | 2    |
-| Rerun reuses the checkpoint's args and files when omitted | `checkpoint.ts:377-389`                     | **Narrowed** (Q6)                                              | —    |
-| `meta.name` as heading                                    | `types.ts:33-36`                            | `script.title`                                                 | 2    |
-| Tool-level default agent                                  | `Tool:87-92`                                | `agentName` required on `agent`                                | 3    |
-| Visible agents inside `delegationAgentScope`              | `Tool:282-288`; `Runner:131-166`            | `requireVisibleAgent` with the scope                           | 3    |
-| Model availability checked before launch                  | `Tool:347-353`                              | `selectAvailableDelegationModel` per call                      | 3    |
-| Syntax errors with location; imports refused              | `parseScript.ts:64-107`                     | `ScriptSyntaxError`; the realm has no module loader            | 2    |
+| Capability                                                | Today                                       | New home                                            | Lane |
+| --------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------- | ---- |
+| Inline script source                                      | `Tool:100-106`                              | `script.code`                                       | 2    |
+| Source saved as a draft; rerun a saved file by path       | `Tool:107-113`, `:166-201`, `:251-263`      | **Dropped** (Q8)                                    | 2    |
+| JSON `args`; files bound by role as `files`               | `Tool:93-99`; `workflowScriptFiles.ts:8-14` | **Dropped** (Q8): literals in `code`                | 2    |
+| Rerun reuses the checkpoint's args and files when omitted | `checkpoint.ts:377-389`                     | **Narrowed** (Q6)                                   | —    |
+| `meta.name` as heading                                    | `types.ts:33-36`                            | `script.title`                                      | 2    |
+| Tool-level default agent                                  | `Tool:87-92`                                | `agentName` required on `agent`                     | 3    |
+| Visible agents inside `delegationAgentScope`              | `Tool:282-288`; `Runner:131-166`            | `requireVisibleAgent` with the scope                | 3    |
+| Model availability checked before launch                  | `Tool:347-353`                              | `selectAvailableDelegationModel` per call           | 3    |
+| Syntax errors with location; imports refused              | `parseScript.ts:64-107`                     | `ScriptSyntaxError`; the realm has no module loader | 2    |
 
 ### The `agent()` call
 
@@ -699,7 +699,7 @@ option, and an effort option beyond the `@effort` suffix.
 | Pending decisions reachable from the board (Review)                                     | `Board:79-83`, `:598-616`        | the same over nested cards and children's requests                | 6    |
 | A call opens its child run                                                              | `Board:527-537`                  | the card's child-run link                                         | 6    |
 | Skip a running call                                                                     | `Board:454-478`; `Popup:354-361` | stop the child run (existing control); the call rejects `Skipped` | 3, 6 |
-| Restart a running call                                                                  | same                             | **Dropped if Q9 is yes**                                          | —    |
+| Restart a running call                                                                  | same                             | **Dropped** (Q9)                                                  | —    |
 | Resume and "Edit as new task" on an ended run                                           | `BaseRunContent.ts:71-101`       | generic run content of the background script run                  | 6    |
 | Headless `texra run` progress lines                                                     | `workflowPlainOutput.ts:35-63`   | the same lines over the script stage                              | 6    |
 
@@ -715,7 +715,7 @@ per child (the child's own live view already has them).
 | The plugin ships the skill, hidden by the switch   | `skillSources.ts:168-175`                     | the rewritten skill                   | 7    |
 | User guide; fan-out patterns                       | `multi-agent-workflows.md`; `SKILL.md:26-126` | rewritten in `await` form             | 7    |
 
-### `delegate_agent` and `delegate_workflow` (if Q7 is yes)
+### `delegate_agent` and `delegate_workflow` (Q7)
 
 `DT` is `DelegationTools.ts`, `IF` is `inputFields.ts`, `SR` is
 `subagentRun.ts`, all under `tools/delegation/`.
@@ -796,7 +796,7 @@ depends on none of them.
    direct tools. The flag lives on `BoundModel` (`modelBinding.ts:87-98`),
    set in the vendor arms (`:285-380`) beside `supportsForcedToolChoice`.
 
-## Owner rulings (2026-10-01)
+## Owner rulings (2026-10-01, 2026-10-02)
 
 "i want to be as future looking as possible. but also it should cover
 everything that delegate_multi_agents can do."
@@ -813,42 +813,35 @@ everything that delegate_multi_agents can do."
 8. **External numbers are motivation only,** and **code mode stays
    domain-free.**
 
+9. **Q6. Accept the six narrowings** (2026-10-02). A rerun does not inherit
+   the previous args and files; an unavailable model fails one call
+   (catchable) instead of the workflow; a caught `Promise.all` rejection does
+   not interrupt siblings; the per-`all()` `concurrency` bound is gone (the
+   session budget stays); two background runs of one script are not refused;
+   and the declared plan (`meta.tasks`) has no successor. Each follows from a
+   script being plain JavaScript over ordinary calls, none loses a result or
+   bills twice, and the script request shows the whole source before anything
+   runs.
+10. **Q7. `agent` replaces `delegate_agent` and `delegate_workflow`**
+    (2026-10-02), deleted in lane 7 with `delegate_multi_agents`. They differ
+    only by category, which the named agent decides.
+11. **Q8. No script files** (2026-10-02): no `path`, drafts under
+    `.texra/scripts/`, `args`, `files` or `script.source` row. The source is
+    on the `model.message` row, and a rerun with a fix re-sends the code
+    while Q2 reuse keeps finished children free.
+12. **Q9. No per-call Restart** (2026-10-02). Skip stays, as a stop of the
+    child run; a script retries in code, and a user who wants a call redone
+    stops it and asks. No `call.control` or per-call session request.
+13. **Q10. The flip bar is the pooled five-night window** (2026-10-02) under
+    "Rollout and evaluation", replacing "three consecutive nightlies": three
+    nights of four journeys is 12 tasks per arm, which cannot tell a 10-point
+    difference from noise.
+
+Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
+
 ## Open questions for the owner
 
-Numbered after the rulings; Q6 to Q10 replace the earlier Q6 to Q18.
-
-1. **Q6. Accept the narrowings?** Six places do less than today:
-   a rerun does not inherit the previous args and files; an unavailable model
-   fails one call (catchable) instead of the workflow; a caught
-   `Promise.all` rejection does not interrupt siblings; the per-`all()`
-   `concurrency` bound is gone (the session budget stays); two background
-   runs of one script are not refused; and the declared plan (`meta.tasks`)
-   has no successor.
-   _Recommended: accept all six._ Each follows from a script being plain
-   JavaScript over ordinary calls, none loses a result or bills twice, and the
-   script request already shows the whole source before anything runs.
-2. **Q7. Replace `delegate_agent` and `delegate_workflow` with `agent`,**
-   deleted in lane 7 with `delegate_multi_agents`?
-   _Recommended: yes._ They differ only by category, which the named agent
-   decides; keeping them beside `agent` is two systems for one launch.
-3. **Q8. Drop script files?** Today every source is saved as a draft, a model
-   can edit the file and rerun it by path, and `args` and `files` let one file
-   run with different inputs. Keeping this needs `path`, `args`, `files`, a
-   draft store under `.texra/scripts/`, and a `script.source` row (a new
-   frozen kind) pinning the bytes read.
-   _Recommended: drop._ No caller other than the model launches scripts by
-   path, the source is already on the `model.message` row, and a rerun with a
-   fix re-sends the code while Q2 reuse keeps finished children free. The
-   cost is the tokens of re-sending a long script.
-4. **Q9. Drop per-call Restart?** Skip stays, as a stop of the child run.
-   Restart needs `call.control`, a session request, and an attempt-bump
-   interrupt per call.
-   _Recommended: drop._ A script retries in code, and a user who wants a call
-   redone stops it and asks; Q2 reuse keeps the others free.
-5. **Q10. The flip bar.** Replace "three consecutive nightlies" with the
-   pooled five-night window above.
-   _Recommended: yes._ Three nights of four journeys is 12 tasks per arm,
-   which cannot tell a 10-point difference from noise.
+None are open.
 
 ## Lanes
 
@@ -860,7 +853,7 @@ Numbered after the rulings; Q6 to Q10 replace the earlier Q6 to Q18.
 | 4    | Background scripts: `run_in_background`, `script` run identity, delivery and summary line, stop notice, `resumeRun`, `/executions` view, one-shot foreground                                                                         | M                         | 2, 3                                    |
 | 5    | Prompt and discovery: declarations frozen with the system text (unions as typed unions), availability text frozen and the per-step rewrite deleted, BM25 `searchTools` and `describeTool` over the pinned generation                 | M                         | the rewrite part none; the rest 2       |
 | 6    | Renderers in three hosts: script stage (status, grouping, Review, child links, skip as stop), script request panels, headless lines                                                                                                  | L                         | 2, 3, 4                                 |
-| 7    | **Parity gate and deletion.** Delete `delegate_multi_agents` and everything listed above, and the `delegate_*` pair if Q7; adapt the agents, prompts and docs; `{ agent }` name set; the loud refusal; rewrite the skill and guide   | M, ~15k lines incl. tests | 3, 4, 5, 6; then the 1.0 freeze and tag |
+| 7    | **Parity gate and deletion.** Delete `delegate_multi_agents` and everything listed above, and the `delegate_*` pair (Q7); adapt the agents, prompts and docs; `{ agent }` name set; the loud refusal; rewrite the skill and guide    | M, ~15k lines incl. tests | 3, 4, 5, 6; then the 1.0 freeze and tag |
 | 8    | Evaluation and flip: `direct` against `only` per model, the fan-out journey, three runs per arm, the pooled window, the `BoundModel` flag; flip the default once the bar is met                                                      | S                         | 2, 5                                    |
 
 Lanes 1 and the rewrite half of 5 can start today. Nothing is deleted ahead
