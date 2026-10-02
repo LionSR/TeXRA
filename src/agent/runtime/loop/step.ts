@@ -16,9 +16,11 @@
  * step has pinned its own, so the calls a response makes run against the
  * tools its request offered, and a generation no step holds drains.
  *
- * The step renders the run's context: the sections its system text adds,
- * frozen at the first step and after a compaction, a later change appended
- * to the history as a system message. When the offered set, the
+ * The step renders the run's context: the sections its system text adds and
+ * the delegation targets its delegation tools can launch, frozen at the
+ * first step and after a compaction, a later change appended to the history
+ * as a system message. A tool's description never carries live state, so a
+ * new credential or agent does not rewrite the cached tools. When the offered set, the
  * continuation, the hooks or that context differ from what the run last
  * recorded, the step returns a `tools.offered` row, preceded by the
  * `context.blob` rows of the content it names that the run has not stored
@@ -55,6 +57,7 @@ import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
+import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { PromptContribution } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -334,12 +337,20 @@ const openStep = Effect.fn('Step.open')(function* (
   if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
-  const context = stepInstructions(step.prompt, listed, {
-    offered: step.tools.definitions.map(({ name }) => name),
-    isChild: runSystem.isChild(),
-    isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-    bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
-  });
+  const delegation = yield* readDelegationTargets(
+    step.tools.definitions,
+    run.toolInputs.stores,
+    run.delegationAgentScope ?? undefined,
+  );
+  const context = {
+    ...stepInstructions(step.prompt, listed, {
+      offered: step.tools.definitions.map(({ name }) => name),
+      isChild: runSystem.isChild(),
+      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
+      bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
+    }),
+    ...(delegation && { delegation }),
+  };
   const base = runSystem.base();
   const { system, update } = contextAt(state, base, context);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);

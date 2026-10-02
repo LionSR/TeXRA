@@ -115,17 +115,14 @@ export const WorkflowAgentTool = defineTool({
   // card opens when the attempt is admitted, not only at settlement. An
   // asynchronous one settles at once, so its card closes right after opening.
   slow: true,
-  // Static base text; the "Available agents:" line is resolved per run at the
-  // resolveStepTools boundary.
   description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
 Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
-Available agents: loaded from the enabled agents at runtime.
+Available agents and models: listed under <delegation_targets> in the system prompt; a later change arrives as a system message.
 
 Pick the agent whose description matches the task. Do not default to the first listed agent.
 
-Available models: loaded from the active credentials at runtime.
 Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
 
 Optional auto-attach from the input LaTeX:
@@ -146,7 +143,7 @@ const DelegateAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model reference from the Available models line (e.g. `anthropic/claude-opus-5-5`); append `@low`, `@medium`, `@high`, `@xhigh` or `@max` to set the reasoning effort, or `@none` to turn thinking off where the model allows it. Omit unless the user explicitly requested a model or effort; defaults to the current model when available.',
+      'Model reference from the available models (e.g. `anthropic/claude-opus-5-5`); append `@low`, `@medium`, `@high`, `@xhigh` or `@max` to set the reasoning effort, or `@none` to turn thinking off where the model allows it. Omit unless the user explicitly requested a model or effort; defaults to the current model when available.',
     ),
   instruction: z
     .string()
@@ -215,23 +212,17 @@ export const DelegateAgentTool = defineTool({
   requiresApproval: 'inBody',
   // Card at admission, as for `delegate_workflow` above.
   slow: true,
-  // Static base text; the "Available agents:", "Available models:", and "Git
-  // worktree support:" lines are resolved per run at the resolveStepTools
-  // boundary.
   description: `Delegate a task to a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 
 To send a subagent follow-up instructions, use the executions tool: action "send" on /executions/{id}. The subagent keeps its full history, and its next result arrives like the first.
 
 Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
 
-Available agents: loaded from the enabled agents at runtime.
+Available agents and models, and whether git worktree support is on: listed under <delegation_targets> in the system prompt; a later change arrives as a system message.
 
 Agent selection: choose the most specific agent whose description matches the task.
 
-Available models: loaded from the active credentials at runtime.
-Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
-
-Git worktree support: resolved from the active workspace at runtime.`,
+Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.`,
   schema: DelegateAgentInputSchema,
   execute: executeDelegateAgentTool,
 });

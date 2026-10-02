@@ -7,6 +7,7 @@ import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
+import { delegationUpdate } from '@tools/delegation/delegationAvailability';
 import type { PromptContribution, PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
@@ -93,7 +94,8 @@ export function stepInstructions(
 
 /** What changed from the context the model was told to `now`, as the text
  *  of the system message that tells it: each section added or reworded,
- *  each one withdrawn, and the tools that came and went. '' for none. */
+ *  each one withdrawn, the tools that came and went, and the delegation
+ *  targets that did. '' for none. */
 export function contextUpdate(told: RunContext, now: RunContext): string {
   const lines = Object.entries(now.sections).flatMap(([name, text]) =>
     told.sections[name] === text ? [] : [text],
@@ -109,6 +111,8 @@ export function contextUpdate(told: RunContext, now: RunContext): string {
     lines.push(
       `These tools are no longer available; do not call them: ${removed.join(', ')}.`,
     );
+  if (now.delegation)
+    lines.push(...delegationUpdate(told.delegation, now.delegation));
   return lines.join('\n');
 }
 

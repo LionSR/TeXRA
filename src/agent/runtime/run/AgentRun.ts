@@ -246,7 +246,6 @@ export const agentRunLayer = (
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
-        delegationScope: ctx.delegationAgentScope ?? undefined,
         parentOffered,
         held,
       };
