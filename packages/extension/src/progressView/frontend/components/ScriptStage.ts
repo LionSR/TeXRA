@@ -29,6 +29,7 @@ import {
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -330,6 +331,14 @@ export class ScriptStage extends LitElement {
               )}`,
           )}`,
       )}
+      ${
+        this.stage.costUsd > 0
+          ? html`<div class="section">
+              <span>Total</span>
+              <span class="count">${formatCostUsd(this.stage.costUsd)}</span>
+            </div>`
+          : nothing
+      }
     </div>`;
   }
 }

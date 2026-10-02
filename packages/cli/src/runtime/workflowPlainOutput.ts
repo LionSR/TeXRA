@@ -7,7 +7,7 @@
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
-import type { RunId } from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   descendantRuns,
@@ -16,6 +16,7 @@ import {
 } from '@shared/session/sessionView';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 import { scriptStages } from '@ui/transcript';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 import { claimRootRun } from './sessionViewFollow';
 
@@ -48,6 +49,12 @@ function scriptPlainLines(
         lines.set(`${stage.id}:phase:${call.phase}`, `◆ ${call.phase}`);
       lines.set(call.id, call.line);
     }
+    // The stage's total once it has ended, its discarded attempts included.
+    if (stage.status !== RUN_PHASE.RUNNING && stage.costUsd > 0)
+      lines.set(
+        `${stage.id}:total`,
+        `Script total: ${formatCostUsd(stage.costUsd)}`,
+      );
   }
   return lines;
 }

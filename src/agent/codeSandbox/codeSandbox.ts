@@ -21,11 +21,7 @@ import { z } from 'zod';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
-import {
-  GUEST_CPU_BUDGET_MS,
-  QUICKJS_MEMORY_LIMIT_BYTES,
-  RUN_LOG_MAX_LINES,
-} from './limits';
+import { GUEST_CPU_BUDGET_MS, QUICKJS_MEMORY_LIMIT_BYTES } from './limits';
 import {
   type ScriptEnd,
   type SettleMessage,
@@ -125,8 +121,15 @@ interface ScriptRequest<E, R> {
    * failure is not the guest's to catch: it ends the script with it.
    */
   readonly call: (op: ScriptOp) => Effect.Effect<ScriptSettlement, E, R>;
-  /** Each step's newly logged lines, as the guest logged them. */
-  readonly onLog?: (lines: ReadonlyArray<string>) => Effect.Effect<void>;
+  /**
+   * Each step's newly logged lines, each collapsed to one line of at most
+   * 500 characters, and how many lines past the worker's per-step bound the
+   * step dropped before them.
+   */
+  readonly onLog?: (
+    lines: ReadonlyArray<string>,
+    dropped: number,
+  ) => Effect.Effect<void>;
   /**
    * Runs once each settlement has reached the realm, before the next is
    * taken: a caller replaying recorded settlements in their recorded order
@@ -142,23 +145,15 @@ interface ScriptRequest<E, R> {
 interface ScriptResult {
   /** What the script returned, decoded from JSON; undefined for no value. */
   readonly value: unknown;
-  /**
-   * The last {@link RUN_LOG_MAX_LINES} `console.log` lines, in order, each
-   * collapsed to one line of at most 500 characters.
-   */
-  readonly logs: ReadonlyArray<string>;
-  /** How many earlier lines the tail dropped. */
-  readonly logsOmitted: number;
 }
 
 const endToResult = (
   end: ScriptEnd,
-  log: Pick<ScriptResult, 'logs' | 'logsOmitted'>,
   cpuBudgetMs: number,
 ): Effect.Effect<ScriptResult, ScriptError> => {
   switch (end._tag) {
     case 'Returned':
-      return Effect.succeed({ value: end.value, ...log });
+      return Effect.succeed({ value: end.value });
     case 'Threw':
       return Effect.fail(
         new ScriptFault({
@@ -267,17 +262,14 @@ const make = Effect.gen(function* () {
       const calls = yield* FiberSet.make<void, never>();
       const settled = yield* Queue.unbounded<SettleMessage, E>();
 
-      const logs: string[] = [];
-      let logsOmitted = 0;
       let open = 0;
       let report = yield* Queue.take(reports);
       for (;;) {
-        if (request.onLog !== undefined && report.logs.length > 0)
-          yield* request.onLog(report.logs);
-        logs.push(...report.logs);
-        const overflow = Math.max(0, logs.length - RUN_LOG_MAX_LINES);
-        logs.splice(0, overflow);
-        logsOmitted += report.logsDropped + overflow;
+        if (
+          request.onLog !== undefined &&
+          (report.logs.length > 0 || report.logsDropped > 0)
+        )
+          yield* request.onLog(report.logs, report.logsDropped);
         for (const op of report.ops) {
           open += 1;
           yield* FiberSet.run(
@@ -298,12 +290,7 @@ const make = Effect.gen(function* () {
             ),
           );
         }
-        if (report.end)
-          return yield* endToResult(
-            report.end,
-            { logs, logsOmitted },
-            cpuBudgetMs,
-          );
+        if (report.end) return yield* endToResult(report.end, cpuBudgetMs);
         if (open === 0) {
           return yield* new ScriptFault({
             name: 'ScriptStalled',

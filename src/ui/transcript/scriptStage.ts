@@ -103,6 +103,9 @@ export interface ScriptStageView {
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
+  /** What every child its calls launched has cost so far, discarded
+   *  attempts included. */
+  readonly costUsd: number;
 }
 
 /** What a waiting run asks for, in one line. */
@@ -283,11 +286,19 @@ export function scriptStages(
     const calls = (byStage.get(stage.id) ?? [])
       .toSorted((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
       .map((row) => callView(row, run, view));
+    const cards = new Set(calls.map((call) => call.id));
+    let costUsd = 0;
+    for (const childId of run.childIds) {
+      const child = view.runs.get(childId);
+      if (child?.parentCard != null && cards.has(child.parentCard))
+        costUsd += child.usage.cost;
+    }
     return {
       id: stage.id,
       status: stage.status,
       calls,
       phases: phasesOf(calls),
+      costUsd,
     };
   });
 }

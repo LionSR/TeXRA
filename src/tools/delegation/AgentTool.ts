@@ -87,6 +87,9 @@ import {
   launchDetachedSubagent,
 } from './subagentRun';
 
+/** Most children one script may launch. */
+const AGENT_CALL_LIMIT = 1000;
+
 /** The call's `timeoutMs` passed: interrupting the wait stopped the child. */
 class AgentTimedOut extends Data.TaggedError('AgentTimedOut')<{
   readonly timeoutMs: number;
@@ -599,6 +602,22 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       );
     if (settled.kind === 'ended')
       return childResult(agent.name, settled.runId, settled.result, key);
+  }
+
+  // A script launches at most AGENT_CALL_LIMIT children: a reused or
+  // recovered call launches none, and a resume's replayed calls never reach
+  // here, so neither counts.
+  if (script !== undefined) {
+    const launches = yield* script.shared(
+      'agent:launches',
+      Effect.sync(() => ({ count: 0 })),
+    );
+    if (launches.count >= AGENT_CALL_LIMIT)
+      return errorResult(
+        `A script may launch at most ${AGENT_CALL_LIMIT} agents; '${agent.name}' did not run.`,
+        { name: 'CallLimit' },
+      );
+    launches.count += 1;
   }
 
   // An unavailable model fails this call, which a script may catch (Q6).

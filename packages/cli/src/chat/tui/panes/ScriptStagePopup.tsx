@@ -26,6 +26,7 @@ import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and model
 import type { RunId } from '@shared/schemas';
+import { formatCostUsd } from '@utils/text/stringUtils';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   SCRIPT_CALL_STATUS_LABEL,
@@ -204,6 +205,9 @@ export function ScriptStagePopup({
     'Script',
     stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
     `${stage?.calls.length ?? 0} calls`,
+    stage !== undefined && stage.costUsd > 0
+      ? formatCostUsd(stage.costUsd)
+      : undefined,
   ]
     .filter((part) => part !== undefined)
     .join(' · ');

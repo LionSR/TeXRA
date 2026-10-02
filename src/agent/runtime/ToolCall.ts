@@ -75,6 +75,7 @@ export interface ScriptCalls {
    */
   readonly answer: (
     op: ScriptOp,
+    source: ScriptSource,
     answer: () => ToolResultPayload['result'],
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
