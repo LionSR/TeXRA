@@ -54,7 +54,9 @@
  *   awaits one `agent()` call, and the parent's turn ended; killed
  *   (`SIGKILL`) while that child's model call waits for
  *   `golden-background.release`: the background script the conformance
- *   suite resumes.
+ *   suite resumes. The parent's reply waits for
+ *   `golden-background-reply.release` until that child is at its model
+ *   call, so the two runs of one process do not race their rows.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -638,35 +640,49 @@ async function generate(root) {
        ORDER BY e."commit"`,
       [parent],
     )[0]?.id;
-  await until(
-    'the parent waiting and the background child at its model call',
+  const backgroundRows = (run, sql) =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND ${sql}`,
+      [run],
+    ).length;
+  // The parent and its script run are two fibers of one process: the
+  // parent's reply is held (`golden-background-reply.release`) until the
+  // script's child waits at its model call, then the parent ends its turn
+  // alone, so the two runs' rows commit in one order.
+  const backgroundParent = await until(
+    'the background child at its model call',
     () => {
       const parent = query(cli.store(), RUN_OF_AGENT, ['golden_background'])[0]
         ?.id;
       const script = parent && childOf(parent);
       const child = script && childOf(script);
-      const rows = (run, sql) =>
-        query(
-          cli.store(),
-          `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-           WHERE s.logical_id = ? AND ${sql}`,
-          [run],
-        ).length;
       return (
         child !== undefined &&
-        rows(
-          parent,
-          `e.type = 'run.position'
-           AND json_extract(e.data, '$.payload.at') = 'waiting'
-           AND json_extract(e.data, '$.payload.turn') = 1`,
-        ) > 0 &&
-        rows(
+        backgroundRows(
           child,
           `e.type = 'model.message'
            AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
-        ) > 0
+        ) > 0 &&
+        parent
       );
     },
+    background,
+  );
+  writeFileSync(path.join(root, 'golden-background-reply.release'), '');
+  // The turn's last row is its `conversation.progress`, published after
+  // `waiting`: the kill waits for it too.
+  await until(
+    'the background parent waiting',
+    () =>
+      backgroundRows(
+        backgroundParent,
+        `e.type = 'run.position'
+         AND json_extract(e.data, '$.payload.at') = 'waiting'
+         AND json_extract(e.data, '$.payload.turn') = 1`,
+      ) > 0 &&
+      backgroundRows(backgroundParent, `e.type = 'conversation.progress'`) > 0,
     background,
   );
   background.kill('SIGKILL');

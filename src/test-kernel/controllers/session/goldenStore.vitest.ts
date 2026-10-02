@@ -131,7 +131,7 @@ const RUNNING = RunIdSchema.parse('283494944f1bfdfee431047b');
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000f');
 const SCRIPT_RUN = RunIdSchema.parse('62db81fbc29ce54c703f5b7c');
-const SCRIPT_CHILD = RunIdSchema.parse('303a6ba690cab22c32cb1f77');
+const SCRIPT_CHILD = RunIdSchema.parse('05c0820314926d5df2a1d70a');
 const TOMBSTONED = RunIdSchema.parse('a00000000012');
 
 const roots: string[] = [];
@@ -882,6 +882,48 @@ describe('the interrupted golden runs', () => {
             )
             .run(workspace, FANOUT, FANNED, RUNNING),
         );
+        // Before the resume the run is interrupted (its owner proved dead):
+        // nothing works on the call whose child was running, so it reads as
+        // interrupted, not running, under no Running section.
+        yield* session.setTranscriptSubscriptions('golden-test', [
+          { id: FANOUT, fromSeq: 0 },
+        ]);
+        const [killed] = yield* SubscriptionRef.changes(session.view).pipe(
+          Stream.filter((view) => {
+            const run = view.runs.get(FANOUT);
+            return (
+              run?.group === 'interrupted' &&
+              scriptStages(run, view).length === 1
+            );
+          }),
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        const interrupted = killed!.runs.get(FANOUT)!;
+        expect(
+          scriptStages(interrupted, killed!)[0]!.calls.map(
+            ({ label, status, section, line }) => ({
+              label,
+              status,
+              section: section ?? null,
+              line: line.split(' · ')[0],
+            }),
+          ),
+        ).toEqual([
+          {
+            label: 'A',
+            status: 'finished',
+            section: null,
+            line: 'Finished: A',
+          },
+          {
+            label: 'B',
+            status: 'interrupted',
+            section: null,
+            line: 'Interrupted: B',
+          },
+        ]);
+        yield* session.setTranscriptSubscriptions('golden-test', []);
         const asked = autoDecideRequests(session, (opened) =>
           opened.payload.kind === 'proposal' ? { action: 'approve' } : null,
         );

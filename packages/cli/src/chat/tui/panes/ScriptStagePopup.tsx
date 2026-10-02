@@ -46,6 +46,7 @@ const POPUP_EXTRA_ROWS = 1;
 const STATUS_GLYPH = {
   queued: '○',
   running: '◐',
+  interrupted: '◌',
   finished: '✓',
   reused: '↺',
   skipped: '⊘',
@@ -57,6 +58,7 @@ const STATUS_GLYPH = {
 const STATUS_COLOR = {
   queued: undefined,
   running: COLOR_HINT,
+  interrupted: COLOR_WARNING,
   finished: COLOR_SUCCESS,
   reused: COLOR_SUCCESS,
   skipped: COLOR_BORDER,
