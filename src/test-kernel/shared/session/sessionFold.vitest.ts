@@ -1426,7 +1426,11 @@ const TURN_ROWS: readonly RunLedgerRow[] = [
   }),
   {
     type: 'tool.intent',
-    payload: { responseId: RESPONSE_ID, callIds: ['call-a'], attempt: 1 },
+    payload: {
+      origin: { kind: 'response', responseId: RESPONSE_ID },
+      callIds: ['call-a'],
+      attempt: 1,
+    },
   },
   settlement('call-a'),
   settlement('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
@@ -1763,7 +1767,7 @@ describe('foldRunState', () => {
             {
               type: 'tool.intent',
               payload: {
-                responseId: RESPONSE_ID,
+                origin: { kind: 'response', responseId: RESPONSE_ID },
                 callIds: ['__proto__'],
                 attempt: 1,
               },

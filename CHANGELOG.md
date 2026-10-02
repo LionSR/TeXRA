@@ -233,6 +233,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`script` tool (code mode, first stage).** An agent whose configuration
+  lists `script` can run one JavaScript program that calls its other tools as
+  `await tools.read_file({ path })`, with `Promise.all`, try/catch,
+  `phase(title)` and `console.log`. The program runs in a QuickJS sandbox on
+  a worker thread. Every call it makes is an ordinary tool call, with the
+  same hooks, approvals and card, nested under the script's stage. If the
+  run is interrupted, the script runs again from the top on resume: calls
+  that finished are handed back from the run's history instead of running
+  twice, and a call that was in flight follows the usual rules (re-run when
+  it is safe, otherwise ask). No built-in agent offers `script` yet, and
+  `run_in_background` is refused until background scripts land.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your

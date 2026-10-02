@@ -49,6 +49,7 @@ import {
   ModelMessagePayloadSchema,
   ModelRetryPayloadSchema,
   ToolBindingPayloadSchema,
+  ScriptCallPayloadSchema,
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
@@ -427,6 +428,8 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
+  /** A call a script issued, with its arguments: committed with its intent. */
+  durable('script.call', { payload: ScriptCallPayloadSchema }),
   /** Guards one outcome-unknown call; commits with the request it names. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
@@ -649,6 +652,7 @@ export function listingTypeOf(
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
+    case 'script.call':
     case 'tool.binding':
     case 'tool.result':
     case 'model.retry':

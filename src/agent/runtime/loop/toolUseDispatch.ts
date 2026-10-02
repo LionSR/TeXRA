@@ -20,14 +20,31 @@
  * skip; an unfinished call re-runs when `replayable` says so, else asks; a
  * recovered call with no intent never started. The model decides on retries.
  */
-import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
+import { isDeepStrictEqual } from 'node:util';
+
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  FileSystem,
+  Ref,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 import { z } from 'zod';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
+import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { ToolCall, type CallRequests } from '@agent/runtime/ToolCall';
+import {
+  ScriptDiverged,
+  ToolCall,
+  type CallRequests,
+  type ScriptCalls,
+} from '@agent/runtime/ToolCall';
 import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
@@ -39,6 +56,7 @@ import {
   type StateOperation,
   type ToolCallStatus,
   type ToolFileAttachment,
+  type ToolIntentOrigin,
   type ToolResult,
   type ToolResultPayload,
 } from '@shared/schemas';
@@ -64,7 +82,6 @@ import {
   replayable,
   SKIPPED_NOT_STARTED,
   SKIPPED_OUTCOME_UNKNOWN,
-  type LocalCall,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -97,6 +114,13 @@ const STREAMED_OUTPUT_MAX = 50_000;
 
 const SKIPPED_AFTER_END_TURN =
   'Tool call skipped: an earlier tool call ended the turn.';
+
+/** What the per-call program needs of a call, whichever origin issued it:
+ *  a response's dispatch fact, or a script's `script.call`. */
+type CallFacts = Pick<
+  DispatchFacts,
+  'callId' | 'toolName' | 'replay' | 'logId' | 'stageId'
+>;
 
 type Settlement = Pick<
   ToolResultPayload,
@@ -306,7 +330,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   };
 
   const settle = (
-    fact: DispatchFacts,
+    fact: CallFacts,
     attempt: number,
     settlement: Settlement,
     cards: readonly RunLedgerDraft[],
@@ -340,7 +364,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   /** The row that opens a call's card. A slow tool's is committed with the
    *  row that admits the attempt, so a resume finds the card its settlement
    *  closes; a fast tool's rides the settlement batch itself. */
-  const cardStart = (fact: DispatchFacts, input: unknown): RunLedgerDraft =>
+  const cardStart = (fact: CallFacts, input: unknown): RunLedgerDraft =>
     displayRow(runId, {
       type: 'tool.start',
       logId: fact.logId,
@@ -353,7 +377,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    *  card stores no output: a read projects it from the `tool.result` the
    *  batch commits (`rowCodec.ts`). */
   const settledCards = (
-    fact: DispatchFacts,
+    fact: CallFacts,
     input: unknown,
     status: ToolCallStatus,
     files: readonly FileListEntry[] = [],
@@ -370,13 +394,22 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }),
   ];
   /** The card rows an admitted attempt opens: a slow tool's, before it runs. */
-  const admittedCards = (
-    fact: DispatchFacts,
-    call: LocalCall,
-  ): RunLedgerDraft[] =>
+  const admittedCards = (fact: CallFacts, input: unknown): RunLedgerDraft[] =>
     step.registry.get(fact.toolName)?.slow === true
-      ? [cardStart(fact, parseCallArguments(call, logger))]
+      ? [cardStart(fact, input)]
       : [];
+
+  /** The row that admits an attempt of the calls an origin issued. */
+  const intentRow = (
+    origin: ToolIntentOrigin,
+    callId: string,
+    attempt: number,
+  ): RunLedgerDraft => ({
+    type: 'tool.intent',
+    aggregateId,
+    payload: { origin, callIds: [callId], attempt },
+  });
+  const fromResponse: ToolIntentOrigin = { kind: 'response', responseId };
 
   const syntheticSettlement = (error: string): Settlement => ({
     disposition: 'skipped',
@@ -391,13 +424,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    *  is the call's own request a resumed attempt re-enters: still open, or
    *  answered since this owner took the run and not yet read. */
   const execute = Effect.fn('toolUse.executeCall')(function* (
-    fact: DispatchFacts,
-    call: LocalCall,
+    fact: CallFacts,
+    parsedInput: unknown,
     attempt: number,
     standing: {
       readonly requestId: string;
       readonly decision: RequestDecision | null;
     } | null = null,
+    /** A call a response issued may issue calls of its own, as a script. */
+    scriptCalls?: ScriptCalls,
   ): Effect.fn.Return<
     void,
     InvokeError,
@@ -405,7 +440,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   > {
     const fs = yield* FileSystem.FileSystem;
     const tool: ITool | undefined = step.registry.get(fact.toolName);
-    const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
     // A slow tool's card is open: `dispatchCall` committed its `tool.start`
     // with the row that admitted this attempt. What the tool prints while it
@@ -550,6 +584,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               toolCallId: fact.callId,
               requests,
               hooks: { onToolOutput },
+              ...(scriptCalls === undefined ? {} : { scriptCalls }),
             }),
             Effect.provide(step.services),
           ),
@@ -670,8 +705,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 
   /** Ask whether an outcome-unknown call re-runs or is skipped (A3). */
   const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
-    fact: DispatchFacts,
-    call: LocalCall,
+    origin: ToolIntentOrigin,
+    fact: CallFacts,
     input: unknown,
     intent: Pick<RunState['pendingIntents'][string], 'attempt' | 'binding'>,
   ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
@@ -701,7 +736,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (bound !== undefined && bound.resolved && bound.decision !== null) {
       const answer = decided(bound.decision);
       if (answer !== null)
-        return yield* recordOutcomeDecision(fact, call, intent, answer);
+        return yield* recordOutcomeDecision(
+          origin,
+          fact,
+          input,
+          intent,
+          answer,
+        );
     }
     // A request the run committed and nobody answered is asked again under
     // its own id, so one barrier never accumulates requests. Anything else
@@ -760,7 +801,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       const policy = current.requests[requestId]?.decision;
       const answer = policy == null ? null : decided(policy);
       if (answer)
-        return yield* recordOutcomeDecision(fact, call, intent, answer);
+        return yield* recordOutcomeDecision(
+          origin,
+          fact,
+          input,
+          intent,
+          answer,
+        );
     }
     // The decision is the `request.decided` row the decide command lands on
     // the tail. A plane that closes first, and a cleanup's `cancel`, leave
@@ -785,32 +832,282 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     yield* cell.fold(row, 'The tool-outcome decision');
     const answer = decided(row.decision);
     if (answer === null) return yield* Effect.interrupt;
-    return yield* recordOutcomeDecision(fact, call, intent, answer);
+    return yield* recordOutcomeDecision(origin, fact, input, intent, answer);
   });
 
   /** A rerun admits a new attempt with its `tool.intent` and reopens the
    *  card; a skip records nothing further, the decision row is the fact. */
   const recordOutcomeDecision = Effect.fn('toolUse.outcomeDecision')(function* (
-    fact: DispatchFacts,
-    call: LocalCall,
+    origin: ToolIntentOrigin,
+    fact: CallFacts,
+    input: unknown,
     intent: { readonly attempt: number },
     decision: 'rerun' | 'skip',
   ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     if (decision === 'rerun') {
       yield* append([
-        {
-          type: 'tool.intent',
-          aggregateId,
-          payload: {
-            responseId,
-            callIds: [fact.callId],
-            attempt: intent.attempt + 1,
-          },
-        },
-        ...admittedCards(fact, call),
+        intentRow(origin, fact.callId, intent.attempt + 1),
+        ...admittedCards(fact, input),
       ]);
     }
     return decision;
+  });
+
+  /**
+   * The rules a call that may have run already follows, and its run: one
+   * the replay rule admits re-runs, another is asked about, and a skip
+   * closes the card the interrupted attempt opened.
+   */
+  const resumeIntent = Effect.fn('toolUse.resumeIntent')(function* (
+    origin: ToolIntentOrigin,
+    fact: CallFacts,
+    input: unknown,
+    intent: RunState['pendingIntents'][string],
+    scriptCalls?: ScriptCalls,
+  ): Effect.fn.Return<
+    void,
+    InvokeError,
+    ProcessServices | Runs | WorkspaceFs | StorageFs
+  > {
+    const current = yield* cell.current;
+    // The call's own request, never answered: its body never ran past it,
+    // so the attempt re-enters it and the answer completes the call. One
+    // the run's stop retired as cancelled is asked again the same way.
+    const ownId =
+      intent.binding?.role === 'call' ? intent.binding.requestId : null;
+    const own = ownId === null ? undefined : current.requests[ownId];
+    if (ownId !== null && own !== undefined) {
+      // Answered since this owner took the run, before its loop got here:
+      // no waiter read it, so it is the call's answer too.
+      const unread = own.resolved && current.decidedSinceActivation.has(ownId);
+      if (!own.resolved || unread) {
+        yield* execute(
+          fact,
+          input,
+          intent.attempt,
+          { requestId: ownId, decision: own.decision },
+          scriptCalls,
+        );
+        return;
+      }
+      if (own.decision?.action === 'cancel') {
+        yield* execute(fact, input, intent.attempt, null, scriptCalls);
+        return;
+      }
+    }
+    const decision = (yield* replayable(fact, step.registry, input, logger))
+      ? yield* recordOutcomeDecision(origin, fact, input, intent, 'rerun')
+      : yield* decideOutcomeUnknown(origin, fact, input, intent);
+    if (decision === 'skip') {
+      // The skip closes the card the interrupted attempt opened.
+      yield* settle(
+        fact,
+        intent.attempt,
+        syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
+        settledCards(fact, input, 'failed'),
+      );
+      return;
+    }
+    yield* execute(fact, input, intent.attempt + 1, null, scriptCalls);
+  });
+
+  /**
+   * The calls a response's call may issue as a script, each through this
+   * same per-call program under the origin `{ kind: 'script' }`: its
+   * `script.call` commits with its first intent, its card opens under the
+   * script's stage, and its settlement is handed back at its `tool.result`
+   * commit. A resumed script is handed back what its rows settled, in the
+   * order those settlements committed, before any call runs again; a call
+   * that was in flight follows the replay and outcome-unknown rules; and a
+   * call at a recorded `seq` that is not the recorded one is a divergence.
+   * Calls take their places in issue order: a parallel-safe call waits for
+   * the barrier before it and runs under the parallel window, any other is a
+   * barrier that waits for every call before it.
+   */
+  const scriptCallsOf = Effect.fn('toolUse.scriptCalls')(function* (
+    script: DispatchFacts,
+  ) {
+    const services = yield* Effect.context<
+      ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
+    >();
+    const origin: ToolIntentOrigin = {
+      kind: 'script',
+      scriptCallId: script.callId,
+    };
+    const stageId = `script-${script.logId}`;
+    const recorded = Object.values(
+      (yield* cell.current).pendingResponse?.scriptCalls ?? {},
+    ).filter((call) => call.scriptCallId === script.callId);
+    // The settled calls, in the order their settlements committed: each is
+    // handed back once the one before it reached the guest.
+    const replayOrder = recorded
+      .flatMap((call) =>
+        call.settledAt === null ? [] : [[call.settledAt, call.seq] as const],
+      )
+      .toSorted(([a], [b]) => a - b)
+      .map(([, seq]) => seq);
+    const delivered = new Map(
+      replayOrder.map((seq) => [seq, Deferred.makeUnsafe<void>()]),
+    );
+    const handedBack = (seq: number | undefined) => {
+      const done = seq === undefined ? undefined : delivered.get(seq);
+      return done === undefined ? Effect.void : Deferred.await(done);
+    };
+    // Each call's place in issue order, and the barrier and parallel calls
+    // a later call waits for.
+    const placed = new Map<number, Deferred.Deferred<void>>();
+    const placeOf = (seq: number) => {
+      const existing = placed.get(seq);
+      if (existing !== undefined) return existing;
+      const created = Deferred.makeUnsafe<void>();
+      placed.set(seq, created);
+      return created;
+    };
+    const lanes = yield* SynchronizedRef.make<{
+      readonly barrier: Deferred.Deferred<void> | null;
+      readonly since: readonly Deferred.Deferred<void>[];
+    }>({ barrier: null, since: [] });
+    const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
+    const stageOpened = yield* Ref.make(false);
+    const openStage = Effect.gen(function* () {
+      if (yield* Ref.getAndSet(stageOpened, true)) return;
+      run.session.publishRunEvent(runId, {
+        type: 'stage.start',
+        id: stageId,
+        label: 'Script',
+        kind: 'script',
+        ...(script.stageId !== null ? { parentId: script.stageId } : {}),
+      });
+    });
+    yield* Effect.addFinalizer((exit) =>
+      Effect.gen(function* () {
+        if (!(yield* Ref.get(stageOpened))) return;
+        const settled = settledOf(yield* cell.current, script.callId);
+        let status: 'completed' | 'failed' | 'cancelled' =
+          settled?.result.status === 'executed' ? 'completed' : 'failed';
+        if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
+          status = 'cancelled';
+        run.session.publishRunEvent(runId, {
+          type: 'stage.end',
+          id: stageId,
+          status,
+        });
+      }),
+    );
+
+    /** Run `body` in `seq`'s place: after the calls it must follow. */
+    const inPlace = <A, E, R>(
+      seq: number,
+      parallelSafe: boolean,
+      body: Effect.Effect<A, E, R>,
+    ) =>
+      Effect.gen(function* () {
+        const done = yield* Deferred.make<void>();
+        const after = yield* SynchronizedRef.modify(lanes, (lane) =>
+          parallelSafe
+            ? [[lane.barrier], { ...lane, since: [...lane.since, done] }]
+            : [[lane.barrier, ...lane.since], { barrier: done, since: [] }],
+        );
+        yield* Deferred.succeed(placeOf(seq), undefined);
+        yield* Effect.forEach(
+          after,
+          (call) => (call === null ? Effect.void : Deferred.await(call)),
+          { discard: true },
+        );
+        return yield* (parallelSafe ? window.withPermits(1)(body) : body).pipe(
+          Effect.ensuring(Deferred.succeed(done, undefined)),
+        );
+      });
+
+    const call = Effect.fn('toolUse.scriptCall')(function* (op: ScriptOp) {
+      const callId = `${script.callId}/${op.seq}`;
+      if (op.seq > 0) yield* Deferred.await(placeOf(op.seq - 1));
+      yield* openStage;
+      const input = toJsonValue(op.input);
+      const state = yield* cell.current;
+      const known = state.pendingResponse?.scriptCalls[callId];
+      if (
+        known !== undefined &&
+        (known.toolName !== op.name || !isDeepStrictEqual(known.input, input))
+      ) {
+        return yield* new ScriptDiverged({
+          seq: op.seq,
+          recorded: `${known.toolName}(${JSON.stringify(known.input)})`,
+          issued: `${op.name}(${JSON.stringify(input)})`,
+        });
+      }
+      const settled = settledOf(state, callId);
+      if (settled !== null) {
+        // Replayed from its row: it takes no lane and does not run.
+        yield* Deferred.succeed(placeOf(op.seq), undefined);
+        yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
+        return settled.result;
+      }
+      const tool = step.registry.get(op.name);
+      yield* inPlace(
+        op.seq,
+        tool?.parallelSafe === true,
+        Effect.gen(function* () {
+          // Nothing runs again until the guest holds everything that settled.
+          yield* handedBack(replayOrder.at(-1));
+          const fact: CallFacts = known ?? {
+            callId,
+            toolName: op.name,
+            replay: tool?.replay ?? 'unsafe',
+            logId: generateShortId(),
+            stageId,
+          };
+          const intent = (yield* cell.current).pendingIntents[callId];
+          if (known !== undefined && intent !== undefined) {
+            return yield* resumeIntent(origin, fact, input, intent);
+          }
+          yield* append([
+            ...(known === undefined
+              ? [
+                  {
+                    type: 'script.call' as const,
+                    aggregateId,
+                    payload: {
+                      scriptCallId: script.callId,
+                      seq: op.seq,
+                      callId,
+                      toolName: fact.toolName,
+                      input,
+                      replay: fact.replay,
+                      logId: fact.logId,
+                      stageId,
+                      phase: op.phase,
+                    },
+                  },
+                ]
+              : []),
+            intentRow(origin, callId, 1),
+            ...admittedCards(fact, input),
+          ]);
+          yield* execute(fact, input, 1);
+        }),
+      );
+      const result = settledOf(yield* cell.current, callId)?.result;
+      if (result === undefined) {
+        return yield* Effect.die(
+          new Error(`Script call ${callId} is unsettled after its run.`),
+        );
+      }
+      return result;
+    });
+
+    return {
+      tools: step.definitions
+        .map((definition) => definition.name)
+        .filter((name) => name !== script.toolName),
+      call: (op: ScriptOp) => call(op).pipe(Effect.provideContext(services)),
+      delivered: (seq: number) => {
+        const done = delivered.get(seq);
+        return done === undefined
+          ? Effect.void
+          : Deferred.succeed(done, undefined).pipe(Effect.asVoid);
+      },
+    } satisfies ScriptCalls;
   });
 
   /** One call of a partition: the resume rules, then execution. */
@@ -832,46 +1129,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* settle(fact, 1, syntheticSettlement(SKIPPED_AFTER_END_TURN), []);
       return;
     }
+    const input = parseCallArguments(call, logger);
     const intent = current.pendingIntents[fact.callId];
     if (intent !== undefined) {
-      // The call's own request, never answered: its body never ran past it,
-      // so the attempt re-enters it and the answer completes the call. One
-      // the run's stop retired as cancelled is asked again the same way.
-      const ownId =
-        intent.binding?.role === 'call' ? intent.binding.requestId : null;
-      const own = ownId === null ? undefined : current.requests[ownId];
-      if (ownId !== null && own !== undefined) {
-        // Answered since this owner took the run, before its loop got here:
-        // no waiter read it, so it is the call's answer too.
-        const unread =
-          own.resolved && current.decidedSinceActivation.has(ownId);
-        if (!own.resolved || unread) {
-          yield* execute(fact, call, intent.attempt, {
-            requestId: ownId,
-            decision: own.decision,
-          });
-          return;
-        }
-        if (own.decision?.action === 'cancel') {
-          yield* execute(fact, call, intent.attempt);
-          return;
-        }
-      }
-      const input = parseCallArguments(call, logger);
-      const decision = (yield* replayable(fact, step.registry, input, logger))
-        ? yield* recordOutcomeDecision(fact, call, intent, 'rerun')
-        : yield* decideOutcomeUnknown(fact, call, input, intent);
-      if (decision === 'skip') {
-        // The skip closes the card the interrupted attempt opened.
-        yield* settle(
-          fact,
-          intent.attempt,
-          syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-          settledCards(fact, input, 'failed'),
-        );
-        return;
-      }
-      yield* execute(fact, call, intent.attempt + 1);
+      yield* Effect.scoped(
+        Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>
+          resumeIntent(fromResponse, fact, input, intent, scriptCalls),
+        ),
+      );
       return;
     }
     if (recovered) {
@@ -881,14 +1146,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // The intent precedes every call, parallel-safe or not, and a slow
     // tool's card opens in the same batch.
     yield* append([
-      {
-        type: 'tool.intent',
-        aggregateId,
-        payload: { responseId, callIds: [fact.callId], attempt: 1 },
-      },
-      ...admittedCards(fact, call),
+      intentRow(fromResponse, fact.callId, 1),
+      ...admittedCards(fact, input),
     ]);
-    yield* execute(fact, call, 1);
+    yield* Effect.scoped(
+      Effect.flatMap(scriptCallsOf(fact), (scriptCalls) =>
+        execute(fact, input, 1, null, scriptCalls),
+      ),
+    );
   });
 
   /** A duplicate derives its primary's settlement, effects stripped. */
@@ -931,7 +1196,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   // Partitions in order; each barrier is its own, each run of parallel-safe
   // calls shares one and executes under the window.
   const partitions = Map.groupBy(pending.calls, (fact) => fact.partition);
-  let endTurn = Object.values(pending.settled).some(endsTurn);
+  // A script's calls are not the response's: its own result says whether
+  // one of them ended the turn.
+  let endTurn = pending.calls.some((fact) => {
+    const settled = pending.settled[fact.callId];
+    return settled !== undefined && endsTurn(settled);
+  });
   for (const members of partitions.values()) {
     const primaries = members.filter((fact) => fact.duplicateOf === null);
     const duplicates = members.filter((fact) => fact.duplicateOf !== null);

@@ -7,6 +7,10 @@ import { globSync } from 'glob';
 import { defineConfig } from 'vitest/config';
 
 import { aliases, rootDir } from './scripts/aliases.mjs';
+import {
+  bundleCodeSandboxWorker,
+  CODE_SANDBOX_WORKER_ID,
+} from './scripts/code-sandbox-worker.mjs';
 
 const require = createRequire(import.meta.url);
 const QUICKJS_WASM_ID = '@jitl/quickjs-wasmfile-release-sync/wasm';
@@ -97,7 +101,11 @@ const pureSuites = globSync(
   .sort();
 
 export default defineConfig({
-  plugins: [texTemplatePlugin(), quickJsWasmPlugin()],
+  plugins: [
+    texTemplatePlugin(),
+    quickJsWasmPlugin(),
+    codeSandboxWorkerPlugin(),
+  ],
   resolve: {
     alias: {
       ...aliases,
@@ -173,6 +181,27 @@ function quickJsWasmPlugin() {
         code: `export default Uint8Array.from(Buffer.from(${JSON.stringify(contents.toString('base64'))}, 'base64'));`,
         map: null,
       };
+    },
+  };
+}
+
+/**
+ * Serves the worker the way every host bundle embeds it, so a suite starts
+ * the same bundled worker the hosts ship rather than a TypeScript entry Node
+ * cannot load.
+ */
+function codeSandboxWorkerPlugin() {
+  const virtualId = `\0${CODE_SANDBOX_WORKER_ID}`;
+  return {
+    name: 'code-sandbox-worker',
+    enforce: 'pre',
+    resolveId(source) {
+      return source === CODE_SANDBOX_WORKER_ID ? virtualId : undefined;
+    },
+    async load(id) {
+      if (id !== virtualId) return undefined;
+      const { source } = await bundleCodeSandboxWorker();
+      return { code: `export default ${JSON.stringify(source)};`, map: null };
     },
   };
 }

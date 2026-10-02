@@ -49,6 +49,16 @@ declare module '@jitl/quickjs-wasmfile-release-sync/wasm' {
   export default bytes;
 }
 
+/**
+ * The bundled code sandbox worker (`src/agent/codeSandbox/worker.ts`) as
+ * CommonJS source text, embedded by every host build through
+ * `scripts/code-sandbox-worker.mjs`.
+ */
+declare module 'virtual:code-sandbox-worker' {
+  const source: string;
+  export default source;
+}
+
 declare module 'highlightjs-lean' {
   import { LanguageFn } from 'highlight.js';
   const lean: LanguageFn;

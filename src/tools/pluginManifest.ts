@@ -403,6 +403,19 @@ export const MANIFEST = [
     hidden: true,
   },
   {
+    // The `script` tool: a program that calls the run's other tools. An
+    // agent gets it only if its configuration names it; its session layer is
+    // the code sandbox the scripts run in.
+    id: 'codemode',
+    toolNames: ['script'],
+    name: 'Code Mode',
+    category: 'workflow',
+    description:
+      "Run a JavaScript program that calls the agent's other tools, resuming after an interruption without running finished calls again.",
+    hidden: true,
+    sessionLayer: true,
+  },
+  {
     // The onboarding agent's narrow set, one responsibility per tool (see the
     // setup imports in `@tools/registry`).
     id: 'setup',

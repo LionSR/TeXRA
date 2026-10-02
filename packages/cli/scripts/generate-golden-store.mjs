@@ -37,6 +37,11 @@
  * - `golden_approval`, a second `texra chat` under a PTY: a `bash` command
  *   waiting for its approval, bound to its call, killed (`SIGKILL`) before
  *   anyone answers, the pending approval the conformance suite resumes.
+ * - `golden_script` (headless, `yolo`): a `script` call whose guest reads
+ *   twice and runs one command in a `Promise.all`, killed (`SIGKILL`) while
+ *   the command waits, after the first read settled: the interrupted script
+ *   the conformance suite resumes. The command is a barrier, so the second
+ *   read waits behind it and every row commits in one order.
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -258,7 +263,7 @@ function scenario(root) {
     const [key] = existsSync(dir) ? readdirSync(dir) : [];
     return key === undefined ? null : path.join(dir, key, 'texra.db');
   };
-  return { run, start, chat, store };
+  return { run, start, chat, store, project };
 }
 
 /** Rows of the workspace store, read from outside the CLI. */
@@ -499,6 +504,29 @@ async function generate(root) {
   );
   asking.kill('SIGKILL');
   await asking.exited;
+  // The interrupted script: killed while its command waits for the release
+  // file, which only the orphaned command reads once the process is gone.
+  const scripted = cli.start([
+    'run',
+    'golden_script',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Gather the notes in one script.',
+    '--approval-policy',
+    'yolo',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  await until(
+    'the script command waiting',
+    () => existsSync(path.join(cli.project, 'golden-script.started')),
+    scripted,
+  );
+  scripted.child.kill('SIGKILL');
+  await scripted.exited;
+  writeFileSync(path.join(cli.project, 'golden-script.release'), '');
 
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.
@@ -676,6 +704,8 @@ function normalize(file, root) {
     [/Shell: [^\n]*/g, 'Shell: golden'],
     [/<wall-time>[^<]*<\/wall-time>/g, '<wall-time>0s</wall-time>'],
     [/"durationMs":\d+/g, '"durationMs":0'],
+    // A workflow call's wall time in its run-log line.
+    [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
   ];
   const digests = new Map();
   const scrubText = (text) => {

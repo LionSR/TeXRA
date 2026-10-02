@@ -1,19 +1,53 @@
 /** Capabilities scoped to one tool invocation, supplied by its host boundary. */
-import { Context, type Effect } from 'effect';
+import { Context, Data, type Effect } from 'effect';
 
 import type {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
+import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { PermissionPayload, RequestDecision } from '@shared/schemas';
+import type {
+  PermissionPayload,
+  RequestDecision,
+  ToolResultPayload,
+} from '@shared/schemas';
 import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RunLedgerRefused } from '@shared/session/runLedger';
 import type { StepRoot } from '@utils/files/externalRoots';
+import type { InvokeError } from './ModelInvoker';
 import type { AgentRunShape } from './run/AgentRun';
+
+/** A resumed script issued another call at `seq` than its rows recorded. */
+export class ScriptDiverged extends Data.TaggedError('ScriptDiverged')<{
+  readonly seq: number;
+  readonly recorded: string;
+  readonly issued: string;
+}> {
+  override get message(): string {
+    return `The resumed script diverged at call ${this.seq}: it recorded ${this.recorded} and now issued ${this.issued}.`;
+  }
+}
+
+/**
+ * How a `script` call's guest reaches the run's tools: through the run
+ * loop's per-call program, which commits each call's rows (`script.call`,
+ * `tool.intent`, its card, `tool.result`) and on a resume hands back what
+ * the rows already settled instead of running it again.
+ */
+export interface ScriptCalls {
+  /** The tools the guest may call: the step's offered tools, less `script`. */
+  readonly tools: readonly string[];
+  /** Settles one issued call, at its `tool.result` commit. */
+  readonly call: (
+    op: ScriptOp,
+  ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
+  /** The sandbox delivered `seq`'s settlement to the guest. */
+  readonly delivered: (seq: number) => Effect.Effect<void>;
+}
 
 /**
  * The requests one tool call raises, opened through its run's loop. The first
@@ -53,6 +87,9 @@ export interface ToolCallShape {
     /** What the tool prints while it runs, for its card's transient output. */
     readonly onToolOutput?: (chunk: string) => void;
   };
+  /** The calls a script may issue; absent outside a run's dispatch and for
+   *  a call a script issued. */
+  readonly scriptCalls?: ScriptCalls;
   /** Where the call's requests open: present exactly when {@link run} is. */
   readonly requests?: CallRequests;
   /**
