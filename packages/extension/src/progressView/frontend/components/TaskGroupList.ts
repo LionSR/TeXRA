@@ -355,11 +355,13 @@ export class TaskGroupList extends LitElement {
 
   /**
    * Paint one transcript row, guarded against re-render while the row stays
-   * the same object. A row is replaced (never patched) whenever its source
-   * entry changes, so reference identity is the whole freshness test.
+   * the same object and its run's interrupted fact holds. A row is replaced
+   * (never patched) whenever its source entry changes, so reference identity
+   * is the freshness test for the row itself.
    */
   private renderLogEntry(row: TranscriptRow) {
-    return guard([row], () => formatLogEntry(row));
+    const interrupted = this.run?.group === 'interrupted';
+    return guard([row, interrupted], () => formatLogEntry(row, interrupted));
   }
 
   private handleRevealOlderRows(event: Event): void {

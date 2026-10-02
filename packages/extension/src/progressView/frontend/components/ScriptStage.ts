@@ -42,6 +42,9 @@ function statusIcon(
       return 'circle-dot';
     case 'running':
       return terminalStatusIcon('running');
+    case 'interrupted':
+      // As an interrupted compaction reads: nothing runs it until Resume.
+      return 'circle-exclamation';
     case 'finished':
       return terminalStatusIcon('completed');
     case 'reused':
@@ -74,6 +77,7 @@ const scriptStageStyles = css`
   :host {
     display: block;
     min-width: 0;
+    container-type: inline-size;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
   }
@@ -133,6 +137,7 @@ const scriptStageStyles = css`
     color: var(--wa-color-danger-on-quiet);
   }
 
+  .status-interrupted .row-icon,
   .is-waiting .row-icon {
     color: var(--wa-color-warning-on-quiet);
   }
@@ -156,8 +161,10 @@ const scriptStageStyles = css`
     color: var(--wa-color-text-quiet);
   }
 
+  /* The last line takes what the facts leave: a zero basis keeps a long
+     line from squeezing the facts to nothing. */
   .row-last {
-    flex: 1 1 auto;
+    flex: 1 1 0;
   }
 
   .row-last.is-error {
@@ -166,9 +173,25 @@ const scriptStageStyles = css`
 
   .row-meta {
     flex: 0 1 auto;
+    min-width: min(8em, 25%);
     max-width: 35%;
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Narrow: the facts drop to their own line under the label. */
+  @container (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+    }
+
+    .row-meta {
+      order: 1;
+      flex: 1 0 100%;
+      max-width: none;
+      box-sizing: border-box;
+      padding-left: calc(12px + var(--wa-space-xs));
+    }
   }
 
   .row-rejected {

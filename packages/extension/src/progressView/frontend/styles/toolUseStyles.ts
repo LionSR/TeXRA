@@ -67,6 +67,16 @@ export const toolUseStyles = css`
     color: var(--color-pending);
   }
 
+  /* An open call on an interrupted run: stopped, waiting for Resume. */
+  .tool-use-interrupted > .details-summary :is(wa-icon, .tool-interrupted) {
+    color: var(--color-warning);
+  }
+
+  .tool-interrupted {
+    font-size: var(--font-size-sm);
+    margin-inline-start: var(--wa-space-xs);
+  }
+
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
     margin: 0;
     white-space: pre-wrap;
