@@ -8,10 +8,9 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childToolRefusal } from '@agent/runtime/agentToolResolution';
-import { offeredBy } from '@agent/runtime/loop/step';
 import { registerRun } from '@agent/storage/runLifecycle';
 
 // Local imports
@@ -29,18 +28,12 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import {
-  configureDelegatedChildApprovals,
-  type DelegatedChildApproval,
-} from '@tools/approval';
+import { type DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import type { RunToolCall } from '@tools/core/toolRun';
-import { generateRunId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
-import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
 
 // ============================================================================
 // Shared utilities
@@ -84,87 +77,6 @@ export interface ApprovalMeta {
   agentOverride?: string;
   requestedAgent?: string;
 }
-
-/**
- * Execute a subagent through the delegation tool boundary.
- * Pre-generates runId so all IDs (tool return, XML delivery, error)
- * are consistent and usable with the executions tool.
- *
- * Result is delivered via the shared child-run loop's follow-up queue
- * delivery — the same choreography every child-run type shares.
- */
-export const executeSubagent = Effect.fn('executeSubagent')(function* (
-  parent: RunToolCall,
-  configPayload: AgentConfigPayload,
-  parentRunId: RunId,
-  options?: { approvalMeta?: ApprovalMeta },
-) {
-  const parentSession = parent.run.session;
-  const delegationAgentScope = parent.run.delegationAgentScope ?? undefined;
-  const childConfigPayload: AgentConfigPayload = {
-    ...configPayload,
-    ...(delegationAgentScope ? { delegationAgentScope } : {}),
-  };
-  const agentName = configPayload.agent;
-
-  const inheritChildRunApprovals = (resolvedRunId: RunId): void => {
-    // Live inherited bypass values: each approval follows the parent's
-    // corresponding bypass, so a partial grant propagates only that grant.
-    // Complete delegated-task approval also reaches nested orchestrators.
-    configureDelegatedChildApprovals(
-      resolvedRunId,
-      parentRunId,
-      options?.approvalMeta?.childApproval ?? 'inherit',
-      parentSession,
-    );
-  };
-
-  // The most the child may be offered: what the parent's step offers now.
-  const parentOffered = yield* offeredBy(parent.run);
-  if (parent.run.toolPolicy.stopAfterCycle) {
-    // The parent is mid-cycle, so child progress cannot be delivered as a
-    // follow-up the way the detached loop does it. Degrade deliberately to the
-    // parent run's trace (the same trace nested tool activity projects onto):
-    // the orchestrator's transcript still records what its child is doing.
-    const parentTrace = parent.run.logger;
-    const notifyParentTrace = (update: SubagentProgressUpdate): void => {
-      const line = describeSubagentProgress(agentName, update);
-      if (line) parentTrace.info(line);
-    };
-    const deliveryExit = yield* Effect.exit(
-      executeSubagentForDeliveryInBand({
-        configPayload: childConfigPayload,
-        parentRunId,
-        session: parentSession,
-        parentOffered,
-        onRunResolved: inheritChildRunApprovals,
-        notify: notifyParentTrace,
-      }),
-    );
-    if (Exit.isSuccess(deliveryExit)) {
-      const { result, delivery } = deliveryExit.value;
-      return executed(
-        delivery,
-        result.outcome === 'cancelled'
-          ? `Cancelled '${agentName}'`
-          : `Completed '${agentName}'`,
-      );
-    }
-    return errorResult(toErrorMessage(Cause.squash(deliveryExit.cause)), {
-      summary: `Subagent '${agentName}' failed`,
-    });
-  }
-
-  return yield* launchDetachedSubagent(parent, childConfigPayload, {
-    parentRunId,
-    runId: generateRunId(),
-    parentOffered,
-    inheritChildRunApprovals,
-    ...(options?.approvalMeta !== undefined && {
-      approvalMeta: options.approvalMeta,
-    }),
-  });
-});
 
 /**
  * Launch one detached child under `runId` and return the receipt the model

@@ -15,6 +15,7 @@ import {
   type ScriptOp,
   type ScriptSettlement,
 } from '@agent/codeSandbox/codeSandbox';
+import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolCall, type ScriptCalls } from '@agent/runtime/ToolCall';
 import {
   ToolError,
@@ -28,8 +29,6 @@ import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
 
-/** Most calls one script may issue; a resume reissues the same ones. */
-const SCRIPT_CALL_LIMIT = 1000;
 const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
 /** How many guest stack frames a script failure keeps. */
 const FAULT_FRAMES = 3;
@@ -171,6 +170,19 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   const scriptCalls = yield* issued;
   const sandbox = yield* CodeSandbox;
+  // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
+  const tail: string[] = [];
+  let tailOmitted = 0;
+  const logTail = (): string[] =>
+    tail.length === 0
+      ? []
+      : [
+          '',
+          `Log (last ${tail.length} lines${tailOmitted > 0 ? `, ${tailOmitted} earlier omitted` : ''}):`,
+          ...tail,
+        ];
+  const failed = (lines: readonly string[]) =>
+    Effect.fail(new ToolError([...lines, ...logTail()].join('\n')));
   const script = { source: input.code, title: input.title ?? null };
   // The files its calls attached, in the order their results committed:
   // they reach the model on the script's own result.
@@ -204,12 +216,6 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       ],
       timeout: Duration.millis(input.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       call: (op: ScriptOp) => {
-        if (op.seq >= SCRIPT_CALL_LIMIT)
-          return Effect.succeed<ScriptSettlement>({
-            _tag: 'Failure',
-            name: 'CallLimit',
-            message: `A script may issue at most ${SCRIPT_CALL_LIMIT} calls.`,
-          });
         const global = globals.get(op.name);
         if (global !== undefined) {
           // `name(first, opts)` is `tools.name({ ...opts, [positional]: first })`:
@@ -229,44 +235,55 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         }
         return op.name.endsWith('()')
           ? Effect.flatMap(
-              scriptCalls.answer(op, () => answerOf(op, scriptCalls.catalog)),
+              scriptCalls.answer(op, script, () =>
+                answerOf(op, scriptCalls.catalog),
+              ),
               (result) => settlementOf(result, op),
             )
           : issue(op);
       },
-      onLog: (lines) =>
-        Effect.sync(() => hooks?.onToolOutput?.(`${lines.join('\n')}\n`)),
+      onLog: (lines, dropped) =>
+        Effect.sync(() => {
+          tail.push(...lines);
+          const overflow = Math.max(0, tail.length - RUN_LOG_MAX_LINES);
+          tail.splice(0, overflow);
+          tailOmitted += dropped + overflow;
+          if (lines.length > 0) hooks?.onToolOutput?.(`${lines.join('\n')}\n`);
+        }),
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
       Effect.map((result) => ({ _tag: 'Returned' as const, result })),
       Effect.catchTag('EndedTurn', (ended) => Effect.succeed(ended)),
-      Effect.catchTag('ScriptFault', (fault) => {
-        const frames = (fault.stack ?? '')
-          .split('\n')
-          .map((line) => line.trim())
-          .filter((line) => line.startsWith('at '))
-          .slice(0, FAULT_FRAMES);
-        return Effect.fail(
-          new ToolError(
+      // A script that ends in failure still returns its log tail: the lines
+      // before the failure are most of what explains it.
+      Effect.catchTags({
+        ScriptFault: (fault) =>
+          failed([
             [
               `The script threw ${fault.name}: ${fault.message}`,
-              ...frames,
+              // The guest's own frames: the realm's bridge and natives
+              // locate nothing in the script.
+              ...(fault.stack ?? '')
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(
+                  (line) =>
+                    line.startsWith('at ') && line.includes('script.js'),
+                )
+                .slice(0, FAULT_FRAMES),
             ].join('\n    '),
-          ),
-        );
+          ]),
+        ScriptSyntaxError: (error) =>
+          failed([`The script does not parse: ${error.message}`]),
+        ScriptCpuExhausted: (error) => failed([error.message]),
+        ScriptMemoryExhausted: (error) => failed([error.message]),
+        ScriptTimedOut: (error) => failed([error.message]),
       }),
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
-  const { value, logs, logsOmitted } = outcome.result;
-  const log =
-    logs.length === 0
-      ? []
-      : [
-          '',
-          `Log (last ${logs.length} lines${logsOmitted > 0 ? `, ${logsOmitted} earlier omitted` : ''}):`,
-          ...logs,
-        ];
+  const { value } = outcome.result;
+  const log = logTail();
   const foreground =
     input.run_in_background === true
       ? [

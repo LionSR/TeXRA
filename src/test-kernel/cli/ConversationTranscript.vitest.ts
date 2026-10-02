@@ -42,7 +42,6 @@ import {
   type NormalizedToolUse,
   type RunPhase,
   type RunId,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
   loadInk,
@@ -138,23 +137,6 @@ function phaseRow(
   };
 }
 
-function workflowTaskRow(
-  id: string,
-  call: WorkflowCallProgress,
-  line = 'Queued: Task',
-): TranscriptRow {
-  return {
-    kind: 'workflowTask',
-    id,
-    timestamp: 0,
-    level: 'info',
-    call,
-    line,
-    statusLabel: call.status,
-    metadataParts: [],
-  };
-}
-
 describe('CLI conversation transcript', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
     const user = entry('u1', 'user', '1+1', true);
@@ -194,15 +176,9 @@ describe('CLI conversation transcript', () => {
     expect(split.pending.map((item) => item.id)).toEqual(['a1', 't1']);
   });
 
-  it('keeps finalized rows behind unfinished tool and workflow rows live', () => {
+  it('keeps finalized rows behind an unfinished tool row live', () => {
     const tool = toolEntry('t1', 'in_progress');
     const toolPhase = phaseRow('p1', 'After tool');
-    const workflowTask = workflowTaskRow('w1', {
-      id: 'w1',
-      label: 'Task',
-      status: 'queued',
-    });
-    const workflowPhase = phaseRow('p2', 'After workflow task');
 
     const toolSplit = splitTranscriptEntries(
       [tool, toolPhase],
@@ -211,14 +187,6 @@ describe('CLI conversation transcript', () => {
     );
     expect(toolSplit.finalized).toEqual([]);
     expect(toolSplit.pending.map((item) => item.id)).toEqual(['t1', 'p1']);
-
-    const workflowSplit = splitTranscriptEntries(
-      [workflowTask, workflowPhase],
-      settledPrefix([workflowTask, workflowPhase]),
-      RUN_PHASE.RUNNING,
-    );
-    expect(workflowSplit.finalized).toEqual([]);
-    expect(workflowSplit.pending.map((item) => item.id)).toEqual(['w1', 'p2']);
   });
 
   it('keeps running compaction live and promotes its terminal update once', () => {

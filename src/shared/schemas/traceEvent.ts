@@ -9,10 +9,6 @@ import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
-import {
-  WorkflowCallProgressSchema,
-  WorkflowDeclaredPlanSchema,
-} from './workflowCallProgress';
 
 function trace<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
   return z.object({
@@ -60,15 +56,6 @@ export const TranscriptEventSchemas = {
     status: ToolCallStatusSchema,
     result: JsonValueSchema.optional(),
     files: z.array(FileListEntrySchema).optional(),
-  }),
-  workflowPlan: trace('workflow.plan', {
-    attemptId: z.string(),
-    phases: WorkflowDeclaredPlanSchema.shape.phases.readonly(),
-    tasks: WorkflowDeclaredPlanSchema.shape.tasks.readonly(),
-  }),
-  workflowCall: trace('workflow.call', {
-    logId: z.string(),
-    call: WorkflowCallProgressSchema,
   }),
   /**
    * One priced model turn of the row's run: never a running total, so a

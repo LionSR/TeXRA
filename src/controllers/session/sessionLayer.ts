@@ -87,7 +87,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  interruptedWorkflowCall,
   RUN_OUTCOME,
   TOOL_CALL_STATUS,
   type AggregateId,
@@ -828,15 +827,8 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
               id: work.id,
               status: outcome,
             });
-          } else if (work.kind === 'stream') {
-            session.publishRunEvent(runId, { type: 'stream.end', id: work.id });
           } else {
-            session.publishRunEvent(runId, {
-              type: 'workflow.call',
-              logId: work.id,
-              stageId: work.stageId,
-              call: interruptedWorkflowCall(work.call),
-            });
+            session.publishRunEvent(runId, { type: 'stream.end', id: work.id });
           }
         }
         const settled = yield* Effect.exit(session.settlePublications(runId));

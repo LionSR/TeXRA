@@ -132,7 +132,7 @@ export function runHeldMessage(pid: number): string {
  *  recorded in its claim, the two parts of an identity a user can act on. One
  *  home, read by the refusal below and by the liveness ladder's unsettled
  *  reason, so the two wordings cannot drift apart. */
-export function runHeldClause(ownerId: OwnerId): string {
+function runHeldClause(ownerId: OwnerId): string {
   const { pid, hostname } = ownerIdentity(ownerId);
   return `held by another TeXRA process (pid ${pid} on ${hostname})`;
 }

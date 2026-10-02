@@ -30,8 +30,6 @@ import {
 const ROOT = 'chat-root' as RunId;
 const RUN_A = 'run-a' as RunId;
 const RUN_B = 'run-b' as RunId;
-const WORKFLOW = 'workflow' as RunId;
-const WORKFLOW_CHILD = 'workflow-child' as RunId;
 
 function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
   return {
@@ -178,18 +176,6 @@ describe('CLI approval surface', () => {
       'bash-b-2',
       'bash-run-a',
     ]);
-  });
-
-  it("promotes the requests of a workflow popup's children with it", () => {
-    const a = bashPayload(RUN_A);
-    const child = bashPayload(WORKFLOW_CHILD);
-    const view = viewOfRequests(a, child);
-    seedView(view);
-
-    promoteApprovalsForRun(WORKFLOW, {
-      includeRunIds: new Set([WORKFLOW_CHILD]),
-    });
-    expect(currentApproval.get()?.payload).toEqual(child);
   });
 
   it('holds a tool edit or retry back until its hook presents the payload', () => {

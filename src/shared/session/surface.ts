@@ -134,14 +134,12 @@ export interface Surface {
   /** The user's expansion choice per stream in the tree, absent until they
    *  make one; `forceExpanded` outranks it. */
   readonly expanded: ReadonlyMap<RunId, boolean>;
-  /** Task groups and workflow row groups inside a transcript, per stream. */
+  /** Task groups inside a transcript, per stream. */
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
   /** Per top-level run, the `lastTimestamp` this surface last showed. */
   readonly seen: ReadonlyMap<RunId, number>;
   /** Never persisted. */
   readonly focusedRow: string | null;
-  /** Run-board tab strip; resolved at read through `resolvePhase`. */
-  readonly phase: ReadonlyMap<RunId, string>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -170,7 +168,6 @@ export const PersistedSurfaceSchema = z.object({
   inquiryDrafts: entries(z.string(), InquiryDraftSchema),
   expanded: entries(RunIdSchema, z.boolean()),
   groups: entries(RunIdSchema, entries(z.string(), z.boolean())),
-  phase: entries(RunIdSchema, z.string()),
   seen: entries(RunIdSchema, z.number()),
   drawerOpen: z.boolean().prefault(false),
   storageHintDismissed: z.boolean().prefault(false),
@@ -205,7 +202,6 @@ export function loadSurface(
     ),
     seen: new Map(persisted.seen),
     focusedRow: null,
-    phase: new Map(persisted.phase),
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
@@ -225,7 +221,6 @@ export function persistSurface(surface: Surface): PersistedSurface {
     inquiryDrafts: [...surface.inquiryDrafts],
     expanded: [...surface.expanded],
     groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
-    phase: [...surface.phase],
     seen: [...surface.seen],
     drawerOpen: surface.drawerOpen,
     storageHintDismissed: surface.storageHintDismissed,
@@ -259,7 +254,6 @@ const PER_STREAM_MAP_FIELDS = {
   drafts: true,
   expanded: true,
   groups: true,
-  phase: true,
   rejected: true,
   seen: true,
 } as const satisfies Record<RunKeyedMapField, true>;
@@ -362,23 +356,6 @@ export function canSendFollowUp(
 }
 
 /**
- * The phase a workflow view shows — the run board and the terminal popup
- * alike: the viewer's choice while the model still has it, else the current
- * phase (the last opened one, or the first declared), else `null` for a run
- * with no phases.
- */
-export function resolvePhase(
-  chosen: string | undefined,
-  phases: readonly { readonly key: string; readonly opened: boolean }[],
-): string | null {
-  if (chosen !== undefined && phases.some((phase) => phase.key === chosen)) {
-    return chosen;
-  }
-  const opened = phases.findLast((phase) => phase.opened);
-  return opened?.key ?? phases.at(0)?.key ?? null;
-}
-
-/**
  * Every change a component may ask of the surface. The root applies it;
  * a component never mutates the record. `selectNew` and `select` are also
  * host-initiated arms of `surface.action` (PRD 8.5).
@@ -414,11 +391,6 @@ export type SurfaceAction =
       readonly expanded: boolean;
     }
   | { readonly kind: 'focusRow'; readonly rowId: string | null }
-  | {
-      readonly kind: 'phase';
-      readonly runId: RunId;
-      readonly phase: string;
-    }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
   | { readonly kind: 'dismissStorageHint' }
   | { readonly kind: 'seen'; readonly view: SessionView };
@@ -498,11 +470,6 @@ export function applySurfaceAction(
       };
     case 'focusRow':
       return { ...surface, focusedRow: action.rowId };
-    case 'phase':
-      return {
-        ...surface,
-        phase: withEntry(surface.phase, action.runId, action.phase),
-      };
     case 'workbench':
       return { ...surface, workbench: action.layout };
     case 'seen':

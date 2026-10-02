@@ -172,7 +172,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   });
 });
 
-describe('createTestRunTrace workflow task state', () => {
+describe('createTestRunTrace settlement', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
     const { trace, settlePhase, row, rows } = attachRecorder(runId);
@@ -185,15 +185,6 @@ describe('createTestRunTrace workflow task state', () => {
       logId: 'tool:pending',
       toolName: 'read',
       input: { path: 'paper.tex' },
-    });
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task:planned',
-      call: {
-        id: 'planned',
-        label: 'Audit later',
-        status: 'queued',
-      },
     });
 
     settlePhase(RUN_PHASE.CANCELLED);
@@ -209,7 +200,6 @@ describe('createTestRunTrace workflow task state', () => {
         error: 'The run ended before this tool completed.',
       },
     });
-    expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
 
     // The terminal status is the authoritative boundary for recorder-owned
     // runs/tools. Late provider cleanup cannot mutate a row already made
@@ -234,26 +224,11 @@ describe('createTestRunTrace workflow task state', () => {
       },
     });
 
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task:planned',
-      call: {
-        id: 'planned',
-        label: 'Audit later',
-        status: 'skipped',
-        reason: 'not-reached',
-      },
-    });
-    expect(row('task:planned')).toMatchObject({
-      settlementSeqNo: 4,
-      call: { status: 'skipped', reason: 'not-reached' },
-    });
-
     settlePhase(RUN_PHASE.RUNNING);
     trace.emit({ type: 'response.finalized', text: 'Fresh turn response' });
     const responses = assistantRows(rows());
     expect(responses).toMatchObject([
-      { settlementSeqNo: 5, text: { full: 'Fresh turn response' } },
+      { settlementSeqNo: 4, text: { full: 'Fresh turn response' } },
     ]);
     expect(responses[0]?.id).not.toBe(response.id);
   });
@@ -317,49 +292,5 @@ describe('createTestRunTrace workflow task state', () => {
       },
     ]);
     expect(waitingResponse.id).not.toBe(resumedResponse.id);
-  });
-
-  it('updates one typed task entry from planned to completed', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task-card',
-      call: {
-        id: 'audit-core',
-        label: 'Audit core',
-        phase: 'Audit',
-        status: 'queued',
-      },
-    });
-    trace.emit({
-      type: 'workflow.call',
-      logId: 'task-card',
-      stageId: 'phase-audit',
-      call: {
-        id: 'audit-core',
-        label: 'Audit core',
-        phase: 'Audit',
-        status: 'completed',
-        model: 'openai/gpt-5.6-sol',
-        durationMs: 12_000,
-        costUsd: 0.03,
-      },
-    });
-
-    expect(rows()).toHaveLength(1);
-    expect(rows()[0]).toMatchObject({
-      id: 'task-card',
-      kind: 'workflowTask',
-      level: 'info',
-      groupId: 'phase-audit',
-      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      call: {
-        label: 'Audit core',
-        status: 'completed',
-        durationMs: 12_000,
-        costUsd: 0.03,
-      },
-    });
   });
 });

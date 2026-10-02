@@ -1,6 +1,5 @@
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
-  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
@@ -14,10 +13,6 @@ import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
 } from '@ui/copy/scriptRequest';
-import {
-  WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowScriptPlanSummary,
-} from '@ui/copy/workflowScriptProposal';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import { type CliApprovalContent } from './approvalPrompts';
@@ -129,10 +124,6 @@ function agentProposalApprovalSummary(
   boundFileGroups: boolean,
 ): string {
   const workingDirectory = proposal.workingDirectory?.trim();
-  const workflow =
-    proposal.agentCategory === AgentCategory.Workflow
-      ? proposal.workflowScript
-      : undefined;
   const fileGroups = getProposalFileGroups(proposal).map((group) =>
     boundFileGroups
       ? formatAgentProposalFileGroup(group.label, group.files)
@@ -155,33 +146,14 @@ function agentProposalApprovalSummary(
       `${SCRIPT_REQUEST_COPY.sourceHeading}:`,
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
-  // A multi-agent workflow is a container, not one agent run: its agent and
-  // model are defaults each call may override, and its files are what the
-  // script may hand to calls, not every call's inputs.
-  const header = workflow
-    ? [
-        `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-          proposal.agent,
-          getModelLabel(proposal.model),
-        ),
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
-        `Script: ${workflow.scriptPath}`,
-      ]
-    : [
-        `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
-          proposal.agentCategory,
-        )})`,
-        `Model: ${getModelLabel(proposal.model)}`,
-      ];
   return [
-    ...header,
+    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
+      proposal.agentCategory,
+    )})`,
+    `Model: ${getModelLabel(proposal.model)}`,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
-    ...(workflow && fileGroups.length > 0
-      ? [`${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:`]
-      : []),
     ...fileGroups,
-    workflow ? 'Description:' : 'Instruction:',
+    'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
 }

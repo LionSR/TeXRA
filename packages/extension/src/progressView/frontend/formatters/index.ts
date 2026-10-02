@@ -62,9 +62,6 @@ const ROW_FORMATTERS: RowFormatters = {
   statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
-  // Only a run without a run model reaches this; the run board paints
-  // script calls.
-  workflowTask: formatDefaultLogMessageTemplate,
   compactionActivity: formatCompactionActivityTemplate,
   phase: formatDefaultLogMessageTemplate,
   log: formatDefaultLogMessageTemplate,

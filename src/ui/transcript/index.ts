@@ -14,7 +14,6 @@ export {
   plainLogRow,
   streamingTextRow,
   toolRow,
-  workflowTaskRow,
   type LogRowPayload,
 } from './projectTranscriptRow';
 export {
@@ -40,17 +39,14 @@ export {
   type TranscriptRowKind,
   type UserRow,
   type WebSearchRow,
-  type WorkflowTaskRow,
 } from './transcriptRow';
 export {
   dispatchedChildren,
-  pendingRequestLine,
   scriptStages,
   SCRIPT_CALL_STATUS_LABEL,
   SCRIPT_SECTION_LABEL,
   TOOL_CUT_BY_RUN_END,
   type ScriptCallView,
-  type ScriptSection,
   type ScriptStageView,
 } from './scriptStage';
 export {

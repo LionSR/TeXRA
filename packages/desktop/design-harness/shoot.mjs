@@ -22,16 +22,11 @@ const scenes = process.env.SCENES
       'ext-proposal',
       'ext-inline',
       'ext-process',
-      'run-board',
-      'run-board-settled',
-      'run-board-no-failed',
-      'run-board-foreign',
       'desktop-projects',
       'desktop-one-project',
       'desktop-empty-project',
       'desktop-narrow',
       'desktop-subagents',
-      'desktop-run',
     ];
 const browser = await chromium.launch(
   process.env.PW_EXE ? { executablePath: process.env.PW_EXE } : {},

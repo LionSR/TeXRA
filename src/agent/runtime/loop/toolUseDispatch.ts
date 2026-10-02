@@ -1009,12 +1009,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         }>({ barrier: null, since: [] });
         const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
         const stageOpened = yield* Ref.make(false);
-        const openStage = Effect.gen(function* () {
+        // Labelled by the script's title, which its first call carries.
+        const openStage = Effect.fn('toolUse.openScriptStage')(function* (
+          title: string | null,
+        ) {
           if (yield* Ref.getAndSet(stageOpened, true)) return;
           run.session.publishRunEvent(runId, {
             type: 'stage.start',
             id: stageId,
-            label: 'Script',
+            label: title ?? 'Script',
             kind: 'script',
             ...(script.stageId !== null ? { parentId: script.stageId } : {}),
           });
@@ -1122,12 +1125,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
          *  running its tool through the per-call program. */
         const call = Effect.fn('toolUse.scriptCall')(function* (
           op: ScriptOp,
-          source: ScriptSource | null,
+          source: ScriptSource,
           answer?: () => ToolResultPayload['result'],
         ) {
           const callId = `${script.callId}/${op.seq}`;
           if (op.seq > 0) yield* Deferred.await(placeOf(op.seq - 1));
-          yield* openStage;
+          yield* openStage(source.title);
           const input = toJsonValue(op.input);
           const state = yield* cell.current;
           const known = state.pendingResponse?.scriptCalls[callId];
@@ -1195,7 +1198,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             return { result, attachments: [] };
           }
           const tool = step.registry.get(op.name);
-          const context = source === null ? {} : { script: scopeOf(source) };
+          const context = { script: scopeOf(source) };
           yield* inPlace(
             op.seq,
             tool,
@@ -1263,8 +1266,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           }),
           call: (op: ScriptOp, source: ScriptSource) =>
             call(op, source).pipe(Effect.provideContext(services)),
-          answer: (op: ScriptOp, answer: () => ToolResultPayload['result']) =>
-            call(op, null, answer).pipe(
+          answer: (
+            op: ScriptOp,
+            source: ScriptSource,
+            answer: () => ToolResultPayload['result'],
+          ) =>
+            call(op, source, answer).pipe(
               Effect.map(({ result }) => result),
               Effect.provideContext(services),
             ),

@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { UserMessage } from '@progressView/frontend/components/UserMessage';
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
-import type { WorkflowScriptDeliverySummary } from '@shared/schemas';
-import { formatWorkflowScriptDeliverySummary } from '@shared/subagentFollowup';
+import type { ScriptDeliverySummary } from '@shared/schemas';
+import { formatScriptDeliverySummary } from '@shared/subagentFollowup';
 
 // Local file imports
 import {
@@ -15,13 +15,13 @@ import {
 
 function mount(
   text: string,
-  workflowSummary: WorkflowScriptDeliverySummary | null = null,
+  scriptSummary: ScriptDeliverySummary | null = null,
 ): Promise<UserMessage> {
   return mountComponent<UserMessage>('user-message', {
     text,
     logId: 'log-1',
     timestamp: Date.now(),
-    workflowSummary,
+    scriptSummary,
   });
 }
 
@@ -60,8 +60,8 @@ describe('user-message structured delivery', () => {
     });
   }
 
-  it('renders the typed workflow summary carried beside the text', async () => {
-    const summary: WorkflowScriptDeliverySummary = {
+  it('renders the typed script summary carried beside the text', async () => {
+    const summary: ScriptDeliverySummary = {
       name: 'proofread-pipeline',
       outcome: 'completed',
       phaseCount: 2,
@@ -79,12 +79,11 @@ describe('user-message structured delivery', () => {
       costUsd: 0.19,
       durationMs: 724_000,
       files: [{ path: 'paper.tex', added: 12, removed: 8 }],
-      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
       errorCause: null,
     };
     // The producer logs the collapsed line as the row text and the typed
     // summary beside it; the bubble renders from the structured field.
-    const text = formatWorkflowScriptDeliverySummary(summary);
+    const text = formatScriptDeliverySummary(summary);
 
     const element = await mount(text, summary);
     const bubble = element.shadowRoot?.querySelector('.user-message');
@@ -113,12 +112,12 @@ describe('user-message structured delivery', () => {
   it('never mines a summary out of the text of a row without the structured field', async () => {
     // Legacy persisted rows still carry the raw envelope as text; without the
     // structured field they render as an ordinary structured-delivery bubble
-    // of that text — no render-time re-parse of <workflow-summary>.
+    // of that text — no render-time re-parse of <script-summary>.
     const text = [
-      '<workflow-script-result id="abc">',
+      '<script-result id="abc">',
       '<response>raw run log</response>',
-      '<workflow-summary>{&quot;name&quot;:&quot;spoof&quot;}</workflow-summary>',
-      '</workflow-script-result>',
+      '<script-summary>{&quot;name&quot;:&quot;spoof&quot;}</script-summary>',
+      '</script-result>',
     ].join('\n');
 
     const element = await mount(text);

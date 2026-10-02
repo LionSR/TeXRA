@@ -36,10 +36,9 @@ import {
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
-import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
 import { InquiryThreadSummarySchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
-import { PersistedJsonValueSchema, RunFactSchema } from './rowValues';
+import { RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
@@ -109,7 +108,7 @@ export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 /** C2 separates independent lifecycles even when their logical ids coincide:
  *  `run` is keyed by the run id, every other kind by its own logical id. */
-const AggregateKindSchema = z.enum(['run', 'workflow-checkpoint', 'inquiry']);
+const AggregateKindSchema = z.enum(['run', 'inquiry']);
 type AggregateKind = z.infer<typeof AggregateKindSchema>;
 const AggregateKeySchema = z
   .tuple([AggregateKindSchema, z.string().min(1)])
@@ -233,9 +232,8 @@ function durable<T extends string, S extends z.ZodRawShape>(
 /**
  * The parent edge (one run model, section 3.2): the whole of it. `id` is the
  * launching run; `uid` is that run's incarnation, stamped by the database
- * inside the child's creation transaction so a logical id a workflow-script
- * retry reuses can never redirect the child to a later incarnation of its
- * parent. Any other spelling of the edge is `parent !== null`, computed from
+ * inside the child's creation transaction so a logical id a retry reuses
+ * can never redirect the child to a later incarnation of its parent. Any other spelling of the edge is `parent !== null`, computed from
  * the fold or the handle.
  */
 const RunParentSchema = z.object({
@@ -251,19 +249,18 @@ export type RunParent = z.infer<typeof RunParentSchema>;
  * it. `worktree` is absent for a run that executes in the workspace itself
  * rather than in a dedicated worktree. `category`
  * and `userFollowUpSupport` are explicit on every run: the
- * launcher knows them for an agent, a process, and a workflow script alike,
+ * launcher knows them for an agent, a process, and a script alike,
  * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
  * initial approval-policy snapshot rides here rather than as its own event
  * (PRD 6, item 2): under the latest-of-type rule a run never edited would
  * otherwise have no policy entry, and on the payload it is atomic with the
- * run's existence. `checkpointId` is a workflow run's resume anchor
- * (decision 9): a relaunch finds its journal by it, never by the run's id.
+ * run's existence.
  */
 const RunStartEventSchema = durable('run.start', {
   identity: RunIdentitySchema,
   userFollowUpSupport: UserFollowUpSupportSchema,
   /** The `RunView` discriminant: `toolUse` for an agent in tool-use mode
-   *  and for a process run, `workflow` for a workflow agent or script. */
+   *  and for a process or script run, `workflow` for a workflow agent. */
   category: AgentCategorySchema,
   worktree: WorktreeInfoSchema.nullish(),
   /** The launching run with its creation coordinate; null for a root. */
@@ -274,8 +271,6 @@ const RunStartEventSchema = durable('run.start', {
   parentCard: z.string().min(1).nullish(),
   /** The run's approval policy at launch, from the session's single authority. */
   approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
-  /** Workflow-script runs: the checkpoint this run journals into. */
-  checkpointId: z.string().min(1).nullish(),
 });
 
 /** C9 cleanup targets: the run directories owned by this lifecycle, derived by the database. */
@@ -457,71 +452,10 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
     phase: z.enum(['accepted', 'settled']),
   }),
 ]);
-/**
- * A workflow script's durable journal (runtime on Effect, section 5, PR 4):
- * one row per completed `agent()` call on the checkpoint aggregate a
- * `run.start.checkpointId` names. The journal folds latest per `key`, so a
- * repeated key replaces its entry and the aggregate only ever appends; the
- * script row is the source the journal replays against, adopted anew on
- * every invocation because a retrying model rarely reproduces it byte for
- * byte.
- */
-const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
-  durable(
-    'workflow.script',
-    {
-      /** The run the checkpoint hangs under: the run that invoked the
-       *  workflow, whose id its checkpoint id is derived from. The database
-       *  makes it the aggregate's parent, so removing that run collects the
-       *  journal with it instead of stranding these rows. */
-      parentRunId: RunIdSchema,
-      script: z.string().min(1),
-      args: PersistedJsonValueSchema,
-      files: WorkflowScriptFilesSchema,
-    },
-    'workflow-checkpoint',
-  ),
-  durable(
-    'workflow.journal',
-    {
-      key: z.string().regex(/^[a-f0-9]{16}$/),
-      index: z.int().nonnegative(),
-      result: PersistedJsonValueSchema,
-    },
-    'workflow-checkpoint',
-  ),
-  /**
-   * The attempt high-water mark for one `agent()` call: the number of the
-   * physical attempt the parent is about to launch, committed before the
-   * launch. The child aggregates cannot carry it — deleting a run collects
-   * its rows outright, and an id-by-id probe reads that hole as "never
-   * launched" and relaunches into it — so the parent's own journal, which
-   * outlives every child, keeps the count. Folded as the highest per `key`.
-   *
-   * `supersededRunId` is the one authorization that closes a child which
-   * already started work: a user retrying that child through the workflow's
-   * control surface. The engine writes this row at that child's own attempt,
-   * naming it, before it asks for the replacement (the mark stays put, so the
-   * replacement's id reads as the free slot above it), so
-   * the recovery probe advances past an attempt it would otherwise refuse to
-   * repeat. Absent on every mark a launch writes for itself, which is what
-   * keeps restart recovery fail-closed for a child nobody retried.
-   */
-  durable(
-    'workflow.attempt',
-    {
-      key: z.string().regex(/^[a-f0-9]{16}$/),
-      attempt: z.int().nonnegative(),
-      supersededRunId: RunIdSchema.nullish(),
-    },
-    'workflow-checkpoint',
-  ),
-]);
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
   ...RunLedgerEventDraftSchema.options,
-  ...WorkflowCheckpointDraftSchema.options,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -544,9 +478,6 @@ export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
   ...RunLedgerEventDraftSchema.options.map((schema) => schema.extend(envelope)),
-  ...WorkflowCheckpointDraftSchema.options.map((schema) =>
-    schema.extend(envelope),
-  ),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -561,11 +492,8 @@ export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
 /** Aggregate identities introduced by a fact and its declared lifecycle edges. */
 export function referencedAggregates(event: SessionEvent): AggregateId[] {
   const ids = [event.aggregateId];
-  if (event.type === 'run.start') {
-    if (event.parent !== null) ids.push(aggregateId('run', event.parent.id));
-    if (event.checkpointId != null)
-      ids.push(aggregateId('workflow-checkpoint', event.checkpointId));
-  }
+  if (event.type === 'run.start' && event.parent !== null)
+    ids.push(aggregateId('run', event.parent.id));
   if (event.type === 'inquiryThreadUpdated' && event.parentRunId !== null) {
     ids.push(aggregateId('run', event.parentRunId));
   }
@@ -575,8 +503,8 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
 /**
  * The aggregate-graph edges one draft declares, applied by the store in the
  * transaction that appends it: the parent a `run.start` stamps, the
- * aggregate a row hangs its target under (a workflow checkpoint under the
- * run that invoked it; an inquiry thread under its asking run, or none),
+ * aggregate a row hangs its target under (an inquiry thread under its
+ * asking run, or none),
  * the claim an inquiry update borrows for that transaction alone, and the
  * closure a tombstone makes. {@link referencedAggregates} reads the same
  * edges off committed rows.
@@ -595,13 +523,6 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
       return {
         parent:
           draft.parent === null ? null : aggregateId('run', draft.parent.id),
-        borrowsClaim: false,
-        closes: false,
-      };
-    case 'workflow.script':
-      return {
-        parent: null,
-        reparent: aggregateId('run', draft.parentRunId),
         borrowsClaim: false,
         closes: false,
       };
@@ -647,8 +568,6 @@ export function listingTypeOf(
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
-    case 'workflow.plan':
-    case 'workflow.call':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
@@ -665,13 +584,10 @@ export function listingTypeOf(
     case 'context.blob':
     case 'hook.outcome':
     case 'child.turn':
-    case 'workflow.script':
-    case 'workflow.journal':
-    case 'workflow.attempt':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
       // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
       // renderer (`run.position`, `output.produced` are listing rows). Keyed
-      // records and the journal fold whole; the fold suite pins this list.
+      // records fold whole; the fold suite pins this list.
       return null;
     case 'request.opened':
     case 'request.decided':

@@ -26,7 +26,6 @@ import { html, render, type TemplateResult } from 'lit';
 
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
-import { RUN_BOARD_FIXTURES, runBoardScene } from './scenes/runBoard';
 // ── small pieces ────────────────────────────────────────────────────────
 const extFrame = (inner: TemplateResult) =>
   html` <div class="h-ext" id="frame">
@@ -38,12 +37,6 @@ const extFrame = (inner: TemplateResult) =>
   </div>`;
 
 // ── scenes ──────────────────────────────────────────────────────────────
-const runBoardScenes = Object.fromEntries(
-  Object.entries(RUN_BOARD_FIXTURES).map(([name, fold]) => [
-    name,
-    () => extFrame(runBoardScene(fold)),
-  ]),
-);
 
 // ── styles for the harness chrome (tokens only; components bring their own) ──
 const style = html`<style>
@@ -171,7 +164,6 @@ const style = html`<style>
 
 const scenes: Record<string, () => TemplateResult> = {
   ...extensionScenes,
-  ...runBoardScenes,
   ...desktopScenes,
 };
 const scene =

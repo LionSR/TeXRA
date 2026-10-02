@@ -129,7 +129,6 @@ interface RegisterRunOptions {
   readonly parentRunId?: RunId;
   /** The parent's tool card whose call launches this run. */
   readonly parentCard?: string;
-  readonly checkpointId?: string;
   readonly category?: AgentCategory;
   /** The run's identity, declared by the launch site — the durable authority. */
   readonly identity: RunIdentity;
@@ -211,7 +210,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
           parentCard: options.parentCard,
         }),
         approvalPolicy: session.approvalPolicySnapshotFor(runId),
-        checkpointId: options.checkpointId,
       });
     }
     events.push(config);

@@ -462,37 +462,6 @@ describe('session events and view', () => {
     }).pipe(Effect.provide(graph([]))),
   );
 
-  it.effect('hangs a workflow checkpoint under the run that invoked it', () =>
-    Effect.gen(function* () {
-      const events = yield* SessionEvents;
-      const log = yield* Database;
-      const checkpoint = qualifyAggregateId(
-        'workflow-checkpoint',
-        'cp-000000000000',
-      );
-      yield* events.publish([
-        runStart,
-        {
-          type: 'workflow.script',
-          aggregateId: checkpoint,
-          parentRunId: RUN,
-          script: 'return 1',
-          args: { kind: 'undefined' },
-          files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
-        },
-      ]);
-      // Without the edge the journal is unreachable once the run is gone:
-      // deletion follows `parent_id`, and nothing else names this id.
-      expect((yield* log.aggregateState([checkpoint]))[0]?.parentId).toBe(
-        qualifyAggregateId('run', RUN),
-      );
-      yield* events.publish([
-        { type: 'run.removed', aggregateId: qualifyAggregateId('run', RUN) },
-      ]);
-      expect((yield* log.aggregateState([checkpoint]))[0]?.closed).toBe(true);
-    }).pipe(Effect.provide(graph([]))),
-  );
-
   it.effect(
     'reparents an answered inquiry atomically before old-parent deletion',
     () =>
@@ -2317,23 +2286,18 @@ describe('the C1 event table and the C6 publisher', () => {
       const storage = workspace();
       const shared = `${'\\frac{a}{b} — ünïcode\n'.repeat(300)}end`;
       const solo = `\uD800${'y'.repeat(4096)}`;
-      const script = (
-        id: string,
-        run: RunId,
-        args: object,
-      ): SessionEventDraft => ({
-        type: 'workflow.script',
-        aggregateId: qualifyAggregateId('workflow-checkpoint', id),
-        parentRunId: run,
-        script: shared,
-        args: { kind: 'json', value: { ...args, $b: 'mine', $$b: [shared] } },
-        files: { inputFiles: [], contextFiles: [], mediaFiles: [] },
+      const card = (run: RunId, args: object): SessionEventDraft => ({
+        type: 'tool.start',
+        aggregateId: qualifyAggregateId('run', run),
+        logId: 'call-1',
+        toolName: 'script',
+        input: { script: shared, args: { ...args, $b: 'mine', $$b: [shared] } },
       });
       const drafts = [
         runStart,
         olderStart,
-        script('cp-000000000001', RUN, { solo }),
-        script('cp-000000000002', OLDER, {}),
+        card(RUN, { solo }),
+        card(OLDER, {}),
       ];
       const count = (table: string) =>
         Effect.sync(() => {
@@ -2358,23 +2322,18 @@ describe('the C1 event table and the C6 publisher', () => {
       return Effect.gen(function* () {
         const db = yield* Database;
         yield* db.appendAll(drafts);
-        const scripts = (yield* db.readAll(0)).filter(
-          (event) => event.type === 'workflow.script',
+        const cards = (yield* db.readAll(0)).filter(
+          (event) => event.type === 'tool.start',
         );
-        expect(
-          scripts.map(({ script, args }) => JSON.stringify({ script, args })),
-        ).toEqual(
-          drafts.slice(2).map((draft) =>
-            JSON.stringify({
-              script: shared,
-              args: 'args' in draft && draft.args,
-            }),
-          ),
+        expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
+          drafts
+            .slice(2)
+            .map((draft) => JSON.stringify('input' in draft && draft.input)),
         );
         const raw = reader(storage);
         try {
           const data = raw
-            .prepare("SELECT data FROM event WHERE type = 'workflow.script'")
+            .prepare("SELECT data FROM event WHERE type = 'tool.start'")
             .all()
             .map((row) => String(row.data));
           expect(data.every((text) => !text.includes(shared))).toBe(true);
@@ -2402,10 +2361,7 @@ describe('the C1 event table and the C6 publisher', () => {
         const reopened = yield* Effect.gen(function* () {
           const fresh = yield* Database;
           return yield* Effect.flip(
-            fresh.readAggregate(
-              qualifyAggregateId('workflow-checkpoint', 'cp-000000000002'),
-              0,
-            ),
+            fresh.readAggregate(qualifyAggregateId('run', OLDER), 0),
           );
         }).pipe(Effect.provide(substrate(storage)));
         expect(reopened).toMatchObject({ cause: { reason: 'corrupt' } });

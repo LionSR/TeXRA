@@ -69,6 +69,7 @@ const runInOrder = (releaseOrder: ReadonlyArray<number>) =>
       return created;
     };
     const ops: ScriptOp[] = [];
+    const logs: string[] = [];
     yield* Effect.forkScoped(
       Effect.forEach(
         releaseOrder,
@@ -92,8 +93,9 @@ const runInOrder = (releaseOrder: ReadonlyArray<number>) =>
             Effect.andThen(Deferred.await(slot(answers, op.seq))),
           );
         }),
+      onLog: (lines) => Effect.sync(() => logs.push(...lines)),
     });
-    return { ops, result };
+    return { ops, result, logs };
   });
 
 // Live clock throughout: the deadlines under test are real time, and so is the
@@ -127,9 +129,8 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         for (const run of [failFirst, again, inIssueOrder]) {
           expect(run.result).toEqual({
             value: { l: 'a1', r: 'b2', caught: 'ToolFailed: nope' },
-            logs: ['caught ToolFailed: nope'],
-            logsOmitted: 0,
           });
+          expect(run.logs).toEqual(['caught ToolFailed: nope']);
         }
       }),
   );
@@ -231,6 +232,31 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         })
         .pipe(Effect.flip);
       expect(error._tag).toBe('ScriptTimedOut');
+    }),
+  );
+
+  it.effect('a syntax error names its line and column in the script', () =>
+    Effect.gen(function* () {
+      const sandbox = yield* CodeSandbox;
+      const errors = yield* Effect.forEach(
+        ['const a = 1;\nconst b = ;', 'import x from "y";'],
+        (source) =>
+          sandbox
+            .run({
+              source,
+              tools: [],
+              timeout: '1 minute',
+              call: () => Effect.never,
+            })
+            .pipe(Effect.flip),
+      );
+      expect(errors.map((error) => [error._tag, error.message])).toEqual([
+        [
+          'ScriptSyntaxError',
+          "unexpected token in expression: ';' (line 2, column 11)",
+        ],
+        ['ScriptSyntaxError', "expecting '(' (line 1, column 8)"],
+      ]);
     }),
   );
 });

@@ -158,6 +158,19 @@ const ThrownSchema = z.object({
   stack: z.string().optional(),
 });
 
+/** What the script's source is wrapped in; it shares the first line. */
+const SCRIPT_PREFIX = '(async () => {';
+
+/** A syntax error's message with where in the script it is: QuickJS puts
+ *  the position in the stack (`at script.js:L:C`), not the message. */
+function withLocation(message: string, stack: string | undefined): string {
+  const at = /script\.js:(\d+):(\d+)/.exec(stack ?? '');
+  if (at === null) return message;
+  const line = Number(at[1]);
+  const column = Number(at[2]) - (line === 1 ? SCRIPT_PREFIX.length : 0);
+  return `${message} (line ${line}, column ${Math.max(1, column)})`;
+}
+
 /**
  * How a value thrown out of the realm ends the script: the guest's own
  * rejection (as the bridge describes it), an error QuickJS hands the host, or
@@ -354,7 +367,7 @@ const openRealm = (
           // The prefix shares the script's first line, so reported line
           // numbers match the script as written.
           const body = context.evalCode(
-            `(async () => {${input.source}\n})`,
+            `${SCRIPT_PREFIX}${input.source}\n})`,
             'script.js',
             { type: 'global', strict: true },
           );
@@ -363,7 +376,10 @@ const openRealm = (
             body.error.dispose();
             end ??=
               thrown._tag === 'Threw' && thrown.name === 'SyntaxError'
-                ? { _tag: 'SyntaxError', message: thrown.message }
+                ? {
+                    _tag: 'SyntaxError',
+                    message: withLocation(thrown.message, thrown.stack),
+                  }
                 : thrown;
             return;
           }

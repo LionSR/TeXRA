@@ -485,16 +485,5 @@ function handle(
         }
         return done;
       });
-    case 'workflow.control':
-      // A settled call, or an id no live run of this session owns, acted on
-      // nothing: the surface hears that, never a `done`.
-      return session.workflowControls.control(req.childRunId, req.action)
-        ? Effect.succeed(done)
-        : Effect.fail(
-            new Unavailable({
-              runId: req.runId,
-              reason: 'No live call under that run id.',
-            }),
-          );
   }
 }

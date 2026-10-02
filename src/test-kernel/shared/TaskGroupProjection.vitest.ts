@@ -20,12 +20,11 @@ type StageEvent = Extract<
  *  writes over the group it names. */
 function project(
   events: readonly (readonly [StageEvent, number])[],
-  attemptId?: string,
 ): TaskGroup[] {
   const groups: TaskGroup[] = [];
   for (const [event, at] of events) {
     const index = groups.findIndex((group) => group.id === event.id);
-    const group = taskGroupOnStage(groups[index], event, at, attemptId);
+    const group = taskGroupOnStage(groups[index], event, at);
     if (!group) continue;
     if (index === -1) groups.push(group);
     else groups[index] = group;
@@ -85,16 +84,13 @@ describe('task-group projection from stage events', () => {
     ]);
   });
 
-  it('tags a workflow phase with the declared attempt and writes nothing for an unopened end', () => {
+  it('writes nothing for an unopened end', () => {
     expect(
-      project(
-        [
-          [{ type: 'stage.start', id: 'p', label: 'Map', kind: 'phase' }, 1],
-          [{ type: 'stage.start', id: 'r', label: 'r0', kind: 'round' }, 2],
-          [{ type: 'stage.end', id: 'never', status: RUN_OUTCOME.FAILED }, 3],
-        ],
-        'attempt-2',
-      ),
+      project([
+        [{ type: 'stage.start', id: 'p', label: 'Map', kind: 'phase' }, 1],
+        [{ type: 'stage.start', id: 'r', label: 'r0', kind: 'round' }, 2],
+        [{ type: 'stage.end', id: 'never', status: RUN_OUTCOME.FAILED }, 3],
+      ]),
     ).toStrictEqual([
       {
         id: 'p',
@@ -102,7 +98,6 @@ describe('task-group projection from stage events', () => {
         startTime: 1,
         status: RUN_PHASE.RUNNING,
         kind: 'phase',
-        attemptId: 'attempt-2',
       },
       {
         id: 'r',

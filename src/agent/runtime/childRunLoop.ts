@@ -71,7 +71,7 @@ export interface ChildRunPause {
 
 /**
  * Presentation and finalization for process-backed children (agent CLIs,
- * background bash, workflow scripts). Native engines own their run handle
+ * background bash). Native engines own their run handle
  * and terminal finalization and omit this port.
  */
 export interface ChildRunPort {
@@ -164,7 +164,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /**
    * Produce the next turn's outcome from the queued follow-up batch. Throws
    * on hard failure. Omitted by strategies whose first (and only) turn is
-   * always terminal (workflow-script); the loop never calls `runTurn` in
+   * always terminal (a background script); the loop never calls `runTurn` in
    * that case. Native children keep their own input wait inside `launch`.
    */
   runTurn?(
@@ -240,7 +240,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   readonly queueLease?: FollowUpConsumerLease;
   /**
    * Presentation and finalization port for process-backed children (agent
-   * CLIs, background bash, workflow scripts). Native engines finalize their
+   * CLIs, background bash). Native engines finalize their
    * own run handle.
    */
   readonly childRun?: ChildRunPort;

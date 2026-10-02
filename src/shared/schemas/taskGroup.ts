@@ -18,8 +18,6 @@ export const TaskGroupSchema = z.strictObject({
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
   kind: StageKindSchema.optional(),
-  /** Workflow-script projection attempt that opened this phase. */
-  attemptId: z.string().min(1).optional(),
   index: z.int().nonnegative().optional(),
   total: z.int().positive().optional(),
 });

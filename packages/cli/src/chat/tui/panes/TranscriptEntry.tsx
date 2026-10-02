@@ -14,7 +14,6 @@ import { Markdown } from '../render/Markdown';
 import { ToolUseRow } from './ToolUseRow';
 import {
   COMPACTION_ACTIVITY_STATUS_STYLE,
-  WORKFLOW_TASK_STATUS_COLOR,
   boundedTranscriptEntryLayout,
   transcriptEntryLayout,
   type TranscriptEntryLayout,
@@ -67,15 +66,11 @@ function PlainEntryRows({
     );
   }
 
-  // Workflow-call rows carry the same status color as their layout marker, so
-  // the six statuses stay distinguishable at a glance.
   let rowColor: string | undefined;
   if (entry.kind === 'error') {
     rowColor = COLOR_ERROR;
   } else if (entry.kind === 'compactionActivity') {
     rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
-  } else if (entry.kind === 'workflowTask') {
-    rowColor = WORKFLOW_TASK_STATUS_COLOR[entry.call.status];
   } else if (entry.kind === 'phase') {
     rowColor = COLOR_HINT;
   }

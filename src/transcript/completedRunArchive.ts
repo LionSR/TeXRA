@@ -98,7 +98,6 @@ function conversationNodesForRow(
     case 'statistics':
     case 'contextManagement':
     case 'progressStatus':
-    case 'workflowTask':
     case 'compactionActivity':
     case 'phase':
     case 'log':

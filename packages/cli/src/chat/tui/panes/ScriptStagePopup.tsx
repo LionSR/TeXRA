@@ -33,6 +33,7 @@ import {
   scriptStages,
   type ScriptCallView,
 } from '@ui/transcript';
+import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
@@ -206,6 +207,9 @@ export function ScriptStagePopup({
     'Script',
     stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
     `${stage?.calls.length ?? 0} calls`,
+    stage !== undefined && stage.costUsd > 0
+      ? formatCostUsd(stage.costUsd)
+      : undefined,
   ]
     .filter((part) => part !== undefined)
     .join(' · ');
