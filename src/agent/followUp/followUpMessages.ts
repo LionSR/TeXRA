@@ -1,6 +1,6 @@
-import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   deliveryTagOf,
+  SUMMARIZED_TAGS,
   formatWorkflowScriptDeliverySummary,
   parseWorkflowScriptDeliverySummary,
   summarizeSubagentFollowup,
@@ -26,12 +26,11 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   }
   // This is where a delivery envelope becomes a transcript row: parse the
   // workflow summary once here and carry it structured, so renderers never
-  // re-extract it from the rendered text. Only the workflow envelopes own a
+  // re-extract it from the rendered text. Only the script envelopes own a
   // `<workflow-summary>` element — other tags' bodies are entity-escaped.
   const tag = deliveryTagOf(followUp.text);
   const workflowSummary =
-    tag === DELIVERY_TAG.workflowScriptResult ||
-    tag === DELIVERY_TAG.workflowScriptError
+    tag !== undefined && SUMMARIZED_TAGS.has(tag)
       ? parseWorkflowScriptDeliverySummary(followUp.text)
       : undefined;
   if (workflowSummary) {

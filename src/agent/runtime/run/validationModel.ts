@@ -118,6 +118,15 @@ const [a, b] = await Promise.all([
 return { a: a.response, b: b.response }`;
 
 /**
+ * The golden store's background script: one `agent()` call, whose child
+ * waits for `golden-background.release`, so the generator kills the process
+ * while it runs, after the parent's turn has ended.
+ */
+const GOLDEN_BACKGROUND_SOURCE = `phase('Background')
+const answer = await agent('Background child: answer once released.', { agentName: 'golden_child', label: 'Child' })
+return { answer: answer.response }`;
+
+/**
  * The scripted conversation of the golden 1.0 store
  * (`packages/cli/scripts/generate-golden-store.mjs`): each agent's system
  * prompt names its part, and a part's step is the count of tool results its
@@ -156,6 +165,10 @@ function goldenTurn(
         : text('The approved command ran.'),
     );
   if (system.includes('GOLDEN-CHILD')) {
+    if (said.includes('Background child'))
+      return gate('golden-background.release').pipe(
+        Effect.as(text('Background child answer.')),
+      );
     if (said.includes('Fan-out child B'))
       return gate('golden-fanout.release').pipe(
         Effect.as(text('Fan-out child B answer.')),
@@ -249,6 +262,24 @@ function goldenTurn(
       step === undefined ? text('Fan-out done.') : [step()],
     );
   }
+  // A script sent to the background, then the turn ends: its result comes
+  // back as a follow-up, which the next turn acknowledges.
+  if (system.includes('GOLDEN-BACKGROUND'))
+    return Effect.succeed(
+      results.length === 0
+        ? [
+            call('script', {
+              title: 'Background',
+              code: GOLDEN_BACKGROUND_SOURCE,
+              run_in_background: true,
+            }),
+          ]
+        : text(
+            said.includes('script-result')
+              ? 'Background script reported.'
+              : 'Background script sent.',
+          ),
+    );
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
   const steps = [
     () => call('read_file', { path: 'notes.tex' }),

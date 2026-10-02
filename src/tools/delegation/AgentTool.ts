@@ -9,7 +9,8 @@
  * run, which waits. The script's `agent` calls share one approval request
  * showing its source (Q5); a direct call proposes itself. A completed
  * awaited call is reused by a later call with the same key in the same run
- * (Q2), and a call cut short finds the child its attempt launched
+ * or a background script run of it (Q2), and a call cut short finds the
+ * child its attempt launched
  * (`agentChild.ts`).
  */
 
@@ -287,10 +288,33 @@ const fingerprint = Effect.fn('agent.fingerprint')(function* (
 });
 
 /**
- * A completed call of this run whose key is `key`, or a refusal when one of
- * this same script holds it: two calls of one script that would answer the
- * same must say how they differ (`id`). Read from the run's `tool.result`
- * rows; only an executed result carries a key.
+ * The runs whose completed calls a call may reuse (Q2): the run that issued
+ * the `script` call, and the background script runs it launched. A call of
+ * a background script's run reaches its parent and its siblings this way.
+ */
+const reuseScope = Effect.fn('agent.reuseScope')(function* (
+  call: DelegationParent,
+) {
+  const { session, runId, config } = call.run;
+  const view = yield* session.readView([]);
+  const root =
+    config.agentCategory === AgentCategory.ToolUse &&
+    config.backgroundScript != null
+      ? (view.runs.get(runId)?.parentId ?? runId)
+      : runId;
+  return [
+    root,
+    ...(view.runs.get(root)?.childIds ?? []).filter(
+      (id) => view.runs.get(id)?.identity.kind === 'script',
+    ),
+  ];
+});
+
+/**
+ * A completed call in the reuse scope whose key is `key`, or a refusal when
+ * one of this same script holds it: two calls of one script that would
+ * answer the same must say how they differ (`id`). Read from the runs'
+ * `tool.result` rows; only an executed result carries a key.
  */
 const reusable = Effect.fn('agent.reusable')(function* (
   call: DelegationParent,
@@ -311,10 +335,9 @@ const reusable = Effect.fn('agent.reusable')(function* (
       { name: 'DuplicateCall' },
     );
   siblings.set(key, callId);
-  const rows = yield* call.run.session.readAggregate(
-    aggregateId('run', call.run.runId),
-    ['tool.result'],
-  );
+  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+    call.run.session.readAggregate(aggregateId('run', runId), ['tool.result']),
+  )).flat();
   const found = rows.flatMap((row) =>
     row.type === 'tool.result' &&
     row.payload.result.status === 'executed' &&
@@ -728,6 +751,11 @@ export const AgentTool = defineTool({
   // A script's calls run beside each other, held to the child-run budget.
   ownsConcurrency: true,
   scriptGlobal: { positional: 'prompt' },
+  // The named agent decides the category: both lists are its targets.
+  availabilityCategory: [AgentCategory.Workflow, AgentCategory.ToolUse],
+  // A script awaits the child's envelope, or `{ runId }` in the background.
+  scriptReturns:
+    "{ category: 'toolUse'; response: string; files: string[]; structured?: unknown; outcome: 'completed'; cost: number } | { category: 'workflow'; outputs: { relativePath: string; absolutePath: string; added: number | null; removed: number | null }[]; outcome: 'completed'; cost: number } | { runId: string }",
   slow: true,
   description: `Run a named agent as a child of this run.
 

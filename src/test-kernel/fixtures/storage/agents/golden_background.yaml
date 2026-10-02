@@ -1,0 +1,10 @@
+name: golden_background
+description: The golden store's background script, killed while its child runs.
+settings:
+  agentCategory: toolUse
+  tools:
+    - script
+    - agent
+prompts:
+  systemPrompt: 'GOLDEN-BACKGROUND: send one script to the background.'
+  userRequest: '{{ INSTRUCTION }}'

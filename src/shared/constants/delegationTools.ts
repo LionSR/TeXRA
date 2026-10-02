@@ -17,6 +17,7 @@ const CANONICAL_DELEGATION_TOOL_NAMES = [
   'delegate_workflow',
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   'delegate_agent',
+  'agent',
 ] as const;
 
 export type CanonicalDelegationToolName =

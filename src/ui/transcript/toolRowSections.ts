@@ -347,7 +347,8 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
 
-  const agent = asString(input.agent);
+  // `agent` names its agent and task as `agentName` and `prompt`.
+  const agent = asString(input.agent) ?? asString(input.agentName);
   const model = asString(input.model);
   if (agent || model) {
     sections.push({
@@ -358,7 +359,7 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
     });
   }
 
-  const instruction = asString(input.instruction);
+  const instruction = asString(input.instruction) ?? asString(input.prompt);
   if (instruction) sections.push(textSection('Instruction:', instruction));
 
   const badges = [

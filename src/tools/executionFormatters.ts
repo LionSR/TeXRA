@@ -21,7 +21,7 @@ import { formatTimestamp } from '@utils/text/stringUtils';
 /**
  * The display category of a run: an agent run shows its run mode
  * (`workflow` / `toolUse`), every other run shows what it IS
- * (`process` / `multiAgentWorkflow`).
+ * (`process` / `multiAgentWorkflow` / `script`).
  */
 type RunDisplayCategory = AgentCategory | Exclude<RunIdentity['kind'], 'agent'>;
 
@@ -65,6 +65,8 @@ function getAvailablePaths(
       return [...common, 'files'];
     case 'process':
       return [...common, 'output'];
+    case 'script':
+      return [...common, 'conversation'];
     default:
       category satisfies never;
       return common;

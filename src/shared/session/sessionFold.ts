@@ -379,7 +379,7 @@ function createRun(
     followUpSupport: event.userFollowUpSupport,
     resumeEligible:
       event.category === AgentCategory.ToolUse &&
-      isPlainAgentIdentity(identity),
+      (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
     ancestors: [],

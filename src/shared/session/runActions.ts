@@ -5,6 +5,7 @@
 import {
   AgentCategory,
   isPlainAgentIdentity,
+  RUN_PHASE,
   RUN_SUBSTATE,
   type RunAction,
 } from '@shared/schemas';
@@ -24,7 +25,8 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * Nothing that rewrites or removes a run's files or history is offered while
  * it is live. After, it can be deleted; a plain agent's can be resumed (an
  * interrupted one, or a workflow from its saved outputs), run again, or
- * restored into the launcher; a workflow agent's outputs can be diffed,
+ * restored into the launcher; a background script's can be resumed unless it
+ * completed; a workflow agent's outputs can be diffed,
  * archived, or removed.
  */
 export function runActions(
@@ -54,6 +56,10 @@ export function runActions(
       actions.push('resume');
     actions.push('runNew', 'restore');
   }
+  // A background script takes no message: a resume is how it continues
+  // after a crash or a stop, its finished calls handed back from its rows.
+  if (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED)
+    actions.push('resume');
   if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];

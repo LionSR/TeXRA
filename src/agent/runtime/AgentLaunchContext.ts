@@ -479,8 +479,14 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       prompt,
       modelConfig,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
-      // Frozen so nothing mutates it mid-run.
-      toolPolicy: Object.freeze({ ...input.toolPolicy }),
+      // Frozen so nothing mutates it mid-run. A background script's run
+      // ends when its script settles, launched or resumed: it has no later
+      // turn for anything to wait for.
+      toolPolicy: Object.freeze({
+        ...input.toolPolicy,
+        ...(config.agentCategory === AgentCategory.ToolUse &&
+          config.backgroundScript != null && { stopAfterCycle: true }),
+      }),
       stores,
       logger: agentLogger,
       parentStage,
