@@ -137,9 +137,10 @@ export interface ChildRunStrategy<TTurn, R = never> {
   pauseNotice?(): ChildRunPause | undefined;
 
   /**
-   * A native child a user stopped: the notice its parent reads, saying what
-   * it had done and which run to resume. Queued for the parent's next input
-   * without waking it. A process child says this through `pauseNotice`.
+   * A native child a user stopped, directly or by stopping its parent: the
+   * notice its parent reads, saying what it had done and which run to
+   * resume. Queued for the parent's next input without waking it. A process
+   * child says this through `pauseNotice`.
    */
   stopNotice?(): Effect.Effect<string, Error, R>;
 

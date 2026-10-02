@@ -153,6 +153,9 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   name: string,
   outcome: WorkflowScriptDeliverySummary['outcome'],
   errorCause: string | null,
+  /** When this launch or resume of the run started: what the duration
+   *  counts from, as a workflow script's does, never an idle gap. */
+  startedAt: number,
 ) {
   const { calls } = yield* scriptRunCalls(session, runId);
   const view = yield* session.readView([]);
@@ -199,14 +202,13 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
       for (const path of envelope.data.files)
         files.set(path, { path, added: null, removed: null });
   }
-  const launchedAt = view.runs.get(runId)?.launchedAt ?? now;
   return {
     name,
     outcome,
     phaseCount: new Set(calls.flatMap(({ phase }) => phase ?? [])).size,
     tally,
     costUsd: runTreeUsage(view, runId).cost,
-    durationMs: Math.max(0, Math.round(now - launchedAt)),
+    durationMs: Math.max(0, Math.round(now - startedAt)),
     files: [...files.values()],
     scriptPath: null,
     errorCause,
@@ -228,7 +230,7 @@ export function createScriptRunStrategy(
     readonly title: string;
   },
 ): ChildRunStrategy<RunEndResult, AgentRunServices> {
-  const { session, runId, title } = params;
+  const { session, runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
   return {
     ...createNativeSubagentStrategy(params),
@@ -251,6 +253,7 @@ export function createScriptRunStrategy(
                   title,
                   'completed',
                   null,
+                  startedAt,
                 ),
               ),
             ],
@@ -265,7 +268,14 @@ export function createScriptRunStrategy(
           attributes,
           lines: [
             workflowSummaryElement(
-              yield* scriptRunSummary(session, runId, title, 'failed', cause),
+              yield* scriptRunSummary(
+                session,
+                runId,
+                title,
+                'failed',
+                cause,
+                startedAt,
+              ),
             ),
           ],
           message: cause,
@@ -286,6 +296,7 @@ export function createScriptRunStrategy(
           title,
           'stopped',
           null,
+          startedAt,
         );
         return formatDelivery({
           tag: DELIVERY_TAG.scriptError,
