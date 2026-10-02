@@ -43,6 +43,7 @@ import { InfoPane } from './panes/InfoPane';
 import { WorkPlanReader } from './panes/WorkPlanReader';
 import { TranscriptReader } from './panes/TranscriptReader';
 import { WorkflowPopup } from './panes/WorkflowPopup';
+import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
@@ -67,7 +68,10 @@ import {
   goalAutoApproveAll as goalAutoApproveAllSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
+  openScriptPopup,
   openWorkflowPopup,
+  scriptPopupView as scriptPopupViewSignal,
+  updateScriptPopupView,
   updateWorkflowPopupView,
   workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
@@ -249,6 +253,11 @@ export function App(props: AppProps): React.JSX.Element {
     runViewOf(view, childListTarget),
   );
   const workflowPopup = useSignal(workflowPopupViewSignal);
+  const scriptPopup = useSignal(scriptPopupViewSignal);
+  // The active run's transcript holds a script's calls: Ctrl-O shows them.
+  const scriptAvailable =
+    activeRun?.transcript.taskGroups.some((group) => group.kind === 'script') ??
+    false;
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
   const selectedChild = runViewOf(view, selectedChildValue);
@@ -356,6 +365,22 @@ export function App(props: AppProps): React.JSX.Element {
           />
         );
       }
+      case 'script':
+        return (
+          <ScriptStagePopup
+            availableRows={availableRows}
+            onClose={closeForegroundReader}
+            onFocusRun={(runId) => {
+              closeForegroundReader();
+              focusRunAndPromoteApprovals(runId);
+            }}
+            onOpenTranscript={openTranscriptReader}
+            onRequest={request}
+            onViewChange={updateScriptPopupView}
+            runId={reader.runId}
+            view={scriptPopup}
+          />
+        );
       case 'workPlan':
         return (
           <WorkPlanReader
@@ -607,6 +632,11 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
+    if (isCtrlInput(input, key, 'o')) {
+      if (activeRunId && scriptAvailable) openScriptPopup(activeRunId);
+      return;
+    }
+
     // Tab transfers keyboard ownership from the input to the child list.
     if (key.tab) {
       focusChildList();
@@ -671,6 +701,7 @@ export function App(props: AppProps): React.JSX.Element {
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
               transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
+              scriptAvailable={scriptAvailable}
             />
           </>
         )}

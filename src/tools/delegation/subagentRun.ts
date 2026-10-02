@@ -222,6 +222,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           identity: { kind: 'agent', agent: config.agent },
           userFollowUpSupport,
           parentRunId,
+          ...(parent.logId !== undefined && { parentCard: parent.logId }),
         });
 
         const strategyParams = {

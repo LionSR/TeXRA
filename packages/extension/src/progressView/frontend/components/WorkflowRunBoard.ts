@@ -22,7 +22,6 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared contracts
 import type {
   AgentCategory,
-  PermissionPayload,
   RunId,
   WorkflowCallProgress,
 } from '@shared/schemas';
@@ -44,7 +43,12 @@ import {
 } from '@shared/runs/workflowRunModel';
 import { TickerController } from '@shared/litControllers/TickerController';
 import { designTokens } from '@ui/styles';
-import type { WorkflowTaskRow } from '@ui/transcript';
+import {
+  pendingRequestLine,
+  SCRIPT_SECTION_LABEL,
+  type ScriptSection,
+  type WorkflowTaskRow,
+} from '@ui/transcript';
 import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -75,12 +79,7 @@ type WorkflowRunView = Extract<
 type PendingRequest = SessionView['requests'][number];
 
 /** The bucket a task row leads under; quiet rows carry none. */
-type Bucket = 'waiting' | 'failed' | 'running';
-const BUCKET_LABEL: Record<Bucket, string> = {
-  waiting: 'Needs a decision',
-  failed: 'Failed',
-  running: 'Running',
-};
+type Bucket = ScriptSection;
 
 /** The rows of one phase as the board paints them: section headings
  *  between buckets, and a counted group folding its members in place. */
@@ -120,28 +119,6 @@ function workflowCallStatusIcon(
       return terminalStatusIcon('failed');
     default:
       return assertNever(status, 'Unhandled workflow call status');
-  }
-}
-
-/** What a waiting child asks for, in the words the terminal's rows use. */
-function requestLine(payload: PermissionPayload): string {
-  switch (payload.kind) {
-    case 'bash':
-      return `Wants bash: ${payload.data.command}`;
-    case 'toolEdit':
-      return `Wants edit: ${payload.data.relativePath}`;
-    case 'retry':
-      return `Wants retry: ${payload.data.operation}`;
-    case 'proposal':
-      return 'Wants approval for a proposal';
-    case 'planApproval':
-      return 'Wants approval for a plan';
-    case 'externalInquiry':
-      return 'Wants an answer to an inquiry';
-    case 'userQuestion':
-      return 'Wants an answer to a question';
-    default:
-      return assertNever(payload, 'Unhandled request kind');
   }
 }
 
@@ -509,7 +486,7 @@ export class WorkflowRunBoard extends LitElement {
     const target = request?.runId ?? child?.id;
     const meta = this.rowMeta(row);
     const last = waiting
-      ? requestLine(request.payload)
+      ? pendingRequestLine(request.payload)
       : (row.detail?.text ?? child?.latestLine ?? child?.statusLabel ?? '');
     const actions = this.renderActions(row, child, request?.runId);
     const rejected =
@@ -588,7 +565,7 @@ export class WorkflowRunBoard extends LitElement {
     switch (block.kind) {
       case 'section':
         return html`<div class="section">
-          <span>${BUCKET_LABEL[block.bucket]}</span>
+          <span>${SCRIPT_SECTION_LABEL[block.bucket]}</span>
           <span class="count">${block.count}</span>
         </div>`;
       case 'row':

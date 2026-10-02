@@ -75,6 +75,8 @@ export class SubagentDurabilityError extends Data.TaggedError(
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
+  /** The parent's tool card whose call launches the child. */
+  readonly parentCard?: string;
   /** What the parent's step offered, which the child can only narrow. */
   readonly parentOffered: readonly OfferedTool[];
   /**
@@ -191,6 +193,9 @@ const executeInBand = Effect.fn('executeInBand')(
         identity: { kind: 'agent', agent: config.agent },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentRunId: options.parentRunId,
+        ...(options.parentCard !== undefined && {
+          parentCard: options.parentCard,
+        }),
       }).pipe(
         Effect.mapError((cause) =>
           mode === 'required-result'

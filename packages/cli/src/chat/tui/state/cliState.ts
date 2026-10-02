@@ -268,6 +268,7 @@ export function closeInfoPane(): void {
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'workflow'; readonly runId: RunId }
+  | { readonly kind: 'script'; readonly runId: RunId }
   | { readonly kind: 'workPlan'; readonly runId: RunId };
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
@@ -334,6 +335,41 @@ export function updateWorkflowPopupView(
 ): void {
   const current = WORKFLOW_POPUP_VIEW.get();
   WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
+}
+
+/** View state of the script popup: which of the run's scripts it shows
+ *  (unset, the newest) and the highlighted call. */
+export interface ScriptPopupView {
+  readonly stageId: string | undefined;
+  readonly selectedId: string | undefined;
+}
+
+const INITIAL_SCRIPT_POPUP_VIEW: ScriptPopupView = {
+  stageId: undefined,
+  selectedId: undefined,
+};
+
+/** Held per run, like the workflow popup's: closing it to look at a call's
+ *  child and coming back lands where the user left it. */
+const SCRIPT_POPUP_VIEW = signal<{
+  readonly runId: RunId | undefined;
+  readonly view: ScriptPopupView;
+}>({ runId: undefined, view: INITIAL_SCRIPT_POPUP_VIEW });
+export const scriptPopupView: Signal.Computed<ScriptPopupView> = computed(
+  () => SCRIPT_POPUP_VIEW.get().view,
+);
+
+/** Open the script popup on the scripts a run's transcript holds. */
+export function openScriptPopup(runId: RunId): void {
+  if (SCRIPT_POPUP_VIEW.get().runId !== runId) {
+    SCRIPT_POPUP_VIEW.set({ runId, view: INITIAL_SCRIPT_POPUP_VIEW });
+  }
+  FOREGROUND_READER.set({ kind: 'script', runId });
+}
+
+export function updateScriptPopupView(patch: Partial<ScriptPopupView>): void {
+  const current = SCRIPT_POPUP_VIEW.get();
+  SCRIPT_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
 }
 
 export function openWorkPlanReader(runId: RunId): void {

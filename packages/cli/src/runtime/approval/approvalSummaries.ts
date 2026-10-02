@@ -11,6 +11,10 @@ import {
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
+import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@ui/copy/workflowScriptProposal';
@@ -134,6 +138,23 @@ function agentProposalApprovalSummary(
       ? formatAgentProposalFileGroup(group.label, group.files)
       : formatAgentProposalFileGroup(group.label, group.files, Infinity),
   );
+  // A script's request covers every `agent` call it makes: it names what it
+  // asks for first, the calls it issued before it asked, and its source.
+  const script = proposal.script;
+  if (script)
+    return [
+      `Script agent request: ${SCRIPT_REQUEST_COPY.title(script)}`,
+      SCRIPT_REQUEST_COPY.grant,
+      `First agent call: ${proposal.agent} · ${getModelLabel(proposal.model)}`,
+      ...(script.calls.length > 0
+        ? [
+            `${SCRIPT_REQUEST_COPY.callsHeading}:`,
+            ...script.calls.map((call) => `  ${scriptRequestCallLine(call)}`),
+          ]
+        : []),
+      `${SCRIPT_REQUEST_COPY.sourceHeading}:`,
+      ...instructionLines.map((line) => `  ${line}`),
+    ].join('\n');
   // A multi-agent workflow is a container, not one agent run: its agent and
   // model are defaults each call may override, and its files are what the
   // script may hand to calls, not every call's inputs.
@@ -168,7 +189,10 @@ function agentProposalApprovalSummary(
 export function buildAgentProposalApprovalContent(
   proposal: AgentProposalPermission,
 ): CliApprovalContent {
-  const instructionLines = agentProposalInstructionLines(proposal.instruction);
+  // A script's request shows its source where a proposal shows its prompt.
+  const instructionLines = agentProposalInstructionLines(
+    proposal.script?.source ?? proposal.instruction,
+  );
   const boundedInstructionLines =
     boundedAgentProposalInstructionLines(instructionLines);
   const fileGroups = getProposalFileGroups(proposal);

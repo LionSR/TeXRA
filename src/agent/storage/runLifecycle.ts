@@ -127,6 +127,8 @@ export const commitResumedActivation = (
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
   readonly parentRunId?: RunId;
+  /** The parent's tool card whose call launches this run. */
+  readonly parentCard?: string;
   readonly checkpointId?: string;
   readonly category?: AgentCategory;
   /** The run's identity, declared by the launch site — the durable authority. */
@@ -205,6 +207,9 @@ export const registerRun = Effect.fn('registerRun')(function* (
           options.parentRunId === undefined
             ? null
             : { id: options.parentRunId },
+        ...(options.parentCard !== undefined && {
+          parentCard: options.parentCard,
+        }),
         approvalPolicy: session.approvalPolicySnapshotFor(runId),
         checkpointId: options.checkpointId,
       });

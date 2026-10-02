@@ -49,6 +49,7 @@ import type {
   PhaseRow,
   StatItem,
   StreamingTextRow,
+  ToolCallFacts,
   ToolRow,
   TranscriptRow,
   TranscriptRowBase,
@@ -257,11 +258,13 @@ export function toolRow(
   log: ToolUseLog,
   output: string | undefined,
   runLabels: ToolRowModelContext['runLabels'],
+  call: ToolCallFacts = {},
 ): ToolRow {
   const shown = output === undefined ? log : { ...log, output };
   const toolUse = normalizeToolUse(shown);
   return {
     ...base,
+    ...call,
     kind: 'tool',
     toolUse,
     model: toolRowModel(toolUse, {

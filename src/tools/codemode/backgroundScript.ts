@@ -113,6 +113,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         identity: { kind: 'script', title },
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
         parentRunId,
+        ...(call.logId !== undefined && { parentCard: call.logId }),
         description: childRunDescription(title),
       });
       yield* startDetachedChildRunLoop({

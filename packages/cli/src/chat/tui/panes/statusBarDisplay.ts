@@ -179,6 +179,7 @@ interface StatusBarShortcutsInput {
   readonly childNavigationAvailable?: boolean;
   /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
+  readonly scriptAvailable?: boolean;
 }
 
 interface StatusBarDisplay {
@@ -523,6 +524,7 @@ function statusBarBindingsText(
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     transcriptAvailable = false,
+    scriptAvailable = false,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
@@ -536,13 +538,24 @@ function statusBarBindingsText(
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
+  const script = scriptAvailable
+    ? keyHintText({ key: 'Ctrl-O', action: 'script' })
+    : undefined;
   const commands = chatInputAvailable
     ? keyHintText({ key: '/', action: 'commands' })
     : undefined;
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   return firstFittingCandidate({
     candidates: [
-      statusBarBindingRow([parentBack, childList, fullOutput, commands, ctrlC]),
+      statusBarBindingRow([
+        parentBack,
+        childList,
+        fullOutput,
+        script,
+        commands,
+        ctrlC,
+      ]),
+      statusBarBindingRow([parentBack, childList, fullOutput, script, ctrlC]),
       statusBarBindingRow([parentBack, childList, fullOutput, ctrlC]),
       statusBarBindingRow([parentBack, childList, ctrlC]),
       parentBack && statusBarBindingRow([parentBack, ctrlC]),

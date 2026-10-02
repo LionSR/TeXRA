@@ -292,6 +292,19 @@ true` returns at once with a run ID, and the script runs as a child run of
   `{ output, summary }`.
 - **A script's result carries the files its calls attached**, so an image a
   nested `read_file` returned reaches the model with the script's answer.
+- **Every host shows a script's calls.** In VS Code and the desktop app, a
+  script's stage lists its calls by `phase()`, with the calls that need a
+  decision, the failed ones and the running ones first; each call says
+  whether it is queued, running, finished, reused, skipped, cancelled, failed
+  or not run, with its agent, model, attempt, files, time and cost. An
+  `agent` call opens its child run, **Review** opens the run waiting on you,
+  and **Skip** stops a running call's child (the script gets a `Skipped`
+  error). The calls' full cards fold under **Call details**. In the terminal,
+  **Ctrl-O** opens the same list for the focused run (Enter opens, `s`
+  skips), and `texra run` prints a line per call as it changes. The request a
+  script's first `agent` call opens shows the script's title, source and the
+  calls it made so far. A background script's run offers **Resume** after a
+  stop and **Edit as new task**, which puts its script into the launcher.
 - **Pending approvals survive a restart.** When TeXRA exits, crashes or is
   stopped while a command, an edit, a plan, a delegation or a question waits
   for you, resuming the run shows you that same request again, and your

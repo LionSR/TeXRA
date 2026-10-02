@@ -26,7 +26,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * it is live. After, it can be deleted; a plain agent's can be resumed (an
  * interrupted one, or a workflow from its saved outputs), run again, or
  * restored into the launcher; a background script's can be resumed unless it
- * completed; a workflow agent's outputs can be diffed,
+ * completed, and restored; a workflow agent's outputs can be diffed,
  * archived, or removed.
  */
 export function runActions(
@@ -58,8 +58,11 @@ export function runActions(
   }
   // A background script takes no message: a resume is how it continues
   // after a crash or a stop, its finished calls handed back from its rows.
-  if (run.identity.kind === 'script' && run.status !== RUN_PHASE.COMPLETED)
-    actions.push('resume');
+  // Its script can also start a new task from the launcher.
+  if (run.identity.kind === 'script') {
+    if (run.status !== RUN_PHASE.COMPLETED) actions.push('resume');
+    actions.push('restore');
+  }
   if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
     actions.push('diff', 'pack', 'clean');
   return [...actions, ...inspectActions()];

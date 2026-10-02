@@ -33,6 +33,10 @@ import {
 
 // Local imports - shared utils
 import {
+  SCRIPT_REQUEST_COPY,
+  scriptRequestCallLine,
+} from '@ui/copy/scriptRequest';
+import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
   workflowScriptStepCount,
@@ -95,6 +99,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
    */
   protected override renderAsk(): TemplateResult {
     const data = this.permission.data;
+    if (data.script) {
+      return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
+    }
     if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
       return html`Start a team run:
         <strong>${data.workflowScript.name}</strong> with ${data.agent} on
@@ -179,12 +186,17 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           </div>`
         : nothing;
 
+    let body: TemplateResult;
+    if (data.script)
+      body = html`${pickers} ${this.renderScriptSummary(data, data.script)}`;
+    else if (workflowScript)
+      body = this.renderWorkflowScriptSummary(data, workflowScript);
+    else
+      body = html`${pickers} ${this.renderInstruction(data.instruction)}
+      ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+      ${this.renderProposalFiles(data)}`;
     return this.renderCard(
-      workflowScript
-        ? this.renderWorkflowScriptSummary(data, workflowScript)
-        : html`${pickers} ${this.renderInstruction(data.instruction)}
-          ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-          ${this.renderProposalFiles(data)}`,
+      body,
       renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
@@ -270,6 +282,49 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         }
         ${this.renderProposalFiles(data)}
         ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
+      </wa-details>
+    `;
+  }
+
+  /**
+   * A script's request for its `agent` calls (Q5): what one approval
+   * covers, the whole source, the calls it issued before it asked, and,
+   * folded, the first `agent` call it is asking for.
+   */
+  private renderScriptSummary(
+    data: AgentProposalPermission,
+    script: NonNullable<AgentProposalPermission['script']>,
+  ): TemplateResult {
+    return html`
+      <div class="proposal-card__lede">
+        <span>${SCRIPT_REQUEST_COPY.grant}</span>
+      </div>
+      <div class="workflow-proposal__plan-note">
+        ${SCRIPT_REQUEST_COPY.sourceHeading}:
+      </div>
+      <div class="workflow-proposal__instruction script-proposal__source">
+        <pre><code>${script.source}</code></pre>
+      </div>
+      ${
+        script.calls.length > 0
+          ? html`<div class="workflow-proposal__plan-note">
+                ${SCRIPT_REQUEST_COPY.callsHeading}:
+              </div>
+              <ol class="script-proposal__calls">
+                ${repeat(
+                  script.calls,
+                  (_call, index) => index,
+                  (call) => html`<li>${scriptRequestCallLine(call)}</li>`,
+                )}
+              </ol>`
+          : nothing
+      }
+      <wa-details
+        class="workflow-proposal__workflow-details"
+        summary=${`First agent call: ${data.agent}`}
+      >
+        ${this.renderInstruction(data.instruction)}
+        ${this.renderProposalFiles(data)}
       </wa-details>
     `;
   }

@@ -188,6 +188,8 @@ const RunViewCommonSchema = z.object({
   /** Latest `context.state`. */
   context: ContextStateDataSchema.nullable(),
   parentId: RunIdSchema.nullable(),
+  /** The parent's tool card that launched this run (`run.start.parentCard`). */
+  parentCard: z.string().nullable(),
   /** Root first. */
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */

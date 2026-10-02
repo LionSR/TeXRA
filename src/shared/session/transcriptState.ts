@@ -34,6 +34,7 @@ import {
   workflowTaskRow,
   type LogRowPayload,
   type StreamingTextRow,
+  type ToolCallFacts,
   type TranscriptRow,
   type TranscriptRowBase,
   transcriptText,
@@ -99,7 +100,13 @@ export type Slot =
       text: string;
       running: boolean;
     }
-  | { readonly kind: 'tool'; base: TranscriptRowBase; log: ToolUseLog }
+  | {
+      readonly kind: 'tool';
+      base: TranscriptRowBase;
+      log: ToolUseLog;
+      /** What the card's `tool.start` says of a script's call. */
+      call: ToolCallFacts;
+    }
   | {
       readonly kind: 'call';
       base: TranscriptRowBase;
@@ -379,7 +386,7 @@ function rowOf(
         : plainLogRow(slot.base, text);
     }
     case 'tool':
-      return toolRow(slot.base, slot.log, live, ctx.runLabels);
+      return toolRow(slot.base, slot.log, live, ctx.runLabels, slot.call);
     case 'call':
       return workflowTaskRow(slot.base, slot.call);
     case 'log':

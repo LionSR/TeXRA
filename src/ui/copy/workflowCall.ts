@@ -22,7 +22,7 @@ const CALL_FILE_PREVIEW_LIMIT = 3;
  * along. Empty for a declared plan label and for a structured call, which by
  * contract carries no files.
  */
-function formatWorkflowCallFiles(
+export function formatWorkflowCallFiles(
   files: WorkflowCallProgress['files'],
 ): string | undefined {
   if (!files) return undefined;
