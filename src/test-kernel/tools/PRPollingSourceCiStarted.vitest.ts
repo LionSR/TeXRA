@@ -100,7 +100,10 @@ function checkRunsResponse(runs: GhCheckRun[]): {
 }
 
 function createSource(): CiStartedSource {
-  return new PRPollingSource() as unknown as CiStartedSource;
+  return new PRPollingSource(
+    undefined,
+    Effect.void,
+  ) as unknown as CiStartedSource;
 }
 
 function queuePollResponses(
