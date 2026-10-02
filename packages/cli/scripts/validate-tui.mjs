@@ -946,6 +946,8 @@ const SCENARIOS = [
   },
   {
     name: 'approval-form',
+    // This fixture's root takes no grant (`runActions`), so the session
+    // toggles are shown unavailable rather than offered and then refused.
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval', '\r'],
     frame: 'viewport',
@@ -955,8 +957,8 @@ const SCENARIOS = [
       'Ask',
       'Block',
       'Auto-approve',
-      'Auto-approve commands — Off · this session',
-      'Auto-approve edits — Off · this session',
+      'Auto-approve commands — available while the chat is active',
+      'Auto-approve edits — available while the chat is active',
       'Goal: approve all work — Off · commands only',
       '1-6/Enter select',
       'Esc cancel',
@@ -981,10 +983,11 @@ const SCENARIOS = [
     expect: [
       'Approval mode: Block shell commands and file edits.',
       'API keys',
-      'never',
+      // The bar names the policy by its one user-facing label.
+      '◆ Ready Block',
       '/ commands',
     ],
-    unexpect: ['keys deny', 'approval: deny privileged actions'],
+    unexpect: ['keys deny', 'approval: deny privileged actions', 'Ready never'],
   },
   {
     name: 'uninterruptible-running-status-bar',

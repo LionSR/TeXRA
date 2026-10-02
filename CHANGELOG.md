@@ -1273,6 +1273,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 #### Bug Fixes
 
+- **`/agent` shows workflows again.** Once teams joined the picker its list
+  overflowed at every terminal height, and the Workflows section with its
+  `texra run <name>` hint was dropped. The picker now scrolls its agents and
+  teams inside the rows left after the Workflows section, which folds to one
+  summary row on short terminals instead of disappearing. The status bar
+  names a Block policy "Block", as `/approval` does, and `/config` names its
+  two agent categories "Subagents" and "Codex and Claude Code".
+
 - **Slash-command results no longer read as the model speaking.** In the
   terminal chat, what a command reports (`/model`, `/approval`, `/login`, …)
   is a dim row led by `»`, failures are red `!` errors instead of plain

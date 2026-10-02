@@ -10,11 +10,11 @@ import {
   getCategoryAgent,
   type WorkspaceAgentsStores,
 } from '@agent/index';
-import { moreRowsText } from '@cli/tui/overflowText';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
+  type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
@@ -129,70 +129,67 @@ function hiddenCurrentAgentHint(
   return `Current: ${agentName(current)} (hidden from picker)`;
 }
 
+/** How the Workflows section renders: its full list, one summary row, or
+ *  not at all when there are no workflows. */
+type WorkflowLayout = 'list' | 'summary' | 'none';
+
+/**
+ * Window the picker within its sections; never drop one. The selectable list
+ * scrolls inside the rows left over once the Workflows section (heading, one
+ * row per workflow, the `texra run <name>` hint) has its rows. When that full
+ * section would squeeze the selectable list below three rows, it folds into
+ * one summary row that still names the section and the run hint.
+ */
 function agentSelectWindow({
   availableRows,
-  extraRows = 0,
+  extraRows,
   itemCount,
   workflowCount,
 }: {
   readonly availableRows: number | undefined;
-  readonly extraRows?: number;
+  readonly extraRows: number;
   readonly itemCount: number;
   readonly workflowCount: number;
-}): {
-  readonly maxVisibleItems: number | undefined;
-  readonly showOverflow: boolean;
-  readonly maxVisibleWorkflows: number;
-  readonly showWorkflowOverflow: boolean;
-} {
-  if (availableRows == null) {
-    return {
-      maxVisibleItems: undefined,
-      showOverflow: false,
-      maxVisibleWorkflows: workflowCount,
-      showWorkflowOverflow: false,
-    };
-  }
-
-  // Border, title, description, tool-use heading, and key hints are the fixed
+}): SelectWindowSize & { readonly workflowLayout: WorkflowLayout } {
+  // Border, title, description, section heading, and key hints are the fixed
   // chrome for the primary selectable list.
-  const chromeRows = 8 + Math.max(0, extraRows);
-  const selectRows = Math.max(1, availableRows - chromeRows);
-  if (itemCount > selectRows) {
-    return {
-      ...computeSelectWindowSize({ availableRows, itemCount, chromeRows }),
-      maxVisibleWorkflows: 0,
-      showWorkflowOverflow: false,
-    };
+  const chromeRows = 8 + extraRows;
+  const list = computeSelectWindowSize({
+    availableRows,
+    itemCount,
+    chromeRows: chromeRows + (workflowCount > 0 ? workflowCount + 2 : 0),
+  });
+  if (workflowCount === 0) return { ...list, workflowLayout: 'none' };
+  if ((list.maxVisibleItems ?? itemCount) >= Math.min(3, itemCount)) {
+    return { ...list, workflowLayout: 'list' };
   }
-
-  const remainingRows = availableRows - chromeRows - itemCount;
-  if (workflowCount === 0 || remainingRows < 3) {
-    return {
-      maxVisibleItems: itemCount,
-      showOverflow: false,
-      maxVisibleWorkflows: 0,
-      showWorkflowOverflow: false,
-    };
-  }
-
-  // Workflow heading and run hint are the fixed rows for the secondary list.
-  const workflowRows = remainingRows - 2;
-  if (workflowCount <= workflowRows) {
-    return {
-      maxVisibleItems: itemCount,
-      showOverflow: false,
-      maxVisibleWorkflows: workflowCount,
-      showWorkflowOverflow: false,
-    };
-  }
-
   return {
-    maxVisibleItems: itemCount,
-    showOverflow: false,
-    maxVisibleWorkflows: Math.max(0, workflowRows - 1),
-    showWorkflowOverflow: true,
+    ...computeSelectWindowSize({
+      availableRows,
+      itemCount,
+      chromeRows: chromeRows + 1,
+    }),
+    workflowLayout: 'summary',
   };
+}
+
+// Border, title, section heading, one select row, the workflow summary row,
+// and the key hints: the compact frame's rows once workflows join it.
+const COMPACT_ROWS_WITH_WORKFLOWS = 7;
+
+const WORKFLOW_RUN_HINT = 'texra run <name> --input=<file>';
+
+/** The Workflows section folded to one row: heading, run hint, then names. */
+function WorkflowSummaryRow(props: {
+  readonly names: readonly string[];
+}): React.JSX.Element {
+  return (
+    <Text wrap="truncate-end">
+      <Text bold>Workflows</Text>
+      <Text dimColor>{` · ${WORKFLOW_RUN_HINT}: `}</Text>
+      {props.names.join(', ')}
+    </Text>
+  );
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
@@ -241,20 +238,14 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     agents.toolUse,
     props.currentAgent,
   );
-  const workflowRows = agents.workflow.map((agent) => ({
-    value: agent.value,
-    name: agent.label,
-  }));
+  const workflowNames = agents.workflow.map((agent) => agent.label);
+  const extraRows = currentAgentHint ? 1 : 0;
   const selectWindow = agentSelectWindow({
     availableRows: props.availableRows,
-    extraRows: currentAgentHint ? 1 : 0,
+    extraRows,
     itemCount: items.length,
-    workflowCount: workflowRows.length,
+    workflowCount: workflowNames.length,
   });
-  const visibleWorkflowRows = workflowRows.slice(
-    0,
-    selectWindow.maxVisibleWorkflows,
-  );
   if (picker.transient) return picker.transient;
 
   const currentAgentHintRow = currentAgentHint ? (
@@ -276,6 +267,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onSelect={picker.select}
           onCancel={props.onClose}
         />
+        {workflowNames.length > 0 &&
+        (props.availableRows ?? 0) >=
+          COMPACT_ROWS_WITH_WORKFLOWS + extraRows ? (
+          <WorkflowSummaryRow names={workflowNames} />
+        ) : null}
         <CompactPickerKeyHints selectable={props.selectable} />
       </FormFrame>
     );
@@ -300,24 +296,22 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           onCancel={props.onClose}
         />
       </Box>
-      {visibleWorkflowRows.length > 0 || selectWindow.showWorkflowOverflow ? (
+      {selectWindow.workflowLayout === 'list' ? (
         <Box flexDirection="column">
           <Text bold>Workflows</Text>
-          {visibleWorkflowRows.map((workflow) => (
+          {agents.workflow.map((workflow) => (
             <Text key={workflow.value} wrap="truncate-end">
               {'  '}
-              {workflow.name}
+              {workflow.label}
             </Text>
           ))}
-          {selectWindow.showWorkflowOverflow ? (
-            <Text dimColor>
-              {moreRowsText(workflowRows.length - visibleWorkflowRows.length)}
-            </Text>
-          ) : null}
           <Text dimColor wrap="truncate-end">
-            {'Run a workflow with texra run <name> --input=<file>.'}
+            {`Run a workflow with ${WORKFLOW_RUN_HINT}.`}
           </Text>
         </Box>
+      ) : null}
+      {selectWindow.workflowLayout === 'summary' ? (
+        <WorkflowSummaryRow names={workflowNames} />
       ) : null}
       <Box marginTop={1}>
         <PickerKeyHints

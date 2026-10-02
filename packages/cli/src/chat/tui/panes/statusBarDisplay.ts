@@ -7,7 +7,10 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  texraApprovalPolicyLabel,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import { contextGaugeBand, roundedContextPercent } from '@shared/contextGauge';
 import {
@@ -621,27 +624,14 @@ function childListBindingsText(
 function approvalPolicySegment(
   policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
-  switch (policy) {
-    case undefined:
-    case 'ask':
-      return undefined;
-    case 'never':
-      // Same word the /approval picker uses for this policy — the bar is how
-      // users confirm their selection took effect.
-      return {
-        text: 'never',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
-      };
-    case 'yolo':
-      return {
-        text: 'auto-approve',
-        color: COLOR_ERROR,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
-      };
-    default:
-      return policy satisfies never;
-  }
+  if (policy === undefined || policy === 'ask') return undefined;
+  // The label the /approval picker and every other surface uses for this
+  // policy — the bar is how users confirm their selection took effect.
+  return {
+    text: texraApprovalPolicyLabel(policy),
+    color: policy === 'never' ? COLOR_WARNING : COLOR_ERROR,
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
+  };
 }
 
 interface StatusBarRunTarget {
