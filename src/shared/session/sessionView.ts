@@ -270,22 +270,26 @@ export function isLiveRun(
 
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
- * the fold's count, and the dispatch card's over the children it lists. A
- * child parked between turns (held) or paused, nothing asked of the user,
- * has delivered its turn: it counts as finished, not running.
+ * the fold's count over the run tree (each child's own `rollup` below it),
+ * and the dispatch card's over the tree it lists (`below` recurses through
+ * the children it lists instead). A child parked between turns (held) or
+ * paused, nothing asked of the user, has delivered its turn: it counts as
+ * finished, not running.
  */
-export function rollupOf(children: readonly RunView[]): RunView['rollup'] {
+export function rollupOf(
+  children: readonly RunView[],
+  below: (child: RunView) => RunView['rollup'] = (child) => child.rollup,
+): RunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle =
       child.status === RUN_PHASE.WAITING &&
       (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
-    rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
+    const under = below(child);
+    rollup.total += 1 + under.total;
+    rollup.running += (isLiveRun(child) && !idle ? 1 : 0) + under.running;
     rollup.finished +=
-      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
-      child.rollup.finished;
+      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) + under.finished;
   }
   return rollup;
 }

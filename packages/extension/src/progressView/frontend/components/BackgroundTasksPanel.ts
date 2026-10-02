@@ -31,7 +31,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports
 import type { InquiryThreadSummary, RunId } from '@shared/schemas';
 import {
-  descendantRuns,
   rollupOf,
   type SessionView,
   type RunView,
@@ -255,17 +254,21 @@ export class BackgroundTasksPanel extends LitElement {
     return this.view ? dispatchedChildren(run, this.view) : [];
   }
 
-  /** Every descendant `rollup` counts, so the card's running badge and its
-   *  since time read the same set: a direct child that finishes while a
-   *  grandchild runs leaves the badge lit and the time standing. */
-  private descendantsOf(runs: readonly RunView[]): RunView[] {
-    const view = this.view;
-    if (!view) return [];
-    return runs.flatMap((child) =>
-      descendantRuns(view, child.id, { includeRoot: true })
-        .map((id) => view.runs.get(id))
-        .filter((run): run is RunView => run !== undefined),
-    );
+  /** Every run the card lists, nested ones included: its running badge,
+   *  its counts and its since time read this one set, so a listed child
+   *  that finishes while a listed grandchild runs leaves the badge lit and
+   *  the time standing, and a script's children (listed by its stage) count
+   *  nowhere here. */
+  private listedUnder(runs: readonly RunView[]): RunView[] {
+    return runs.flatMap((child) => [
+      child,
+      ...this.listedUnder(this.childrenOf(child)),
+    ]);
+  }
+
+  /** The card's counts over the tree it lists. */
+  private listedRollup(runs: readonly RunView[]): RunView['rollup'] {
+    return rollupOf(runs, (child) => this.listedRollup(this.childrenOf(child)));
   }
 
   private inquiriesOf(run: RunView): InquiryThreadSummary[] {
@@ -283,13 +286,16 @@ export class BackgroundTasksPanel extends LitElement {
 
     // Over the children this card lists, not every descendant the run's
     // own `rollup` counts: a script's calls are its stage's.
-    const rollup = rollupOf(children);
+    const listed = this.listedUnder(children);
+    const rollup = this.listedRollup(children);
+    // A listed run's `approval` bubbles up from anything under it, its
+    // script's calls included: the row to open is the listed one.
     const approval = children.some((child) => child.approval !== 'none');
     // When the fan-out began: the earliest descendant still running, over
     // the set `rollup.running` counts. The fold clears `runStartedAt` on a
     // terminal status, so a settled fan-out has no start to name and the
     // line drops.
-    const starts = this.descendantsOf(children).flatMap(
+    const starts = listed.flatMap(
       (descendant) => descendant.runStartedAt ?? [],
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
