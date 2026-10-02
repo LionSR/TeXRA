@@ -215,7 +215,6 @@ const executeInBand = Effect.fn('executeInBand')(
             workingDirectory,
             runMode: 'single-cycle',
             resultOnly: mode === 'required-result',
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           }),
         }),
     });

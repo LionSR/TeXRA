@@ -21,7 +21,6 @@ import {
   AgentCategory,
   ownerPid,
   RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
@@ -355,7 +354,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             parentRunId,
             startedAt: Date.now(),
             workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
-            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
             resume: { identity: resume, options: { ...launchOptions, onIdle } },
           }),
         });

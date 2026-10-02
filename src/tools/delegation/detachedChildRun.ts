@@ -110,15 +110,12 @@ export function startDetachedChildRunLoop<
           const {
             createChildRun: _createChildRun,
             buildLaunch: _buildLaunch,
-            budgeted,
             ...loopParams
           } = input;
           const completion = yield* startChildRunLoop({
             ...loopParams,
             ...(childRun !== undefined && { childRun }),
             strategy: launch.strategy,
-            // An awaited in-band child rides its idle parent's budget slot.
-            budgeted: budgeted ?? true,
           });
           return { launch, completion };
         }),

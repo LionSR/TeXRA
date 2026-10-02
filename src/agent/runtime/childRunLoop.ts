@@ -70,8 +70,9 @@ export interface ChildRunPause {
 }
 
 /**
- * Agent-CLI presentation and finalization. Native engines own their run
- * handle and terminal finalization and omit this port.
+ * Presentation and finalization for process-backed children (agent CLIs,
+ * background bash, workflow scripts). Native engines own their run handle
+ * and terminal finalization and omit this port.
  */
 export interface ChildRunPort {
   readonly logger: AgentTrace;
@@ -223,7 +224,9 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   /** The recovery boundary already claimed this queue before loading its rows. */
   readonly queueLease?: FollowUpConsumerLease;
   /**
-   * Agent-CLI presentation. Native engines finalize their own run handle.
+   * Presentation and finalization port for process-backed children (agent
+   * CLIs, background bash, workflow scripts). Native engines finalize their
+   * own run handle.
    */
   readonly childRun?: ChildRunPort;
   readonly parentRunId: RunId;
@@ -237,7 +240,7 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    * (`RunRegistry.childRunBudget`); agent-CLI children, external processes,
    * sit outside it (`.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
    */
-  readonly budgeted?: boolean;
+  readonly budgeted: boolean;
   /**
    * Progress sink override for awaiting callers of a persist-only child: the
    * parent is blocked inside a tool call, so follow-up delivery cannot reach
