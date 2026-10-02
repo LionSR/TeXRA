@@ -1179,7 +1179,20 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                     loop.userStopped &&
                     target !== null
                   ) {
-                    const text = yield* strategy.stopNotice();
+                    // A notice that cannot be read still says the child
+                    // stopped: the stop stands, and the failure is loud.
+                    const text = yield* strategy.stopNotice().pipe(
+                      Effect.catch((error) =>
+                        loopLog(trace, 'warn', 'Child-run stop notice failed', {
+                          runId,
+                          error,
+                        }).pipe(
+                          Effect.as(
+                            `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
+                          ),
+                        ),
+                      ),
+                    );
                     yield* runSession.followUps.submit(
                       target,
                       {
