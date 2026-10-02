@@ -184,3 +184,26 @@ export function declarationOf(
     `${indent}${name}(args: ${args}): Promise<${definition.scriptReturns ?? 'ToolOutput'}>;`,
   ].join('\n');
 }
+
+/**
+ * A tool that is also a script global (`ITool.scriptGlobal`), as a function:
+ * its `positional` field first, the rest of its arguments second, under the
+ * tool's whole description, which names what it rejects with.
+ */
+export function globalDeclarationOf(
+  definition: ToolDefinition,
+  positional: string,
+): string {
+  const schema = inputSchema(definition);
+  const root = isObject(schema) ? schema : {};
+  const properties = isObject(root.properties) ? root.properties : {};
+  const first = typeOf(properties[positional], root, false, '');
+  const member = IDENTIFIER.test(definition.name)
+    ? `tools.${definition.name}`
+    : `tools[${JSON.stringify(definition.name)}]`;
+  const args = `Parameters<typeof ${member}>[0]`;
+  return [
+    ...docComment(definition.description ?? '', ''),
+    `declare function ${definition.name}(${positional}: ${first}, opts?: Omit<${args}, ${JSON.stringify(positional)}>): ReturnType<typeof ${member}>;`,
+  ].join('\n');
+}

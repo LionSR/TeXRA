@@ -209,9 +209,12 @@ function describedAtFreeze<
       (name) => mcpServerOfToolName(name) === undefined,
     ),
   );
-  const declared = tools.definitions.filter(
-    ({ name }) => names.has(name) && !describes(name),
-  );
+  const declared = tools.definitions
+    .filter(({ name }) => names.has(name) && !describes(name))
+    .map((definition) => ({
+      definition,
+      scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
+    }));
   const recorded = (name: string) => {
     const shown =
       state.offeredContext === null
