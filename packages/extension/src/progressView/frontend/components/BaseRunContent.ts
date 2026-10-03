@@ -16,7 +16,7 @@ import {
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { resumeBlockerFix } from '@ui/copy/interruptedTasks';
+import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import './InterruptedTasksNotice';
@@ -133,6 +133,20 @@ export abstract class BaseRunContent extends LitElement {
             >`
           : nothing
       }
+    </div>`;
+  }
+
+  /** The notice's own dock, for a run with no composer or ended line (a
+   *  process, a running workflow): nothing while no task is listed. */
+  protected renderInterruptedDock(): TemplateResult | typeof nothing {
+    if (
+      !this.view ||
+      interruptedTasks(this.view, this.surface?.interruptedDismissed).length ===
+        0
+    )
+      return nothing;
+    return html`<div class="conversation-composer-dock">
+      <div class="conversation-column">${this.renderInterruptedNotice()}</div>
     </div>`;
   }
 
