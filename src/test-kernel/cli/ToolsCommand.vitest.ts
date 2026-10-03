@@ -62,10 +62,11 @@ describe('CLI tools command', () => {
     mocks.installCliProcessRuntime
       .mockReset()
       .mockImplementation(() => testRuntime());
-    mocks.readCliToolGuide.mockReset().mockReturnValue({
-      text: 'Install help',
-      command: 'echo install',
-    });
+    mocks.readCliToolGuide
+      .mockReset()
+      .mockReturnValue(
+        Effect.succeed({ text: 'Install help', command: 'echo install' }),
+      );
     mocks.setCliToolEnabled.mockReset().mockReturnValue(Effect.succeed(true));
     mocks.runForegroundCommand.mockReset().mockReturnValue(Effect.succeed(0));
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
@@ -194,10 +195,12 @@ describe('CLI tools command', () => {
   });
 
   it('rejects POSIX guide commands with shell operators instead of dropping them', async () => {
-    mocks.readCliToolGuide.mockReturnValueOnce({
-      text: 'Install help',
-      command: 'echo install && echo second-step',
-    });
+    mocks.readCliToolGuide.mockReturnValueOnce(
+      Effect.succeed({
+        text: 'Install help',
+        command: 'echo install && echo second-step',
+      }),
+    );
 
     const result = await runToolsCli(['install', 'codex', '--run']);
 

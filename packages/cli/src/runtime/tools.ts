@@ -7,13 +7,10 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import {
-  findToolPlugin,
-  type ToolPlugin,
-  type ToolPluginSetup,
-} from '@tools/plugins';
+import type { ToolPluginSetup } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { setToolEnabled } from '@tools/toolAvailability';
+import { ToolRegistry } from '@tools/toolTable';
 
 type CliToolGuideKind = 'install' | 'auth';
 
@@ -44,20 +41,25 @@ export function readCliToolStatus(probeInputs: ToolProbeInputs, id: string) {
   );
 }
 
-/** A probed plugin the CLI's dashboard lists; built-in plugins need no setup. */
-function findCliToolDef(id: string): ToolPlugin | undefined {
-  const def = findToolPlugin(id);
-  return def?.availability && isToolPluginVisible(def, 'cli') ? def : undefined;
-}
+/** A probed plugin the CLI's dashboard lists, from the process's plugins;
+ *  built-in plugins need no setup. */
+const findCliToolDef = (id: string) =>
+  Effect.map(ToolRegistry, ({ entries }) => {
+    const def = entries.get(id);
+    return def?.availability && isToolPluginVisible(def, 'cli')
+      ? def
+      : undefined;
+  });
 
-export function readCliToolGuide(
-  id: string,
+export const readCliToolGuide = (id: string, kind: CliToolGuideKind) =>
+  Effect.map(findCliToolDef(id), (def) =>
+    def === undefined ? undefined : cliToolGuide(def.setup ?? {}, kind),
+  );
+
+function cliToolGuide(
+  setup: ToolPluginSetup,
   kind: CliToolGuideKind,
-): CliToolGuide | undefined {
-  const def = findCliToolDef(id);
-  if (!def) return undefined;
-  const setup: ToolPluginSetup = def.setup ?? {};
-
+): CliToolGuide {
   if (kind === 'install') {
     const lines = [
       setup.installGuide ?? setup.configNotes ?? 'No install guide.',
@@ -83,10 +85,12 @@ export function setCliToolEnabled(
   id: string,
   enabled: boolean,
 ) {
-  const def = findCliToolDef(id);
-  if (!def?.toggleable) return Effect.succeed(false);
-  // A plugin's bundled agents follow its switch (`toolRegistryLayer`).
-  return setToolEnabled(id, enabled, state).pipe(Effect.as(true));
+  return Effect.flatMap(findCliToolDef(id), (def) =>
+    def?.toggleable
+      ? // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
+        setToolEnabled(id, enabled, state).pipe(Effect.as(true))
+      : Effect.succeed(false),
+  );
 }
 
 /**

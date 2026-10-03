@@ -33,14 +33,22 @@ one copy rather than a second nested one.
 
 ## Usage
 
-The package's surface is Effect: `Sessions.layer(platform)` composes the
-process and provides the session owner for one `Scope`, and the embedder runs
-the program at its own entry point.
+The package's surface is Effect: `Sessions.layer({ platform, plugins })`
+composes the process and provides the session owner for one `Scope`, and the
+embedder runs the program at its own entry point. `plugins` is the list of
+what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
+`harnessBuiltins.minimal` for files and the shell alone), and any plugin of
+the embedder's own beside them. The built-ins run tool-use agents. A workflow agent
+(rounds that rewrite documents) needs a plugin that contributes the
+workflow category's round mode, which the package does not ship: TeXRA's
+`documents` plugin is the app's, and a run of a workflow agent with no such
+plugin fails, naming the category.
 
 ```ts
 import { Effect, Stream } from 'effect';
 import { Sessions } from '@texra-ai/agent';
 import { nodePlatform } from '@texra-ai/agent/node';
+import { harnessBuiltins } from '@texra-ai/agent/plugins';
 
 const platform = nodePlatform({
   agentsDir: './agents',
@@ -62,7 +70,10 @@ const program = Effect.gen(function* () {
     ),
   );
   return yield* run.result;
-}).pipe(Effect.scoped, Effect.provide(Sessions.layer(platform)));
+}).pipe(
+  Effect.scoped,
+  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins.all })),
+);
 
 const result = await Effect.runPromise(program);
 console.log(result.outcome);
@@ -72,11 +83,11 @@ Nothing in the package calls `Effect.runPromise` itself: the
 `Effect.runPromise` above is the embedder's own boundary, as is any host
 entry that runs the program.
 
-| Service    | What it is                                                                                                                                                                                                                                                                                                  |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer(platform)` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
-| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                          |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                       |
+| Service    | What it is                                                                                                                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Sessions` | The process's one session owner: `open(roots?)`, `close(roots?)`, `list`. One session per workspace storage root, the same owner every TeXRA host opens through. `Sessions.layer({ platform, plugins })` composes the process and provides it, with this scope as the lifetime of the hold it takes on that composition. |
+| `Session`  | `start`, `request`, `view.changes`, and `subscribe`, whose transcript interest is held for a `Scope` and cleared when it closes. A value, one per root, not a tag.                                                                                                                                                       |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                                                                    |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -181,6 +192,7 @@ files.
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/agent`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
+| `@texra-ai/agent/plugins` | `harnessBuiltins`: the built-in plugins, `.all` and `.minimal`                                                                      |
 | `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
 
 Every entry needs the `effect` and `zod` peers installed. See

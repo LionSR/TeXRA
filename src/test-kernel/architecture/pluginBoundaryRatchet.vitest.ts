@@ -5,6 +5,10 @@ import { resolve } from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import { harnessBuiltins } from '@tools/builtinPlugins';
+import { PLUGIN_ARMS } from '@tools/pluginArms';
+import type { Plugin } from '@tools/plugins';
+import { texraPlugins } from '@tools/registry';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -17,8 +21,8 @@ import {
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
- * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (`PLUGIN_PROCESS_LAYERS`,
- * `PLUGIN_SESSION_LAYERS`). Failure modes guarded:
+ * own row kinds (`PLUGIN_EVENT_ARMS`) and its services (a `Plugin`'s
+ * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
  * - core (`src/shared`, `src/agent`) imports a plugin's arm, so a plugin's
  *   row kind is hard-coded in core again and a new stateful plugin edits
@@ -47,7 +51,7 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'GitHubSubscriptions',
     users:
-      /^src\/tools\/(?:github\/|registry\.ts$)|^src\/controllers\/settingsView\/githubSubscriptions\.ts$/,
+      /^src\/tools\/(?:github\/|integrationPlugins\.ts$)|^src\/controllers\/settingsView\/githubSubscriptions\.ts$/,
   },
   { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
   { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
@@ -55,7 +59,7 @@ const PLUGIN_SERVICES: readonly {
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
   'src/tools/agentCliSessionStores.ts',
-  'src/tools/registry.ts',
+  'src/tools/integrationPlugins.ts',
   'src/platform/processRuntime.ts',
 ]);
 
@@ -97,5 +101,116 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
 
   it('actually scans the production source roots', () => {
     expectRealCoverage(ALL_HOST_PRODUCTION_ROOTS);
+  });
+});
+
+/** Each plugin of a list, with the tools it offers the model, in order. */
+const roster = (plugins: readonly Plugin[]) =>
+  plugins.map(({ id, tools }) => [id, Object.keys(tools ?? {})]);
+
+/**
+ * Split design §4: one case pins each list a host or embedder composes the
+ * process from. Every TeXRA host passes `texraPlugins` (the extension adds
+ * only Copilot's host layer to the `copilot` entry), and the SDK's examples
+ * pass the harness's own lists. A plugin or tool that joins or leaves a list
+ * changes what every agent on it can be offered, so it is a reviewed change
+ * here, not a side effect of an import.
+ */
+describe('plugin rosters', () => {
+  it("pins TeXRA's plugins and their tools, in dashboard order", () => {
+    expect(roster(texraPlugins())).toEqual([
+      [
+        'file-ops',
+        ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
+      ],
+      [
+        'latex-extract',
+        ['extract_figures', 'extract_tikz_figures', 'extract_bib_entries'],
+      ],
+      ['latex-diagnostics', ['diagnostics']],
+      ['arxiv', ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source']],
+      ['crossref', ['crossref_search']],
+      ['web', ['web_search', 'web_fetch']],
+      [
+        'memory-workflow',
+        ['memory', 'todo_write', 'executions', 'accept_run_files'],
+      ],
+      ['goal', ['plan']],
+      ['texcount', ['texcount']],
+      ['wolfram', ['wolfram']],
+      [
+        'zotero',
+        ['zotero_collections', 'zotero_search', 'zotero_add', 'zotero_export'],
+      ],
+      [
+        'lean4',
+        ['lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect'],
+      ],
+      ['multi-agent', ['agent']],
+      ['github-pr-subscription', ['github_subscription']],
+      ['external-inquiry', ['inquiry']],
+      ['codex', ['codex']],
+      ['claude-agent', ['claude_code']],
+      [
+        'core',
+        ['inline_comment', 'open_pdf', 'ask_user_question', 'lean_loogle'],
+      ],
+      ['codemode', ['script']],
+      [
+        'setup',
+        [
+          'probe_environment',
+          'verify_setup',
+          'unset_api_key',
+          'list_api_keys',
+          'invoke_command',
+          'install_vscode_extension',
+          'read_config',
+          'update_config',
+          'send_to_terminal',
+          'apply_team',
+        ],
+      ],
+      ['copilot', []],
+      ['documents', []],
+    ]);
+  });
+
+  it('pins the row kinds plugins write, each of a listed plugin', () => {
+    const ids = new Set(texraPlugins().map(({ id }) => id));
+    expect(
+      [...PLUGIN_ARMS.values()].map(({ plugin, kind }) => [
+        `${plugin}/${kind}`,
+        ids.has(plugin),
+      ]),
+    ).toEqual([['goal/state', true]]);
+  });
+
+  it("pins the harness's built-in lists", () => {
+    expect({
+      all: roster(harnessBuiltins.all),
+      minimal: roster(harnessBuiltins.minimal),
+    }).toEqual({
+      all: [
+        [
+          'file-ops',
+          ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
+        ],
+        ['web', ['web_search', 'web_fetch']],
+        [
+          'memory-workflow',
+          ['memory', 'todo_write', 'executions', 'accept_run_files'],
+        ],
+        ['goal', ['plan']],
+        ['multi-agent', ['agent']],
+        ['codemode', ['script']],
+      ],
+      minimal: [
+        [
+          'file-ops',
+          ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
+        ],
+      ],
+    });
   });
 });

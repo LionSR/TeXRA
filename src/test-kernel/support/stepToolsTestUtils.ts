@@ -8,7 +8,7 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import { LiveTools } from '@tools/liveTools';
-import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
+import { readDisabledTools } from '@tools/plugins';
 
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 
@@ -32,7 +32,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   const live = yield* LiveTools;
   const held = yield* live.hold(declaredToolNames(input.tools));
   const pinned = yield* live.pinSwitched(
-    Effect.map(readDisabledTools(input.stores.globalState), switchedOffPlugins),
+    readDisabledTools(input.stores.globalState),
   );
   const resolved = yield* resolveStepTools(pinned.generation, {
     runTools: [],

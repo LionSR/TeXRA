@@ -1,11 +1,11 @@
 /**
- * The process's plugin table: every plugin's tools, continuation, prompt
- * contribution and layers by plugin id, which the built-in plugins
- * contribute to the live catalog (`@tools/liveTools`). The `ToolRegistry`
- * service holds it, beside the catalog built over it: an input of
- * `installProcessRuntime`, which names no table of its own (each TeXRA entry
- * passes `@tools/registry`'s). This module imports no tool, manifest or
- * plugin layer, so a reader of the tag loads none of them.
+ * The process's plugin table: the plugin list an entry passes to
+ * `installProcessRuntime` (TeXRA's is `texraPlugins` in `@tools/registry`),
+ * and each plugin's tools, continuation, prompt contribution, round mode and
+ * layers by plugin id, which the built-in plugins contribute to the live
+ * catalog (`@tools/liveTools`). The `ToolRegistry` service holds it, beside
+ * the catalog built over it. This module imports no tool or plugin layer, so
+ * a reader of the tag loads none of them.
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -18,10 +18,11 @@ import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { LiveTools } from '@tools/liveTools';
+import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
- * A plugin's process-lifetime services (`PLUGIN_PROCESS_LAYERS`): built
+ * A plugin's process-lifetime services (its `processLayer`): built
  * when the plugin is switched on or first pinned, released when it is
  * switched off and no step pins it (`@tools/liveTools`). Its services are
  * erased here and typed as `PluginServices` where a step serves them.
@@ -35,7 +36,7 @@ export interface ProcessPluginLayer {
 }
 
 /**
- * A plugin's session-lifetime services (`PLUGIN_SESSION_LAYERS`): one build
+ * A plugin's session-lifetime services (its `sessionLayer`): one build
  * per open session, up while the plugin is switched on, a step of that
  * session pins it, or work it started holds it (`PluginHold`), and closed
  * with the session. It may read the session's `Runs`.
@@ -167,8 +168,10 @@ export interface PromptContribution {
   readonly skills: boolean;
 }
 
-/** Every plugin's tools, and every tool by name. */
+/** The process's plugins, and what each contributes, by plugin id. */
 export interface ToolTable {
+  /** Every plugin, in the order the app listed them (dashboard order). */
+  readonly entries: ReadonlyMap<string, Plugin>;
   /** Each plugin's tools by registered name, keyed by plugin id. */
   readonly plugins: ReadonlyMap<string, ReadonlyMap<string, ITool>>;
   /** Each plugin's process services, by plugin id. */
@@ -186,45 +189,62 @@ export interface ToolTable {
   readonly get: (name: string) => ITool | undefined;
 }
 
-/** Each plugin's round mode by the category it drives: two plugins that
- *  claim one category are a defect in the table, refused when it is built. */
-function roundsByCategory(
-  rounds: Readonly<Record<string, RoundMode>>,
-): ReadonlyMap<AgentCategory, RoundMode> {
-  const byCategory = new Map<AgentCategory, RoundMode>();
-  for (const [id, mode] of Object.entries(rounds)) {
-    if (byCategory.has(mode.category))
-      throw new Error(
-        `Plugin ${id} contributes a round mode for ${mode.category} agents, which another plugin already drives.`,
+/**
+ * The table over `plugins`, which the app lists in order. A list that
+ * repeats a plugin id or a tool name, claims one agent category's rounds
+ * twice, or gives a toggle or setup copy to a plugin with no availability
+ * probe is a defect of the list, refused when it is built.
+ */
+export function toolTable(plugins: readonly Plugin[]): ToolTable {
+  const entries = new Map<string, Plugin>();
+  const byName = new Map<string, ITool>();
+  const rounds = new Map<AgentCategory, RoundMode>();
+  const refuse = (reason: string): never => {
+    throw new Error(`The plugin list is not valid: ${reason}`);
+  };
+  for (const plugin of plugins) {
+    if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
+    entries.set(plugin.id, plugin);
+    for (const [name, tool] of Object.entries(plugin.tools ?? {})) {
+      if (byName.has(name))
+        refuse(`tool ${name} of plugin ${plugin.id} is another plugin's.`);
+      byName.set(name, tool);
+    }
+    if (plugin.rounds !== undefined) {
+      if (rounds.has(plugin.rounds.category))
+        refuse(
+          `plugin ${plugin.id} drives ${plugin.rounds.category} agents' rounds, which another plugin already drives.`,
+        );
+      rounds.set(plugin.rounds.category, plugin.rounds);
+    }
+    if (
+      plugin.availability === undefined &&
+      (plugin.toggleable === true || plugin.setup !== undefined)
+    )
+      refuse(
+        `plugin ${plugin.id} has a toggle or setup copy but no availability probe.`,
       );
-    byCategory.set(mode.category, mode);
   }
-  return byCategory;
-}
-
-/** A table over plugin id → tools, continuation, prompt contribution,
- *  layers and round mode. */
-export function toolTable(
-  plugins: Readonly<Record<string, Readonly<Record<string, ITool>>>>,
-  continuations: Readonly<Record<string, Continuation>> = {},
-  prompt: Readonly<Record<string, PromptContribution>> = {},
-  processLayers: Readonly<Record<string, ProcessPluginLayer>> = {},
-  sessionLayers: Readonly<Record<string, SessionPluginLayer>> = {},
-  rounds: Readonly<Record<string, RoundMode>> = {},
-): ToolTable {
-  const byName = new Map(Object.values(plugins).flatMap(Object.entries));
+  const each = <A>(read: (plugin: Plugin) => A | undefined) =>
+    new Map(
+      plugins.flatMap((plugin) => {
+        const value = read(plugin);
+        return value === undefined ? [] : [[plugin.id, value] as const];
+      }),
+    );
   return {
-    plugins: new Map(
-      Object.entries(plugins).map(([id, tools]) => [
-        id,
-        new Map(Object.entries(tools)),
-      ]),
+    entries,
+    plugins: each((plugin) => new Map(Object.entries(plugin.tools ?? {}))),
+    continuations: each((plugin) => plugin.continuation),
+    // Each plugin's section, and whether it ships skills for the catalog.
+    prompt: each((plugin) =>
+      plugin.prompt === undefined && plugin.skills !== true
+        ? undefined
+        : { section: plugin.prompt ?? null, skills: plugin.skills === true },
     ),
-    continuations: new Map(Object.entries(continuations)),
-    prompt: new Map(Object.entries(prompt)),
-    processLayers: new Map(Object.entries(processLayers)),
-    sessionLayers: new Map(Object.entries(sessionLayers)),
-    rounds: roundsByCategory(rounds),
+    processLayers: each((plugin) => plugin.processLayer),
+    sessionLayers: each((plugin) => plugin.sessionLayer),
+    rounds,
     get: (name) => byName.get(name),
   };
 }

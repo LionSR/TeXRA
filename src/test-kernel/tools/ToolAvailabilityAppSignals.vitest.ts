@@ -13,11 +13,14 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
@@ -63,18 +66,34 @@ const probeServices = Layer.mergeAll(
   NodeFileSystem.layer,
 );
 
-/** The process's availability service over the (mocked) manifest this test
- *  registered, as a composition root builds it. */
-const availabilityService = Effect.gen(function* () {
-  const { toolAvailabilityLayer } = yield* Effect.promise(
-    () => import('@tools/toolAvailability'),
+/** Tools under `names`, which the availability service only lists. */
+const named = (...names: string[]): Record<string, ITool> =>
+  Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        definition: { name, description: name, parameters: {} },
+        call: vi.fn(),
+      },
+    ]),
   );
-  const context = yield* Layer.build(toolAvailabilityLayer);
-  return Context.get(context, ToolAvailability);
-});
+
+/** The process's availability service over `plugins`, as a composition root
+ *  builds it. */
+const availabilityService = (plugins: readonly Plugin[]) =>
+  Effect.gen(function* () {
+    const { toolAvailabilityLayer } = yield* Effect.promise(
+      () => import('@tools/toolAvailability'),
+    );
+    const context = yield* Layer.build(
+      toolAvailabilityLayer.pipe(
+        Layer.provide(Layer.succeed(ToolRegistry)(toolTable(plugins))),
+      ),
+    );
+    return Context.get(context, ToolAvailability);
+  });
 
 afterEach(() => {
-  vi.doUnmock('@tools/plugins');
   vi.resetModules();
 });
 
@@ -84,27 +103,26 @@ describe('tool availability service', () => {
     () =>
       Effect.gen(function* () {
         const probedRoots: (string | undefined)[] = [];
-        vi.doMock('@tools/plugins', () => ({
-          TOOL_PLUGINS: [
-            {
-              id: 'token-tool',
-              toolNames: ['token'],
-              name: 'Token tool',
-              category: 'ai-agents',
-              availability: {
-                reprobeOnSecrets: ['token.key'],
-                probe: vi.fn(({ workspace }: ToolProbeInputs) =>
-                  Effect.sync(() => probedRoots.push(workspace)),
-                ),
-                check: vi.fn(() => Effect.succeed(true)),
-              },
+        const plugins: readonly Plugin[] = [
+          {
+            id: 'token-tool',
+            tools: named('token'),
+            name: 'Token tool',
+            category: 'ai-agents',
+            description: '',
+            availability: {
+              reprobeOnSecrets: ['token.key'],
+              probe: vi.fn(({ workspace }: ToolProbeInputs) =>
+                Effect.sync(() => probedRoots.push(workspace)),
+              ),
+              check: vi.fn(() => Effect.succeed(true)),
             },
-          ],
-        }));
+          },
+        ];
         const { emitAppSignal } = yield* Effect.promise(
           () => import('@eventBus/AppSignals'),
         );
-        const availability = yield* availabilityService;
+        const availability = yield* availabilityService(plugins);
         const roots = (workspace: string | undefined) => ({
           ...probeInputs,
           workspace,
@@ -139,18 +157,17 @@ describe('tool availability service', () => {
     () =>
       Effect.gen(function* () {
         const check = vi.fn(() => Effect.succeed(true));
-        vi.doMock('@tools/plugins', () => ({
-          TOOL_PLUGINS: [
-            {
-              id: 'probed-tool',
-              toolNames: ['probed'],
-              name: 'Probed tool',
-              category: 'ai-agents',
-              availability: { check },
-            },
-          ],
-        }));
-        const availability = yield* availabilityService;
+        const plugins: readonly Plugin[] = [
+          {
+            id: 'probed-tool',
+            tools: named('probed'),
+            name: 'Probed tool',
+            category: 'ai-agents',
+            description: '',
+            availability: { check },
+          },
+        ];
+        const availability = yield* availabilityService(plugins);
         // The first caller claims the slot and forks the probe; the second
         // joins before that fiber's first step and asks for a rerun.
         const first = yield* Effect.forkChild(
@@ -171,30 +188,30 @@ describe('tool availability service', () => {
     'holds each workspace its own results, none before a probe answers',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/plugins', () => ({
-          TOOL_PLUGINS: [
-            {
-              id: 'present-tool',
-              toolNames: ['present'],
-              name: 'Present tool',
-              category: 'ai-agents',
-              availability: {
-                check: vi.fn(() => Effect.succeed(true)),
-              },
+        const plugins: readonly Plugin[] = [
+          {
+            id: 'present-tool',
+            tools: named('present'),
+            name: 'Present tool',
+            category: 'ai-agents',
+            description: '',
+            availability: {
+              check: vi.fn(() => Effect.succeed(true)),
             },
-            {
-              id: 'missing-tool',
-              toolNames: ['missing'],
-              name: 'Missing tool',
-              category: 'ai-agents',
-              toggleable: true,
-              availability: {
-                check: vi.fn(() => Effect.succeed(false)),
-              },
+          },
+          {
+            id: 'missing-tool',
+            tools: named('missing'),
+            name: 'Missing tool',
+            category: 'ai-agents',
+            description: '',
+            toggleable: true,
+            availability: {
+              check: vi.fn(() => Effect.succeed(false)),
             },
-          ],
-        }));
-        const availability = yield* availabilityService;
+          },
+        ];
+        const availability = yield* availabilityService(plugins);
         const statuses = (root: string | undefined) =>
           Effect.map(SubscriptionRef.get(availability.results), (held) =>
             held.get(root)?.map(({ id, status }) => [id, status]),
@@ -226,49 +243,50 @@ describe('tool availability service', () => {
     'distinguishes failed probes from missing tools without hiding optional-status failures',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/plugins', () => ({
-          TOOL_PLUGINS: [
-            {
-              id: 'broken-probe',
-              toolNames: ['broken'],
-              name: 'Broken probe',
-              category: 'ai-agents',
-              availability: {
-                probe: vi.fn(() =>
-                  Effect.fail(new Error('invalid local configuration')),
-                ),
-                check: vi.fn(() => Effect.succeed(true)),
-                statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
-              },
+        const plugins: readonly Plugin[] = [
+          {
+            id: 'broken-probe',
+            tools: named('broken'),
+            name: 'Broken probe',
+            category: 'ai-agents',
+            description: '',
+            availability: {
+              probe: vi.fn(() =>
+                Effect.fail(new Error('invalid local configuration') as never),
+              ),
+              check: vi.fn(() => Effect.succeed(true)),
+              statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
             },
-            {
-              id: 'broken-detail',
-              toolNames: ['present'],
-              name: 'Broken detail',
-              category: 'ai-agents',
-              availability: {
-                check: vi.fn(() => Effect.succeed(true)),
-                detailCheck: vi.fn(() =>
-                  Effect.fail(new Error('status command crashed')),
-                ),
-              },
+          },
+          {
+            id: 'broken-detail',
+            tools: named('present'),
+            name: 'Broken detail',
+            category: 'ai-agents',
+            description: '',
+            availability: {
+              check: vi.fn(() => Effect.succeed(true)),
+              detailCheck: vi.fn(() =>
+                Effect.fail(new Error('status command crashed') as never),
+              ),
             },
-            {
-              // A callback that throws, as an eager configuration read can.
-              id: 'throwing-probe',
-              toolNames: ['throwing'],
-              name: 'Throwing probe',
-              category: 'ai-agents',
-              availability: {
-                probe: vi.fn(() => {
-                  throw new Error('config read threw');
-                }),
-                check: vi.fn(() => Effect.succeed(true)),
-              },
+          },
+          {
+            // A callback that throws, as an eager configuration read can.
+            id: 'throwing-probe',
+            tools: named('throwing'),
+            name: 'Throwing probe',
+            category: 'ai-agents',
+            description: '',
+            availability: {
+              probe: vi.fn(() => {
+                throw new Error('config read threw');
+              }),
+              check: vi.fn(() => Effect.succeed(true)),
             },
-          ],
-        }));
-        const availability = yield* availabilityService;
+          },
+        ];
+        const availability = yield* availabilityService(plugins);
         const throwing = expect.objectContaining({
           id: 'throwing-probe',
           status: 'unknown',

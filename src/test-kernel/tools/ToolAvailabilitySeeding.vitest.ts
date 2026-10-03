@@ -13,7 +13,8 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { TOOL_PLUGINS, findToolPlugin } from '@tools/plugins';
+import { texcount, zotero } from '@tools/integrationPlugins';
+import { texraPlugins } from '@tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 /** Let a forked probe reach the call it will be interrupted in. */
@@ -21,7 +22,9 @@ const started = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-const EXPECTED_DEFAULTS = TOOL_PLUGINS.filter(
+const PLUGINS = texraPlugins();
+
+const EXPECTED_DEFAULTS = PLUGINS.filter(
   (plugin) => plugin.toggleable && !plugin.onByDefault,
 ).map((plugin) => plugin.id);
 
@@ -34,7 +37,7 @@ describe('seedDisabledToolDefaults', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => installPlatform());
 
-        yield* seedDisabledToolDefaults(hostStores().globalState);
+        yield* seedDisabledToolDefaults(hostStores().globalState, PLUGINS);
 
         expect(
           yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
@@ -52,30 +55,12 @@ describe('seedDisabledToolDefaults', () => {
           }),
         );
 
-        yield* seedDisabledToolDefaults(hostStores().globalState);
+        yield* seedDisabledToolDefaults(hostStores().globalState, PLUGINS);
 
         expect(
           yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
         ).toEqual([]);
       }),
-  );
-
-  it.effect('drops a recorded id that names no plugin', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({
-          globalState: {
-            [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script', 'zotero'],
-          },
-        }),
-      );
-
-      yield* seedDisabledToolDefaults(hostStores().globalState);
-
-      expect(
-        yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-      ).toEqual(['zotero']);
-    }),
   );
 });
 
@@ -93,9 +78,8 @@ describe('external tool availability probes', () => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
-      const texcount = findToolPlugin('texcount');
       const fiber = yield* Effect.forkChild(
-        texcount!
+        texcount
           .availability!.check()
           .pipe(
             Effect.provide(spawner.layer),
@@ -119,12 +103,11 @@ describe('external tool availability probes', () => {
         vi.spyOn(globalThis, 'fetch').mockReturnValue(
           new Promise<Response>(() => {}),
         );
-        const zotero = findToolPlugin('zotero');
         const fiber = yield* Effect.forkChild(
           // The port the group's own probe resolves out of the workspace
           // configuration, handed to `check` the way the availability layer
           // hands back a cached probe result.
-          zotero!
+          zotero
             .availability!.check(23119)
             .pipe(Effect.provide(fakeProcessServices())),
         );

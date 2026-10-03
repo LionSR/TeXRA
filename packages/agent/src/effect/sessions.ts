@@ -19,7 +19,7 @@ import type {
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 
-import { acquireProcess, type AgentPlatform } from './runtime.js';
+import { acquireProcess, type Composition } from './runtime.js';
 import type { PlatformConflict, LaunchError, RunFailure } from './errors.js';
 
 /**
@@ -137,16 +137,20 @@ export class Sessions extends Context.Service<
   }
 >()('@texra-ai/agent/Sessions') {
   /**
-   * The Effect embedder's entry: compose the process once and serve its
-   * session owner, with this scope as the lifetime of the hold it takes on
-   * that composition. A second, different platform while this package holds
-   * a composition, or a process runtime a host installed rather than this
-   * package, fails with {@link PlatformConflict}; anything else composition
-   * throws is a defect. Acquisition waits for a retiring runtime.
+   * The Effect embedder's entry: compose the process once, from its
+   * platform and its plugins (`harnessBuiltins.all` from
+   * `@texra-ai/agent/plugins`, or a list of the embedder's own beside
+   * them), and serve its session owner, with this scope as the lifetime of
+   * the hold it takes on that composition. A second, different platform or
+   * plugin list while this package holds a composition, or a process
+   * runtime a host installed rather than this package, fails with
+   * {@link PlatformConflict}; a plugin list that repeats an id or a tool
+   * name, and anything else composition throws, is a defect. Acquisition
+   * waits for a retiring runtime.
    */
   static layer(
-    platform: AgentPlatform,
+    composition: Composition,
   ): Layer.Layer<Sessions, PlatformConflict> {
-    return Layer.effect(Sessions, acquireProcess(platform));
+    return Layer.effect(Sessions, acquireProcess(composition));
   }
 }

@@ -45,7 +45,8 @@ import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { toolRegistryLayer } from '@tools/registry';
+import { pluginCatalogLayer } from '@tools/pluginCatalog';
+import { texraPlugins } from '@tools/registry';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
@@ -106,7 +107,7 @@ function runLayer(
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
-      toolRegistryLayer(USER_MCP_CONFIG_PATH).pipe(
+      pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
         Layer.provide(
           Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
         ),
@@ -436,15 +437,21 @@ describe('run-scoped tool resolution', () => {
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
           toolTableLayer(
-            toolTable({
-              test: {
-                bash: approvalGatedTool('bash'),
-                grep: tool('grep'),
-                inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
-                write_file: approvalGatedTool('write_file'),
-                wolfram: approvalGatedTool('wolfram'),
+            toolTable([
+              {
+                id: 'test',
+                name: 'Test',
+                category: 'file',
+                description: '',
+                tools: {
+                  bash: approvalGatedTool('bash'),
+                  grep: tool('grep'),
+                  inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
+                  write_file: approvalGatedTool('write_file'),
+                  wolfram: approvalGatedTool('wolfram'),
+                },
               },
-            }),
+            ]),
           ),
         ),
         Effect.provide(nodeSpawnerLayer),
