@@ -27,7 +27,10 @@ function resumeAction(args: {
   if (at !== undefined && args.fork !== true) {
     throw new CliUsageError('--at names a fork point: use it with --fork.');
   }
-  if (at !== undefined && !/^[1-9]\d*$/.test(at)) {
+  if (
+    at !== undefined &&
+    (!/^[1-9]\d*$/.test(at) || !Number.isSafeInteger(Number(at)))
+  ) {
     throw new CliUsageError(`--at takes a position number, not ${at}.`);
   }
   if (handoff !== undefined && handoff.trim() === '') {

@@ -276,9 +276,10 @@ All notable changes to this project will be documented in this file.
   the conversation before you continue; `--handoff "<text>"` clears it and
   continues from your text alone. A fork records where it came from, and
   each reset or handoff is recorded where the model's view was cut. A fork
-  inside a turn is refused. The progress view and desktop app get their
-  menus for these in a later release; the agent SDK reaches them through
-  `Session.request` (`run.fork`, `run.reset`).
+  inside a turn is refused. A reset or handoff takes effect when the task
+  next waits for you, after any message already queued for it. The agent
+  SDK can fork, reset and hand off too; the progress view and desktop app
+  get their menus for these in a later release.
 
 - **One Plugins page.** Settings › Plugins (and `/plugins` in the terminal)
   lists everything that adds tools or agents: TeXRA's own plugins, installed

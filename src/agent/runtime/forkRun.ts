@@ -36,6 +36,8 @@ import type { SessionHandle } from './SessionHandle';
  */
 const isSettled = (state: RunState): boolean =>
   (state.phase === 'waiting' || state.phase === 'halted') &&
+  // Input consumed for a turn that has not run is inside that turn.
+  state.at !== 'turn.ready' &&
   state.openAttempt === null &&
   state.pendingResponse === null &&
   Object.keys(state.pendingIntents).length === 0 &&
@@ -46,8 +48,9 @@ const refused = (reason: string) => new Rejected({ reason });
 
 /**
  * Fork run `from` at `at`, the `seq` of a settled position in its run
- * history, or at its latest position when `at` is null. Returns the new
- * run's id; the run is written whole and left for its host to resume.
+ * history, or at the end of its last completed turn when `at` is null (a
+ * run in a turn now is forked from before it). Returns the new run's id;
+ * the run is written whole and left for its host to resume.
  */
 export const forkRun = Effect.fn('forkRun')(function* (
   session: SessionHandle,
@@ -69,27 +72,42 @@ export const forkRun = Effect.fn('forkRun')(function* (
   if (start?.type !== 'run.start') {
     return yield* refused(`Task ${from.id} has no recorded start.`);
   }
-  // The latest position, when none is named: the end of the conversation.
-  const cut =
-    at ??
-    (yield* session.readAggregate(aggregateId('run', from.id), [
+  const settledAt = (seq: number) =>
+    Effect.map(session.runHistory.load(from.id, seq), (state) =>
+      state !== null && state.loop !== null && isSettled(state)
+        ? { seq, state, loop: state.loop }
+        : null,
+    );
+  let found: Effect.Success<ReturnType<typeof settledAt>> = null;
+  if (at !== null) {
+    found = yield* settledAt(at);
+  } else {
+    // The latest turn boundary whose state is settled: the last park of a
+    // conversation, or the one before the turn it is in now.
+    const parks = (yield* session.readAggregate(aggregateId('run', from.id), [
       'run.position',
-    ])).at(-1)?.seq;
-  if (cut === undefined) {
-    return yield* refused(`Task ${from.id} has no position to fork from.`);
+    ])).filter(
+      (row) =>
+        row.type === 'run.position' &&
+        (row.payload.at === 'waiting' || row.payload.at === 'halted'),
+    );
+    for (const park of parks.toReversed()) {
+      found = yield* settledAt(park.seq);
+      if (found !== null) break;
+    }
   }
-  const state = yield* session.runHistory.load(from.id, cut);
-  if (state === null || state.loop === null || !isSettled(state)) {
+  if (found === null) {
     return yield* refused(
       'A fork starts at a settled point of a conversation: the end of one of its turns.',
     );
   }
+  const { seq: cut, state } = found;
   const runId = generateRunId();
   // The view, and the loop state a resume restores with the content it
   // names (its base system text and instruction), less the structured
   // result of a turn the fork never ran. The offered tools and the system
   // text a step adds are the fork's first step's to record, as for any run.
-  const { structured: _, ...loop } = state.loop;
+  const { structured: _, ...loop } = found.loop;
   const named = [loop.system, loop.instruction].flatMap((digest) =>
     digest === undefined ? [] : [digest],
   );

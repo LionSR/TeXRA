@@ -26,6 +26,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  Cause,
   Deferred,
   Effect,
   Exit,
@@ -59,6 +60,7 @@ import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@tools/catalogEntries';
+import { ensureError } from '@utils/errors/errorMessage';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 
 import { blobRows } from './run/requestContext';
@@ -387,43 +389,51 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const joined = yield* batchRows(state, batch).pipe(
-      Effect.tapError((error) =>
-        batch.kind === 'edit'
-          ? Deferred.fail(batch.edit.done, error)
-          : Effect.void,
-      ),
-    );
+    const joined = yield* batchRows(state, batch);
     const committed = yield* Effect.uninterruptible(
-      runHistory
-        .appendBatch(runId, state, [
-          ...joined.rows,
-          // The input that recovers a failed run clears the error fact in
-          // the same transaction, so a resume taken between this batch and
-          // the next turn's snapshot does not read the run as still failed.
-          ...(joined.turn
-            ? [
-                ...snapshotRow(runId, state, {
-                  runtime: { lastError: null },
-                  ...(state.loop
-                    ? { state: { ...state.loop, ...joined.recorded } }
-                    : {}),
-                }),
-                positionRow(runId, state, 'turn.ready'),
-              ]
-            : []),
-        ])
-        .pipe(
-          Effect.onExit((exit) =>
-            batch.kind === 'edit'
-              ? Deferred.done(batch.edit.done, Exit.asVoid(exit))
-              : Effect.void,
-          ),
-        ),
+      runHistory.appendBatch(runId, state, [
+        ...joined.rows,
+        // The input that recovers a failed run clears the error fact in
+        // the same transaction, so a resume taken between this batch and
+        // the next turn's snapshot does not read the run as still failed.
+        ...(joined.turn
+          ? [
+              ...snapshotRow(runId, state, {
+                runtime: { lastError: null },
+                ...(state.loop
+                  ? { state: { ...state.loop, ...joined.recorded } }
+                  : {}),
+              }),
+              positionRow(runId, state, 'turn.ready'),
+            ]
+          : []),
+      ]),
     );
     joined.delivered();
     return { state: committed, turn: joined.turn };
   });
+
+  /** {@link consume}, settling a view edit's waiter on every exit: its
+   *  commit, a refusal, or a stop before either. */
+  const consumeSettled = (state: RunState, batch: FollowUpBatch) =>
+    batch.kind !== 'edit'
+      ? consume(state, batch)
+      : consume(state, batch).pipe(
+          Effect.onExit((exit) =>
+            Deferred.done(
+              batch.edit.done,
+              Exit.isSuccess(exit)
+                ? Exit.void
+                : Exit.fail(
+                    Cause.hasInterruptsOnly(exit.cause)
+                      ? new Error(
+                          'The task stopped before its view was edited.',
+                        )
+                      : ensureError(Cause.squash(exit.cause)),
+                  ),
+            ),
+          ),
+        );
 
   return {
     hasQueued: () => input.hasQueued(),
@@ -472,6 +482,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       released = true;
       manager.release(lease, next);
     },
-    consume,
+    consume: consumeSettled,
   };
 });
