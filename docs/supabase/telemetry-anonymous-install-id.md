@@ -1,26 +1,29 @@
 # Anonymous install-id usage logging (runbook)
 
 Internal. Schema and RPCs applied to the live project on 2026-09-30 (steps 1-2
-below), the function deployed and smoke-tested (steps 3-4, 2026-09-30), and
-redeployed as version 35 on 2026-10-01 with only the subscription list-price
-change (llm-zoo 1.41.0 long-context tiers). All steps are complete. Lets
-TeXRA clients without an account send usage batches to the
-`log-usage` edge function, identified by a random install ID instead of a
-login. Steps 1-2 are done: do not rerun the migration SQL below (its
-`ADD COLUMN`, `ADD CONSTRAINT` and `CREATE INDEX` statements are not
-idempotent).
+below); do not rerun the migration SQL (its `ADD COLUMN`, `ADD CONSTRAINT` and
+`CREATE INDEX` statements are not idempotent). TeXRA clients without an account
+send usage batches identified by a random install ID instead of a login. Two
+edge functions serve them.
 
-## Contract
+## Layout
 
-- The client sends `X-TeXRA-Install-Id: <lowercase UUIDv4>` and no
-  `Authorization` header. The batch body schema is unchanged.
-- `log-usage` still accepts a login JWT (released clients). A bearer token that
-  fails authentication is a 401; it never falls back to the install header.
-- Without a JWT, a well-formed install ID is accepted and rows are written with
-  `user_id` NULL and `install_id` set. A missing or malformed credential is a
-  401, as before. Exactly one owner per row.
-- Code: `supabase/functions/log-usage/usageOwner.ts` (`resolveOwner`) and
-  `index.ts`.
+| Function       | Owner                                   | Callers                    |
+| -------------- | --------------------------------------- | -------------------------- |
+| `log-usage-v2` | `X-TeXRA-Install-Id` (lowercase UUIDv4) | current clients, anonymous |
+| `log-usage`    | `Authorization: Bearer` login JWT       | already-released clients   |
+
+- Shared: `supabase/functions/_shared/logUsage.ts` (validation, batch dedup,
+  equivalent cost, RPC upsert, response shapes, 1000-entry cap),
+  `usageValidation.ts`, `equivalentCost.ts`. Per function: `index.ts` (one
+  `serveLogUsage(resolver)` call), `usageOwner.ts` (the resolver), `deno.json`,
+  `deno.lock` (same pins; keep both in step, see the releasing skill).
+- `log-usage-v2`: a stray `Authorization` header is ignored; a missing or
+  malformed install ID is a 401. Rows have `user_id` NULL and `install_id` set.
+- `log-usage`: the bearer token must authenticate (else 401) and the install
+  header is never read. Rows have `user_id` set.
+- The sign-in system is gone, so `log-usage` is a legacy path that shrinks to
+  nothing; delete it when the owner retires old releases.
 
 ## Migration SQL (private migrations repo)
 
@@ -80,33 +83,35 @@ owner (the function builds it from one request), but rows without a
 
 RLS is unchanged: both tables are written only by the service role.
 
-## Deploy checklist
+## Deploy order
 
-1. **Done (2026-09-30).** Write and review the RPC bodies against the live definitions.
-2. **Done (2026-09-30).** Apply the migration (columns, constraints, indexes, both RPCs) in one
-   transaction. The old function keeps working: it writes `user_id` rows and
-   leaves `install_id` NULL.
-3. **Done (2026-09-30; redeployed 2026-10-01 as version 35, `verify_jwt` false).** Deploy the function with the same flags as today:
-   `supabase functions deploy log-usage --no-verify-jwt`. Confirm the live
-   function is already `--no-verify-jwt`; if the gateway verifies JWTs, a
-   request with no `Authorization` header is rejected before the function runs.
-4. Smoke test with a throwaway UUID (no credentials in the command beyond the
-   public function URL):
-   `curl -i -X POST "$URL/functions/v1/log-usage" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
-   expects 200 `accepted: 1`; repeat for `deduplicated`; no header expects 401.
-   Then delete the test rows (`DELETE ... WHERE install_id = '0000...0001'`).
-   **Done (2026-09-30, version 34):** a throwaway install ID got 200
-   `accepted: 1`, the repeat got 200 `deduplicated`, no header and a malformed
-   ID each got 401, the row landed in `usage_logs` with `install_id` set, and
-   the test rows were deleted. Version 35 was re-checked read-only only (no
-   header gets 401; an invalid install-id batch gets `BATCH_REJECTED`); it
-   changes no write path, so the write test was not repeated on it.
-5. Ship the client only after steps 2-4. **Done:** the anonymous client is on
-   `main`, and real install-id rows are arriving.
+Steps 1-2 (schema and RPCs) are done (2026-09-30) and serve both owners.
+Until step 4 the live `log-usage` (the combined version, v36: JWT or install
+header) keeps working for every client.
+
+1. **Deploy `log-usage-v2` first**, from a clean checkout:
+   `supabase functions deploy log-usage-v2 --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`.
+   `--no-verify-jwt` is required: without it the gateway rejects requests that
+   carry no `Authorization` header before the function runs.
+2. Smoke test against `/functions/v1/log-usage-v2` with a throwaway UUID (no
+   credentials beyond the public function URL):
+   `curl -i -X POST "$URL/functions/v1/log-usage-v2" -H 'Content-Type: application/json' -H 'X-TeXRA-Install-Id: 00000000-0000-4000-8000-000000000001' -d '{"batchId":"<uuid>","entries":[{"timestamp":"<iso>","model":"x","provider":"x","inputTokens":1,"outputTokens":1,"cost":0}]}'`
+   expects 200 `accepted: 1`; repeat for `deduplicated`; no header and a
+   malformed ID each expect 401. Then delete the test rows
+   (`DELETE ... WHERE install_id = '0000...0001'`).
+3. Ship the client pointing at `log-usage-v2` (`src/telemetry/UsageLogService.ts`).
+4. **Only after a released client version uses v2** (the owner decides when),
+   redeploy `log-usage` JWT-only from this tree, same flags
+   (`supabase functions deploy log-usage --no-verify-jwt --use-api --project-ref jntubmcgbhwtcktubelv`),
+   so it serves old releases only. Anonymous clients that still post to
+   `log-usage` get 401 from then on.
+
+The pending llm-zoo 2.0 pricing change (#13602) rides along with whichever
+deploy happens next.
 
 ## Rollback
 
-Redeploy the previous function revision (it only writes `user_id`). The schema
+Redeploy the previous function revision of the affected function. The schema
 change is additive and can stay. To revert it fully, first delete install rows
 (`DELETE FROM ... WHERE install_id IS NOT NULL`), then drop the constraints and
 indexes, drop `install_id`, restore `user_id SET NOT NULL`, and restore the old

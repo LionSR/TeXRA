@@ -62,8 +62,8 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    preview.
 
 5. **`llm-zoo` pin.** If the release changes `llm-zoo`, also update the exact
-   pin in `supabase/functions/log-usage/deno.json`, then refresh its adjacent
-   `deno.lock` file. It is easy to miss, since it isn't part of the automated
+   pin in `supabase/functions/log-usage/deno.json` and `log-usage-v2/deno.json`, then refresh their adjacent
+   `deno.lock` files. It is easy to miss, since it isn't part of the automated
    bump.
 
 ## Preview releases
