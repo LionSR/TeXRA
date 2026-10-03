@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect, vi } from 'vitest';
 
+import { apiKeySecretName } from '@texra-ai/llm';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -12,8 +13,6 @@ import {
   discoverCopilotRoutes,
   getRuntimeModelDirectFallback,
 } from '@model/copilotRouting';
-import { apiKeySecretName } from '@model/apiProviders';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import type {
   LanguageModelInfo,
   LanguageModelPort,
@@ -22,6 +21,7 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeHostLanguageModel,

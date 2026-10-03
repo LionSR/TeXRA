@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import {
+  apiKeySecretName,
+  decideModelRoute,
+  FAST_FIRST_RESPONSE_HINT,
+  OWN_KEY_ROUTE_FACTS,
+  SecretsFailed,
+} from '@texra-ai/llm';
 import { installSubscriptionProbes } from '@controllers/modelAccess/installSubscriptionProbes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
@@ -12,17 +18,13 @@ import {
   modelUnavailableReasonFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import { apiKeySecretName } from '@model/apiProviders';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { LanguageModel } from '@platform/languageModel';
-import { SecretsFailed } from '@platform/secrets';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   isModelOptionAvailable,
   type ModelOptionData,
 } from '@shared/schemas';
-import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -32,6 +34,7 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
+import { CODEX_SESSION_SECRET_KEY } from '../../../packages/llm/src/oauth/codex/codexConstants.js';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
 const GPT56 = 'openai/gpt-5.6-sol';

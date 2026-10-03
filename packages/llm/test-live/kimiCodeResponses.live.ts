@@ -1,5 +1,5 @@
 // Local imports
-import { openaiResponsesModel } from '../src/openaiResponses.js';
+import { openaiResponsesModel } from '../src/api/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 // A Kimi Code membership key: its own endpoint and quota, Kimi's wire.

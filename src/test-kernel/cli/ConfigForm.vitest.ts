@@ -5,6 +5,11 @@ import { Effect } from 'effect';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
+import {
+  API_PROVIDERS,
+  type ApiKeyStatus,
+  type ApiProvider,
+} from '@texra-ai/llm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
 import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
@@ -12,11 +17,6 @@ import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBui
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
-import {
-  API_PROVIDERS,
-  type ApiKeyStatus,
-  type ApiProvider,
-} from '@model/apiProviders';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -49,8 +49,8 @@ const providerApiKeyRuntime = vi.hoisted(() => ({
   save: vi.fn(),
 }));
 
-vi.mock('@model/apiProviders', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@model/apiProviders')>();
+vi.mock('@texra-ai/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@texra-ai/llm')>();
   return { ...actual, loadApiKeyStatusMap: providerApiKeyRuntime.load };
 });
 vi.mock('@cli/chat/tui/hosts/cliProviderKeys', () => ({

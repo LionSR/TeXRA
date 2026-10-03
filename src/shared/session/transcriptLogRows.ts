@@ -5,6 +5,7 @@
  * as an error row naming the diagnostic, never dropped or cast.
  */
 
+import { modelConfig } from '@texra-ai/llm';
 import {
   MESSAGE_TYPES,
   addTurnTotals,
@@ -14,7 +15,6 @@ import {
   type MessageType,
   type TranscriptEvent,
 } from '@shared/schemas';
-import { modelConfig } from '@shared/model/modelSelection';
 import type { StreamingTextRow } from '@ui/transcript';
 
 import { open, write, type Draft } from './transcriptState';

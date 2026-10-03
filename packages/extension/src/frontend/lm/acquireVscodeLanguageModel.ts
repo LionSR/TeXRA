@@ -16,7 +16,7 @@ import {
   type TurnEvent,
   type TurnResult,
   type VscodeLanguageModelConfiguration,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import { Cause, Effect, Exit, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 

@@ -10,7 +10,7 @@ import {
   assistantMessageFromResult,
   type Continuation,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,

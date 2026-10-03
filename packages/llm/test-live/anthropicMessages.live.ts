@@ -1,5 +1,5 @@
 // Local imports
-import { anthropicMessagesModel } from '../src/anthropicMessages.js';
+import { anthropicMessagesModel } from '../src/api/anthropicMessages.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({

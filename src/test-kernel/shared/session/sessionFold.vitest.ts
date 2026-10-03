@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { Result } from 'effect';
 
-import { ModelOriginSchema } from '@texra-ai/llm/turn';
+import { ModelOriginSchema } from '@texra-ai/llm';
 import { ledgerRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   aggregateId as qualifyAggregateId,

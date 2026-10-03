@@ -81,7 +81,7 @@ import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop } from './rounds';
-import type { TurnResult } from '@texra-ai/llm/turn';
+import type { TurnResult } from '@texra-ai/llm';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 

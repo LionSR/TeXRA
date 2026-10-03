@@ -5,7 +5,7 @@ import {
   chooseReasoning,
   defaultReasoningLevel,
   ReasoningChoiceError,
-} from '@model/reasoningChoice';
+} from '@texra-ai/llm';
 
 type Spec = Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>;
 

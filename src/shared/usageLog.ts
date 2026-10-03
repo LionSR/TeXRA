@@ -1,7 +1,7 @@
 import { Context, Layer } from 'effect';
 import { z } from 'zod';
 
-import { TurnProtocolSchema } from '@texra-ai/llm/turn';
+import { TurnProtocolSchema } from '@texra-ai/llm';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
   AGENT_SOURCE,

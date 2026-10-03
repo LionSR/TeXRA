@@ -1,5 +1,5 @@
+import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
 import { flattenError } from '@logger/formatLogData';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 const REDACTED = '[redacted]';
 

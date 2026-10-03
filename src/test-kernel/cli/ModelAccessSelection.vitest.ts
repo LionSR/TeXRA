@@ -49,14 +49,10 @@ const withServices = Effect.provide(
   ),
 );
 
-vi.mock('@auth/codex', () => ({
+vi.mock('@texra-ai/llm/node', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra-ai/llm/node')>()),
   getCodexStatus: mocks.getCodexStatus,
-}));
-
-vi.mock('@auth/xai', () => ({
   getXaiStatus: mocks.getXaiStatus,
-  xaiAccountLabel: (account: { email?: string } | null | undefined) =>
-    account?.email ?? 'your Grok account',
 }));
 
 vi.mock('@model/subscriptionAccess', () => ({
@@ -74,7 +70,7 @@ vi.mock('@model/subscriptionAccess', () => ({
       : mocks.setPreferXaiSubscription(stores, enabled),
 }));
 
-vi.mock('@model/apiProviders', () => {
+vi.mock('@texra-ai/llm', async (importOriginal) => {
   const providers = [
     'openai',
     'anthropic',
@@ -90,6 +86,7 @@ vi.mock('@model/apiProviders', () => {
     'meta',
   ];
   return {
+    ...(await importOriginal<typeof import('@texra-ai/llm')>()),
     API_PROVIDERS: providers,
     hasUsableApiKey: mocks.hasUsableApiKey,
     lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,

@@ -1,9 +1,8 @@
 import { Data, Effect, Equal, Redacted } from 'effect';
 
 // Local imports
-import type { ApiProvider } from '@model/apiProviders';
-import type { SecretsFailed } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
+import type { ApiProvider, SecretsFailed } from '@texra-ai/llm';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;

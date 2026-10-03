@@ -8,7 +8,7 @@ import { requestRates } from 'llm-zoo';
 
 import type { NormalizedUsage } from '@shared/schemas';
 
-import type { TurnResult } from '@texra-ai/llm/turn';
+import type { TurnResult } from '@texra-ai/llm';
 import type { BoundModel } from './modelBinding';
 
 type TurnUsage = NonNullable<TurnResult['usage']>;

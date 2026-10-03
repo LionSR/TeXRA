@@ -13,7 +13,7 @@ import { priceTurnUsage } from '@agent/runtime/run/pricing';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-import type { Model, TurnResult } from '@texra-ai/llm/turn';
+import type { Model, TurnResult } from '@texra-ai/llm';
 
 /** Per-million rates the fixture bills at; cache writes are 1.25x and 2x. */
 const INPUT_PRICE = 3;

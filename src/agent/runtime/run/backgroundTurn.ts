@@ -13,7 +13,7 @@ import {
   type RemoteOperation,
   type ResolvedTurn,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import type { InvocationRef } from '@shared/schemas';
 
 import { rowAggregate } from '../loop/rows';

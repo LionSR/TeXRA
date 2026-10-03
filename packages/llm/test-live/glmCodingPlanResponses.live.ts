@@ -1,5 +1,5 @@
 // Local imports
-import { openaiResponsesModel } from '../src/openaiResponses.js';
+import { openaiResponsesModel } from '../src/api/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 // A Coding Plan key on the endpoint API keys use; Zhipu serves Responses

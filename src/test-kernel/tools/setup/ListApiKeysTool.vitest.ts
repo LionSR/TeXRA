@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe, vi } from 'vitest';
 
 // Local imports
-import { SecretsFailed } from '@platform/secrets';
+import { SecretsFailed } from '@texra-ai/llm';
 import type { ToolResult } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {

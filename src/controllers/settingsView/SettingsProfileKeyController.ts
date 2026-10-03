@@ -2,6 +2,7 @@
 import { Data, Effect } from 'effect';
 
 // Local imports - secrets
+import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
 import { storeCredential } from '@common/secrets/storeCredential';
 // Local imports - hosts
 import type {
@@ -11,7 +12,6 @@ import type {
   PromptHost,
 } from '@hosts/uiHosts';
 // Local imports - model
-import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 import type { StateReadFailed } from '@platform/interfaces';
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';

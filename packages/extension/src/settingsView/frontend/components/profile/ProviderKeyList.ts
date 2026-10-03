@@ -9,15 +9,15 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
+import { codingPlanForApiProvider } from '@texra-ai/llm';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
 } from '@shared/settingsView/settingsViewMessages';
-import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
-import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { TickerController } from '@shared/litControllers/TickerController';
+import { providerEndpointKey } from '@shared/state/providerSettings';
 import type { SubscriptionUsageSnapshots } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import { commonViewStyles, designTokens } from '@ui/styles';
@@ -128,9 +128,7 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                const key = findModelProviderPlugin(
-                  entry.provider,
-                )?.endpointKey;
+                const key = providerEndpointKey(entry.provider);
                 if (key) postStateSetting(key, value);
               }}
             ></wa-input>

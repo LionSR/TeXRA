@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as codexAuth from '@auth/codex';
-import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
+import * as codexAuth from '@texra-ai/llm/node';
+import { SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import { timestampField } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
