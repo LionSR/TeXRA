@@ -328,14 +328,13 @@ describe('runResumeCommand', () => {
     );
   });
 
-  it('reports an ended run with no checkpoint as finished', async () => {
-    await seedRunRecord({
-      config: TOOL_USE_CONFIG,
-      checkpoint: false,
-    });
-    // Registered and never opened, it would resume by opening: it ended.
-    await Effect.runPromise(
-      Effect.scoped(
+  it.effect('reports an ended run with no checkpoint as finished', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        seedRunRecord({ config: TOOL_USE_CONFIG, checkpoint: false }),
+      );
+      // Registered and never opened, it would resume by opening: it ended.
+      yield* Effect.scoped(
         seededSession.borrowRunClaim(RUN_ID).pipe(
           Effect.andThen(
             seededSession.commit([
@@ -350,15 +349,15 @@ describe('runResumeCommand', () => {
             ]),
           ),
         ),
-      ),
-    );
+      );
 
-    await expect(run(cliContext())).resolves.toBe(2);
+      expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
-    );
-  });
+      expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+        'This run has finished. Start a new agent task to continue.',
+      );
+    }),
+  );
 
   it.effect('reports a live run instead of failing silently', () =>
     Effect.gen(function* () {
