@@ -33,7 +33,7 @@ import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
 
-const USAGE_LOG_ENDPOINT = 'https://remote.texra.ai/functions/v1/log-usage';
+const USAGE_LOG_ENDPOINT = 'https://remote.texra.ai/functions/v1/log-usage-v2';
 const MAX_QUEUE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 const DISPOSE_WARNING_TIMEOUT_MS = 5000;

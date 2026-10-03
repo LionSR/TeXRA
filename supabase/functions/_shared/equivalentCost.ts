@@ -27,7 +27,10 @@ import {
   requestRates,
   type ModelConfig,
 } from 'llm-zoo';
-import type { UsageLogEntry } from './usageValidation.ts';
+import {
+  subscriptionSourceForUsage,
+  type UsageLogEntry,
+} from './usageValidation.ts';
 
 /**
  * Catalog entries keyed by the provider's API model id, the `model` every
@@ -79,4 +82,23 @@ export function equivalentListCost(
     1e6;
   // Client-side costs are rounded to 6 decimals before logging; match that.
   return Math.round(cost * 1e6) / 1e6;
+}
+
+/**
+ * The cost to store for an entry. Subscription rounds arrive with cost 0 (the
+ * client prices them through zeroed subscription overrides), so they store
+ * the list-price equivalent instead; any client-supplied nonzero cost passes
+ * through.
+ */
+export function storedCost(entry: UsageLogEntry): number {
+  if (entry.cost > 0 || subscriptionSourceForUsage(entry) === undefined) {
+    return entry.cost;
+  }
+  const equivalent = equivalentListCost(entry);
+  if (equivalent === undefined) {
+    console.warn(
+      `[LOG_USAGE] No llm-zoo list price for subscription model "${entry.model}"; equivalent cost left 0`,
+    );
+  }
+  return equivalent ?? 0;
 }
