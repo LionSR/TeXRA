@@ -19,9 +19,8 @@ a file another lane owns.
 #13661 deleted `parseDelegationToolInput`. What remains is
 `extractionShorthandToolConfig`, whose only caller is
 `src/tools/registry.ts:129` (`FIGURE_OPTIONS.toolConfig`), reached through the
-`@shared/schemas` barrel line `export * from './proposalInput'`. Its doc still
-calls it "the single mapping shared by the agent tool and replay", which is
-no longer true.
+`@shared/schemas` barrel line `export * from './proposalInput'`: a whole file
+and a barrel export for one option mapping.
 
 Proposal: inline the function beside `FIGURE_OPTIONS` in `src/tools/registry.ts`
 and delete `proposalInput.ts` and its barrel line. That removes one file and
