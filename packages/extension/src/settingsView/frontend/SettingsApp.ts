@@ -35,7 +35,8 @@ import './tabs/SubscriptionsTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/TeamsTab';
-import './tabs/ToolsTab';
+import './tabs/ApprovalTab';
+import './tabs/PluginsTab';
 import './tabs/SkillsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
@@ -61,7 +62,6 @@ import {
   detachSubagentsOnStop,
   disabledSkills,
   disabledSkillSources,
-  installedPlugins,
   agentsSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -96,8 +96,7 @@ import {
   subscriptionAuth,
   subscriptionUsage,
   telemetryEnabled,
-  toolDashboardItems,
-  toolDashboardLoaded,
+  pluginsPage,
   toolPathProtectionEnabled,
   agentSelectionItems,
   workflowAutoCompile,
@@ -350,34 +349,28 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               .masterEnabled=${agentSkillsEnabled.get()}
               .disabledSkills=${disabledSkills.get()}
               .disabledSources=${disabledSkillSources.get()}
-              .plugins=${installedPlugins.get()}
               .skills=${skillsList.get()}
               .issues=${skillLoadIssues.get()}
             ></skills-tab>
           </agents-tab>
         `;
       }
-      case 'tools': {
-        const items = toolDashboardItems.get();
+      case 'plugins': {
+        const page = pluginsPage.get();
         // Read here, inside this watcher's render, so a snapshot that changes
-        // one of the cards' inline settings re-renders the page.
+        // one of the rows' inline settings re-renders the page.
         const settingValues = Object.fromEntries(
-          items
-            .flatMap((item) => item.settings ?? [])
+          (page?.rows ?? [])
+            .flatMap((row) =>
+              row.kind === 'texra' ? (row.item.settings ?? []) : [],
+            )
             .map(([key]) => [key, settingSignal<string>(key).get()]),
         );
         return html`
-          <tools-tab
-            .section=${section}
-            .items=${items}
-            .loaded=${toolDashboardLoaded.get()}
-            .approvalPolicy=${approvalPolicy.get()}
-            .bashApprovalEnabled=${bashApprovalEnabled.get()}
-            .editApprovalEnabled=${editApprovalEnabled.get()}
-            .goalMaxCostUsd=${goalMaxCostUsd.get()}
-            .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
+          <plugins-tab
+            .page=${page}
             .settingValues=${settingValues}
-          ></tools-tab>
+          ></plugins-tab>
         `;
       }
       case 'latex':
@@ -405,6 +398,16 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           ></memory-tab>
         `;
       case 'general':
+        if (section === 'approval')
+          return html`
+            <approval-tab
+              .approvalPolicy=${approvalPolicy.get()}
+              .bashApprovalEnabled=${bashApprovalEnabled.get()}
+              .editApprovalEnabled=${editApprovalEnabled.get()}
+              .goalMaxCostUsd=${goalMaxCostUsd.get()}
+              .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
+            ></approval-tab>
+          `;
         return section === 'git'
           ? html`
               <git-tab

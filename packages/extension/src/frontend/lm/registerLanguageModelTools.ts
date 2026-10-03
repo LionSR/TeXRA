@@ -30,7 +30,7 @@ import {
 } from 'effect';
 
 import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
-import type { PluginServices, ProcessRuntime } from '@platform/processRuntime';
+import type { PluginContext, ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
@@ -147,7 +147,7 @@ const copilotTools = Effect.fnUntraced(function* (
                 Effect.provide(
                   Option.getOrElse(
                     services,
-                    () => Context.empty() as Context.Context<PluginServices>,
+                    () => Context.empty() as PluginContext,
                   ),
                 ),
                 Effect.provideService(ToolCall, {

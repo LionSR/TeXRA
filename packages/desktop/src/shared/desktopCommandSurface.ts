@@ -124,7 +124,7 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
-  'texra.showTools': 'screwdriver-wrench',
+  'texra.showTools': 'cube',
   'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
 } as const satisfies Record<DesktopCommandId, TeXRAIconName>;

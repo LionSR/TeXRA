@@ -73,6 +73,7 @@ export const UsageBatchSchema = z.object({
 });
 
 export type UsageLogEntry = z.infer<typeof UsageLogEntrySchema>;
+export type UsageBatch = z.infer<typeof UsageBatchSchema>;
 
 /** Return the subscription product for subscription-backed usage. */
 export function subscriptionSourceForUsage(

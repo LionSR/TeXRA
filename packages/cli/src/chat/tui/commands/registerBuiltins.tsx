@@ -1,7 +1,7 @@
 // The built-in slash command contributions, built from the surface's runtime
 // options and installed once at startup.
 
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
@@ -11,12 +11,17 @@ import type {
   CliLogoutTarget,
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
+import {
+  installPlugins,
+  parsePluginOrigin,
+} from '@common/plugins/installedPlugins';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
+import { PLUGINS_TUI } from '@ui/copy/plugins';
 
 import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
 import {
@@ -27,6 +32,7 @@ import { CliConfigForm } from '../forms/CliConfigForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
+import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import {
@@ -46,6 +52,7 @@ import {
   revokeCliRunGrant,
 } from './handlers/approvalCommand';
 import {
+  type SlashCommandContext,
   type SlashCommandEffect,
   type SlashCommandOutput,
 } from './handlers/slashContext';
@@ -320,6 +327,44 @@ export function registerBuiltinSlashCommands(options: {
     />
   );
 
+  const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+    <PluginsListForm
+      roots={options.runtimeSession.roots}
+      runtime={runtime}
+      availableRows={props.availableRows}
+      onClose={() => props.onDone(undefined)}
+    />
+  );
+
+  /** `/plugins add <source>`: the install `texra plugin install` runs; the
+   *  plugin stays off until it is switched on and trusted in `/plugins`. */
+  const addPlugin = (
+    remainder: string,
+    context: SlashCommandContext,
+  ): SlashCommandEffect =>
+    Effect.gen(function* () {
+      // The source is the rest of the line, so a folder may hold spaces; a
+      // trailing `--plugin <name>` picks one plugin of a marketplace.
+      const [, verb, rest] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
+      const [, source, pick] =
+        /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
+      if (verb?.toLowerCase() !== 'add' || !source)
+        return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
+      const { roots } = options.runtimeSession;
+      const origin = parsePluginOrigin(
+        source,
+        roots.workspace ?? context.cliContext.cwd,
+        undefined,
+      );
+      if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+      const added = yield* installPlugins(
+        origin.success,
+        pick === undefined ? [] : [pick],
+        roots,
+      );
+      appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
+    });
+
   function configContribution(
     configStores: SettingsStores,
   ): SlashCommandContribution {
@@ -492,6 +537,15 @@ export function registerBuiltinSlashCommands(options: {
                 : showCliMemoryPreview(roots, remainder);
             }),
           formComponent: MemoryListFormAdapter,
+        },
+        {
+          name: 'plugins',
+          description: 'Switch plugins on or off, or add one',
+          aliases: ['plugin'],
+          category: 'configuration',
+          echo: 'ifPersists',
+          handler: addPlugin,
+          formComponent: PluginsListFormAdapter,
         },
         {
           name: 'skills',

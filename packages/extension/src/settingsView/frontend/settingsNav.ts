@@ -11,6 +11,7 @@ import {
   type SettingsSectionName,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
+import { PLUGINS_PAGE } from '@ui/copy/plugins';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 interface SettingsSectionEntry {
@@ -59,16 +60,11 @@ const SETTINGS_TAB_METADATA: {
       advanced: 'Advanced',
     },
   },
-  tools: {
-    icon: 'screwdriver-wrench',
-    label: 'Tools',
-    description:
-      'Decide when agents ask first, and check the tools and integrations they use.',
-    sections: {
-      approval: 'Approval',
-      tools: 'Tools',
-      integrations: 'Integrations',
-    },
+  plugins: {
+    icon: 'cube',
+    label: 'Plugins',
+    description: PLUGINS_PAGE.description,
+    sections: {},
   },
   latex: {
     icon: 'file-code',
@@ -91,8 +87,8 @@ const SETTINGS_TAB_METADATA: {
   general: {
     icon: 'gear',
     label: 'General',
-    description: 'Privacy and Git commit attribution.',
-    sections: { privacy: 'Privacy', git: 'Git' },
+    description: 'When agents ask first, privacy, and Git commit attribution.',
+    sections: { approval: 'Approval', privacy: 'Privacy', git: 'Git' },
   },
   shortcuts: {
     icon: 'code',

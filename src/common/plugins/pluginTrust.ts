@@ -330,7 +330,7 @@ export function readInstalledPluginLoad(
         else if (record.trust.version !== key.version)
           change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
         withheld.push(
-          `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (\`texra plugin enable ${record.name}\`, or Settings > Skills).`,
+          `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (Settings > Plugins, \`/plugins\`, or \`texra plugin enable ${record.name}\`).`,
         );
         continue;
       }

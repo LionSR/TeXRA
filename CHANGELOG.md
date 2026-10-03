@@ -257,6 +257,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **One Plugins page.** Settings › Plugins (and `/plugins` in the terminal)
+  lists everything that adds tools or agents: TeXRA's own plugins, installed
+  Claude Code and Codex plugins, and the MCP servers in `~/.texra/mcp.json`
+  (read-only, with **Open mcp.json**). Each row says what it adds, whether it
+  is on, whether it is trusted, whether it can run here with the fix when it
+  cannot, and which agents use it. **Add plugin** takes a GitHub URL or a
+  folder (`/plugins add <URL or folder>` in the terminal). It replaces the
+  Tools and Integrations sections, the plugin list under Agents › Skills and
+  `/config` › Tools. The approval policy moved to Settings › General ›
+  Approval.
+
 - **A script's card reads as its agents, not its code.** The card opens with
   one line, such as `3 agents · 1 needs you · $0.840`, then each phase's
   calls as plain rows. A finished agent's row shows the first line of its

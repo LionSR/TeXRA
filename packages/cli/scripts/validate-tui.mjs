@@ -79,16 +79,10 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-// `/config` → Tools (fifth row) → Tool integrations (fourth row, by hotkey).
-const CONFIG_TOOLS_FORM_KEYS = [
-  '/config',
+// `/plugins`: the one plugin list, which replaced `/config` → Tools.
+const PLUGINS_FORM_KEYS = [
+  '/plugins',
   { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
-  DOWN,
-  DOWN,
-  DOWN,
-  DOWN,
-  '\r',
-  { input: '4', delayMs: ASYNC_FORM_SETTLE_MS },
 ];
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_ENTRIES: '4',
@@ -563,7 +557,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 10 more',
+      '… 11 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -1014,21 +1008,21 @@ const SCENARIOS = [
     unexpect: ['✻ Working', '✻ Thinking'],
   },
   {
-    name: 'tools-form',
+    name: 'plugins-form',
     env: { HARNESS_ENTRIES: '4' },
-    keys: CONFIG_TOOLS_FORM_KEYS,
+    keys: PLUGINS_FORM_KEYS,
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
-      '/config · Tools',
-      'Toggle available external integrations',
-      'always on ·',
-      'Multi-Agent Workflow — enabled · detected · Ready',
-      'disabled · detected · Ready',
+      '/plugins',
+      'Switch plugins on or off. Add one: /plugins add <URL or folder>',
+      'always on · TeXRA plugin',
+      'Multi-Agent Workflow — on · TeXRA plugin · 1 tool',
+      'switch on/off',
     ],
-    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
+    unexpect: ['[TeXRA]', 'toolUtils', '/config · Tools', 'TeXRA CLI'],
     maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: '/config · Tools', max: 8 },
+      { from: 'entry-4 chat history line', to: '/plugins', max: 8 },
     ],
   },
   {
@@ -1037,14 +1031,11 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_MULTI_AGENT_DISABLED: '1',
     },
-    keys: [...CONFIG_TOOLS_FORM_KEYS, '5'],
+    keys: [...PLUGINS_FORM_KEYS, 'b'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: [
-      '/config · Tools',
-      'Multi-Agent Workflow — enabled · detected · Ready',
-      '1-8/Enter toggle',
-    ],
+    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 1 tool'],
+    unexpect: ['Multi-Agent Workflow — off'],
   },
   {
     name: 'skills-form',
@@ -1268,24 +1259,22 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'compact-tools-form',
+    name: 'compact-plugins-form',
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
-    keys: CONFIG_TOOLS_FORM_KEYS,
+    keys: PLUGINS_FORM_KEYS,
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
-      '/config · Tools',
-      'Toggle external integrations',
-      'Goal Mode — +7 more',
+      '/plugins · Switch plugins on or off',
       '↑/↓ navigate',
-      '1-8/Enter toggle',
+      'switch on/off',
       'Esc close',
     ],
-    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
+    unexpect: ['[TeXRA]', 'toolUtils', '/config · Tools', 'TeXRA CLI'],
     maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: '/config · Tools', max: 2 },
+      { from: 'entry-4 chat history line', to: '/plugins', max: 2 },
     ],
   },
   {
@@ -1297,7 +1286,7 @@ const SCENARIOS = [
       '… 5 previous rows',
       '› /status    Show session details',
       '/memory',
-      '… 6 more rows',
+      '… 7 more rows',
       'Esc close',
     ],
   },

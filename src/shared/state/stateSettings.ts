@@ -1132,21 +1132,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
   }),
 
-  // --- External tool integrations ------------------------------------------
-  // This is a list-backed global-state domain. `/config` delegates editing to
-  // the tools form so the catalog owns discoverability while the tool
-  // dashboard remains the single editor for per-integration toggles.
-  surfacedSetting({
+  // --- Plugin switches ------------------------------------------------------
+  // Written and read by the Plugins page and the TUI's `/plugins` over the
+  // plugin rows, which no catalog-driven UI renders.
+  {
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),
-    title: 'Tool integrations',
-    description:
-      'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
-    category: 'tools',
     slot: 'globalState',
-    openForm: 'tools',
-    surfaces: { cliConfig: true },
-  }),
+  },
   surfacedSetting({
     key: WorkspaceStateKey.DISABLED_SKILLS,
     schema: z.array(QualifiedSkillNameSchema).prefault([]),

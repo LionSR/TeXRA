@@ -16,7 +16,6 @@ import {
 } from '@common/errors/errorPredicates';
 import type { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import { scopedClient } from '@tools/timeouts';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
@@ -69,18 +68,18 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
 /**
  * The process services a plugin's availability callbacks read: provider
  * credentials, the host's setup capabilities for the one plugin whose
- * availability depends on the editor host (Lean 4's VS Code extension), that
- * host's Lean port, which owns the roster of running servers the same plugin
- * reports, the HTTP client the Zotero probes request through, the spawner
- * every probe runs its child processes on, and the filesystem the CLI binary
- * probes look in. All six are `ProcessServices` arms, so every caller of the
- * availability surface already holds them.
+ * availability depends on the editor host (Lean 4's VS Code extension), the
+ * HTTP client the Zotero probes request through, the spawner every probe
+ * runs its child processes on, and the filesystem the CLI binary probes look
+ * in. All five are `ProcessServices` arms, so every caller of the
+ * availability surface already holds them. A plugin's probe may also read
+ * its own process services (`definePlugin`), which it is served while its
+ * layer is up.
  */
 export type ToolProbeServices =
   | Secrets
   | FileSystem.FileSystem
   | SetupPlatform
-  | LeanLanguageServices
   | HttpClient.HttpClient
   | ChildProcessSpawner;
 
@@ -107,7 +106,7 @@ export type ToolProbeInputs = Pick<
  * hands back to `check` (availability), `statusLabel` (dashboard badge) and
  * `detailCheck` (the line below the description).
  */
-export interface ToolAvailabilityChecks {
+export interface ToolAvailabilityChecks<R = ToolProbeServices> {
   /**
    * Optional shared probe result passed to check/status/detail callbacks.
    * Takes the asking workspace as data — the GitHub plugin's probe asks whether
@@ -116,19 +115,19 @@ export interface ToolAvailabilityChecks {
    */
   readonly probe?: (
     inputs: ToolProbeInputs,
-  ) => Effect.Effect<unknown, ToolProbeError, ToolProbeServices>;
+  ) => Effect.Effect<unknown, ToolProbeError, R>;
   /** Returns true if the external dependency is available. */
   readonly check: (
     probeResult?: unknown,
-  ) => Effect.Effect<boolean, ToolProbeError, ToolProbeServices>;
+  ) => Effect.Effect<boolean, ToolProbeError, R>;
   /** Optional detailed status string resolved at check time (shown below description). */
   readonly detailCheck?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
+  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
   /** Optional short status label for the dashboard badge. */
   readonly statusLabel?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
+  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
   /**
    * The secret-store keys this plugin's answer reads. A committed write to any
    * of them (`credentialChanged`) re-probes every open workspace, so a plugin
@@ -329,25 +328,23 @@ export function probeSdkBinaryStatus(config: {
  * then receive the resolved `T` directly; `detailCheck` is an Effect so a
  * detail may read a service (the Claude Code entry reads Secrets).
  */
-export function prerequisitesChecks<T>(config: {
-  probe: (
-    inputs: ToolProbeInputs,
-  ) => Effect.Effect<T, ToolProbeError, ToolProbeServices>;
+export function prerequisitesChecks<T, R = ToolProbeServices>(config: {
+  probe: (inputs: ToolProbeInputs) => Effect.Effect<T, ToolProbeError, R>;
   /**
    * Re-derives `T` on a cache miss, which the callbacks reach carrying no
    * probe inputs — so each entry says here what it answers without a workspace.
    */
-  fallback: () => Effect.Effect<T, ToolProbeError, ToolProbeServices>;
+  fallback: () => Effect.Effect<T, ToolProbeError, R>;
   check: (prereqs: T) => boolean;
   statusLabel?: (prereqs: T) => string | undefined;
   detailCheck: (
     prereqs: T,
-  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
-}): ToolAvailabilityChecks {
+  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
+}): ToolAvailabilityChecks<R> {
   const { probe, fallback, check, statusLabel, detailCheck } = config;
   const resolve = (
     probeResult: unknown,
-  ): Effect.Effect<T, ToolProbeError, ToolProbeServices> =>
+  ): Effect.Effect<T, ToolProbeError, R> =>
     probeResult === undefined ? fallback() : Effect.succeed(probeResult as T);
   return {
     probe,

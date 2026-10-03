@@ -99,7 +99,7 @@ interface SettingsViewBodyPorts {
   readonly skillDisplay: HostEffect<
     Omit<
       Extract<SettingsViewOutboundMessage, { command: 'updateSkillsList' }>,
-      'command' | 'plugins'
+      'command'
     >
   >;
   /** The account copy (`src/ui`), which controllers likewise take from
@@ -139,7 +139,11 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     roots,
     bindings,
     present,
-    repaint: Effect.suspend(() => postSkills),
+    // A plugin's skills are listed on the Skills page as `<plugin>:<name>`.
+    repaint: Effect.andThen(
+      toolsPage.postPlugins,
+      Effect.suspend(() => postSkills),
+    ),
   });
   const agents = settingsAgentCommands({
     roots,
@@ -157,14 +161,10 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
   const postSkills = bindings.post(
-    Effect.map(
-      Effect.all([ports.skillDisplay, pluginsPage.list]),
-      ([result, plugins]) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-        ...result,
-        plugins,
-      }),
-    ),
+    Effect.map(ports.skillDisplay, (result) => ({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    })),
   );
   const postUsage = (forceRefresh: boolean) =>
     bindings.post(
@@ -432,8 +432,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     signInSubscription,
     /** Settle a repaint nobody awaits, reported as a message's would be. */
     settle,
-    /** The Tools page following its workspace's availability results, for
-     *  the host to hold while the view lives. */
+    /** The Plugins page following its workspace's availability results,
+     *  for the host to hold while the view lives. */
     followToolAvailability: toolsPage.followToolAvailability(settle),
     /**
      * What each app signal this view follows repaints: a run that binds a

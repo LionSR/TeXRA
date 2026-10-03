@@ -4,7 +4,7 @@ import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
   UsageLogEntrySchema,
-} from './usageValidation.ts';
+} from '../_shared/usageValidation.ts';
 
 const VALID_BATCH_ID = 'a584b784-a4f1-4d44-a99f-36767d31e79d';
 

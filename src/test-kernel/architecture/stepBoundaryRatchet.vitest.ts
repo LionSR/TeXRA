@@ -75,6 +75,9 @@ const RULES: readonly {
       'src/tools/pluginCatalog.ts',
       'src/controllers/session/sessionLayer.ts',
       'src/controllers/settingsView/githubSubscriptions.ts',
+      // The availability probes, which run each plugin's probe with its
+      // own process services while its layer is up; they pin nothing.
+      'src/tools/toolAvailability.ts',
       'packages/extension/src/frontend/lm/registerLanguageModelTools.ts',
     ],
   },

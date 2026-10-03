@@ -511,7 +511,7 @@ export function createDesktopHostRequests(
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'tools/tools'),
+        postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
     // The desktop has no walkthrough of its own: its getting-started page
     // is the desktop docs.

@@ -43,7 +43,7 @@ import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import type { PluginServices } from '@platform/processRuntime';
+import type { PluginContext } from '@platform/processRuntime';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
@@ -83,7 +83,7 @@ export interface StepTools {
   /** Each offered tool's identity, in offer order. */
   readonly offered: readonly OfferedTool[];
   /** The pinned plugins' process and session services. */
-  readonly services: Context.Context<PluginServices>;
+  readonly services: PluginContext;
   /** The read-only skill directories its calls may read. */
   readonly stepRoots: readonly StepRoot[];
   /** The command hooks of the installed plugins it accepted, by plugin id:
@@ -126,7 +126,7 @@ const NO_TOOLS: StepTools = {
   definitions: [],
   registry: new MapToolRegistry(new Map()),
   offered: [],
-  services: Context.empty() as Context.Context<PluginServices>,
+  services: Context.empty() as PluginContext,
   stepRoots: [],
   hooks: [],
 };

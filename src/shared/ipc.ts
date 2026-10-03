@@ -56,7 +56,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
-  // Installed plugin actions (install, enable, disable, update, remove)
+  // Plugin page actions: install, enable, disable, update, remove an installed
+  // plugin, and open the MCP config file
   PLUGIN_ACTION: 'pluginAction',
   // GitHub token commands (for PR subscription tool)
   UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',
@@ -89,7 +90,7 @@ export const SETTINGS_VIEW_COMMANDS = {
   // derived-snapshot list, keyed by its `snapshot` field.
   UPDATE_SETTINGS_SNAPSHOT: 'updateSettingsSnapshot',
   UPDATE_SKILLS_LIST: 'updateSkillsList',
-  UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
+  UPDATE_PLUGINS: 'updatePlugins',
   UPDATE_SUBSCRIPTION_USAGE: 'updateSubscriptionUsage',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
 } as const;
