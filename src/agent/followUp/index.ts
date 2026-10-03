@@ -19,5 +19,6 @@
 export {
   describeFollowUpFailure,
   presentFollowUpResult,
+  resumeOnSession,
   submitFollowUp,
 } from './ToolUseFollowUp';

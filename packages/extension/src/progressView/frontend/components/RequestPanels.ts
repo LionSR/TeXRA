@@ -118,6 +118,9 @@ export class RequestPanels extends LitElement {
         .answerability=${
           this.run ? requestAnswerability(this.run, permission) : 'readOnly'
         }
+        .resumeRunId=${
+          this.run?.actions.includes('resume') ? this.run.id : null
+        }
         .surface=${this.surface}
       ></${CARD_TAG[permission.kind]}>`,
     )}`;

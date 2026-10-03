@@ -4,7 +4,12 @@
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
 import { html, type TemplateResult } from 'lit';
 
-import { AgentCategory, type MissingTool } from '@shared/schemas';
+import {
+  AgentCategory,
+  emptyRunEndOutput,
+  RunIdSchema,
+  type MissingTool,
+} from '@shared/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -27,6 +32,7 @@ import {
   GRANDCHILD,
   local,
   Log,
+  OTHER_OWNER,
   OWNER,
   PROCESS,
   ROOT,
@@ -207,6 +213,97 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
   </div>`;
 }
 
+/** Two tasks a TeXRA that has since closed left mid-turn, by title: the
+ *  first with two agents (one done), the second's agent from a plugin that
+ *  is off now. What the open-time notice lists. */
+const REVIEW_TASK = RunIdSchema.parse('a1a1a1a1a1a1');
+const ABSTRACT_TASK = RunIdSchema.parse('a2a2a2a2a2a2');
+function interruptedTasksView(): SessionView {
+  const log = new Log();
+  const tasks = [
+    [REVIEW_TASK, 'Review and fix chapter 2', T.root],
+    [ABSTRACT_TASK, 'Polish abstract', T.child],
+  ] as const;
+  for (const [id, title, at] of tasks) {
+    log.emit(
+      id,
+      at,
+      {
+        type: 'run.start',
+        identity: { kind: 'agent', agent: 'assistant' },
+        category: AgentCategory.ToolUse,
+        worktree: { workingDirectory: '/paper', branch: 'main' },
+        parent: null,
+        provenance: null,
+        userFollowUpSupport: 'nativeInteractive',
+      },
+      OTHER_OWNER,
+    );
+    log.emit(
+      id,
+      at,
+      { type: 'run.activate', category: AgentCategory.ToolUse },
+      OTHER_OWNER,
+    );
+    log.emit(
+      id,
+      at + 1,
+      { type: 'run.description', description: title, by: 'model' },
+      OTHER_OWNER,
+    );
+  }
+  const referees = [
+    RunIdSchema.parse('a3a3a3a3a3a3'),
+    RunIdSchema.parse('a4a4a4a4a4a4'),
+  ];
+  for (const [index, id] of referees.entries()) {
+    log.emit(
+      id,
+      T.childProgress,
+      {
+        type: 'run.start',
+        identity: { kind: 'agent', agent: `referee-${index + 1}` },
+        category: AgentCategory.ToolUse,
+        parent: log.parent(REVIEW_TASK),
+        provenance: null,
+        userFollowUpSupport: 'nativeInteractive',
+      },
+      OTHER_OWNER,
+    );
+    log.emit(
+      id,
+      T.childProgress,
+      { type: 'run.activate', category: AgentCategory.ToolUse },
+      OTHER_OWNER,
+    );
+  }
+  log.emit(
+    referees[0],
+    T.grandchildDone,
+    {
+      type: 'run.end',
+      outcome: 'completed',
+      output: emptyRunEndOutput(AgentCategory.ToolUse),
+    },
+    OTHER_OWNER,
+  );
+  return foldAll([
+    ...log.events.map(tail),
+    log.drained(),
+    local({
+      self: [OWNER],
+      dead: [OTHER_OWNER],
+      resumeBlocked: [
+        {
+          runId: ABSTRACT_TASK,
+          reason: { kind: 'pluginOff', name: 'zotero' },
+          retry: false,
+        },
+      ],
+    }),
+  ]);
+}
+
 // ── scenes ──────────────────────────────────────────────────────────────
 
 export const extensionScenes: Record<string, () => TemplateResult> = {
@@ -319,6 +416,26 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-interrupted-run': () => {
     const view = withInterruptedChild();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // Opening after a crash: the notice above the composer lists the
+  // interrupted tasks, the blocked one with its fix.
+  'ext-interrupted-open': () => {
+    const view = interruptedTasksView();
+    return sidebar(view, surface(view, { kind: 'selectNew' }));
+  },
+  // The blocked task itself: its ended line says what it waits for, with
+  // the one Resume and the fix, under the notice until "Not now".
+  'ext-interrupted-blocked': () => {
+    const view = interruptedTasksView();
+    return sidebar(
+      view,
+      surface(view, { kind: 'select', runId: ABSTRACT_TASK }),
+    );
+  },
+  // The desktop's project column at open, over the same tasks.
+  'desktop-interrupted-open': () => {
+    const view = interruptedTasksView();
+    return desktopColumn(view, surface(view, { kind: 'selectNew' }));
   },
   // Real-ExtensionDrawer: the Sessions drawer over the same conversation.
   'ext-drawer': () => {

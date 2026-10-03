@@ -18,7 +18,6 @@ export interface RunMenuAction {
   arm:
     | Extract<
         HostRequest['kind'],
-        | 'resume'
         | 'runNew'
         | 'openRunStorage'
         | 'exportTranscript'
@@ -42,7 +41,6 @@ export const ELEMENT_IDS = {
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
-  RESUME_BTN: 'resumeBtn',
   EXPORT_TRANSCRIPT_BTN: 'exportTranscriptBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
@@ -90,13 +88,6 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
     arm: 'runNew',
     icon: 'play',
     label: 'Run again from scratch',
-  },
-  {
-    id: ELEMENT_IDS.RESUME_BTN,
-    action: 'resume',
-    arm: 'resume',
-    icon: 'forward-step',
-    label: 'Resume from saved outputs',
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,

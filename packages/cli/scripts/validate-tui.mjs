@@ -2130,7 +2130,7 @@ const SCENARIOS = [
       'Interrupted',
       'Recent',
       'nested Interrupted',
-      'Resume',
+      '1 task was interrupted',
     ],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },
@@ -2138,6 +2138,35 @@ const SCENARIOS = [
       { before: '\n  Interrupted', after: 'Recent' },
     ],
     unexpect: ['ERROR', 'signal read during notification phase'],
+  },
+  {
+    // The open-time notice above the input: the interrupted root by title,
+    // what blocks it and where to fix it, and the two commands that answer
+    // it. Anything submitted hides it.
+    name: 'interrupted-notice',
+    cols: 150,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_SESSION_TREE: '1',
+      HARNESS_RESUME_BLOCKED: '1',
+    },
+    keys: [],
+    expect: [
+      '1 task was interrupted',
+      'interrupted · stopped',
+      'needs the zotero plugin, which is off: /plugins',
+      '/resume all continues it',
+    ],
+    ordered: [{ before: '1 task was interrupted', after: '› ' }],
+    unexpect: ['ERROR', 'signal read during notification phase'],
+  },
+  {
+    name: 'interrupted-notice-hides-on-submit',
+    cols: 150,
+    env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
+    keys: ['/status', '\r'],
+    expect: ['model access:'],
+    unexpect: ['1 task was interrupted', 'ERROR'],
   },
   {
     // Enter resumes the selected interrupted run. The list opens on the

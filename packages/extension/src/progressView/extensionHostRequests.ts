@@ -571,6 +571,10 @@ export function createExtensionHostRequests(
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showTeamSettings');
       if (section === 'models') return commandVerb('texra.showModels');
+      if (section === 'plugins')
+        return commandVerb('texra.showDashboard', 'plugins');
+      if (section === 'general')
+        return commandVerb('texra.showDashboard', 'general/approval');
       return commandVerb('texra.showDashboard');
     },
     // SecretManager has no key-changed event, so the set-key flow's

@@ -28,7 +28,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
-import type { PermissionPayload } from '@shared/schemas';
+import type { PermissionPayload, RunId } from '@shared/schemas';
 import {
   approvalDecisionArms,
   type SurfaceDecision,
@@ -62,7 +62,7 @@ type Decline = keyof typeof DECLINE_LABEL;
 
 /** What a card this window cannot answer says in place of its actions. */
 const UNANSWERABLE_NOTE = {
-  resume: 'Resume the task to answer.',
+  resume: 'The task stopped before this was answered. Resume it to answer.',
   readOnly: 'This window cannot answer this request.',
 } as const;
 
@@ -106,6 +106,10 @@ export abstract class BaseRequestPanel<
    */
   @property({ attribute: false })
   answerability: RequestAnswerability = 'answerable';
+
+  /** The asking run, while a resume is what lets the card be answered:
+   *  the card carries the Resume, beside the question it unblocks. */
+  @property({ attribute: false }) resumeRunId: RunId | null = null;
 
   protected get readOnly(): boolean {
     return this.answerability !== 'answerable';
@@ -288,11 +292,28 @@ export abstract class BaseRequestPanel<
                 </div>
                 ${this.renderNote()}`
             : html`<p class="request-card__meta">
-                ${UNANSWERABLE_NOTE[this.answerability]}
-              </p>`
+                  ${UNANSWERABLE_NOTE[this.answerability]}
+                </p>
+                ${this.renderResume()}`
         }
       </div>
     `;
+  }
+
+  private renderResume(): TemplateResult | typeof nothing {
+    const runId = this.resumeRunId;
+    if (this.answerability !== 'resume' || runId === null) return nothing;
+    return html`<div class="request-card__actions">
+      ${renderLabeledActionButton({
+        icon: 'forward-step',
+        text: 'Resume',
+        title: 'Resume',
+        action: 'resume',
+        kind: 'primary',
+        onClick: () =>
+          this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId })),
+      })}
+    </div>`;
   }
 
   private renderPrimary(): TemplateResult {

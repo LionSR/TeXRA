@@ -59,7 +59,7 @@ export class WorkflowRunContent extends BaseRunContent {
           ? nothing
           : html`<div class="conversation-composer-dock">
               <div class="conversation-column">
-                ${this.renderEndedLine(run)}
+                ${this.renderInterruptedNotice()} ${this.renderEndedLine(run)}
               </div>
             </div>`
       }

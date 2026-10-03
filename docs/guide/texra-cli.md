@@ -417,8 +417,9 @@ message, so without a terminal it exits with a usage error that points
 scripting at `texra run`. A workflow run resumes headless under its original
 execution id and honors the headless globals (`--print`, `--output-format`,
 `--no-input`). The interactive chat also accepts `/resume`: with no id it
-prints recent executions, with an id it continues the stored session. A
-missing or malformed id exits with code 2.
+lists recent tasks by title, with an id it continues that task, and
+`/resume all` continues every interrupted one. `/rename <title>` gives the
+focused task your own title. A missing or malformed id exits with code 2.
 
 Fork, reset or hand off a conversation as you continue it:
 
@@ -438,7 +439,8 @@ next.
 When `texra chat` opens without a task to resume, it looks for tasks a
 closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
 "auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
-default, `ask`, leaves them for you. A task whose agent is missing, or
+default, `ask`, lists them above the input, where `/resume all` continues
+them and anything else you type hides the list. A task whose agent is missing, or
 comes from a plugin that is off or not trusted, waits until that is fixed
 and then continues by itself. `texra run` never resumes anything on its
 own.

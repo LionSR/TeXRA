@@ -479,9 +479,14 @@ export function createDesktopHostRequests(
         postDesktopSettingsView(
           options.postToRenderer,
           section
-            ? ({ teams: 'agents/teams', models: 'models/models' } as const)[
-                section
-              ]
+            ? (
+                {
+                  teams: 'agents/teams',
+                  models: 'models/models',
+                  plugins: 'plugins',
+                  general: 'general/approval',
+                } as const
+              )[section]
             : undefined,
         ),
       ),

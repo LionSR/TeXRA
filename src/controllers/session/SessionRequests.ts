@@ -152,11 +152,54 @@ export function sessionRequests(
 const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
   'run.delete': 'delete',
   'run.compact': 'compact',
+  'run.rename': 'rename',
   'policy.set': 'grant',
 };
 
 /**
- * Refuse a delete, compaction or approval grant the run's current `actions`
+ * The user's title, as the run's `run.description` row by the user. A run
+ * this process does not hold takes the row under its claim, taken and given
+ * back as a decision's is, so a later resume can still take the run.
+ */
+function rename(
+  session: SessionHandle,
+  req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
+  heldHere: boolean,
+): Effect.Effect<Outcome, RequestError> {
+  const commit = session
+    .commit([
+      {
+        type: 'run.description',
+        aggregateId: qualifyAggregateId('run', req.runId),
+        description: req.title,
+        by: 'user',
+      },
+    ])
+    .pipe(
+      Effect.mapError((error): RequestError =>
+        error instanceof DatabaseNotOwner
+          ? new NotOwner({ runId: req.runId })
+          : new Unavailable({
+              runId: req.runId,
+              reason: 'The title could not be saved.',
+            }),
+      ),
+      Effect.as(done),
+    );
+  if (heldHere) return commit;
+  return Effect.acquireUseRelease(
+    session
+      .acquireClaims(qualifyAggregateId('run', req.runId))
+      .pipe(
+        Effect.mapError((): RequestError => new NotOwner({ runId: req.runId })),
+      ),
+    () => commit,
+    (release) => release.pipe(Effect.orDie),
+  );
+}
+
+/**
+ * Refuse a delete, compaction, rename or approval grant the run's current `actions`
  * no longer holds, with its reason: the host rendered it from an earlier
  * view, and the run may have started or ended since. A run the view has not
  * folded yet, and one another process holds, are left to `admit` and the
@@ -437,6 +480,8 @@ function handle(
             );
         }
       });
+    case 'run.rename':
+      return rename(session, req, heldHere);
     case 'run.fork':
       return forkRun(
         session,

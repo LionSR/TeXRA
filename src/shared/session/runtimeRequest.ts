@@ -38,6 +38,13 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('run.delete'), ...runScoped }),
   z.object({ kind: z.literal('run.compact'), ...runScoped }),
+  /** The user's title for the run: a `run.description` row by the user,
+   *  which a later model title does not replace. */
+  z.object({
+    kind: z.literal('run.rename'),
+    ...runScoped,
+    title: z.string().trim().min(1),
+  }),
   /**
    * A new task holding this run's conversation up to `at`, the `seq` of a
    * settled position in its history (its latest when absent): answered with

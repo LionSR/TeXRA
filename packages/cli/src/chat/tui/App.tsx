@@ -69,6 +69,7 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
   focusRun,
+  interruptedNoticeHidden,
 } from './state/cliState';
 import {
   appendLocalNotice,
@@ -630,7 +631,11 @@ export function App(props: AppProps): React.JSX.Element {
               roots={props.session.roots}
               controlRef={inputBarRef}
               holdsKeystroke={holdsKeystroke}
-              onSubmit={props.onSubmit}
+              onSubmit={(line, mediaFiles, images) => {
+                // Anything submitted passes over the open-time notice.
+                interruptedNoticeHidden.set(true);
+                props.onSubmit(line, mediaFiles, images);
+              }}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}
               disabled={inputDisabled}

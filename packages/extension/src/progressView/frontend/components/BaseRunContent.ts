@@ -16,8 +16,10 @@ import {
 } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import { resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import './InterruptedTasksNotice';
 import './RequestPanels';
 import './LogList';
 import './UsagePanel';
@@ -67,13 +69,16 @@ export abstract class BaseRunContent extends LitElement {
   /**
    * The line in the composer's place for a run that takes no follow-up:
    * why (the fold's detail, else ended or no replies), then what the user
-   * can do. An interrupted run resumes; a run that has stopped, however it
+   * can do. A run that resumes has its one Resume here, and a blocked one
+   * the fix its detail names; a run that has stopped, however it
    * stopped, starts a new task from its setup (the launcher prefilled with
    * its agent and instruction). This is the one home of Edit as new task.
    * Each is offered only while the run's `actions` holds it.
    */
   protected renderEndedLine(run: RunView): TemplateResult {
     const live = isLiveRun(run);
+    // What a blocked resume waits for has its fix in Settings › Plugins.
+    const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume' | 'restoreIntoLauncher') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     return html`<div class="conversation-ended">
@@ -86,16 +91,33 @@ export abstract class BaseRunContent extends LitElement {
         }</span
       >
       ${
-        run.actions.includes('resume') &&
-        // A background script resumes after a stop too: its finished calls
-        // are handed back from its rows (`runActions`).
-        (run.group === 'interrupted' || run.identity.kind === 'script')
+        // The task's one Resume (an interrupted task, a workflow from its
+        // saved outputs, a stopped background script: `runActions`).
+        run.actions.includes('resume')
           ? html`<wa-button
               id="resumeRunBtn"
               variant="brand"
               size="s"
               @click=${request('resume')}
               >${waIcon('forward-step', { slot: 'start' })}Resume</wa-button
+            >`
+          : nothing
+      }
+      ${
+        fix
+          ? html`<wa-button
+              id="resumeBlockerFixBtn"
+              appearance="outlined"
+              variant="neutral"
+              size="s"
+              @click=${() =>
+                this.dispatchEvent(
+                  SessionUiEvents.host({
+                    kind: 'openSettings',
+                    section: 'plugins',
+                  }),
+                )}
+              >${fix}</wa-button
             >`
           : nothing
       }
@@ -112,6 +134,14 @@ export abstract class BaseRunContent extends LitElement {
           : nothing
       }
     </div>`;
+  }
+
+  /** The open-time notice, above the composer or the ended line. */
+  protected renderInterruptedNotice(): TemplateResult {
+    return html`<interrupted-tasks-notice
+      .view=${this.view}
+      .surface=${this.surface}
+    ></interrupted-tasks-notice>`;
   }
 
   protected renderUsagePanel(run: RunView): TemplateResult {

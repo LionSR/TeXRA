@@ -62,6 +62,7 @@ import {
   showCliMemoryPreview,
 } from './handlers/memoryCommands';
 import {
+  resumeInterruptedTasks,
   sessionContributions,
   showCliSessionStatus,
   showCliSlashCommandHelp,
@@ -506,11 +507,14 @@ export function registerBuiltinSlashCommands(options: {
         },
         {
           name: 'resume',
-          description: 'Resume a previous task',
+          description:
+            'Resume a previous task; /resume all continues every interrupted one',
           category: 'session',
           echo: 'ifPersists',
           handler: (remainder, context) =>
             Effect.gen(function* () {
+              if (remainder.trim() === 'all')
+                return yield* resumeInterruptedTasks(context.runtimeSession);
               const id = parseCliHistoryId(remainder);
               if (!id)
                 return yield* Effect.fail(

@@ -227,21 +227,14 @@ export const runTabStyles = css`
     color: var(--color-warning);
   }
 
-  /* An interrupted row's primary action. */
-  .tab-resume {
-    flex-shrink: 0;
-    margin-inline-start: var(--wa-space-3xs);
-  }
-
   /* A row at rest is its title and status glyph; its status detail (the
-     interrupted, held-elsewhere or unreadable notice) and Resume appear with
-     the metadata line, on hover, focus, or selection. */
-  .tab-container:not(:hover, :focus-within, .is-active)
-    :is(.tab-detail, .tab-resume) {
+     interrupted, held-elsewhere or unreadable notice) appears with the
+     metadata line, on hover, focus, or selection. */
+  .tab-container:not(:hover, :focus-within, .is-active) .tab-detail {
     display: none;
   }
 
-  /* The row's Delete: shown on hover or focus, like Resume. */
+  /* The row's Delete: shown on hover or focus. */
   .tab-remove {
     flex-shrink: 0;
     color: var(--color-text-muted);

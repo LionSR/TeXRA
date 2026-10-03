@@ -11,7 +11,10 @@ import {
   listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
-import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
+import {
+  formatCliHistoryAgentLabel,
+  formatCliHistorySubject,
+} from '@cli/runtime/historyLabels';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 
@@ -30,8 +33,17 @@ interface ResumeListFormProps {
   readonly onClose: () => void;
 }
 
+/** A task goes by its title: the user's, else the model's, else what it is
+ *  about; the id stays for `texra resume <id>` and never labels a row. */
+function resumeEntryLabel(entry: CliHistoryEntry): string {
+  const title = entry.description?.replaceAll(/\s+/g, ' ').trim();
+  return (
+    title || formatCliHistorySubject(entry, formatCliHistoryAgentLabel(entry))
+  );
+}
+
 function resumeEntryDescription(entry: CliHistoryEntry): string {
-  return `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`;
+  return `${entry.timestamp} · ${entry.status} · ${formatCliHistoryAgentLabel(entry)}`;
 }
 
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
@@ -49,7 +61,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       items={(entries) =>
         entries.map((entry) => ({
           value: entry.id,
-          label: entry.id,
+          label: resumeEntryLabel(entry),
           description: resumeEntryDescription(entry),
         }))
       }
