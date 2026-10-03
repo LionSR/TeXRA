@@ -423,12 +423,12 @@ function holdRun(runId: RunId): void {
 /** `resumeRun`'s started result: the run ran and the batch reached it. */
 const STARTED = { started: true, delivered: true } as const;
 
-const defaultResumeRun = (_runId: RunId, options: ResumeRunOptions) =>
+const defaultResumeRun = (runId: RunId, options: ResumeRunOptions) =>
   Effect.gen(function* () {
     // The real `resumeRun` rearranges the host onto the resumed run only
     // after its own retrieval succeeded, so every stand-in that reaches a launch
     // must run the hook or the caller never adopts the run.
-    if (options.onResumeResolved) yield* options.onResumeResolved();
+    if (options.onResumeResolved) yield* options.onResumeResolved(runId);
     return STARTED;
   });
 
@@ -852,9 +852,9 @@ describe('createChatSessionController', () => {
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
+      (id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved();
+          if (options.onResumeResolved) yield* options.onResumeResolved(id);
           return { ...STARTED, outcome: RUN_PHASE.WAITING };
         }),
     );
@@ -897,9 +897,9 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
+      (id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved();
+          if (options.onResumeResolved) yield* options.onResumeResolved(id);
           yield* Effect.promise(() => rehydrated.promise);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
@@ -950,11 +950,11 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) => {
+      (id: RunId, options: ResumeRunOptions) => {
         resumeStarted.resolve();
         return Effect.gen(function* () {
           yield* Effect.promise(() => resumeReached.promise);
-          if (options.onResumeResolved) yield* options.onResumeResolved();
+          if (options.onResumeResolved) yield* options.onResumeResolved(id);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
@@ -1098,10 +1098,10 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
     const resumeCalled = createDeferred();
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) => {
+      (id: RunId, options: ResumeRunOptions) => {
         resumeCalled.resolve();
         return Effect.gen(function* () {
-          if (options.onResumeResolved) yield* options.onResumeResolved();
+          if (options.onResumeResolved) yield* options.onResumeResolved(id);
           return {
             ...STARTED,
             outcome: options.isCancellationRequested?.()

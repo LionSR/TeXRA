@@ -35,7 +35,11 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { getRunRecords, owningCall, runEndFromEvents } from './runRecords';
+import {
+  getRunRecords,
+  openOwnedChildren,
+  runEndFromEvents,
+} from './runRecords';
 
 function pinRunWorkingDirectory(
   record: RunRecord,
@@ -295,32 +299,47 @@ export type FinalizeRunResult =
     };
 
 /**
+ * End a run nothing drives any more, CANCELLED (an outcome it already wrote
+ * stands), under its own claim: an owned child its parent's stop outlived,
+ * or one a person's outcome decision left behind.
+ */
+export const retireRun = Effect.fn('retireRun')(function* (
+  session: SessionHandle,
+  runId: RunId,
+) {
+  const ended = yield* Effect.scoped(
+    session.holdRunClaim(runId).pipe(
+      Effect.andThen(
+        finalizeRun(session, {
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          keepExistingOutcome: true,
+        }),
+      ),
+    ),
+  );
+  if (!ended.ok) return yield* Effect.fail(ensureError(ended.error));
+});
+
+/**
  * HQ6: a run does not end while an open call of it owns a child that has not
- * ended. A stop or a backstop (`cascade`) ends such a child first, CANCELLED,
- * as the live cascade would have; the run's own terminal, or a stop whose
- * child is still live in this process, is refused.
+ * ended. A stop or a backstop (`cascade`) retires such a child first, as the
+ * live cascade would have; the run's own terminal, or a stop whose child is
+ * still live in this process, is refused.
  */
 const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
   cascade: boolean,
 ) {
-  for (const child of session.runView(runId)?.childIds ?? []) {
-    const owner = yield* owningCall(session, child);
-    if (owner?.parentRunId !== runId) continue;
-    if ((yield* getRunRecords(session, child).readRunEnd()) !== null) continue;
-    if (!cascade || session.runs.isLive(child))
+  for (const child of yield* openOwnedChildren(session, runId)) {
+    if (!cascade || session.runs.isLive(child.runId))
       return yield* Effect.fail(
         new Error(
-          `Run ${runId} cannot end while its open call ${owner.callId} owns run ${child}, which has not ended`,
+          `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,
         ),
       );
-    const ended = yield* finalizeRun(session, {
-      runId: child,
-      outcome: RUN_OUTCOME.CANCELLED,
-      keepExistingOutcome: true,
-    });
-    if (!ended.ok) return yield* Effect.fail(ensureError(ended.error));
+    yield* retireRun(session, child.runId);
   }
 });
 

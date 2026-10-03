@@ -76,9 +76,13 @@ export interface ResumeRunOptions extends Pick<
   readonly isCancellationRequested?: () => boolean;
   /**
    * Rearrange the host only after state retrieval and ownership checks have
-   * accepted this run. Failures propagate; cancellation is re-read afterwards.
+   * accepted this run. It hears the run actually resumed, which is the
+   * parent when the run asked for is an owned child. Failures propagate;
+   * cancellation is re-read afterwards.
    */
-  readonly onResumeResolved?: () => Effect.Effect<void, Error, ProcessServices>;
+  readonly onResumeResolved?: (
+    resumed: RunId,
+  ) => Effect.Effect<void, Error, ProcessServices>;
 }
 
 const CHANNEL = 'ResumeRun';
@@ -177,7 +181,7 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
       return { failed: 'owned_elsewhere' };
     }
     if (options.onResumeResolved) {
-      yield* options.onResumeResolved();
+      yield* options.onResumeResolved(runId);
       if (cancelled()) return REFUSED;
     }
     if (config.agentCategory === AgentCategory.ToolUse) {
