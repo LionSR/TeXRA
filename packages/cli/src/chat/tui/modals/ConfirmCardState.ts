@@ -157,7 +157,13 @@ export function confirmCardKeyHintsForWidth(
   const candidates: readonly KeyHint[][] = [
     fullHints,
     compactHints,
-    compactHints.filter((hint) => isCoreApprovalHint(hint) || hint.key === 'a'),
+    // The one extra key a narrow card keeps: a card's own first action (its
+    // narrowest grant, as the plan card's commands-only goal), else `a`.
+    compactHints.filter(
+      (hint) =>
+        isCoreApprovalHint(hint) ||
+        hint.key === (options.extraActions?.[0]?.key ?? 'a'),
+    ),
     compactHints.filter(isCoreApprovalHint),
   ];
   return firstFittingCandidate({
