@@ -27,7 +27,7 @@ There are three packages:
 | Package             | Path               | Owns                                                                                                                                                                                                              | Files today |
 | ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | `@texra-ai/harness` | `packages/harness` | The run's history, the loop, sessions and storage, the Registry and Step, the ports, the binding of a run's model choice to settings, trust, MCP and data plugins, the built-in plugins, the transcript row model | about 520   |
-| `@texra-ai/llm`     | `packages/llm`     | Model access, as pi's `pi-ai`: the wire protocols, the model catalog and routing, providers, subscription sign-in. Settings and credentials arrive as inputs                                                      | about 75    |
+| `@texra-ai/llm`     | `packages/llm`     | Model access: the turn contract, the model catalog and routing, providers, the wire protocols behind one binder, subscription sign-in. Settings and credentials arrive as inputs                                  | about 75    |
 | `@texra-ai/texra`   | `packages/texra`   | The app plugins, the documents plugin (round mode), LaTeX, the UI kit, the app's settings rows, the host-side controllers, telemetry                                                                              | about 300   |
 
 The three hosts (`packages/cli`, `packages/desktop`, `packages/extension`)
@@ -46,11 +46,12 @@ two app row kinds, and `write_file`'s LaTeX filter.
 
 **Owner rulings, 2026-10-02.** (1) "Ledger" is renamed "history"
 everywhere: `RunLedger` becomes `RunHistory`, after the core-concepts
-History primitive (§6, M5). (2) Model access moves into `@texra-ai/llm`,
-the way pi's `pi-ai` holds model discovery, providers and OAuth. `llm`
-reads no TeXRA setting and imports nothing in the repo; configuration and
-credentials are inputs (§1, M4). (3) The doc calls the owner "the owner"
-or "they".
+History primitive (§6, M5). (2) Model access (the catalog, providers,
+routing and sign-in) moves into `@texra-ai/llm`. `llm` reads no TeXRA
+setting and imports nothing in the repo; configuration and credentials are
+inputs (§1, M4). Its entry points are designed from TeXRA's own consumers,
+not copied from a peer's. (3) The doc calls the owner "the owner" or
+"they".
 
 ## 1. The three packages
 
@@ -116,13 +117,13 @@ The rest is data: `RouteFacts` (`modelRoute.ts:65`) gains the fields `llm`
 reads from settings today, and `openBrowser` is already an option
 (`loopbackLogin.ts:66`).
 
-| Read today (file:line)                                                                                                                                                               | Becomes                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modelRoute.ts:309-389` `readRouteFacts`: the OpenRouter, Kimi Code and GLM toggles and the GLM endpoint (`:347-350`), subscription preferences (`:323`), the Kimi Code key (`:353`) | Stays in the harness beside its caller, `runtime/modelRoutes.ts`, and returns `RouteFacts`. `decideModelRoute` (`:151`) is already pure                                                                     |
-| `modelRoute.ts:405`: `routeConfig` reads the ChatGPT context-window setting                                                                                                          | `RouteFacts.chatgptContextWindow`                                                                                                                                                                           |
-| `routeEndpoint.ts:48`: the custom provider endpoint; the region toggles, which `modelProviderPlugins.ts:28` names as `GlobalStateKey`s                                               | `RouteFacts.endpoints` (provider to URL), resolved by the harness. The toggle's key and control copy stay a harness setting row                                                                             |
-| `apiProviders.ts:111-130`: key lookups over `PlatformSecrets` (`:8-14`); `sessionAccess.ts:11, :37-40`: `SecretsFailed` and the session store                                        | `CredentialStore`                                                                                                                                                                                           |
-| `SubscriptionOAuthCoordinator.ts:18-20`, `sessionAccess.ts:10`: `safeParseJson`, `withLogChannel`, `SharedAttempt`                                                                   | `Effect.try` over `JSON.parse`; `Effect.annotateLogs` with the same `channel` key; `SharedAttempt` (63 lines) moves into `llm`, and its other caller (`SubscriptionUsageService`) imports it from `./oauth` |
+| Read today (file:line)                                                                                                                                                               | Becomes                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modelRoute.ts:309-389` `readRouteFacts`: the OpenRouter, Kimi Code and GLM toggles and the GLM endpoint (`:347-350`), subscription preferences (`:323`), the Kimi Code key (`:353`) | Stays in the harness beside its caller, `runtime/modelRoutes.ts`, and returns `RouteFacts`. `decideModelRoute` (`:151`) is already pure                                                                    |
+| `modelRoute.ts:405`: `routeConfig` reads the ChatGPT context-window setting                                                                                                          | `RouteFacts.chatgptContextWindow`                                                                                                                                                                          |
+| `routeEndpoint.ts:48`: the custom provider endpoint; the region toggles, which `modelProviderPlugins.ts:28` names as `GlobalStateKey`s                                               | `RouteFacts.endpoints` (provider to URL), resolved by the harness. The toggle's key and control copy stay a harness setting row                                                                            |
+| `apiProviders.ts:111-130`: key lookups over `PlatformSecrets` (`:8-14`); `sessionAccess.ts:11, :37-40`: `SecretsFailed` and the session store                                        | `CredentialStore`                                                                                                                                                                                          |
+| `SubscriptionOAuthCoordinator.ts:18-20`, `sessionAccess.ts:10`: `safeParseJson`, `withLogChannel`, `SharedAttempt`                                                                   | `Effect.try` over `JSON.parse`; `Effect.annotateLogs` with the same `channel` key; `SharedAttempt` (63 lines) moves into `llm`, and its other caller (`SubscriptionUsageService`) imports it from `./node` |
 
 **What stays in the harness** is the binding of a run's model choice to
 the session's settings: `readRouteFacts`, `runModelDecision`, and the
@@ -132,19 +133,86 @@ host route), `reasoningLevel` (`:30`), `subscriptionAccess` (`:52`, `:77`)
 and `codingPlanSubscriptions` (`:40`). `setupCredentialAccess` and
 `setupModelDefaults` go to the app with `setup`.
 
-| `@texra-ai/llm` subpath | Contents                                                                                                                        | Runs in      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `.`                     | `Model`, the turn types, `CredentialStore`, the errors, the prefix fingerprint                                                  | any          |
-| `./models`              | The catalog over `llm-zoo`, `RouteFacts`, `decideModelRoute`, `routeConfig`, endpoints, the reasoning choice                    | any          |
-| `./providers/*`         | One module per provider: endpoints, regional URLs, key names, compatibility key. Plain data, which the settings webview imports | browser-safe |
-| `./api/*`               | The four wire protocols, today's `./openai-responses`, `./anthropic-messages`, `./google-interactions`, `./openrouter-chat`     | Node         |
-| `./oauth`               | The ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                     | Node         |
+### The `llm` entry points
 
-This mirrors `pi-ai` at `a13d35a74`, without its `./compat` and Bedrock
-entries. pi also shows what not to copy: it has two agent cores,
-`pi-agent-core` and `pi-durable`, the dual system TeXRA avoids. Its
-sandbox, `pi-codemode`, is a package of its own with one dependency; ours
-stays in the harness until a second consumer exists.
+The entry points follow the harness's own convention (`.`, `./schemas`,
+`./node`): a package is split by where its code runs, not by topic. Three
+facts about today's consumers decide the shape.
+
+- **`./turn` is imported everywhere, including the browser.** 34 files (22
+  production, 12 tests) import it. The webview frontends and the desktop
+  renderer reach it through the `LanguageModel` port type
+  (`platform/languageModel.ts` → `processRuntime.ts` →
+  `webviewSessionLayer.ts` → `progressView/frontend/sessionTransport.ts`),
+  and the settings webview already imports `llm-zoo` and the provider
+  catalog (`settingsState.ts`, `ProviderKeyList.ts`, `ModelSelectionList.ts`).
+  Its graph today is `zod`, `effect` and three local modules, so it is
+  browser-safe.
+- **The wire protocols have one production caller.** `modelBinding.ts:16-22`
+  is the only production file that imports `./openai-responses`,
+  `./anthropic-messages`, `./google-interactions` or `./openrouter-chat`;
+  the other four importers are their suites in `src/test-kernel/llm/`. The
+  four subpaths exist only so that one import does not load every vendor
+  SDK. A choice of protocol per route, made in one place, is better served
+  by one function.
+- **The prefix fingerprint is internal.** `./prefix-fingerprint` has no
+  production importer; its two importers are the OpenAI Responses and
+  Google Interactions suites. It uses `node:crypto`'s `hash`, as
+  `uploadCache.ts` does, so it cannot sit in a browser-safe entry anyway.
+  The schema field it fills (`message.ts:416`) is a plain string and stays
+  in `.`.
+
+| `@texra-ai/llm` entry | Contents                                                                                                                                                                                                                           | Runs in      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `.`                   | `Model`, the turn types and schemas (today's `./turn`), the model catalog over `llm-zoo` and the provider data, `RouteFacts`, `decideModelRoute`, `routeConfig`, the reasoning choice, the `CredentialStore` port type, the errors | browser-safe |
+| `./node`              | `bindModel(route, facts, credentials) → Model`, the ChatGPT and Grok sign-in flows, their coordinators and session schemas, `SharedAttempt`                                                                                        | Node         |
+
+**The protocols become internal modules.** `packages/llm/src/api/` holds
+the four protocols, the fingerprint and the upload cache, and nothing
+exports them. `bindModel` moves the protocol choice out of
+`modelBinding.ts` (`:437`, `:532`, `:568`, `:600`, `:945`) and loads the
+chosen module with a literal `import('./api/<protocol>.js')`, so a run
+loads only its provider's SDK. The harness's binding keeps what it owns
+today: the route's price, context window and retry-gate keys, the Copilot
+host route, and the long-running fetch it passes as the transport. Nothing
+in `bindModel`'s signature names a protocol module's type
+(`modelBinding.ts:210`'s `typeof openaiResponsesWebSocketModel` moves
+inside `llm`), so the declaration graph of `./node` stays free of vendor
+types too.
+
+**Every host bundles the dynamic import.** esbuild rewrites `import()`
+only when the specifier is a string literal (the note in
+`externalBinaryUtils.ts:16-19`), which each protocol's import is.
+
+- _Extension_ (`esbuild.config.mjs`: CJS, no splitting): the module is
+  inlined behind a lazy initializer, so the SDK is bundled but evaluated
+  on first use. `codexImport.ts:79` and `claudeAgentImport.ts:60` already
+  ship this way.
+- _Desktop main_ (`esbuild.main.mjs:53-54`: ESM, `splitting: true`): each
+  protocol becomes its own chunk.
+- _CLI_ (`build-bundle.mjs:43-44`: ESM, no splitting): inlined, as in the
+  extension.
+- _SDK_ (`packages/agent/scripts/bundle.mjs`: ESM, `splitting: true`,
+  `packages: 'external'`): each protocol becomes a chunk, and the vendor
+  SDKs other than the patched `openai` stay bare imports inside that
+  chunk. The `bundle-workspace-llm` plugin resolves `@texra-ai/llm` and
+  `@texra-ai/llm/node` through `import.meta.resolve`, which reads the new
+  `exports`.
+
+**What keeps `.` browser-safe.** Two checks, both existing machinery. An
+ESLint `no-restricted-imports` block on `packages/llm/src/**` outside
+`api/`, `oauth/` and `node.ts` forbids `node:*` and the four vendor SDKs,
+with no baseline. The SDK's `validate-artifacts.mjs` already fails any
+published entry whose declaration graph imports `@anthropic-ai/sdk`,
+`@google/genai`, `@openrouter/sdk` or `openai`; it covers `.` and `./node`
+unchanged. The renderer has no `@types/node`, so a Node type that reaches
+`.` shows up as a `process` or `NodeJS` error in its typecheck; the fix is
+at the import, never a Node type in the renderer.
+
+pi's `pi-ai` exports topic subpaths (`./models`, `./providers/*`,
+`./api/*`, `./oauth`). TeXRA splits by runtime instead, because its webviews
+need the catalog and the turn types and must not reach a Node module, and
+because its protocols have one caller.
 
 ## 2. The harness public API
 
@@ -455,17 +523,17 @@ so they rebase cleanly against the running lanes. No step leaves a shim, a
 re-export or a forwarding module; a moved symbol's importers are rewritten
 in the same PR.
 
-| Step | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Size                              | Depends on             | Freeze |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ------ |
-| M1   | Round mode becomes the documents plugin's `rounds` contribution, keyed by category and read once at run open (`toolUse.ts:143-144` loses the category branch; `rounds.ts:127-142` loses `makeDocumentRounds`). This is H3's remaining violation, 4                                                                                                                                                                                                                            | M, ~15 files                      | none                   | no     |
-| M2   | `Plugin`, `definePlugin`, `Sessions.layer({ platform, plugins })`, `Plugins.contribute`, `Session.resume`, and the spawner moved onto the run layer (H4, absorbed). The manifest and its five tables become plugin values. The composition root loses its app options and record layers, and `ProcessServices`/`PluginServices` lose their app tags. The SDK stops binding TeXRA's table. `harnessBuiltins.minimal` and `.all`, and the roster case (§4)                      | L, ~60 files, net deletion        | M1                     | no     |
-| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. The host-side session modules are marked for the app                                                   | M, ~40 files                      | M2                     | no     |
-| M4   | Model access into `@texra-ai/llm` (ruling 2): `git mv` of `src/auth` (29), 8 `src/model` files and the 5 provider-catalog files into `packages/llm/src/{models,providers,api,oauth}`; `CredentialStore` defined in `llm` and served from `Secrets`; `RouteFacts` gains `endpoints` and `chatgptContextWindow`; the subpaths of §1; importers rewritten to `@texra-ai/llm/*` and the `@auth/*` alias deleted; `llm` gains `llm-zoo`; the llm-imports-nothing zone, no baseline | M, ~45 files moved, ~70 importers | none                   | no     |
-| M5   | "Ledger" becomes "history" (ruling 1): the four files of §6 and every occurrence, about 1,100 in about 170 files, CLAUDE.md, AGENTS.md and `.agents/docs` included; a codemod over a fixed word list that skips the rulings ledger and Lean's `tactic-ledger`                                                                                                                                                                                                                 | S in review, M in files           | H1, H2 merged          | no     |
-| M6   | Rows: the `documents/output` and `external-inquiry/thread` arms replace `output.produced` and `inquiryThreadUpdated`; the `plugin` aggregate kind and `plugin.fact.parent`; the plugin id changes. The golden store is regenerated once, with H1's if they land together                                                                                                                                                                                                      | M, ~30 files                      | H2 (#13638) merged; M2 | before |
-| M7   | The settings catalog by owner: harness rows, plugin rows on `Plugin`, the enums split                                                                                                                                                                                                                                                                                                                                                                                         | M, ~25 files                      | M2; after G6           | no     |
-| M8   | The move, rename only: `git mv` of about 520 files into `packages/harness/src` and about 300 into `packages/texra/src`; `packages/agent` becomes `packages/harness` (`@texra-ai/harness`); `tsconfig.json` paths retargeted; dependencies split; ESLint zones and ratchet paths re-keyed with identical entries; the harness-imports-no-app zone at zero; the widened deep-import ratchet                                                                                     | L in files, S in review           | M1–M7, H1; G2 merged   | see Q5 |
-| M9   | Shrink the deep-import baseline, one host per PR, through `Session.request` arms and public exports                                                                                                                                                                                                                                                                                                                                                                           | M each                            | M8                     | no     |
+| Step | Work                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Size                              | Depends on             | Freeze |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------- | ------ |
+| M1   | Round mode becomes the documents plugin's `rounds` contribution, keyed by category and read once at run open (`toolUse.ts:143-144` loses the category branch; `rounds.ts:127-142` loses `makeDocumentRounds`). This is H3's remaining violation, 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | M, ~15 files                      | none                   | no     |
+| M2   | `Plugin`, `definePlugin`, `Sessions.layer({ platform, plugins })`, `Plugins.contribute`, `Session.resume`, and the spawner moved onto the run layer (H4, absorbed). The manifest and its five tables become plugin values. The composition root loses its app options and record layers, and `ProcessServices`/`PluginServices` lose their app tags. The SDK stops binding TeXRA's table. `harnessBuiltins.minimal` and `.all`, and the roster case (§4)                                                                                                                                                                                                                                                                                                                                                                                                                                           | L, ~60 files, net deletion        | M1                     | no     |
+| M3   | The remaining harness→app imports. Misplaced types and constants move to their owners: `ToolCategory` and the other types out of `settingsViewMessages` (6 importers), `workflowOutput`, icon names, account copy, `teams`, `latexToolchain`. `fileOps({ writeFilter })`; `accept_run_files` moves to `documents`; `SessionRequests` stops importing `inquiryActions`. The host-side session modules are marked for the app                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | M, ~40 files                      | M2                     | no     |
+| M4   | Model access into `@texra-ai/llm` (ruling 2): `git mv` of `src/auth` (29), 8 `src/model` files and the 5 provider-catalog files into `packages/llm/src/{models,providers,api,oauth}`; `CredentialStore` defined in `llm` and served from `Secrets`; `RouteFacts` gains `endpoints` and `chatgptContextWindow`; the entries of §1: the 34 `./turn` importers rewritten to `.`, the protocol choice moved from `modelBinding.ts` into `bindModel` in `./node` with the protocols, the fingerprint and the upload cache under `src/api/` and unexported, today's six subpaths deleted, and the four suites in `src/test-kernel/llm/` reaching `packages/llm/src/api/` by relative path, as `test-live/` does; the moved files' importers rewritten to `.` or `./node` and the `@auth/*` alias deleted; `llm` gains `llm-zoo`; the llm-imports-nothing zone and the browser-safe `.` rule, no baseline | M, ~45 files moved, ~70 importers | none                   | no     |
+| M5   | "Ledger" becomes "history" (ruling 1): the four files of §6 and every occurrence, about 1,100 in about 170 files, CLAUDE.md, AGENTS.md and `.agents/docs` included; a codemod over a fixed word list that skips the rulings ledger and Lean's `tactic-ledger`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | S in review, M in files           | H1, H2 merged          | no     |
+| M6   | Rows: the `documents/output` and `external-inquiry/thread` arms replace `output.produced` and `inquiryThreadUpdated`; the `plugin` aggregate kind and `plugin.fact.parent`; the plugin id changes. The golden store is regenerated once, with H1's if they land together                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | M, ~30 files                      | H2 (#13638) merged; M2 | before |
+| M7   | The settings catalog by owner: harness rows, plugin rows on `Plugin`, the enums split                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | M, ~25 files                      | M2; after G6           | no     |
+| M8   | The move, rename only: `git mv` of about 520 files into `packages/harness/src` and about 300 into `packages/texra/src`; `packages/agent` becomes `packages/harness` (`@texra-ai/harness`); `tsconfig.json` paths retargeted; dependencies split; ESLint zones and ratchet paths re-keyed with identical entries; the harness-imports-no-app zone at zero; the widened deep-import ratchet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | L in files, S in review           | M1–M7, H1; G2 merged   | see Q5 |
+| M9   | Shrink the deep-import baseline, one host per PR, through `Session.request` arms and public exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | M each                            | M8                     | no     |
 
 **Why M5 is not folded into M8.** M8 is reviewed by its shape: every entry
 in `git diff -M` is a pure rename or a codemod's specifier rewrite. About
@@ -555,8 +623,12 @@ that TeXRA is one plugin list among others.
   and resolved every alias import: 37 harness files import app modules, and
   app and host files reach 254 harness-internal specifiers.
 - Ruling 2: read every import and every settings or secrets read in
-  `src/model` and `src/auth`, and pi-ai's exports, `models.ts` and `auth/`
-  at `a13d35a74`. Ruling 1: counted with `git grep -i ledger` and split the
+  `src/model` and `src/auth`. The `llm` entries: listed every importer of
+  each of today's six subpaths, walked the import graph (type imports
+  included) from the desktop renderer and both webview frontends to
+  `@texra-ai/llm`, and read the four bundle configs and
+  `validate-artifacts.mjs`. The dynamic-import findings are read from the
+  configs and the two existing SDK imports, not from a build. Ruling 1: counted with `git grep -i ledger` and split the
   hits by meaning. Roster case: searched `src/test-kernel` for a suite that
   pins a plugin list or offered tools.
 - pi-durable 1.0.0 ships its tools as a built-in extension, `/node`
