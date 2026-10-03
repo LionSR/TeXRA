@@ -241,6 +241,7 @@ describe('completedRunArchive facade', () => {
               yield* session.commit([
                 {
                   type: 'run.description',
+                  by: 'model',
                   aggregateId: aggregateId('run', runId),
                   description: label,
                 },

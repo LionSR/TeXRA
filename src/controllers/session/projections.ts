@@ -12,7 +12,7 @@
  *   listing delivers; an open request and a queued follow-up are keys of
  *   their own (`pendingKeyOf`), deleted when their pair closes them.
  * - `usage`: a `usage` display row per priced `model.message` response and
- *   `model.compaction` summary (a run with a ledger stores its spend there,
+ *   `context.edit` summary (a run with a ledger stores its spend there,
  *   never as a `usage` row), and each run's spend summed by `sumUsageStats`.
  * - `model`: a `run.model` display row at each `run.snapshot` whose model
  *   differs from the snapshot before it, and each run's latest switch.
@@ -96,7 +96,7 @@ const ALL_TYPES = SessionEventDraftSchema.options.map(
 /** A priced row's spend as the `usage` display row carries it. */
 function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
   let priced = null;
-  if (event.type === 'model.compaction') priced = event.payload.usage;
+  if (event.type === 'context.edit') priced = event.payload.usage;
   if (event.type === 'model.message' && event.payload.kind === 'response')
     priced = event.payload.usage;
   if (priced == null) return null;
@@ -169,7 +169,7 @@ export const PROJECTORS = {
   },
   usage: {
     version: 1,
-    inputs: ['model.message', 'model.compaction', 'usage'],
+    inputs: ['model.message', 'context.edit', 'usage'],
     prior: 'run_usage',
     projects: ['usage'],
     project: (event, prior) => {

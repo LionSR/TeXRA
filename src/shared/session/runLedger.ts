@@ -143,7 +143,7 @@ export class RunLedger extends Context.Service<
      *   it. A `request.opened` PRECEDES the `tool.binding` or `model.retry`
      *   that binds it, so the fold resolves the binding against a request
      *   it already holds;
-     * - a `model.compaction` immediately precedes the `model.message`
+     * - a `context.edit` immediately precedes the `model.message`
      *   `response` row that used it, when both are present;
      * - a `model.message` `response` row carries the dispatch facts and the
      *   priced `usage` of its turn, both stamped here: the package produces

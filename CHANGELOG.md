@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The Multi-Agent Workflow switch is named `multi-agent`.** Use
+  `texra tools enable multi-agent` (or `disable`, `status`). A stored switch
+  under the old `workflow-script` name is dropped once, with a warning in the
+  log, and the plugin is back to its default (on).
 - **Models are named by their provider's own model ID.** Settings, agent
   files, `--model` and delegation now take names like
   `anthropic/claude-opus-5-5` or `openai/gpt-6.1-sol`, optionally with an
@@ -238,6 +242,11 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **An interrupted call asks one plain question.** When a call may have run
+  before a run was interrupted and left no result, the request now names the
+  tool (and the agent run it left, for an `agent` call) and offers Run again
+  or Skip, in the progress view and the terminal alike, instead of a generic
+  question with a run id in its text.
 - **`script` tool (code mode, first stage).** An agent whose configuration
   lists `script` can run one JavaScript program that calls its other tools as
   `await tools.read_file({ path })`, with `Promise.all`, try/catch,

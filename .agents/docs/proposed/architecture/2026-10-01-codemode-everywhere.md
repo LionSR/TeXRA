@@ -764,10 +764,12 @@ depends on none of them.
 - Effect class replacing `replay` (`DispatchFacts.replay`,
   `runLedgerEvent.ts:111`), and any grant derived from it. The script
   request's grant stays `agent`-only.
-- One view-edit kind over `model.compaction` (`runLedgerEvent.ts:275-287`),
-  with #13546 (snapshots and rewind).
-- Fork as a `run.start.origin` arm, to be ruled together with PRD #13354's
-  `origin { sessionRoot, runId }` and wake time.
+- One view-edit kind: ruled 2026-10-02 in
+  [the durable harness note](./2026-10-02-durable-harness.md); `context.edit`
+  replaced `model.compaction`. #13546 (snapshots and rewind) builds on it.
+- Fork as a `run.start.provenance` arm (the envelope already has an
+  `origin`): its `fork` arm landed with `context.edit`; PRD #13354's
+  `{ sessionRoot, runId }` and wake time stay deferred.
 - Durable approvals, #13604: no new shape; `tool.binding` widens in meaning.
 
 ## Rollout and evaluation

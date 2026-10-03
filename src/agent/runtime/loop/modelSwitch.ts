@@ -20,7 +20,7 @@ import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/http';
 import type { RunCell } from './runProgram';
 
-/** Record a host-admitted model switch: the compaction that drops the
+/** Record a host-admitted model switch: the edit that drops the
  *  continuation and the snapshot naming the new model, committed inside the
  *  swap, so the new binding goes into force only once its rows have. The
  *  snapshot's `modelId` is the run's one model fact; the run's configuration
@@ -63,13 +63,17 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
         });
         switched = yield* cell.append([
           {
-            type: 'model.compaction',
+            type: 'context.edit',
             aggregateId: rowAggregate(run.runId),
             payload: {
-              keepPrefix: state.messages.length,
+              cause: 'compaction',
+              trigger: 'model-switch',
+              base: state.lastEdit,
+              range: {
+                from: state.messages.length,
+                to: state.messages.length,
+              },
               messages: [],
-              cause: 'model-switch',
-              continuation: null,
               usage: null,
             },
           },

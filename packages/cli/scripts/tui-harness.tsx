@@ -154,8 +154,8 @@ const HARNESS_MODEL = 'harness-model';
 const RUNNING_SCRIPT_FIRST_AGENT_RUN_ID = RunIdSchema.parse('aaaa000af10e');
 const SHOW_SCRIPT_RUNNING = process.env.HARNESS_SCRIPT_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
-const RESET_WORKFLOW_SCRIPT_DISABLED =
-  process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
+const RESET_MULTI_AGENT_DISABLED =
+  process.env.HARNESS_MULTI_AGENT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
@@ -347,11 +347,11 @@ const HARNESS_PLATFORM_SERVICES = await installCliProcessRuntime(
     version: '0.0.0-harness',
   }),
 );
-if (RESET_WORKFLOW_SCRIPT_DISABLED) {
+if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
     setCliToolEnabled(
       HARNESS_PLATFORM_SERVICES.globalState,
-      'workflow-script',
+      'multi-agent',
       false,
     ),
   );
@@ -520,7 +520,10 @@ function seedRun(
     userFollowUpSupport:
       options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     parent:
-      options.parentRunId === undefined ? null : { id: options.parentRunId },
+      options.parentRunId === undefined
+        ? null
+        : { id: options.parentRunId, callId: null },
+    provenance: null,
   });
   if (identity.kind === 'agent') {
     publish({
@@ -598,6 +601,7 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
 function seedDescription(runId: RunId, description: string): void {
   publish({
     type: 'run.description',
+    by: 'model',
     aggregateId: qualifyAggregateId('run', runId),
     description,
   });
@@ -1764,6 +1768,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         // The creation commit the database stamps, not a guess: `Log.parent`
         // refuses a parent that never started.
         parent: parentId === null ? null : log.parent(parentId),
+        provenance: null,
       },
       owner,
     );

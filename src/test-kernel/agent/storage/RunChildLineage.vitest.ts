@@ -36,7 +36,8 @@ describe('persisted parent edge', () => {
             identity: { kind: 'agent', agent: 'assistant' },
             category: 'toolUse',
             userFollowUpSupport: 'unsupported',
-            parent: { id: 'aaa0ff' as RunId },
+            parent: { id: 'aaa0ff' as RunId, callId: null },
+            provenance: null,
           },
         ]);
         expect(rows[0]).toMatchObject({

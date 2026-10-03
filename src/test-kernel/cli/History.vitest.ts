@@ -222,6 +222,7 @@ async function publishRunFacts(
     session.publish([
       {
         type: 'run.description',
+        by: 'model',
         aggregateId: aggregateId('run', runId),
         description: facts.description,
       },

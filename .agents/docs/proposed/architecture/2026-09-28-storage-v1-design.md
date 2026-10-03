@@ -579,11 +579,11 @@ The same lane gives every persisted `z.unknown()` field a `JsonValueSchema`:
 There are three projections. Each is a pure TypeScript projector over the
 decoded event, with its own version in `projection_state`.
 
-| Projection | Tables                                     | Input kinds                                                                                              | Replaces                                                                        |
-| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `listing`  | `listing_entry`                            | every kind with a `listingKeyOf` or `pendingKeyOf`                                                       | `READ_LISTING`'s latest CTE, `LISTING_GROUP`, the pending-set SQL, `runRecords` |
-| `usage`    | `projected_row` (`usage`), `run_usage`     | priced `model.message` responses, `model.compaction` summaries, stored `usage` rows (agent-CLI children) | `USAGE_ROWS`, `RUN_USAGE`, `totalRunUsage`                                      |
-| `model`    | `projected_row` (`run.model`), `run_model` | `run.snapshot`                                                                                           | `MODEL_ROWS`, `LATEST_MODEL_ROWS`, `SNAPSHOT_MODEL`, `event_snapshot_model`     |
+| Projection | Tables                                     | Input kinds                                                                                          | Replaces                                                                        |
+| ---------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `listing`  | `listing_entry`                            | every kind with a `listingKeyOf` or `pendingKeyOf`                                                   | `READ_LISTING`'s latest CTE, `LISTING_GROUP`, the pending-set SQL, `runRecords` |
+| `usage`    | `projected_row` (`usage`), `run_usage`     | priced `model.message` responses, `context.edit` summaries, stored `usage` rows (agent-CLI children) | `USAGE_ROWS`, `RUN_USAGE`, `totalRunUsage`                                      |
+| `model`    | `projected_row` (`run.model`), `run_model` | `run.snapshot`                                                                                       | `MODEL_ROWS`, `LATEST_MODEL_ROWS`, `SNAPSHOT_MODEL`, `event_snapshot_model`     |
 
 - **Who writes.** `Database.appendRows` runs the projectors inside the
   append transaction, over the committed events it already holds as typed

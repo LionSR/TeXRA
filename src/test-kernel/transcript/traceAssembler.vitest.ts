@@ -148,6 +148,7 @@ describe('assembleTrace', () => {
         type: 'run.start',
         origin: null,
         parent: null,
+        provenance: null,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       });
       expect(trace.events).toContainEqual(

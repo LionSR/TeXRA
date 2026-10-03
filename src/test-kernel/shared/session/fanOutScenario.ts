@@ -135,7 +135,7 @@ export class Log {
     if (uid === undefined) {
       throw new Error(`fixture parent ${id} has no run.start`);
     }
-    return { id, uid };
+    return { id, uid, callId: null };
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
@@ -202,6 +202,7 @@ export function buildScenario({ proposal = false } = {}) {
     category: AgentCategory.ToolUse,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     parent: null,
+    provenance: null,
     userFollowUpSupport: 'unsupported',
     approvalPolicy: ROOT_POLICY,
   });
@@ -241,6 +242,7 @@ export function buildScenario({ proposal = false } = {}) {
     identity: CHILD_IDENTITY,
     category: AgentCategory.ToolUse,
     parent: log.parent(ROOT),
+    provenance: null,
     parentCard: 'call-1',
     userFollowUpSupport: 'nativeInteractive',
   });
@@ -299,6 +301,7 @@ export function buildScenario({ proposal = false } = {}) {
     category: AgentCategory.ToolUse,
     userFollowUpSupport: 'unsupported',
     parent: log.parent(CHILD),
+    provenance: null,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
@@ -341,6 +344,7 @@ export function buildScenario({ proposal = false } = {}) {
     identity: { kind: 'process', tool: 'bash' },
     category: AgentCategory.ToolUse,
     parent: null,
+    provenance: null,
     userFollowUpSupport: 'unsupported',
   });
   log.emit(PROCESS, T.process, {

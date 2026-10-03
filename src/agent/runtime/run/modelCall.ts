@@ -81,7 +81,7 @@ export interface UsageAttribution {
 /**
  * Report one priced call to the process usage log, which bills per call. It
  * writes no session row: a turn's usage is its `response` row and a
- * compaction's its `model.compaction` row.
+ * compaction's its `context.edit` row.
  */
 export const reportUsage = (
   usageLog: UsageLog['Service'],

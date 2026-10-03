@@ -52,7 +52,7 @@ const isResponse = (row: RunLedgerDraft): boolean =>
 
 /** Rows that append to, or rewrite, the canonical history. */
 const isMessageBearing = (row: RunLedgerDraft): boolean =>
-  row.type === 'model.compaction' ||
+  row.type === 'context.edit' ||
   (row.type === 'model.message' &&
     (row.payload.kind === 'append' || row.payload.kind === 'response'));
 
@@ -95,17 +95,17 @@ function contractViolation(
         return `${trailing.type} follows the run.snapshot of its batch`;
       }
     }
-    if (row.type === 'model.compaction') {
+    if (row.type === 'context.edit') {
       if (hasResponse) {
         const next = rows[index + 1];
         if (next === undefined || !isResponse(next)) {
-          return 'a model.compaction is not immediately followed by the response that used it';
+          return 'a context.edit is not immediately followed by the response that used it';
         }
       }
-      // `keepPrefix` indexes the history the batch starts from, so no earlier
+      // `range` indexes the history the batch starts from, so no earlier
       // row of the batch may have shifted it.
       if (rows.slice(0, index).some(isMessageBearing)) {
-        return 'a model.compaction is not the first message-bearing row of its batch';
+        return 'a context.edit is not the first message-bearing row of its batch';
       }
     }
     if (row.type === 'tool.result') {
@@ -157,10 +157,6 @@ function contractViolation(
  * `endpoint` key in tool output or a message body stays data, not a refusal.
  */
 function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
-  if (row.type === 'model.compaction') {
-    const { continuation } = row.payload;
-    return continuation === null ? [] : [continuation.origin];
-  }
   if (row.type !== 'model.message') return [];
   const p = row.payload;
   switch (p.kind) {
@@ -440,7 +436,7 @@ export const runLedgerLayer: Layer.Layer<
       // D11: the history this batch assembles is the history `load` runs
       // through `PreparedHistorySchema`, so every batch that appends to or
       // rewrites it is checked here, where the refusal is still actionable —
-      // a compaction whose `keepPrefix` cuts a group, and equally an append
+      // an edit whose `range` cuts a group, and equally an append
       // that adds an orphan tool group or a call without its results. An
       // empty history goes unchecked, exactly as `load` leaves one unchecked.
       if (
@@ -448,13 +444,13 @@ export const runLedgerLayer: Layer.Layer<
         candidate.success.messages.length > 0
       ) {
         // Only what follows the already-checked `state` history is new, or,
-        // after a compaction (the batch's first message-bearing row), what
-        // follows its `keepPrefix`; re-checking it all is quadratic per run.
-        const compaction = rows.find((row) => row.type === 'model.compaction');
+        // after an edit (the batch's first message-bearing row), what
+        // follows its range's start; re-checking it all is quadratic per run.
+        const edit = rows.find((row) => row.type === 'context.edit');
         const held = state?.messages.length ?? 0;
         const kept =
-          compaction?.type === 'model.compaction'
-            ? Math.min(compaction.payload.keepPrefix, held)
+          edit?.type === 'context.edit'
+            ? Math.min(edit.payload.range.from, held)
             : held;
         const refusal = unprepared(run, candidate.success.messages, kept);
         if (refusal !== null) return yield* refusal;

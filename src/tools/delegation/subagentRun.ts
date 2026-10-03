@@ -136,6 +136,9 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           userFollowUpSupport,
           parentRunId,
           ...(parent.logId !== undefined && { parentCard: parent.logId }),
+          ...(parent.toolCallId !== undefined && {
+            parentCallId: parent.toolCallId,
+          }),
         });
 
         const strategyParams = {

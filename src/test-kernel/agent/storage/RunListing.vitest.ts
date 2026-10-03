@@ -60,7 +60,10 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
             category: 'toolUse',
             userFollowUpSupport: 'unsupported',
             parent:
-              meta.parentRunId === undefined ? null : { id: meta.parentRunId },
+              meta.parentRunId === undefined
+                ? null
+                : { id: meta.parentRunId, callId: null },
+            provenance: null,
           },
         ]),
       );
@@ -73,6 +76,7 @@ async function writeMetadata(id: RunId, meta: SeededRunFacts): Promise<void> {
       session.commit([
         {
           type: 'run.description',
+          by: 'model',
           aggregateId: aggregateId('run', id),
           description: meta.description,
         },
