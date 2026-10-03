@@ -3,7 +3,7 @@
  * the loop that writes a `context.edit` with cause `compaction` (triggered
  * by `context-limit`, `context-window` when a turn overflowed the window, or
  * `user` for a `/compact`), replacing the whole history, from the
- * ledger-retained history and nothing else. The trigger is
+ * history retained by the run history and nothing else. The trigger is
  * the compaction threshold setting measured against the bound model's
  * context window (the run's `contextTokens`), a `/compact` request, or an
  * overflow; the replacement is a summary the bound model produces through the
@@ -27,7 +27,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
-import type { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import type { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -97,7 +97,7 @@ function logCompactionEvent({
 
 interface CompactionInput {
   readonly runId: RunId;
-  readonly ledger: RunLedger['Service'];
+  readonly runHistory: RunHistory['Service'];
   readonly logger: AgentTrace;
   readonly bound: BoundModel;
   /** The run's invoker, which makes the summary call. */
@@ -139,9 +139,9 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   input: CompactionInput,
 ): Effect.fn.Return<
   RunState,
-  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed
+  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
 > {
-  const { runId, ledger, logger, bound, force } = input;
+  const { runId, runHistory, logger, bound, force } = input;
   const percent = yield* readSettingFrom<number>(
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
@@ -234,7 +234,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   const tokensAfter = Math.max(1, estimateMessageTokens([replacement]));
   // The whole conversation is replaced by the summary, and a provider-side
   // continuation over the old history is dropped with it.
-  const compacted = yield* ledger.appendBatch(runId, state, [
+  const compacted = yield* runHistory.appendBatch(runId, state, [
     {
       type: 'context.edit',
       aggregateId: rowAggregate(runId),

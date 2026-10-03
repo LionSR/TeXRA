@@ -67,8 +67,8 @@ import {
 import type { DatabaseWriteFailed } from '@shared/session/database';
 import {
   findStorageRefusal,
-  type RunLedgerRefused,
-} from '@shared/session/runLedger';
+  type RunHistoryRefused,
+} from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import { generateShortId } from '@utils/core';
@@ -148,7 +148,7 @@ const EMPTY_RESPONSE_ERROR_MESSAGE =
 /**
  * How much of a failed attempt's streamed output the failure carries. The
  * retry surface shows the tail so the user sees the work was not lost; the
- * bound keeps a long generation out of the error and off the ledger row.
+ * bound keeps a long generation out of the error and off the run history row.
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
 
@@ -185,12 +185,12 @@ type InvocationOutcome =
   | { readonly kind: 'cancelled'; readonly state: RunState };
 
 /**
- * The ledger failures `invoke` can hand back. One definition: the dispatch
+ * The run history failures `invoke` can hand back. One definition: the dispatch
  * path in `loop/toolUseDispatch` branches on the same union, so it imports
  * this rather than re-declaring the alias.
  */
 export type InvokeError =
-  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed;
+  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -342,7 +342,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /**
-       * The bridge from the model's events into the trace and the ledger: the
+       * The bridge from the model's events into the trace and the run history: the
        * provider's identity becomes an `identified` row as soon as it is seen
        * (once; a background operation may report it twice), deltas stream
        * into the run's thinking and output handles, and the completed result
@@ -623,7 +623,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       });
 
       /**
-       * A resumed attempt whose background operation the ledger holds: observe
+       * A resumed attempt whose background operation the run history holds: observe
        * it under the deadline recorded with its `accepted` row, never resubmit,
        * even if the background settings changed since. Unbilled, so it runs
        * outside the route gate. The admitted turn is rebuilt from the rows
@@ -780,7 +780,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const manualRetry = Effect.fn('ModelInvoker.manualRetry')(function* (
         cell: RunCell,
         failed: BoundModel,
-        // The failure as it is recorded, live or recovered from the ledger:
+        // The failure as it is recorded, live or recovered from the run history:
         // the prompt, the row and the reported error all read this one value,
         // so a restart re-presents the same facts the first prompt showed.
         recorded: ProviderError,
@@ -880,7 +880,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           logger.debug('Manual retry triggered');
           const selection = decision.credentials ?? 'configured';
           // A personal retry declines the route its offer named, on this
-          // run's ledger only: no concurrent run or stored preference changes.
+          // run's history only: no concurrent run or stored preference changes.
           const { declinedRoutes: declined, requests } = yield* cell.current;
           const opened = requests[requestId]?.payload;
           const offer =
@@ -1054,10 +1054,10 @@ export const modelInvokerLayer = (): Layer.Layer<
           const found = Cause.findError(exit.cause);
           const error = Result.isSuccess(found) ? found.success : undefined;
           if (error?._tag !== 'AttemptFailed') {
-            const ledger =
-              error?._tag === 'RunLedgerRefused' ||
+            const runHistory =
+              error?._tag === 'RunHistoryRefused' ||
               error?._tag === 'DatabaseWriteFailed';
-            return yield* ledger
+            return yield* runHistory
               ? Effect.fail(error)
               : Effect.die(error ?? Cause.squash(exit.cause));
           }

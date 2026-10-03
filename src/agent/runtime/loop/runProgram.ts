@@ -17,23 +17,23 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import {
   foldRunState,
   freshRunState,
-  type RunLedgerDraft,
+  type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
-import { ledgerRows } from '../storedTurn';
+import { runHistoryRows } from '../storedTurn';
 import { Runs } from '../runRegistry';
 import { haltedPositionRow } from './rows';
 import type { FollowUps } from '../FollowUps';
 
 /**
- * The run's one state holder and its only ledger writer. Seeded with the
+ * The run's one state holder and its only run history writer. Seeded with the
  * opened state inside the acquire, so no reader branches on null: "the run
  * has rows and a phase" is the acquire's postcondition. The loop hands the
  * same cell to the invoker and the dispatch unit, so no run service keeps a
@@ -46,7 +46,7 @@ export interface RunCell {
   /** The state the cell opened on: what a resume folded from stored rows. */
   readonly opened: RunState;
   /**
-   * Commit one batch against the current state and adopt what the ledger
+   * Commit one batch against the current state and adopt what the run history
    * folds back. Rows that read the state (a snapshot, a step, a settlement
    * carrying the workspace) are built from the state the batch commits
    * against. Read-append-write is one uninterruptible region under the
@@ -58,9 +58,9 @@ export interface RunCell {
    */
   readonly append: (
     rows:
-      | readonly RunLedgerDraft[]
-      | ((state: RunState) => readonly RunLedgerDraft[]),
-  ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
+      | readonly RunHistoryDraft[]
+      | ((state: RunState) => readonly RunHistoryDraft[]),
+  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
   /**
    * Adopt a state a run service already committed against (the follow-up
    * consumer, the compaction).
@@ -83,9 +83,9 @@ export interface RunCell {
 export const makeRunCell = (
   runId: RunId,
   opened: RunState,
-): Effect.Effect<RunCell, never, RunLedger> =>
+): Effect.Effect<RunCell, never, RunHistory> =>
   Effect.gen(function* () {
-    const ledger = yield* RunLedger;
+    const runHistory = yield* RunHistory;
     const ref = yield* SynchronizedRef.make(opened);
     return {
       runId,
@@ -93,7 +93,7 @@ export const makeRunCell = (
       opened,
       append: (rows) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) =>
-          ledger.appendBatch(
+          runHistory.appendBatch(
             runId,
             state,
             typeof rows === 'function' ? rows(state) : rows,
@@ -102,7 +102,7 @@ export const makeRunCell = (
       adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
       fold: (row, what) =>
         SynchronizedRef.updateAndGetEffect(ref, (state) => {
-          const folded = Result.flatMap(ledgerRows([row]), (rows) =>
+          const folded = Result.flatMap(runHistoryRows([row]), (rows) =>
             foldRunState(state, rows),
           );
           return Result.isFailure(folded) || folded.success === null
@@ -120,7 +120,7 @@ export const makeRunCell = (
     } satisfies RunCell;
   });
 
-/** Why a run the ledger holds no rows for cannot be continued. */
+/** Why a run the run history holds no rows for cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
   'This run stopped before it recorded any state to resume from. Start a new run instead.';
 
@@ -132,23 +132,23 @@ export type RunEntry =
 /**
  * The run's entry, as data. Takes the claim when resuming, loads the
  * aggregate, and raises both refusals once — a resume with nothing to resume,
- * and a fresh launch onto an aggregate that already holds ledger state
+ * and a fresh launch onto an aggregate that already holds run history state
  * (#11313). The caller branches on the tag.
  */
 export const loadRun = (
   runId: RunId,
   resume: boolean,
-): Effect.Effect<RunEntry, Error, RunLedger | AgentRun> =>
+): Effect.Effect<RunEntry, Error, RunHistory | AgentRun> =>
   Effect.gen(function* () {
-    const ledger = yield* RunLedger;
+    const runHistory = yield* RunHistory;
     const loaded = resume
-      ? yield* ledger.acquire(runId)
-      : yield* ledger.load(runId);
+      ? yield* runHistory.acquire(runId)
+      : yield* runHistory.load(runId);
     if (loaded !== null && loaded.phase !== null) {
       if (!resume) {
         return yield* Effect.fail(
           new Error(
-            `Run ${runId} already has ledger state; resume it instead.`,
+            `Run ${runId} already has run history state; resume it instead.`,
           ),
         );
       }
@@ -166,7 +166,7 @@ export const loadRun = (
         family: 'toolUse',
         modelId: bound.modelId,
         modelCompatibilityKey: bound.compatibilityKey,
-        // The launch's own-API-key choice enters the ledger with the opening
+        // The launch's own-API-key choice enters the run history with the opening
         // snapshot, so every later binding and every resume reads it back.
         declinedRoutes: run.declinedRoutes,
       },
@@ -212,7 +212,7 @@ export const settleRun =
     const halt = Effect.gen(function* () {
       const state = yield* cell.current;
       yield* cell.append([haltedPositionRow(cell.runId, state, outcome)]).pipe(
-        Effect.catchTag('RunLedgerRefused', (error) =>
+        Effect.catchTag('RunHistoryRefused', (error) =>
           Effect.sync(() =>
             logger.warn('Failed to record the run halt', {
               data: error,

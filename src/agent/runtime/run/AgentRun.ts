@@ -36,7 +36,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
@@ -137,7 +137,7 @@ export interface AgentRunShape {
   readonly scope: Scope.Scope;
   /**
    * A switch the host admitted (the registry name of the next model),
-   * applied by the loop at its next model boundary so the ledger rows that
+   * applied by the loop at its next model boundary so the run history rows that
    * record it are appended by the one fiber that holds the run's state. A
    * plain slot: the host's request is synchronous.
    */
@@ -167,14 +167,14 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient | LiveTools
+  RunHistory | LanguageModel | HttpClient.HttpClient | LiveTools
 > =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
       const { runId, session } = ctx;
       const { logger, config } = ctx;
-      const ledger = yield* RunLedger;
+      const runHistory = yield* RunHistory;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
@@ -252,7 +252,7 @@ export const agentRunLayer = (
         parentOffered,
         held,
       };
-      const snapshot = yield* ledger.latestSnapshot(runId);
+      const snapshot = yield* runHistory.latestSnapshot(runId);
       // A workflow agent's rounds offer no tools: a fresh run says so rather
       // than narrowing its YAML's declared `tools:` silently.
       if (workflow && snapshot === null && declared.length > 0) {

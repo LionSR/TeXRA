@@ -222,7 +222,7 @@ authorization rule, in `src/tools/executions/send.ts`, is:
   becomes (`FollowUps.ts:204-217`).
 
 A crash therefore re-delivers the row and never delivers it twice. The sender's
-tool call is itself in the ledger, so a replayed turn does not re-run a
+tool call is itself in the run history, so a replayed turn does not re-run a
 committed `tool.result`.
 
 **Waking a waiting sender (the corrected claim).** `executions wait` stops
@@ -347,7 +347,7 @@ a need.
 - **One publisher.** Every row is written by the `SessionEvents` `exclusive`
   admission job, and the relation stamp runs inside that job. There is no
   second append path.
-- **Run ledger single writer.** Consumption stays in `FollowUps.consume`'s one
+- **Run history single writer.** Consumption stays in `FollowUps.consume`'s one
   `appendBatch`. `toolUse.ts` (796 of 796 lines) is not touched.
 - **No new subscribe surface, and one fewer.** `onSent` is deleted. The wait
   reads the session view it already subscribes to. No `bus.emit` is added.
@@ -462,7 +462,7 @@ through `exclusive`. It does not use `setInterval` or add a `PubSub`.
 
 The [plugin architecture](../../implemented/architecture/2026-09-24-plugin-architecture.md)
 decides where each part lives. Its "What is deliberately core" list names the
-run ledger and the run loop, and it gives plugins no durable state, event
+run history and the run loop, and it gives plugins no durable state, event
 channel or hooks. So:
 
 - **Core, not switchable.** The `followup.queued` row with `from`,

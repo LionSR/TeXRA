@@ -25,7 +25,7 @@
  * recorded, the step returns a `tools.offered` row, preceded by the
  * `context.blob` rows of the content it names that the run has not stored
  * yet and followed by that message, which the loop appends before the
- * request (or the park's decision) through the run's one ledger writer. A
+ * request (or the park's decision) through the run's one run history writer. A
  * resumed run's first step is held to what it recorded: it offers the recorded tools that are still in
  * the catalog as the same tool (the digest of its name and input schema, and
  * its plugin's id and revision), and names each one that is gone or changed.
@@ -53,7 +53,7 @@ import {
   type SkillCatalogEntry,
   type ToolDefinition,
 } from '@shared/schemas';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import {
   sha256,
@@ -480,7 +480,7 @@ const openStep = Effect.fn('Step.open')(function* (
               context: sha256(context),
               hooks: step.hooks,
             },
-          } satisfies RunLedgerDraft,
+          } satisfies RunHistoryDraft,
           ...(update === ''
             ? []
             : [appendRow(run.runId, [{ role: 'system', text: update }])]),

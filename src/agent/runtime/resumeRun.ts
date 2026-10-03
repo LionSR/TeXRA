@@ -29,7 +29,7 @@ import {
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { claimStanding, heldElsewhereBy } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
@@ -90,12 +90,12 @@ const CHANNEL = 'ResumeRun';
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
 /**
- * Only a ledger refusal of the saved rows names an unusable checkpoint.
+ * Only a run history refusal of the saved rows names an unusable checkpoint.
  * Ownership, metadata and lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   for (let current = error, depth = 0; depth < 8; depth++) {
-    if (current instanceof RunLedgerRefused) {
+    if (current instanceof RunHistoryRefused) {
       return (
         current.reason === 'inconsistent' ||
         current.reason === 'unprepared-history'

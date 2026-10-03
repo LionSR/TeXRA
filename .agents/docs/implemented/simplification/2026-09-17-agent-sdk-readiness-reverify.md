@@ -122,7 +122,7 @@ there unnecessary abstraction _now_).
 
 | Item                                             | `-09-14` state                         | This pass (`3d5fbda`)                                                                                                                                                 |
 | ------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node flow engine**                             | deleted                                | **still deleted.** `ls src/agent/node` → no such directory. Runs are the run-ledger Effect program (`src/shared/session/runLedger.ts`, 140 LoC).                      |
+| **Node flow engine**                             | deleted                                | **still deleted.** `ls src/agent/node` → no such directory. Runs are the run-history Effect program (`src/shared/session/runHistory.ts`, 140 LoC).                    |
 | **`ModelHandler.ts` god-base / `IModelHandler`** | deleted, no shim                       | **still gone.** `grep "class ModelHandler\|IModelHandler" src/ packages/` → zero production hits. Model stack is `ModelInvoker.ts` (**1,326** LoC) + `runtime/run/*`. |
 | **`redactSecrets`**                              | single-arg, clean                      | **still clean.** `redactSecrets(text: string): string` (`src/logger/redaction.ts:58` after §5.2; `:93` before), straight-line body.                                   |
 | **SDK version**                                  | 0.41.0                                 | **0.41.0** (`packages/agent/package.json`).                                                                                                                           |
@@ -132,16 +132,16 @@ there unnecessary abstraction _now_).
 | **Deep-import width** (cli/desktop/ext/agent)    | 5 / 4 / 8 / 7                          | **5 / 4 / 7 / 7** — extension shrank 8→7; rest hold.                                                                                                                  |
 | **Tier-1 named doors**                           | 8/8 fronted                            | **8/8 fronted** — `src/agent/{export,followUp,index,review,runtime,storage,templates,trace}/index.ts` all present.                                                    |
 
-## 3. Loop ↔ ledger boundary — fold-based continuation (unchanged)
+## 3. Loop ↔ run history boundary — fold-based continuation (unchanged)
 
 The verified property is the **continuation model**, unchanged from `-09-14`:
 the two run programs (`runtime/loop/toolUse.ts`, `runtime/loop/reflection.ts`)
-call `ledger.appendBatch(runId, state, [...])` and continue from what
+call `runHistory.appendBatch(runId, state, [...])` and continue from what
 `appendBatch` returns (`foldRunState` over committed rows), so live and resume
 are the same function — no cursor, no graph, no intermediate flow engine. The
-ledger implementation is `RunLedger.appendBatch` (`src/agent/runtime/RunLedger.ts`,
+run history implementation is `RunHistory.appendBatch` (`src/agent/runtime/RunHistory.ts`,
 460 LoC — distinct from the 140-LoC session contract
-`src/shared/session/runLedger.ts`; capitalization disambiguates). As `-09-14`
+`src/shared/session/runHistory.ts`; capitalization disambiguates). As `-09-14`
 established, **this pass makes no single-writer claim** — the write side is
 deliberately multi-owner. What is re-verified: the fold-based continuation, the
 CLAUDE.md "one publisher, loop-owned cards" rule holding on the loop's own path,
@@ -252,7 +252,7 @@ deep-import width shrank 8 → 7 — both the shape of progress the standing ope
 work names, landed by ordinary cleanup PRs rather than by this routine. All
 eight named doors stay fronted; the model stack is the cohesive `ModelInvoker.ts`
 
-- `runtime/run/*` over the run ledger, with no `ModelHandler`/`IModelHandler`
+- `runtime/run/*` over the run history, with no `ModelHandler`/`IModelHandler`
   residue; the run loop's fold-based continuation and the logger re-verify clean
   with no silent degradation. The subagent SPI is a real four-implementor
   contract; `agentCreator` is the single, correctly-open boundary.

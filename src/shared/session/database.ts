@@ -191,7 +191,7 @@ export class CurrentValueNewer extends Data.TaggedError('CurrentValueNewer')<{
 }
 
 /**
- * A ledger read or claim of an aggregate this build cannot read whole
+ * A run history read or claim of an aggregate this build cannot read whole
  * (`BlockedAggregate`): a later build wrote a row of it, or a row is
  * corrupt. Nothing is read or claimed, so no run state is ever folded from
  * part of its rows. It rides as the cause of the read's `DatabaseReadFailed`
@@ -333,7 +333,7 @@ export class Database extends Context.Service<
       id: AggregateId,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** The latest `run.snapshot` on one open run, through the
-     *  `(aggregate_id, type, seq)` index: the run ledger's existence and
+     *  `(aggregate_id, type, seq)` index: the run history's existence and
      *  coordinates read, never a fold. A closed (tombstoned) run reads as
      *  absent, as `readRunRecords` does. */
     readonly readRunSnapshot: (

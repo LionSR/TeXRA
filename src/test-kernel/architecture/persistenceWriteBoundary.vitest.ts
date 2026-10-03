@@ -60,7 +60,7 @@ const tableWrite = (tables: string) =>
     `\\b(?:INSERT(?:\\s+OR\\s+\\w+)?\\s+INTO|REPLACE\\s+INTO|UPDATE|DELETE\\s+FROM|DROP\\s+TABLE(?:\\s+IF\\s+EXISTS)?)\\s+(?:"?\\w+"?\\s*\\.\\s*)?"?(?:${tables})"?\\b`,
     'i',
   );
-/** The ledger's tables: `event` and `event_sequence`, the store-wide `blob`
+/** The run history's tables: `event` and `event_sequence`, the store-wide `blob`
  *  table and its `event_blob` references, the `stored_kind` and `projection_state` bookkeeping, and the four
  *  projection tables. `Database.ts` is their one writer. */
 const EVENT_TABLE_WRITE = tableWrite(

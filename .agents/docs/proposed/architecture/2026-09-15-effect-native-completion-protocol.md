@@ -95,7 +95,7 @@ are unaffected. In brief:
 ## 2. Established work and remaining evidence
 
 The old flow engine and model-handler hierarchy are retired. The production
-loops use the ledger and the native model contract; built-in tool executors
+loops use the run history and the native model contract; built-in tool executors
 return Effects. The run file lease and `hostPort` have been deleted. `Runs`
 is already a session service, and since the first audit `Requests` is one too
 (#12577). These components are the starting point, not

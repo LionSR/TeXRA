@@ -269,7 +269,7 @@ function expectChatGptSubscriptionRoute(): void {
 }
 
 /** The retry writes no access setting: the run declines the exhausted route
- *  on its own ledger and the user's switches stay theirs. */
+ *  on its own run history and the user's switches stay theirs. */
 function expectNoPreferenceWrites(): void {
   expect(mocks.setCliSubscriptionPreference).not.toHaveBeenCalled();
   expect(mocks.setCliCodingPlanSubscription).not.toHaveBeenCalled();
@@ -549,7 +549,7 @@ describe('TUI request decisions', () => {
 
         expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
         // The decision is the whole switch: the run declines the exhausted
-        // route on its own ledger, so the user's stored preference is not
+        // route on its own run history, so the user's stored preference is not
         // rewritten on their behalf.
         expectNoPreferenceWrites();
         // The shared key entry checks the provider the run's offer named.

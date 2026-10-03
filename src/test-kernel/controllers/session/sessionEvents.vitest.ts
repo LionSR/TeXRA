@@ -57,7 +57,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { runLedgerLayer } from '@agent/runtime/RunLedger';
+import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -105,8 +105,8 @@ import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
@@ -2837,7 +2837,7 @@ describe('the C1 event table and the C6 publisher', () => {
           'DatabaseNotOwner',
         );
         expect(events.pendingFollowUps(target)).toEqual([]);
-        yield* (yield* RunLedger).acquire(RUN);
+        yield* (yield* RunHistory).acquire(RUN);
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
@@ -2847,7 +2847,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
       }).pipe(
         Effect.provide(
-          runLedgerLayer.pipe(
+          runHistoryLayer.pipe(
             Layer.provideMerge(sessionEventsLayer),
             Layer.provideMerge(substrate(storage)),
           ),
@@ -2943,19 +2943,19 @@ describe('the C1 event table and the C6 publisher', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The run ledger over the real publisher and the real (in-memory) store: no
-// second `RunLedger`, no hand-written `SessionEvents`, so a schema mistake
+// The run history over the real publisher and the real (in-memory) store: no
+// second `RunHistory`, no hand-written `SessionEvents`, so a schema mistake
 // fails here rather than in the PR that turns the writes on.
 // ---------------------------------------------------------------------------
 
-describe('RunLedger', () => {
-  const ledger = () =>
-    runLedgerLayer.pipe(
+describe('RunHistory', () => {
+  const runHistory = () =>
+    runHistoryLayer.pipe(
       Layer.provideMerge(sessionEventsLayer),
       Layer.provideMerge(databaseLayer('ephemeral').pipe(Layer.orDie)),
       Layer.provide(
         Layer.succeed(WorkspaceRoots)(
-          createFakeWorkspaceRoots({ storagePath: '/workspace/ledger' }),
+          createFakeWorkspaceRoots({ storagePath: '/workspace/run-history' }),
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
@@ -3030,7 +3030,7 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (): RunLedgerDraft => ({
+  const snapshot = (): RunHistoryDraft => ({
     type: 'run.snapshot',
     aggregateId: AGGREGATE,
     payload: {
@@ -3046,10 +3046,10 @@ describe('RunLedger', () => {
       },
     },
   });
-  const refusalOf = (error: unknown): RunLedgerRefused | null =>
-    error instanceof RunLedgerRefused ? error : null;
+  const refusalOf = (error: unknown): RunHistoryRefused | null =>
+    error instanceof RunHistoryRefused ? error : null;
   /** The approval a barrier call waits on, and the row that binds it. */
-  const approvalRequested: RunLedgerDraft = {
+  const approvalRequested: RunHistoryDraft = {
     type: 'request.opened',
     aggregateId: AGGREGATE,
     requestId: 'req-1',
@@ -3063,12 +3063,12 @@ describe('RunLedger', () => {
       },
     },
   };
-  const approvalBinding: RunLedgerDraft = {
+  const approvalBinding: RunHistoryDraft = {
     type: 'tool.binding',
     aggregateId: AGGREGATE,
     payload: { callId: 'call-a', attempt: 1, requestId: 'req-1', role: 'call' },
   };
-  const toolEnd = (callId: string): RunLedgerDraft => ({
+  const toolEnd = (callId: string): RunHistoryDraft => ({
     type: 'tool.end',
     aggregateId: AGGREGATE,
     logId: callId,
@@ -3077,9 +3077,9 @@ describe('RunLedger', () => {
   const settled = (
     callId: string,
     body: Partial<
-      Extract<RunLedgerDraft, { type: 'tool.result' }>['payload']
+      Extract<RunHistoryDraft, { type: 'tool.result' }>['payload']
     > = {},
-  ): RunLedgerDraft => ({
+  ): RunHistoryDraft => ({
     type: 'tool.result',
     aggregateId: AGGREGATE,
     payload: {
@@ -3094,7 +3094,7 @@ describe('RunLedger', () => {
       ...body,
     },
   });
-  const group: RunLedgerDraft = {
+  const group: RunHistoryDraft = {
     type: 'model.message',
     aggregateId: AGGREGATE,
     payload: {
@@ -3120,7 +3120,7 @@ describe('RunLedger', () => {
     },
   };
   /** The batches of one turn, in order, up to and excluding the delivery. */
-  const openTurn = (run: typeof RunLedger.Service) =>
+  const openTurn = (run: typeof RunHistory.Service) =>
     Effect.gen(function* () {
       let state = yield* run.appendBatch(RUN, null, [
         {
@@ -3190,7 +3190,7 @@ describe('RunLedger', () => {
   it.effect('live state equals reloaded state', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
-      const run = yield* RunLedger;
+      const run = yield* RunHistory;
       yield* events.publish([runStart]);
       yield* run.acquire(RUN);
       let state = yield* openTurn(run);
@@ -3217,7 +3217,7 @@ describe('RunLedger', () => {
         'tool',
       ]);
       expect(yield* run.load(RUN)).toEqual(state);
-    }).pipe(Effect.provide(ledger())),
+    }).pipe(Effect.provide(runHistory())),
   );
 
   it.effect(
@@ -3225,7 +3225,7 @@ describe('RunLedger', () => {
     () =>
       Effect.gen(function* () {
         const events = yield* SessionEvents;
-        const run = yield* RunLedger;
+        const run = yield* RunHistory;
         const log = yield* Database;
         yield* events.publish([runStart]);
         let state = yield* openTurn(run);
@@ -3333,12 +3333,12 @@ describe('RunLedger', () => {
             },
           ])
           .pipe(Effect.flip);
-        expect(unsafe).toBeInstanceOf(RunLedgerRefused);
+        expect(unsafe).toBeInstanceOf(RunHistoryRefused);
         expect(refusalOf(unsafe)?.reason).toBe('unsafe-endpoint');
         expect(refusalOf(unsafe)?.detail).not.toContain(SECRET);
         expect(refusalOf(unsafe)?.detail).toContain(
           'https://api.example.test/v1',
         );
-      }).pipe(Effect.provide(ledger())),
+      }).pipe(Effect.provide(runHistory())),
   );
 });

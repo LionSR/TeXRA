@@ -3,7 +3,7 @@
  * `followup.consumed` (the session publisher's pending set), the blocking
  * wait and the non-blocking probe, and `consume`, which commits one batch's
  * `followup.consumed` rows with the user message they become and
- * `run.position turn.ready`, in one ledger transaction (C3). A crash before
+ * `run.position turn.ready`, in one run history transaction (C3). A crash before
  * that commit leaves the rows queued, so the next consumer delivers them
  * again; after it, nothing re-delivers them.
  *
@@ -43,9 +43,9 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { subagentProgressRunId } from '@shared/subagentFollowup';
-import type { RunLedger } from '@shared/session/runLedger';
+import type { RunHistory } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@tools/catalogEntries';
@@ -71,7 +71,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  *  of what the
  *  delivery changes. `delivered` logs them once durable. */
 export interface JoinedFollowUps {
-  readonly rows: readonly RunLedgerDraft[];
+  readonly rows: readonly RunHistoryDraft[];
   readonly recorded: Partial<
     Pick<ToolUseLoopState, 'instruction' | 'activated'>
   >;
@@ -126,7 +126,7 @@ export interface FollowUps {
 /** Claim `run`'s own follow-up input for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
-  ledger: RunLedger['Service'],
+  runHistory: RunHistory['Service'],
 ): Effect.fn.Return<FollowUps, Error, Scope.Scope> {
   const { runId, session, logger } = run;
   const manager = session.followUps;
@@ -338,7 +338,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   > {
     const joined = yield* batchRows(state, batch);
     const committed = yield* Effect.uninterruptible(
-      ledger.appendBatch(runId, state, [
+      runHistory.appendBatch(runId, state, [
         ...joined.rows,
         // The input that recovers a failed run clears the error fact in
         // the same transaction, so a resume taken between this batch and

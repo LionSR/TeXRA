@@ -311,7 +311,7 @@ export function decodeRow(
 
 /**
  * The read-time projection of a tool card's output (§10): on a run with a
- * ledger a `tool.end` stores no `result`, and its output is the `tool.result`
+ * run history a `tool.end` stores no `result`, and its output is the `tool.result`
  * committed in the same batch, the row just before it on its aggregate (bar
  * the card's own `tool.start`). The card keeps its `files`; the transcript
  * fold keeps the name and input its `tool.start` opened the card with.
@@ -404,7 +404,7 @@ export function verdictBook(
       : Effect.sync(() => blocked.set(verdict.aggregateId, verdict)).pipe(
           Effect.andThen(
             Effect.logWarning(
-              `${path} holds a ${verdict.reason} ${verdict.type} row (version ${verdict.version}) of ${verdict.aggregateId}; it stays in the store, and the aggregate is shown blocked and refused to every ledger read and claim.`,
+              `${path} holds a ${verdict.reason} ${verdict.type} row (version ${verdict.version}) of ${verdict.aggregateId}; it stays in the store, and the aggregate is shown blocked and refused to every run history read and claim.`,
             ),
           ),
           withLogChannel(CHANNEL),
@@ -466,7 +466,7 @@ export function verdictBook(
       return found;
     });
   const refresh = Effect.andThen(retain, scan());
-  /** A ledger read or claim of a blocked aggregate is refused whole. */
+  /** A run history read or claim of a blocked aggregate is refused whole. */
   const refuse = <E>(
     id: AggregateId,
     failed: (cause: DatabaseAggregateBlocked) => E,

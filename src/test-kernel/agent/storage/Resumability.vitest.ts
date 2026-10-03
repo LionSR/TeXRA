@@ -43,9 +43,9 @@ describe('deriveResumability', () => {
 
   /** Open the run aggregate the way the loop does: claim, then snapshot. */
   async function writeSnapshot(runId: RunId): Promise<void> {
-    await Effect.runPromise(session.ledger.acquire(runId));
+    await Effect.runPromise(session.runHistory.acquire(runId));
     await Effect.runPromise(
-      session.ledger.appendBatch(runId, null, [
+      session.runHistory.appendBatch(runId, null, [
         {
           type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),
@@ -162,7 +162,7 @@ describe('deriveResumability', () => {
     Effect.gen(function* () {
       const runId = 'ac000b' as RunId;
       yield* Effect.promise(() => writeMeta(runId, {}));
-      vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+      vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

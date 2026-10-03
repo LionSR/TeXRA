@@ -7,7 +7,7 @@ Baseline: `main` at `3378a967`. Parent survey:
 
 ## 1. Finding
 
-There is one ledger, one fold, one provider caller and one child-run driver
+There is one run history, one fold, one provider caller and one child-run driver
 (`startChildRunLoop` in `src/agent/runtime/childRunLoop.ts`); every strategy
 passes through it. Workflow scripts are not a second orchestrator; they are a
 second journal and attempt identity layered on the same driver. What is
@@ -20,7 +20,7 @@ duplicated is scaffolding, not architecture.
 | One envelope module with a result/error builder pair, and five drivers that each re-select the same facts                                                                                  | `src/tools/delegation/deliveryEnvelope.ts`, `subagentResults.ts`, `bashDelivery.ts` (not `bash.ts`, which only delegates), `codex.ts`, `claudeAgent.ts`, `workflowScriptStrategy.ts` | ~70                       |
 | Two cancellation bridges onto one handle: one controller, one signal-to-`interrupt()` listener set                                                                                         | `childRunLoop.ts` `ChildRunInterruptible` / `nativeSubagentStrategy.ts` `bindAbortSignals`                                                                                           | blocked, see 2.4          |
 | Two halt writers in one file                                                                                                                                                               | `reflection.ts` `finish` and `finalize`                                                                                                                                              | small                     |
-| A synthesized `run.position` under a fake `family:'toolUse'` for agent-CLI children with no ledger                                                                                         | `childRunLoop.ts`                                                                                                                                                                    | small                     |
+| A synthesized `run.position` under a fake `family:'toolUse'` for agent-CLI children with no run history                                                                                    | `childRunLoop.ts`                                                                                                                                                                    | small                     |
 | Reflection output written to no row; results survive only inside the snapshot's family state                                                                                               | `reflection.ts` `roundsToPersisted`; `src/agent/implementations/flows/reflection/output/`                                                                                            | violates one-run-model R1 |
 | Two empty path segments                                                                                                                                                                    | `src/agent/implementations/flows/` holds only `reflection/`; there is no flow engine                                                                                                 | 0                         |
 

@@ -32,7 +32,7 @@ candidate in these areas is already filed, already landed, or already recorded
 as refused with a ruling (`config/ratchets/refuted-candidates.json`). Four
 read-only audits — one each over the agent core, the model handler, the
 logger, and the SDK public surface — found **no wrapper layer that only
-forwards, no second ledger writer, no services-bag, no re-export shim**. The
+forwards, no second run history writer, no services-bag, no re-export shim**. The
 large files are large because of irreducible durability/resume/stop
 invariants, not accreted indirection. The open work is ratification and
 manifest-writing, which needs an owner, not a routine.
@@ -49,7 +49,7 @@ can be ratified.
    where this pass found paths that map omitted (the Claude Code SDK route and
    the settings-view consent turn, both below):
    - Agent core: `src/agent/core/` (`definition/`, `state/`, `tools/`); run
-     programs `@agent/runtime/loop/{toolUse,reflection}.ts` over the run ledger;
+     programs `@agent/runtime/loop/{toolUse,reflection}.ts` over the run history;
      the run loop's model call is `@agent/runtime/ModelInvoker.ts` (with
      `helperModel.ts` and `run/compaction.ts` invoking the bound `Model`
      directly — deliberate exceptions, not a second handler, as the 2026-09-24

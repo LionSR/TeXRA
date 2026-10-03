@@ -339,7 +339,7 @@ npm run check:dead-code-ratchet          # exports need consumers in the same PR
 - **A bridging module that reads `platform()` and exposes it as a `Layer`.** Any
   `@adapter-until` marker is a hard build failure with no baseline.
 - **`effect/unstable/workflow` for durable phases.** `Activity.make`/`Workflow.make`
-  require Effect Schema; §15 decision 8 keeps Zod. The repo's own `RunLedger` rows plus
+  require Effect Schema; §15 decision 8 keeps Zod. The repo's own `RunHistory` rows plus
   `Effect.retry` supply durability instead.
 - **A new eslint rule as the deliverable.** Forbidden by audit §6; the ratchet is the fence.
 - **Converting `platform()` readers inside retiring subsystems.** 1.0 plan §5 forbids it —

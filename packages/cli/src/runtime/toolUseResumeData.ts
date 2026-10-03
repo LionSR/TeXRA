@@ -53,7 +53,7 @@ export interface CliRunStanding {
  * Ownership is deliberately not inspected. A run another process is executing
  * right now has a snapshot and no outcome, so it is offered here and refused
  * when the user opens it: one lease read on the run they picked instead of one
- * per row. Content is not judged here either — `RunLedger.load` refuses rows
+ * per row. Content is not judged here either — `RunHistory.load` refuses rows
  * that do not fold, and that cohort is worded `unusable_checkpoint` at open
  * time.
  *
@@ -124,7 +124,7 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
 export const isTerminalWorkflowCheckpoint = Effect.fn(
   'isTerminalWorkflowCheckpoint',
 )(function* (id: RunId, session: SessionHandle): Effect.fn.Return<boolean> {
-  const state = yield* session.ledger
+  const state = yield* session.runHistory
     .load(id)
     .pipe(
       Effect.catch((error) =>

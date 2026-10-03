@@ -4,7 +4,7 @@
  * effects, the terminal-result stop, and the deliberate absence of
  * fail-fast sibling interruption. Settlements are read where the model
  * reads them — the one delivered tool group — and, where a dispatch is
- * interrupted, off the ledger it did or did not commit to.
+ * interrupted, off the run history it did or did not commit to.
  */
 
 // Test composition imports
@@ -71,7 +71,7 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -245,7 +245,7 @@ interface DispatchKit {
   /** The tools the dispatch's step offers. */
   readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
-    AgentRun | RunLedger | Exclude<ToolServices, Scope.Scope>
+    AgentRun | RunHistory | Exclude<ToolServices, Scope.Scope>
   >;
 }
 
@@ -281,8 +281,8 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const tools = new MapToolRegistry(options.tools);
   publishTestRunStart(session, runId);
   yield* session.settlePublications();
-  yield* session.ledger.acquire(runId);
-  const opened = yield* session.ledger.appendBatch(runId, null, [
+  yield* session.runHistory.acquire(runId);
+  const opened = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
@@ -293,7 +293,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     }),
   ]);
   const turn = turnWithCalls(options.calls);
-  const state = yield* session.ledger.appendBatch(runId, opened, [
+  const state = yield* session.runHistory.appendBatch(runId, opened, [
     {
       type: 'model.message',
       aggregateId: rowAggregate(runId),
@@ -332,7 +332,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         options.pendingSwitch ?? null,
       ),
     ),
-    Layer.succeed(RunLedger, session.ledger),
+    Layer.succeed(RunHistory, session.runHistory),
   );
   return {
     runId,
@@ -423,7 +423,7 @@ describe('tool-use dispatch', () => {
           mode.startsWith('interrupted'),
         );
       }
-      const saved = yield* kit.session.ledger.load(kit.runId);
+      const saved = yield* kit.session.runHistory.load(kit.runId);
       expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
       yield* closeSessionOf(kit.session);
@@ -713,8 +713,8 @@ describe('tool-use dispatch', () => {
 
       const folded = yield* Effect.provide(
         Effect.gen(function* () {
-          const ledger = yield* RunLedger;
-          return yield* ledger.load(kit.runId);
+          const runHistory = yield* RunHistory;
+          return yield* runHistory.load(kit.runId);
         }),
         kit.layer,
       );
@@ -780,8 +780,8 @@ describe('tool-use dispatch', () => {
 
       const folded = yield* Effect.provide(
         Effect.gen(function* () {
-          const ledger = yield* RunLedger;
-          return yield* ledger.load(kit.runId);
+          const runHistory = yield* RunHistory;
+          return yield* runHistory.load(kit.runId);
         }),
         kit.layer,
       );
@@ -928,7 +928,7 @@ describe('tool-use dispatch', () => {
         if (group?.role !== 'tool') {
           throw new Error('The dispatch delivered no tool group.');
         }
-        // The ledger holds the bytes; a file id only ever lives in memory.
+        // The run history holds the bytes; a file id only ever lives in memory.
         expect(group.results[0]?.content.slice(1)).toStrictEqual([
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },

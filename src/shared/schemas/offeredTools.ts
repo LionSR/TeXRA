@@ -1,5 +1,5 @@
 /**
- * The payload of a run ledger's `tools.offered` arm (`sessionEvent.ts`):
+ * The payload of a run history's `tools.offered` arm (`sessionEvent.ts`):
  * what one step of a run offered the model, each tool's identity, and the
  * continuation the step pinned; and the `context.blob` arm, the one store of
  * the model-facing content those rows and every `attempt` row name by digest.

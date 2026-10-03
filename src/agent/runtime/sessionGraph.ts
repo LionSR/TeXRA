@@ -38,7 +38,7 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/sessionView';
-import type { RunLedger } from '@shared/session/runLedger';
+import type { RunHistory } from '@shared/session/runHistory';
 import type {
   SessionEventReads,
   SessionEventsShape,
@@ -74,9 +74,9 @@ export interface SessionGraph {
    *  folded what they committed. A barrier, never a reporter: a refused job
    *  belongs to whoever enqueued it. */
   readonly settle: Effect.Effect<void>;
-  /** The run ledger over this root's event plane: the run loop's one
+  /** The run history over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
-  readonly ledger: Context.Service.Shape<typeof RunLedger>;
+  readonly runHistory: Context.Service.Shape<typeof RunHistory>;
   /** A hold on one aggregate's claim, answered with its release. Holds are
    *  counted: the last one to go returns the claim to how the first found
    *  it, or releases it when any hold `ends` it — a run's driver, a
@@ -99,7 +99,7 @@ export interface SessionGraph {
   readonly claimOwner: (
     id: RunId,
   ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-  /** Every committed row of one aggregate, ledger-private rows included:
+  /** Every committed row of one aggregate, run-history-private rows included:
    *  the read behind the keyed private records, which fold over the
    *  whole aggregate rather than the latest of a type.
    *  With `types`, only those rows, through the type index. */

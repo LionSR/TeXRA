@@ -31,7 +31,7 @@ import {
   DatabaseWriteFailed,
   type SessionOpenError,
 } from '@shared/session/database';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -66,7 +66,7 @@ import {
 } from '../progressTestUtils';
 
 // ---------------------------------------------------------------------------
-// The loop harness: the run's own services over a real session ledger and the
+// The loop harness: the run's own services over a real session run history and the
 // session's real follow-up queue, with the model faked at the `ModelInvoker`
 // seam. The wait, the drain and the consumption are the production ones, so
 // what a parked run does with input is exercised end to end.
@@ -75,8 +75,8 @@ import {
 interface LoopInit extends ScriptedRunInit {
   readonly script: readonly ScriptedTurn[];
   readonly resume?: boolean;
-  /** The ledger the run writes through; the session's own by default. */
-  readonly ledger?: RunLedger['Service'];
+  /** The run history the run writes through; the session's own by default. */
+  readonly runHistory?: RunHistory['Service'];
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(controls: RunControls): void;
@@ -103,7 +103,7 @@ function loopProgram(
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(
-          Layer.succeed(RunLedger)(init.ledger ?? init.session.ledger),
+          Layer.succeed(RunHistory)(init.runHistory ?? init.session.runHistory),
         ),
       ),
     ),
@@ -114,7 +114,9 @@ function loopProgram(
 const runLoop = Effect.fn('test.runLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
   const result = yield* loopProgram(init, requests);
-  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
+  const state = yield* init.session.runHistory
+    .load(init.runId)
+    .pipe(Effect.orDie);
   return { result, requests, state };
 });
 
@@ -128,7 +130,9 @@ const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
 ) {
   const requests: InvokeRequest[] = [];
   const exit = yield* Effect.exit(loopProgram(init, requests));
-  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
+  const state = yield* init.session.runHistory
+    .load(init.runId)
+    .pipe(Effect.orDie);
   return { exit, requests, state };
 });
 
@@ -189,11 +193,11 @@ const quietSession = (overrides: Record<string, unknown> = {}) =>
 /**
  * A run whose rows stop where a crash between a committed text response and
  * its post-response policy would leave them: the response and its step are
- * in the ledger, nothing after them is.
+ * in the run history, nothing after them is.
  */
 const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
   function* (session: SessionHandle, runId: RunId, text: string) {
-    const ledger = session.ledger;
+    const runHistory = session.runHistory;
     const aggregate = rowAggregate(runId);
     const fresh: RunState = {
       ...freshRunState(0),
@@ -201,7 +205,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
     };
-    const opened = yield* ledger.appendBatch(runId, null, [
+    const opened = yield* runHistory.appendBatch(runId, null, [
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
@@ -213,7 +217,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
-    return yield* ledger.appendBatch(runId, opened, [
+    return yield* runHistory.appendBatch(runId, opened, [
       {
         type: 'model.message',
         aggregateId: aggregate,
@@ -327,7 +331,7 @@ describe('a parked child run', () => {
           script: [textTurn('second cycle'), textTurn('never reached')],
         });
         yield* resumed.park(1);
-        const resumedState = yield* session.ledger.load(runId);
+        const resumedState = yield* session.runHistory.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
         expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
           [],
@@ -348,7 +352,7 @@ describe('a parked child run', () => {
         yield* again.park(0);
         expect(again.requests).toHaveLength(0);
         expect(
-          userTexts(yield* session.ledger.load(runId)).filter(
+          userTexts(yield* session.runHistory.load(runId)).filter(
             (text) => text === asked,
           ),
         ).toEqual([asked]);
@@ -430,15 +434,15 @@ describe('a parked root run', () => {
         session,
         stopAfterCycle: true,
         script: [textTurn('done')],
-        ledger: {
-          ...session.ledger,
+        runHistory: {
+          ...session.runHistory,
           appendBatch: (id, state, drafts) =>
             drafts.some(
               (draft) =>
                 draft.type === 'run.position' && draft.payload.at === 'halted',
             )
               ? Effect.fail(writeFailed)
-              : session.ledger.appendBatch(id, state, drafts),
+              : session.runHistory.appendBatch(id, state, drafts),
         },
       });
 
@@ -592,9 +596,9 @@ describe('a parked root run', () => {
 
       // The rows `FollowUps.consume` commits, and then nothing: the process
       // ended before the turn that answers them began.
-      const parked = yield* session.ledger.load(runId).pipe(Effect.orDie);
-      if (parked === null) throw new Error('The run has no ledger.');
-      yield* session.ledger.appendBatch(runId, parked, [
+      const parked = yield* session.runHistory.load(runId).pipe(Effect.orDie);
+      if (parked === null) throw new Error('The run has no run history.');
+      yield* session.runHistory.appendBatch(runId, parked, [
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
@@ -695,7 +699,7 @@ describe('the batch a parked run consumes', () => {
         });
         yield* park(1);
         yield* Fiber.interrupt(fiber);
-        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
 
         // One batch is one user message whose parts are the items in order;
         // the transcript still shows each of them as its own row.
@@ -1007,7 +1011,7 @@ describe('an active goal at the wait', () => {
             script: [textTurn('recovered'), textTurn('never reached')],
           });
           yield* recovered.park(1);
-          expect(userTexts(yield* session.ledger.load(runId))).toContain(
+          expect(userTexts(yield* session.runHistory.load(runId))).toContain(
             'try the other lemma',
           );
           yield* Fiber.interrupt(recovered.fiber);
@@ -1080,7 +1084,7 @@ describe('the host wiring a run attaches', () => {
         yield* Fiber.join(stopping);
         expect(cancelled._tag).toBe('Some');
         expect(detach).toHaveBeenCalledTimes(1);
-        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
         expect(state?.phase ?? null).toBeNull();
         const lease = session.followUps.claimLive(runId, 'loop');
         expect(lease).not.toBeNull();

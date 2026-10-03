@@ -117,7 +117,7 @@ interface ScriptRequest<E, R> {
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
    * if the script ends first. Settlements reach the realm one at a time, in
    * the order these effects complete: a caller that completes each at its
-   * ledger commit makes the realm's delivery order the commit order. A
+   * run history commit makes the realm's delivery order the commit order. A
    * failure is not the guest's to catch: it ends the script with it.
    */
   readonly call: (op: ScriptOp) => Effect.Effect<ScriptSettlement, E, R>;

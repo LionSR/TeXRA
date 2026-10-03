@@ -59,13 +59,13 @@ existing control flow, without importing the later Effect rewrite.
 ## 2. What the implementation actually contains
 
 _Rewritten 2026-09-18 against `main`. The 2026-09-09 text below the heading
-described the pre-ledger runtime and every file it cited is deleted; it is
+described the pre-run history runtime and every file it cited is deleted; it is
 replaced rather than annotated, because none of its sentences survives._
 
 The execution engine the 2026-09-09 assessment said had not been replaced has
 been replaced. There is no flow engine, no graph cursor and no execution KV
-store. A run is one Effect program that appends rows to the run ledger
-(`src/shared/session/runLedger.ts`) and continues from the folded `RunState`
+store. A run is one Effect program that appends rows to the run history
+(`src/shared/session/runHistory.ts`) and continues from the folded `RunState`
 each `appendBatch` returns; resume is the same function reading the same rows.
 The two run programs are `src/agent/runtime/loop/toolUse.ts` and
 `loop/reflection.ts`, plain Effect loops, and the per-run services they take
@@ -108,7 +108,7 @@ _Status column added 2026-09-18: every mechanism below has zero references on
 
 | Current mechanism                                               | Final treatment                                                                                                                                          | Status (2026-09-18)                                                                                                                                                                             |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `KVStore` and `ExecutionKVStore`                                | Delete with their execution-state consumers. Introduce typed Effect database operations directly; do not implement the old interface over SQL.           | **Done.** Zero references; the run ledger over SQLite replaced both.                                                                                                                            |
+| `KVStore` and `ExecutionKVStore`                                | Delete with their execution-state consumers. Introduce typed Effect database operations directly; do not implement the old interface over SQL.           | **Done.** Zero references; the run history over SQLite replaced both.                                                                                                                           |
 | `PersistedFlow`, graph-cursor checkpoints, `RoundPersistedFlow` | Replace with the final Effect loops and durable model/tool/workflow state, then delete the old interpreter and its dedicated tests.                      | **Done.** Zero references; the two Effect run loops append rows and fold `RunState`.                                                                                                            |
 | File-based `executionLease`                                     | Replace ownership admission and write checks with database transactions; delete lease files, polling, legacy readers, and compatibility writes together. | **Done.** Zero references; ownership is a database claim. `leaseOwnerLiveness` survives as `Database.ts`'s liveness check, as this section anticipated.                                         |
 | Application-state uses of `JsonStore`                           | Move host state and mutable application records to SQLite. Do not migrate their old contents.                                                            | **Done** for application state; configuration and credentials deliberately stay JSON, per the caveat below.                                                                                     |

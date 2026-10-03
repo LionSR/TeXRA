@@ -160,7 +160,7 @@ export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
     // Resumability comes from the listing's snapshot probe; only a failed
     // workflow row reads its state, bounded so a history of them does not
-    // fold every ledger at once. `Effect.forEach` keeps input order.
+    // fold every run history at once. `Effect.forEach` keeps input order.
     const opened = yield* session;
     return yield* Effect.forEach(
       (yield* listRuns(opened)).filter(isUserVisibleRun),

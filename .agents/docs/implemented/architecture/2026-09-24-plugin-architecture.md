@@ -86,7 +86,7 @@ first kind on the two central primitives.
   delegation annotation, the run's own tools). When the offered set differs
   from the run's last record, the step returns a `tools.offered` row (each
   tool's name, digest, plugin and revision), which the loop appends through
-  `RunLedger.appendBatch` before the request. A fresh run records its first
+  `RunHistory.appendBatch` before the request. A fresh run records its first
   set in its opening batch.
 - **Stale calls.** A response's calls run against the step that offered
   them, restricted to the tools whose identity still matches the latest
@@ -216,8 +216,8 @@ decision:
   program (workflow agents run it in round mode since the one-run-program
   series). v1 plugins have no task kinds, so a plugin cannot add a step, a
   node or a wait; its one loop input is the continuation table.
-- **The ledger.** `appendBatch` on the run ledger
-  (`src/shared/session/runLedger.ts`) is the one writer of run rows, and the
+- **The run history.** `appendBatch` on the run history
+  (`src/shared/session/runHistory.ts`) is the one writer of run rows, and the
   session's one publisher (`SessionEvents`) the one writer of every other
   row. A plugin owns no second channel: its own rows are typed `plugin.fact`
   arms in the one closed schema (amended 2026-09-28), and the offered-tool

@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { aggregateId, type RunId } from '@shared/schemas';
-import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -13,7 +13,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 /** The opening snapshot a run writes before its first external activity. */
-function openingSnapshot(runId: RunId): RunLedgerDraft {
+function openingSnapshot(runId: RunId): RunHistoryDraft {
   return {
     type: 'run.snapshot',
     aggregateId: aggregateId('run', runId),
@@ -44,7 +44,7 @@ describe('ExecutionsTool metadata-free run summary', () => {
         const runId = 'abc123abc123' as RunId;
         const session = testDefaultSession();
         publishTestRunStart(session, runId);
-        yield* session.ledger.appendBatch(runId, null, [
+        yield* session.runHistory.appendBatch(runId, null, [
           openingSnapshot(runId),
         ]);
 

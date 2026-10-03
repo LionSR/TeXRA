@@ -62,7 +62,7 @@ Effect-native.
 | TeXRA LLM package            | Canonical content, provider controls, protocol conversion, stream normalization, native provider operations and typed evidence | No session store, tool executor, reflection policy, billing settlement or platform singleton |
 | Reflection/tool-use programs | Task/stage policy, request construction, continuation decisions and interpretation of results                                  | No SDK request/response unions or provider-specific message surgery                          |
 | Existing runtime services    | Attempt admission, selected model binding, tool execution, interactions, accounting and ordered settlement                     | One owner for each operation; no new general workflow engine                                 |
-| Agreed ledger/substrate      | Committed history, attempt evidence, state transitions, owner fencing and recovery reads                                       | One transaction/retention authority, shared by both programs                                 |
+| Agreed run history/substrate | Committed history, attempt evidence, state transitions, owner fencing and recovery reads                                       | One transaction/retention authority, shared by both programs                                 |
 | Hosts/readers                | User input and presentation of redacted committed facts and transient progress                                                 | Display text cannot reconstruct model history                                                |
 
 The public package accepts materialized canonical messages. It does not accept
@@ -255,7 +255,7 @@ One generic opaque field cannot express three different validity rules:
 | Conversation continuation | An immutable input/history prefix and its protocol encoding, plus the remote anchor and deployment binding | Use only when the next input extends the covered prefix under a supported continuation rule. |
 | Remote operation          | One admitted invocation attempt, input and binding                                                         | Retrieve/cancel that operation; it is not a reusable conversation-prefix token.              |
 
-The runtime stores immutable history identity using the agreed ledger
+The runtime stores immutable history identity using the agreed run history
 references, with an explicit replacement/branch revision. The package receives
 canonical input and the corresponding continuation evidence; it does not inspect
 database commits itself. Runtime checks reference lineage, and the provider
@@ -320,7 +320,7 @@ replay after a restart or a tool implementation change.
 - Only the call's relevant logical state operations, and a `duplicateOf`
   reference where current duplicate policy shares a primary result.
 
-The ledger atomically commits final logical state operations, the tool result
+The run history atomically commits final logical state operations, the tool result
 and terminal presentation facts. A model-visible result and the runtime's
 state-operation vocabulary remain separate schemas. The LLM package consumes
 canonical results; it does not own TeXRA's todo, plan, usage or file-interaction
@@ -398,7 +398,7 @@ cutover; do not retain both histories. Version and validate the new payload
 explicitly rather than silently changing the meaning of an existing `append`
 row.
 
-## 7. Ledger amendments required by these contracts
+## 7. Run history amendments required by these contracts
 
 These are payload/row amendments within the existing event table and owner
 fence, not a competing database or an operation-replay engine. Final row/version

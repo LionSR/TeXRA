@@ -47,7 +47,7 @@ release, and 100 never shipped.
 | the `event_agg_commit` index                                                                                                                                          | `storeFormat.ts:238`                                                  | nothing (no query needs it)                                                    |
 | per-run `context.blob` copies: 50–65% of blob bytes are duplicates, and blobs are 73–79% of the data                                                                  | `requestContext.ts:93-110`                                            | the store-wide `blob` table, collected by reachability                         |
 | throw-on-bad-row, where one row fails the whole listing                                                                                                               | `Database.ts:126-156`                                                 | a `Blocked` or `Corrupt` verdict per aggregate                                 |
-| `packages/llm`'s authority over the stored `model.message` shape                                                                                                      | `runLedgerEvent.ts:20-26,168`                                         | a storage-owned `StoredTurn` (§4)                                              |
+| `packages/llm`'s authority over the stored `model.message` shape                                                                                                      | `runHistoryEvent.ts:20-26,168`                                        | a storage-owned `StoredTurn` (§4)                                              |
 | the second copy of every tool output (`tool.end.result` beside `tool.result`)                                                                                         | `toolUseDispatch.ts:344-358`                                          | the card's output projected at read time (§10)                                 |
 | `appStateChanges.ts` as a separate file                                                                                                                               | 61 lines                                                              | merged into its owner, `currentValues.ts`                                      |
 | aside copies that are never deleted; 95% free pages; 4 MB WAL files that stay                                                                                         | the store directory                                                   | §7                                                                             |
@@ -67,7 +67,7 @@ The additions come last:
  folds &          sessionFold · runStateFold · transcriptFold      (read payloads; never SQL)
  projections      projectors (listing, usage, model)               (pure TS over decoded events)
                           ▲
- ledger &         SessionEvents inbox (one publisher) → RunLedger → Database.appendAll
+ history &        SessionEvents inbox (one publisher) → RunHistory → Database.appendAll
  publisher        (seq, commit, claims, lifecycle edges, executes projector ops)
                           ▲ typed drafts in, typed events out
  row codec        rowCodec.ts + rowVersions.ts                     (the only stored-shape knowledge)
@@ -76,14 +76,14 @@ The additions come last:
                   SQLite file (WAL)
 ```
 
-| Layer              | Module (under `src/controllers/session/` unless noted)                                                | May know                                                                                                                             | Must not know                                                    |
-| ------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Physical store     | `storeSchema.ts` (was `storeFormat.ts`)                                                               | tables, columns, indexes, PRAGMAs, `SCHEMA_VERSION`, file moves                                                                      | any payload field; any row kind                                  |
-| Row codec          | `rowCodec.ts`; the registry and upcasters in `src/shared/schemas/rowVersions.ts`                      | `type` and `version` columns, the `data` JSON layout, blob externalization, the (kind, logical id) ↔ `AggregateId` mapping, verdicts | SQL; fold semantics                                              |
-| Ledger / publisher | `Database.ts` (the one writer), `src/agent/runtime/SessionEvents.ts` (the one publisher), `RunLedger` | envelopes (seq, commit, origin, at), claims, aggregate lifecycle edges, transactions                                                 | stored shapes: it hands drafts to the codec and gets events back |
-| Projections        | `projections.ts` (replaces `displayProjection.ts`)                                                    | its own tables and version; `listingKeyOf`, `pendingKeyOf`, `sumUsageStats`                                                          | `event.data`: it reads decoded events only                       |
-| Folds              | `src/shared/session/{sessionFold,runStateFold,transcriptFold}.ts`                                     | payload fields                                                                                                                       | columns, versions, SQL                                           |
-| Current values     | `currentValues.ts` (new; absorbs `appStateChanges.ts` and the `values` half of `Database.ts`)         | `current_value`, `input_history`, family schemas and their versions                                                                  | events                                                           |
+| Layer                   | Module (under `src/controllers/session/` unless noted)                                                 | May know                                                                                                                             | Must not know                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Physical store          | `storeSchema.ts` (was `storeFormat.ts`)                                                                | tables, columns, indexes, PRAGMAs, `SCHEMA_VERSION`, file moves                                                                      | any payload field; any row kind                                  |
+| Row codec               | `rowCodec.ts`; the registry and upcasters in `src/shared/schemas/rowVersions.ts`                       | `type` and `version` columns, the `data` JSON layout, blob externalization, the (kind, logical id) ↔ `AggregateId` mapping, verdicts | SQL; fold semantics                                              |
+| Run history / publisher | `Database.ts` (the one writer), `src/agent/runtime/SessionEvents.ts` (the one publisher), `RunHistory` | envelopes (seq, commit, origin, at), claims, aggregate lifecycle edges, transactions                                                 | stored shapes: it hands drafts to the codec and gets events back |
+| Projections             | `projections.ts` (replaces `displayProjection.ts`)                                                     | its own tables and version; `listingKeyOf`, `pendingKeyOf`, `sumUsageStats`                                                          | `event.data`: it reads decoded events only                       |
+| Folds                   | `src/shared/session/{sessionFold,runStateFold,transcriptFold}.ts`                                      | payload fields                                                                                                                       | columns, versions, SQL                                           |
+| Current values          | `currentValues.ts` (new; absorbs `appStateChanges.ts` and the `values` half of `Database.ts`)          | `current_value`, `input_history`, family schemas and their versions                                                                  | events                                                           |
 
 **Two invariants.** Nothing above the codec sees a stored shape: no
 `'<type>.<N>'` string, no integer aggregate id, no `data` text, no `blob`
@@ -106,7 +106,7 @@ Two ratchets enforce them:
     a query contract offered to the model, not reads of the session store.
     The write ratchet already exempts it the same way.
 - **`persistenceWriteBoundary.vitest.ts` (extended).**
-  - Its write regex extends from `event|event_sequence` to every ledger
+  - Its write regex extends from `event|event_sequence` to every run history
     table: `blob`, `stored_kind`, `projection_state`, and the four
     projection tables. `Database.ts` stays the single writer.
   - `current_value` and `input_history` get their own single writer,
@@ -478,7 +478,7 @@ rewritten. There are two mechanisms, and they agree:
   - Otherwise one `SELECT DISTINCT aggregate FROM event WHERE type = ? AND version > ?`
     per offending type, off `event_type_commit`, names the blocked
     aggregates.
-  - This matters because a run can have a newer ledger row while every
+  - This matters because a run can have a newer run history row while every
     listing row it delivers still decodes.
 
 What each reader sees:
@@ -488,8 +488,8 @@ What each reader sees:
   - The fold marks that run's `RunView` blocked.
   - Renderers show "written by a newer TeXRA; update to open it" or "row N
     is corrupt".
-- **Acquire and ledger reads.** `acquireClaims`, `readAggregate` of a
-  ledger, and resume refuse with a typed `DatabaseAggregateBlocked`. A
+- **Acquire and run history reads.** `acquireClaims`, `readAggregate` of a
+  run history, and resume refuse with a typed `DatabaseAggregateBlocked`. A
   `RunState` is never folded from part of a run's rows.
 
 **Plugin arms** gain `{ version, upcasters }` (§6).
@@ -533,7 +533,7 @@ of AGENTS.md "Compatibility and format retirement" to this wording:
 ## 4. Decoupling `model.message` from `packages/llm`
 
 Today `ModelMessagePayloadSchema` embeds `TurnResultSchema` and `MessageSchema`
-verbatim (`runLedgerEvent.ts:20-26,168,194`). As a result:
+verbatim (`runHistoryEvent.ts:20-26,168,194`). As a result:
 
 - a provider SDK or enum change in `packages/llm/src/turn.ts` is a stored
   format change;
@@ -560,7 +560,7 @@ verbatim (`runLedgerEvent.ts:20-26,168,194`). As a result:
   - `packages/llm` parses them when it replays to its own protocol, and it
     already refuses foreign evidence at that point (`anthropicMessages.ts:379`).
 - **Where conversion happens.** `toStoredTurn` and `fromStoredTurn` sit at
-  the `RunLedger` boundary in `src/agent/runtime/`, where the llm types are
+  the `RunHistory` boundary in `src/agent/runtime/`, where the llm types are
   already in scope. `src/shared/schemas` stops importing `@texra-ai/llm/turn`
   for any stored arm.
 - **What the ratchet checks.** `storedShapeBoundary.vitest.ts` refuses a
@@ -827,7 +827,7 @@ is filled from its `tool.result` at read time.
 A settled tool call writes two rows today:
 
 - the display card, `tool.end.result`, holding `{toolName, input, output, files}`;
-- the ledger row, `tool.result.result`, holding the same sanitized result
+- the run history row, `tool.result.result`, holding the same sanitized result
   (`toolUseDispatch.ts:535-553`).
 
 The input is a third copy; it is also on `tool.start`.
@@ -835,17 +835,17 @@ The input is a third copy; it is also on `tool.start`.
 **The design: the card's output is projected from its settlement at read
 time.**
 
-- On a run with a ledger, `tool.end` keeps `{logId, status, files}` and
+- On a run with a run history, `tool.end` keeps `{logId, status, files}` and
   drops `result`.
 - The display read already selects the batch. It also selects the
   `tool.result` rows with commits in that batch; they commit in the same
   transaction, and a commit range never splits a transaction.
 - The codec's display path assembles `tool.end.result` from the
-  `tool.result` and its `tool.start` input. It then drops the ledger row
+  `tool.result` and its `tool.start` input. It then drops the run history row
   before anything leaves the codec.
 - Renderers, the transcript fold and the history query store see today's
   shape unchanged. `tool.result` never reaches a transport.
-- Runs without a ledger (agent-CLI children, `toolUseHelpers.ts:53`) keep
+- Runs without a run history (agent-CLI children, `toolUseHelpers.ts:53`) keep
   writing `result` on the card.
 
 The card is still loop-owned:
@@ -860,7 +860,7 @@ loop-owned cards" to:
 
 > A tool call's card belongs to the run loop. A slow tool's `tool.start`
 > commits with the row that admits the attempt; a fast tool's card opens
-> and closes in its settlement batch. On a run with a ledger, the card
+> and closes in its settlement batch. On a run with a run history, the card
 > stores no output: its output is projected at read time from the
 > `tool.result` it commits with. What a tool prints while it runs is
 > transient text on the card id (`hooks.onToolOutput` → `stream.chunk`),
@@ -968,9 +968,9 @@ E2E evidence:
 **Lane 2: Stored contracts.**
 
 - `StoredTurn` and `StoredMessage`, with `toStoredTurn`/`fromStoredTurn`
-  at `RunLedger`.
+  at `RunHistory`.
 - `JsonValueSchema` for the four `z.unknown()` fields.
-- Tool output stored once (§10): the output-free `tool.end` on ledger runs,
+- Tool output stored once (§10): the output-free `tool.end` on run history runs,
   and the read-time projection of its output from `tool.result`.
 - The CLAUDE.md "One publisher, loop-owned cards" wording change (§10).
 - The per-kind fingerprint test, `npm run storage:freeze`, and the

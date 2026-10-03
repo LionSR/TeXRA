@@ -101,7 +101,7 @@ function detachBackgroundRun(
 }
 
 /**
- * A parent run the ledger already knows: its one `run.start` has landed, so
+ * A parent run the run history already knows: its one `run.start` has landed, so
  * the parking and the launch that follow append to a run that began exactly
  * once. A second `run.start` on the same aggregate is refused by the seq-1
  * rule, and that refusal is a lost publication the next settle reports.

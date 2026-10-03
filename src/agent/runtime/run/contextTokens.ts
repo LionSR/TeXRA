@@ -6,7 +6,7 @@
  * added since. Before the first response, and after a compaction replaced the
  * history, it is that estimate alone.
  */
-import type { HistoryMessage } from '@shared/session/ledgerTurns';
+import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunState } from '@shared/session/runStateFold';
 
 /** The text a model reads at the standard ~4 characters a token; media and reasoning do not count. */

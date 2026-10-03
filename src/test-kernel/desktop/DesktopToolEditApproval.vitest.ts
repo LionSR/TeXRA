@@ -157,7 +157,7 @@ function createApprovalFixture(
       /**
        * Ask for one edit through the tool boundary, as a tool call does. The
        * run's existence fact comes first: a request row is only ever appended
-       * to a run the ledger already knows.
+       * to a run the run history already knows.
        */
       requestApproval(
         request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,

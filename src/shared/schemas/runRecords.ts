@@ -94,7 +94,7 @@ export function emptyRunEndOutput(category: AgentCategory): RunEndOutput {
  * A run's terminal result as every reader sees it. `error` is present only
  * on a failed outcome; `usage` once a round recorded usage, including on
  * failures. Cost is `usage.totalCost` and nothing else. Derived on read
- * (`readRunEnd`): the usage is the run ledger's fold of its priced response
+ * (`readRunEnd`): the usage is the run history's fold of its priced response
  * rows, the output as {@link RunEndOutputSchema} says.
  */
 export const RunEndSchema = z.strictObject({

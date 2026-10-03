@@ -301,15 +301,15 @@ reason given; nothing is dropped silently.
 the codemode doc's "the freeze waits" ruling it lands in its version-1
 shape with no upcaster, ideally in H2's PR.
 
-| #    | Row change                                                                                                                                                      | Why the GUI needs it                                                                                                                                                                                                                                                           |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| G-F1 | `context.edit` (harness D2) keeps today's compaction trigger beside `cause`: `trigger: 'context-limit' \| 'context-window' \| 'model-switch' \| 'user' \| null` | D2's `cause: 'compaction'` drops the three causes `model.compaction` has today (`runLedgerEvent.ts:285`), and none records that the user asked (`/compact`). The divider must say "You compacted" vs "Compacted: context was full" vs "Model switched" from the row, not guess |
-| G-F2 | `run.description` gains `by: 'model' \| 'user'`; the fold keeps the newest user title over later model ones                                                     | J6 rename. Today the row is "the AI-generated summary" only (`sessionEvent.ts:340`); a user title on the same row with no author would be overwritten by the next model summary                                                                                                |
-| G-F3 | A `toolOutcome` arm of `PermissionPayload`: `{ toolName, title, childRunId: RunId \| null }`, decided `retry \| skip`                                           | Today the outcome question is a `userQuestion` whose text embeds a raw run id (`agentChild.ts:185`). A typed arm lets every host draw one card and lets the script stage say "Wants a decision: did Referee B finish?" without parsing prose                                   |
+| #    | Row change                                                                                                                                                      | Why the GUI needs it                                                                                                                                                                                                                                                            |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G-F1 | `context.edit` (harness D2) keeps today's compaction trigger beside `cause`: `trigger: 'context-limit' \| 'context-window' \| 'model-switch' \| 'user' \| null` | D2's `cause: 'compaction'` drops the three causes `model.compaction` has today (`runHistoryEvent.ts:285`), and none records that the user asked (`/compact`). The divider must say "You compacted" vs "Compacted: context was full" vs "Model switched" from the row, not guess |
+| G-F2 | `run.description` gains `by: 'model' \| 'user'`; the fold keeps the newest user title over later model ones                                                     | J6 rename. Today the row is "the AI-generated summary" only (`sessionEvent.ts:340`); a user title on the same row with no author would be overwritten by the next model summary                                                                                                 |
+| G-F3 | A `toolOutcome` arm of `PermissionPayload`: `{ toolName, title, childRunId: RunId \| null }`, decided `retry \| skip`                                           | Today the outcome question is a `userQuestion` whose text embeds a raw run id (`agentChild.ts:185`). A typed arm lets every host draw one card and lets the script stage say "Wants a decision: did Referee B finish?" without parsing prose                                    |
 
 **Already present; the GUI reads them as they are:** the contributing plugin
 and revision per offered tool (`offeredTools.ts:29-31`); usage priced at
-write (`runLedgerEvent.ts:183-193`), so an old task's cost does not drift
+write (`runHistoryEvent.ts:183-193`), so an old task's cost does not drift
 with the pricing table; the launching card (`run.start.parentCard`,
 `sessionEvent.ts:266-269`); the script `title` and `phase` on
 `script.call`; fork origin (D3) and owned-child `callId` (D4).
@@ -320,7 +320,7 @@ with the pricing table; the launching card (`run.start.parentCard`,
   `{ kind: 'agentMissing' | 'pluginOff' | 'pluginUntrusted', name }`
   (harness D5 puts the reason in the projection; the GUI needs it typed,
   not as a sentence, to offer "Turn on").
-- Fork points: per conversation turn, the settled ledger position the fork
+- Fork points: per conversation turn, the settled run history position the fork
   would cut at, or none (harness ruling Q4 refuses others). The menu item
   is shown only where a point exists; the renderer never computes one.
 - The tree cost per run (`runTreeUsage`), folded once, so the script card,
@@ -408,7 +408,7 @@ Each cut is listed in the control table (§5) with its reason.
   parity inventory, rulings) and the harness doc on
   `origin/docs/durable-harness` in full.
 - Read `src/ui/transcript/scriptStage.ts`, the `run.start`,
-  `run.description`, request and ledger arms in `sessionEvent.ts`,
+  `run.description`, request and run history arms in `sessionEvent.ts`,
   `offeredTools.ts`, `ModelCompactionPayloadSchema` and
   `runTreeUsage`; spot-checked the cited lines in `BaseRunContent.ts`,
   `RunTab.ts`, `constants.ts`, `toolFormatters.ts`,

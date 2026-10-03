@@ -70,7 +70,7 @@ export class ProgressApiKeyRetryController {
     }
 
     // The decision is the whole switch: the run reads `credentials:
-    // 'personal'` off its own ledger and declines the exhausted route for
+    // 'personal'` off its own run history and declines the exhausted route for
     // itself when it rebinds. No preference of the user's is rewritten, so
     // two runs falling back at once cannot undo each other's choice.
     yield* this.deps.triggerRetry(request.stream, request.requestId);
