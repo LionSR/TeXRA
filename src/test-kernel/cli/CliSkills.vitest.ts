@@ -29,7 +29,7 @@ import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { TOOL_PLUGINS } from '@tools/plugins';
+import { texraPlugins } from '@tools/registry';
 
 const tempRoots = useTempDirs();
 
@@ -179,7 +179,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           import.meta.dirname,
           '../../../packages/extension/resources',
         );
-        const skillPluginIds = TOOL_PLUGINS.flatMap((plugin) =>
+        const skillPluginIds = texraPlugins().flatMap((plugin) =>
           plugin.skills === true ? [plugin.id] : [],
         );
         const pluginSkillDirs = (dir: string) =>

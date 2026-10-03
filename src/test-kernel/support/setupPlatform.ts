@@ -333,20 +333,28 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
         ),
     }),
     // An empty tool table (the real one loads every tool), with goal mode's
-    // continuation and the documents plugin's round mode: a suite that
-    // resolves a run's tools runs on the session graph's runtime or provides
-    // `toolRegistryLayer`. The round mode's module is read per run, as the
-    // wake's is above, so a suite's mock of the output pipeline (the LaTeX
-    // compile it reaches) is the one a round runs.
+    // continuation (and its switch) and the documents plugin's round mode: a
+    // suite that resolves a run's tools runs on the session graph's runtime
+    // or provides `pluginCatalogLayer`. The round mode's module is read per
+    // run, as the wake's is above, so a suite's mock of the output pipeline
+    // (the LaTeX compile it reaches) is the one a round runs.
     toolTableLayer(
-      toolTable(
-        {},
-        { goal: goalContinuation },
-        {},
-        {},
-        {},
+      toolTable([
         {
-          documents: {
+          id: 'goal',
+          name: 'Goal Mode',
+          category: 'workflow',
+          description: '',
+          toggleable: true,
+          availability: { check: () => Effect.succeed(true) },
+          continuation: goalContinuation,
+        },
+        {
+          id: 'documents',
+          name: 'Documents',
+          category: 'workflow',
+          description: '',
+          rounds: {
             category: AgentCategory.Workflow,
             open: (run) =>
               Effect.flatMap(
@@ -357,7 +365,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
               ),
           },
         },
-      ),
+      ]),
     ),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.

@@ -1,26 +1,23 @@
 /**
- * The tool plugin manifest — the one list every tool belongs to: a stable id
- * plus dashboard copy, the opt-in toggle, the availability probe and the
- * install/auth actions. Implementations live in `@tools/registry`, which maps
- * each plugin id to its tool objects and fails the build when those names
- * differ from `toolNames` here; keeping implementations out keeps this
- * module's closure (and its readers') small. The entries themselves are
- * `MANIFEST` in `@tools/pluginManifest`; this module declares their shape,
- * checks them and is what every consumer reads.
- *
- * Derived from this list: the Tools dashboard (in list order) and each
- * card's inline settings rows, the agent creator's tool groups, availability
- * probes, the first-install toggle seed, switched-off plugins, a run's
- * injected tools (`@agent/runtime/agentToolResolution`), install/auth actions, `texra tools`
- * guides, and the bundled skills and agents the bootstrap installs, which a
+ * A plugin: one value that is both its manifest row (a stable id plus
+ * dashboard copy, the opt-in toggle, the availability probe and the
+ * install/auth actions) and what it contributes (its tools, continuation,
+ * prompt section, round mode and layers). The harness's built-ins are
+ * `@tools/builtinPlugins`; an app passes its list, built-ins included, to
+ * `installProcessRuntime`, and the process's `ToolRegistry` holds it in
+ * order (`@tools/toolTable`), which every reader takes it from: the Tools
+ * dashboard (in list order) and each card's inline settings rows,
+ * availability probes, the first-install toggle seed, the switches, a run's
+ * injected tools (`@agent/runtime/agentToolResolution`), install/auth
+ * actions, `texra tools` guides, and the bundled skills and agents, which a
  * switched-off plugin withholds with its tools.
  *
- * Rules: an id is persisted (the disabled-tools key), so it never changes and
- * is never reused; every tool belongs to exactly one plugin (checked below
- * and in the registry). No hooks, task kinds or second event channels: a
- * plugin holds state only in its process or session layer and writes rows
- * only of its own kinds, through the one publisher. A plugin is data,
- * re-registered by code at every startup.
+ * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
+ * offered tool records), so it never changes and is never reused; every
+ * tool belongs to exactly one plugin (checked when the table is built). No
+ * hooks, task kinds or second event channels: a plugin holds state only in
+ * its process or session layer and writes rows only of its own kinds,
+ * through the one publisher.
  */
 
 // Third-party imports
@@ -28,20 +25,29 @@ import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import type { RoundMode } from '@agent/runtime/loop/rounds';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
-import { MANIFEST } from '@tools/pluginManifest';
+import type {
+  Continuation,
+  ProcessPluginLayer,
+  PromptSection,
+  SessionPluginLayer,
+} from '@tools/toolTable';
 
-/** One tool plugin. */
-export interface ToolPlugin {
+/** One plugin. */
+export interface Plugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
-  /** The registered tools this plugin provides; `@tools/registry` checks
-   *  them. Empty for a plugin whose contribution is not a tool. */
-  readonly toolNames: readonly string[];
+  readonly name: string;
+  readonly category: ToolCategory;
+  readonly description: string;
+  /** Its tools, by registered name. */
+  readonly tools?: Readonly<Record<string, ITool>>;
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -49,9 +55,6 @@ export interface ToolPlugin {
    * and always available.
    */
   readonly availability?: ToolAvailabilityChecks;
-  readonly name: string;
-  readonly category: ToolCategory;
-  readonly description: string;
   /** Checked for availability but listed on no Tools dashboard. */
   readonly hidden?: boolean;
   /** Product hosts whose Tools dashboard does not list the plugin. */
@@ -68,34 +71,26 @@ export interface ToolPlugin {
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
    *  seeds the plugin disabled (unless `onByDefault`), and while disabled its
-   *  tools are withheld from every agent. */
+   *  tools are withheld from every agent. It must be probed
+   *  (`availability`, `ALWAYS_AVAILABLE` when it needs nothing installed). */
   readonly toggleable?: boolean;
   /** A toggleable plugin a fresh install seeds on rather than off. */
   readonly onByDefault?: true;
-  /** Decides what a parked run does next: a continuation in
-   *  `PLUGIN_CONTINUATIONS` (`@tools/registry`), which a run's step pins
-   *  while the plugin is switched on. */
-  readonly continuation?: true;
-  /** Adds a section to each request's system text: a function in
-   *  `PLUGIN_PROMPT_SECTIONS` (`@tools/registry`), which a run's step pins
-   *  while the plugin is switched on. */
-  readonly promptSection?: true;
-  /** Owns process-lifetime services: an entry in `PLUGIN_PROCESS_LAYERS`
-   *  (`@tools/registry`), up while the plugin is switched on or a step pins
-   *  it (`@tools/liveTools`). */
-  readonly processLayer?: true;
-  /** Its process-lifetime services come from the host that runs it, not
-   *  from core: the host passes the layer to `installProcessRuntime`
-   *  (`pluginLayers`), and it follows the same lifetime. */
-  readonly hostLayer?: true;
-  /** Owns session-lifetime services: an entry in `PLUGIN_SESSION_LAYERS`,
-   *  one per open session, up while the plugin is switched on or a step of
-   *  that session pins it. */
-  readonly sessionLayer?: true;
-  /** Writes rows of its own kinds: an arm in `PLUGIN_EVENT_ARMS`
-   *  (`@tools/pluginArms`). They decode while the plugin is off; a build
-   *  without the plugin keeps them unread. */
-  readonly rows?: true;
+  /** Decides what a parked run of its category does next; a run's step pins
+   *  it while the plugin is switched on. */
+  readonly continuation?: Continuation;
+  /** Its section of each request's system text; a run's step pins it while
+   *  the plugin is switched on. */
+  readonly prompt?: PromptSection;
+  /** Drives the runs of one agent category in rounds (`@agent/runtime/loop/rounds`). */
+  readonly rounds?: RoundMode;
+  /** Process-lifetime services, up while the plugin is switched on or a step
+   *  pins it (`@tools/liveTools`). A host-supplied one (Copilot's, in VS
+   *  Code) is passed with the host's plugin value. */
+  readonly processLayer?: ProcessPluginLayer;
+  /** Session-lifetime services, one per open session, up while the plugin
+   *  is switched on or a step of that session pins it. */
+  readonly sessionLayer?: SessionPluginLayer;
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
   readonly agents?: true;
@@ -117,89 +112,6 @@ export interface ToolPluginSetup {
   readonly configNotes?: string;
   /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
   readonly authNote?: string;
-}
-
-/**
- * Every tool plugin, in dashboard order. The literal `MANIFEST` type feeds the
- * compile-time checks below and the registry's; consumers read this view.
- */
-export const TOOL_PLUGINS: readonly ToolPlugin[] = MANIFEST;
-
-export type ToolPluginEntry = (typeof MANIFEST)[number];
-
-/** Every plugin id in the manifest. */
-export type ToolPluginId = ToolPluginEntry['id'];
-
-/** The tool names one plugin (or a union of plugins) declares. */
-export type PluginToolName<Id extends ToolPluginId> = Extract<
-  ToolPluginEntry,
-  { readonly id: Id }
->['toolNames'][number];
-
-/** The first id that repeats in a plugin tuple, or `never`. */
-type DuplicateId<
-  Plugins extends readonly { readonly id: string }[],
-  Seen extends string = never,
-> = Plugins extends readonly [
-  infer Head extends { readonly id: string },
-  ...infer Rest extends readonly { readonly id: string }[],
-]
-  ? Head['id'] extends Seen
-    ? Head['id']
-    : DuplicateId<Rest, Seen | Head['id']>
-  : never;
-
-type AssertNever<T extends never> = T;
-/** Plugin ids are unique. */
-type _PluginIdsAreUnique = AssertNever<DuplicateId<typeof MANIFEST>>;
-
-/**
- * A tool name belongs to one plugin. On a clash the error names each plugin
- * id whose tools another plugin also declares.
- */
-type AssertNoSharedToolNames<T extends Record<ToolPluginId, never>> = T;
-type _ToolNamesAreUniqueAcrossPlugins = AssertNoSharedToolNames<{
-  [Id in ToolPluginId]: PluginToolName<Id> &
-    PluginToolName<Exclude<ToolPluginId, Id>>;
-}>;
-
-/**
- * A toggleable plugin is probed (`ALWAYS_AVAILABLE` when it needs nothing
- * installed), so switching it off withholds its tools; the error names the
- * toggleable plugin ids with no `availability`.
- */
-type _ToggleablePluginsAreProbed = AssertNever<
-  Exclude<
-    Extract<ToolPluginEntry, { readonly toggleable: true }>['id'],
-    Extract<ToolPluginEntry, { readonly availability: object }>['id']
-  >
->;
-
-/**
- * Setup copy is shown only for a probed plugin (the dashboard lists and
- * `texra tools` reads only those), so a plugin with `setup` declares
- * `availability`; the error names the plugin ids that do not.
- */
-type _SetupPluginsAreProbed = AssertNever<
-  Exclude<
-    Extract<ToolPluginEntry, { readonly setup: object }>['id'],
-    Extract<ToolPluginEntry, { readonly availability: object }>['id']
-  >
->;
-
-/** Look up a plugin by id. */
-export function findToolPlugin(id: string): ToolPlugin | undefined {
-  return TOOL_PLUGINS.find((plugin) => plugin.id === id);
-}
-
-/** The plugins the user's switches hold off: only a probed plugin has a
- *  switch, so a stored id of any other plugin switches nothing. */
-export function switchedOffPlugins(
-  disabled: ReadonlySet<string>,
-): ReadonlySet<string> {
-  return new Set(
-    [...disabled].filter((id) => findToolPlugin(id)?.availability != null),
-  );
 }
 
 const DisabledToolIdsSchema = z.array(z.string());

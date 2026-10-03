@@ -1,5 +1,5 @@
 // `/config` → Tools form. It mirrors `texra tools list` inside an active TUI session
-// and toggles integrations that are marked toggleable in TOOL_PLUGINS.
+// and toggles integrations whose plugin is marked toggleable.
 
 import { Text } from 'ink';
 

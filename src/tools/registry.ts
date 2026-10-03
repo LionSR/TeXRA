@@ -1,95 +1,52 @@
+/**
+ * TeXRA's plugin list: the harness's built-ins with TeXRA's options, beside
+ * the app's own plugins, in the order the Tools dashboard lists them. Each
+ * TeXRA entry passes it to `installProcessRuntime`; nothing in the harness
+ * names an app plugin.
+ */
+
 // Third-party imports
-import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { documentRoundMode } from '@agent/output/documentRoundPolicy';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { revisionKey } from '@common/plugins/mcpServers';
-import {
-  installedPluginId,
-  readInstalledPluginLoad,
-} from '@common/plugins/pluginTrust';
-import { AppState } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingHost } from '@shared/state/stateSettings';
-import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { extractionShorthandToolConfig } from '@shared/schemas';
-import { LiveTools, toolTableLayer } from '@tools/liveTools';
-import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import {
-  readDisabledTools,
-  switchedOffPlugins,
-  TOOL_PLUGINS,
-  type PluginToolName,
-  type ToolPluginEntry,
-  type ToolPluginId,
-} from '@tools/plugins';
+  codemode,
+  fileOps,
+  goal,
+  memoryWorkflow,
+  multiAgent,
+  web,
+} from '@tools/builtinPlugins';
+import type { WorkflowAgentOptions } from '@tools/delegation/AgentTool';
 import {
-  claudeAgentSessionsLayer,
-  codexThreadsLayer,
-} from '@tools/agentCliSessionStores';
-import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
-import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
-import { goalContinuation } from '@tools/goal/goalContinuation';
-import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
-import { sha256 } from '@tools/catalogEntries';
-import {
-  toolTable,
-  type Continuation,
-  type InstalledToolReader,
-  type ProcessPluginLayer,
-  type PromptSection,
-  type SessionPluginLayer,
-} from '@tools/toolTable';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+  claudeAgent,
+  codex,
+  externalInquiry,
+  githubActivity,
+  lean4,
+  texcount,
+  wolfram,
+  zotero,
+} from '@tools/integrationPlugins';
+import type { Plugin } from '@tools/plugins';
+import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
+import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local file imports
-import { BashTool } from './bash';
-import { DiagnosticsTool } from './DiagnosticsTool';
-import { InlineCommentTool } from './comment/InlineCommentTool';
-import { EditFileTool } from './EditTool';
-import { GlobTool } from './glob';
-import { GrepTool } from './grep';
-import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
-import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
-import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
-import { ReadFileTool } from './ReadTool';
-import { WriteFileTool } from './WriteTool';
-import { WebFetchTool } from './web/WebFetchTool';
-import { WebSearchTool } from './web/WebSearchTool';
-import { WolframTool } from './wolfram/WolframTool';
-import { TexcountTool } from './texcount/TexcountTool';
 import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
-import { PlanTool } from './plan/PlanTool';
-import { TodoWriteTool } from './todo/TodoTool';
-import { MemoryTool } from './memory/MemoryTool';
-import { OpenPdfTool } from './OpenPdfTool';
-import { ZoteroAddTool } from './zotero/ZoteroAddTool';
-import { ZoteroCollectionsTool } from './zotero/ZoteroCollectionsTool';
-import { ZoteroExportTool } from './zotero/ZoteroExportTool';
-import { ZoteroSearchTool } from './zotero/ZoteroSearchTool';
-import { CodexTool } from './codex';
-import { ClaudeAgentTool } from './claudeAgent';
-import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
-import {
-  LeanDiagnosticsTool,
-  LeanFileTool,
-  LeanProjectTool,
-  LeanInspectTool,
-} from './lean/LspTools';
+import { InlineCommentTool } from './comment/InlineCommentTool';
+import { DiagnosticsTool } from './DiagnosticsTool';
+import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
+import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
+import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
 import { LeanLoogleTool } from './lean/LoogleTool';
-import { agentTool, type WorkflowAgentOptions } from './delegation/AgentTool';
-import { ExecutionsTool } from './ExecutionsTool';
-import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { codeSandboxLayer, ScriptTool } from './codemode/ScriptTool';
-import { ExternalInquiryTool } from './inquiry/ExternalInquiryTool';
+import { OpenPdfTool } from './OpenPdfTool';
 import { AskUserQuestionTool } from './userQuestion/UserQuestionTool';
-import { GitHubSubscriptionTool } from './github/githubSubscriptionTool';
 /**
  * Setup-assistant tools: a narrow UNIX-style set for the onboarding agent.
  *
@@ -148,69 +105,86 @@ const FIGURE_OPTIONS: WorkflowAgentOptions = {
   toolConfig: extractionShorthandToolConfig,
 };
 
-/**
- * Every plugin's tool objects, keyed by plugin id then tool name. The
- * `satisfies` clause is the manifest check: each plugin in `TOOL_PLUGINS` must
- * appear here with exactly the tools its `toolNames` declares — a missing or
- * extra name, or an unknown plugin id, is a compile error.
- */
-const PLUGIN_TOOLS = {
-  'file-ops': {
-    bash: BashTool,
-    read_file: ReadFileTool,
-    write_file: WriteFileTool,
-    edit_file: EditFileTool,
-    glob: GlobTool,
-    grep: GrepTool,
-  },
-  'latex-extract': {
+const latexExtract: Plugin = {
+  id: 'latex-extract',
+  tools: {
     extract_figures: ExtractLatexFiguresTool,
     extract_tikz_figures: ExtractTikzFiguresTool,
     extract_bib_entries: ExtractBibliographyTool,
   },
-  'latex-diagnostics': { diagnostics: DiagnosticsTool },
-  arxiv: {
+  name: 'LaTeX Extraction',
+  category: 'latex',
+  description:
+    'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
+};
+
+const latexDiagnostics: Plugin = {
+  id: 'latex-diagnostics',
+  tools: { diagnostics: DiagnosticsTool },
+  name: 'LaTeX Diagnostics',
+  category: 'latex',
+  description:
+    'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
+};
+
+const arxiv: Plugin = {
+  id: 'arxiv',
+  tools: {
     arxiv_search: ArxivSearchTool,
     arxiv_metadata: ArxivMetadataTool,
     download_arxiv_source: ArxivDownloadTool,
   },
-  crossref: { crossref_search: CrossrefSearchTool },
-  web: { web_search: WebSearchTool, web_fetch: WebFetchTool },
-  'memory-workflow': {
-    memory: MemoryTool,
-    todo_write: TodoWriteTool,
-    executions: ExecutionsTool,
-    accept_run_files: AcceptRunFilesTool,
-  },
-  goal: { plan: PlanTool },
-  texcount: { texcount: TexcountTool },
-  wolfram: { wolfram: WolframTool },
-  zotero: {
-    zotero_collections: ZoteroCollectionsTool,
-    zotero_search: ZoteroSearchTool,
-    zotero_add: ZoteroAddTool,
-    zotero_export: ZoteroExportTool,
-  },
-  lean4: {
-    lean_diagnostics: LeanDiagnosticsTool,
-    lean_file: LeanFileTool,
-    lean_project: LeanProjectTool,
-    lean_inspect: LeanInspectTool,
-  },
-  'multi-agent': { [AGENT_TOOL_NAME]: agentTool(FIGURE_OPTIONS) },
-  'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
-  'external-inquiry': { inquiry: ExternalInquiryTool },
-  codex: { codex: CodexTool },
-  'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
-  copilot: {},
-  codemode: { script: ScriptTool },
-  core: {
+  name: 'ArXiv Search & Download',
+  category: 'academic',
+  description:
+    'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
+};
+
+const crossref: Plugin = {
+  id: 'crossref',
+  tools: { crossref_search: CrossrefSearchTool },
+  name: 'Crossref Citation Lookup',
+  category: 'academic',
+  description:
+    'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
+};
+
+/**
+ * Tools every host offers without setup that no dashboard card lists:
+ * review annotations, the PDF viewer, the user-question dialog, and Loogle
+ * search (network only, so not gated on the Lean 4 plugin's probe). Its
+ * prompt section is the configured default bibliography, at every step of
+ * every run.
+ */
+const core: Plugin = {
+  id: 'core',
+  name: 'Core Tools',
+  category: 'workflow',
+  description:
+    'Review annotations, PDF viewing, user questions, and Loogle search.',
+  tools: {
     inline_comment: InlineCommentTool,
     open_pdf: OpenPdfTool,
     ask_user_question: AskUserQuestionTool,
     lean_loogle: LeanLoogleTool,
   },
-  setup: {
+  hidden: true,
+  prompt: ({ config }) => {
+    const bibPath = config.get<string>('texra.bib.defaultPath');
+    return bibPath
+      ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
+      : '';
+  },
+};
+
+/** The onboarding agent's narrow set, one responsibility per tool. */
+const setup: Plugin = {
+  id: 'setup',
+  name: 'Setup Assistant',
+  category: 'system',
+  description:
+    'Probe and verify the environment, manage API keys and settings, and apply a team.',
+  tools: {
     probe_environment: ProbeEnvironmentTool,
     verify_setup: VerifySetupTool,
     unset_api_key: UnsetApiKeyTool,
@@ -222,242 +196,64 @@ const PLUGIN_TOOLS = {
     send_to_terminal: SendToTerminalTool,
     apply_team: ApplyTeamTool,
   },
-} as const satisfies {
-  readonly [Id in ToolPluginId]: {
-    readonly [Name in PluginToolName<Id>]: ITool;
-  };
+  hidden: true,
 };
 
-/** The continuation of each plugin whose manifest entry declares one. */
-const PLUGIN_CONTINUATIONS = {
-  goal: goalContinuation,
-} as const satisfies {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly continuation: true }>['id']
-  ]: Continuation;
+/** A workflow agent's run: the documents plugin's rounds. */
+const documents: Plugin = {
+  id: 'documents',
+  name: 'Documents',
+  category: 'workflow',
+  description:
+    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks.',
+  hidden: true,
+  rounds: documentRoundMode,
 };
-
-/** The prompt section of each plugin whose manifest entry declares one. */
-const PLUGIN_PROMPT_SECTIONS: Readonly<Record<string, PromptSection>> = {
-  'memory-workflow': memoryPromptSection,
-  // The configured default bibliography, at every step of every run.
-  core: ({ config }) => {
-    const bibPath = config.get<string>('texra.bib.defaultPath');
-    return bibPath
-      ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-      : '';
-  },
-} as const satisfies {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly promptSection: true }>['id']
-  ]: PromptSection;
-};
-
-// ------------------------------------------------------------ plugin layers
 
 /**
- * The process services of each plugin whose manifest entry declares
- * `processLayer`, up while the plugin is on or pinned (`@tools/liveTools`).
- * GitHub's delivery drain is its step of the core shutdown protocol.
+ * TeXRA's plugins, in dashboard order. `copilot` contributes no tool of its
+ * own: its process layer, which the VS Code host passes here, exposes the
+ * research tools of the other plugins on in the live catalog to Copilot while
+ * it is on (`copilotToolsLayer` in packages/extension).
  */
-const PLUGIN_PROCESS_LAYERS = {
-  'github-pr-subscription': {
-    layer: gitHubSubscriptionsLayer,
-    drain: Effect.flatMap(GitHubSubscriptions, (s) => s.drainDeliveries),
-  },
-} as const satisfies {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly processLayer: true }>['id']
-  ]: ProcessPluginLayer;
-};
-
-/** The session services of each plugin whose manifest entry declares
- *  `sessionLayer`: one build per open session. */
-const PLUGIN_SESSION_LAYERS = {
-  codemode: codeSandboxLayer,
-  codex: codexThreadsLayer,
-  'claude-agent': claudeAgentSessionsLayer,
-} as const satisfies {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly sessionLayer: true }>['id']
-  ]: SessionPluginLayer;
-};
-
-type PluginTools = typeof PLUGIN_TOOLS;
-
-/** Union of all registered tool names. */
-type RegisteredToolName = {
-  [Id in ToolPluginId]: keyof PluginTools[Id];
-}[ToolPluginId];
-
-/**
- * Compile-time guard: every canonical tool with specialized display treatment
- * must remain registered.
- */
-type AssertNever<T extends never> = T;
-type _CanonicalDisplayNamesAreRegistered = AssertNever<
-  Exclude<CanonicalToolDisplayName, RegisteredToolName>
->;
-
-/**
- * Every plugin's tools, continuation and prompt contribution, which the
- * process serves as the `ToolRegistry` service. Flattening cannot overwrite
- * a tool: the manifest rules out a name two plugins share.
- */
-const TOOL_TABLE = toolTable(
-  PLUGIN_TOOLS,
-  PLUGIN_CONTINUATIONS,
-  // Each plugin's section, and whether it ships skills for the catalog.
-  Object.fromEntries(
-    TOOL_PLUGINS.flatMap(({ id, skills }) => {
-      const section = PLUGIN_PROMPT_SECTIONS[id] ?? null;
-      return section !== null || skills
-        ? [[id, { section, skills: skills === true }]]
-        : [];
+export const texraPlugins = (
+  host: { readonly copilot?: ProcessPluginLayer } = {},
+): readonly Plugin[] => [
+  fileOps,
+  latexExtract,
+  latexDiagnostics,
+  arxiv,
+  crossref,
+  web,
+  memoryWorkflow,
+  goal,
+  texcount,
+  wolfram,
+  zotero,
+  lean4,
+  multiAgent(FIGURE_OPTIONS),
+  githubActivity,
+  externalInquiry,
+  codex,
+  claudeAgent,
+  core,
+  codemode,
+  setup,
+  {
+    id: 'copilot',
+    name: 'Copilot Chat Tools',
+    category: 'ai-agents',
+    description:
+      'Expose arXiv search, web fetch, and Crossref search to GitHub Copilot Chat and agent mode as #texra_arxiv_search, #texra_web_fetch, and #texra_crossref_search. Each is exposed while its own plugin is on.',
+    setup: Object.freeze({
+      configNotes:
+        'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
     }),
-  ),
-  PLUGIN_PROCESS_LAYERS,
-  PLUGIN_SESSION_LAYERS,
-  // A workflow agent's run is the documents plugin's rounds.
-  { documents: documentRoundMode },
-);
-
-/** A switch apply's backoff: 200 ms doubling, over six retries. */
-const SWITCH_READ = Schedule.exponential('200 millis');
-
-/** The process layers a host supplies, for the plugins whose manifest
- *  entry declares `hostLayer` (the VS Code host's Copilot tools). */
-export type HostPluginLayers = {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly hostLayer: true }>['id']
-  ]?: ProcessPluginLayer;
-};
-
-/**
- * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it,
- * the process layers `hostLayers` adds, and the MCP servers of
- * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`): TeXRA's
- * plugin table, which each entry passes to `installProcessRuntime` as its
- * `tools`. The layer takes the process `FileSystem`
- * that `installProcessRuntime` serves, to read that file, and its
- * `AppState`, which holds the key MCP env values are digested under, the
- * switches and the plugin install record. A switch flipped or a plugin
- * disabled in any process sharing that state reaches the catalog at once
- * (`AppState.changes`), not only at a run's next step, so what follows the
- * catalog outside a run (a host layer's lifetime, its Copilot tools, an
- * installed plugin's server) follows the switch.
- */
-export const toolRegistryLayer = (
-  mcpConfigPath: string,
-  hostLayers: HostPluginLayers = {},
-) =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const appState = yield* AppState;
-      // Resolved once per process, on the first run that declares an MCP tool.
-      const envKey = yield* Effect.cached(revisionKey(appState));
-      // The installed plugins a step loads: the enabled, trusted ones, each
-      // keyed by what it would start, and why each other enabled one loads
-      // nothing. One that ships only skills loads with no servers.
-      const installed: InstalledToolReader = Effect.gen(function* () {
-        const load = yield* readInstalledPluginLoad({
-          globalState: appState,
-        }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-        const withServers = load.loadable.filter(
-          ({ plugin }) => plugin.mcpServers.length > 0,
-        );
-        const warnings = [
-          ...load.withheld,
-          ...withServers.flatMap(({ plugin }) => plugin.warnings),
-        ];
-        const key =
-          withServers.length === 0 ? undefined : yield* Effect.result(envKey);
-        if (key?._tag === 'Failure')
-          warnings.push(
-            `No installed plugin's MCP servers start: ${key.failure.message}`,
-          );
-        return {
-          plugins: load.loadable.map((source) => {
-            const { record, plugin, trust } = source;
-            const id = installedPluginId(record.name);
-            const servers =
-              key?._tag === 'Success'
-                ? plugin.mcpServers.map((server) =>
-                    mcpPlugin(server, key.success, id),
-                  )
-                : [];
-            return {
-              id,
-              key: sha256({
-                trust,
-                servers: servers.map(({ spec, revision }) => [spec, revision]),
-              }),
-              servers,
-              source,
-            };
-          }),
-          warnings,
-        };
-      });
-      const catalog = toolTableLayer(
-        {
-          ...TOOL_TABLE,
-          processLayers: new Map([
-            ...TOOL_TABLE.processLayers,
-            ...Object.entries(hostLayers),
-          ]),
-        },
-        mcpPluginLoader(fs, mcpConfigPath, envKey),
-        // Fail closed: every plugin with a switch stays off until the
-        // switches are read, so an unreadable store never enables one.
-        switchedOffPlugins(new Set(TOOL_PLUGINS.map(({ id }) => id))),
-        installed,
-      );
-      const followSwitches = Layer.effectDiscard(
-        Effect.gen(function* () {
-          const live = yield* LiveTools;
-          const off = Effect.map(
-            readDisabledTools(appState),
-            switchedOffPlugins,
-          );
-          // Nothing stays pinned: a pin here only applies the switches and
-          // withdraws the installed plugins no longer enabled; it starts
-          // none. A failed apply changes nothing, so what is off stays off;
-          // it is tried again with a bounded backoff, the catalog's lock
-          // released between tries, and a change it still misses is logged.
-          const apply = Effect.scoped(
-            live.pinSwitched(off, { installed: 'withdraw' }),
-          ).pipe(
-            Effect.retry({ schedule: SWITCH_READ, times: 6 }),
-            Effect.catchCause((cause) =>
-              Effect.logError(
-                `Tool switches were not applied to the catalog after seven tries; the plugins they switch stay as they were (off, before the first read) until the switches or the install record change again: ${toErrorMessage(Cause.squash(cause))}`,
-              ),
-            ),
-          );
-          // The switches as they stand, then again on each change to them
-          // or to the install record, written here or by another process,
-          // off the build: a store not readable yet fails no process.
-          yield* appState
-            .changes([
-              GlobalStateKey.DISABLED_TOOLS,
-              GlobalStateKey.INSTALLED_PLUGINS,
-            ])
-            .pipe(
-              Stream.runForEach(() => apply),
-              Effect.forkScoped,
-            );
-        }),
-      );
-      return Layer.provideMerge(followSwitches, catalog);
-    }),
-  );
-
-/** Whether a registered tool declares itself unavailable on a product host. */
-export function isToolUnavailableOnHost(
-  name: string,
-  host: SettingHost,
-): boolean {
-  return TOOL_TABLE.get(name)?.unavailableHosts?.includes(host) === true;
-}
+    unavailableHosts: ['cli', 'desktop', 'sdk'],
+    toggleable: true,
+    onByDefault: true,
+    availability: ALWAYS_AVAILABLE,
+    ...(host.copilot !== undefined && { processLayer: host.copilot }),
+  },
+  documents,
+];
