@@ -20,6 +20,7 @@ import {
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import { deliveredResponse } from '@shared/subagentFollowup';
+import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
 import { formatWorkflowCallFiles } from '@ui/copy/workflowCall';
 import { assertNever, getBasename, isObject } from '@utils/core';
 import {
@@ -63,8 +64,8 @@ export const SCRIPT_CALL_STATUS_LABEL = {
  *  addressed to it, to steer it while it runs or keep talking after. */
 export const TALK_TO_AGENT = 'Talk to this agent';
 
-const NOT_RUN_NOTE = 'The run ended before this call started.';
-const INTERRUPTED_NOTE = 'Stopped with its run. Resume the run to continue.';
+const NOT_RUN_NOTE = 'The task ended before this call started.';
+const INTERRUPTED_NOTE = 'Stopped with its task. Resume the task to continue.';
 
 export interface ScriptCallView {
   /** The card's id (`logId`). */
@@ -133,7 +134,7 @@ function pendingRequestLine(payload: PermissionPayload): string {
     case 'userQuestion':
       return 'Wants an answer to a question';
     case 'toolOutcome':
-      return `Asks whether ${payload.data.toolName} runs again`;
+      return TOOL_OUTCOME_COPY.waiting(payload.data);
     default:
       return assertNever(payload, 'Unhandled request kind');
   }

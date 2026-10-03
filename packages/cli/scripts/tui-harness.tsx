@@ -174,6 +174,8 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const SCRIPT_PROPOSAL = process.env.HARNESS_SCRIPT_PROPOSAL === '1';
 /** A finished `agent` call whose output is its delivery envelope. */
 const SHOW_AGENT_RESULT = process.env.HARNESS_AGENT_RESULT === '1';
+/** An agent call that may have run before TeXRA stopped, with no result. */
+const SHOW_TOOL_OUTCOME = process.env.HARNESS_TOOL_OUTCOME === '1';
 const PLAN_APPROVAL_OBJECTIVE =
   process.env.HARNESS_PLAN_APPROVAL_OBJECTIVE ??
   [
@@ -1483,6 +1485,25 @@ if (SHOW_PLAN_APPROVAL) {
     HARNESS_RUN_ID,
     { kind: 'planApproval', data: makePlanApprovalPayload() },
     appendHarnessPlanDecision,
+  );
+}
+
+if (SHOW_TOOL_OUTCOME) {
+  requestHarnessApproval(
+    HARNESS_RUN_ID,
+    {
+      kind: 'toolOutcome',
+      data: {
+        requestId: 'harness-tool-outcome',
+        runId: HARNESS_RUN_ID,
+        toolName: 'agent',
+        title:
+          "'review' may have done work no result records: the run stopped while it was working",
+        childRunId: RunIdSchema.parse('aaaa0009f10e'),
+      },
+    },
+    (decision) =>
+      appendHarnessAssistantTranscript(`TOOL-OUTCOME: ${decision.action}`),
   );
 }
 

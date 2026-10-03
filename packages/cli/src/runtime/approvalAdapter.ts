@@ -25,6 +25,7 @@ import type {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type CliApprovalContent,
@@ -261,9 +262,8 @@ export function createHeadlessCliHostInteractions(
           yield* askHeadlessUserQuestion(payload.data, context, hooks),
         );
       case 'toolOutcome': {
-        const { title, childRunId } = payload.data;
         const decision = yield* ask({
-          summary: `${title}${childRunId === null ? '' : ` (run ${childRunId})`}\nIt may have run before the run was interrupted, and no result was recorded. Run it again?`,
+          summary: `${TOOL_OUTCOME_COPY.question(payload.data)}\n${payload.data.title}\n${TOOL_OUTCOME_COPY.explanation} Run it again?`,
         });
         if (decision.action === 'approve')
           return yield* decide(runId, requestId, { action: 'retry' });

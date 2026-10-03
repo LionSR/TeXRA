@@ -911,7 +911,7 @@ describe('the interrupted golden runs', () => {
             label: 'B',
             status: 'interrupted',
             needsYou: false,
-            summary: 'Stopped with its run. Resume the run to continue.',
+            summary: 'Stopped with its task. Resume the task to continue.',
             line: 'Interrupted: B',
           },
         ]);
