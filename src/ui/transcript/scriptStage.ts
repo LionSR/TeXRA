@@ -19,6 +19,7 @@ import {
 } from '@shared/schemas';
 import {
   acceptsFollowUp,
+  requestAnswerability,
   type FollowUpHost,
   type RunView,
   type SessionView,
@@ -86,7 +87,7 @@ export interface ScriptCallView {
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
   readonly askingRunId?: RunId;
-  /** A run under the call waits on the user. */
+  /** A run under the call waits on a request this window can answer. */
   readonly needsYou: boolean;
   /** An agent row whose agent takes a message here now (`acceptsFollowUp`,
    *  the rule the composer it opens reads): opening it is talking to it
@@ -267,7 +268,12 @@ function callView(
     ...(detail !== undefined && detail.text.length > 0 ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
-    needsYou: request !== undefined,
+    // Only a request this window can answer needs the user here: the rule
+    // the request card and the attention badge read.
+    needsYou:
+      request !== undefined &&
+      asking !== undefined &&
+      requestAnswerability(asking, request.payload) === 'answerable',
     talkable:
       agent &&
       asking === undefined &&
