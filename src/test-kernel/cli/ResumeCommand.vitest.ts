@@ -364,7 +364,7 @@ describe('runResumeCommand', () => {
     await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Run ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
+      `Task ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
     );
   });
 

@@ -109,7 +109,7 @@ export function runStatusCopy(
 /** Banner copy for the fold's interrupted reading: the process running the
  *  run is gone; a pending approval stays listed, so a resume re-asks it. */
 export function runInterruptedMessage(): string {
-  return 'The process running this run stopped before it finished. Resume it to continue.';
+  return 'The process running this task stopped before it finished. Resume it to continue.';
 }
 
 /** Banner copy for a run whose rows this build cannot read whole: a later
@@ -118,14 +118,14 @@ export function runBlockedMessage(
   reason: 'newer' | 'unknown' | 'corrupt',
 ): string {
   return reason === 'corrupt'
-    ? 'A stored row of this run is corrupt, so it cannot be opened or resumed.'
-    : 'This run was written by a newer TeXRA; update TeXRA to open it.';
+    ? 'A stored row of this task is corrupt, so it cannot be opened or resumed.'
+    : 'This task was written by a newer TeXRA; update TeXRA to open it.';
 }
 
 /** Banner and tooltip copy for a run another TeXRA process holds, named by
  *  its pid: the one part of a process identity a user can act on. */
 export function runHeldMessage(pid: number): string {
-  return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the run.`;
+  return `Held by another TeXRA process (pid ${pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
 }
 
 /** The clause naming the process that holds a run: the pid and the machine
@@ -143,12 +143,12 @@ export function runHeldByProcessMessage(
   runId: RunId,
   ownerId: OwnerId,
 ): string {
-  return `Run ${runId} is ${runHeldClause(ownerId)}.`;
+  return `Task ${runId} is ${runHeldClause(ownerId)}.`;
 }
 
 /** Banner and tooltip copy for a run whose saved state could not be read. */
 export function runUnreadableMessage(cause: string): string {
-  return `Could not read this run's state: ${cause}. Delete removes it.`;
+  return `Could not read this task's state: ${cause}. Delete removes it.`;
 }
 
 export function formatRunStatusLabel(status: RunLifecycleStatus): string {

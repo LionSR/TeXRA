@@ -687,7 +687,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
       const panel = vscode.window.createWebviewPanel(
         'texra.progress.panel',
-        'TeXRA Sessions',
+        'TeXRA Tasks',
         vscode.ViewColumn.One,
         {
           enableScripts: true,
