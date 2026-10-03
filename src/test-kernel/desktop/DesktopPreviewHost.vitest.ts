@@ -179,7 +179,6 @@ describe('desktop preview host', () => {
           postToRenderer: () => {},
           postSurfaceAction: () => {},
           getCustomAgentDirectory: () => Effect.succeed('/agents'),
-          showFirstRunWalkthrough: () => {},
           onboarding: {} as Parameters<
             typeof createDesktopHostRequests
           >[0]['onboarding'],

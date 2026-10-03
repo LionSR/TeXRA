@@ -48,14 +48,12 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
-import { DESKTOP_ONBOARDING_COMMANDS } from '../shared/desktopOnboardingMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
   DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
-import { createStartupTeamPanel } from './desktopOnboarding';
 import './desktopShell.css';
 import { shellSidebarTemplate, type RailProject } from './desktopShell';
 import {
@@ -105,25 +103,6 @@ function applyTheme(): void {
 }
 darkScheme.addEventListener('change', applyTheme);
 forcedColors.addEventListener('change', applyTheme);
-const startupTeamPanel = createStartupTeamPanel({
-  dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
-  onVisibilityChanged: rerenderShell,
-  showLauncher: returnToLauncher,
-  openTeams: () => settingsDialog.open('agents/teams'),
-  // Lazy by necessity: the panel is constructed above the accelerator map's
-  // declaration (which lands much later at module scope), so an eager or
-  // captured read is a TDZ throw. Reading at render time is also what lets a
-  // user override (registry `localStorage`) reach the hint: the registry
-  // re-seeds the map on every change, and an explicitly removed shortcut
-  // arrives as an absent accelerator, which prints no hint.
-  commandsHint: () => {
-    const accelerator = formatDesktopAccelerator(
-      shortcutAcceleratorsById.get(DESKTOP_COMMAND_PALETTE_ID),
-      rendererPlatform,
-    );
-    return accelerator ? ` (${accelerator})` : '';
-  },
-});
 
 // =============================================================================
 // Desktop shell
@@ -463,11 +442,6 @@ function shellConversationTemplate(): TemplateResult {
                   >
                     ${conversationView}
                   </section>
-                  ${
-                    // A modal over the window; with no folder open the
-                    // open-folder panel is the one card shown.
-                    startupTeamPanel.template()
-                  }
                 `
               : noWorkspacePlaceholder
           }
@@ -743,9 +717,6 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   saveFile: () => {
     void currentWorkbench().editorPane.save();
   },
-  showFirstRunWalkthrough: () => {
-    startupTeamPanel.show();
-  },
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
 };
@@ -796,10 +767,6 @@ const routeMessage = createMessageRoutes({
     if (projectWorkbenches.has(shell.active)) {
       LAYOUT_PANEL_TOGGLES[message.panel]();
     }
-  },
-  'desktop:setOnboarding': (message) => {
-    if (message.shouldShow) startupTeamPanel.show();
-    else startupTeamPanel.hide();
   },
   'desktop:setLog': (message) => logsController.applySnapshot(message),
   'desktop:showDiff': (message) => {
@@ -959,7 +926,6 @@ appRoot.addEventListener('composer-submit', (event) => {
   if (key) projectSessions.submit(key);
 });
 
-postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
 // The projects list arrives in reply; each project's session subscribes as it
 // opens, and the file tree refreshes when the list names the project this
 // window shows.

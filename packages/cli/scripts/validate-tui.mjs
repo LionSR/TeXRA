@@ -939,35 +939,38 @@ const SCENARIOS = [
     ],
   },
   {
+    // `/approval` is the policy only: grants are given with `a` on a card,
+    // and with none given there is nothing else to list.
     name: 'approval-form',
-    // This fixture's root takes no grant (`runActions`), so the session
-    // toggles are shown unavailable rather than offered and then refused.
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/approval', '\r'],
     frame: 'viewport',
     expect: [
       '/approval',
-      'Choose when commands and edits ask first, or toggle an',
+      'Choose when commands and edits ask first. Press a on a',
       'Ask',
       'Block',
       'Auto-approve',
-      'Auto-approve commands — available while the chat is active',
-      'Auto-approve edits — available while the chat is active',
-      'Goal: approve all work — Off · commands only',
-      '1-6/Enter select',
+      '1-3/Enter select',
       'Esc cancel',
     ],
+    unexpect: ['Goal: approve all work', 'Stop auto-approving'],
   },
   {
-    // The session toggles send the same `policy.set` the approval card's
-    // "approve for session" key does, so the run's policy row drives the
-    // status-bar badge.
-    name: 'approval-toggle-auto-bash',
+    // A grant given with `a` on the card is listed to take back: the same
+    // `policy.set`, cleared, so the status-bar badge goes with it.
+    name: 'approval-revoke-grant',
     frame: 'viewport',
     // A grant applies to a root that waits after a turn (`runActions`).
-    env: { HARNESS_ENTRIES: '4', HARNESS_ROOT_WAITING: '1' },
-    keys: ['/approval', '\r', '4'],
-    expect: ['Auto-approve commands: on', 'AUTO-BASH'],
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_ROOT_WAITING: '1',
+    },
+    bootExpect: ' Ctrl-C ',
+    keys: ['a', '/approval', '\r', '4'],
+    expect: ['Auto-approving commands: off'],
+    unexpect: ['AUTO-BASH', 'Run command?'],
   },
   {
     name: 'approval-policy-status-bar',
@@ -1194,7 +1197,7 @@ const SCENARIOS = [
       '/approval',
       'Ask',
       '↑/↓ navigate',
-      '1-6/Enter select',
+      '1-3/Enter select',
       'Esc cancel',
     ],
     unexpect: [
@@ -1842,7 +1845,7 @@ const SCENARIOS = [
     bootExpect: 'a approve agent work for this task',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['auto-approvals: agent work, commands, file edits'],
+    expect: ['auto-approvals: edits, commands, agent work'],
     unexpect: ['Spawn review?'],
   },
   {
@@ -1920,7 +1923,7 @@ const SCENARIOS = [
       'Runs until done; only Bash is automatic',
       'observations. Do not edit any files',
       'scroll plan',
-      'r run as goal',
+      'r goal · a all work',
       'y approve',
       'n reject',
       'Esc reject',
@@ -1959,7 +1962,7 @@ const SCENARIOS = [
       'Runs until done; only Bash is automatic',
       '4. Delegate a brief independent verification to the `review` subagent to',
       "check the derivation's correctness.",
-      'r run as goal',
+      'r goal · a all work',
       'y approve',
       'n reject',
     ],
@@ -1980,7 +1983,7 @@ const SCENARIOS = [
       'Coordinate a short math proof through CLI chat.',
       'Split the finite and symbolic cases',
       'Runs until done; only Bash is automatic',
-      'r run as goal',
+      'r goal · a all work',
       'y approve',
       'n reject',
       'Esc reject',
@@ -2004,6 +2007,20 @@ const SCENARIOS = [
       'goal objective: Coordinate a short math proof through CLI chat.',
       '/ commands',
     ],
+    unexpect: ['Approve plan?', '1 approval'],
+  },
+  {
+    // `a`, the card grammar's broad approval, runs the plan as a goal that
+    // approves edits and agent work too.
+    name: 'plan-approval-approve-goal-all',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_PLAN_APPROVAL: '1',
+    },
+    bootExpect: ' Ctrl-C ',
+    keys: ['a', '/status', '\r'],
+    frame: 'viewport',
+    expect: ['PLAN-GOAL', 'auto-approvals: edits, commands, agent work'],
     unexpect: ['Approve plan?', '1 approval'],
   },
   {

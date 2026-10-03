@@ -9,10 +9,8 @@ import {
 } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { quickPick } from '@frontend/ui/dialogs';
 import {
   announce,
   showLoggedInfoMessage,
@@ -24,15 +22,12 @@ import {
 } from '@model/setupCredentialAccess';
 import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { agentName, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import {
-  ONBOARDING_CHOICE_API_KEY,
-  ONBOARDING_CHOICE_CHATGPT,
-} from '@ui/copy/onboarding';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -96,62 +91,6 @@ function hasAnyUsableSetupCredential(
   );
 }
 
-const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
-  function* (stores: SettingsStores, secrets: PlatformSecrets) {
-    if (yield* hasAnyUsableSetupCredential(stores, secrets)) {
-      return true;
-    }
-
-    const picks = [
-      {
-        label: `$(comment-discussion) ${ONBOARDING_CHOICE_CHATGPT.label}`,
-        description: ONBOARDING_CHOICE_CHATGPT.description,
-        id: 'chatgpt' as const,
-      },
-      {
-        label: `$(key) ${ONBOARDING_CHOICE_API_KEY.label}`,
-        description: ONBOARDING_CHOICE_API_KEY.description,
-        id: 'apiKey' as const,
-      },
-      {
-        label: '$(book) Open the manual walkthrough instead',
-        description: 'Step through the Getting Started guide yourself',
-        id: 'walkthrough' as const,
-      },
-    ];
-
-    // Each option already carries its own description, so the picker needs no
-    // second explanation of the same three choices.
-    const picked = yield* quickPick(picks, {
-      title: 'TeXRA setup',
-      placeHolder:
-        'Choose how the setup assistant reaches models before it starts.',
-    });
-
-    if (!picked) return false;
-
-    // Each credential path runs its action then re-checks for a usable
-    // credential; only the walkthrough leaves setup un-launched.
-    switch (picked.id) {
-      case 'chatgpt':
-        yield* signInWithSubscription(stores, CHANNEL, 'chatgpt');
-        break;
-      case 'apiKey':
-        yield* safeExecuteCommand(EXTENSION_COMMANDS.SET_API_KEY, [], CHANNEL);
-        break;
-      case 'walkthrough':
-        yield* safeExecuteCommand(
-          EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-          [],
-          CHANNEL,
-        );
-        return false;
-    }
-
-    return yield* hasAnyUsableSetupCredential(stores, secrets);
-  },
-);
-
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
@@ -203,6 +142,9 @@ export function launchSetupAssistant(
   secrets: PlatformSecrets,
   session: SessionHandle,
   onRunResolved: (runId: RunId) => void,
+  /** Bring the panel's "Connect a model" card into view: the one credential
+   *  prompt, which the setup card follows once a credential lands. */
+  connectModel: Effect.Effect<void, Error, ProcessServices>,
 ) {
   return Effect.gen(function* () {
     // Every setup entry point funnels through here (command, status pill,
@@ -243,14 +185,8 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    const proceed = yield* ensureCredentialOrPrompt(session.roots, secrets);
-    if (!proceed) {
-      yield* Effect.forkDetach(
-        showLoggedInfoMessage(
-          CHANNEL,
-          'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in with your ChatGPT subscription or set an API key.',
-        ),
-      );
+    if (!(yield* hasAnyUsableSetupCredential(session.roots, secrets))) {
+      yield* connectModel;
       return 'not-started' as const;
     }
 

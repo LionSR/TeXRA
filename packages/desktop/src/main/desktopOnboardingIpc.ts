@@ -7,7 +7,6 @@ import type {
   StateReadFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import { readState, StateFlagSchema } from '@shared/config/settingsAccess';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   isRequestRefusal,
@@ -18,31 +17,6 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  buildDesktopOnboardingSetStateMessage,
-  DESKTOP_ONBOARDING_COMMANDS,
-  DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-} from '../shared/desktopOnboardingMessages.js';
-import type {
-  DesktopCommandRoutes,
-  DesktopRenderer,
-} from './desktopIpcTypes.js';
-
-/**
- * The welcome card's dismissal did not land: either the flag write rejected or
- * the renderer refused the follow-up state message. Both are reported the same
- * way, through the window's router, so they share one tag; `message` is the
- * cause's own text, which the report shows.
- */
-class OnboardingDismissFailed extends Data.TaggedError(
-  'OnboardingDismissFailed',
-)<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-const dismissFailed = (cause: unknown) =>
-  new OnboardingDismissFailed({ message: toErrorMessage(cause), cause });
 
 /**
  * A capability behind a card action that still answers with a promise
@@ -81,13 +55,10 @@ interface DesktopOnboardingIpcOptions {
 }
 
 /**
- * The onboarding funnel of one window: the startup team chooser's own two
- * messages, the funnel state the `host` snapshot carries (PRD 8.1), and the
- * card actions the host request arms call.
+ * The onboarding funnel of one window: the funnel state the `host` snapshot
+ * carries (PRD 8.1) and the card actions the host request arms call.
  */
 export interface DesktopOnboardingIpc {
-  /** The startup chooser's two inbound commands. */
-  readonly routes: DesktopCommandRoutes;
   /** Recompute the funnel from credentials + flags and publish it. */
   refreshOnboardingFunnel(): OnboardingAction;
   /** The funnel as last derived; null before the first refresh. */
@@ -109,7 +80,6 @@ export interface DesktopOnboardingIpc {
 }
 
 export function createDesktopOnboardingIpc(
-  renderer: DesktopRenderer,
   options: DesktopOnboardingIpcOptions,
 ): DesktopOnboardingIpc {
   const state = options.state;
@@ -133,26 +103,6 @@ export function createDesktopOnboardingIpc(
             { discard: true },
           )
         : Effect.void,
-  });
-
-  const postCurrentState = Effect.gen(function* () {
-    const dismissed = yield* readState(
-      state,
-      DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
-      StateFlagSchema,
-    );
-    renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
-  });
-
-  const dismiss = Effect.gen(function* () {
-    yield* state
-      .update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true)
-      .pipe(Effect.mapError(dismissFailed));
-    yield* Effect.try({
-      try: () =>
-        renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false)),
-      catch: dismissFailed,
-    });
   });
 
   const skipMainOnboarding = (): OnboardingAction =>
@@ -207,10 +157,6 @@ export function createDesktopOnboardingIpc(
     );
 
   return {
-    routes: {
-      [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState,
-      [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss,
-    },
     refreshOnboardingFunnel: () => funnel.run(),
     funnelState: () => funnel.state ?? null,
     onFunnelChange(listener) {

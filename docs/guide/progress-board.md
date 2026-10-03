@@ -104,20 +104,20 @@ Each action in detail:
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Auto-approve switches
+### Auto-approval
 
-While a run is going, its header has three auto-approve switches:
-**edits**, **commands** and **agent work**. Turn one on at any time, for
-example before you step away, and later requests of that kind in the run are
-approved without asking. Edits and commands are independent. Agent work
-also covers the other two, and turning it off returns all three to asking.
-An approval card's ▾ menu (**Approve all … in this run**) sets the same
-switch. In the narrow sidebar the switches move to the top of the run's ⋯
-menu as **Auto-approve edits**, **Auto-approve commands** and
-**Auto-approve agent work**, and an amber **Auto** tag in the header shows
-that one is on. The switches appear only on a live run this window is
-running. The CLI shows the same grants as AUTO-EDIT, AUTO-BASH and AUTO-TASK
-badges.
+An approval card's ▾ menu (**Approve all … in this run**) is where you let a
+task approve a kind of request on its own: **edits**, **commands** or
+**agent work**. Later requests of that kind in the task are approved without
+asking. Edits and commands are independent. Agent work also covers the other
+two, and turning it off returns all three to asking.
+
+While a grant is on, the task's header shows an amber chip for it
+(**Auto: edits**, **Auto: commands**, **Auto: agent work**); its × turns the
+grant off. In the narrow sidebar one **Auto** chip stands for all of them,
+and its × turns them all off. The composer's **Approval** chip sets the
+policy a new task starts with. The CLI shows the same grants as AUTO-EDIT,
+AUTO-BASH and AUTO-TASK badges.
 
 ### Context utilization
 

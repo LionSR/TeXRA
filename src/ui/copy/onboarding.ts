@@ -15,7 +15,9 @@
 
 import { OWN_API_KEYS } from './modelAccess';
 
-export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
+/** The one credential prompt: the extension/desktop card and the CLI's
+ *  first-run picker carry the same title. */
+export const ONBOARDING_CARD_TITLE = 'Connect a model';
 
 /**
  * What TeXRA is, in one line, wherever a first impression forms: a capable
@@ -40,15 +42,21 @@ export const ONBOARDING_CHOICE_API_KEY = {
   description: 'Anthropic, OpenAI, Google, and more',
 } as const;
 
-/** State 0 choice 4 - quiet link, persists the shared declined flag. */
-export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
+/** The card's lede: what connecting a model leads to. */
+export const ONBOARDING_CARD_LEDE =
+  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project, picks your agent team, and starts your first task.';
 
 /**
- * The one-line narrative every surface hangs off. Used by the walkthrough and
- * docs lede; product surfaces express it through behavior, not this sentence.
+ * The API-key banner: shown once a task has finished and no sign-in or API
+ * key can reach a model now; before that, the card above is the one prompt.
+ * It says what is true now, not that a credential was lost: a task may have
+ * finished on a route the check does not count.
  */
-export const ONBOARDING_NARRATIVE =
-  'Run setup once: TeXRA checks LaTeX, applies the right agent team, and starts your first polish.';
+export const CREDENTIAL_LOST_NOTICE =
+  'No ChatGPT sign-in or API key can reach a model right now. Connect a model to continue.';
+
+/** State 0 choice 4 - quiet link, persists the shared declined flag. */
+export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
 
 /**
  * State 1 handoff sentence: a credential just landed and the setup assistant

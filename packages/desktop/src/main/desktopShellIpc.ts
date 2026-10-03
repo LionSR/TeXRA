@@ -11,7 +11,6 @@ import {
   type DesktopLayoutPanel,
   type DesktopWorkbenchKind,
 } from '../shared/desktopShellMessages.js';
-import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
 import {
   DESKTOP_DOCS_URL,
   DESKTOP_SHELL_IPC_COMMANDS,
@@ -167,9 +166,6 @@ export function createDesktopShellActions(
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
-    showFirstRunWalkthrough: () => {
-      renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
-    },
     showInfoMessage: (message) => {
       // The member is an Effect already failing with `NotificationFailed`, so
       // the action program is the member itself.

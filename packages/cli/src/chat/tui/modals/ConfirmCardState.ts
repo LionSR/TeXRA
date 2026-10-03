@@ -137,6 +137,9 @@ const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'approve edits for session': 'all edits',
   [DELEGATION_APPROVAL_COPY.cliAction]:
     DELEGATION_APPROVAL_COPY.cliCompactAction,
+  // The plan card's two goal keys, so both fit beside y and n.
+  'run as goal': 'goal',
+  'goal, approve all': 'all work',
 };
 
 function isCoreApprovalHint(hint: KeyHint): boolean {
@@ -154,7 +157,13 @@ export function confirmCardKeyHintsForWidth(
   const candidates: readonly KeyHint[][] = [
     fullHints,
     compactHints,
-    compactHints.filter((hint) => isCoreApprovalHint(hint) || hint.key === 'a'),
+    // The one extra key a narrow card keeps: a card's own first action (its
+    // narrowest grant, as the plan card's commands-only goal), else `a`.
+    compactHints.filter(
+      (hint) =>
+        isCoreApprovalHint(hint) ||
+        hint.key === (options.extraActions?.[0]?.key ?? 'a'),
+    ),
     compactHints.filter(isCoreApprovalHint),
   ];
   return firstFittingCandidate({

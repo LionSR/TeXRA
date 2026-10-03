@@ -76,6 +76,8 @@ export const HostSnapshotSchema = z.object({
   recording: z.object({ session: z.string(), target: z.string() }).nullable(),
   /** The New-task state's notices; host-owned visibility. */
   banners: z.object({
+    /** A credential that worked (a task has finished) stopped working;
+     *  before a first task the "Connect a model" card is the prompt. */
     apiKey: z.object(visible),
     agentConfig: AgentConfigBannerDataSchema.extend(visible),
     dependency: DependencyBannerDataSchema.extend(visible),

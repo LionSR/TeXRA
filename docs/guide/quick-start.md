@@ -38,7 +38,7 @@ available.
 
 ## Add a key or connect a subscription
 
-A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
+A credential is the one step no agent can do for you. On a fresh install, the **Connect a model** card in the
 TeXRA panel offers the main access choices:
 
 1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Models** page

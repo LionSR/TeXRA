@@ -6,12 +6,13 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
-import { APPROVAL_BYPASS_LABEL } from '@cli/chat/tui/forms/ApprovalPolicyForm';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { type RunId } from '@shared/schemas';
+import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
 
 import { type SlashCommandContext } from './slashContext';
 
@@ -39,28 +40,25 @@ export function applyCliApprovalPolicySelection(
 }
 
 /**
- * `/approval`'s session toggles: the same `policy.set` mutation the approval
- * card's "approve for session" key and the extension toolbar send, so the
- * run's `approval.policy` row (and the status-bar badge) is the confirmation.
+ * `/approval`'s revoke: the same `policy.set` mutation the approval card's
+ * `a` key grants with, cleared, so the run's `approval.policy` row (and the
+ * status-bar badge) is the confirmation.
  */
-export function setCliRunBypass(
+export function revokeCliRunGrant(
   session: SessionHandle,
   runId: RunId,
-  bypass: keyof typeof APPROVAL_BYPASS_LABEL,
-  enabled: boolean,
+  bypass: ApprovalBypassKind,
 ): Effect.Effect<void> {
   return session.requests
     .request({
       kind: 'policy.set',
-      change: { field: 'bypass', runId, bypass, enabled },
+      change: { field: 'bypass', runId, bypass, enabled: false },
     })
     .pipe(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () =>
-          appendLocalNotice(
-            `${APPROVAL_BYPASS_LABEL[bypass]}: ${enabled ? 'on' : 'off'}`,
-          ),
+          appendLocalNotice(`Auto-approving ${RUN_GRANT_NOUN[bypass]}: off`),
       }),
     );
 }

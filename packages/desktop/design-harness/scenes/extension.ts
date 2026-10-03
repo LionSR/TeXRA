@@ -219,14 +219,23 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-first-run': () => firstRun('setup'),
   // Setup done, still no .tex in the folder: the project starter.
   'ext-no-tex': () => firstRun('done', [LATEXINDENT, ...IMAGE_TOOLS]),
-  // First open without a credential: the welcome card.
+  // First open without a credential: the "Connect a model" card.
   'ext-no-credential': () => firstRun('needs-credential'),
+  // A credential that worked stopped working: the banner, not the card.
+  'ext-credential-lost': () => {
+    const view = emptySessionView(PROJECT.key);
+    const base = host();
+    return sidebar(view, surface(view, { kind: 'selectNew' }), {
+      ...base,
+      banners: { ...base.banners, apiKey: { visible: true } },
+    });
+  },
   // The desktop placement of the same shell, inside a run.
   'desktop-placement': () => {
     const view = fanOutView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Two run grants on: the header's switches (the ⋯ menu's at 420px).
+  // Two run grants on: the header's read-only chips, each revocable.
   'ext-auto-approve': () => {
     const view = fanOutView();
     view.policy.set(CHILD, {
@@ -236,6 +245,17 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       goal: [],
     });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // The same grants in the desktop's wide column.
+  'desktop-auto-approve': () => {
+    const view = fanOutView();
+    view.policy.set(CHILD, {
+      policy: 'ask',
+      bypasses: { toolEdit: true, bash: true, superYolo: false },
+      own: {},
+      goal: [],
+    });
+    return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionSession: inside the child, with the ancestor path (its
   // workflow parent takes no replies, so no goes-to line).

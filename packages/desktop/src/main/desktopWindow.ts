@@ -176,7 +176,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
-    showFirstRunWalkthrough: () => shellActions.showFirstRunWalkthrough(),
     refreshFunnelAfterLaunch,
   });
   const surface: ProjectSurface = yield* openProjectSurface({
@@ -277,7 +276,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const commandRoutes = new Map<string, DesktopCommandRoute>();
   for (const routes of [
     promptController.routes,
-    onboarding.routes,
     claim(SETTINGS_VIEW_INBOUND_COMMANDS, (message) => {
       const settings = surface.settings();
       return settings
