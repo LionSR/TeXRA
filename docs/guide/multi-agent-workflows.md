@@ -130,5 +130,5 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 - [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads run scripts
 - [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
 - [Workflow agents](./agent-architecture.md): what a single workflow-agent call does
-- [Agent integrations](./agent-integrations.md): the Tools tab and approval settings
+- [Agent integrations](./agent-integrations.md): the Plugins page and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent these tools

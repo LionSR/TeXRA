@@ -33,7 +33,6 @@ export const PluginListItemSchema = z.object({
   /** Why it cannot be read now, when it cannot. */
   problem: z.string().optional(),
 });
-export type PluginListItem = z.infer<typeof PluginListItemSchema>;
 
 /** Inbound: one plugin action. `install` asks the host for a source and
  *  `openMcpConfig` opens the MCP config file, neither naming a plugin; every

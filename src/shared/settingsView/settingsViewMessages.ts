@@ -412,7 +412,7 @@ export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
  * plugin its listing, and an MCP server from the user's `mcp.json` its name
  * and command. `usedBy` names the agents whose tool lists reach the row.
  */
-export const PluginRowSchema = z.discriminatedUnion('kind', [
+const PluginRowSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('texra'),
     item: ToolDashboardItemSchema,

@@ -1136,6 +1136,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
   }),
 
+  // --- Plugin switches ------------------------------------------------------
+  // Written and read by the Plugins page and the TUI's `/plugins` over the
+  // plugin rows, which no catalog-driven UI renders.
+  {
+    key: GlobalStateKey.DISABLED_TOOLS,
+    schema: z.array(z.string()).prefault([]),
+    slot: 'globalState',
+  },
   surfacedSetting({
     key: WorkspaceStateKey.DISABLED_SKILLS,
     schema: z.array(QualifiedSkillNameSchema).prefault([]),
