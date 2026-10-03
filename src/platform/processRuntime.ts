@@ -89,8 +89,8 @@ export type ProcessServices =
   | ToolAvailability;
 
 /**
- * The services plugin layers serve (`PLUGIN_PROCESS_LAYERS`,
- * `PLUGIN_SESSION_LAYERS` in `@tools/registry`). None is a process service:
+ * The services plugin layers serve (a plugin's `processLayer`
+ * and `sessionLayer`). None is a process service:
  * a tool or continuation reaches one only through the step that pinned its
  * plugin, which provides the pinned layers' services to the call.
  */

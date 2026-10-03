@@ -35,7 +35,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { UsageLog } from '@shared/usageLog';
-import { toolRegistryLayer } from '@tools/registry';
+import type { Plugin } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 import { PlatformConflict } from './errors.js';
@@ -98,22 +98,31 @@ interface ProcessHold {
  */
 let holds = 0;
 
+/** What an embedder composes the process from: its platform and its
+ *  plugins, the harness's built-ins among them. */
+export interface Composition {
+  readonly platform: AgentPlatform;
+  readonly plugins: readonly Plugin[];
+}
+
 /**
- * The platform the installation those holds share was composed with, while
- * this package holds one; cleared with the last hold. It is what says the
- * installed process runtime is this package's to join: one that is installed
- * while this is unset was installed by a host for its own roots, and one
- * composed with a different platform serves another embedder's services.
+ * The platform and plugin list the installation those holds share was
+ * composed with, while this package holds one; cleared with the last hold.
+ * It is what says the installed process runtime is this package's to join:
+ * one that is installed while this is unset was installed by a host for its
+ * own roots, and one composed with a different platform or plugin list
+ * serves another embedder's services.
  */
-let composedWith: AgentPlatform | undefined;
+let composedWith: Composition | undefined;
 
 /** A new hold must wait for the last hold's full session and runtime teardown. */
 const processChanges = Semaphore.makeUnsafe(1);
 
 /** Acquire and register one hold atomically; its scope owns the release. */
-export const acquireProcess = (
-  platform: AgentPlatform,
-): Effect.Effect<
+export const acquireProcess = ({
+  platform,
+  plugins,
+}: Composition): Effect.Effect<
   Context.Service.Shape<typeof Sessions>,
   PlatformConflict,
   Scope.Scope
@@ -121,7 +130,7 @@ export const acquireProcess = (
   Effect.acquireRelease(
     processChanges.withPermit(
       Effect.try({
-        try: () => composeProcess(platform),
+        try: () => composeProcess(platform, plugins),
         catch: (thrown) => thrown,
       }).pipe(
         Effect.catch((thrown) =>
@@ -135,7 +144,7 @@ export const acquireProcess = (
         // off until the embedder switches them on. A store that cannot be
         // read or written is a platform defect; the hold it took is ended.
         Effect.tap((hold) =>
-          seedDisabledToolDefaults(platform.roots.globalState).pipe(
+          seedDisabledToolDefaults(platform.roots.globalState, plugins).pipe(
             Effect.orDie,
             Effect.onError(() => hold.release),
           ),
@@ -160,14 +169,30 @@ export const acquireProcess = (
  * package did not install is already there: borrowing a runtime a host built
  * for its own roots would silently serve the host's services to this one.
  */
-function composeProcess(platform: AgentPlatform): ProcessHold {
+/** The same plugin values in the same order, however the list was built. */
+const samePlugins = (
+  composed: readonly Plugin[],
+  asked: readonly Plugin[],
+): boolean =>
+  composed.length === asked.length &&
+  composed.every((plugin, index) => plugin === asked[index]);
+
+function composeProcess(
+  platform: AgentPlatform,
+  plugins: readonly Plugin[],
+): ProcessHold {
   // The owner carries the runtime it runs on; an absent owner is what says
   // this composition must install its own.
   let processRuntime = installedProcessRuntime();
-  if (composedWith ? composedWith !== platform : processRuntime !== undefined) {
+  if (
+    composedWith
+      ? composedWith.platform !== platform ||
+        !samePlugins(composedWith.plugins, plugins)
+      : processRuntime !== undefined
+  ) {
     throw new PlatformConflict({
       message:
-        'The agent package is already using another platform in this process.',
+        'The agent package is already using another platform or plugin list in this process: compose every hold from the same platform value and the same plugin values.',
     });
   }
   const processServices = {
@@ -186,8 +211,8 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: platform.roots.globalStorage,
-      // TeXRA's plugin table, until the embedder passes its own plugins.
-      tools: toolRegistryLayer(platform.mcpConfigPath),
+      plugins,
+      mcpConfigPath: platform.mcpConfigPath,
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with.
@@ -199,7 +224,7 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       // package speaks at the informational level rather than flooding it.
       minimumLogLevel: 'Info',
     });
-    composedWith = platform;
+    composedWith = { platform, plugins };
   }
   const heldRuntime = processRuntime;
   const sessions = makeSessions(

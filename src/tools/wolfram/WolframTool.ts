@@ -11,11 +11,22 @@ import { ToolError } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
-import { WOLFRAM_INSTALL_GUIDE } from '@tools/pluginManifest';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { previewLabel, splitContentLines } from '@utils/text/stringUtils';
 
 const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s
+
+/** How to get `wolframscript`: the Wolfram card's guide, and this tool's
+ *  answer when the command is missing. */
+export const WOLFRAM_INSTALL_GUIDE =
+  'Requires the "wolframscript" command-line tool.\n\n' +
+  'Install the free Wolfram Engine:\n' +
+  '  Mac:     brew install --cask wolfram-engine\n' +
+  '  Ubuntu:  Download from wolfram.com/engine\n' +
+  '  Windows: Download from wolfram.com/engine\n\n' +
+  'Note: A Mathematica installation alone is not enough: you\n' +
+  'need WolframScript on your PATH. The Wolfram Engine includes\n' +
+  'it automatically. Free licenses are available for development use.';
 
 const WOLFRAM_NOT_INSTALLED_ERROR = `"wolframscript" is not installed or not in your PATH.\n\n${WOLFRAM_INSTALL_GUIDE}`;
 

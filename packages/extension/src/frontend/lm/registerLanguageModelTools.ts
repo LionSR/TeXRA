@@ -3,13 +3,13 @@
  * Model Tool API (`vscode.lm.registerTool`), so they can be referenced in
  * Copilot Chat (e.g. `#texra_arxiv_search`) and invoked by agent mode.
  *
- * This is the `copilot` plugin's process layer (`hostLayer` in
- * `@tools/pluginManifest`), which this host supplies to
+ * This is the `copilot` plugin's process layer, which this host passes with
+ * TeXRA's plugins (`texraPlugins` in `@tools/registry`) to
  * `installProcessRuntime`: it is up while the plugin is on, and closing it
  * disposes every registration. While up, Copilot sees each of these tools
  * the live catalog's current generation (`@tools/liveTools`) holds, and it
  * re-reads on each generation the catalog publishes. The process applies a
- * switch flipped here to the catalog at once (`toolRegistryLayer`), so a
+ * switch flipped here to the catalog at once (`pluginCatalogLayer`), so a
  * switched-off plugin's tool leaves the generation, and Copilot, with it.
  *
  * Only context-free, read-only research tools are surfaced — they need no

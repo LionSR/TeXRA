@@ -30,7 +30,7 @@ import {
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { toolRegistryLayer } from '@tools/registry';
+import { texraPlugins } from '@tools/registry';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
@@ -145,7 +145,8 @@ export const initializeElectronPlatform = Effect.fn(
   const runtime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
-    tools: toolRegistryLayer(USER_MCP_CONFIG_PATH),
+    plugins: texraPlugins(),
+    mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     // Application state is the one the CLI and the extension keep, in the
     // shared global database: one install record for plugins and the trust

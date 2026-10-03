@@ -1,7 +1,7 @@
 /**
  * Tool dashboard data builder.
  *
- * Projects the tool plugin manifest ({@link @tools/plugins}) onto the Tools
+ * Projects the process's plugins ({@link @tools/plugins}) onto the Tools
  * dashboard, enriched with runtime availability; this controller module keeps
  * that tool-layer dependency out of shared settings-view code.
  */
@@ -17,14 +17,12 @@ import type {
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import {
-  TOOL_PLUGINS,
-  findToolPlugin,
   readDisabledTools,
-  type ToolPlugin,
+  type Plugin,
   type ToolPluginSetup,
 } from '@tools/plugins';
-import { isToolUnavailableOnHost } from '@tools/registry';
 import type { ToolProbeInputs } from '@tools/toolProbes';
+import { ToolRegistry } from '@tools/toolTable';
 import {
   ToolAvailability,
   type ExternalToolCheckResult,
@@ -48,15 +46,18 @@ export type ToolTerminalAction =
 /**
  * Plan the terminal command for a tool-dashboard install/auth action.
  *
- * Hosts re-look up the command from the plugin manifest rather than
+ * Hosts re-look up the command from the process's plugins rather than
  * trusting a command string supplied by the webview, and report which of the
  * two failure reasons applies instead of silently doing nothing.
  */
-export function planToolTerminalAction(input: {
-  readonly toolId: string;
-  readonly commandKind: ToolCommandKind;
-}): ToolTerminalAction {
-  const def = findToolPlugin(input.toolId);
+export function planToolTerminalAction(
+  input: {
+    readonly toolId: string;
+    readonly commandKind: ToolCommandKind;
+  },
+  plugins: ReadonlyMap<string, Plugin>,
+): ToolTerminalAction {
+  const def = plugins.get(input.toolId);
   if (!def?.availability) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
@@ -69,7 +70,7 @@ export function planToolTerminalAction(input: {
 }
 
 /** The plugin's inline settings rows, as the dashboard item carries them. */
-function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
+function settingRows(plugin: Plugin): Pick<ToolDashboardItem, 'settings'> {
   return plugin.settings
     ? { settings: plugin.settings.map(([key, label]) => [key, label]) }
     : {};
@@ -88,21 +89,22 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
  * be called there.
  */
 export function isToolPluginVisible(
-  plugin: ToolPlugin,
+  plugin: Plugin,
   host: SettingHost,
 ): boolean {
+  const tools = Object.values(plugin.tools ?? {});
   return (
     plugin.hidden !== true &&
     plugin.unavailableHosts?.includes(host) !== true &&
-    (plugin.toolNames.length === 0 ||
-      plugin.toolNames.some((name) => !isToolUnavailableOnHost(name, host)))
+    (tools.length === 0 ||
+      tools.some((tool) => tool.unavailableHosts?.includes(host) !== true))
   );
 }
 
 /**
  * Build the complete tool dashboard items list.
  *
- * Built-in plugins come first, in manifest order, then the probed plugins in
+ * Built-in plugins come first, in list order, then the probed plugins in
  * the order their results arrive.
  *
  * @param probeInputs - the asking host (see {@link isToolPluginVisible}), its
@@ -120,20 +122,24 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     cachedResults?: readonly ExternalToolCheckResult[],
   ) {
     const { host } = probeInputs;
-    const builtinItems: ToolDashboardItem[] = TOOL_PLUGINS.filter(
-      (plugin) =>
-        plugin.availability === undefined && isToolPluginVisible(plugin, host),
-    ).map((plugin) => ({
-      id: plugin.id,
-      name: plugin.name,
-      category: plugin.category,
-      description: plugin.description,
-      tools: plugin.toolNames.map((toolName) => ({ name: toolName })),
-      status: 'available' as const,
-      installActions: [],
-      requiresSetup: false,
-      ...settingRows(plugin),
-    }));
+    const plugins = (yield* ToolRegistry).entries;
+    const builtinItems: ToolDashboardItem[] = [...plugins.values()]
+      .filter(
+        (plugin) =>
+          plugin.availability === undefined &&
+          isToolPluginVisible(plugin, host),
+      )
+      .map((plugin) => ({
+        id: plugin.id,
+        name: plugin.name,
+        category: plugin.category,
+        description: plugin.description,
+        tools: Object.keys(plugin.tools ?? {}).map((name) => ({ name })),
+        status: 'available' as const,
+        installActions: [],
+        requiresSetup: false,
+        ...settingRows(plugin),
+      }));
 
     const results =
       cachedResults ?? (yield* (yield* ToolAvailability).refresh(probeInputs));
@@ -141,7 +147,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     const disabledIds = yield* readDisabledTools(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
-      const def = findToolPlugin(id);
+      const def = plugins.get(id);
       if (!def || !isToolPluginVisible(def, host)) continue;
       const {
         installGuide,

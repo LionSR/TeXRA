@@ -52,7 +52,7 @@ import {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { TOOL_PLUGINS } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
@@ -201,7 +201,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
       );
       installPluginAgentDirectories(
         resourcesRoot,
-        TOOL_PLUGINS.flatMap((plugin) =>
+        [...(yield* ToolRegistry).entries.values()].flatMap((plugin) =>
           plugin.agents === true ? [plugin.id] : [],
         ),
       );
