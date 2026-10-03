@@ -37,13 +37,6 @@ export const groupStyles = css`
     &.is-cancelled {
       border-inline-start-color: var(--border-control);
     }
-
-    /* A phase the plan declares and the run has not opened: hollow glyph,
-       dashed rail, quiet. */
-    &.is-declared {
-      border-inline-start-style: dashed;
-      color: var(--color-text-muted);
-    }
   }
 
   .log-group-content {

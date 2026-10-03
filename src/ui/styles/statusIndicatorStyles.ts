@@ -27,18 +27,12 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--color-success);
   }
 
-  .status-indicator.is-completed,
-  .status-indicator.is-cancelled {
+  .status-indicator.is-completed {
     background-color: var(--color-text-muted);
   }
 
   .status-indicator.is-failed {
     background-color: var(--color-error);
-  }
-
-  .status-indicator.is-waiting,
-  .status-indicator.is-resuming {
-    background-color: var(--wa-color-text-link);
   }
 
   /* Not the muted fill: "starting" is in progress, and folding it in with

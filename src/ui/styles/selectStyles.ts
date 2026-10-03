@@ -93,18 +93,6 @@ export const compactFormControlStyles: CSSResult = css`
 `;
 
 export const selectStyles: CSSResult = css`
-  .select-group {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-  }
-
-  .select-group wa-select {
-    flex: 1;
-    min-width: 6rem;
-    max-width: 10rem;
-  }
-
   wa-option {
     font-family: var(--wa-font-family-body);
   }
@@ -139,14 +127,6 @@ export const selectStyles: CSSResult = css`
   .model-option-status {
     color: var(--wa-color-danger-on-quiet);
     opacity: var(--opacity-full);
-    font-style: normal;
-    margin-inline-start: var(--wa-space-3xs);
-  }
-
-  /* Quiet trailing marker on picker options (e.g. the team picker's "Custom"
-     provenance tag) — text, not color alone, carries the distinction. */
-  .option-suffix {
-    color: var(--wa-color-text-quiet);
     font-style: normal;
     margin-inline-start: var(--wa-space-3xs);
   }

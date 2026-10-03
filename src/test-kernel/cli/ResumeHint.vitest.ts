@@ -37,8 +37,8 @@ function child(over: Partial<RunView> & { readonly id: string }): RunView {
 
 /** Root plus one subagent: the shared fixture for multi-line hint cases. */
 const TWO_RESUME_TARGETS: readonly ResumeTarget[] = [
-  { runId: 'root', label: 'task', isRoot: true },
-  { runId: 'rev', label: 'reviewer', isRoot: false },
+  { runId: 'root', label: 'task' },
+  { runId: 'rev', label: 'reviewer' },
 ];
 
 describe('collectResumeTargets', () => {
@@ -48,7 +48,7 @@ describe('collectResumeTargets', () => {
         view: viewWith([root()]),
         rootRunId: ROOT,
       }),
-    ).toEqual([{ runId: 'root', label: 'task', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'task' }]);
   });
 
   it('lists running and finished plain tool-use subagents', () => {
@@ -83,7 +83,7 @@ describe('collectResumeTargets', () => {
         view,
         rootRunId: ROOT,
       }),
-    ).toEqual([{ runId: 'root', label: 'task', isRoot: true }]);
+    ).toEqual([{ runId: 'root', label: 'task' }]);
   });
 
   it('returns nothing when there is no root run yet', () => {
@@ -165,7 +165,7 @@ describe('formatResumeHint', () => {
 
   it('prepends token usage when available', () => {
     expect(
-      formatResumeHint([{ runId: 'root', label: 'task', isRoot: true }], {
+      formatResumeHint([{ runId: 'root', label: 'task' }], {
         inputTokens: 186_189_742,
         outputTokens: 11_042_600,
         cost: 0,
@@ -205,7 +205,7 @@ describe('formatResumeHint', () => {
     'includes the $usageRoute task cost in the full hint',
     ({ usageRoute, cost, expected }) => {
       expect(
-        formatResumeHint([{ runId: 'root', label: 'task', isRoot: true }], {
+        formatResumeHint([{ runId: 'root', label: 'task' }], {
           inputTokens: 100,
           outputTokens: 20,
           cost,

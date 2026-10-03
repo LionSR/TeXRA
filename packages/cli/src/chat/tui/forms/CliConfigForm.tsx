@@ -48,9 +48,9 @@ export interface CliConfigFormProps {
    * surface that opened this form.
    */
   readonly secrets: PlatformSecrets;
-  /** The process runtime the tools row's probes run on, from the same surface. */
+  /** The process runtime the rows' reads and writes run on, from the same surface. */
   readonly runtime: ProcessRuntime;
-  /** The project the process opened, for the probes that need a workspace. */
+  /** The project the process opened, for the agents and skills rows. */
   readonly workspaceRoot: string | undefined;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;

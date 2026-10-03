@@ -151,12 +151,6 @@ export const logEntryStyles = css`
     gap: var(--wa-space-3xs);
   }
 
-  .file-list-summary {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-  }
-
   /* Per-file +added/-removed line-change counts in tool detail rows. The
      inline-flex gap spaces the two counts without a per-span inline style. */
   .file-stats {

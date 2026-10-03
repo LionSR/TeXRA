@@ -13,9 +13,9 @@
  * (`packages/desktop/src/renderer/designTokens.ts`), so both trees render
  * from this one definition.
  *
- * `.action-button` / `.action-icon-button` / `.header-action` are selector
- * aliases for the same skins, kept because `renderIconActionButton` emits them
- * and per-component overrides target them.
+ * `.action-button` / `.action-icon-button` are selector aliases for the same
+ * skins, kept because `renderIconActionButton` emits them and per-component
+ * overrides target them.
  */
 
 import { css, unsafeCSS, type CSSResult } from 'lit';
@@ -23,11 +23,11 @@ import { css, unsafeCSS, type CSSResult } from 'lit';
 import { compactFormControlStyles } from './selectStyles';
 
 /**
- * The seven selector aliases that share the button skins — declared once so
+ * The six selector aliases that share the button skins — declared once so
  * the rules below cannot drift from each other.
  */
 const INTERACTIVE_CONTROLS: CSSResult = unsafeCSS(
-  '.btn-primary, .btn-secondary, .btn-ghost, .action-button, .header-action, .icon-button, .action-icon-button',
+  '.btn-primary, .btn-secondary, .btn-ghost, .action-button, .icon-button, .action-icon-button',
 );
 
 /**
@@ -130,14 +130,12 @@ export const buttonStyles: CSSResult = css`
   }
 
   .btn-ghost,
-  .action-button,
-  .header-action {
+  .action-button {
     flex-shrink: 0;
   }
 
   .btn-ghost::part(base),
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base),
-  .header-action::part(base) {
+  .action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
     gap: var(--wa-space-2xs);
     min-height: var(--height-control-compact);
     padding-inline: var(--control-padding-inline);
@@ -152,15 +150,13 @@ export const buttonStyles: CSSResult = css`
   }
 
   .btn-ghost::part(base):hover,
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):hover,
-  .header-action::part(base):hover {
+  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):hover {
     border-color: var(--border-hairline);
     background: var(--surface-hover);
   }
 
   .btn-ghost::part(base):active,
-  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):active,
-  .header-action::part(base):active {
+  .action-button:not(.btn-primary):not(.btn-secondary)::part(base):active {
     background: var(--surface-active);
   }
 
@@ -293,7 +289,6 @@ export const buttonStyles: CSSResult = css`
       .btn-secondary,
       .btn-ghost,
       .action-button:not(.btn-primary):not(.btn-secondary),
-      .header-action,
       .icon-button,
       .action-icon-button
     )[disabled]::part(base) {
@@ -313,7 +308,6 @@ export const buttonStyles: CSSResult = css`
   :is(
       .btn-ghost,
       .action-button,
-      .header-action,
       .icon-button,
       .action-icon-button
     )[disabled]::part(base):is(:hover, :active) {

@@ -17,7 +17,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
-import { PLUGINS_PAGE } from '@ui/copy/plugins';
+import { PLUGINS_PAGE, pluginRowKey } from '@ui/copy/plugins';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
@@ -31,18 +31,6 @@ import {
 import type { PluginsPageData } from '../settingsState';
 
 import '../components/plugins/PluginCard';
-
-/** The key a row is repeated by: unique across the three kinds. */
-const rowKey = (row: PluginRow): string => {
-  switch (row.kind) {
-    case 'texra':
-      return `texra:${row.item.id}`;
-    case 'installed':
-      return `installed:${row.plugin.name}`;
-    case 'mcp':
-      return `mcp:${row.name}`;
-  }
-};
 
 @customElement('plugins-tab')
 export class PluginsTab extends LitElement {
@@ -207,7 +195,7 @@ export class PluginsTab extends LitElement {
               })
             : repeat(
                 page.rows,
-                rowKey,
+                pluginRowKey,
                 (row) => html`
                   <plugin-card .row=${row}>
                     ${this.renderRowSettings(row)}

@@ -12,8 +12,9 @@ import {
 
 import { isLiveRun, type RunView } from './sessionView';
 
-/** Opening the run's folder, exporting or copying its conversation: what
- *  any run offers, a fresh list per run so no two views share one array. */
+/** Opening the run's folder, exporting its conversation, copying its
+ *  diagnostics: what any run offers, a fresh list per run so no two views
+ *  share one array. */
 const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 
 /**

@@ -47,6 +47,33 @@ export const PLUGINS_TUI = Object.freeze({
     `Added ${names.join(', ')}. Switch it on in /plugins to review what it declares and trust it.`,
 });
 
+/** The row's identity, unique across the three kinds: the page's repeat key
+ *  and the TUI's select value. */
+export function pluginRowKey(row: PluginRow): string {
+  switch (row.kind) {
+    case 'texra':
+      return `texra:${row.item.id}`;
+    case 'installed':
+      return `installed:${row.plugin.name}`;
+    case 'mcp':
+      return `mcp:${row.name}`;
+  }
+}
+
+/** Whether the row's switch can be flipped: a TeXRA plugin with a switch,
+ *  or an installed plugin TeXRA can read and run. An MCP server is listed
+ *  only. */
+export function pluginRowSwitchable(row: PluginRow): boolean {
+  switch (row.kind) {
+    case 'texra':
+      return row.item.toggleable === true;
+    case 'installed':
+      return row.plugin.code.length === 0 && row.plugin.problem === undefined;
+    case 'mcp':
+      return false;
+  }
+}
+
 /** The row's name, with an installed plugin's version. */
 export function pluginRowName(row: PluginRow): string {
   switch (row.kind) {
@@ -110,10 +137,9 @@ export function pluginRowState(row: PluginRow): string {
  * plugin ships with the app and an MCP server is the user's own file.
  */
 export function pluginRowTrust(row: PluginRow): string | null {
-  if (row.kind !== 'installed') return null;
-  const { plugin } = row;
   // One that cannot be switched on has no trust question to answer.
-  if (plugin.problem !== undefined || plugin.code.length > 0) return null;
+  if (row.kind !== 'installed' || !pluginRowSwitchable(row)) return null;
+  const { plugin } = row;
   const revision = plugin.commit?.slice(0, 12) ?? plugin.version;
   if (plugin.trusted) return revision ? `trusted at ${revision}` : 'trusted';
   return plugin.enabled
