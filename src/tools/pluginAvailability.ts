@@ -47,11 +47,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'pluginAvailability';
 
-/** A plugin that is probed but needs nothing installed: always available. */
-export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {
-  check: () => Effect.succeed(true),
-};
-
 // Interruption reaches the spawned `texcount --version`, so an interrupted
 // dashboard refresh kills the probe instead of abandoning it.
 export const TEXCOUNT_AVAILABILITY: ToolAvailabilityChecks = {

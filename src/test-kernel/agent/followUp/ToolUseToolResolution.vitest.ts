@@ -20,7 +20,9 @@ import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolTableLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
-import { toolRegistryLayer } from '@tools/registry';
+import { pluginCatalogLayer } from '@tools/pluginCatalog';
+import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
+import { texraPlugins } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
 import { setToolEnabled } from '@tools/toolAvailability';
 
@@ -51,7 +53,7 @@ describe('tool-use tool resolution', () => {
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(
-        toolRegistryLayer(USER_MCP_CONFIG_PATH).pipe(
+        pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
           Layer.provide(
             Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
           ),
@@ -179,7 +181,7 @@ describe('tool-use tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          toolRegistryLayer(USER_MCP_CONFIG_PATH).pipe(
+          pluginCatalogLayer(texraPlugins(), USER_MCP_CONFIG_PATH).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
             ),
@@ -194,19 +196,22 @@ describe('tool-use tool resolution', () => {
     () => {
       const events: string[] = [];
       // One plugin whose layer records its lifetime.
-      const table = toolTable(
+      // A switchable plugin: probed, so its stored switch counts.
+      const table = toolTable([
         {
-          zotero: {
+          id: 'zotero',
+          name: 'Zotero',
+          category: 'ai-agents',
+          description: '',
+          tools: {
             zotero_search: {
               definition: { name: 'zotero_search' },
               call: () => Effect.die('not called'),
             },
           },
-        },
-        {},
-        {},
-        {
-          zotero: {
+          toggleable: true,
+          availability: ALWAYS_AVAILABLE,
+          processLayer: {
             layer: Layer.effectDiscard(
               Effect.acquireRelease(
                 Effect.sync(() => events.push('open')),
@@ -215,7 +220,7 @@ describe('tool-use tool resolution', () => {
             ),
           },
         },
-      );
+      ]);
       return Effect.gen(function* () {
         const stores = hostStores();
         const resolve = (parentOffered?: readonly OfferedTool[]) =>

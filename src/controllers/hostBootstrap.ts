@@ -39,8 +39,8 @@ import {
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { ToolRegistry } from '@tools/toolTable';
 
 // Local file imports
 import { installSubscriptionProbes } from './modelAccess/installSubscriptionProbes';
@@ -120,13 +120,12 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // here, so this is a registration rather than a scan. Tool plugins that ship
   // skills contribute them to the bundled tier; the ids cross as strings so
   // `@skills` and `@platform` take no value edge to `@tools`.
+  const plugins = [...(yield* ToolRegistry).entries.values()];
   initializeNodeRuntimeSkills(
     init.skills,
-    TOOL_PLUGINS.flatMap((plugin) =>
-      plugin.skills === true ? [plugin.id] : [],
-    ),
+    plugins.flatMap((plugin) => (plugin.skills === true ? [plugin.id] : [])),
   );
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
-  yield* seedDisabledToolDefaults(init.roots.globalState);
+  yield* seedDisabledToolDefaults(init.roots.globalState, plugins);
 });

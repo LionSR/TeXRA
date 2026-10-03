@@ -62,7 +62,7 @@ import {
 } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
-import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
+import { readDisabledTools } from '@tools/plugins';
 import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import type { PromptContribution } from '@tools/toolTable';
 import type { StepRoot } from '@utils/files/externalRoots';
@@ -272,13 +272,9 @@ const openStep = Effect.fn('Step.open')(function* (
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
     const pinned = yield* live
-      .pinSwitched(
-        Effect.map(
-          readDisabledTools(run.stores.globalState),
-          switchedOffPlugins,
-        ),
-        { installed: true },
-      )
+      .pinSwitched(readDisabledTools(run.stores.globalState), {
+        installed: true,
+      })
       .pipe(Scope.provide(scope));
     // Read live: a policy change or a host attached mid-run reaches the next
     // step's offer.

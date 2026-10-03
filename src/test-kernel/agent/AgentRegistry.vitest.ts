@@ -26,6 +26,8 @@ import {
 } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
+import { texraPlugins } from '@tools/registry';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 /**
  * A catalog program over the process's global storage view. This suite's fake
@@ -130,6 +132,8 @@ describe('agent registry', () => {
                 resourcesRoot: resourcesPath,
               }),
               AppState.layer(new FakeStateStore()),
+              // TeXRA's plugins, whose bundled agent directories register.
+              Layer.succeed(ToolRegistry)(toolTable(texraPlugins())),
             ),
           ),
         );

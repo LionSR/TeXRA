@@ -20,9 +20,9 @@
  *   withdrawn there, or as soon as the record changes (`'withdraw'`, which
  *   the process's switch follower applies), and the generations that pinned
  *   it drain as usual.
- * - **Plugin layers** (`PLUGIN_PROCESS_LAYERS`) are up while their plugin is
+ * - **Plugin layers** (each plugin's `processLayer`) are up while their plugin is
  *   on or a pinned generation holds it (`@tools/pluginLayers` builds a
- *   session's `PLUGIN_SESSION_LAYERS` by the same rule).
+ *   session's `sessionLayer`s by the same rule).
  *
  * Each entry carries its identity (the digest of its name and input schema,
  * its plugin's id and revision), which a call is checked against.
@@ -72,7 +72,8 @@ export class LiveTools extends Context.Service<
   {
     readonly registry: Registry<string, ToolEntry, void>;
     /**
-     * Read the switches, contribute exactly the built-in plugins they leave
+     * Read the switches (the ids the user holds off; only a probed plugin's
+     * switch counts), contribute exactly the built-in plugins they leave
      * on, and pin the tool, continuation and prompt generations that produces, as
      * one serialized step: a concurrent step's older read never reverts the
      * catalog under it, and no step pins a generation built from switches
@@ -201,13 +202,16 @@ const liveToolsLayer = (
             ...table.prompt.keys(),
             ...table.processLayers.keys(),
           ])) {
-            const on = !off.has(id);
+            // Only a probed plugin has a switch: a stored id of any other
+            // plugin switches nothing.
+            const on =
+              !off.has(id) || table.entries.get(id)?.availability === undefined;
             const held = builtIns.get(id);
             if (on && held === undefined) {
               const contribution = yield* Scope.fork(scope);
               const continuation = table.continuations.get(id);
               const prompt = table.prompt.get(id);
-              // The manifest rules out a name two plugins share, so a
+              // The table rules out a name two plugins share, so a
               // conflict between built-in plugins is a defect.
               yield* Effect.all([
                 registry.contribute(

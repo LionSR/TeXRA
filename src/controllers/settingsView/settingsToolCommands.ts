@@ -21,6 +21,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { setToolEnabled } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
+import { ToolRegistry } from '@tools/toolTable';
 
 import {
   SETTINGS_LOG_CHANNEL,
@@ -119,21 +120,25 @@ export function settingsToolCommands(ports: {
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
       setToolEnabled(toolId, enabled, roots.globalState).pipe(
-        // A plugin's bundled agents follow its switch (`toolRegistryLayer`).
+        // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
         Effect.andThen(postToolDashboard),
       ),
     // The command is looked up from the plugin manifest, never taken from
     // the webview.
-    runToolCommand: ({ toolId, kind }) => {
-      const action = planToolTerminalAction({ toolId, commandKind: kind });
-      return action.kind === 'none'
-        ? Effect.fail(
-            new Error(
-              `No ${kind} command for tool "${toolId}" (${action.reason})`,
-            ),
-          )
-        : bindings.runInTerminal(action.name, action.command);
-    },
+    runToolCommand: ({ toolId, kind }) =>
+      Effect.flatMap(ToolRegistry, ({ entries }) => {
+        const action = planToolTerminalAction(
+          { toolId, commandKind: kind },
+          entries,
+        );
+        return action.kind === 'none'
+          ? Effect.fail(
+              new Error(
+                `No ${kind} command for tool "${toolId}" (${action.reason})`,
+              ),
+            )
+          : bindings.runInTerminal(action.name, action.command);
+      }),
     runInstallCommand: ({ installCommand }) =>
       isAllowedLatexInstallCommand(installCommand)
         ? bindings.runInTerminal('TeXRA Install', installCommand)
