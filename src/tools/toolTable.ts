@@ -1,9 +1,9 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
  * `installProcessRuntime` (TeXRA's is `texraPlugins` in `@tools/registry`),
- * and each plugin's tools, continuation, prompt contribution, round mode and
- * layers by plugin id, which the built-in plugins contribute to the live
- * catalog (`@tools/liveTools`). The `ToolRegistry` service holds it, beside
+ * by plugin id, with the round mode of each agent category and each tool by
+ * name. What a plugin contributes to the live catalog (`@tools/liveTools`)
+ * is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */

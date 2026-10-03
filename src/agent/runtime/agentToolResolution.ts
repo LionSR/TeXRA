@@ -17,8 +17,8 @@
  *      so is one whose plugin is off (not in the generation).
  *   2. The injected tools not already declared, under the same gates: the
  *      plugins' (`injectedWhen`), and every tool of an installed plugin (its
- *      MCP servers'), which the plugin's enablement offers every top-level tool-use run but
- *      a plugin agent that names its tools.
+ *      MCP servers'), which the plugin's enablement offers every top-level
+ *      tool-use run but a plugin agent that names its tools.
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
