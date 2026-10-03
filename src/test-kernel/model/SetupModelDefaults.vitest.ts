@@ -3,7 +3,7 @@ import { it } from '@effect/vitest';
 import { describe } from 'vitest';
 
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   decideModelRoute,
   modelConfig,
   OWN_KEY_ROUTE_FACTS,
@@ -54,7 +54,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
   });
 
   it('covers every non-OpenRouter direct-key API provider', () => {
-    for (const provider of API_PROVIDERS) {
+    for (const provider of API_KEY_PROVIDER_IDS) {
       if (provider === 'openRouter') continue;
       assert.ok(
         SETUP_MODEL_BY_PROVIDER[provider],

@@ -1,7 +1,7 @@
 # Plugin catalog projections after the harness split
 
 Date: 2026-10-03
-Status: proposed
+Status: implemented (both candidates landed)
 Origin: simplification sweep over the harness split lanes M1 to M5 (#13635,
 #13637, #13641, #13643, #13644, #13646, #13652, #13653). The same PR
 implemented the bounded finds:
@@ -12,9 +12,23 @@ implemented the bounded finds:
 - `modelBinding.ts` imports `HttpModelConfiguration` instead of restating it.
 - Three stale comments that pointed at the pre-M2 manifest are corrected.
 
-The two candidates below are left for later on purpose. The first rewrites the
-step, which was held out of this sweep. The second crosses files that another sweep
-owns.
+The two candidates below were left for later on purpose: the first rewrites
+the step, which was held out of that sweep, and the second crosses files
+another sweep owned. Both have since landed in one follow-up PR
+(`simplify/livetools-fold`):
+
+- **1 landed.** `pinSwitched` returns `plugins`, the built-in plugins on when
+  it pinned, read under the same lock as the tool generation. The step reads
+  the continuation, the prompt sections and the skills flag off those values.
+  `toolTable()` refuses a list where two plugins continue one agent
+  category. Deleted: the `continuations` and `sections` registries and their
+  `pin` calls, the matching `pinSwitched` fields, `ContinuationEntry`,
+  `PromptContribution` (`stepInstructions` takes the plugins), and the
+  write-only `prompt` field of `OpenStep` and of the step `stepFor` returns.
+- **2 landed.** Every consumer uses `API_KEY_PROVIDER_IDS` and
+  `ApiKeyProviderId`; both aliases are gone, the two `vi.mock` keys are
+  renamed, and `src/logger/redaction.ts` imports `ApiKeyProviderId` instead
+  of restating it.
 
 ## 1. The continuation and prompt registries project the on-plugin set
 

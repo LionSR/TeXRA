@@ -15,7 +15,7 @@
  */
 import { Cause, Effect } from 'effect';
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   apiProviderOfSecretName,
   codingPlanForApiProvider,
   loadApiKeyStatusMap,
@@ -122,7 +122,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   const profile = new SettingsProfileController({
     stores: roots,
-    loadProviderKeyStatuses: loadApiKeyStatusMap(secrets, API_PROVIDERS),
+    loadProviderKeyStatuses: loadApiKeyStatusMap(secrets, API_KEY_PROVIDER_IDS),
   });
   const modelSelection = new SettingsModelSelectionController({
     stores: roots,

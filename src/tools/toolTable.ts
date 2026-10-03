@@ -177,14 +177,6 @@ export type PromptSection = (ctx: {
   readonly config: ConfigProvider;
 }) => string;
 
-/** What a plugin adds to the system text of each request whose step pins
- *  it: its section, and whether the run's skill catalog lists the skills it
- *  ships. */
-export interface PromptContribution {
-  readonly section: PromptSection | null;
-  readonly skills: boolean;
-}
-
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
@@ -199,14 +191,15 @@ export interface ToolTable {
 
 /**
  * The table over `plugins`, which the app lists in order. A list that
- * repeats a plugin id or a tool name, claims one agent category's rounds
- * twice, or gives a toggle or setup copy to a plugin with no availability
- * probe is a defect of the list, refused when it is built.
+ * repeats a plugin id or a tool name, claims one agent category's rounds or
+ * continuation twice, or gives a toggle or setup copy to a plugin with no
+ * availability probe is a defect of the list, refused when it is built.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool>();
   const rounds = new Map<AgentCategory, RoundMode>();
+  const continued = new Set<AgentCategory>();
   const refuse = (reason: string): never => {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
@@ -224,6 +217,13 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
           `plugin ${plugin.id} drives ${plugin.rounds.category} agents' rounds, which another plugin already drives.`,
         );
       rounds.set(plugin.rounds.category, plugin.rounds);
+    }
+    if (plugin.continuation !== undefined) {
+      if (continued.has(plugin.continuation.category))
+        refuse(
+          `plugin ${plugin.id} continues ${plugin.continuation.category} agents, which another plugin already continues.`,
+        );
+      continued.add(plugin.continuation.category);
     }
     if (
       plugin.availability === undefined &&

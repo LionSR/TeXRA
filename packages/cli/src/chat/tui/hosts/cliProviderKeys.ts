@@ -15,7 +15,7 @@ import { Effect, Fiber } from 'effect';
 
 // Local imports - CLI runtime
 import {
-  type ApiProvider,
+  type ApiKeyProviderId,
   apiProviderOfSecretName,
   providerDisplayName,
 } from '@texra-ai/llm';
@@ -50,7 +50,7 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>,
   secrets: PlatformSecrets,
   stores: SettingsStores,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
   key: string,
 ) {
   const controller = new SettingsProfileKeyController({
@@ -79,7 +79,7 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
 export const commitCliProviderApiKey = (
   secrets: PlatformSecrets,
   stores: SettingsStores,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
   key: string,
 ): Effect.Effect<void, Error> =>
   commitProviderApiKeyVia(tuiUi, secrets, stores, provider, key);
@@ -130,7 +130,7 @@ const onboardingUi: Pick<PromptHost, 'input' | 'info' | 'confirm'> = {
 export const commitOnboardingProviderApiKey = (
   secrets: PlatformSecrets,
   stores: SettingsStores,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
   key: string,
 ): Effect.Effect<void, Error> =>
   commitProviderApiKeyVia(onboardingUi, secrets, stores, provider, key);
@@ -147,7 +147,7 @@ export const promptForCliProviderApiKey = Effect.fn(
 )(function* (
   secrets: PlatformSecrets,
   stores: SettingsStores,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ) {
   const label = yield* getProviderDisplayName(
     stores,

@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { API_PROVIDERS, lookupApiKeyOrigin } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, lookupApiKeyOrigin } from '@texra-ai/llm';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -64,7 +64,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         { concurrency: 'unbounded' },
       ),
       Effect.all(
-        API_PROVIDERS.map((provider) =>
+        API_KEY_PROVIDER_IDS.map((provider) =>
           lookupApiKeyOrigin(secrets, provider).pipe(
             Effect.catchTag('SecretsFailed', () =>
               Effect.succeed('unknown' as const),

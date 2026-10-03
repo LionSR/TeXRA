@@ -3,7 +3,7 @@ import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
 import {
-  type ApiProvider,
+  type ApiKeyProviderId,
   buildBaseModelOption,
   decideModelRoute,
   hasUsableApiKey,
@@ -166,7 +166,7 @@ function withAvailabilityFields(
  * said it would consult. A provider absent from the map was never read, which
  * the verdict treats as a defect rather than as an absent key.
  */
-type ProviderKeyStatuses = Partial<Record<ApiProvider, boolean>>;
+type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, boolean>>;
 
 /**
  * The host facts every model's route is decided over, resolved once before
@@ -187,7 +187,7 @@ interface ModelAvailabilityContext extends ModelRouteContext {
 
 /** The one provider whose key decides a model, and the plan it pays through. */
 interface ProviderKeyGate {
-  needsProviderKey: ApiProvider;
+  needsProviderKey: ApiKeyProviderId;
   usageRoute?: UsageRoute;
 }
 
@@ -323,7 +323,7 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
  */
 function readProviderKeyStatuses(
   secrets: PlatformSecrets,
-  providers: readonly ApiProvider[],
+  providers: readonly ApiKeyProviderId[],
 ): Effect.Effect<ProviderKeyStatuses> {
   return Effect.forEach(
     providers,
@@ -433,7 +433,7 @@ function withConsultedKeyStatuses(
   routed: RoutedModels,
   ctx: ModelAvailabilityContext,
 ): Effect.Effect<ModelAvailabilityContext> {
-  const consulted = new Set<ApiProvider>();
+  const consulted = new Set<ApiKeyProviderId>();
   for (const { gate } of routed.values()) {
     if (
       'needsProviderKey' in gate &&

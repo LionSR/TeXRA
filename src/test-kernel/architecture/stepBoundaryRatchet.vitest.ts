@@ -17,8 +17,9 @@ import {
  * Invariant 7 of the core concepts: a run's tools, continuation and prompt
  * contributions change only at a step boundary, and the change is recorded
  * there. The step (`src/agent/runtime/loop/step.ts`) is the one module that
- * applies the plugin switches to the live catalog, pins its tool,
- * continuation and prompt generations, installs the run's current step, and authors the
+ * applies the plugin switches to the live catalog, pins its tool generation
+ * and the plugins on (whose continuations and prompt sections it reads),
+ * installs the run's current step, and authors the
  * `tools.offered` row. Anything else doing one of these would change a
  * run's tools or continuation between steps, or change them unrecorded.
  * Failure modes guarded:
@@ -43,9 +44,8 @@ const RULES: readonly {
   readonly also: readonly string[];
 }[] = [
   {
-    what: 'applies the plugin switches and pins a tool, continuation or prompt generation',
-    pattern:
-      /\b(?:registry|continuations|sections)\.pin\b|\bpinSwitched\(|\.(?:continuations|sections)\.entries\b/,
+    what: 'applies the plugin switches and pins a tool generation and the plugins on',
+    pattern: /\bregistry\.pin\b|\bpinSwitched\(/,
     // The catalog itself, which serializes the switch read with the pin, and
     // the process's plugin catalog layer, which applies a switch flipped in this
     // process to the catalog at once (it pins nothing past the call).

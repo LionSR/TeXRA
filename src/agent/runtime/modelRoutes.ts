@@ -8,7 +8,7 @@ import {
   xaiCoordinator,
 } from '@texra-ai/llm/node';
 import {
-  type ApiProvider,
+  type ApiKeyProviderId,
   codexBackendModelId,
   decideModelRoute,
   exposeApiKey,
@@ -56,7 +56,7 @@ const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
 export interface ApiKeyRouteCredential {
   readonly apiKey: string;
   readonly endpoint: string;
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
   readonly route: 'api-key' | 'openrouter';
   readonly usageRoute: UsageRoute;
 }
@@ -90,7 +90,7 @@ type SubscriptionSession =
 
 /** An OAuth subscription session standing in for the provider's API key. */
 type SubscriptionRouteCredential = SubscriptionSession & {
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
 };
 
 export type RouteCredential =
@@ -131,7 +131,7 @@ function subscriptionAuthFailure(
 /** How one OAuth subscription route reads its signed-in session. */
 interface SubscriptionRouteRow {
   /** The API key the subscription stands in for. */
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
   /**
    * The session read, refreshing an expired session; `refreshRejected`
    * below is the one forced refresh. Its failure passes

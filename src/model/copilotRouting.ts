@@ -14,7 +14,7 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
  */
 
 import {
-  type ApiProvider,
+  type ApiKeyProviderId,
   decideModelRoute,
   isDeprecatedModel,
   isRetiredModel,
@@ -194,7 +194,7 @@ export function copilotRouteUnavailableReason(
 
 interface CopilotDirectFallback {
   readonly model: string;
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
 }
 
 /** Direct-key route for a model the editor was serving through Copilot. */

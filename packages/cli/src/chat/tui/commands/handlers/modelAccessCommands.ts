@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { type ApiProvider, codingPlanForApiProvider } from '@texra-ai/llm';
+import { type ApiKeyProviderId, codingPlanForApiProvider } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -25,7 +25,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
   function* (
     secrets: PlatformSecrets,
     stores: SettingsStores,
-    provider: ApiProvider,
+    provider: ApiKeyProviderId,
     key: string,
   ) {
     yield* commitCliProviderApiKey(secrets, stores, provider, key);

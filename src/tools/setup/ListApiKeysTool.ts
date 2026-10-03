@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { API_PROVIDERS, apiKeySecretName } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, apiKeySecretName } from '@texra-ai/llm';
 import { Secrets } from '@platform/secrets';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { executed } from '@tools/core/result';
@@ -32,7 +32,7 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
   }
 
   const knownProviderKeyMap = new Map(
-    API_PROVIDERS.map((p) => [apiKeySecretName(p), p] as const),
+    API_KEY_PROVIDER_IDS.map((p) => [apiKeySecretName(p), p] as const),
   );
 
   const providerKeys: string[] = [];
@@ -53,7 +53,7 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
     }
   }
 
-  const missingProviders = API_PROVIDERS.filter(
+  const missingProviders = API_KEY_PROVIDER_IDS.filter(
     (p) => !providerKeys.includes(p),
   );
 
@@ -96,7 +96,7 @@ const listApiKeys = Effect.fn('ListApiKeysTool.execute')(function* () {
   const providerSummary =
     providerKeys.length === 0
       ? 'no persisted provider API keys'
-      : `${providerKeys.length}/${API_PROVIDERS.length} persisted provider API keys`;
+      : `${providerKeys.length}/${API_KEY_PROVIDER_IDS.length} persisted provider API keys`;
 
   return executed(
     lines.join('\n'),

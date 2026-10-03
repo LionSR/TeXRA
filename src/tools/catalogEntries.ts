@@ -13,7 +13,6 @@ import stableStringify from 'safe-stable-stringify';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { toolDefinitionsFor } from '@agent/runtime/run/tools';
 import type { Generation } from '@tools/liveRegistry';
-import type { Continuation } from '@tools/toolTable';
 import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 
 /** One tool in the catalog, with the identity a step records. */
@@ -35,12 +34,6 @@ export interface ToolEntry {
 }
 
 export type ToolGeneration = Generation<string, ToolEntry>;
-
-/** A continuation in the catalog, with the plugin that contributes it. */
-export interface ContinuationEntry {
-  readonly plugin: string;
-  readonly continuation: Continuation;
-}
 
 /** What a hold found: the configuration problems the read found, and each
  *  configured plugin by id with why it offers no tools, if so. */

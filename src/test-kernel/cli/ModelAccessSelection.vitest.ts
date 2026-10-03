@@ -87,7 +87,7 @@ vi.mock('@texra-ai/llm', async (importOriginal) => {
   ];
   return {
     ...(await importOriginal<typeof import('@texra-ai/llm')>()),
-    API_PROVIDERS: providers,
+    API_KEY_PROVIDER_IDS: providers,
     hasUsableApiKey: mocks.hasUsableApiKey,
     lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
     configuredApiKeyProviders: () =>

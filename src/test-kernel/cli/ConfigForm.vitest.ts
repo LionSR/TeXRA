@@ -6,9 +6,9 @@ import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
-  API_PROVIDERS,
+  API_KEY_PROVIDER_IDS,
   type ApiKeyStatus,
-  type ApiProvider,
+  type ApiKeyProviderId,
 } from '@texra-ai/llm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
 import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
@@ -78,14 +78,14 @@ vi.mock('@cli/chat/tui/forms/ConfigForm', async (importOriginal) => {
 });
 
 function apiKeyStatuses(
-  overrides: Partial<Record<ApiProvider, ApiKeyStatus>> = {},
-): Record<ApiProvider, ApiKeyStatus> {
+  overrides: Partial<Record<ApiKeyProviderId, ApiKeyStatus>> = {},
+): Record<ApiKeyProviderId, ApiKeyStatus> {
   return Object.fromEntries(
-    API_PROVIDERS.map((provider) => [
+    API_KEY_PROVIDER_IDS.map((provider) => [
       provider,
       overrides[provider] ?? 'not-set',
     ]),
-  ) as Record<ApiProvider, ApiKeyStatus>;
+  ) as Record<ApiKeyProviderId, ApiKeyStatus>;
 }
 
 beforeEach(() => {
@@ -209,7 +209,7 @@ describe('ConfigForm helpers', () => {
 
 describe('CliConfigForm API-key status lifecycle', () => {
   it('settles a failed initial load to a stable unavailable state', async () => {
-    const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
+    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load.mockReturnValueOnce(
       Effect.tryPromise(() => initial.promise),
@@ -233,7 +233,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('refreshes provider status after saving without rendering the secret', async () => {
-    const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
+    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
     providerApiKeyRuntime.load
       .mockReturnValueOnce(Effect.succeed(apiKeyStatuses()))
       .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
@@ -263,7 +263,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('keeps a successfully saved key configured when its refresh fails', async () => {
-    const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
+    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load
       .mockReturnValueOnce(
@@ -300,8 +300,8 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('suppresses a stale mount response after the post-save refresh wins', async () => {
-    const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
-    const refreshed = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
+    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
+    const refreshed = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
     providerApiKeyRuntime.load
       .mockReturnValueOnce(Effect.tryPromise(() => initial.promise))
       .mockReturnValueOnce(Effect.tryPromise(() => refreshed.promise));
@@ -327,7 +327,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
   });
 
   it('ignores a pending status response after unmount', async () => {
-    const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
+    const initial = createDeferred<Record<ApiKeyProviderId, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load.mockReturnValueOnce(
       Effect.tryPromise(() => initial.promise),

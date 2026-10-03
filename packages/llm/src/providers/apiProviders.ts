@@ -12,18 +12,15 @@ import {
   type SecretsFailed,
 } from './credentials.js';
 import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from './providers.js';
-
-export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
-
-export type ApiProvider = (typeof API_PROVIDERS)[number];
+import type { ApiKeyProviderId } from './providerPlugins.js';
 
 /** Runtime-checked narrowing for provider strings. */
-export function isApiProvider(provider: string): provider is ApiProvider {
-  return (API_PROVIDERS as readonly string[]).includes(provider);
+export function isApiProvider(provider: string): provider is ApiKeyProviderId {
+  return (API_KEY_PROVIDER_IDS as readonly string[]).includes(provider);
 }
 
 /** Secret storage key for a provider's API key. */
-export function apiKeySecretName(provider: ApiProvider): string {
+export function apiKeySecretName(provider: ApiKeyProviderId): string {
   return `apiKey.${provider}`;
 }
 
@@ -33,7 +30,9 @@ export function apiKeySecretName(provider: ApiProvider): string {
  * inverse of {@link apiKeySecretName}, for subscribers of the store's
  * `credentialChanged` signal.
  */
-export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
+export function apiProviderOfSecretName(
+  key: string,
+): ApiKeyProviderId | undefined {
   const provider = key.startsWith('apiKey.') ? key.slice('apiKey.'.length) : '';
   return isApiProvider(provider) ? provider : undefined;
 }
@@ -74,7 +73,7 @@ export function exposeApiKey(key: Redacted.Redacted<string>): string {
  */
 function resolveApiKey(
   credentials: CredentialStore,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
   return Effect.map(
     resolveCredential(credentials, apiKeySecretName(provider), [
@@ -106,7 +105,7 @@ function resolveApiKey(
  */
 export function lookupApiKey(
   credentials: CredentialStore,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed> {
   return Effect.map(
     resolveApiKey(credentials, provider),
@@ -117,7 +116,7 @@ export function lookupApiKey(
 /** Origin of the resolved key (`secret` / `env` / `none`). See trio doc above. */
 export function lookupApiKeyOrigin(
   credentials: CredentialStore,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ): Effect.Effect<ApiKeyOrigin, SecretsFailed> {
   return Effect.map(
     resolveApiKey(credentials, provider),
@@ -132,7 +131,7 @@ const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
 };
 
 /** Resolve key statuses for providers from their resolved key origins. */
-export function loadApiKeyStatusMap<const Provider extends ApiProvider>(
+export function loadApiKeyStatusMap<const Provider extends ApiKeyProviderId>(
   credentials: CredentialStore,
   providers: readonly Provider[],
 ): Effect.Effect<Record<Provider, ApiKeyStatus>, SecretsFailed> {
@@ -158,28 +157,28 @@ export function loadApiKeyStatusMap<const Provider extends ApiProvider>(
  */
 export function configuredApiKeyProviders(
   credentials: CredentialStore,
-): Effect.Effect<ApiProvider[], SecretsFailed> {
+): Effect.Effect<ApiKeyProviderId[], SecretsFailed> {
   return Effect.forEach(
-    API_PROVIDERS,
+    API_KEY_PROVIDER_IDS,
     (provider) => lookupApiKeyOrigin(credentials, provider),
     { concurrency: 'unbounded' },
   ).pipe(
     Effect.map((origins) =>
-      API_PROVIDERS.filter((_, index) => origins[index] !== 'none'),
+      API_KEY_PROVIDER_IDS.filter((_, index) => origins[index] !== 'none'),
     ),
   );
 }
 
 /** No key is configured for the provider, in secret storage or the env. */
 class ApiKeyMissing extends Data.TaggedError('ApiKeyMissing')<{
-  readonly provider: ApiProvider;
+  readonly provider: ApiKeyProviderId;
   readonly message: string;
 }> {}
 
 /** Get an API key, failing if none is configured. See trio doc above. */
 export function getApiKey(
   credentials: CredentialStore,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | ApiKeyMissing> {
   return Effect.flatMap(
     resolveApiKey(credentials, provider),
@@ -202,7 +201,7 @@ export function getApiKey(
  */
 export function hasUsableApiKey(
   credentials: CredentialStore,
-  provider: ApiProvider,
+  provider: ApiKeyProviderId,
 ): Effect.Effect<boolean, SecretsFailed> {
   return Effect.map(
     resolveApiKey(credentials, provider),
