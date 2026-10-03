@@ -194,13 +194,14 @@ export type SessionHandleInit = Partial<
   readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
   /**
-   * The opener is a window (the TUI, desktop, the extension): at open the
-   * session lists, or under `texra.resumeOnOpen: auto` continues, the
-   * tasks a closed or crashed TeXRA left interrupted, and resumes a blocked
-   * one once what it needs is back (`followInterruptedTasks`). Headless runs
-   * and the SDK leave it unset: their policy is off (ruling Q2).
+   * The opener is a window (the TUI, desktop, the extension), which follows
+   * its interrupted tasks (`followInterruptedTasks`): it resumes a task
+   * whose resume was blocked once what it needs is back, and with `offer`
+   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
+   * tasks a closed or crashed TeXRA left interrupted. Headless runs and the
+   * SDK leave it unset: their policy is off (ruling Q2).
    */
-  readonly offersInterruptedTasks?: boolean;
+  readonly interruptedTasks?: 'offer' | 'retry';
   /** An ephemeral session opens a throwaway database instead of the
    *  project's. */
   readonly transcriptMode?:
@@ -1235,6 +1236,16 @@ export class SessionHandle {
         : SubscriptionRef.update(this.graph.local, (local) => {
             const rest = local.resumeBlocked.filter((b) => b.runId !== runId);
             if (blocked === null && rest.length === local.resumeBlocked.length)
+              return local;
+            // The same block again leaves the state, and the view, as it is.
+            const held = local.resumeBlocked.find((b) => b.runId === runId);
+            if (
+              blocked !== null &&
+              held !== undefined &&
+              held.retry === blocked.retry &&
+              held.reason.kind === blocked.reason.kind &&
+              held.reason.name === blocked.reason.name
+            )
               return local;
             return {
               ...local,

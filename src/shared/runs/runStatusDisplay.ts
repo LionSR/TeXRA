@@ -113,15 +113,20 @@ export function runInterruptedMessage(): string {
   return 'The process running this task stopped before it finished. Resume it to continue.';
 }
 
-/** Banner copy for a run a resume found blocked: what it waits for. */
-export function runResumeBlockedMessage(reason: ResumeBlocker): string {
+/** Banner copy for a run a resume found blocked: what it waits for, and
+ *  whether it continues by itself then (`retry`: a resume was asked for). */
+export function runResumeBlockedMessage(
+  reason: ResumeBlocker,
+  retry: boolean,
+): string {
+  const then = retry ? 'It continues once' : 'You can resume it once';
   switch (reason.kind) {
     case 'agentMissing':
-      return `This task's agent, ${reason.name}, is no longer installed. It continues once the agent is back.`;
+      return `This task's agent, ${reason.name}, is no longer installed. ${then} the agent is back.`;
     case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. It continues once the plugin is on.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is off. ${then} the plugin is on.`;
     case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It continues once you trust it.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. ${then} you trust it.`;
   }
 }
 

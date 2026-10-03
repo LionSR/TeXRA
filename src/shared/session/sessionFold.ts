@@ -606,11 +606,14 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const readOnly = heldElsewhere || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
-  const resumeBlocked =
-    local.resumeBlocked.find((b) => b.runId === run.id)?.reason ?? null;
+  const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
+  const resumeBlocked = blockedEntry?.reason ?? null;
   let statusDetail: string | null = unreadable ?? null;
-  if (statusDetail === null && resumeBlocked !== null)
-    statusDetail = runResumeBlockedMessage(resumeBlocked);
+  if (statusDetail === null && blockedEntry !== undefined)
+    statusDetail = runResumeBlockedMessage(
+      blockedEntry.reason,
+      blockedEntry.retry,
+    );
   else if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
@@ -1325,7 +1328,7 @@ function foldLocal(view: SessionView, local: LocalRuntimeState): void {
   for (const runId of new Set([...before.keys(), ...after.keys()]))
     if (before.get(runId) !== after.get(runId)) touched.add(runId);
   const blockers = (state: LocalRuntimeState) =>
-    new Map(state.resumeBlocked.map((b) => [b.runId, b.reason]));
+    new Map(state.resumeBlocked.map((b) => [b.runId, b]));
   const [held, holding] = [blockers(previous), blockers(local)];
   for (const runId of new Set([...held.keys(), ...holding.keys()]))
     if (held.get(runId) !== holding.get(runId)) touched.add(runId);

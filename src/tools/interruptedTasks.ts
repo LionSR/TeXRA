@@ -1,7 +1,8 @@
 /**
  * Open-time continuation (durable harness, gap 2; ruling Q2), for a session
  * a TUI, desktop or extension window opened. Headless runs and the SDK never
- * start it: their policy is `off`.
+ * start it: their policy is `off`. `texra resume <id>` starts only its
+ * retries: an open-time resume beside that one would race it.
  *
  * At open it finds the interrupted roots: runs no process holds that did not
  * end, launched by a user (an owned child is resumed by its parent's call,
@@ -15,7 +16,7 @@
  * checked again, its reason cleared once nothing blocks it, and the run
  * resumed when a resume was asked for (`retry`).
  */
-import { Deferred, Effect, Queue } from 'effect';
+import { Deferred, Effect, Queue, type Scope } from 'effect';
 
 import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
 import { resumeBlocker } from '@agent/runtime/resumeBlocker';
@@ -23,6 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   RESUME_ON_OPEN_SETTING,
   RUN_SUBSTATE,
@@ -58,7 +60,12 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
   );
 
 export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
-  function* (session: SessionHandle) {
+  function* (
+    session: SessionHandle,
+    /** Find the interrupted tasks at open too, not only retry blocked
+     *  resumes. */
+    offer: boolean,
+  ) {
     // Subscribed before the open-time pass, so a catalog change during it
     // is not missed.
     const changed = yield* Queue.sliding<void>(1);
@@ -72,44 +79,66 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
     );
     yield* Deferred.await(subscribed);
 
-    const policy = yield* readSettingFrom<ResumeOnOpen>(
-      session.roots,
-      RESUME_ON_OPEN_SETTING.configKey,
-    );
-    const view = yield* session.readView([]);
-    const roots = [...view.runs.values()].filter(
-      (run) =>
-        run.parentId === null &&
-        run.identity.kind === 'agent' &&
-        run.blocked === null &&
-        run.substate !== RUN_SUBSTATE.PAUSED &&
-        !isTerminalOutcomePhase(run.status) &&
-        !session.runs.isLive(run.id),
-    );
-    // Interrupted: no live process holds it (the claim's owner is proved
-    // dead, or there is none).
-    const interrupted = yield* Effect.filter(roots, (run) =>
-      Effect.map(
-        session.claimOwner(run.id),
-        (claim) => claimStanding(claim).kind === 'free',
-      ),
-    );
     // One check of a run at a time: a resume runs until the run is idle,
-    // and a change meanwhile must not resume it twice.
-    const checking = new Set<RunId>();
-    const check = (runId: RunId, resume: boolean) =>
+    // and a change meanwhile must not resume it twice. A change that lands
+    // during a check checks the run again after it, with what it then
+    // records, so no change is lost to a check that read the catalog before.
+    const checking = new Map<RunId, { again: boolean }>();
+    const check = (
+      runId: RunId,
+      resume: boolean,
+    ): Effect.Effect<void, never, Scope.Scope | AgentCatalogServices> =>
       Effect.suspend(() => {
-        if (checking.has(runId)) return Effect.void;
-        checking.add(runId);
+        const running = checking.get(runId);
+        if (running !== undefined) {
+          running.again = true;
+          return Effect.void;
+        }
+        const entry = { again: false };
+        checking.set(runId, entry);
         return Effect.asVoid(
           Effect.forkScoped(
             checkRun(session, runId, resume).pipe(
-              Effect.ensuring(Effect.sync(() => checking.delete(runId))),
+              Effect.ensuring(
+                Effect.suspend(() => {
+                  checking.delete(runId);
+                  const blocked = session
+                    .resumeBlocks()
+                    .find((b) => b.runId === runId);
+                  return entry.again && blocked !== undefined
+                    ? check(runId, blocked.retry)
+                    : Effect.void;
+                }),
+              ),
             ),
           ),
         );
       });
-    for (const run of interrupted) yield* check(run.id, policy === 'auto');
+    if (offer) {
+      const policy = yield* readSettingFrom<ResumeOnOpen>(
+        session.roots,
+        RESUME_ON_OPEN_SETTING.configKey,
+      );
+      const view = yield* session.readView([]);
+      const roots = [...view.runs.values()].filter(
+        (run) =>
+          run.parentId === null &&
+          run.identity.kind === 'agent' &&
+          run.blocked === null &&
+          run.substate !== RUN_SUBSTATE.PAUSED &&
+          !isTerminalOutcomePhase(run.status) &&
+          !session.runs.isLive(run.id),
+      );
+      // Interrupted: no live process holds it (the claim's owner is proved
+      // dead, or there is none).
+      const interrupted = yield* Effect.filter(roots, (run) =>
+        Effect.map(
+          session.claimOwner(run.id),
+          (claim) => claimStanding(claim).kind === 'free',
+        ),
+      );
+      for (const run of interrupted) yield* check(run.id, policy === 'auto');
+    }
     yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(

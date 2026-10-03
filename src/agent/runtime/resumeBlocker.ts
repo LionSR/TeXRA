@@ -42,10 +42,14 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   );
   yield* settledCatalog;
   const entry = (yield* resolve) ?? (yield* Effect.andThen(refresh(), resolve));
-  if (entry === undefined || entry === null)
-    return { kind: 'agentMissing', name: config.agent };
-  if (entry.source !== 'plugin') return null;
-  const plugin = entry.name.slice(0, entry.name.indexOf(':'));
+  // The catalog lists a plugin's agents only while the plugin loads, so a
+  // plugin agent it misses is answered by the plugin's install record.
+  const name = entry?.name ?? config.agent;
+  const pluginAgent =
+    entry != null ? entry.source === 'plugin' : config.agentSource === 'plugin';
+  if (!pluginAgent)
+    return entry == null ? { kind: 'agentMissing', name: config.agent } : null;
+  const plugin = name.slice(0, name.indexOf(':'));
   const load = yield* readInstalledPluginLoad(session.roots);
   if (load.loadable.some(({ record }) => record.name === plugin)) return null;
   // A plugin trust withholds names itself; any other is off or gone.

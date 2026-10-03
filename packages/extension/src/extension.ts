@@ -462,7 +462,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const runtimeSession = yield* initializeDefaultSession({
     roots,
     responseTextProcessing: createTexraResponseTextProcessing(),
-    offersInterruptedTasks: true,
+    interruptedTasks: 'offer',
   });
   if (runtimeSession.storeMovedAside) {
     yield* Effect.forkDetach(

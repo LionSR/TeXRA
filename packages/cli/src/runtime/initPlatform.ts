@@ -93,9 +93,9 @@ type CliPlatformInitOptions = Pick<
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
-  /** The chat TUI, opened without a task to resume: its session lists or
-   *  continues the interrupted tasks (`SessionHandleInit`). */
-  readonly offersInterruptedTasks?: boolean;
+  /** The chat TUI: how its session follows interrupted tasks
+   *  (`SessionHandleInit.interruptedTasks`). */
+  readonly interruptedTasks?: 'offer' | 'retry';
 };
 
 /**
@@ -376,7 +376,9 @@ export function initCliPlatform(
               initializeDefaultSession({
                 roots,
                 responseTextProcessing: createTexraResponseTextProcessing(),
-                offersInterruptedTasks: context.offersInterruptedTasks === true,
+                ...(context.interruptedTasks !== undefined && {
+                  interruptedTasks: context.interruptedTasks,
+                }),
               }),
               () => teardownDefaultSession(),
             ).pipe(
