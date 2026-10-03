@@ -98,9 +98,10 @@ inside `ModelInvoker` (an automatic route-scoped batch under the session's
 
 Every consumer imports `@texra-ai/llm` or `@texra-ai/llm/node`, so
 `package.json`'s `exports` map is the boundary the resolver enforces: a module
-this package does not export cannot be reached from outside it. The protocol
-suites in `src/test-kernel/llm/` reach `src/api/` by relative path, as
-`test-live/` does. Inside the package a module imports the file that defines a
+this package does not export cannot be reached from outside it. Tests are the
+one exception: the protocol suites in `src/test-kernel/llm/` reach `src/api/`
+and the sign-in suites in `src/test-kernel/auth/` reach `src/oauth/` by
+relative path, as `test-live/` does. Inside the package a module imports the file that defines a
 symbol, in one acyclic direction — `protocol` ← `message` ← `errors` ←
 `api/transport` ← `turn`, with each protocol's own modules below its entry —
 and the only files that re-export are the two entries, whose published names
