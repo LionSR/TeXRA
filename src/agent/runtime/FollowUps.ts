@@ -133,6 +133,9 @@ export interface FollowUps {
   readonly consume: (
     state: RunState,
     batch: FollowUpBatch,
+    /** What the batch commits on: `state`, moved first by a step that
+     *  must precede it (a background compaction a reset settles). */
+    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
   ) => Effect.Effect<
     ConsumedFollowUps,
     Error,
@@ -382,13 +385,15 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   const consume = Effect.fn('FollowUps.consume')(function* (
-    state: RunState,
+    current: RunState,
     batch: FollowUpBatch,
+    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
   ): Effect.fn.Return<
     ConsumedFollowUps,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
+    const state = prepare === undefined ? current : yield* prepare(current);
     const joined = yield* batchRows(state, batch);
     const committed = yield* Effect.uninterruptible(
       runHistory.appendBatch(runId, state, [
@@ -415,10 +420,14 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
 
   /** {@link consume}, settling a view edit's waiter on every exit: its
    *  commit, a refusal, or a stop before either. */
-  const consumeSettled = (state: RunState, batch: FollowUpBatch) =>
+  const consumeSettled = (
+    state: RunState,
+    batch: FollowUpBatch,
+    prepare?: (state: RunState) => Effect.Effect<RunState, Error>,
+  ) =>
     batch.kind !== 'edit'
-      ? consume(state, batch)
-      : consume(state, batch).pipe(
+      ? consume(state, batch, prepare)
+      : consume(state, batch, prepare).pipe(
           Effect.onExit((exit) =>
             Deferred.done(
               batch.edit.done,

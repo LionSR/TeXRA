@@ -52,7 +52,7 @@ import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId } from '@utils/core';
 
 import { AgentRun } from '../run/AgentRun';
-import { compactIfNeeded } from '../run/compaction';
+import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { stored } from '../run/requestContext';
 import { dispatchFactsFor, toolDefinitionsFor } from '../run/tools';
@@ -163,6 +163,18 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       : null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = rounds ? null : yield* claimFollowUps(run, runHistory);
+  // Round mode compacts only on overflow (its policy's own): rounds build
+  // on each other.
+  const compaction =
+    rounds === null
+      ? yield* backgroundCompaction({
+          runId,
+          runHistory,
+          logger,
+          invoker,
+          stores: session.roots,
+        })
+      : null;
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -558,6 +570,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
+        if (compaction !== null && run.pendingModelSwitch.value !== null)
+          state = yield* cell.adopt(
+            yield* compaction.settle(state, 'the model is switching'),
+          );
         state = yield* applyPendingModelSwitch(state, cell, snapshot);
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
@@ -605,20 +621,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
         if (state.openAttempt === null) {
-          const force = compactionRequested ? 'request' : null;
+          const requested = compactionRequested;
           compactionRequested = false;
-          // Round mode compacts only on overflow: rounds build on each other.
-          if (rounds === null)
+          if (compaction !== null)
             state = yield* cell.adopt(
-              yield* compactIfNeeded(state, {
-                runId,
-                runHistory,
-                logger,
-                bound,
-                invoker,
-                stores: session.roots,
-                force,
-              }),
+              yield* compaction.atBoundary(state, bound, requested),
             );
           // A compaction replaced the history, the context updates in it
           // too: a new step renders the system text anew, each one in it.
@@ -748,9 +755,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               );
             }
           }
+          // A reset or handoff replaces the view a background summary
+          // was computed from: that summary lands, or stops, first.
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
             batch,
+            batch.kind === 'edit' && compaction !== null
+              ? (at) => compaction.settle(at, 'the task is being reset')
+              : undefined,
           );
           state = yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;

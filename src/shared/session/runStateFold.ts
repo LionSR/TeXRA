@@ -179,6 +179,9 @@ export type RunState = RunPosition & {
   /** The last completed turn, from its `response` row: the finish reason a
    *  loop reads when it processes a response it did not just receive. */
   readonly lastTurn: TurnResult | null;
+  /** The `seq` of the response row `lastTurn` came from: a view edit after
+   *  it leaves its count measuring a history the view no longer holds. */
+  readonly lastTurnSeq: number | null;
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
@@ -280,6 +283,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   continuation: null,
   openAttempt: null,
   lastTurn: null,
+  lastTurnSeq: null,
   pendingResponse: null,
   pendingIntents: byId([]),
   decidedSinceActivation: new Set(),
@@ -531,6 +535,7 @@ function foldRow(
               p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
             openAttempt: null,
             lastTurn: p.turn,
+            lastTurnSeq: row.seq,
             pendingRetry: null,
             usage: addTurnUsage(state.usage, p.usage),
           };

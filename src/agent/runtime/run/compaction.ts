@@ -2,8 +2,11 @@
  * Conversation compaction for the tool-use loop: a run-scoped step beside
  * the loop that writes a `context.edit` with cause `compaction` (triggered
  * by `context-limit`, `context-window` when a turn overflowed the window, or
- * `user` for a `/compact`), replacing the whole history, from the
- * history retained by the run history and nothing else. The trigger is
+ * `user` for a `/compact`), replacing the history it summarized, from the
+ * history retained by the run history and nothing else. A threshold
+ * compaction of a conversation runs in the background
+ * ({@link backgroundCompaction}); a `/compact` and an overflow wait for
+ * theirs. The trigger is
  * the compaction threshold setting measured against the bound model's
  * context window (the run's `contextTokens`), a `/compact` request, or an
  * overflow; the replacement is a summary the bound model produces through the
@@ -13,7 +16,7 @@
  * The compaction prompts and the summary cap live here because this is the
  * reader that owns them on the run loop.
  */
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
 
 import {
   logContextManagementEvent,
@@ -37,6 +40,7 @@ import { rowAggregate, type Message } from '../loop/rows';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
 import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
+import type { CallResult } from './modelCall';
 import type { BoundModel } from './modelBinding';
 
 /**
@@ -127,63 +131,72 @@ const COMPACTION_REASON = {
   threshold: 'token threshold exceeded',
 } as const;
 
-/**
- * Compact the run's history when it reaches the configured share of the
- * bound model's context window, or when the user asked for it. Returns the
- * folded state after the `context.edit` row, or the state unchanged when
- * nothing was compacted (below the threshold, too short to summarize, or a
- * summary attempt that failed, which is logged and shown, never a stop).
- */
-export const compactIfNeeded = Effect.fn('compaction.check')(function* (
+type Reason = keyof typeof COMPACTION_REASON;
+
+/** A summary the bound model produced of messages `[0, to)`. */
+interface Summary {
+  readonly replacement: Message;
+  readonly usage: CallResult['usage'];
+  readonly to: number;
+  readonly tokensBefore: number;
+  readonly contextWindow: number;
+  readonly activity: ReturnType<typeof startCompactionActivity>;
+}
+
+/** Whether the history has reached the threshold share of the window. */
+const overThreshold = Effect.fn('compaction.overThreshold')(function* (
   state: RunState,
-  input: CompactionInput,
-): Effect.fn.Return<
-  RunState,
-  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
-> {
-  const { runId, runHistory, logger, bound, force } = input;
+  input: Pick<CompactionInput, 'stores' | 'bound'>,
+) {
   const percent = yield* readSettingFrom<number>(
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );
-  if (force === null && percent <= 0) return state;
+  const contextWindow = input.bound.contextWindow;
+  return (
+    percent > 0 &&
+    contextWindow > 0 &&
+    contextTokens(state) > Math.floor((percent / 100) * contextWindow)
+  );
+});
+
+/**
+ * Summarize the whole history `state` holds, or null when it is too short
+ * to summarize or the summary failed, each logged and shown as the
+ * compaction's activity, never silent.
+ */
+const summarize = Effect.fn('compaction.summarize')(function* (
+  state: RunState,
+  input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker'>,
+  reason: Reason,
+): Effect.fn.Return<Summary | null> {
+  const { logger, bound } = input;
   const conversation = state.messages;
   if (conversation.length <= 2) {
-    if (force !== null) {
+    if (reason !== 'threshold') {
       logger.debug('Conversation too short for compaction, skipping');
     }
-    return state;
+    return null;
   }
   const contextWindow = bound.contextWindow;
   const tokensBefore = contextTokens(state);
-  if (
-    force === null &&
-    (contextWindow <= 0 ||
-      tokensBefore <= Math.floor((percent / 100) * contextWindow))
-  ) {
-    return state;
-  }
-
-  logger.debug(
-    `Compacting conversation (${COMPACTION_REASON[force ?? 'threshold']})`,
-    {
-      data: {
-        inputTokens: tokensBefore,
-        utilizationPercent: roundedUtilizationPercent(
-          tokensBefore,
-          contextWindow,
-        ),
+  logger.debug(`Compacting conversation (${COMPACTION_REASON[reason]})`, {
+    data: {
+      inputTokens: tokensBefore,
+      utilizationPercent: roundedUtilizationPercent(
+        tokensBefore,
         contextWindow,
-      },
+      ),
+      contextWindow,
     },
-  );
+  });
   const activity = startCompactionActivity(logger);
   // The summary is a model call like any other: the invoker gates, prices
-  // and reports it, and its usage rides the row below. It leaves out the
-  // context updates: the next step renders them into the system text anew.
-  // Its output fits what its input leaves of the window, up to the model's
-  // own limit; a limit too small for a manual thinking budget runs without
-  // thinking (the model's rule, not this one's).
+  // and reports it, and its usage rides the edit that lands it. It leaves
+  // out the context updates: the next step renders them into the system
+  // text anew. Its output fits what its input leaves of the window, up to
+  // the model's own limit; a limit too small for a manual thinking budget
+  // runs without thinking (the model's rule, not this one's).
   const summarized = yield* Effect.exit(
     input.invoker.call(
       {
@@ -218,43 +231,201 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
       `Compaction failed, continuing with original messages: ${toErrorMessage(Cause.squash(summarized.cause))}`,
       { data: Cause.squash(summarized.cause) },
     );
-    return state;
+    return null;
   }
   // The summary turn's own text, trimmed: an empty summary is skipped.
   const summary = turnText(summarized.value.turn).trim();
   if (!summary) {
     logger.warn('Compaction returned empty summary, skipping');
     activity.finish('skipped');
-    return state;
+    return null;
   }
-  const replacement: Message = {
-    role: 'user',
-    content: [{ kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` }],
+  return {
+    replacement: {
+      role: 'user',
+      content: [
+        { kind: 'text', text: `${COMPACTION_SUMMARY_PREFIX}${summary}` },
+      ],
+    },
+    usage: summarized.value.usage,
+    to: conversation.length,
+    tokensBefore,
+    contextWindow,
+    activity,
   };
-  const tokensAfter = Math.max(1, estimateMessageTokens([replacement]));
-  // The whole conversation is replaced by the summary, and a provider-side
-  // continuation over the old history is dropped with it.
-  const compacted = yield* runHistory.appendBatch(runId, state, [
+});
+
+/**
+ * Land `summary`, computed at edit `base`: messages `[0, summary.to)` are
+ * replaced by it, and a provider-side continuation over the old history is
+ * dropped with them. What the loop appended since stays after it.
+ */
+const land = Effect.fn('compaction.land')(function* (
+  state: RunState,
+  input: Pick<CompactionInput, 'runId' | 'runHistory' | 'logger'>,
+  summary: Summary,
+  base: number | null,
+  reason: Reason,
+) {
+  const compacted = yield* input.runHistory.appendBatch(input.runId, state, [
     {
       type: 'context.edit',
-      aggregateId: rowAggregate(runId),
+      aggregateId: rowAggregate(input.runId),
       payload: {
         cause: 'compaction',
-        trigger: COMPACTION_TRIGGER[force ?? 'threshold'],
-        base: state.lastEdit,
-        range: { from: 0, to: conversation.length },
-        messages: [replacement],
-        usage: summarized.value.usage,
+        trigger: COMPACTION_TRIGGER[reason],
+        base,
+        range: { from: 0, to: summary.to },
+        messages: [summary.replacement],
+        usage: summary.usage,
       },
     },
   ]);
   logCompactionEvent({
-    logger,
-    tokensBefore,
-    tokensAfter,
-    contextWindow,
-    details: `${conversation.length} messages summarized`,
+    logger: input.logger,
+    tokensBefore: summary.tokensBefore,
+    tokensAfter: Math.max(1, estimateMessageTokens(compacted.messages)),
+    contextWindow: summary.contextWindow,
+    details: `${summary.to} messages summarized`,
   });
-  activity.finish('completed');
+  summary.activity.finish('completed');
   return compacted;
 });
+
+/**
+ * Compact the run's history when it reaches the configured share of the
+ * bound model's context window, or when asked to, waiting for the summary.
+ * Returns the folded state after the `context.edit` row, or the state
+ * unchanged when nothing was compacted (below the threshold, too short to
+ * summarize, or a summary attempt that failed, which is logged and shown,
+ * never a stop).
+ */
+export const compactIfNeeded = Effect.fn('compaction.check')(function* (
+  state: RunState,
+  input: CompactionInput,
+): Effect.fn.Return<
+  RunState,
+  RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
+> {
+  const reason = input.force ?? 'threshold';
+  if (input.force === null && !(yield* overThreshold(state, input)))
+    return state;
+  const summary = yield* summarize(state, input, reason);
+  if (summary === null) return state;
+  return yield* land(state, input, summary, state.lastEdit, reason);
+});
+
+/**
+ * The tool-use loop's compaction (durable harness, gap 4). Crossing the
+ * threshold starts the summary on a fiber in the run's scope, so a stop
+ * interrupts it, and the loop goes on with the full history; a later
+ * request boundary lands it, as the edit of messages `[0, to)` at the
+ * `base` it was computed from, keeping what was appended since. Every other
+ * edit of the view is the loop's own (a `/compact`, a model switch, a reset
+ * or a handoff), and each settles this first ({@link settle}): a finished
+ * summary lands, and one still running is cut short. So no summary meets a
+ * view another edit moved, and the fold's base check refuses one that
+ * would. A history past the window waits for the summary; a `/compact`
+ * settles, then summarizes the whole history.
+ */
+export interface BackgroundCompaction {
+  /** At a request boundary, with no attempt open. */
+  readonly atBoundary: (
+    state: RunState,
+    bound: BoundModel,
+    requested: boolean,
+  ) => Effect.Effect<
+    RunState,
+    RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
+  >;
+  /** Before another edit of the view: land a finished summary, cut short
+   *  one still running (`why` says what edit is coming). */
+  readonly settle: (
+    state: RunState,
+    why: string,
+  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
+}
+
+export const backgroundCompaction = Effect.fn('compaction.background')(
+  function* (
+    input: Omit<CompactionInput, 'force' | 'bound'>,
+  ): Effect.fn.Return<BackgroundCompaction, never, Scope.Scope> {
+    const scope = yield* Effect.scope;
+    /** The summary being made off the loop, of the view at `base`. */
+    let pending: {
+      readonly base: number | null;
+      readonly fiber: Fiber.Fiber<Summary | null>;
+    } | null = null;
+
+    /** Land the pending summary's outcome, and forget it. */
+    const landPending = (state: RunState, exit: Exit.Exit<Summary | null>) => {
+      const base = pending?.base ?? null;
+      pending = null;
+      if (Exit.isSuccess(exit))
+        return exit.value === null
+          ? Effect.succeed(state)
+          : land(state, input, exit.value, base, 'threshold');
+      // A failed summary call is the summary's own warning; this is a
+      // defect in making one.
+      input.logger.warn(
+        `A background compaction stopped: ${toErrorMessage(Cause.squash(exit.cause))}`,
+        { data: Cause.squash(exit.cause) },
+      );
+      return Effect.succeed(state);
+    };
+
+    const settle = Effect.fn('compaction.settle')(function* (
+      state: RunState,
+      why: string,
+    ) {
+      if (pending === null) return state;
+      const running = pending.fiber;
+      const finished = yield* Effect.sync(() => running.pollUnsafe());
+      if (finished !== undefined) return yield* landPending(state, finished);
+      yield* Fiber.interrupt(pending.fiber);
+      pending = null;
+      input.logger.warn(
+        `A background compaction was cut short (${why}); nothing it summarized was applied.`,
+      );
+      return state;
+    });
+
+    const atBoundary = Effect.fn('compaction.atBoundary')(function* (
+      state: RunState,
+      bound: BoundModel,
+      requested: boolean,
+    ) {
+      if (requested) {
+        const settled = yield* settle(state, 'a /compact replaces it');
+        return yield* compactIfNeeded(settled, {
+          ...input,
+          bound,
+          force: 'request',
+        });
+      }
+      if (pending !== null) {
+        // A history past the window cannot go out: wait for the summary.
+        const running = pending.fiber;
+        const full =
+          bound.contextWindow > 0 &&
+          contextTokens(state) >= bound.contextWindow;
+        const finished = full
+          ? yield* Fiber.await(running)
+          : yield* Effect.sync(() => running.pollUnsafe());
+        return finished === undefined
+          ? state
+          : yield* landPending(state, finished);
+      }
+      if (!(yield* overThreshold(state, { ...input, bound }))) return state;
+      pending = {
+        base: state.lastEdit,
+        fiber: yield* summarize(state, { ...input, bound }, 'threshold').pipe(
+          Effect.forkIn(scope),
+        ),
+      };
+      return state;
+    });
+
+    return { atBoundary, settle };
+  },
+);
