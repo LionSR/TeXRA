@@ -6,7 +6,7 @@ import {
   type RunRegistry,
   type RunRegistryInit,
 } from '@agent/runtime/runRegistry';
-import type { PluginServices } from '@platform/processRuntime';
+import type { PluginContext } from '@platform/processRuntime';
 import {
   claudeAgentSessionsLayer,
   codexThreadsLayer,
@@ -75,7 +75,7 @@ export const testCallPluginServices = Layer.merge(
 export function testPinPlugins(
   runs: () => RunRegistry,
 ): RunRegistryInit['pinPlugins'] {
-  let built: Context.Context<PluginServices> | undefined;
+  let built: PluginContext | undefined;
   return () =>
     Effect.suspend(() =>
       built !== undefined
@@ -84,7 +84,7 @@ export function testPinPlugins(
             Effect.provideService(Runs, runs()),
             Scope.provide(Scope.makeUnsafe()),
             Effect.map((services) => {
-              built = services as Context.Context<PluginServices>;
+              built = services as PluginContext;
               return built;
             }),
           ),
@@ -93,4 +93,4 @@ export function testPinPlugins(
 
 /** A registry's `pinPlugins` for a suite that runs no tool: serves nothing. */
 export const pinNoPlugins: RunRegistryInit['pinPlugins'] = () =>
-  Effect.succeed(Context.empty() as Context.Context<PluginServices>);
+  Effect.succeed(Context.empty() as PluginContext);

@@ -32,8 +32,6 @@ import {
   Stream,
   SubscriptionRef,
   Scope,
-  type FileSystem,
-  type Path,
 } from 'effect';
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
@@ -111,14 +109,10 @@ import {
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
-import { InlineComments } from '@tools/comment/InlineCommentTool';
-import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { LiveTools } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
-import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
@@ -142,7 +136,6 @@ import {
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'sessionLayer';
 
@@ -1010,25 +1003,9 @@ interface ProcessRuntimeOptions {
    */
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
-  /**
-   * The host's inline-comment provider, for the one host with a Comments UI.
-   * Absent elsewhere, where the tool is off the agent list and a call that
-   * reached it anyway fails naming the missing host wiring.
-   */
-  readonly inlineComments?: InlineCommentProvider;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
-  /**
-   * The host's Lean language services, built and closed with the runtime.
-   * Absent, the direct `lake env lean --server` pool over this install's
-   * `FileSystem`/`Path`; VS Code passes its Lean 4 extension bridge.
-   */
-  readonly lean?: Layer.Layer<
-    LeanLanguageServices,
-    never,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner | AppState
-  >;
   /**
    * The host's usage layer owns its version-stamped sender and final drain.
    * `UsageLog.disabled` reports no usage. The host supplies the layer so this
@@ -1078,9 +1055,7 @@ export function installProcessRuntime({
   agentDirectories,
   toolMissingReporter,
   setup = {},
-  inlineComments,
   toolAvailability = toolAvailabilityLayer,
-  lean = directLeanLanguageServices(),
   usageLog,
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
@@ -1116,9 +1091,6 @@ export function installProcessRuntime({
       resumeToolUseFromResumeData,
       resumeRun,
     }),
-    inlineComments === undefined
-      ? Layer.empty
-      : Layer.succeed(InlineComments)(inlineComments),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(identity),
@@ -1139,10 +1111,8 @@ export function installProcessRuntime({
         // runtime, its finalizer drains the queue while HTTP is up, and it
         // is ahead of `services` so HTTP reaches it.
         Layer.provideMerge(usageLog),
-        // Its probes read the Lean port and the services below.
+        // Its probes read the plugins' layers and the services below.
         Layer.provideMerge(toolAvailability),
-        // The editor's Lean port also reads this process's AppState.
-        Layer.provideMerge(lean),
         Layer.provideMerge(services),
         // Every session shares this process's global-storage view.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),

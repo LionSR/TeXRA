@@ -10,6 +10,7 @@
  */
 
 // Local imports
+import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -28,7 +29,7 @@ import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
-import type { Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { TodoWriteTool } from '@tools/todo/TodoTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
@@ -152,7 +153,7 @@ export const multiAgent = (
  * gets it only if its configuration names it; its session layer is the code
  * sandbox the scripts run in.
  */
-export const codemode: Plugin = {
+export const codemode = definePlugin<CodeSandbox>({
   id: 'codemode',
   name: 'Code Mode',
   category: 'workflow',
@@ -161,7 +162,7 @@ export const codemode: Plugin = {
   tools: SCRIPT_TOOLS,
   hidden: true,
   sessionLayer: codeSandboxLayer,
-};
+});
 
 /** The built-in lists: every built-in with no app options, and files and
  *  the shell alone. */

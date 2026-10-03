@@ -366,6 +366,15 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           },
         },
       ]),
+    ).pipe(
+      // What a plugin's process layer is built over.
+      Layer.provide(
+        Layer.mergeAll(
+          NodeFileSystem.layer,
+          NodePath.layer,
+          AppState.layer(fakeHostAppState),
+        ),
+      ),
     ),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
@@ -386,7 +395,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       }),
     ),
     Layer.mock(InquiryRecords, {}),
-    // A suite that exercises a Lean tool provides its own port innermost.
+    // The Lean plugin's port, which a step serves its tools; a suite that
+    // exercises a Lean tool provides its own innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),

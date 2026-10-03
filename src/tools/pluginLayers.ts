@@ -18,7 +18,7 @@ import {
 
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
-import type { PluginServices } from '@platform/processRuntime';
+import type { PluginContext } from '@platform/processRuntime';
 import type { LiveTools } from '@tools/liveTools';
 import { PluginHold, ToolRegistry } from '@tools/toolTable';
 
@@ -30,12 +30,12 @@ import { PluginHold, ToolRegistry } from '@tools/toolTable';
 export const buildPluginLayer = <R>(
   plugin: string,
   layer: Layer.Layer<never, never, R>,
-): Effect.Effect<Context.Context<PluginServices>, never, Scope.Scope | R> =>
+): Effect.Effect<PluginContext, never, Scope.Scope | R> =>
   Effect.acquireRelease(Effect.logDebug(`Plugin ${plugin}: services up.`), () =>
     Effect.logDebug(`Plugin ${plugin}: services down.`),
   ).pipe(
     Effect.andThen(Layer.build(layer)),
-    Effect.map((services) => services as Context.Context<PluginServices>),
+    Effect.map((services) => services as PluginContext),
     withLogChannel('PluginLayers'),
   );
 
@@ -66,10 +66,7 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
           Effect.forkIn(scope),
         );
       });
-  const built: RcMap.RcMap<
-    string,
-    Context.Context<PluginServices>
-  > = yield* RcMap.make({
+  const built: RcMap.RcMap<string, PluginContext> = yield* RcMap.make({
     lookup: (id: string) =>
       buildPluginLayer(id, layers.get(id)!).pipe(
         Effect.provideService(Runs, runs()),
@@ -117,7 +114,7 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
           }
           return yield* Effect.reduce(
             [...used].filter((id) => on.has(id) && layers.has(id)),
-            () => Context.empty() as Context.Context<PluginServices>,
+            () => Context.empty() as PluginContext,
             (merged, id) =>
               Effect.map(restore(RcMap.get(built, id)), (services) =>
                 Context.merge(merged, services),

@@ -7,6 +7,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   Scope,
   Stream,
   SubscriptionRef,
@@ -20,6 +21,7 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type { Plugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
+import { LiveTools } from '@tools/liveTools';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
@@ -87,7 +89,15 @@ const availabilityService = (plugins: readonly Plugin[]) =>
     );
     const context = yield* Layer.build(
       toolAvailabilityLayer.pipe(
-        Layer.provide(Layer.succeed(ToolRegistry)(toolTable(plugins))),
+        Layer.provide(
+          Layer.merge(
+            Layer.succeed(ToolRegistry)(toolTable(plugins)),
+            // No plugin layer is up: each probe runs on the process services.
+            Layer.succeed(LiveTools)({
+              processServices: () => Effect.succeed(Option.none()),
+            } as unknown as LiveTools['Service']),
+          ),
+        ),
       ),
     );
     return Context.get(context, ToolAvailability);

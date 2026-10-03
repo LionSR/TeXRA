@@ -7,14 +7,20 @@
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */
-import { Context, type Effect, type Layer, type Scope } from 'effect';
+import {
+  Context,
+  type Effect,
+  type FileSystem,
+  type Layer,
+  type Path,
+  type Scope,
+} from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { RoundMode } from '@agent/runtime/loop/rounds';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
-import type { ConfigProvider } from '@platform/interfaces';
-import type { PluginServices } from '@platform/processRuntime';
+import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { LiveTools } from '@tools/liveTools';
@@ -22,17 +28,28 @@ import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
+ * What a plugin's process layer is built over: the live catalog it belongs
+ * to, and the process's filesystem, paths, child processes and application
+ * state (a language server pool spawns and reads its settings).
+ */
+export type PluginLayerServices =
+  | LiveTools
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner
+  | AppState;
+
+/**
  * A plugin's process-lifetime services (its `processLayer`): built
  * when the plugin is switched on or first pinned, released when it is
- * switched off and no step pins it (`@tools/liveTools`). Its services are
- * erased here and typed as `PluginServices` where a step serves them.
+ * switched off and no step pins it (`@tools/liveTools`). `ROut` is what it
+ * serves its own plugin's code (`definePlugin`); the table holds it erased.
  * `drain` is its step of the core shutdown protocol, run before the
  * sessions close while its services are still up.
  */
-export interface ProcessPluginLayer {
-  /** It may read the live catalog it belongs to. */
-  readonly layer: Layer.Layer<never, never, LiveTools>;
-  readonly drain?: Effect.Effect<void, never, PluginServices>;
+export interface ProcessPluginLayer<ROut = never> {
+  readonly layer: Layer.Layer<ROut, never, PluginLayerServices>;
+  readonly drain?: Effect.Effect<void, never, ROut>;
 }
 
 /**
@@ -131,18 +148,18 @@ export type InstalledToolReader = Effect.Effect<{
  * at a resumed activation's first step that pins it, before the activation
  * decides anything: continuation does not survive a resume on its own.
  */
-export interface Continuation {
+export interface Continuation<R = never> {
   readonly category: AgentCategory;
   readonly atIdle: (park: {
     readonly session: SessionHandle;
     readonly runId: RunId;
     readonly state: RunState;
     readonly canContinue: boolean;
-  }) => Effect.Effect<string | null, Error, PluginServices>;
+  }) => Effect.Effect<string | null, Error, R>;
   readonly onResume: (run: {
     readonly session: SessionHandle;
     readonly runId: RunId;
-  }) => Effect.Effect<void, Error, PluginServices>;
+  }) => Effect.Effect<void, Error, R>;
 }
 
 /**

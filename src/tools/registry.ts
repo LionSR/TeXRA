@@ -6,6 +6,7 @@
  */
 
 // Third-party imports
+import { Layer } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -30,7 +31,8 @@ import {
   wolfram,
   zotero,
 } from '@tools/integrationPlugins';
-import type { Plugin } from '@tools/plugins';
+import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 
@@ -39,7 +41,11 @@ import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
-import { InlineCommentTool } from './comment/InlineCommentTool';
+import {
+  InlineComments,
+  InlineCommentTool,
+  type InlineCommentProvider,
+} from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
@@ -156,26 +162,32 @@ const crossref: Plugin = {
  * prompt section is the configured default bibliography, at every step of
  * every run.
  */
-const core: Plugin = {
-  id: 'core',
-  name: 'Core Tools',
-  category: 'workflow',
-  description:
-    'Review annotations, PDF viewing, user questions, and Loogle search.',
-  tools: {
-    inline_comment: InlineCommentTool,
-    open_pdf: OpenPdfTool,
-    ask_user_question: AskUserQuestionTool,
-    lean_loogle: LeanLoogleTool,
-  },
-  hidden: true,
-  prompt: ({ config }) => {
-    const bibPath = config.get<string>('texra.bib.defaultPath');
-    return bibPath
-      ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-      : '';
-  },
-};
+const core = (provider?: InlineCommentProvider) =>
+  definePlugin<InlineComments>({
+    id: 'core',
+    name: 'Core Tools',
+    category: 'workflow',
+    description:
+      'Review annotations, PDF viewing, user questions, and Loogle search.',
+    tools: {
+      inline_comment: InlineCommentTool,
+      open_pdf: OpenPdfTool,
+      ask_user_question: AskUserQuestionTool,
+      lean_loogle: LeanLoogleTool,
+    },
+    hidden: true,
+    prompt: ({ config }) => {
+      const bibPath = config.get<string>('texra.bib.defaultPath');
+      return bibPath
+        ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
+        : '';
+    },
+    // The host's Comments UI, for the one host that has one; elsewhere the
+    // tool fails naming the missing host wiring.
+    ...(provider !== undefined && {
+      processLayer: { layer: Layer.succeed(InlineComments)(provider) },
+    }),
+  });
 
 /** The onboarding agent's narrow set, one responsibility per tool. */
 const setup: Plugin = {
@@ -217,7 +229,14 @@ const documents: Plugin = {
  * it is on (`copilotToolsLayer` in packages/extension).
  */
 export const texraPlugins = (
-  host: { readonly copilot?: ProcessPluginLayer } = {},
+  host: {
+    readonly copilot?: ProcessPluginLayer;
+    /** The host's Lean services in place of the direct `lake` pool (VS
+     *  Code's Lean 4 extension bridge). */
+    readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
+    /** The host's Comments UI behind `inline_comment`. */
+    readonly inlineComments?: InlineCommentProvider;
+  } = {},
 ): readonly Plugin[] => [
   fileOps,
   latexExtract,
@@ -230,13 +249,15 @@ export const texraPlugins = (
   texcount,
   wolfram,
   zotero,
-  lean4,
+  host.lean === undefined
+    ? lean4
+    : { ...lean4, processLayer: { layer: host.lean } },
   multiAgent(FIGURE_OPTIONS),
   githubActivity,
   externalInquiry,
   codex,
   claudeAgent,
-  core,
+  core(host.inlineComments),
   codemode,
   setup,
   {
