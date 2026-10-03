@@ -31,6 +31,7 @@ import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
+  formatCostUsd,
   formatResultCount,
 } from '@utils/text/stringUtils';
 
@@ -266,8 +267,29 @@ function formatUsage(
   };
 }
 
+// The task's spend so far, its agents included: the root's `treeUsage`,
+// whichever run the bar describes. A subscription that billed nothing
+// already reads as `subscription`, so a zero total earns no segment.
+function taskCostSegment(
+  run: RunView | undefined,
+  view: Pick<SessionView, 'runs'>,
+): StatusBarSegment | undefined {
+  if (run === undefined) return undefined;
+  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
+  const cost = root?.treeUsage.cost ?? 0;
+  if (cost <= 0) return undefined;
+  return {
+    text: formatCostUsd(cost),
+    color: 'dim',
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.taskCost,
+  };
+}
+
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
+  // The task's total is also in `/status` and the exit summary: on a narrow
+  // bar it gives way first.
+  taskCost: 15,
   activeSubagent: 20,
   flow: 30,
   usage: 40,
@@ -748,7 +770,7 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
  */
 export function buildStatusBarDisplay(
   run: RunView | undefined,
-  view: Pick<SessionView, 'policy' | 'queuedFollowUps'>,
+  view: Pick<SessionView, 'policy' | 'queuedFollowUps' | 'runs'>,
   input: StatusBarChrome,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
@@ -875,6 +897,7 @@ export function buildStatusBarDisplay(
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
             },
         formatUsage(run?.context ?? undefined, run?.usage),
+        taskCostSegment(run, view),
         queuedCount > 0
           ? {
               text: `queued ${queuedCount}`,

@@ -16,7 +16,6 @@ import {
   GOAL_MAX_COST_SETTING,
   type RunId,
 } from '@shared/schemas';
-import { runTreeUsage } from '@shared/session/sessionView';
 import type { Continuation } from '@tools/toolTable';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { renderPrompt } from '@utils/prompt';
@@ -56,10 +55,9 @@ export const goalContinuation: Continuation = {
       session.roots,
       GOAL_MAX_COST_SETTING.configKey,
     );
-    const spent = runTreeUsage(
-      yield* SubscriptionRef.get(session.view),
-      runId,
-    ).cost;
+    const spent =
+      (yield* SubscriptionRef.get(session.view)).runs.get(runId)?.treeUsage
+        .cost ?? 0;
     if (cap > 0 && spent >= cap) {
       yield* pauseActive({ session, runId });
       session.publishRunEvent(runId, {

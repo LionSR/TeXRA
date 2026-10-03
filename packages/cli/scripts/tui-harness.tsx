@@ -117,7 +117,10 @@ import {
   chatTuiCanStartRootRun,
   TuiSession,
 } from '../src/chat/tui/state/sessionRunState';
-import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
+import {
+  formatCliSessionStatus,
+  taskCostStatus,
+} from '../src/chat/tui/sessionStatus';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import {
@@ -1551,6 +1554,7 @@ function appendHarnessStatus(): void {
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
         (followUp) => followUp.text,
       ),
+      cost: taskCostStatus(view, run),
     }),
   );
 }

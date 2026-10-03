@@ -27,19 +27,31 @@ const NO_USAGE: TokenUsageStats = {
   outputTokens: 0,
 };
 
+type Tree = Pick<RunView, 'parentId' | 'childIds'> &
+  Partial<Pick<RunView, 'treeUsage'>>;
+
 /** A folded run, borrowed from the recorded fan-out so the stub states a
- *  real `RunView`; only its phase, group, and metered total matter to the
- *  tracker. The stub's runs are held, so an in-flight phase reads as live. */
+ *  real `RunView`; only its phase, group, and metered totals matter to the
+ *  tracker. A leaf's tree total is its own unless the case states one.
+ *  The stub's runs are held, so an in-flight phase reads as live. */
 function runViewWith(
   runId: RunId,
   status: RunPhase,
   usage: TokenUsageStats,
-  tree: Pick<RunView, 'parentId' | 'childIds'>,
+  tree: Tree,
 ): RunView {
   const folded = FAN_OUT_VIEW.runs.get(CHILD);
   if (!folded) throw new Error('fan-out fixture has no child run');
   const group = isInFlightPhase(status) ? 'running' : 'recent';
-  return { ...folded, ...tree, id: runId, status, group, usage };
+  return {
+    ...folded,
+    treeUsage: usage,
+    ...tree,
+    id: runId,
+    status,
+    group,
+    usage,
+  };
 }
 
 /**
@@ -52,7 +64,7 @@ function trackerOverSessionView(): {
     runId: RunId,
     status: RunPhase,
     usage?: TokenUsageStats,
-    tree?: Pick<RunView, 'parentId' | 'childIds'>,
+    tree?: Tree,
   ): void;
   tracker: StatusBarUsageTracker;
 } {
@@ -145,13 +157,19 @@ describe('StatusBarUsageTracker', () => {
 
   it("keeps a finished child's spend while its parent is in flight", () => {
     const { setRun, tracker } = trackerOverSessionView();
+    // The fold states the parent's tree total (`treeUsage`); the tracker
+    // reads it off the root and never sums the tree itself.
+    const parentTree = {
+      parentId: null,
+      childIds: [runB],
+      treeUsage: { cost: 0.03, inputTokens: 15, outputTokens: 26 },
+    };
     setRun(
       runA,
       RUN_PHASE.RUNNING,
       { cost: 0.01, inputTokens: 10, outputTokens: 20 },
-      { parentId: null, childIds: [runB] },
+      parentTree,
     );
-    // A child's spend is on its own run only, never rolled into its parent.
     setRun(
       runB,
       RUN_PHASE.COMPLETED,
@@ -166,7 +184,7 @@ describe('StatusBarUsageTracker', () => {
       runA,
       RUN_PHASE.COMPLETED,
       { cost: 0.01, inputTokens: 10, outputTokens: 20 },
-      { parentId: null, childIds: [runB] },
+      parentTree,
     );
     expect(tracker.totalUsage.cost).toBe(0);
   });

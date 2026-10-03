@@ -29,6 +29,8 @@ import {
   OWNER,
   PROCESS,
   ROOT,
+  T,
+  tail,
   withInterruptedChild,
   withoutApproval,
   withProposal,
@@ -335,6 +337,27 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   'ext-inline': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // The finished script with priced turns on the root, its agent and that
+  // agent's own agent: the card and the footer read the tree total.
+  'ext-cost': () => {
+    const { log, events } = buildScenario();
+    const priced = (
+      [
+        [ROOT, 0.12],
+        [CHILD, 0.21],
+        [GRANDCHILD, 0.51],
+      ] as const
+    ).map(([id, cost]) =>
+      tail(
+        log.emit(id, T.rootDone, {
+          type: 'usage',
+          usage: { inputTokens: 12_000, outputTokens: 900, cost },
+        }),
+      ),
+    );
+    const view = foldAll([...events, ...priced, local({ self: [OWNER] })]);
+    return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // The background process stream: its command strip over its raw output.
   'ext-process': () => {

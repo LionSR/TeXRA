@@ -747,6 +747,59 @@ describe('sessionFold', () => {
     expect(runView(fromScratch, CHILD).usage).toStrictEqual(total);
   });
 
+  it("folds each run's tree total once, grandchildren included", () => {
+    // Failure modes: a total that adds direct children only; a listing
+    // total and its replayed turns counted twice up the tree; a run's own
+    // `usage` absorbing its children's.
+    const log = new Log();
+    const startOf = (id: RunId, parent: RunId | null) =>
+      log.emit(id, 4000, {
+        type: 'run.start',
+        identity: id === ROOT ? ROOT_IDENTITY : CHILD_IDENTITY,
+        userFollowUpSupport: 'unsupported',
+        category: AgentCategory.ToolUse,
+        parent: parent === null ? null : log.parent(parent),
+      });
+    const starts = [
+      startOf(ROOT, null),
+      startOf(CHILD, ROOT),
+      startOf(GRANDCHILD, CHILD),
+    ];
+    const turn = (id: RunId, cost: number) =>
+      log.emit(id, 4010, {
+        type: 'usage',
+        usage: { inputTokens: 10, outputTokens: 1, cost },
+      });
+    const turns = [turn(ROOT, 0.25), turn(CHILD, 0.5), turn(GRANDCHILD, 1)];
+    const view = foldAll(
+      [...starts, ...turns].map((event) => ({
+        _tag: 'event' as const,
+        read: 'aggregate' as const,
+        event,
+      })),
+    );
+    expect(runView(view, ROOT).usage.cost).toBe(0.25);
+    expect(runView(view, ROOT).treeUsage).toMatchObject({
+      cost: 1.75,
+      inputTokens: 30,
+    });
+    expect(runView(view, CHILD).treeUsage.cost).toBe(1.5);
+    expect(runView(view, GRANDCHILD).treeUsage.cost).toBe(1);
+
+    // A cold listing of the grandchild's total, then its replayed turn:
+    // the root's total still counts that turn once.
+    const listed = foldAll([
+      ...starts.map((event) => ({
+        _tag: 'event' as const,
+        read: 'listing' as const,
+        event,
+      })),
+      { _tag: 'event', read: 'listing', event: turns[2]! },
+      { _tag: 'event', read: 'aggregate', event: turns[2]! },
+    ]);
+    expect(runView(listed, ROOT).treeUsage.cost).toBe(1);
+  });
+
   it('takes each round map from the newest row, on a cold read and on replay', () => {
     // `output.produced` is a latest-only listing key, so a cold read hands
     // the fold one row per run. It carries the whole round collection, and

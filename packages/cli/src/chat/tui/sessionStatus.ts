@@ -1,13 +1,19 @@
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import type { UsageRoute } from '@shared/schemas';
+import {
+  isEmptyUsage,
+  type TokenUsageStats,
+  type UsageRoute,
+} from '@shared/schemas';
+import type { RunView, SessionView } from '@shared/session/sessionView';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
+import { usageCostLabel } from '@ui/copy/modelAccess';
 import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { formatCostUsd, truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
 import type { BypassState } from './panes/statusBarDisplay';
@@ -40,6 +46,61 @@ export interface CliSessionStatusInput {
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy: TexraApprovalPolicy;
+  /** The task's spend (`taskCostStatus`); undefined before anything is
+   *  metered. */
+  readonly cost?: CliSessionCostStatus;
+}
+
+interface CliSessionCostStatus {
+  readonly total: TokenUsageStats;
+  readonly own: TokenUsageStats;
+  readonly agents: readonly {
+    readonly label: string;
+    readonly usage: TokenUsageStats;
+  }[];
+}
+
+/**
+ * The spend of the task `run` belongs to, read off the fold: its root's
+ * `treeUsage`, the root's own calls (`usage`), and each agent the root
+ * started that spent anything, with that agent's `treeUsage`.
+ */
+export function taskCostStatus(
+  view: SessionView,
+  run: RunView | undefined,
+): CliSessionCostStatus | undefined {
+  if (run === undefined) return undefined;
+  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
+  if (root === undefined || isEmptyUsage(root.treeUsage)) return undefined;
+  return {
+    total: root.treeUsage,
+    own: root.usage,
+    agents: root.childIds.flatMap((childId) => {
+      const child = view.runs.get(childId);
+      return child === undefined || isEmptyUsage(child.treeUsage)
+        ? []
+        : [{ label: child.label, usage: child.treeUsage }];
+    }),
+  };
+}
+
+function costLabel(usage: TokenUsageStats): string {
+  return (
+    usageCostLabel(usage.cost, usage.usageRoute, usage.usagePlan) ??
+    formatCostUsd(usage.cost)
+  );
+}
+
+function costStatusLines(cost: CliSessionCostStatus | undefined): string[] {
+  if (cost === undefined) return [];
+  if (cost.agents.length === 0) return [`cost: ${costLabel(cost.total)}`];
+  return [
+    `cost: ${costLabel(cost.total)}, agents included`,
+    `  own model calls: ${costLabel(cost.own)}`,
+    ...cost.agents.map(
+      (agent) => `  ${agent.label}: ${costLabel(agent.usage)}`,
+    ),
+  ];
 }
 
 function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
@@ -80,6 +141,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${input.statusLabel ?? 'not started'}`,
+    ...costStatusLines(input.cost),
     ...((input.activeChildSessions ?? 0) > 0
       ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
       : []),
