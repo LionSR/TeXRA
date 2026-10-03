@@ -78,8 +78,8 @@ const REACHES_A_HOST = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
-  /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|builtinSessionGraphTestSetup|crashConformance|testProcessRuntime|testWorkspaceRoots)['"]/,
+  /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup|builtinSessionGraphTestSetup)['"]/,
 ];
 // What the scan cannot see is a suite that changes process-wide state a
 // library reads once — an environment variable chalk takes its color level

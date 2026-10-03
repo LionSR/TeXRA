@@ -22,6 +22,11 @@
  * And a background script killed while its child ran: a resume that
  * launches its child again, leaves the parent's turn open, delivers no
  * result or more than one, or delivers one without its summary line.
+ * And the durable harness's row shapes read back other than written: a
+ * fork whose `run.start` does not name its source, a fork or handoff
+ * `context.edit` missing or out of order, an awaited child without the
+ * call that owns it. The crash-point suite over live runs is
+ * `crashConformance*.vitest.ts`.
  */
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
@@ -130,14 +135,18 @@ const APPROVAL = RunIdSchema.parse('a00000000007');
 const SCRIPTED = RunIdSchema.parse('a00000000008');
 const FANOUT = RunIdSchema.parse('a00000000009');
 /** The fan-out's children: the first completed, the second ran at the kill. */
-const FANNED = RunIdSchema.parse('fab0b830fe15028fb71663a9');
-const RUNNING = RunIdSchema.parse('bff84dd3e985d3899c2edfca');
+const FANNED = RunIdSchema.parse('d96e5a2c188ad7ac95c94015');
+const RUNNING = RunIdSchema.parse('75ba3de4124b968bfa08881c');
 /** The chat that sent a script to the background, the script's run, and
  *  the script's one `agent()` child, which ran at the kill. */
 const BACKGROUND = RunIdSchema.parse('a0000000000c');
-const SCRIPT_RUN = RunIdSchema.parse('86fd08b3bd174f25f0078221');
-const SCRIPT_CHILD = RunIdSchema.parse('905d6e67bdcf8bef0289b566');
-const TOMBSTONED = RunIdSchema.parse('a0000000000f');
+const SCRIPT_RUN = RunIdSchema.parse('c99c8753fe5970c015825e1c');
+const SCRIPT_CHILD = RunIdSchema.parse('30537f25e7398017e18c7493');
+/** A headless run, the fork `texra resume --fork` made of it, and the
+ *  handoff that continued the fork. */
+const FORK_SOURCE = RunIdSchema.parse('a0000000000f');
+const FORKED = RunIdSchema.parse('a00000000010');
+const TOMBSTONED = RunIdSchema.parse('a00000000011');
 
 const roots: string[] = [];
 afterAll(() => {
@@ -273,6 +282,47 @@ describe('the golden 1.0 store', () => {
         ),
       ),
     ]).toEqual(['openai/gpt-5.6-sol@medium', 'gemini38f']);
+    // The durable harness's row shapes (H2): a fork's start names its
+    // source, and its first history row seeds the source's view; a handoff
+    // cuts the fork's view to its note; an awaited child names the call
+    // that owns it.
+    const forked = aggregateId('run', FORKED);
+    expect(
+      events.flatMap((event) =>
+        event.type === 'run.start' && event.aggregateId === forked
+          ? [event.provenance]
+          : [],
+      ),
+    ).toEqual([
+      {
+        kind: 'fork',
+        from: { id: FORK_SOURCE, uid: expect.any(String) },
+        at: expect.any(Number),
+      },
+    ]);
+    expect(
+      events.flatMap((event) =>
+        event.type === 'context.edit' && event.aggregateId === forked
+          ? [[event.payload.cause, event.payload.messages.length > 0]]
+          : [],
+      ),
+    ).toEqual([
+      ['fork', true],
+      ['handoff', false],
+    ]);
+    expect(
+      events.flatMap((event) =>
+        event.type === 'run.start' && event.parent !== null
+          ? [[event.parent.id, event.parent.callId]]
+          : [],
+      ),
+    ).toEqual([
+      [PARENT, 'validation-agent-3'],
+      [FANOUT, 'validation-script-1/0'],
+      [FANOUT, 'validation-script-1/1'],
+      [BACKGROUND, 'validation-script-1'],
+      [SCRIPT_RUN, 'script/0'],
+    ]);
     // The plan the chat ran as a goal: the goal plugin's fact, active, then
     // completed.
     expect(
@@ -369,6 +419,12 @@ describe('the golden 1.0 store', () => {
           parent: SCRIPT_RUN,
           status: 'running',
           outcome: null,
+        }),
+        run(FORK_SOURCE, 'golden_fork'),
+        // The resumed chat over the fork, exited at its idle prompt.
+        run(FORKED, 'golden_fork', {
+          status: 'cancelled',
+          outcome: 'cancelled',
         }),
       ]);
       // The approval its process never saw answered, still pending.
@@ -481,6 +537,8 @@ describe('the golden 1.0 store', () => {
           'waiting',
           'running',
           'running',
+          'completed',
+          'cancelled',
         ]);
         const db = yield* Database;
         for (const [run, type] of [
@@ -1228,7 +1286,7 @@ describe('the interrupted golden runs', () => {
       );
       expect(delivered).toHaveLength(1);
       const text = String(delivered[0]?.content.text);
-      expect(text).toMatch(/^<script-result id="86fd08b3bd174f25f0078221"/);
+      expect(text).toMatch(/^<script-result id="c99c8753fe5970c015825e1c"/);
       expect(text).toContain('Background child answer.');
       expect(parseScriptDeliverySummary(text)).toMatchObject({
         name: 'Background',

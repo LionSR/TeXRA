@@ -56,6 +56,10 @@
  *   suite resumes. The parent's reply waits for
  *   `golden-background-reply.release` until that child is at its model
  *   call, so the two runs of one process do not race their rows.
+ * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
+ *   fork, whose `run.start.provenance` names its source and whose first
+ *   history row is a `context.edit` (cause `fork`); then `texra resume
+ *   --handoff` on the fork: a `context.edit` (cause `handoff`).
  * - one `golden_child` run deleted last with `texra history delete`: the
  *   tombstoned run, which no later open is left to collect.
  *
@@ -691,6 +695,62 @@ async function generate(root) {
   );
   background.kill('SIGKILL');
   await background.exited;
+
+  // The fork and its handoff (durable harness, H5): a headless run answers
+  // once; `texra resume --fork` continues a new task holding that
+  // conversation, whose `run.start` names its source; `texra resume
+  // --handoff` then continues the fork from a note alone. Each reply names
+  // the user messages its view held.
+  cli.run([
+    'run',
+    'golden_fork',
+    '--model',
+    'gpt56',
+    '--instruction',
+    'Before the fork.',
+    '--approval-policy',
+    'never',
+    '--output-format',
+    'json',
+    '--print',
+  ]);
+  const forkSource = query(cli.store(), RUN_OF_AGENT, ['golden_fork'])[0]?.id;
+  if (forkSource === undefined) fail('no golden_fork run to fork');
+  /** Resume under a PTY with `flags`, type `message` once the chat idles
+   *  (null: the flags start the turn), and exit once `reply` shows. */
+  const resumeChat = async (flags, message, reply) => {
+    const tty = await cli.chat(['resume', ...flags]);
+    const shows = (label, text) =>
+      until(label, () => tty.screen().includes(text), tty);
+    if (message !== null) {
+      await shows('the idle resumed chat', 'Ctrl-C exit');
+      tty.write(message);
+      await shows(`the typed ${JSON.stringify(message)}`, `› ${message}`);
+      tty.write('\r');
+    }
+    await shows(`the reply ${JSON.stringify(reply)}`, reply);
+    await shows('the idle prompt', 'Ctrl-C exit');
+    tty.write('\x03');
+    const exit = await tty.exited;
+    if (exit.exitCode !== 0)
+      fail(
+        `texra resume ${flags.join(' ')} exited ${exit.exitCode}\n${tty.screen()}`,
+      );
+  };
+  await resumeChat(
+    [forkSource, '--fork'],
+    'After the fork.',
+    'Saw: Before the fork. | After the fork.',
+  );
+  const forked = query(cli.store(), RUN_OF_AGENT, ['golden_fork']).find(
+    (row) => row.id !== forkSource,
+  )?.id;
+  if (forked === undefined) fail('the fork started no run');
+  await resumeChat(
+    [forked, '--handoff', 'The handoff note.'],
+    null,
+    'Saw: The handoff note.',
+  );
 
   // The tombstone: a finished run deleted last, before any later open could
   // collect it.

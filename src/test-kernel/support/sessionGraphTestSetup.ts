@@ -1,79 +1,9 @@
-import { Effect } from 'effect';
-
-import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { globalDatabaseLayer } from '@controllers/session/Database';
-import { AppState, AgentDirectories } from '@platform/interfaces';
-import { UsageLog } from '@shared/usageLog';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
+/**
+ * The test kernel's process runtime and session graph family over TeXRA's
+ * plugins (`texraPlugins`), installed at import (`installTestSessionGraph`).
+ */
 import { texraPlugins } from '@tools/registry';
-import { initTestProcessRuntime } from './testProcessRuntime';
-import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
-import { createFakeWorkspaceRoots } from './FakePlatform';
-import {
-  fakeHostAgentDirectories,
-  fakeHostAppState,
-  fakeHostLanguageModel,
-  fakeHostSecrets,
-  fakeSetupPlatform,
-} from './setupPlatform';
 
-/**
- * The test kernel's process runtime and session graph family (PRD
- * one-fold-three-renderers, 7.7): what a composition root installs with
- * `installProcessRuntime()`. Installed at import, in the importing test file's module
- * graph, so it lands after that file's `vi.mock` registrations and the graph
- * is built over the modules the test actually mocks. `setupFakePlatform.ts`
- * deliberately does not import this module: a setup file runs before any
- * `vi.mock`, and a graph built there would hold the real modules for the
- * rest of the file.
- */
+import { installTestSessionGraph } from './sessionGraphInstall';
 
-/**
- * The install runs once per module graph, as module evaluation does: a
- * session built on this runtime (the file's default session, a suite's)
- * keeps its readers for the file's whole life, so nothing may dispose the
- * runtime they run on. A graph is released when its last session is
- * disposed, so suites that dispose their sessions get fresh graphs.
- *
- * The storage paths resolve at install to the worker's shared default rather
- * than the installed host's: this module evaluates before any host exists
- * for the host-free suites that reach it through a fixture, and every
- * default fake host answers that same directory — a suite with its own
- * storage root passes the records layers its path directly. The other
- * process services read the fake host installed at call time, as the bare
- * runtime's do: this runtime outlives the per-test hosts.
- */
-const { globalStorage } = createFakeWorkspaceRoots();
-
-/** Reads of this install's process start: the `ProcessIdentity` layer is a
- *  process service, so it builds once however many sessions open. */
-export const identityReads = { count: 0 };
-
-const runtime = installProcessRuntime({
-  processStart: Effect.sync(() => {
-    identityReads.count += 1;
-    return 'vitest';
-  }),
-  globalStorage,
-  // Under the fake global root, never the developer's `~/.texra/mcp.json`.
-  plugins: texraPlugins(),
-  mcpConfigPath: mcpConfigPathOf(globalStorage),
-  secrets: fakeHostSecrets,
-  appState: AppState.layer(fakeHostAppState),
-  languageModel: fakeHostLanguageModel,
-  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-  setup: fakeSetupPlatform,
-  toolAvailability: unprobedToolAvailability,
-  // The harness reports no usage; the telemetry suite starts its own.
-  usageLog: UsageLog.disabled,
-  globalDatabase: globalDatabaseLayer(globalStorage),
-  // The suite's captured entries are the assertion surface: emit every
-  // level the programs run and let each test filter what it reads.
-  minimumLogLevel: 'Trace',
-});
-initTestProcessRuntime(runtime);
-// Built here, once, as a composition root's first `runPromise` builds it:
-// opening the global database reads the mount table through the spawner,
-// which is asynchronous, so the synchronous session opens the suites run
-// (`createTestSession`) need the process services already in place.
-await runtime.runPromise(Effect.void);
+await installTestSessionGraph(texraPlugins());

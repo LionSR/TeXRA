@@ -1,0 +1,12 @@
+name: golden_crash
+description: The crash-point conformance run, truncated after each of its commits and resumed.
+settings:
+  agentCategory: toolUse
+  tools:
+    - read_file
+    - bash
+    - agent
+    - script
+prompts:
+  systemPrompt: 'GOLDEN-CRASH: two calls, then a script with an owned child.'
+  userRequest: '{{ INSTRUCTION }}'
