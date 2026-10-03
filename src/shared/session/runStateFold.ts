@@ -1,5 +1,5 @@
 /**
- * Pure run-state replay for ledger load, appendBatch, and the trace stepper:
+ * Pure run-state replay for run history load, appendBatch, and the trace stepper:
  * state at a commit is exactly the state resume continues from, without IO,
  * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
  * sessionFold produces the view; this fold produces the loop's continuation.
@@ -52,11 +52,11 @@ import {
 } from './runRows';
 import { openAttemptAfter, type OpenAttempt } from './openAttempt';
 import { mutate } from './stateOperation';
-import type { HistoryMessage, Live, RunLedgerRow } from './ledgerTurns';
+import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 import type { z } from 'zod';
 
 /**
- * The rows `RunLedger.appendBatch` commits: the six ledger arms plus the
+ * The rows `RunHistory.appendBatch` commits: the six run history arms plus the
  * display arms a batch has to commit atomically with them. A tool call's card
  * settles with its `tool.result` (`tool.end` for a card the dispatcher already
  * opened, both card rows for a fast tool whose card opens and closes in that
@@ -66,13 +66,13 @@ import type { z } from 'zod';
  * model id. Publishing those companions separately is the crash
  * window where a settled tool keeps an active card, or a terminal card claims
  * a result no row holds, or an approval survives with nothing to recover it
- * by, or a listing names a model the ledger does not. An explicit list
+ * by, or a listing names a model the run history does not. An explicit list
  * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself.
  */
-export type RunLedgerDraft = Live<
-  Extract<SessionEventDraft, { type: RunLedgerDraftType }>
+export type RunHistoryDraft = Live<
+  Extract<SessionEventDraft, { type: RunHistoryDraftType }>
 >;
-type RunLedgerDraftType =
+type RunHistoryDraftType =
   | 'run.position'
   | 'model.message'
   | 'context.edit'
@@ -93,8 +93,8 @@ type RunLedgerDraftType =
   | 'request.decided'
   | 'followup.consumed';
 
-export class RunLedgerInconsistent extends Data.TaggedError(
-  'RunLedgerInconsistent',
+export class RunHistoryInconsistent extends Data.TaggedError(
+  'RunHistoryInconsistent',
 )<{
   readonly reason:
     | 'out-of-order' // commits not strictly increasing, or a row before the row it presupposes
@@ -157,9 +157,9 @@ export type RunState = RunPosition & {
   /** The latest `run.snapshot` as written: the loop state beside it moves
    *  with each `tool.result` mutation, this does not. */
   readonly lastSnapshot: RunSnapshotPayload | null;
-  /** Ledger rows folded into this state, before and after any snapshot:
+  /** Run history rows folded into this state, before and after any snapshot:
    *  zero means only queued input has folded (an unopened, not broken, run). */
-  readonly ledgerRows: number;
+  readonly runHistoryRows: number;
   /** `null` until the opening `run.snapshot` (then `initial`, moved by
    *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
@@ -213,13 +213,13 @@ export type RunState = RunPosition & {
   readonly hookOutcomes: HookOutcomes;
 };
 
-/** Companions committed beside the ledger fact; the loop ignores them. */
+/** Companions committed beside the run history fact; the loop ignores them. */
 type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
 
-/** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
+/** The rows `foldRow` applies: the shared rows and the run history's own arms. */
 type FoldedRowType =
   | SharedRunRow['type']
-  | Exclude<RunLedgerDraft['type'], CardRowType>
+  | Exclude<RunHistoryDraft['type'], CardRowType>
   | 'run.activate';
 
 /**
@@ -269,7 +269,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   round: 0,
   commit,
   lastSnapshot: null,
-  ledgerRows: 0,
+  runHistoryRows: 0,
   phase: null,
   modelId: null,
   modelCompatibilityKey: null,
@@ -304,7 +304,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * is bound to the call it parks, and a resume re-enters it; what is left
  * unbound is a later request of an attempt already past its first, which
  * parks a body nothing can re-enter, so a resume retires those as cancelled
- * before it continues the run (`RunLedger.acquire`). An `externalInquiry` is
+ * before it continues the run (`RunHistory.acquire`). An `externalInquiry` is
  * the exception by contract:
  * its tool returns at once and its answer arrives as a follow-up, whichever
  * process is running the run by then, so it stands unbound across every
@@ -326,14 +326,14 @@ export function unboundRequests(state: RunState): readonly string[] {
   );
 }
 
-type Fold = Result.Result<RunState, RunLedgerInconsistent>;
+type Fold = Result.Result<RunState, RunHistoryInconsistent>;
 
 const refuse = (
-  reason: RunLedgerInconsistent['reason'],
+  reason: RunHistoryInconsistent['reason'],
   detail: string,
   commit: CommitOrdinal | null,
-): Result.Result<never, RunLedgerInconsistent> =>
-  Result.fail(new RunLedgerInconsistent({ reason, detail, commit }));
+): Result.Result<never, RunHistoryInconsistent> =>
+  Result.fail(new RunHistoryInconsistent({ reason, detail, commit }));
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
@@ -377,7 +377,7 @@ const opened = (state: RunState | null): state is RunState =>
 
 function foldRow(
   current: RunState | null,
-  row: RunLedgerRow,
+  row: RunHistoryRow,
   pass: FoldPass,
 ): Fold | null {
   const commit = row.commit;
@@ -388,7 +388,7 @@ function foldRow(
     for (const message of added) messages.push(message);
     return messages;
   };
-  /** A row out of the order the ledger writes. */
+  /** A row out of the order the run history writes. */
   const outOfOrder = (detail: string) => refuse('out-of-order', detail, commit);
   if (current !== null && commit <= current.commit) {
     return outOfOrder(`commit ${commit} is not above ${current.commit}`);
@@ -396,11 +396,11 @@ function foldRow(
   /** A row that presupposes the opening snapshot, folded before it. */
   const beforeOpening = (what: string) =>
     outOfOrder(`${what} before the opening run.snapshot`);
-  /** The state with this ledger row counted in. */
+  /** The state with this run history row counted in. */
   const advance = (state: RunState): RunState => ({
     ...state,
     commit,
-    ledgerRows: state.ledgerRows + 1,
+    runHistoryRows: state.runHistoryRows + 1,
   });
   // Pending input is the publisher's: a queued row only opens an empty run.
   if (isFollowUpRow(row))
@@ -435,9 +435,9 @@ function foldRow(
           }
         : {}),
       commit,
-      // Only the loop's own position is a ledger row; queued input, output
+      // Only the loop's own position is a run history row; queued input, output
       // and the requests a session opens do not open a run.
-      ledgerRows: state.ledgerRows + (at === undefined ? 0 : 1),
+      runHistoryRows: state.runHistoryRows + (at === undefined ? 0 : 1),
       ...verdict.rows,
       phase: phaseAfter(state.phase, at),
     });
@@ -840,7 +840,7 @@ function foldRow(
  * `rows` must be strictly increasing in `commit`; the fold does not reorder
  * them. `state` is `null` for a cold fold and the previous level for an
  * incremental one, and the two are the same computation: that equality is
- * what the ledger test pins. `null` out means no ledger row has folded.
+ * what the run history test pins. `null` out means no run history row has folded.
  *
  * Returns a typed inconsistency rather than throwing or defaulting: a row
  * the fold cannot apply is corruption, not a state to degrade into. A
@@ -848,8 +848,8 @@ function foldRow(
  */
 export function foldRunState(
   state: RunState | null,
-  rows: readonly RunLedgerRow[],
-): Result.Result<RunState | null, RunLedgerInconsistent> {
+  rows: readonly RunHistoryRow[],
+): Result.Result<RunState | null, RunHistoryInconsistent> {
   let current = state;
   const pass: FoldPass = new WeakSet();
   for (const row of rows) {

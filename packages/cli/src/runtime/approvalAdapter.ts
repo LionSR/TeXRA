@@ -194,7 +194,7 @@ export function createHeadlessCliHostInteractions(
   /** One pending request, answered: denied when this run has nobody to ask
    *  (a request opened before the host or policy changed is listed pending,
    *  and a prompt on a closed stdin never settles), else by the prompt.
-   *  Returns whether the decision reached the ledger. */
+   *  Returns whether the decision reached the run history. */
   const answer = Effect.fn('approvalAdapter.answer')(function* (
     runId: RunId,
     payload: AnswerablePayload,

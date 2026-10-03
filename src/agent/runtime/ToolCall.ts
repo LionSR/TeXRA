@@ -17,7 +17,7 @@ import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import type { RunLedgerRefused } from '@shared/session/runLedger';
+import type { RunHistoryRefused } from '@shared/session/runHistory';
 import type { StepRoot } from '@utils/files/externalRoots';
 import type { InvokeError } from './ModelInvoker';
 import type { AgentRunShape } from './run/AgentRun';
@@ -124,7 +124,7 @@ export interface CallRequests {
     options?: { readonly onNeverCommitted?: Effect.Effect<void> },
   ) => Effect.Effect<
     RequestDecision,
-    DatabaseNotOwner | DatabaseWriteFailed | RunLedgerRefused
+    DatabaseNotOwner | DatabaseWriteFailed | RunHistoryRefused
   >;
 }
 

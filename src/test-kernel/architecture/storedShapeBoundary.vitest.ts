@@ -192,14 +192,14 @@ describe('stored shape boundary', () => {
 
   it('stores no shape the llm package owns', () => {
     const { reached, llm } = llmImportsOfStoredShapes();
-    // Not vacuous: the walk reaches the stored turn and its ledger arms.
-    expect(reached).toContain('src/shared/schemas/runLedgerEvent.ts');
+    // Not vacuous: the walk reaches the stored turn and its run history arms.
+    expect(reached).toContain('src/shared/schemas/runHistoryEvent.ts');
     expect(reached).toContain('src/shared/schemas/storedTurn.ts');
     expect(
       llm,
       llm.length === 0
         ? undefined
-        : 'A stored shape is storage-owned (`storedTurn.ts`); `RunLedger` converts the package’s values (`src/agent/runtime/storedTurn.ts`).',
+        : 'A stored shape is storage-owned (`storedTurn.ts`); `RunHistory` converts the package’s values (`src/agent/runtime/storedTurn.ts`).',
     ).toEqual([]);
   });
 });

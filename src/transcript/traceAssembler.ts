@@ -84,7 +84,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   if (!record) return { status: 'config_missing' };
   // The display rows are what the document carries, so the emptiness guard
   // belongs after the filter: a tombstoned aggregate and one holding only
-  // ledger-private rows are both "no replayable timeline", and readers may
+  // run-history-private rows are both "no replayable timeline", and readers may
   // then treat a non-empty document as having a creation row.
   const displayEvents = events.filter(isDisplaySessionEvent);
   if (displayEvents.length === 0) return { status: 'streamLogs_missing' };

@@ -1,8 +1,8 @@
 /**
- * The run-ledger rows in the loop's terms. A stored `model.message` or
+ * The run-history rows in the loop's terms. A stored `model.message` or
  * `context.edit` carries the storage-owned turn and history shapes
  * (`storedTurn.ts`); the loop authors, and the run fold reads, the same rows
- * with the `@texra-ai/llm` values it works in. `RunLedger` converts between
+ * with the `@texra-ai/llm` values it works in. `RunHistory` converts between
  * the two (`src/agent/runtime/storedTurn.ts`), so nothing above it sees a
  * stored turn and nothing below it sees a package type.
  */
@@ -56,4 +56,4 @@ export type Live<Row> = Row extends { readonly type: 'model.message' }
     : Row;
 
 /** A committed row as the run fold reads it. */
-export type RunLedgerRow = Live<SessionEvent>;
+export type RunHistoryRow = Live<SessionEvent>;

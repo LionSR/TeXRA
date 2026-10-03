@@ -27,7 +27,7 @@ import {
 } from '@platform/languageModel';
 import { AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
@@ -102,7 +102,7 @@ function runLayer(
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
-    Layer.provideMerge(Layer.succeed(RunLedger, ctx.session.ledger)),
+    Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
@@ -217,7 +217,7 @@ describe('run-scoped tool resolution', () => {
 
         // `gone` vanished and `added` appeared since the run opened.
         const resumed = yield* Effect.gen(function* () {
-          const state = yield* session.ledger.load(runId);
+          const state = yield* session.runHistory.load(runId);
           const step = yield* stepFor(
             yield* AgentRun,
             state!,
@@ -300,7 +300,7 @@ describe('run-scoped tool resolution', () => {
           Effect.provide(runLayer(ctx, [])),
           Effect.orDie,
         );
-        const before = (yield* session.ledger.load(runId))!;
+        const before = (yield* session.runHistory.load(runId))!;
 
         yield* ctx.stores.secrets.set(apiKeySecretName('deepseek'), 'sk-test');
         const step = yield* Effect.gen(function* () {
@@ -370,7 +370,7 @@ describe('run-scoped tool resolution', () => {
           Effect.provide(runLayer(ctx, [])),
           Effect.orDie,
         );
-        const before = (yield* session.ledger.load(runId))!;
+        const before = (yield* session.runHistory.load(runId))!;
 
         const step = yield* Effect.gen(function* () {
           const run = yield* AgentRun;

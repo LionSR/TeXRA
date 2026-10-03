@@ -1,5 +1,5 @@
 /**
- * Payloads for the run-ledger arms of `SessionEventDraftSchema`
+ * Payloads for the run-history arms of `SessionEventDraftSchema`
  * (`2026-09-08-pr1-run-ledger-foundation.md` section 2). Shapes only: the
  * arms themselves live in `sessionEvent.ts`, which is the single vocabulary
  * the publisher and both folds switch over.
@@ -286,7 +286,7 @@ export const ModelMessagePayloadSchema = z
  * longer the latest. `usage` is a summary call's priced usage, folded as a
  * response's (`null` when no model was called). Only `compaction` has a
  * writer; `reset`, `handoff` and `fork` are the durable harness's shapes. Whether the result is preparable is the
- * ledger's check (D11), at write and cold load: a payload cannot see the
+ * run history's check (D11), at write and cold load: a payload cannot see the
  * history it edits.
  */
 export const ContextEditPayloadSchema = z

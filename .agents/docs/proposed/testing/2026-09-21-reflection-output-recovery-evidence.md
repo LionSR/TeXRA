@@ -108,7 +108,7 @@ doc comment says this explicitly (`:1185-1188`).
 The suite runs against a real SQLite session database
 (`src/controllers/session/Database.ts` builds an `@effect/sql-sqlite-node`
 client) and a real on-disk raw output file (the case writes and reads it via
-`node:fs`), so the resume exercises the durable-ledger and on-disk-file
+`node:fs`), so the resume exercises the durable-run history and on-disk-file
 reconciliation path — but it does so **within one process**. No second
 process is spawned, so a literal kill-and-restart reopen is not driven here.
 The code a reopen takes is identical, because `restore` reads only the

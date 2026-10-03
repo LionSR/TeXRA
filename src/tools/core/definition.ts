@@ -10,7 +10,7 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
-import { findStorageRefusal } from '@shared/session/runLedger';
+import { findStorageRefusal } from '@shared/session/runHistory';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
@@ -71,7 +71,7 @@ export type DefineToolOptions<T, R = never> = {
 /**
  * Define a tool: validate the model's input against `schema`, run `execute`,
  * and turn ordinary failures into `{ status: 'error' }` feedback.
- * Interruption, ledger refusals and database write failures propagate.
+ * Interruption, run history refusals and database write failures propagate.
  */
 export function defineTool<T, R = never>(
   def: DefineToolOptions<T, R>,

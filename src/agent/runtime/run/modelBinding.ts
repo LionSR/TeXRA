@@ -1,7 +1,7 @@
 /**
  * The run's model binding: one runtime `ModelConfig` plus the route
  * `modelRoutes` resolves, bound to the llm package `Model` the loop
- * calls, the durable `ModelOrigin` every ledger row names, and the runtime
+ * calls, the durable `ModelOrigin` every run history row names, and the runtime
  * facts the package deliberately does not own (price, context window, the
  * credential route keys the retry gate coordinates on).
  *
@@ -111,7 +111,7 @@ interface BindModelInput {
   readonly compatibilityKey?: ModelCompatibilityKey | null;
   /** Own-key quota fallback also declines Copilot; seeds declinedRoutes. */
   readonly ownApiKeyFallback?: boolean;
-  /** Declined routes persist on this run's ledger, not in user preferences. */
+  /** Declined routes persist on this run's history, not in user preferences. */
   readonly declinedRoutes?: readonly DeclinableUsageRoute[];
   readonly agentCategory: AgentCategory;
   /** The route default's temperature. */

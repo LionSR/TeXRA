@@ -537,7 +537,7 @@ export function buildAgentCliLaunch<TTurn>(
       publishUsage: (turn) => {
         const usage = getUsage(turn);
         if (!usage) return;
-        // The child has no ledger, so its `usage` rows are its one record of
+        // The child has no run history, so its `usage` rows are its one record of
         // spend: one per turn, which is what each provider reports.
         logger.emit({ type: 'usage', usage });
       },

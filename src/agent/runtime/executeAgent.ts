@@ -21,7 +21,7 @@ import {
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 
 import {
   buildAgentLaunchContext,
@@ -76,7 +76,7 @@ type ToolUseLaunchVariant =
 
 /**
  * The per-run layer both families run under: the run's `AgentRun`, the
- * invoker, the session's ledger, and the session's rooted filesystems (built
+ * invoker, the session's run history, and the session's rooted filesystems (built
  * from the roots of the session the run is on, fresh or resumed, so code
  * below the launch takes `WorkspaceFs` / `StorageFs` from context rather than
  * from the fiber's ambient roots). The follow-up lease is not here: a
@@ -109,7 +109,7 @@ function runLayerFor(
         },
       }),
     ),
-    Layer.provideMerge(Layer.succeed(RunLedger)(runSession.ledger)),
+    Layer.provideMerge(Layer.succeed(RunHistory)(runSession.runHistory)),
     Layer.provideMerge(sessionFsLayer(runSession.roots)),
   );
 }

@@ -46,7 +46,7 @@ import {
   SCRATCHPAD_TAG,
   type CompileFailure,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
@@ -100,7 +100,7 @@ const documentRoundPolicy = Effect.fn('rounds.policy')(function* (
   const overflowRetry = Effect.fn('rounds.overflowRetry')(function* (
     initial: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState | null, Error, RunLedger> {
+  ): Effect.fn.Return<RunState | null, Error, RunHistory> {
     if (initial.overflowRecoveredAtTurn === initial.turn) {
       logger.warn(
         'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
@@ -116,7 +116,7 @@ const documentRoundPolicy = Effect.fn('rounds.policy')(function* (
     const compacted = yield* cell.adopt(
       yield* compactIfNeeded(initial, {
         runId,
-        ledger: yield* RunLedger,
+        runHistory: yield* RunHistory,
         logger,
         bound: yield* SynchronizedRef.get(run.model),
         invoker,

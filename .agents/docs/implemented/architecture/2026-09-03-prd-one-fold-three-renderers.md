@@ -1275,7 +1275,7 @@ be trusted at each call.
 > publications with a `Semaphore(1)` around the durable write. What landed
 > (`src/agent/runtime/SessionEvents.ts`) is stronger and simpler: one inbox
 > (`Queue.unbounded`) drained by one fiber, and every writer of the log is a
-> job on it — `publish` (an awaited batch, the run ledger's door), `exclusive`
+> job on it — `publish` (an awaited batch, the run history's door), `exclusive`
 > (a read of committed rows and the append that depends on it, as one job),
 > `detach` (a synchronous enqueue for a producer with no fiber to wait on: the
 > trace subscriber), and `settle` (wait for what is detached). A semaphore
@@ -1283,7 +1283,7 @@ be trusted at each call.
 > fiber happens to run synchronously to its first async boundary; the inbox
 > orders by the moment of the call. The permit that had migrated into
 > `SessionHandle` (`publicationGate`, a promise `Set`, `schedulePublication`)
-> is deleted, and `RunLedger.appendBatch` no longer bypasses the publisher.
+> is deleted, and `RunHistory.appendBatch` no longer bypasses the publisher.
 
 ### 7.2 `SessionView`
 
@@ -1471,7 +1471,7 @@ make cross-host WAL access supported.
 are secret-scrubbed before persistence. The five execution-aggregate flow rows
 (`model.message`, `model.compaction`, `tool.intent`, `tool.result`,
 `flow.snapshot`) retain their provider content without redaction, as specified
-by the runtime proposal §2.1. Raw access belongs to `RunLedger`. The shared
+by the runtime proposal §2.1. Raw access belongs to `RunHistory`. The shared
 display fold redacts before exposing state, including the CLI's direct
 `SessionViewService.ref` consumer; trusting an in-process reader is not a
 redaction boundary. Every transport and export applies the same display

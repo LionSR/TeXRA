@@ -30,7 +30,7 @@ import {
   type HookOutcomePayload,
   type ToolResult,
 } from '@shared/schemas';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { rowAggregate } from './rows';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -127,7 +127,7 @@ export function stepHooks(
 
 /** What the hooks of one point decided, and the rows that record it. */
 interface HookPoint {
-  readonly rows: readonly RunLedgerDraft[];
+  readonly rows: readonly RunHistoryDraft[];
   /** A `PreToolUse` denial's reasons, joined; null when none denied. */
   readonly deny: string | null;
   /** The context the model reads beside the prompt or the result, each
@@ -242,7 +242,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
     { concurrency: 'unbounded' },
   );
   return {
-    rows: outcomes.map((payload): RunLedgerDraft => ({
+    rows: outcomes.map((payload): RunHistoryDraft => ({
       type: 'hook.outcome',
       aggregateId: rowAggregate(run.runId),
       payload,
@@ -288,7 +288,7 @@ const currentHooks = (run: AgentRunShape) =>
 /** A prompt point's rows, and the text parts its context adds to the
  *  prompt's message. */
 interface PromptPoint {
-  readonly rows: readonly RunLedgerDraft[];
+  readonly rows: readonly RunHistoryDraft[];
   readonly parts: InputPart[];
 }
 
@@ -353,7 +353,7 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
   run: AgentRunShape,
   turn: { readonly state: RunState; readonly outcome: string },
   lastMessage: string,
-): Effect.fn.Return<readonly RunLedgerDraft[], never, Services> {
+): Effect.fn.Return<readonly RunHistoryDraft[], never, Services> {
   if (turn.outcome !== 'completed') return [];
   const { state } = turn;
   const base = inputBase(run);

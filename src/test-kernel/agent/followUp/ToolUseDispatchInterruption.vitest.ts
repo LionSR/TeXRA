@@ -13,7 +13,7 @@ import {
   type RequestDecision,
   type ToolOutcomePermission,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
@@ -33,7 +33,7 @@ import {
 import type { TurnResult } from '@texra-ai/llm';
 
 // ---------------------------------------------------------------------------
-// The loop harness: the run's own services over a real session ledger, with
+// The loop harness: the run's own services over a real session run history, with
 // the model faked at the `ModelInvoker` seam. The rows the fake writes are the
 // production ones, so the fold, the resume rules and dispatch all run against
 // the durable facts a live turn leaves behind.
@@ -50,7 +50,7 @@ function loopLayer(init: HarnessInit) {
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
-    Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+    Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
   );
 }
 
@@ -109,7 +109,7 @@ const CALLS = [
  * tool_result entries is unresumable: providers with strict pairing (and
  * OpenAI's response chaining) refuse the next request. The retired engine
  * defended this by synthesizing cancelled results at the interrupt. The
- * ledger defends it by construction: a response that requested tools enters
+ * run history defends it by construction: a response that requested tools enters
  * the conversation only through the delivering `append`, which carries the
  * complete tool group, so an interrupt mid-dispatch leaves no assistant tool
  * turn in history at all and the settled calls stay row facts. Resume settles
@@ -158,7 +158,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(toolB.call).toHaveBeenCalledTimes(1);
         expect(toolC.call).not.toHaveBeenCalled();
 
-        const interrupted = yield* session.ledger
+        const interrupted = yield* session.runHistory
           .load(runId)
           .pipe(Effect.orDie);
         // No assistant tool turn and no tool group: the paid response is
@@ -192,7 +192,9 @@ describe('tool dispatch interrupted mid-turn', () => {
         // so and decides whether to retry it.
         expect(toolC.call).not.toHaveBeenCalled();
 
-        const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const delivered = yield* session.runHistory
+          .load(runId)
+          .pipe(Effect.orDie);
         const group = delivered?.messages.find(
           (message) => message.role === 'tool',
         );
@@ -251,7 +253,9 @@ describe('tool dispatch interrupted mid-turn', () => {
       expect(resumed.outcome).toBe('completed');
       expect(asked.questions).toHaveLength(1);
       expect(toolB.call).toHaveBeenCalledTimes(1);
-      const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      const delivered = yield* session.runHistory
+        .load(runId)
+        .pipe(Effect.orDie);
       const group = delivered?.messages.find(
         (message) => message.role === 'tool',
       );
@@ -362,7 +366,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       );
       expect(resumed.outcome).toBe('completed');
       expect(toolB.call).toHaveBeenCalledTimes(1);
-      const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
       expect(state?.messages.map((message) => message.role)).toEqual([
         'user',
         'assistant',
@@ -444,7 +448,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         ).toBe(true);
         expect(asked.questions).toHaveLength(1);
 
-        const open = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const open = yield* session.runHistory.load(runId).pipe(Effect.orDie);
         const request = open?.requests[asked.questions[0].requestId];
         // The close is on the request, and it decides nothing about the call:
         // no rerun was admitted and no skip was reported.
@@ -476,7 +480,9 @@ describe('tool dispatch interrupted mid-turn', () => {
           asked.questions[0].requestId,
         );
 
-        const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        const delivered = yield* session.runHistory
+          .load(runId)
+          .pipe(Effect.orDie);
         expect(
           delivered?.requests[asked.questions[1].requestId]?.decision,
         ).toMatchObject({ action: 'skip' });

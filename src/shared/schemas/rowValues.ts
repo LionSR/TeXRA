@@ -1,5 +1,5 @@
 /**
- * The values stored rows carry. The sibling of `runLedgerEvent.ts`: shapes
+ * The values stored rows carry. The sibling of `runHistoryEvent.ts`: shapes
  * only. The event arms live in `sessionEvent.ts`, the single vocabulary the
  * publisher and both folds switch over; the current values are the families
  * of the `current_value` table.

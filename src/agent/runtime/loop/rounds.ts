@@ -20,7 +20,7 @@ import { Effect, type FileSystem } from 'effect';
 import type { StageHandle } from '@agent/trace';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { AgentCategory, RunOutcome } from '@shared/schemas';
-import type { RunLedger } from '@shared/session/runLedger';
+import type { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { positionRow } from './rows';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -68,7 +68,7 @@ export interface RoundTurns {
   ) => Effect.Effect<
     { readonly state: RunState; readonly done: boolean },
     Error,
-    RoundServices | RunLedger
+    RoundServices | RunHistory
   >;
 }
 

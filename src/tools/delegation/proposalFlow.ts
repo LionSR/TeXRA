@@ -27,7 +27,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import type { RunLedgerRefused } from '@shared/session/runLedger';
+import type { RunHistoryRefused } from '@shared/session/runHistory';
 import {
   decideProposalApproval,
   texraApprovalDenialMessage,
@@ -170,7 +170,7 @@ type ProposalRequestError =
   | DatabaseNotOwner
   | DatabaseReadFailed
   | DatabaseWriteFailed
-  | RunLedgerRefused;
+  | RunHistoryRefused;
 
 /** Request the shared proposal decision, honoring the run's bypass policy.
  *  `ask` presents it in place of this call's own proposal request: the

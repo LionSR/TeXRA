@@ -1,6 +1,6 @@
 /**
  * A workflow agent's loop-boundary suite: `runToolUse` in round mode (the
- * documents plugin's rounds) driven over a real session ledger with the
+ * documents plugin's rounds) driven over a real session run history with the
  * model faked at the `ModelInvoker` seam. It pins what the durable rows must
  * say at the boundary — the round loop's compile repair, resume from the
  * rows, the output facts a round publishes, the token-limited response, and
@@ -45,7 +45,7 @@ import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -75,7 +75,7 @@ import { RunFileService } from '@utils/files/runStorage';
 import { createRecordingHost } from './progressTestUtils';
 
 /**
- * Round mode over a real session ledger: the round loop, the
+ * Round mode over a real session run history: the round loop, the
  * compile-rejection policy, the cut-off round and resume are production
  * code; the model is faked at the `ModelInvoker` seam and the round's output
  * pipeline at its module seams, so a scenario scripts turns and compile
@@ -336,7 +336,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
     Effect.provide(
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
-        Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
         Layer.provideMerge(Layer.succeed(Runs)(init.session.runs)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
         Layer.provideMerge(
@@ -359,8 +359,10 @@ const runLoop = Effect.fn('test.runRounds')(function* (init: LoopInit) {
 });
 
 const loadState = Effect.fn('test.loadState')(function* (init: LoopInit) {
-  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
-  if (state === null) throw new Error('The run wrote no ledger state.');
+  const state = yield* init.session.runHistory
+    .load(init.runId)
+    .pipe(Effect.orDie);
+  if (state === null) throw new Error('The run wrote no run history state.');
   return state;
 });
 
@@ -993,7 +995,7 @@ describe('an interrupted workflow run', () => {
 
         // The first round's stage closed with its own verdict; only the
         // interrupted one is cancelled, and its outputs stay in the
-        // ledger a resume continues from.
+        // run history a resume continues from.
         expect(roundStageOutcomes(recorder)).toEqual([
           RUN_OUTCOME.COMPLETED,
           RUN_OUTCOME.CANCELLED,

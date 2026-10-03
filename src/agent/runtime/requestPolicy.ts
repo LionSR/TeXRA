@@ -27,7 +27,7 @@ import {
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
-import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 
 import type { SessionHandle } from './SessionHandle';
 
@@ -133,7 +133,7 @@ export function policyDecidedRows(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
-): Extract<RunLedgerDraft, { type: 'request.decided' }>[] {
+): Extract<RunHistoryDraft, { type: 'request.decided' }>[] {
   const answer = answerFor(session, payload);
   if (answer === undefined) return [];
   if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);

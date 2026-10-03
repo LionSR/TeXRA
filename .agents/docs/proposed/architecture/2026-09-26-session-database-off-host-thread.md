@@ -176,7 +176,7 @@ The layer becomes a client that forwards each service operation.
 database cannot be shared across threads and is never contended.
 
 The service surface is already message-shaped. Its six consumers
-(`src/agent/runtime/SessionEvents.ts`, `src/agent/runtime/RunLedger.ts`,
+(`src/agent/runtime/SessionEvents.ts`, `src/agent/runtime/RunHistory.ts`,
 `src/controllers/session/sessionLayer.ts`,
 `src/controllers/session/sessionInputs.ts`,
 `packages/desktop/src/main/desktopProjectRecords.ts`,

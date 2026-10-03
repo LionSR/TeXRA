@@ -46,7 +46,7 @@ come from positions through the shared `RunRows` slice.
 - **Snapshot `phase` readers:** the loop and resume (`toolUse.ts`:
   initial/waiting/halted checks, the park test at the turn boundary;
   `rounds.ts`; `runProgram.ts` "opened" test; `modelSwitch.ts`),
-  `RunLedger` (a run with `phase === null` is unopened), and the CLI's
+  `RunHistory` (a run with `phase === null` is unopened), and the CLI's
   `isTerminalWorkflowCheckpoint`, which reads `runtime.phase === 'halted'`
   from `latestSnapshot`.
 - **Snapshot coordinate readers:** the loop's own counters, restored on
@@ -107,7 +107,7 @@ snapshot keeps only what is not position.
   must keep them green unchanged, and it gets a stop-and-resume E2E at each
   kind of position.
 - **Batch preconditions.** `appendBatch` requires a snapshot to be the last
-  ledger row of its batch, except for listed followers. That rule changes
+  run history row of its batch, except for listed followers. That rule changes
   when snapshots stop accompanying every position.
 - **Format.** Another `SESSION_EVENT_FORMAT` bump. 1.0 is a clean state, so
   there is no reader for the old format.

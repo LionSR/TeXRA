@@ -1,10 +1,10 @@
 /**
- * The run ledger: the only reader of ledger-private payloads and the only
+ * The run history: the only reader of run-history-private payloads and the only
  * writer of the run rows. Three operations, each a boundary the row design
  * names, each taking the run id and qualifying its own aggregate access with
  * `aggregateId('run', run)`.
  *
- * Stateless by construction. The loop holds the `RunState`; the ledger folds
+ * Stateless by construction. The loop holds the `RunState`; the run history folds
  * the batch it just committed onto the state it was handed. That is what
  * makes `foldRunState` provably the same function on the live path and on
  * resume, and it keeps a session-root service free of per-run mutable cache.
@@ -18,13 +18,13 @@ import { Cause, Context, Data, type Effect } from 'effect';
 import type { RunId, SessionEvent } from '@shared/schemas';
 import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
-  RunLedgerDraft,
-  RunLedgerInconsistent,
+  RunHistoryDraft,
+  RunHistoryInconsistent,
   RunState,
 } from './runStateFold';
 
 /**
- * A refusal the ledger itself decided. Database failures are NOT folded into
+ * A refusal the run history itself decided. Database failures are NOT folded into
  * this type: reporting a disk error as a stolen claim is the silent-
  * degradation defect in a different costume, so `acquire` and `load` keep
  * them in their error channel beside it.
@@ -51,15 +51,15 @@ import type {
  * A violated `appendBatch` precondition is a caller defect (`Effect.die`),
  * not an arm: the loop must not handle it.
  */
-export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
+export class RunHistoryRefused extends Data.TaggedError('RunHistoryRefused')<{
   readonly reason:
     'not-owner' | 'unsafe-endpoint' | 'unprepared-history' | 'inconsistent';
   readonly runId: RunId;
   readonly detail: string;
-  readonly cause?: RunLedgerInconsistent;
+  readonly cause?: RunHistoryInconsistent;
 }> {
   override get message(): string {
-    return `The run ledger refused a write (${this.reason}): ${this.detail}`;
+    return `The run history refused a write (${this.reason}): ${this.detail}`;
   }
 }
 
@@ -70,21 +70,21 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
  */
 export function findStorageRefusal(
   cause: Cause.Cause<unknown>,
-): DatabaseWriteFailed | RunLedgerRefused | undefined {
+): DatabaseWriteFailed | RunHistoryRefused | undefined {
   for (const reason of cause.reasons) {
     if (Cause.isInterruptReason(reason)) continue;
     const error = Cause.isFailReason(reason) ? reason.error : reason.defect;
     if (
       error instanceof DatabaseWriteFailed ||
-      error instanceof RunLedgerRefused
+      error instanceof RunHistoryRefused
     )
       return error;
   }
   return undefined;
 }
 
-export class RunLedger extends Context.Service<
-  RunLedger,
+export class RunHistory extends Context.Service<
+  RunHistory,
   {
     /**
      * The claim gate, called before any resume side effect: resume acquires
@@ -98,14 +98,14 @@ export class RunLedger extends Context.Service<
       run: RunId,
     ) => Effect.Effect<
       RunState | null,
-      RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
+      RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
     >;
     /**
-     * Fold a run's rows into its state. `null` only when no ledger row has
+     * Fold a run's rows into its state. `null` only when no run history row has
      * folded: the loop's fresh-run branch and, for a run recorded before the
-     * run ledger, the honest answer, distinct from "checkpoint corrupt".
+     * run history, the honest answer, distinct from "checkpoint corrupt".
      * Queued follow-ups alone still return that unopened state (`phase` is
-     * null) so the caller can deliver them; they do not open the run. Ledger
+     * null) so the caller can deliver them; they do not open the run. Run history
      * rows without an opening `run.snapshot` are not that case: they are a
      * malformed aggregate and fail `inconsistent`, because folding an
      * `attempt` or a `response` into a fresh run is how a paid invocation
@@ -116,7 +116,7 @@ export class RunLedger extends Context.Service<
      */
     readonly load: (
       run: RunId,
-    ) => Effect.Effect<RunState | null, RunLedgerRefused | DatabaseReadFailed>;
+    ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
      * The latest `run.snapshot` on the run aggregate, one indexed row read
      * and no fold: what every reader of the retired `flow_<id>.json` becomes.
@@ -137,7 +137,7 @@ export class RunLedger extends Context.Service<
      * actually committed. Failure of any member commits none.
      *
      * Preconditions, checked before publish; a violation is a defect:
-     * - a `run.snapshot` is the last ledger row of its batch, except when a
+     * - a `run.snapshot` is the last run history row of its batch, except when a
      *   `run.position`, a companion `tool.end`, a `request.decided`, or the
      *   stream.end` closing the row a `waiting` step parks beside follows
      *   it. A `request.opened` PRECEDES the `tool.binding` or `model.retry`
@@ -156,12 +156,12 @@ export class RunLedger extends Context.Service<
      *   response's dispatch facts, the committed settlement for that
      *   `callId` (committed before, or earlier in this batch). This is the
      *   settlement-to-provider join: the canonical tool message binds
-     *   results to calls positionally, the ledger keys them by `callId`.
+     *   results to calls positionally, the run history keys them by `callId`.
      */
     readonly appendBatch: (
       run: RunId,
       state: RunState | null,
-      rows: readonly RunLedgerDraft[],
-    ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
+      rows: readonly RunHistoryDraft[],
+    ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
   }
->()('@texra/session/RunLedger') {}
+>()('@texra/session/RunHistory') {}

@@ -9,7 +9,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
@@ -476,14 +476,14 @@ describe('resumeRun tool-use queue ownership', () => {
   // that folded it. Telling that user the run "has finished", or throwing the
   // launch's internal wording at them, are the two ways this used to go wrong.
   it.effect(
-    'refuses an aggregate the ledger cannot fold as unusable state',
+    'refuses an aggregate the run history cannot fold as unusable state',
     () =>
       Effect.gen(function* () {
         const session = yield* createSession();
         resumeToolUseFromResumeDataMock.mockReturnValueOnce(
           Effect.fail(
             new Error('Failed to launch the resumed run', {
-              cause: new RunLedgerRefused({
+              cause: new RunHistoryRefused({
                 reason: 'inconsistent',
                 runId: RUN,
                 detail: 'unsupported-record',

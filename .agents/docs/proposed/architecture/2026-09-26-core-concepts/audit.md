@@ -2,7 +2,7 @@
 
 This was read-only: no edits, pushes or comments. I exported the tree to a scratch folder, and all paths below are relative to the repo root. Six parallel audits covered the concepts, and I re-read the headline items myself.
 
-The PR #13350 note is pinned at 3efffcc, and several of its claims have drifted; they are listed at the end. Re-checked on a53db0e, which contains #13348 and #13359. #13348 has merged: `FollowUps` is no longer a context service, and `toolUse.ts:150` now reads `rounds ? null : yield* claimFollowUps(run, ledger)`. Items those merges fixed are marked "Fixed by #…" and kept as history; the rest are reworded or carry updated line numbers.
+The PR #13350 note is pinned at 3efffcc, and several of its claims have drifted; they are listed at the end. Re-checked on a53db0e, which contains #13348 and #13359. #13348 has merged: `FollowUps` is no longer a context service, and `toolUse.ts:150` now reads `rounds ? null : yield* claimFollowUps(run, runHistory)`. Items those merges fixed are marked "Fixed by #…" and kept as history; the rest are reworded or carry updated line numbers.
 
 Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
 
@@ -95,8 +95,8 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
    - Fix: add `removeRun` to the job ops via `exclusive`, and prune every id in `runIds` at all three sites.
 2. [v] **App-state rows skip the publisher:** `appStateStore.ts:72-87` uses `database.appendAll`, and `Database.updateAppStateKey` (`:830-849`) calls `appendPrepared` directly. They share the session DB and use `borrowsClaim` (`:582,689,1223`). Fix: the `CurrentValues` table (move 12).
 3. [v] **Global-DB writers use the same event machinery off the publisher:** `recordUpdateCheck` `:851-878`, `updateInquiryRecord` `:891-915`, `desktopProjectRecords.ts:52`. The desktop lists are two non-atomic writes.
-4. [v] **Three claim doors, each calling `hydrateFollowUps`:** `sessionLayer.ts:354-373`, `:487-495`, `RunLedger.ts:284,315`. Fix: one claim door.
-5. [v] **Usage stored four times:** `model.message` usage (`runLedgerEvent.ts:181`), the trace `usage` row (now `logger.emit({type:'usage'})` at `UsageMonitor.ts:175-181`, plus `agentCliShared.ts:547` for agent-CLI children, after #13359 retired the `TraceEmitter.ts:115-123` helper; the display fold reads it at `sessionFold.ts:978-986`), `run.end.usage` (`runLifecycle.ts:228-243`), and `UsageMonitor`'s in-memory totals.
+4. [v] **Three claim doors, each calling `hydrateFollowUps`:** `sessionLayer.ts:354-373`, `:487-495`, `RunHistory.ts:284,315`. Fix: one claim door.
+5. [v] **Usage stored four times:** `model.message` usage (`runHistoryEvent.ts:181`), the trace `usage` row (now `logger.emit({type:'usage'})` at `UsageMonitor.ts:175-181`, plus `agentCliShared.ts:547` for agent-CLI children, after #13359 retired the `TraceEmitter.ts:115-123` helper; the display fold reads it at `sessionFold.ts:978-986`), `run.end.usage` (`runLifecycle.ts:228-243`), and `UsageMonitor`'s in-memory totals.
 6. [v] **Output stored three times:** `output.produced.rounds` (`documentRounds.ts:494`), `run.end.output` (`runRecords.ts:100`), `run.result.output` (`subagentResults.ts:256`, `bash.ts:335`, `cli/commands/workflow.ts:405`).
 7. [v] **Config stored repeatedly:** `run.config` on every activation (`AgentRunLifecycle.ts:455-463`) and on model switch (`modelSwitch.ts:78`), plus the same fields in `run.record` (`runRecords.ts:21-24`).
 8. [v] **Inquiry summary duplicated** into the session log (`inquiryActions.ts:113-119`, `ExternalInquiryTool.ts:336-343`); the global-DB record is the authority.
@@ -266,7 +266,7 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
 
 20. [v] **Second and third retry owners:** `helperModel.ts:81-115` (its own schedule, ungated), and compaction (`compaction.ts:261-279`, no gate or pricing). The session-scoped gate (`sessionLayer.ts:588`) sits under account-wide credentials.
 21. [v] **A failed manual rebind is only a warning,** but `declinedRoutes` still commits (`ModelInvoker.ts:1050-1066`).
-22. [v] **`RunLedger.acquire` publishes `request.decided` cancels directly** (`RunLedger.ts:318-330`), bypassing `decideRequest`. It is a third decision writer.
+22. [v] **`RunHistory.acquire` publishes `request.decided` cancels directly** (`RunHistory.ts:318-330`), bypassing `decideRequest`. It is a third decision writer.
 
 ### Host
 
@@ -378,7 +378,7 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
   - A child's hash is its parent's; a resumed child can widen; one switch with four readers; two install records.
 - **Request:**
   - The SDK retry-deny; the host Copilot fallback; every bypass lost on resume; the goal restore clobbering a mid-goal user grant.
-  - Non-atomic approve-for-session; unrecorded core auto-decisions; CLI `never` auto-approving proposals; `RunLedger` cancel writer.
+  - Non-atomic approve-for-session; unrecorded core auto-decisions; CLI `never` auto-approving proposals; `RunHistory` cancel writer.
 - **Host:**
   - The desktop-only export refusal; the CLI ignoring `autoOpenFinal`; the CLI outcome rewrite.
   - The `AgentDirectoryManager` singleton; external skill roots widening the allowlist across sessions [i].

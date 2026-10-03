@@ -27,7 +27,7 @@ The set has the right direction but the wrong grain, and four of its definitions
    - Claims live per aggregate in `event_sequence.owner_id`.
 
 3. **"One writer" is false as stated.**
-   - A run aggregate has two producers, both going through the one publisher per (process, root), that is, the session's `SessionEvents` inbox: `RunLedger.appendBatch` writes ledger rows, validated and pre-folded (`src/agent/runtime/RunLedger.ts`), and trace facts arrive via `runEventDraft` and `detach` (`SessionEvents.ts:400`, `SessionHandle.ts:993`).
+   - A run aggregate has two producers, both going through the one publisher per (process, root), that is, the session's `SessionEvents` inbox: `RunHistory.appendBatch` writes run history rows, validated and pre-folded (`src/agent/runtime/RunHistory.ts`), and trace facts arrive via `runEventDraft` and `detach` (`SessionEvents.ts:400`, `SessionHandle.ts:993`).
    - Two processes on one root each have a publisher; SQLite and claims arbitrate between them.
    - Two writes bypass the publisher today: `Database.removeRun` (`Database.ts:1013`, which drafts `run.removed` at `:1045`) and `appStateStore` calling `database.appendAll` (`appStateStore.ts:76`).
    - Claims and GC stay in SQL by ruling ("Every write is a command" was withdrawn in #13350).
@@ -117,7 +117,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 | Process              | One `ManagedRuntime` plus process services (tables, `Compositions`, `Sessions` map, catalog)                                                                       | OS process                                                                                     | `installProcessRuntime` in `src/controllers/session/sessionLayer.ts:1154`; `src/platform/processRuntime.ts`                                                                                                                 |
 | Session              | One storage root: its log, publisher, folds, live runs, requests; conversations are root runs in it                                                                | `Sessions` LayerMap entry, explicit close                                                      | `sessionLayer.ts` + `src/agent/runtime/SessionHandle.ts`                                                                                                                                                                    |
 | Log                  | Append-only rows per aggregate, root-wide commit order, one publisher per (process, root), claim per aggregate; RunState and SessionView are its two folds         | Durable (format-stamped)                                                                       | `src/shared/schemas/sessionEvent.ts` (vocabulary), `src/agent/runtime/SessionEvents.ts` (publisher), `src/controllers/session/Database.ts` (claims), `src/shared/session/runRows.ts` / `runStateFold.ts` / `sessionFold.ts` |
-| Run                  | One `run` aggregate with identity, parent edge and driver; native driver = the tool-use program; turn ⊃ step                                                       | run.start → run.end; fiber scope while live; resume re-enters from rows                        | `loop/toolUse.ts`, `run/AgentRun.ts`, `RunLedger.ts`, `runRegistry.ts`                                                                                                                                                      |
+| Run                  | One `run` aggregate with identity, parent edge and driver; native driver = the tool-use program; turn ⊃ step                                                       | run.start → run.end; fiber scope while live; resume re-enters from rows                        | `loop/toolUse.ts`, `run/AgentRun.ts`, `RunHistory.ts`, `runRegistry.ts`                                                                                                                                                     |
 | Input                | Every message to a run is a `followup.queued` row on its aggregate (user, child report, peer, subscription, continuation-made turn)                                | Row durable until `followup.consumed`                                                          | `src/agent/followUp/`, `src/agent/runtime/FollowUps.ts`, `loop/continuationPolicy.ts`                                                                                                                                       |
 | Delegation           | A run opening a child through a driver; the child joins or narrows the parent composition, reports via Input, and shares the session budget; lineage ≠ supervision | Child run's lifetime, under the parent's supervision until detach                              | `childRunLoop.ts`, `childRunBudget.ts`, `src/shared/session/runRelation.ts`                                                                                                                                                 |
 | Agent                | A resolved definition (settings, prompt, declared tools, category) from an ordered catalog of sources                                                              | Catalog: process, rebuilt on refresh; definition: recorded at run open                         | `src/agent/index/agentRegistry.ts`, `agentLoad.ts`, `src/agent/core/definition/`                                                                                                                                            |
@@ -132,7 +132,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 1. **One writer.**
    - Per (process, root): every durable append is a job on the one `SessionEvents` inbox, and commit order is enqueue order.
    - Per aggregate: only the claim holder appends (the owner is stamped in the insert).
-   - Per row type: one writing function (ledger rows: `RunLedger.appendBatch`; `run.end`: `finalizeRun`; request rows: `SessionRequests`).
+   - Per row type: one writing function (run history rows: `RunHistory.appendBatch`; `run.end`: `finalizeRun`; request rows: `SessionRequests`).
    - Claims and GC stay in SQL.
    - Current violations: `Database.removeRun`, `appStateStore.appendAll`.
 2. **Log is truth.**
@@ -148,7 +148,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 5. **Plugins.**
    - A plugin is an id plus rows in static seam tables owned by the seam's layer and `satisfies`-checked against the manifest.
    - Each seam has one fixed core call site and resolves at most one contributor per run from the pinned composition, so there is no chain and no register/unregister.
-   - Function contributions write only through the run's ledger or publisher.
+   - Function contributions write only through the run's history or publisher.
    - The plugin's switch gates every contribution it makes. Skills and bundled agents currently escape this.
 6. **Changes at run open or a recorded step boundary.**
    - A root run resolves its composition (and, once decision 10 lands, its definition) at open and records the offered set and digest on its opening snapshot.
@@ -217,6 +217,6 @@ TeXRA equivalents:
 **Open question worth flagging.** Nothing forces a new contributor to learn the directory mapping, and today it is skewed:
 
 - `installProcessRuntime` and `SessionRequests` live under `src/controllers/session/`.
-- The `RunLedger` interface is in `src/shared/session/`, while its implementation is in `src/agent/runtime/`.
+- The `RunHistory` interface is in `src/shared/session/`, while its implementation is in `src/agent/runtime/`.
 
 The minimal-set table's owner column is the only thing that would fix that. It should live in one README.

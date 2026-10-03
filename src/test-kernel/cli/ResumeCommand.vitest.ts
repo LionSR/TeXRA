@@ -146,9 +146,9 @@ async function seedRunRecord(seed: {
       seed.config?.agentCategory === AgentCategory.Workflow
         ? workflowSnapshot(seed.config.model, seed.modelCompatibilityKey)
         : OPENING_SNAPSHOT;
-    await Effect.runPromise(session.ledger.acquire(RUN_ID));
+    await Effect.runPromise(session.runHistory.acquire(RUN_ID));
     await Effect.runPromise(
-      session.ledger.appendBatch(RUN_ID, null, [
+      session.runHistory.appendBatch(RUN_ID, null, [
         {
           type: 'run.snapshot',
           aggregateId: aggregateId('run', RUN_ID),

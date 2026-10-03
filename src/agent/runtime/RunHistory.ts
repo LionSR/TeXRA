@@ -1,11 +1,11 @@
 /**
- * The run ledger over the root's event plane: claims and reads through
+ * The run history over the root's event plane: claims and reads through
  * `Database`, writes through `SessionEvents.publish` (the one transaction),
  * `foldRunState` on both paths. Mirrors `sessionEventsLayer`'s placement.
  *
  * Reads use `Database.readAggregate` and `Database.readRunSnapshot`, never
  * `SessionEvents.aggregate`: the latter filters to display rows and would
- * silently drop every ledger-private row.
+ * silently drop every run-history-private row.
  */
 import { Effect, Layer, Result } from 'effect';
 
@@ -21,17 +21,20 @@ import {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import {
   foldRunState,
-  RunLedgerInconsistent,
+  RunHistoryInconsistent,
   unboundRequests,
-  type RunLedgerDraft,
+  type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runStateFold';
-import type { HistoryMessage, RunLedgerRow } from '@shared/session/ledgerTurns';
+import type {
+  HistoryMessage,
+  RunHistoryRow,
+} from '@shared/session/historyTurns';
 import { SessionEvents } from '@shared/session/sessionEvents';
-import { ledgerRows, storedDraft } from './storedTurn';
+import { runHistoryRows, storedDraft } from './storedTurn';
 
 /**
  * Rows that may follow a `run.snapshot` in its batch: none moves what it
@@ -40,18 +43,18 @@ import { ledgerRows, storedDraft } from './storedTurn';
  * the `stream.end` of a row the `waiting` position parks beside. Each folded
  * field then has one writer, whose last row is what a resume reads.
  */
-const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
+const AFTER_SNAPSHOT = new Set<RunHistoryDraft['type']>([
   'run.position',
   'tool.end',
   'request.decided',
   'stream.end',
 ]);
 
-const isResponse = (row: RunLedgerDraft): boolean =>
+const isResponse = (row: RunHistoryDraft): boolean =>
   row.type === 'model.message' && row.payload.kind === 'response';
 
 /** Rows that append to, or rewrite, the canonical history. */
-const isMessageBearing = (row: RunLedgerDraft): boolean =>
+const isMessageBearing = (row: RunHistoryDraft): boolean =>
   row.type === 'context.edit' ||
   (row.type === 'model.message' &&
     (row.payload.kind === 'append' || row.payload.kind === 'response'));
@@ -64,7 +67,7 @@ const settlementStatus = (status: 'executed' | 'error'): 'success' | 'error' =>
 function contractViolation(
   run: RunId,
   state: RunState | null,
-  rows: readonly RunLedgerDraft[],
+  rows: readonly RunHistoryDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
   const settledInBatch = new Map<string, 'success' | 'error'>();
@@ -152,11 +155,11 @@ function contractViolation(
 }
 
 /**
- * Every place a `ModelOrigin` binding reaches a durable ledger row. The
+ * Every place a `ModelOrigin` binding reaches a durable run history row. The
  * assertion reads these typed positions, never a recursive shape sniff, so an
  * `endpoint` key in tool output or a message body stays data, not a refusal.
  */
-function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
+function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
   if (row.type !== 'model.message') return [];
   const p = row.payload;
   switch (p.kind) {
@@ -179,7 +182,7 @@ function rowOrigins(row: RunLedgerDraft): readonly ModelOrigin[] {
 }
 
 /**
- * Every `deployment.endpoint` reaching a ledger row carries no userinfo,
+ * Every `deployment.endpoint` reaching a run history row carries no userinfo,
  * query string or fragment. The package's `EndpointSchema` already refuses
  * these at parse time; this is the loud restatement at the one boundary
  * where a row becomes permanent, never a `?? null`. A value that is not a URL
@@ -215,8 +218,8 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
  */
 const candidates = (
   state: RunState | null,
-  rows: readonly RunLedgerDraft[],
-): readonly RunLedgerRow[] =>
+  rows: readonly RunHistoryDraft[],
+): readonly RunHistoryRow[] =>
   rows.map((row, index) => ({
     ...row,
     seq: index + 1,
@@ -236,12 +239,12 @@ const unprepared = (
   runId: RunId,
   history: readonly HistoryMessage[],
   from = 0,
-): RunLedgerRefused | null => {
+): RunHistoryRefused | null => {
   let start = Math.max(0, from - 1);
   if (start > 0 && history[start]?.role === 'tool') start -= 1;
   if (PreparedHistorySchema.safeParse(history.slice(start)).success)
     return null;
-  return new RunLedgerRefused({
+  return new RunHistoryRefused({
     reason: 'unprepared-history',
     runId,
     detail:
@@ -258,8 +261,8 @@ function notOwnerDetail(failure: DatabaseNotOwner): string {
 }
 
 /** The refusal of rows that do not fold. */
-const inconsistent = (runId: RunId, cause: RunLedgerInconsistent) =>
-  new RunLedgerRefused({
+const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
+  new RunHistoryRefused({
     reason: 'inconsistent',
     runId,
     detail: cause.detail,
@@ -268,13 +271,13 @@ const inconsistent = (runId: RunId, cause: RunLedgerInconsistent) =>
 
 /** Committed rows folded onto `state`, their turns read back first. */
 const foldStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
-  Result.flatMap(ledgerRows(rows), (live) => foldRunState(state, live));
+  Result.flatMap(runHistoryRows(rows), (live) => foldRunState(state, live));
 
 /** `load`'s answer for a run's folded rows, which `acquire` shares. */
 const loaded = (
   run: RunId,
   folded: ReturnType<typeof foldRunState>,
-): Effect.Effect<RunState | null, RunLedgerRefused> =>
+): Effect.Effect<RunState | null, RunHistoryRefused> =>
   Effect.gen(function* () {
     if (Result.isFailure(folded))
       return yield* inconsistent(run, folded.failure);
@@ -284,13 +287,13 @@ const loaded = (
     // null). Return that unopened state so the caller can seed pending
     // input; after a restart there is no in-memory copy of those rows.
     if (state === null) return null;
-    if (state.phase === null && state.ledgerRows === 0) return state;
+    if (state.phase === null && state.runHistoryRows === 0) return state;
     if (state.phase === null) {
       return yield* inconsistent(
         run,
-        new RunLedgerInconsistent({
+        new RunHistoryInconsistent({
           reason: 'out-of-order',
-          detail: 'ledger rows without an opening run.snapshot',
+          detail: 'run history rows without an opening run.snapshot',
           commit: state.commit,
         }),
       );
@@ -302,12 +305,12 @@ const loaded = (
     return state;
   });
 
-export const runLedgerLayer: Layer.Layer<
-  RunLedger,
+export const runHistoryLayer: Layer.Layer<
+  RunHistory,
   never,
   SessionEvents | Database
 > = Layer.effect(
-  RunLedger,
+  RunHistory,
   Effect.gen(function* () {
     const events = yield* SessionEvents;
     const log = yield* Database;
@@ -318,12 +321,12 @@ export const runLedgerLayer: Layer.Layer<
     // cause), and a claim another process took after that proof is
     // `DatabaseNotOwner`; those are the refusals that mean `not-owner`, and
     // every other database failure passes through unconverted (F3).
-    const acquire = Effect.fn('RunLedger.acquire')(function* (run: RunId) {
+    const acquire = Effect.fn('RunHistory.acquire')(function* (run: RunId) {
       const aggregate = qualifyAggregateId('run', run);
       const taken = yield* log.acquireClaims([aggregate]).pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
-            new RunLedgerRefused({
+            new RunHistoryRefused({
               reason: 'not-owner',
               runId: run,
               detail: notOwnerDetail(failure),
@@ -333,7 +336,7 @@ export const runLedgerLayer: Layer.Layer<
         Effect.mapError((error) =>
           error instanceof DatabaseWriteFailed &&
           error.cause instanceof DatabaseClaimRefused
-            ? new RunLedgerRefused({
+            ? new RunHistoryRefused({
                 reason: 'not-owner',
                 runId: run,
                 detail: `held by ${error.cause.ownerId} (${error.cause.verdict})`,
@@ -372,7 +375,7 @@ export const runLedgerLayer: Layer.Layer<
         .pipe(
           Effect.catchTag('DatabaseNotOwner', (failure) =>
             Effect.fail(
-              new RunLedgerRefused({
+              new RunHistoryRefused({
                 reason: 'not-owner',
                 runId: run,
                 detail: notOwnerDetail(failure),
@@ -384,33 +387,33 @@ export const runLedgerLayer: Layer.Layer<
       return yield* loaded(run, foldStored(folded.success, cancelled));
     });
 
-    const latestSnapshot = Effect.fn('RunLedger.latestSnapshot')(function* (
+    const latestSnapshot = Effect.fn('RunHistory.latestSnapshot')(function* (
       run: RunId,
     ) {
       return yield* log.readRunSnapshot(qualifyAggregateId('run', run));
     });
 
-    const load = Effect.fn('RunLedger.load')(function* (run: RunId) {
+    const load = Effect.fn('RunHistory.load')(function* (run: RunId) {
       const rows = yield* log.readAggregate(qualifyAggregateId('run', run), 1);
       return yield* loaded(run, foldStored(null, rows));
     });
 
-    const appendBatch = Effect.fn('RunLedger.appendBatch')(function* (
+    const appendBatch = Effect.fn('RunHistory.appendBatch')(function* (
       run: RunId,
       state: RunState | null,
-      rows: readonly RunLedgerDraft[],
+      rows: readonly RunHistoryDraft[],
     ) {
       const violation = contractViolation(run, state, rows);
       if (violation !== null) {
         return yield* Effect.die(
-          new Error(`RunLedger.appendBatch contract: ${violation}`),
+          new Error(`RunHistory.appendBatch contract: ${violation}`),
         );
       }
       for (const row of rows) {
         for (const origin of rowOrigins(row)) {
           const unsafe = unsafeEndpoint(origin);
           if (unsafe !== null) {
-            return yield* new RunLedgerRefused({
+            return yield* new RunHistoryRefused({
               reason: 'unsafe-endpoint',
               runId: run,
               detail: `a ${row.type} origin is not a scheme, host and path alone: ${unsafe}`,
@@ -429,7 +432,7 @@ export const runLedgerLayer: Layer.Layer<
       if (candidate.success === null) {
         return yield* Effect.die(
           new Error(
-            'RunLedger.appendBatch contract: a batch on a fresh run appends a ledger row',
+            'RunHistory.appendBatch contract: a batch on a fresh run appends a run history row',
           ),
         );
       }
@@ -455,13 +458,13 @@ export const runLedgerLayer: Layer.Layer<
         const refusal = unprepared(run, candidate.success.messages, kept);
         if (refusal !== null) return yield* refusal;
       }
-      // A target this process no longer holds open is the ledger's
+      // A target this process no longer holds open is the run history's
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
       const committed = yield* events.publish(rows.map(storedDraft)).pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
-            new RunLedgerRefused({
+            new RunHistoryRefused({
               reason: 'not-owner',
               runId: run,
               detail: notOwnerDetail(failure),
@@ -479,10 +482,10 @@ export const runLedgerLayer: Layer.Layer<
       if (Result.isFailure(folded) || folded.success === null) {
         return yield* Effect.die(
           new Error(
-            `RunLedger.appendBatch published a batch its own fold rejects: ${
+            `RunHistory.appendBatch published a batch its own fold rejects: ${
               Result.isFailure(folded)
                 ? folded.failure.detail
-                : 'no ledger row folded'
+                : 'no run history row folded'
             }`,
           ),
         );

@@ -160,12 +160,12 @@ came to read different fields for it.
 **Aggregates.** Today a run owns two aggregates, `('stream', streamId)` and
 `('execution', executionId)`, with two sequence counters and two ownership
 claims ([execution ownership](../../proposed/architecture/2026-09-10-execution-ownership-lane-and-lease.md)
-§1, row 1). The split was meant to separate display rows from ledger rows.
+§1, row 1). The split was meant to separate display rows from run history rows.
 That distinction is a property of a row type, not of an aggregate, and the
-PR1 ledger's `foldRunState` already has to read both aggregates in one commit
+PR1 run history's `foldRunState` already has to read both aggregates in one commit
 order (PR1 §4.2). The recommended
 shape is **one aggregate kind, `run`, keyed by the run id**, with row types
-marked display-visible or ledger-private. That deletes the second sequence
+marked display-visible or run-history-private. That deletes the second sequence
 counter, the second claim, the `RunAggregates` two-key signature that PR1
 documents as a deviation it was forced into, and the reverse index the
 deviation exists to avoid. `parentStartCommit` and the deletion tombstone
@@ -461,7 +461,7 @@ the 1.0 direction no transitional alias outlives its PR, and
 
 ## 5. What this does not change
 
-- The ledger rows PR1 defines (`flow.step`, `model.message`, `tool.intent`,
+- The run history rows PR1 defines (`flow.step`, `model.message`, `tool.intent`,
   `tool.result`, `flow.snapshot`) and the money-window semantics. This note
   changes what aggregate they land on and what key names them, nothing
   about when they are written. `flow.snapshot` stays as the checkpoint R1

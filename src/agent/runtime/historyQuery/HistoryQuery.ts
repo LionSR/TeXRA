@@ -2,7 +2,7 @@
  * A session's history query store: the model's SQL runs against a separate
  * in-memory database that holds only the session's display rows, copied in
  * from `SessionEvents.all` up to the commit the query was asked at. Nothing
- * a statement names can reach the session database, a ledger row, a private
+ * a statement names can reach the session database, a run history row, a private
  * run record or an envelope column: those were never copied.
  *
  * The store is a child process (`childSource.ts`), started on the first

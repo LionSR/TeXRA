@@ -1,6 +1,6 @@
 /**
  * The loop harness the run-loop suites share: the run's own services over a
- * real session ledger, with the model faked at the `ModelInvoker` seam. The
+ * real session run history, with the model faked at the `ModelInvoker` seam. The
  * rows the fake writes are the production ones, so the fold, the resume rules
  * and dispatch run against the durable facts a live turn leaves behind.
  */

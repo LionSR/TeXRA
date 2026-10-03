@@ -48,7 +48,7 @@ import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 import { refresh } from '@agent/index';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import { runLedgerLayer } from '@agent/runtime/RunLedger';
+import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   initializeDefaultSession,
@@ -80,7 +80,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -381,9 +381,9 @@ describe('the golden 1.0 store', () => {
       expect(
         [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
       ).toEqual([[CHAT, 1]]);
-      const ledger = yield* RunLedger;
+      const runHistory = yield* RunHistory;
       const stateOf = (id: RunId) =>
-        Effect.map(ledger.load(id), (state) => ({
+        Effect.map(runHistory.load(id), (state) => ({
           at: state?.at,
           phase: state?.phase,
           round: state?.round,
@@ -412,9 +412,9 @@ describe('the golden 1.0 store', () => {
         ],
         openAttempt: false,
       });
-      expect((yield* ledger.load(CHAT))?.modelId).toBe('gemini38f');
+      expect((yield* runHistory.load(CHAT))?.modelId).toBe('gemini38f');
     }).pipe(
-      Effect.provide(runLedgerLayer.pipe(Layer.provideMerge(graph(storage)))),
+      Effect.provide(runHistoryLayer.pipe(Layer.provideMerge(graph(storage)))),
       Effect.scoped,
     );
   });

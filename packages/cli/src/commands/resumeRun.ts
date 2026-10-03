@@ -115,7 +115,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
       case 'unclassified':
         // `unclassified` names a durable fact that could not be read — the
         // claim, the run metadata, the latest snapshot — and nothing else.
-        // Rows that do not fold are refused by the ledger's own load at the
+        // Rows that do not fold are refused by the run history's own load at the
         // open below, and come back from `resumeRun` worded
         // `unusable_checkpoint`; this arm never guesses at content it did
         // not read.

@@ -1,5 +1,5 @@
 /**
- * The tool-use program: one plain Effect loop over the run ledger, no cursor
+ * The tool-use program: one plain Effect loop over the run history, no cursor
  * and no graph. Durable phases are row data; the loop never holds its own
  * copy of the conversation, it continues from the state every `appendBatch`
  * returns, which is what makes the live path and the resume path the same
@@ -42,9 +42,9 @@ import {
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import {
-  type RunLedgerDraft,
+  type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
@@ -95,7 +95,7 @@ const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 const SCRIPT_CALL_ID = 'script';
 
 export interface ToolUseStart {
-  /** The caller launched this as a resume; the ledger decides what it is. */
+  /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
   /** A native child's turn permit, and the boundary its loop delivers at. */
   readonly turns?: ChildRunTurns<ToolUseResult>;
@@ -124,7 +124,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ToolUseResult,
   Error,
   | AgentRun
-  | RunLedger
+  | RunHistory
   | ProcessServices
   | Runs
   | ModelInvoker
@@ -133,7 +133,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   | Scope.Scope
 > {
   const run = yield* AgentRun;
-  const ledger = yield* RunLedger;
+  const runHistory = yield* RunHistory;
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
   const languageModel = yield* LanguageModel;
@@ -162,7 +162,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ? (run.config.backgroundScript ?? null)
       : null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
-  const followUps = rounds ? null : yield* claimFollowUps(run, ledger);
+  const followUps = rounds ? null : yield* claimFollowUps(run, runHistory);
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -315,7 +315,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
     );
     const activated = run.opening?.activated ?? [];
-    const opened = yield* ledger.appendBatch(runId, null, [
+    const opened = yield* runHistory.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
       ...snapshotRow(runId, opening, {
@@ -345,7 +345,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     systemPrompt = saved.system && stored(state, saved.system, z.string());
     memoryMisses = saved.memoryMisses ?? [];
     if (saved.structured !== undefined) run.structured.value = saved.structured;
-    logger.debug('Resuming tool-use run from the ledger.');
+    logger.debug('Resuming tool-use run from the run history.');
   };
 
   /**
@@ -416,7 +416,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         },
       },
       positionRow(runId, state, 'response.ready'),
-    ] satisfies readonly RunLedgerDraft[];
+    ] satisfies readonly RunHistoryDraft[];
   });
 
   // ------------------------------------------------------------ the turn
@@ -427,7 +427,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<
     RunExit,
     Error,
-    AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
+    AgentRun | RunHistory | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
@@ -487,7 +487,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           { readonly state: RunState; readonly done: boolean },
           Error,
           | AgentRun
-          | RunLedger
+          | RunHistory
           | ProcessServices
           | Runs
           | WorkspaceFs
@@ -595,7 +595,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             state = yield* cell.adopt(
               yield* compactIfNeeded(state, {
                 runId,
-                ledger,
+                runHistory,
                 logger,
                 bound,
                 invoker,
@@ -800,7 +800,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // Attach inside the outer use so its release detaches even after a partial
   // attach failure. The inner bracket settles the cell before detachment;
-  // `cell.append` protects each ledger commit from interruption.
+  // `cell.append` protects each run history commit from interruption.
   return yield* Effect.acquireUseRelease(
     Effect.void,
     () =>

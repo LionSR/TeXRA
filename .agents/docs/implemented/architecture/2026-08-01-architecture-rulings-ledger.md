@@ -266,7 +266,7 @@ amendment: the process entry provides the process services once; each session
 is a `LayerMap` entry keyed by session, built on that one `ManagedRuntime`
 (`sessionLayer.ts`, `webviewSessionLayer.ts`); each run takes its services
 from a `Layer.effect` scoped to the run (`run/AgentRun.ts`, `ModelInvoker.ts`,
-`SessionEvents.ts`, `FollowUps.ts`, `RunLedger.ts`). A session's services
+`SessionEvents.ts`, `FollowUps.ts`, `RunHistory.ts`). A session's services
 release when its `LayerMap` entry does, and a run's when its scope closes.
 
 **Evidence.** `LayerMap` is what makes "one session, one owner" hold without a
@@ -1119,7 +1119,7 @@ notes cite the rules by number; this is their text.
   Longer-lived layers may build shorter-lived ones, never the reverse. No
   `FooLayer` wrapper that only calls `Layer.succeed`.
 - **R4.** The agent runtime is plain Effect: no state-machine framework, node,
-  graph, cursor, or flow record. A run appends rows to the ledger and folds them.
+  graph, cursor, or flow record. A run appends rows to the run history and folds them.
 - **R5.** Interruption replaces internal abort choreography. `AbortSignal` only
   where an external SDK or host API requires one.
 - **R6.** Scope owns resources (`acquireRelease`, scoped layers, finalizers).

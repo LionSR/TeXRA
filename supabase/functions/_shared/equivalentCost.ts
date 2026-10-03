@@ -73,7 +73,7 @@ export function equivalentListCost(
     config.provider === ModelProvider.XAI ? (entry.reasoningTokens ?? 0) : 0;
   // One entry is one model request, so its prompt is the cache-miss input
   // plus the cached tokens, and a long prompt bills the whole request at the
-  // model's long-context tier, as the client's run ledger does.
+  // model's long-context tier, as the client's run history does.
   const price = requestRates(config, entry.inputTokens + cached);
   const cost =
     (entry.inputTokens * price.inputPrice +

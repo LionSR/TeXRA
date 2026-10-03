@@ -364,7 +364,7 @@ describe('claude_agent tool launch and resume fallback', () => {
           effort: 'high',
           thinking: { type: 'adaptive' },
         });
-        // The run's ledger label is the model's reference.
+        // The run's history label is the model's reference.
         expect(mocks.registerRun.mock.calls[0]?.[2]).toMatchObject({
           model: 'anthropic/claude-opus-5-5',
         });

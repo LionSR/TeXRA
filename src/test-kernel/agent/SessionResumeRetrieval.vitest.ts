@@ -1,6 +1,6 @@
 /**
  * The resume identity a host launches a resumed run with, read from the run
- * aggregate's latest `run.snapshot`. The run's state is `RunLedger.load`,
+ * aggregate's latest `run.snapshot`. The run's state is `RunHistory.load`,
  * folded by the loop that continues it: nothing here carries a conversation,
  * and no checkpoint file is parsed.
  */
@@ -78,8 +78,8 @@ describe('retrieveSessionResumeData', () => {
   ) {
     publishTestRunStart(session, runId);
     yield* session.settlePublications();
-    yield* session.ledger.acquire(runId);
-    yield* session.ledger.appendBatch(runId, null, [
+    yield* session.runHistory.acquire(runId);
+    yield* session.runHistory.appendBatch(runId, null, [
       {
         type: 'run.snapshot',
         aggregateId: aggregateId('run', runId),
@@ -132,7 +132,7 @@ describe('retrieveSessionResumeData', () => {
       const runId = 'ab0005' as RunId;
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+      vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

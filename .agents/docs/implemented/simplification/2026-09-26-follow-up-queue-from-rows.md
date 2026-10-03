@@ -23,7 +23,7 @@ A run's pending follow-ups have two authorities today.
     a `seen` id set that dedupes the overlap between "offered live" and
     "seeded from the fold".
   - The consumers seed that queue once from a cold fold: the tool-use loop
-    from `RunLedger.load` (`toolUse.ts` `followUps.seed(entry.loaded)`), the
+    from `RunHistory.load` (`toolUse.ts` `followUps.seed(entry.loaded)`), the
     agent-CLI child from `foldRunState(null, readAggregate(...))`
     (`childRunLoop.ts`).
 
@@ -56,13 +56,13 @@ every pending row on wake would deliver the deferred row early, on any wake
 
 ### 2.2 The loop's `RunState` is not a fold of the aggregate
 
-`RunLedger.appendBatch` returns `foldRunState(state, committed)`: the state
+`RunHistory.appendBatch` returns `foldRunState(state, committed)`: the state
 the loop loaded, plus the loop's own batches. `followup.queued` rows are
 written by a different job on the same publisher (the admission boundary),
 so they never reach the loop's `RunState` after load. `RunState.followUps`
 is therefore stale by design after the first batch; reading pending from it
 on wake needs either a tail read folded into the state or a change to the
-ledger's continuation contract ("the state the loop continues from is the
+run history's continuation contract ("the state the loop continues from is the
 fold of its own writes", which `contractViolation` and the candidate fold in
 `appendBatch` both assume). That contract is not this lane's to change.
 
@@ -84,7 +84,7 @@ gate.
    `run.removed` drops the aggregate. Expose
    `SessionEvents.pendingFollowUps(aggregateId)`. Rows an earlier process
    committed are not in the set; the boundary that covers them is the claim:
-   `RunLedger.acquire` already cold-folds the aggregate
+   `RunHistory.acquire` already cold-folds the aggregate
    (`foldRunState(null, readAggregate(...))`) to retire unbound requests, and
    the admission's `acquireClaim` is the other claim path. Whichever claim
    runs first hydrates the set from that fold, once per aggregate per
@@ -122,7 +122,7 @@ Estimated net: about -120 lines, plus the pending-set tracker (about +30).
 ## 4. Ruling needed
 
 The design keeps the loop's `RunState` as the fold of its own writes (no
-ledger contract change): pending is read from the publisher's set, not from
+run history contract change): pending is read from the publisher's set, not from
 `RunState.followUps`. `RunState.followUps` then has no runtime reader after
 load; the ruling is whether to
 
@@ -150,7 +150,7 @@ value that is stale after its first batch.
 - `SessionEvents` keeps each run's pending follow-ups
   (`pendingFollowUps`), folded by `applyRunRow` as it commits.
   `hydrateFollowUps` seeds it from the rows where a claim moves here (or the
-  first time this publisher sees the run): `RunLedger.acquire` passes the
+  first time this publisher sees the run): `RunHistory.acquire` passes the
   rows it already read, the graph's `acquireClaims` reads them. A read that
   raced a commit merges with what was tracked, so the set holds commit order.
 - `RunInput` is a wake latch plus the synthetic slot; a take reads

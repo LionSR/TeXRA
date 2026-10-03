@@ -46,7 +46,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
       cause: `run metadata could not be read (${toErrorMessage(error)})`,
     };
   }
-  const snapshot = yield* session.ledger
+  const snapshot = yield* session.runHistory
     .latestSnapshot(runId)
     .pipe(Effect.result);
   if (snapshot._tag === 'Failure') {
@@ -78,7 +78,7 @@ export const checkpointExists = Effect.fn('checkpointExists')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
-  return yield* session.ledger.latestSnapshot(runId).pipe(
+  return yield* session.runHistory.latestSnapshot(runId).pipe(
     Effect.map((snapshot) => snapshot !== null),
     Effect.catch((error) =>
       Effect.logWarning(

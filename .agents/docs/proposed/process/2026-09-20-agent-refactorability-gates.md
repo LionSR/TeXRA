@@ -73,7 +73,7 @@ symbol without citing the ruling id in the PR body.
 ## 3. Docs whose status is typed, not derived
 
 All 29 docs in `.agents/docs/proposed/` say `proposed`; at least seven of the
-Effect-runtime series are executed (the run ledger shipped; CLAUDE.md
+Effect-runtime series are executed (the run history shipped; CLAUDE.md
 describes it as current architecture). Six `agent-sdk-readiness-reverify`
 docs exist where one is current. The tree has no index and no glossary, and
 `.agents/docs/README.md` forbids an index.
