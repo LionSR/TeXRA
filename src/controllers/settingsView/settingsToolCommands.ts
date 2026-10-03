@@ -128,7 +128,9 @@ export function settingsToolCommands(ports: {
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
       setToolEnabled(toolId, enabled, roots.globalState).pipe(
-        // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
+        // A plugin's bundled agents follow its switch (`pluginCatalogLayer`):
+        // reload them before the rows read who uses what.
+        Effect.andThen(bindings.refreshCatalogs()),
         Effect.andThen(postPlugins),
       ),
     // The command is looked up from the plugin manifest, never taken from
