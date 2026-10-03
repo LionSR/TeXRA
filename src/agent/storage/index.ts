@@ -19,7 +19,7 @@ export { finalizeRun, registerRun } from './runLifecycle';
 export {
   type AgentRunListingEntry,
   type BlockedRunListingEntry,
-  createLatexRunDiscovery,
+  runOutputReader,
   listRuns,
   isUserVisibleRun,
 } from './runListing';

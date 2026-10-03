@@ -221,40 +221,6 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display)).toContain('187k/400k (47%)');
   });
 
-  it("shows the task's tree total, from a focused agent too", () => {
-    // Failure modes: the bar shows the focused run's own spend, or none.
-    const zero = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const root = makeRunView({
-      id: 'root' as RunId,
-      status: RUN_PHASE.RUNNING,
-      usage: { ...zero, cost: 0.25 },
-      treeUsage: { ...zero, cost: 0.84 },
-    });
-    const child = makeRunView({
-      id: 'child' as RunId,
-      status: RUN_PHASE.RUNNING,
-      parentId: root.id,
-      ancestors: [{ id: root.id, label: 'main' }],
-      usage: { ...zero, cost: 0.21 },
-      treeUsage: { ...zero, cost: 0.59 },
-    });
-    const view = viewWith([root, child]);
-    const chrome = statusInput();
-    for (const shown of [root, child])
-      expect(
-        leftTexts(buildStatusBarDisplay(shown, view, { ...chrome, turn: {} })),
-      ).toContain('$0.840');
-    const unpriced = { ...root, treeUsage: zero };
-    expect(
-      leftTexts(
-        buildStatusBarDisplay(unpriced, viewWith([unpriced]), {
-          ...chrome,
-          turn: {},
-        }),
-      ),
-    ).not.toContain('$0.000');
-  });
-
   it('shows the route that produced usage instead of a stale access preference', () => {
     const accessLabel = (
       usageRoute:

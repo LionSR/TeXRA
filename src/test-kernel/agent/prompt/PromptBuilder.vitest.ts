@@ -4,6 +4,7 @@ import { describe, expect } from 'vitest';
 
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
+import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -43,7 +44,7 @@ describe('PromptBuilder', () => {
       offered: ['memory'],
       isChild: false,
       isAnthropic: false,
-      bibPath: '',
+      config: new MemoryConfigProvider(),
     });
 
     // Behavioral contract, not exact prose (review note on #7959): pinned

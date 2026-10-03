@@ -26,7 +26,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { AgentTool } from '@tools/delegation/AgentTool';
+import { agentTool } from '@tools/delegation/AgentTool';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
   SubagentDurabilityError,
@@ -178,17 +178,22 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return AgentTool.call({
-    agentName: 'review',
-    prompt: 'Check the proof.',
-  }).pipe(
-    Effect.provideService(AgentEngine, testEngine),
-    // The child's run id derives from the call's id: each case is its own
-    // call, so it launches its own child on the shared session.
-    Effect.provide(
-      nativeToolTestLayer({ ...call, toolCallId: `call-${generateShortId()}` }),
-    ),
-  );
+  return agentTool({ fields: {}, toolConfig: () => ({}) })
+    .call({
+      agentName: 'review',
+      prompt: 'Check the proof.',
+    })
+    .pipe(
+      Effect.provideService(AgentEngine, testEngine),
+      // The child's run id derives from the call's id: each case is its own
+      // call, so it launches its own child on the shared session.
+      Effect.provide(
+        nativeToolTestLayer({
+          ...call,
+          toolCallId: `call-${generateShortId()}`,
+        }),
+      ),
+    );
 }
 
 /**
