@@ -773,6 +773,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           : runTurn(cell);
         state = turn.state;
         if (turn.outcome === 'cancelled') {
+          // A finished summary lands; one still running stops with the turn.
+          if (compaction !== null)
+            state = yield* cell.adopt(
+              yield* compaction.settle(state, 'the turn stopped'),
+            );
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // A summary the turn started lands before the turn ends.

@@ -394,7 +394,11 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       const running = pending.fiber;
       const finished = yield* Effect.sync(() => running.pollUnsafe());
       if (finished !== undefined) return yield* landPending(state, finished);
-      yield* Fiber.interrupt(pending.fiber);
+      yield* Fiber.interrupt(running);
+      // It may have finished as the interrupt landed: that summary lands.
+      const raced = running.pollUnsafe();
+      if (raced !== undefined && Exit.isSuccess(raced))
+        return yield* landPending(state, raced);
       pending = null;
       input.logger.warn(
         `A background compaction was cut short (${why}); nothing it summarized was applied.`,
@@ -423,9 +427,11 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         const finished = full
           ? yield* Fiber.await(running)
           : yield* Effect.sync(() => running.pollUnsafe());
-        return finished === undefined
-          ? state
-          : yield* landPending(state, finished);
+        if (finished === undefined) return state;
+        const landed = yield* landPending(state, finished);
+        // One that produced no summary leaves the decision to this
+        // boundary's history.
+        if (landed !== state) return landed;
       }
       // A binding that carries one turn at a time (a Responses WebSocket)
       // cannot make the summary beside the request: it waits.

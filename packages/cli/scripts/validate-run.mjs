@@ -1046,17 +1046,22 @@ prompts:
         timeoutMs: 40_000 * exchanges.length,
         env: ptyEnv,
         onData: (_data, pty) => {
-          if (exiting) return;
-          const plain = stripVTControlCharacters(pty.output).slice(from);
-          const exchange = exchanges[at];
-          if (!typed && (exchange.message === null || plain.includes('Idle'))) {
-            typed = true;
-            if (exchange.message !== null) {
-              pty.setTimer(() => pty.write(exchange.message), 500);
-              pty.setTimer(() => pty.write('\r'), 900);
+          // One chunk can carry a reply and the next idle: take every step
+          // the output already shows.
+          while (!exiting) {
+            const plain = stripVTControlCharacters(pty.output).slice(from);
+            const exchange = exchanges[at];
+            if (
+              !typed &&
+              (exchange.message === null || plain.includes('Idle'))
+            ) {
+              typed = true;
+              if (exchange.message !== null) {
+                pty.setTimer(() => pty.write(exchange.message), 500);
+                pty.setTimer(() => pty.write('\r'), 900);
+              }
             }
-          }
-          if (typed && plain.includes(exchange.reply)) {
+            if (!typed || !plain.includes(exchange.reply)) return;
             from += plain.indexOf(exchange.reply) + exchange.reply.length;
             at += 1;
             typed = false;
