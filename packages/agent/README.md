@@ -38,7 +38,11 @@ composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins.all`, or
 `harnessBuiltins.minimal` for files and the shell alone), and any plugin of
-the embedder's own beside them.
+the embedder's own beside them. The built-ins run tool-use agents. A workflow agent
+(rounds that rewrite documents) needs a plugin that contributes the
+workflow category's round mode, which the package does not ship: TeXRA's
+`documents` plugin is the app's, and a run of a workflow agent with no such
+plugin fails, naming the category.
 
 ```ts
 import { Effect, Stream } from 'effect';

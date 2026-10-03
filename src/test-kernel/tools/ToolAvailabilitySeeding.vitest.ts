@@ -62,24 +62,6 @@ describe('seedDisabledToolDefaults', () => {
         ).toEqual([]);
       }),
   );
-
-  it.effect('drops a recorded id that names no plugin', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({
-          globalState: {
-            [GlobalStateKey.DISABLED_TOOLS]: ['workflow-script', 'zotero'],
-          },
-        }),
-      );
-
-      yield* seedDisabledToolDefaults(hostStores().globalState, PLUGINS);
-
-      expect(
-        yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-      ).toEqual(['zotero']);
-    }),
-  );
 });
 
 /**

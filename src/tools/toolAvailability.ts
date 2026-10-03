@@ -108,25 +108,15 @@ export function setToolEnabled(
  * before the user does: an absent value means neither the seed nor the user
  * has ever set the list, and a present one (an empty list included) means the
  * user's choices are already recorded, so re-seeding would silently disable
- * tools they had enabled. A recorded id that names no plugin (a plugin
- * renamed or removed) is dropped from the record, with one warning.
+ * tools they had enabled. A recorded id that names no plugin of `plugins` is
+ * kept: one composition's list is not every list that shares the store, and
+ * an id no plugin has switches nothing.
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore, plugins: readonly Plugin[]) {
     const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
     const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
-    if (recorded !== undefined) {
-      const known = new Set(plugins.map(({ id }) => id));
-      const unknown = [...recorded].filter((id) => !known.has(id));
-      if (unknown.length === 0) return;
-      yield* state.update(
-        GlobalStateKey.DISABLED_TOOLS,
-        [...recorded].filter((id) => known.has(id)),
-      );
-      return yield* Effect.logWarning(
-        `Dropped switched-off tool plugins that no longer exist: ${unknown.join(', ')}`,
-      ).pipe(withLogChannel(CHANNEL));
-    }
+    if (recorded !== undefined) return;
 
     const defaults = plugins
       .filter((plugin) => plugin.toggleable && !plugin.onByDefault)

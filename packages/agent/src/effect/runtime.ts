@@ -169,6 +169,14 @@ export const acquireProcess = ({
  * package did not install is already there: borrowing a runtime a host built
  * for its own roots would silently serve the host's services to this one.
  */
+/** The same plugin values in the same order, however the list was built. */
+const samePlugins = (
+  composed: readonly Plugin[],
+  asked: readonly Plugin[],
+): boolean =>
+  composed.length === asked.length &&
+  composed.every((plugin, index) => plugin === asked[index]);
+
 function composeProcess(
   platform: AgentPlatform,
   plugins: readonly Plugin[],
@@ -178,12 +186,13 @@ function composeProcess(
   let processRuntime = installedProcessRuntime();
   if (
     composedWith
-      ? composedWith.platform !== platform || composedWith.plugins !== plugins
+      ? composedWith.platform !== platform ||
+        !samePlugins(composedWith.plugins, plugins)
       : processRuntime !== undefined
   ) {
     throw new PlatformConflict({
       message:
-        'The agent package is already using another platform or plugin list in this process: compose every hold from the same platform and plugin list values.',
+        'The agent package is already using another platform or plugin list in this process: compose every hold from the same platform value and the same plugin values.',
     });
   }
   const processServices = {
