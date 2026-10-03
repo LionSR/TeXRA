@@ -108,11 +108,18 @@ const answerOf = (
 
 /** Whether the view ends on the request a `/compact` queued: its compaction
  *  is still owed, since the edit that compacts replaces the view holding it. */
-const owesCompaction = (message: HistoryMessage | undefined): boolean =>
-  message?.role === 'user' &&
-  message.content.length === 1 &&
-  message.content[0]?.kind === 'text' &&
-  message.content[0].text === IMMEDIATE_COMPACTION_FOLLOW_UP;
+const owesCompaction = (
+  message: { readonly role: string } | undefined,
+): boolean => {
+  if (message?.role !== 'user' || !('content' in message)) return false;
+  const { content } = message;
+  return (
+    Array.isArray(content) &&
+    content.length === 1 &&
+    (content[0] as { readonly text?: unknown }).text ===
+      IMMEDIATE_COMPACTION_FOLLOW_UP
+  );
+};
 
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
@@ -402,8 +409,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       last?.role === 'assistant'
     )
       response = answerOf(last);
-    // The flag a `/compact` set died with the process; its request did not.
-    compactionRequested = owesCompaction(last);
     logger.debug('Resuming tool-use run from the run history.');
   };
 
@@ -740,11 +745,33 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // held this run, or a batch a crash left unconsumed, C3) are the
     // publisher's, seeded where `loadRun`'s claim moved here.
     const entry = yield* loadRun(runId, start.resume);
-    const opened =
-      entry._tag === 'fresh'
-        ? yield* openFresh(entry.opening)
-        : (restore(entry.loaded), entry.loaded);
-    return yield* makeRunCell(runId, opened);
+    if (entry._tag === 'fresh')
+      return yield* makeRunCell(runId, yield* openFresh(entry.opening));
+    restore(entry.loaded);
+    // The flag a `/compact` set died with the process; its request did not.
+    // It is owed until a model boundary passed it: the boundary that runs
+    // the compaction either replaces the view (the request goes with it)
+    // or, when there is nothing to summarize, goes on to an attempt.
+    if (owesCompaction(entry.loaded.messages.at(-1))) {
+      const rows = yield* session.readAggregate(rowAggregate(runId), [
+        'model.message',
+      ]);
+      const asked = rows.findLast(
+        (row) =>
+          row.type === 'model.message' &&
+          row.payload.kind === 'append' &&
+          owesCompaction(row.payload.messages.at(-1)),
+      );
+      compactionRequested =
+        asked !== undefined &&
+        !rows.some(
+          (row) =>
+            row.type === 'model.message' &&
+            row.payload.kind === 'attempt' &&
+            row.commit > asked.commit,
+        );
+    }
+    return yield* makeRunCell(runId, entry.loaded);
   });
 
   const loopBody = (cell: RunCell) =>

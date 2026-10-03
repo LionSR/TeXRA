@@ -75,7 +75,7 @@ function contractViolation(
   const settledInBatch = new Map<string, 'success' | 'error'>();
   const hasResponse = rows.some(isResponse);
   if (registration.length > 0) {
-    if (state !== null) return 'a registration opens a run with no state';
+    if (state !== null) return 'a registration comes with a run state';
     if (registration[0]?.type !== 'run.start')
       return 'a registration does not start with its run.start';
     const stray = registration.find((row) => row.aggregateId !== aggregate);
@@ -494,6 +494,21 @@ export const runHistoryLayer: Layer.Layer<
             ),
           ),
         );
+      // A run registered with its history is its host's to resume, as any
+      // parked run is: the claim its birth took here goes back at once. The
+      // rows are durable whatever happens to the claim, so a release that
+      // fails is no failure of the batch; it says so, and the next process
+      // proves this one dead before it takes the claim.
+      if (registration.length > 0)
+        yield* log
+          .releaseClaims([qualifyAggregateId('run', run)])
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Run ${run} was registered with its history, but its claim was not released: this process cannot resume it`,
+              ).pipe(Effect.annotateLogs({ data: error })),
+            ),
+          );
       // The same fold over the same rows, at the commits the publisher
       // actually assigned: that is the state the loop continues from. It
       // differs from the candidate fold only in those ordinals, so a failure

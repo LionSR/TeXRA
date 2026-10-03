@@ -19,7 +19,8 @@ const CHANNEL = 'SessionResumeRetrieval';
 
 /** What resuming a run needs, whichever category it is. */
 export interface ResumeData {
-  /** The run's configuration, its model being the one the snapshot names. */
+  /** The run's configuration: its model the one its latest snapshot names,
+   *  or, for a run never opened, the one it was registered with. */
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
 }

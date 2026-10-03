@@ -162,12 +162,8 @@ export const forkRun = Effect.fn('forkRun')(function* (
     }),
   });
   // Registration and history are one commit: a fork exists with its history
-  // or not at all. The claim the commit leaves this process is ended at
-  // once: the fork is the host's to resume, as any waiting conversation is.
-  yield* Effect.uninterruptible(
-    session.runHistory
-      .appendBatch(runId, null, rows, registration)
-      .pipe(Effect.andThen(Effect.scoped(session.holdRunClaim(runId)))),
-  );
+  // or not at all, and unclaimed: the host's to resume, as any waiting
+  // conversation is.
+  yield* session.runHistory.appendBatch(runId, null, rows, registration);
   return runId;
 });

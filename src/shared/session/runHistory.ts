@@ -162,7 +162,9 @@ export class RunHistory extends Context.Service<
      * - `registration`, the rows that register the run this batch opens
      *   (`run.start` first), comes only with a null `state`: they commit
      *   ahead of `rows` in the same transaction, so no crash leaves the run
-     *   registered without the history it was registered with.
+     *   registered without the history it was registered with. The claim
+     *   the birth takes is released once the batch commits: such a run is
+     *   its host's to resume.
      */
     readonly appendBatch: (
       run: RunId,

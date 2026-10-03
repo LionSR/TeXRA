@@ -2,7 +2,11 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { type RunSnapshotPayload, type RunId } from '@shared/schemas';
+import {
+  isPlainAgentIdentity,
+  type RunSnapshotPayload,
+  type RunId,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runEndFromEvents } from './runRecords';
 
@@ -18,8 +22,9 @@ const CHANNEL = 'Resumability';
 export type ResumabilityDecision =
   | { readonly kind: 'checkpoint'; readonly snapshot: RunSnapshotPayload }
   /** Registered, not ended, and never opened: its launch stopped between
-   *  the registration and the opening batch. A run TeXRA drives opens from
-   *  its configuration, so it resumes by opening. */
+   *  the registration and the opening batch. A run the loop drives (a
+   *  native agent's, a background script's) opens from its configuration,
+   *  so it resumes by opening. */
   | { readonly kind: 'unopened' }
   | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly cause: string };
@@ -68,12 +73,14 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   if (snapshot.success !== null) {
     return { kind: 'checkpoint', snapshot: snapshot.success.payload };
   }
-  // A process or an external CLI drives its own run and records no opening.
+  // A process or an external CLI drives its own run and records no opening;
+  // the runs the loop opens are those the fold offers a resume
+  // (`resumeEligible`).
   const start = records.success.find((row) => row.type === 'run.start');
   if (
     start?.type === 'run.start' &&
-    start.identity.kind === 'agent' &&
-    start.identity.tool === undefined &&
+    (isPlainAgentIdentity(start.identity) ||
+      start.identity.kind === 'script') &&
     runEndFromEvents(records.success, runId) === null
   )
     return { kind: 'unopened' };
