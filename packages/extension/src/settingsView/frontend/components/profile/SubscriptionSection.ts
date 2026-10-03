@@ -20,9 +20,9 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
-import { type SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
+import { CHATGPT_AUTH, GROK_AUTH } from '@shared/model/accountAuth';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   renderSettingsNumberRow,

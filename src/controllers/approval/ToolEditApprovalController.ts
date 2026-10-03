@@ -53,7 +53,7 @@ import {
   runLatexdiff,
   type BuildDisplayFn,
   type LatexPreviewEntry,
-} from '@tools/approval/latexPreview';
+} from '@tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';

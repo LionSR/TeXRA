@@ -2,9 +2,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
+import type { TeXRAIconName } from '@shared/iconNames';
 import { renderBannerFrame } from './bannerFrame';
 import { waIcon } from './webAwesomeIcons';
-import type { TeXRAIconName } from './iconNames';
 
 export interface SettingsBannerOptions {
   readonly id: string;

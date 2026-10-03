@@ -6,11 +6,15 @@
  */
 
 // Third-party imports
-import { Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { documentRoundMode } from '@agent/output/documentRoundPolicy';
+import { isTexFile } from '@common/files/fileTypeUtils';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import { extractionShorthandToolConfig } from '@shared/schemas';
 import {
   codemode,
@@ -21,6 +25,7 @@ import {
   web,
 } from '@tools/builtinPlugins';
 import type { WorkflowAgentOptions } from '@tools/delegation/AgentTool';
+import type { WriteFilter } from '@tools/WriteTool';
 import {
   claudeAgent,
   codex,
@@ -37,6 +42,7 @@ import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local file imports
+import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
 import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
 import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
@@ -87,6 +93,18 @@ import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
+
+/** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
+ *  replacement rules of the call's workspace. */
+const texWriteFilter: WriteFilter = (path, content, config) => {
+  if (!isTexFile(path)) return Effect.succeed(content);
+  const replaced = replacementEngine.applyFor(content, 'tex-write', (key) =>
+    config.get(key),
+  );
+  return logReplacementDiagnostics(replaced.diagnostics).pipe(
+    Effect.as(replaced.text),
+  );
+};
 
 /**
  * TeXRA's workflow options on `agent`: the figure-extraction pair, which
@@ -211,13 +229,15 @@ const setup: Plugin = {
   hidden: true,
 };
 
-/** A workflow agent's run: the documents plugin's rounds. */
+/** Workflow agents: their rounds, and accepting the documents a run
+ *  produced into the workspace. */
 const documents: Plugin = {
   id: 'documents',
   name: 'Documents',
   category: 'workflow',
   description:
-    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks.',
+    'Run workflow agents: rounds that rewrite documents, with diffs and compile checks, and accept their outputs into the workspace.',
+  tools: { accept_run_files: AcceptRunFilesTool },
   hidden: true,
   rounds: documentRoundMode,
 };
@@ -238,7 +258,7 @@ export const texraPlugins = (
     readonly inlineComments?: InlineCommentProvider;
   } = {},
 ): readonly Plugin[] => [
-  fileOps,
+  fileOps({ writeFilter: texWriteFilter }),
   latexExtract,
   latexDiagnostics,
   arxiv,

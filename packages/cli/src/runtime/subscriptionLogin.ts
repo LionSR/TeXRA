@@ -14,7 +14,7 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { presentCliSignInUrl, type CliSignInProgress } from './signInUrl';

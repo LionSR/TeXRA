@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 // Local imports - shared schemas
 import type { RetryPermission } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 

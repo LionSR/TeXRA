@@ -117,7 +117,10 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import { TEXRA_ICON_CANONICAL_NAMES, type TeXRAIconName } from './iconNames';
+import {
+  TEXRA_ICON_CANONICAL_NAMES,
+  type TeXRAIconName,
+} from '@shared/iconNames';
 
 const TEXRA_ICON_LIBRARY = 'texra';
 

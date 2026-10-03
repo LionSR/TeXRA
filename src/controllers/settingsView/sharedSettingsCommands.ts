@@ -63,11 +63,11 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 import {
-  SUBSCRIPTION_AUTH_PROVIDERS,
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';

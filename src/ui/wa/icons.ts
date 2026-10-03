@@ -1,4 +1,4 @@
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.

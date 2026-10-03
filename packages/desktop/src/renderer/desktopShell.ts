@@ -17,8 +17,8 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

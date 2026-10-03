@@ -10,8 +10,8 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import { createEvent } from '@shared/utils/events';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { clamp } from '@utils/core';
 

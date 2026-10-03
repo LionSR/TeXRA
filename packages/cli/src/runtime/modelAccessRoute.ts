@@ -7,12 +7,12 @@ import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthStatus,
-} from '@shared/settingsView/settingsViewMessages';
+} from '@shared/model/subscriptionAuth';
 import {
   CHATGPT_AUTH,
   GROK_AUTH,
   SUBSCRIPTION_AUTH_COPY,
-} from '@ui/copy/accountAuth';
+} from '@shared/model/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 // Kept to one rendered row: the /login form and the account panel both

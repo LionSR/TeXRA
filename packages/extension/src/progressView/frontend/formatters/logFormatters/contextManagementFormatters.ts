@@ -14,8 +14,8 @@ import '@progressView/frontend/components/ContextManagement';
 
 // Local imports - shared schemas and components
 import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
+import type { TeXRAIconName } from '@shared/iconNames';
 import type { ContextManagementRow } from '@ui/transcript';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
 import type { FormatResult } from '../baseLogFormatter';

@@ -7,8 +7,8 @@ import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
+import { TOOL_OUTCOME_COPY } from '@ui/transcript/toolOutcome';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';

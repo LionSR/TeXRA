@@ -11,7 +11,7 @@ import {
 } from '@cli/runtime/memory';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';

@@ -18,7 +18,7 @@ import {
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
-import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { BuildDisplayFn } from '@tools/latex/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
