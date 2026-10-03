@@ -29,6 +29,7 @@ import {
 } from '@texra-ai/llm';
 import {
   bindModel as bindWireModel,
+  type HttpModelConfiguration,
   type ModelCredential,
 } from '@texra-ai/llm/node';
 
@@ -121,10 +122,9 @@ interface BindModelInput {
 type Protocol = ModelConfiguration['protocol'];
 /** The protocols the package constructs a model for; the editor's is the host's. */
 type HttpProtocol = Exclude<Protocol, 'vscode-lm'>;
-type HttpConfiguration = Exclude<ModelConfiguration, { protocol: 'vscode-lm' }>;
 /** One protocol's configuration, keyed by the discriminant it carries. */
 type ConfigurationOf<P extends HttpProtocol> = Extract<
-  HttpConfiguration,
+  HttpModelConfiguration,
   { protocol: P }
 >;
 

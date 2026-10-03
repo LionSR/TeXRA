@@ -1,9 +1,9 @@
 /**
  * The process's plugin table: the plugin list an entry passes to
  * `installProcessRuntime` (TeXRA's is `texraPlugins` in `@tools/registry`),
- * and each plugin's tools, continuation, prompt contribution, round mode and
- * layers by plugin id, which the built-in plugins contribute to the live
- * catalog (`@tools/liveTools`). The `ToolRegistry` service holds it, beside
+ * by plugin id, with the round mode of each agent category and each tool by
+ * name. What a plugin contributes to the live catalog (`@tools/liveTools`)
+ * is read off its value. The `ToolRegistry` service holds it, beside
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */
@@ -185,20 +185,11 @@ export interface PromptContribution {
   readonly skills: boolean;
 }
 
-/** The process's plugins, and what each contributes, by plugin id. */
+/** The process's plugins by plugin id: what each contributes (its tools,
+ *  continuation, prompt section and layers) is read off its value. */
 export interface ToolTable {
   /** Every plugin, in the order the app listed them (dashboard order). */
   readonly entries: ReadonlyMap<string, Plugin>;
-  /** Each plugin's tools by registered name, keyed by plugin id. */
-  readonly plugins: ReadonlyMap<string, ReadonlyMap<string, ITool>>;
-  /** Each plugin's process services, by plugin id. */
-  readonly processLayers: ReadonlyMap<string, ProcessPluginLayer>;
-  /** Each plugin's session services, by plugin id. */
-  readonly sessionLayers: ReadonlyMap<string, SessionPluginLayer>;
-  /** The continuation of each plugin that contributes one, by plugin id. */
-  readonly continuations: ReadonlyMap<string, Continuation>;
-  /** The prompt contribution of each plugin that makes one, by plugin id. */
-  readonly prompt: ReadonlyMap<string, PromptContribution>;
   /** The round mode of each plugin that drives an agent category's runs in
    *  rounds, by that category; the loop reads it once at a run's open. */
   readonly rounds: ReadonlyMap<AgentCategory, RoundMode>;
@@ -242,28 +233,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         `plugin ${plugin.id} has a toggle or setup copy but no availability probe.`,
       );
   }
-  const each = <A>(read: (plugin: Plugin) => A | undefined) =>
-    new Map(
-      plugins.flatMap((plugin) => {
-        const value = read(plugin);
-        return value === undefined ? [] : [[plugin.id, value] as const];
-      }),
-    );
-  return {
-    entries,
-    plugins: each((plugin) => new Map(Object.entries(plugin.tools ?? {}))),
-    continuations: each((plugin) => plugin.continuation),
-    // Each plugin's section, and whether it ships skills for the catalog.
-    prompt: each((plugin) =>
-      plugin.prompt === undefined && plugin.skills !== true
-        ? undefined
-        : { section: plugin.prompt ?? null, skills: plugin.skills === true },
-    ),
-    processLayers: each((plugin) => plugin.processLayer),
-    sessionLayers: each((plugin) => plugin.sessionLayer),
-    rounds,
-    get: (name) => byName.get(name),
-  };
+  return { entries, rounds, get: (name) => byName.get(name) };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

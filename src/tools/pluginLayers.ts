@@ -51,7 +51,11 @@ export const buildPluginLayer = <R>(
 export const sessionPluginLayers = Effect.fnUntraced(function* (
   runs: () => RunRegistry,
 ) {
-  const layers = (yield* ToolRegistry).sessionLayers;
+  const layers = new Map(
+    [...(yield* ToolRegistry).entries].flatMap(([id, { sessionLayer }]) =>
+      sessionLayer === undefined ? [] : [[id, sessionLayer] as const],
+    ),
+  );
   const scope = yield* Effect.scope;
   // A hold on one plugin's build, taken now, released when `until` ends (or
   // the session closes).
@@ -134,13 +138,16 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
 export const drainPlugins = Effect.fnUntraced(function* (
   live: LiveTools['Service'],
 ) {
-  const layers = (yield* ToolRegistry).processLayers;
   yield* Effect.forEach(
-    [...layers].filter(([, entry]) => entry.drain),
-    ([id, entry]) =>
+    [...(yield* ToolRegistry).entries].flatMap(([id, { processLayer }]) =>
+      processLayer?.drain === undefined
+        ? []
+        : [[id, processLayer.drain] as const],
+    ),
+    ([id, drain]) =>
       Effect.flatMap(live.processServices(id), (services) =>
         Option.isSome(services)
-          ? Effect.provide(entry.drain!, services.value)
+          ? Effect.provide(drain, services.value)
           : Effect.void,
       ),
     { concurrency: 'unbounded', discard: true },

@@ -27,11 +27,7 @@ import { z } from 'zod';
 // Local imports
 import type { RoundMode } from '@agent/runtime/loop/rounds';
 import type { Runs } from '@agent/runtime/runRegistry';
-import type {
-  RuntimeTool as ITool,
-  RuntimeTool,
-  ToolServices,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool, ToolServices } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import type { ToolCategory } from '@shared/tools/toolPlugin';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -53,7 +49,7 @@ export interface Plugin {
   readonly category: ToolCategory;
   readonly description: string;
   /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, ITool>>;
+  readonly tools?: Readonly<Record<string, RuntimeTool>>;
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard

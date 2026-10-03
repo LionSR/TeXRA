@@ -33,8 +33,9 @@ import {
  * - a plugin's service is reached outside its own plugin's code, which the
  *   step serves it to, and the one host door (the settings Git tab reading
  *   the GitHub plugin's process services through `LiveTools`), so plugin
- *   state is used past its switch and its pin. `PluginServices` is also
- *   kept out of `ProcessServices` at compile time (`processRuntime.ts`).
+ *   state is used past its switch and its pin. The table holds each
+ *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
+ *   so no `ProcessServices` arm names one.
  */
 const PLUGIN_ARM_MODULES = /^src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@shared\/plugins\/|^@tools\/pluginArms$/;
