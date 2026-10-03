@@ -47,11 +47,13 @@ export const ONBOARDING_CARD_LEDE =
   'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project, picks your agent team, and starts your first task.';
 
 /**
- * The API-key banner: shown only when a credential that worked (a task has
- * finished) stops working; before that, the card above is the one prompt.
+ * The API-key banner: shown once a task has finished and no sign-in or API
+ * key can reach a model now; before that, the card above is the one prompt.
+ * It says what is true now, not that a credential was lost: a task may have
+ * finished on a route the check does not count.
  */
 export const CREDENTIAL_LOST_NOTICE =
-  'TeXRA can no longer reach a model: your ChatGPT sign-in or API key is gone or has expired. Connect a model to continue.';
+  'No ChatGPT sign-in or API key can reach a model right now. Connect a model to continue.';
 
 /** State 0 choice 4 - quiet link, persists the shared declined flag. */
 export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
