@@ -19,6 +19,7 @@ import {
   AggregateIdSchema,
   ApprovalPolicySnapshotSchema,
   BlockedAggregateSchema,
+  ResumeBlockerSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
@@ -205,6 +206,9 @@ const RunViewCommonSchema = z.object({
    *  `blocked`, a row this build cannot read (a newer TeXRA's, or corrupt). */
   readOnly: z.boolean(),
   blocked: BlockedAggregateSchema.shape.reason.nullable(),
+  /** What a resume of this run waits for in this process (`statusDetail`
+   *  words it); null when nothing blocks it. */
+  resumeBlocked: ResumeBlockerSchema.nullable(),
   /** What a host may offer on the run now (`runActions`). */
   actions: z.array(RunActionSchema).readonly(),
   /** This run or a descendant needs the user; outranks the surface's

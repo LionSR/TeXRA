@@ -43,14 +43,36 @@ export const TextChunkSchema = z.object({
 export type TextChunk = z.infer<typeof TextChunkSchema>;
 
 /**
+ * Why this process cannot resume a run until something it needs is back
+ * (durable harness, gap 2 and D5): its agent is missing, or its agent's
+ * plugin is off or not trusted. A fact about this build and its catalog,
+ * so it lives in the projection, never in a row.
+ */
+export const ResumeBlockerSchema = z.object({
+  kind: z.enum(['agentMissing', 'pluginOff', 'pluginUntrusted']),
+  /** The agent or plugin it names. */
+  name: z.string().min(1),
+});
+export type ResumeBlocker = z.infer<typeof ResumeBlockerSchema>;
+
+/**
  * Process-local liveness evidence: self, explicitly proved-dead owners, and
  * unreadable runs. A current claimant absent from these verdicts is
- * unprovable and remains held until a probe establishes otherwise.
+ * unprovable and remains held until a probe establishes otherwise. Beside
+ * it, the runs a resume found blocked: `retry` when one was asked for, so
+ * the run continues once what it needs is back.
  */
 export const LocalRuntimeStateSchema = z.object({
   self: z.array(OwnerIdSchema),
   dead: z.array(OwnerIdSchema),
   unreadable: z.array(z.object({ runId: RunIdSchema, detail: z.string() })),
+  resumeBlocked: z.array(
+    z.object({
+      runId: RunIdSchema,
+      reason: ResumeBlockerSchema,
+      retry: z.boolean(),
+    }),
+  ),
 });
 export type LocalRuntimeState = z.infer<typeof LocalRuntimeStateSchema>;
 

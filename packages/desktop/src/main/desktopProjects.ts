@@ -216,6 +216,7 @@ function openProjectSession(
       openSessionEffect({
         roots,
         responseTextProcessing: createTexraResponseTextProcessing(),
+        interruptedTasks: 'offer',
       }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its

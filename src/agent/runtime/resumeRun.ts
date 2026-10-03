@@ -34,6 +34,7 @@ import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
+import { resumeBlocker } from './resumeBlocker';
 
 import { type RunEndResult } from './RunEndResult';
 import {
@@ -180,6 +181,16 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
       );
       return { failed: 'owned_elsewhere' };
     }
+    // An agent or plugin this process cannot run now leaves the run
+    // interrupted with the reason (D5), for the session's follower to
+    // resume once it is back; nothing is launched. Another process's run
+    // is refused as such above, whatever this process lacks.
+    const blocker = yield* resumeBlocker(session, config);
+    yield* session.markResumeBlocked(
+      runId,
+      blocker === null ? null : { reason: blocker, retry: true },
+    );
+    if (blocker !== null) return { failed: 'blocked' };
     if (options.onResumeResolved) {
       yield* options.onResumeResolved(runId);
       if (cancelled()) return REFUSED;

@@ -152,6 +152,10 @@ export async function runChat(
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
+        // `texra resume <id>` resumes the task it names; a second resume of
+        // the interrupted ones beside it would race that one, so it only
+        // retries a blocked resume.
+        interruptedTasks: initialResume === undefined ? 'offer' : 'retry',
       });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);

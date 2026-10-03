@@ -31,9 +31,15 @@ import type { FollowUpQueueInput } from './ToolUseFollowUpQueueManager';
  * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, a run this process
  *   cannot classify).
+ * - `blocked`: the run's agent, or its agent's plugin, is missing, off or
+ *   not trusted here (`RunView.resumeBlocked` says which).
  */
 export type FollowUpFailureReason =
-  'finished' | 'unusable_checkpoint' | 'owned_elsewhere' | 'not_resumable';
+  | 'finished'
+  | 'unusable_checkpoint'
+  | 'owned_elsewhere'
+  | 'not_resumable'
+  | 'blocked';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -69,6 +75,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
+  blocked:
+    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
 };
 
 export const FOLLOW_UP_WAKE_FAILED_MESSAGE =

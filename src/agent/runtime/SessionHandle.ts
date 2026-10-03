@@ -59,8 +59,10 @@ import {
   type AggregateId,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
+  type LocalRuntimeState,
   type PermissionPayload,
   type RequestDecision,
+  type ResumeBlocker,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -191,6 +193,15 @@ export type SessionHandleInit = Partial<
    */
   readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
+  /**
+   * The opener is a window (the TUI, desktop, the extension), which follows
+   * its interrupted tasks (`followInterruptedTasks`): it resumes a task
+   * whose resume was blocked once what it needs is back, and with `offer`
+   * also lists at open, or under `texra.resumeOnOpen: auto` continues, the
+   * tasks a closed or crashed TeXRA left interrupted. Headless runs and the
+   * SDK leave it unset: their policy is off (ruling Q2).
+   */
+  readonly interruptedTasks?: 'offer' | 'retry';
   /** An ephemeral session opens a throwaway database instead of the
    *  project's. */
   readonly transcriptMode?:
@@ -1200,6 +1211,46 @@ export class SessionHandle {
             return {
               ...local,
               unreadable: detail === null ? rest : [...rest, { runId, detail }],
+            };
+          }),
+    );
+  }
+
+  /** The runs a resume found blocked here, with what each waits for. */
+  resumeBlocks(): LocalRuntimeState['resumeBlocked'] {
+    return SubscriptionRef.getUnsafe(this.graph.local).resumeBlocked;
+  }
+
+  /**
+   * Record what a resume of a run waits for (durable harness D5: local
+   * truth the fold reads as `resumeBlocked`, never a row), `retry` when a
+   * resume was asked for; null when nothing blocks it any more.
+   */
+  markResumeBlocked(
+    runId: RunId,
+    blocked: { readonly reason: ResumeBlocker; readonly retry: boolean } | null,
+  ): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      this.disposed
+        ? Effect.void
+        : SubscriptionRef.update(this.graph.local, (local) => {
+            const rest = local.resumeBlocked.filter((b) => b.runId !== runId);
+            if (blocked === null && rest.length === local.resumeBlocked.length)
+              return local;
+            // The same block again leaves the state, and the view, as it is.
+            const held = local.resumeBlocked.find((b) => b.runId === runId);
+            if (
+              blocked !== null &&
+              held !== undefined &&
+              held.retry === blocked.retry &&
+              held.reason.kind === blocked.reason.kind &&
+              held.reason.name === blocked.reason.name
+            )
+              return local;
+            return {
+              ...local,
+              resumeBlocked:
+                blocked === null ? rest : [...rest, { runId, ...blocked }],
             };
           }),
     );

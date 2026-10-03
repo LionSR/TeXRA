@@ -37,7 +37,10 @@ function foldTrace(trace: TraceDocument) {
   const view = fold(emptySessionView('trace', 0), [
     { _tag: 'subscriptions', set: [{ id: AGGREGATE, fromSeq: 0 }] },
     ...frame.events,
-    { _tag: 'local', local: { self: [], dead: [], unreadable: [] } },
+    {
+      _tag: 'local',
+      local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
+    },
     { _tag: 'replay.complete', existence: frame.existence! },
   ]);
   return view.runs.get(trace.runId);
