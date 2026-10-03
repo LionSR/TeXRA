@@ -74,16 +74,12 @@ export const TOKENS_GENERATED = '↓';
 
 const WORKFLOW_TALLY_WORDS = [
   ['ok', 'ok'],
-  ['running', 'running'],
-  ['queued', 'queued'],
-  ['planned', 'not started'],
   ['failed', 'failed'],
   ['cancelled', 'cancelled'],
   ['skipped', 'skipped'],
-  ['notRun', 'not run'],
 ] as const satisfies readonly (readonly [keyof ScriptTally, string])[];
 
-/** `6 ok · 1 failed · 1 not run` — the one spelling of a tally, by outcome,
+/** `6 ok · 1 failed · 1 cancelled` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */
 export function formatScriptTally(tally: ScriptTally): string {
   const parts = WORKFLOW_TALLY_WORDS.filter(([key]) => tally[key] > 0).map(

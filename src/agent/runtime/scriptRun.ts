@@ -162,13 +162,9 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
   const tally: ScriptTally = {
     total: calls.length,
     ok: 0,
-    running: 0,
-    queued: 0,
-    planned: 0,
     failed: 0,
     cancelled: 0,
     skipped: 0,
-    notRun: 0,
   };
   const files = new Map<string, ScriptDeliverySummary['files'][number]>();
   for (const call of calls) {

@@ -6,14 +6,10 @@ import { LineCountSchema } from './lineChanges';
 const ScriptTallySchema = z.strictObject({
   total: z.int().nonnegative(),
   ok: z.int().nonnegative(),
-  running: z.int().nonnegative(),
-  queued: z.int().nonnegative(),
-  planned: z.int().nonnegative(),
   failed: z.int().nonnegative(),
   cancelled: z.int().nonnegative(),
   /** Skipped by the user. */
   skipped: z.int().nonnegative(),
-  notRun: z.int().nonnegative(),
 });
 export type ScriptTally = z.infer<typeof ScriptTallySchema>;
 

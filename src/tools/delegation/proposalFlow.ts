@@ -49,27 +49,6 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
 
-/**
- * Return the visible agent entry, or throw with the current visible list. The
- * caller carries the resolved `source` onto the proposal so launch pins the
- * exact `(source, name)` entry instead of re-resolving the bare name.
- */
-const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
-  stores: WorkspaceAgentsStores,
-  category: AgentCategory,
-  name: string,
-  scope?: AgentDelegationScope,
-) {
-  const agents = yield* resolveDelegationScopeAgents(stores, scope, category);
-  const agent = findAgentByIdentifier(agents, name);
-  if (agent) return agent;
-  return yield* Effect.fail(
-    new Error(
-      `Unknown ${category} agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
-    ),
-  );
-});
-
 /** Resolve either category from the current agent list, reporting both on failure. */
 export const requireWorkflowOrToolUseAgent = Effect.fn(
   'requireWorkflowOrToolUseAgent',

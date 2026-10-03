@@ -25,13 +25,9 @@ function tally(ok: number, failed = 0): Record<string, number> {
   return {
     total: ok + failed,
     ok,
-    running: 0,
-    queued: 0,
-    planned: 0,
     failed,
     cancelled: 0,
     skipped: 0,
-    notRun: 0,
   };
 }
 

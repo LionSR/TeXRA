@@ -28,10 +28,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import {
-  RunArtifactDrainError,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import { RunArtifactDrainError } from '@agent/runtime/SessionHandle';
 import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
@@ -88,20 +85,6 @@ interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
-/** One child launched under a run id the caller has already derived. */
-export interface InBandSubagentLaunchOptions {
-  readonly session: SessionHandle;
-  /** The run this attempt executes under; the caller owns its derivation. */
-  readonly runId: RunId;
-  readonly parentRunId: RunId;
-  /** Resolve mutable launch prerequisites only when a launch actually happens. */
-  readonly prepare: () => Effect.Effect<
-    InBandSubagentRunBaseOptions,
-    Error,
-    AgentRunServices
-  >;
-}
-
 interface InBandSubagentRunResult {
   readonly runId: RunId;
   readonly result: RunEnd;
@@ -117,17 +100,17 @@ type SettledInBandTurn = Parameters<
   NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
 >[0];
 
-/** Resolve the definition once before either in-band launch path registers it. */
-const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
-  options: InBandSubagentRunBaseOptions,
-) {
-  return yield* prepareAgentDefinition({
-    config: AgentConfigSchema.parse(options.configPayload),
-    session: options.session,
-    enforceCategory: true,
-    suppressErrorNotification: true,
-  });
-});
+/** A defect as a failed `Error`; an interruption stays one. */
+const defectsAsErrors = <A, R>(
+  self: Effect.Effect<A, Error, R>,
+): Effect.Effect<A, Error, R> =>
+  self.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(cause)
+        : Effect.fail(ensureError(Cause.squash(cause))),
+    ),
+  );
 
 /**
  * Execute one child through the one shared driver and read its typed result
@@ -386,11 +369,7 @@ const executeInBand = Effect.fn('executeInBand')(
   // Interruptible: the registration is one durable commit and the detached
   // loop owns the child from its first tick, so an interruption lands in the
   // join or the read-back and leaves the same rows a crash would.
-  Effect.catchCause((cause) =>
-    Cause.hasInterruptsOnly(cause)
-      ? Effect.failCause(cause)
-      : Effect.fail(ensureError(Cause.squash(cause))),
-  ),
+  defectsAsErrors,
 );
 
 /**
@@ -407,7 +386,10 @@ const executeInBand = Effect.fn('executeInBand')(
  * uninterruptible hand-off is stopped once that hand-off returns.
  */
 export const executeSubagentInBand = (
-  options: InBandSubagentLaunchOptions,
+  options: InBandSubagentRunBaseOptions & {
+    /** The run this attempt executes under; the caller owns its derivation. */
+    readonly runId: RunId;
+  },
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   awaitInBand(options.runId, launchSubagentInBand(options));
 
@@ -441,13 +423,7 @@ export const resumeSubagentInBand = (
         { kind: 'resume', identity: { runId: options.runId, agentConfig } },
         options.runId,
       );
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.fail(ensureError(Cause.squash(cause))),
-      ),
-    ),
+    }).pipe(defectsAsErrors),
   );
 
 /** Await one in-band child's program; interrupting the caller stops the
@@ -478,36 +454,33 @@ const awaitInBand = (
     );
   });
 
-const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
-  function* (
-    options: InBandSubagentLaunchOptions,
-  ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
-    const prepared = yield* options.prepare();
-    const definition = yield* prepareInBandDefinition(prepared);
-    // Validate the current definition, not metadata left by an earlier
-    // catalog load.
-    if (
-      definition.config.agentCategory === AgentCategory.Workflow &&
-      definition.config.inputFiles.length === 0 &&
-      definition.setting.defaultOutputFiles.length === 0
-    ) {
-      return yield* Effect.fail(
-        new Error(
-          `Workflow agent '${definition.config.agent}' edits files: pass options.inputFiles ` +
-            `with files that still exist (its result carries output files and ` +
-            `diffs, not response text).`,
-        ),
-      );
-    }
-    return yield* executeInBand(
-      prepared,
-      { kind: 'fresh', definition },
-      options.runId,
+const launchSubagentInBand = Effect.fn('executeSubagentInBand')(function* (
+  options: InBandSubagentRunBaseOptions & { readonly runId: RunId },
+): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
+  const definition = yield* prepareAgentDefinition({
+    config: AgentConfigSchema.parse(options.configPayload),
+    session: options.session,
+    enforceCategory: true,
+    suppressErrorNotification: true,
+  });
+  // Validate the current definition, not metadata left by an earlier
+  // catalog load.
+  if (
+    definition.config.agentCategory === AgentCategory.Workflow &&
+    definition.config.inputFiles.length === 0 &&
+    definition.setting.defaultOutputFiles.length === 0
+  ) {
+    return yield* Effect.fail(
+      new Error(
+        `Workflow agent '${definition.config.agent}' edits files: pass options.inputFiles ` +
+          `with files that still exist (its result carries output files and ` +
+          `diffs, not response text).`,
+      ),
     );
-  },
-  Effect.catchCause((cause) =>
-    Cause.hasInterruptsOnly(cause)
-      ? Effect.failCause(cause)
-      : Effect.fail(ensureError(Cause.squash(cause))),
-  ),
-);
+  }
+  return yield* executeInBand(
+    options,
+    { kind: 'fresh', definition },
+    options.runId,
+  );
+}, defectsAsErrors);

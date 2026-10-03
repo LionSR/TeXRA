@@ -268,10 +268,10 @@ const IN_BAND_RUN_ID = 'aaaaaa111111' as RunId;
  */
 let inBandSession: SessionHandle;
 
-type PreparedInBandSubagentOptions = Effect.Success<
-  ReturnType<Parameters<typeof executeSubagentInBandEffect>[0]['prepare']>
+type InBandSubagentRunOptions = Omit<
+  Parameters<typeof executeSubagentInBandEffect>[0],
+  'runId'
 >;
-type InBandSubagentRunOptions = PreparedInBandSubagentOptions;
 
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
@@ -295,16 +295,10 @@ function runInBand(
   options: InBandSubagentRunOptions,
   runId: RunId = IN_BAND_RUN_ID,
 ) {
-  const prepared = options;
-  return executeSubagentInBandEffect({
-    runId,
-    parentRunId: prepared.parentRunId,
-    session: prepared.session,
-    prepare: () => Effect.succeed(prepared),
-  }).pipe(
+  return executeSubagentInBandEffect({ ...options, runId }).pipe(
     Effect.provideService(AgentEngine, testEngine),
     Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, prepared.session.runs),
+    Effect.provideService(Runs, options.session.runs),
   );
 }
 
@@ -557,16 +551,13 @@ describe('headless delegation', () => {
             model: 'deepseek/deepseek-v4-flash',
           },
         });
-        const prepared = options;
         const run = () =>
           Effect.provide(
             executeSubagentInBandEffect({
+              ...options,
               runId: IN_BAND_RUN_ID,
-              parentRunId: prepared.parentRunId,
-              session: prepared.session,
-              prepare: () => Effect.succeed(prepared),
             }).pipe(
-              Effect.provideService(Runs, prepared.session.runs),
+              Effect.provideService(Runs, options.session.runs),
               Effect.provideService(AgentEngine, testEngine),
             ),
             fakeProcessServices(),
