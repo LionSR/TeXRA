@@ -23,6 +23,7 @@ import {
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { deliveredResponse } from '@shared/subagentFollowup';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {
   isMcpToolName,
@@ -374,6 +375,11 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
     }),
   );
   if (files) sections.push(files);
+
+  // The answer without its delivery envelope: the card never prints the
+  // `<subagent-result>` XML the parent's model reads.
+  const answer = deliveredResponse(ctx.outputText);
+  if (answer) sections.push(textSection('Result:', answer));
   return sections;
 }
 
@@ -678,6 +684,8 @@ export function dispatchSections(ctx: SectionContext): {
       // no diff shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
+        (ctx.toolName === AGENT_TOOL_NAME &&
+          deliveredResponse(ctx.outputText) !== undefined) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };

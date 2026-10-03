@@ -12,6 +12,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
+  scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
@@ -136,14 +137,18 @@ function agentProposalApprovalSummary(
     return [
       `Script agent request: ${SCRIPT_REQUEST_COPY.title(script)}`,
       SCRIPT_REQUEST_COPY.grant,
-      `First agent call: ${proposal.agent} · ${getModelLabel(proposal.model)}`,
+      scriptRequestFirstAgentLine(
+        proposal.agent,
+        getModelLabel(proposal.model),
+        proposal.instruction,
+      ),
       ...(script.calls.length > 0
         ? [
             `${SCRIPT_REQUEST_COPY.callsHeading}:`,
             ...script.calls.map((call) => `  ${scriptRequestCallLine(call)}`),
           ]
         : []),
-      `${SCRIPT_REQUEST_COPY.sourceHeading}:`,
+      `${SCRIPT_REQUEST_COPY.code(script)}:`,
       ...instructionLines.map((line) => `  ${line}`),
     ].join('\n');
   return [

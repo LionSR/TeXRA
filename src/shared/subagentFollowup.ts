@@ -305,6 +305,25 @@ export function formatSubagentProgress(
 }
 
 /**
+ * What a child-run delivery says, without its envelope: a result's
+ * `<response>` or an error's `<message>`, decoded, else the envelope's
+ * one-line summary (`summarizeSubagentFollowup`), as for a workflow agent's
+ * result that lists only its files. Undefined for any text that is not a
+ * result or error envelope. The one reading every surface uses to show an
+ * `agent` call's answer, so no host prints the delivery XML.
+ */
+export function deliveredResponse(text: string): string | undefined {
+  const trimmed = text.trim();
+  const tag = deliveryTagOf(trimmed);
+  if (tag === undefined) return undefined;
+  let body: string | undefined;
+  if (tag.endsWith('-result')) body = innerTag(trimmed, 'response');
+  else if (tag.endsWith('-error')) body = innerTag(trimmed, 'message');
+  else return undefined;
+  return body ? decodeXmlEntities(body) : summarizeSubagentFollowup(trimmed);
+}
+
+/**
  * Collapse a subagent follow-up XML block into a one-line (or, for results,
  * status + response) human-readable summary. Returns `text` unchanged when it
  * is not a subagent block. Malformed non-string payloads render as a visible

@@ -34,6 +34,7 @@ import {
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
+  scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import {
@@ -186,8 +187,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
-        text: 'Edit as new task',
-        tooltip: 'Edit as new task (s)',
+        text: 'Change and start myself',
+        tooltip: 'Change and start myself (s)',
         action: 'setup',
         disabled: this.readOnly,
         onClick: () => this.emitAction({ action: 'setup' }),
@@ -200,9 +201,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // ===========================================================================
 
   /**
-   * A script's request for its `agent` calls (Q5): what one approval
-   * covers, the whole source, the calls it issued before it asked, and,
-   * folded, the first `agent` call it is asking for.
+   * A script's request for its `agent` calls (Q5): what approving allows,
+   * the first agent it asks for, and, folded, its code and the calls it
+   * issued before it asked.
    */
   private renderScriptSummary(
     data: AgentProposalPermission,
@@ -213,31 +214,33 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         <span>${SCRIPT_REQUEST_COPY.grant}</span>
       </div>
       <div class="workflow-proposal__plan-note">
-        ${SCRIPT_REQUEST_COPY.sourceHeading}:
+        ${scriptRequestFirstAgentLine(
+          data.agent,
+          getModelLabel(data.model),
+          data.instruction,
+        )}
       </div>
-      <div class="workflow-proposal__instruction script-proposal__source">
-        <pre><code>${script.source}</code></pre>
-      </div>
-      ${
-        script.calls.length > 0
-          ? html`<div class="workflow-proposal__plan-note">
-                ${SCRIPT_REQUEST_COPY.callsHeading}:
-              </div>
-              <ol class="script-proposal__calls">
-                ${repeat(
-                  script.calls,
-                  (_call, index) => index,
-                  (call) => html`<li>${scriptRequestCallLine(call)}</li>`,
-                )}
-              </ol>`
-          : nothing
-      }
       <wa-details
         class="workflow-proposal__workflow-details"
-        summary=${`First agent call: ${data.agent}`}
+        summary=${SCRIPT_REQUEST_COPY.showCode(script)}
       >
-        ${this.renderInstruction(data.instruction)}
-        ${this.renderProposalFiles(data)}
+        <div class="workflow-proposal__instruction script-proposal__source">
+          <pre><code>${script.source}</code></pre>
+        </div>
+        ${
+          script.calls.length > 0
+            ? html`<div class="workflow-proposal__plan-note">
+                  ${SCRIPT_REQUEST_COPY.callsHeading}:
+                </div>
+                <ol class="script-proposal__calls">
+                  ${repeat(
+                    script.calls,
+                    (_call, index) => index,
+                    (call) => html`<li>${scriptRequestCallLine(call)}</li>`,
+                  )}
+                </ol>`
+            : nothing
+        }
       </wa-details>
     `;
   }

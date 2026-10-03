@@ -141,6 +141,11 @@ export abstract class BaseRequestPanel<
     return 'reject';
   }
 
+  /** The decline button's text. */
+  protected get declineLabel(): string {
+    return DECLINE_LABEL[this.decline];
+  }
+
   /** Whether the decline can carry a note the agent reads. */
   protected get declineTakesNote(): boolean {
     return this.decline !== 'stop';
@@ -337,7 +342,7 @@ export abstract class BaseRequestPanel<
   }
 
   private renderDecline(): TemplateResult {
-    const label = DECLINE_LABEL[this.decline];
+    const label = this.declineLabel;
     return html`
       ${renderLabeledActionButton({
         icon: 'xmark',
@@ -362,7 +367,7 @@ export abstract class BaseRequestPanel<
 
   private renderNote(): TemplateResult | typeof nothing {
     if (!this.noteOpen) return nothing;
-    const label = DECLINE_LABEL[this.decline];
+    const label = this.declineLabel;
     return html`
       <wa-textarea
         class="request-card__note"

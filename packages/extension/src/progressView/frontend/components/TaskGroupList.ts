@@ -274,10 +274,11 @@ export class TaskGroupList extends LitElement {
       this.scripts =
         this.run && this.view
           ? new Map(
-              scriptStages(this.run, this.view).map((stage) => [
-                stage.id,
-                stage,
-              ]),
+              // The progress view's composer takes a terminal-backed run's
+              // follow-up too (`ToolUseRunContent`).
+              scriptStages(this.run, this.view, {
+                terminalBacked: true,
+              }).map((stage) => [stage.id, stage]),
             )
           : new Map();
     }
@@ -472,7 +473,8 @@ export class TaskGroupList extends LitElement {
 
   /** Rows of a group followed by its child groups, in transcript order. A
    *  script stage leads with its calls as the script-stage model reads
-   *  them; the calls' own cards, with their output, fold below it. */
+   *  them; the calls' own cards, with their output, open below it from the
+   *  card's Log. */
   private renderGroupBody(node: GroupTree): TemplateResult {
     const script = this.scripts.get(node.group.id);
     const rows = this.renderRowEntries(node.rows, `group:${node.group.id}`);
@@ -485,16 +487,10 @@ export class TaskGroupList extends LitElement {
               .view=${this.view}
               .surface=${this.surface}
               ?readOnly=${this.run?.readOnly === true}
+              .runId=${this.runId}
+              ?logOpen=${callsOpen}
             ></script-stage>
-            <wa-details
-              id=${`${GROUP_DOM_IDS.DETAILS_PREFIX}${callsKey}`}
-              class="log-group"
-              summary="Call details"
-              ?open=${callsOpen}
-              @wa-show=${this.handleGroupToggle}
-              @wa-hide=${this.handleGroupToggle}
-              >${callsOpen ? rows : nothing}</wa-details
-            >`
+            ${callsOpen ? rows : nothing}`
         : rows
     }${repeat(
       node.children,

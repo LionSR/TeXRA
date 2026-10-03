@@ -27,6 +27,7 @@ import {
 } from '@cli/tui/ui/glyphs';
 import { writeLogLine } from '@logger/logSink';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
@@ -364,7 +365,8 @@ function buildStyledLines(
   const compactOutput: ToolDisplayLine[] = [];
   // The full transcript prints what the card withheld, unless the card
   // already painted that exact text in full (the full transcript does not
-  // elide): the error block, or an MCP call's result section. Everything
+  // elide): the error block, an MCP call's result section, or an agent
+  // call's `Result:` (its answer without the delivery envelope). Everything
   // else still hides it: a `file-link` card shows a link, a
   // `duplicate-of-header` card paints the header cut to its width, and an
   // edit's diff is the proposed change from the input, while its output is
@@ -374,7 +376,8 @@ function buildStyledLines(
     model.outputSuppression === 'duplicate-of-error' ||
     model.outputSuppression === 'trivial-write' ||
     (model.outputSuppression === 'rendered-by-sections' &&
-      isMcpToolName(toolUse.toolName));
+      (isMcpToolName(toolUse.toolName) ||
+        toolUse.toolName === AGENT_TOOL_NAME));
   if (
     options.showFullOutput &&
     !model.showOutput &&
