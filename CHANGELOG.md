@@ -269,6 +269,16 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Interrupted tasks when TeXRA opens.** When the terminal chat, the
+  desktop app or the extension opens and finds tasks a closed or crashed
+  TeXRA stopped mid-way, Settings › General › Interrupted tasks decides
+  what happens: **Ask** (the default) leaves them for you to resume, and
+  **Resume automatically** continues them. `texra run` and the agent SDK
+  never resume on their own. A task whose agent is gone, or whose agent
+  comes from a plugin that is off or not trusted, is no longer failed by a
+  resume: it stays interrupted, says what it is waiting for, and continues
+  by itself once that is fixed.
+
 - **Long conversations no longer pause to compact.** When a conversation
   reaches the compaction threshold, TeXRA summarizes the earlier turns in
   the background while the agent keeps working on the full history, and

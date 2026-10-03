@@ -34,6 +34,7 @@ import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
+import { resumeBlocker } from './resumeBlocker';
 
 import { type RunEndResult } from './RunEndResult';
 import {
@@ -149,6 +150,15 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
       yield* endUnstartedRecovery(session, recovery);
       return REFUSED;
     }
+    // An agent or plugin this process cannot run now leaves the run
+    // interrupted with the reason (D5), for the session's follower to
+    // resume once it is back; nothing is claimed or launched.
+    const blocker = yield* resumeBlocker(session, config);
+    yield* session.markResumeBlocked(
+      runId,
+      blocker === null ? null : { reason: blocker, retry: true },
+    );
+    if (blocker !== null) return { failed: 'blocked' };
     // A run deleted during those reads took the claim with it.
     if (cancelled() || !session.followUps.useRecovery(recovery)) return REFUSED;
     // A workflow run takes no input: no queue to keep, and its resume is its

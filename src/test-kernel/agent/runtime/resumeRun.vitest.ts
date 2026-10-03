@@ -28,6 +28,11 @@ vi.mock('@agent/runtime/executeAgent', async (importActual) => ({
   resumeToolUseFromResumeData: resumeToolUseFromResumeDataMock,
 }));
 
+// These runs' agents are not in a catalog: nothing blocks their resume.
+vi.mock('@agent/runtime/resumeBlocker', () => ({
+  resumeBlocker: () => Effect.succeed(null),
+}));
+
 const retrieveSessionResumeDataMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: (...args: unknown[]) =>

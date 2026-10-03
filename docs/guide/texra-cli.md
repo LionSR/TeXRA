@@ -435,6 +435,14 @@ effect when the task is next waiting for you, after any message already
 queued for it, and the handoff's text is the message the model answers
 next.
 
+When `texra chat` opens without a task to resume, it looks for tasks a
+closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
+"auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
+default, `ask`, leaves them for you. A task whose agent is missing, or
+comes from a plugin that is off or not trusted, waits until that is fixed
+and then continues by itself. `texra run` never resumes anything on its
+own.
+
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another
 machine, or its liveness cannot be proven) counts as holding the run; when you

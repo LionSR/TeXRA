@@ -19,6 +19,7 @@ import {
 import {
   BASH_APPROVAL_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
+  RESUME_ON_OPEN_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -31,6 +32,7 @@ import { readSelectValue } from '@ui/wa/selectTemplates';
 
 import {
   postStateSetting,
+  renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 
@@ -56,6 +58,8 @@ export class ApprovalTab extends LitElement {
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
   @property({ type: Number }) goalMaxCostUsd =
     GOAL_MAX_COST_SETTING.defaultValue;
+  @property({ type: String }) resumeOnOpen: string =
+    RESUME_ON_OPEN_SETTING.defaultValue;
 
   private handleApprovalPolicyChange = (e: Event): void => {
     const policy = parseTexraApprovalPolicy(readSelectValue(e));
@@ -127,6 +131,10 @@ export class ApprovalTab extends LitElement {
               step: 0.5,
               onChange: (value) =>
                 postStateSetting(GOAL_MAX_COST_SETTING.configKey, value),
+            })}
+            ${renderStateSettingSelectRow({
+              key: RESUME_ON_OPEN_SETTING.configKey,
+              value: this.resumeOnOpen,
             })}
           </div>
         </div>

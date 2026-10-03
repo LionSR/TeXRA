@@ -152,6 +152,9 @@ export async function runChat(
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
+        // `texra resume <id>` resumes the task it names; a second resume of
+        // the interrupted ones beside it would race that one.
+        offersInterruptedTasks: initialResume === undefined,
       });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);

@@ -53,6 +53,7 @@ import {
   bashApprovalEnabled,
   chatgptCodexContextWindow,
   childRunConcurrencyBudget,
+  resumeOnOpen,
   compactionThresholdPercent,
   copilotRouteInfos,
   customAgentDir,
@@ -406,6 +407,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               .editApprovalEnabled=${editApprovalEnabled.get()}
               .goalMaxCostUsd=${goalMaxCostUsd.get()}
               .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
+              .resumeOnOpen=${resumeOnOpen.get()}
             ></approval-tab>
           `;
         return section === 'git'

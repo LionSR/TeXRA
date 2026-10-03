@@ -34,6 +34,7 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
+  RESUME_ON_OPEN_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   TELEMETRY_ENABLED_KEY,
@@ -200,6 +201,9 @@ export const detachSubagentsOnStop = settingSignal<boolean>(
 );
 export const childRunConcurrencyBudget = settingSignal<number>(
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+);
+export const resumeOnOpen = settingSignal<string>(
+  RESUME_ON_OPEN_SETTING.configKey,
 );
 /**
  * Monotonic acknowledgement generation for the agents payload. Incremented

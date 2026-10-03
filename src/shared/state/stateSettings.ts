@@ -46,6 +46,8 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
+  RESUME_ON_OPEN_SETTING,
+  ResumeOnOpenSchema,
   ModelRetryMaxAttemptsSchema,
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
@@ -406,6 +408,16 @@ const CORE_SETTING_ROWS: Record<
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
     surfaces: { settingsView: 'agents', cliConfig: true },
+  },
+  // Global: how one person wants their windows to open.
+  resumeOnOpen: {
+    schema: ResumeOnOpenSchema,
+    configTarget: 'global',
+    title: 'Interrupted tasks',
+    description: RESUME_ON_OPEN_SETTING.description,
+    category: 'agents',
+    enumLabels: ['Ask', 'Resume automatically'],
+    surfaces: { settingsView: 'approval', cliConfig: true },
   },
   // Global: a committed project config must not raise or remove the user's cap.
   'goal.maxCostUsd': {

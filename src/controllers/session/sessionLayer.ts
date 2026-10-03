@@ -117,6 +117,7 @@ import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
+import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -637,6 +638,15 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(Effect.forkScoped);
+      if (key.open.offersInterruptedTasks === true)
+        yield* followInterruptedTasks(session).pipe(
+          Effect.catch(
+            logFailure(
+              `Session ${key.storage} stopped following its interrupted tasks.`,
+            ),
+          ),
+          Effect.forkScoped,
+        );
       // The session owns retries and waits for in-flight removal on close.
       yield* collectPendingDeletions(eventLog, key.storage).pipe(
         Effect.catch(

@@ -115,6 +115,25 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
 } as const);
 
 /**
+ * What a TUI, desktop or extension window does at open with the tasks a
+ * closed or crashed TeXRA left interrupted (durable harness, ruling Q2):
+ * `ask` lists them, `auto` continues them. Headless runs and the SDK do
+ * neither, whatever this says.
+ */
+export const RESUME_ON_OPEN_SETTING = Object.freeze({
+  configKey: 'texra.resumeOnOpen',
+  values: ['ask', 'auto'],
+  defaultValue: 'ask',
+  description:
+    'When TeXRA opens and finds tasks it stopped before they finished: list them so you can choose, or continue them all.',
+} as const);
+
+export const ResumeOnOpenSchema = z
+  .enum(RESUME_ON_OPEN_SETTING.values)
+  .prefault(RESUME_ON_OPEN_SETTING.defaultValue);
+export type ResumeOnOpen = z.infer<typeof ResumeOnOpenSchema>;
+
+/**
  * Bounds, default, and copy for `goal.maxCostUsd`: the run tree's total spend
  * at which an active goal pauses instead of opening its next turn, and `0`
  * disables the cap. Read at each idle, so it needs no field on the goal's own

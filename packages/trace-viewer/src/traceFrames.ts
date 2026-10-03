@@ -115,7 +115,7 @@ export function traceFrame(
         : []),
     ],
     chunks: [],
-    local: { self: [], dead: [], unreadable: [] },
+    local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
     host: traceHost(trace),
     debug: subscribe.debug,
     replayComplete: true,

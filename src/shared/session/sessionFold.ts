@@ -78,6 +78,7 @@ import {
   runBlockedMessage,
   runHeldMessage,
   runInterruptedMessage,
+  runResumeBlockedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
 import { isSettledRow, rowHeadline, type TranscriptRow } from '@ui/transcript';
@@ -270,7 +271,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       claims: new Map(),
       rows: new Map(),
       latest: new Map(),
-      local: { self: [], dead: [], unreadable: [] },
+      local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
       head: null,
     };
     SESSION_INDEXES.set(view.runs, indexes);
@@ -369,6 +370,7 @@ function createRun(
     ownedHere: false,
     readOnly: false,
     blocked: null,
+    resumeBlocked: null,
     actions: [],
     forceExpanded: false,
     group: 'recent' as const,
@@ -604,8 +606,12 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const readOnly = heldElsewhere || unreadable !== undefined;
   const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
+  const resumeBlocked =
+    local.resumeBlocked.find((b) => b.runId === run.id)?.reason ?? null;
   let statusDetail: string | null = unreadable ?? null;
-  if (statusDetail === null && interrupted)
+  if (statusDetail === null && resumeBlocked !== null)
+    statusDetail = runResumeBlockedMessage(resumeBlocked);
+  else if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
   else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
@@ -623,7 +629,8 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     sameUsage(run.treeUsage, treeUsage) &&
     run.statusLabel === copy.statusLabel &&
     run.tone === copy.tone &&
-    run.statusDetail === statusDetail
+    run.statusDetail === statusDetail &&
+    run.resumeBlocked === resumeBlocked
   ) {
     return run;
   }
@@ -640,6 +647,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     treeUsage,
     ...copy,
     statusDetail,
+    resumeBlocked,
   };
 }
 
@@ -1316,6 +1324,11 @@ function foldLocal(view: SessionView, local: LocalRuntimeState): void {
   const [before, after] = [details(previous), details(local)];
   for (const runId of new Set([...before.keys(), ...after.keys()]))
     if (before.get(runId) !== after.get(runId)) touched.add(runId);
+  const blockers = (state: LocalRuntimeState) =>
+    new Map(state.resumeBlocked.map((b) => [b.runId, b.reason]));
+  const [held, holding] = [blockers(previous), blockers(local)];
+  for (const runId of new Set([...held.keys(), ...holding.keys()]))
+    if (held.get(runId) !== holding.get(runId)) touched.add(runId);
   for (const runId of touched) walkUp(view, runId);
 }
 

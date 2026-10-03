@@ -636,6 +636,7 @@ describe('session events and view', () => {
           self: [OTHER],
           dead: [SELF],
           unreadable: [],
+          resumeBlocked: [],
         });
         yield* settle(
           view.ref,
@@ -649,6 +650,7 @@ describe('session events and view', () => {
           self: [OTHER],
           dead: [],
           unreadable: [],
+          resumeBlocked: [],
         });
         yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);
         const held = yield* SubscriptionRef.get(view.ref);
@@ -757,6 +759,7 @@ describe('Sessions owner', () => {
             self: [OTHER],
             dead: [],
             unreadable: [],
+            resumeBlocked: [],
           }),
         );
         const stop = vi.fn(() => ({
@@ -841,6 +844,7 @@ describe('Sessions owner', () => {
               self: [SELF],
               dead: [],
               unreadable: [],
+              resumeBlocked: [],
             }),
           ),
           yield* InquiryRecords,
