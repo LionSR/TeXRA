@@ -1,13 +1,24 @@
 import { Effect } from 'effect';
 
-import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import type { ConfigProvider } from '@platform/interfaces';
 
 /**
- * Optional host policy for text returned by a provider.
- *
- * The package default is deliberately neutral and deterministic: provider
- * text is returned unchanged. TeXRA hosts may inject their LaTeX-specific
- * behavior via the latex-owned factory.
+ * A host's policy for the text a provider returns: cleanup for one run's
+ * response text, over the configuration of the workspace that run belongs
+ * to, so the rules are that project's settings, not whichever roots the
+ * calling fiber carries. The harness owns the contract; TeXRA's hosts pass
+ * the LaTeX-aware policy (`@latex/texraResponseTextProcessing`).
+ */
+export interface ResponseTextProcessing {
+  readonly postProcessResponse: (
+    text: string,
+    config: ConfigProvider,
+  ) => Effect.Effect<string>;
+}
+
+/**
+ * The package default, deliberately neutral and deterministic: provider
+ * text is returned unchanged.
  */
 export function createNeutralResponseTextProcessing(): ResponseTextProcessing {
   return {

@@ -1,5 +1,6 @@
 // Third-party imports
 import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
+import { z } from 'zod';
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -13,6 +14,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { extractionShorthandToolConfig } from '@shared/schemas';
 import { LiveTools, toolTableLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import {
@@ -80,7 +82,7 @@ import {
   LeanInspectTool,
 } from './lean/LspTools';
 import { LeanLoogleTool } from './lean/LoogleTool';
-import { AgentTool } from './delegation/AgentTool';
+import { agentTool, type WorkflowAgentOptions } from './delegation/AgentTool';
 import { ExecutionsTool } from './ExecutionsTool';
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { codeSandboxLayer, ScriptTool } from './codemode/ScriptTool';
@@ -121,6 +123,29 @@ import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
+
+/**
+ * TeXRA's workflow options on `agent`: the figure-extraction pair, which
+ * reaches a workflow child as its tool configuration
+ * (`autoExtractFigure` / `autoExtractTikzFigure`).
+ */
+const FIGURE_OPTIONS: WorkflowAgentOptions = {
+  fields: {
+    extractFigures: z
+      .boolean()
+      .nullish()
+      .describe(
+        'Workflow agents: attach the figures the input LaTeX includes as media.',
+      ),
+    extractTikz: z
+      .boolean()
+      .nullish()
+      .describe(
+        'Workflow agents: compile the input LaTeX TikZ figures and attach them.',
+      ),
+  },
+  toolConfig: extractionShorthandToolConfig,
+};
 
 /**
  * Every plugin's tool objects, keyed by plugin id then tool name. The
@@ -171,7 +196,7 @@ const PLUGIN_TOOLS = {
     lean_project: LeanProjectTool,
     lean_inspect: LeanInspectTool,
   },
-  'workflow-script': { [AGENT_TOOL_NAME]: AgentTool },
+  'workflow-script': { [AGENT_TOOL_NAME]: agentTool(FIGURE_OPTIONS) },
   'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },
@@ -214,6 +239,13 @@ const PLUGIN_CONTINUATIONS = {
 /** The prompt section of each plugin whose manifest entry declares one. */
 const PLUGIN_PROMPT_SECTIONS: Readonly<Record<string, PromptSection>> = {
   'memory-workflow': memoryPromptSection,
+  // The configured default bibliography, at every step of every run.
+  core: ({ config }) => {
+    const bibPath = config.get<string>('texra.bib.defaultPath');
+    return bibPath
+      ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
+      : '';
+  },
 } as const satisfies {
   readonly [
     Id in Extract<ToolPluginEntry, { readonly promptSection: true }>['id']

@@ -8,7 +8,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import { createLatexRunDiscovery } from '@agent/storage';
+import { runOutputReader } from '@agent/storage';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
@@ -172,7 +172,7 @@ export class DesktopProgressFileActions {
         runLatexdiffForRun({
           runId,
           roots: this.host.session.roots,
-          runDiscovery: createLatexRunDiscovery(this.host.session),
+          runDiscovery: runOutputReader(this.host.session),
           channel: DESKTOP_LATEXDIFF_CHANNEL,
           progress: { report: () => undefined },
         }),

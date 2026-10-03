@@ -10,7 +10,6 @@ import {
   RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
-import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
@@ -20,6 +19,8 @@ import {
   type RunIdentity,
   RUN_SUBSTATE,
   type BlockedAggregate,
+  type OutputFileInfo,
+  type ReadonlyRoundIndexed,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -200,12 +201,15 @@ export const listRuns = Effect.fn('listRuns')(function* (
 });
 
 /**
- * Adapter from the agent storage surface to the latex-owned run
- * discovery port. Hosts inject this into latexdiff orchestration.
+ * One run's recorded output files by round, from the session's fold: a
+ * workflow run's documents, or a tool-use run's outputs. Hosts hand it to
+ * latexdiff orchestration, whose run-discovery port it satisfies.
  */
-export function createLatexRunDiscovery(
-  session: SessionHandle,
-): LatexRunDiscoveryPort {
+export function runOutputReader(session: SessionHandle): {
+  readonly readRunOutputs: (
+    runId: RunId,
+  ) => Effect.Effect<ReadonlyRoundIndexed<OutputFileInfo>, Error>;
+} {
   return {
     readRunOutputs: (runId) =>
       session.readView([runId]).pipe(
