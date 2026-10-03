@@ -18,8 +18,9 @@
  * attempt invokes again under its gate, a pending response dispatches what
  * is unsettled, and a halted run launched again waits for its input.
  *
- * A workflow agent's run is this loop in round mode (`./rounds`): the same
- * turn, run once per round by the round loop, with no tools and no input.
+ * A workflow agent's run is this loop in round mode (`./rounds`), with the
+ * policy the documents plugin contributes: the same turn, run once per round
+ * by the round loop, with no tools and no input.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -47,6 +48,7 @@ import {
   type RunState,
 } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
+import { ToolRegistry } from '@tools/toolTable';
 import { generateShortId } from '@utils/core';
 
 import { AgentRun } from '../run/AgentRun';
@@ -78,7 +80,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import { roundLoop, roundsContinuation } from './rounds';
+import { roundLoop } from './rounds';
 import type { TurnResult } from '@texra-ai/llm/turn';
 import type { RunControls } from '../RunHandle';
 import type { ChildRunTurns } from '../childRunLoop';
@@ -137,12 +139,21 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
-  // A workflow run is round mode for its whole life; a conversation's
-  // continuation is pinned by each step instead.
+  // A run whose category a plugin drives in rounds (TeXRA's workflow
+  // agents, the documents plugin) is round mode for its whole life; a
+  // conversation's continuation is pinned by each step instead.
+  const roundMode = (yield* ToolRegistry).rounds.get(run.config.agentCategory);
+  if (
+    roundMode === undefined &&
+    run.config.agentCategory !== AgentCategory.ToolUse
+  )
+    return yield* Effect.die(
+      new Error(
+        `No plugin runs ${run.config.agentCategory} agents in this process, so run ${runId} cannot start.`,
+      ),
+    );
   const roundPolicy =
-    run.config.agentCategory === AgentCategory.Workflow
-      ? yield* roundsContinuation(run)
-      : null;
+    roundMode === undefined ? null : yield* roundMode.open(run);
   const rounds = roundPolicy?.rounds ?? null;
   // A background script's run: it opens on the call its parent handed down
   // and ends when that call settles.
