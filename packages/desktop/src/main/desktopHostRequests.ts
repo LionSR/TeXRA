@@ -512,7 +512,7 @@ export function createDesktopHostRequests(
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'tools/tools'),
+        postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
     gettingStarted: (action) =>
       action === 'openWalkthrough'

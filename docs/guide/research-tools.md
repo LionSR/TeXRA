@@ -74,7 +74,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status on **Settings → Tools → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status and switch it on under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ```
 Search my Zotero library for papers by Vaswani on attention mechanisms.
@@ -108,7 +108,7 @@ Set a default location for Zotero exports so agents always know where to save bi
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify math with Wolfram
 
-The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on **Settings → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>).
+The `research` agent can call `wolfram` to run Wolfram Language code and check symbolic algebra, integrals, or limits before you commit them to the manuscript. This requires a local [Wolfram Engine](https://www.wolfram.com/engine/); its status shows on its **Wolfram Language** row under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 
 ### <wa-icon library="texra" name="beaker"></wa-icon> Formalize proofs in Lean 4
 

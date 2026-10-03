@@ -174,11 +174,11 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 **Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
 
-To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Settings → Tools** <wa-icon library="texra" name="tools"></wa-icon>). Each chip below is a token you can put straight into your `tools:` array:
+To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by the plugin that adds them (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)). Each chip below is a token you can put straight into your `tools:` array:
 
 <ToolCategoriesHero />
 
-<p class="hero-caption">The seven grantable tool categories on <strong>Settings → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
+<p class="hero-caption">The grantable tool categories; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab. Their `tools:` array shows which tools are wired up.
 
