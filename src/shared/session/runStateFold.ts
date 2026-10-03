@@ -179,6 +179,10 @@ export type RunState = RunPosition & {
   /** The last completed turn, from its `response` row: the finish reason a
    *  loop reads when it processes a response it did not just receive. */
   readonly lastTurn: TurnResult | null;
+  /** An edit changed the view's messages since `lastTurn`: its count
+   *  measures a history the view no longer holds. An edit of an empty range
+   *  (a model switch) leaves it. */
+  readonly countStale: boolean;
   readonly pendingResponse: PendingResponse | null;
   /** By call id. */
   readonly pendingIntents: Readonly<Record<string, PendingIntent>>;
@@ -280,6 +284,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   continuation: null,
   openAttempt: null,
   lastTurn: null,
+  countStale: false,
   pendingResponse: null,
   pendingIntents: byId([]),
   decidedSinceActivation: new Set(),
@@ -531,6 +536,7 @@ function foldRow(
               p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
             openAttempt: null,
             lastTurn: p.turn,
+            countStale: false,
             pendingRetry: null,
             usage: addTurnUsage(state.usage, p.usage),
           };
@@ -639,6 +645,10 @@ function foldRow(
         offeredSystem: null,
         offeredContext: null,
         usage: addTurnUsage(current.usage, p.usage),
+        countStale:
+          current.countStale ||
+          p.range.from !== p.range.to ||
+          p.messages.length > 0,
         lastEdit: row.seq,
         ...(p.trigger === 'context-window'
           ? { overflowRecoveredAtTurn: current.turn }

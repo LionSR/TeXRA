@@ -393,13 +393,21 @@ export function validationModel(config: ModelConfig): {
     let content: TurnResult['content'];
     if (golden !== null) {
       content = golden;
+    } else if (echo && turn.system === COMPACTION_SYSTEM_PROMPT) {
+      content = [
+        {
+          kind: 'message',
+          content: [{ kind: 'text', text: 'Earlier turns, summarized.' }],
+        },
+      ];
     } else if (echo) {
-      // The user messages the request carries, in order: what a fork, a
-      // reset or a handoff left of the model's view.
+      // The user messages the request carries, in order, each by its last
+      // 60 characters: what a fork, a reset, a handoff or a compaction left
+      // of the model's view.
       const seen = turn.messages.flatMap((message) =>
         message.role === 'user'
           ? message.content.flatMap((part) =>
-              part.kind === 'text' ? [part.text] : [],
+              part.kind === 'text' ? [part.text.slice(-60)] : [],
             )
           : [],
       );
@@ -479,6 +487,11 @@ export function validationModel(config: ModelConfig): {
       ];
     }
     const calls = content.some((part) => part.kind === 'local-call');
+    // The echo counts its input as a provider would, about four characters
+    // a token, so the compaction threshold can be crossed.
+    const inputTokens = echo
+      ? Math.ceil(JSON.stringify(turn.messages).length / 4)
+      : 1;
     return {
       kind: 'http',
       providerResponseId: `validation-response-${responses}`,
@@ -488,9 +501,9 @@ export function validationModel(config: ModelConfig): {
       content,
       finishReason: calls ? 'tool-calls' : 'stop',
       usage: {
-        inputTokens: 1,
+        inputTokens,
         outputTokens: 1,
-        totalTokens: 2,
+        totalTokens: inputTokens + 1,
         cachedInputTokens: null,
         reasoningTokens: null,
       },

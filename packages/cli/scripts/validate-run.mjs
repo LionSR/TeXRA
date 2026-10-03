@@ -936,32 +936,27 @@ prompts:
 }
 
 /**
- * Fork, handoff and reset end to end (durable harness H5): a headless run
- * answers one message; `texra resume --fork` continues a new task holding
- * that conversation, `--handoff` continues it from a note alone, and
- * `--reset` from nothing. The validation model answers with the user
- * messages it was shown, so each reply is what the edit left of the view,
- * and every request is rebuilt from the rows. The store's `run.start` and
- * `context.edit` rows, with the replies, are kept as the artifact.
+ * A project for the view-edit validators: an agent with no tools whose
+ * (validation) model answers with the user messages it was shown, so each
+ * reply is what the run's view held, and every request is rebuilt from the
+ * rows. `config` is the project's `.texra/config.json`.
  */
-async function validateForkResetHandoff() {
-  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-fork-'));
-  try {
-    const home = path.join(cwd, 'home');
-    const work = path.join(cwd, 'work');
-    const customAgents = path.join(
-      home,
-      '.texra',
-      'v1',
-      'global-storage',
-      'custom_agents',
-    );
-    const validationFlagPath = path.join(work, validationFlagName);
-    mkdirSync(customAgents, { recursive: true });
-    mkdirSync(work, { recursive: true });
-    writeFileSync(
-      path.join(customAgents, 'fork-validation.yaml'),
-      `name: fork_validation
+function echoProject(cwd, config = null) {
+  const home = path.join(cwd, 'home');
+  const work = path.join(cwd, 'work');
+  const customAgents = path.join(
+    home,
+    '.texra',
+    'v1',
+    'global-storage',
+    'custom_agents',
+  );
+  const validationFlagPath = path.join(work, validationFlagName);
+  mkdirSync(customAgents, { recursive: true });
+  mkdirSync(path.join(work, '.texra'), { recursive: true });
+  writeFileSync(
+    path.join(customAgents, 'echo-validation.yaml'),
+    `name: echo_validation
 description: Say what the model was shown.
 
 settings:
@@ -974,79 +969,54 @@ prompts:
   userRequest: |
     {{ INSTRUCTION }}
 `,
+  );
+  writeFileSync(validationFlagPath, validationFlagContent);
+  if (config !== null)
+    writeFileSync(
+      path.join(work, '.texra', 'config.json'),
+      `${JSON.stringify(config)}\n`,
     );
-    writeFileSync(validationFlagPath, validationFlagContent);
-    const env = isolatedCliHomeEnv(home, {
-      TEXRA_INTERNAL_VALIDATE_ECHO: '1',
-      TEXRA_NO_TELEMETRY: '1',
-    });
-    const first = run(
-      process.execPath,
-      [
-        binaryPath,
-        'run',
-        'fork_validation',
-        '--model',
-        'openai/gpt-5.6-sol',
-        '--instruction',
-        'First message',
-        '--cwd',
-        work,
-        '--approval-policy',
-        'never',
-        '--output-format',
-        'json',
-        '--print',
-      ],
-      { cwd: work, validationModel: true, validationFlagPath, env },
-    );
-    assertSuccess(first, 'texra run fork_validation');
-    const source = parseJson(first.stdout, 'fork source run').runId;
-
-    const ptyEnv = {
-      ...env,
-      ...validationModelProviderEnv,
-      [validationEnv]: '1',
-      [validationFlagEnv]: validationFlagPath,
-    };
-    const replies = [];
-    /** Resume with `flags`, type `message` once the chat idles (none: the
-     *  flags start the turn), and exit once the model's reply shows. */
-    const resumeChat = async (id, flags, message, reply) => {
-      let typed = message === null;
-      let exiting = false;
-      const result = await runTexraPty(['resume', id, ...flags], {
-        label: `texra resume ${flags.join(' ')}`,
-        cwd: work,
-        cols: 160,
-        rows: 40,
-        timeoutMs: 40_000,
-        env: ptyEnv,
-        onData: (_data, pty) => {
-          const plain = stripVTControlCharacters(pty.output);
-          if (!typed && plain.includes('Idle')) {
-            typed = true;
-            pty.setTimer(() => pty.write(message), 500);
-            pty.setTimer(() => pty.write('\r'), 900);
-          }
-          if (!exiting && plain.includes(reply)) {
-            exiting = true;
-            pty.setTimer(() => pty.write(ETX), 800);
-            pty.setTimer(() => pty.write(ETX), 2_000);
-          }
-        },
-      });
-      const plain = stripVTControlCharacters(result.output);
-      assert(
-        result.exit.exitCode === 0 && plain.includes(reply),
-        `texra resume ${flags.join(' ')} should show ${JSON.stringify(reply)} and exit cleanly (exit ${result.exit.exitCode})\noutput:\n${plain.slice(-3000)}`,
+  const env = isolatedCliHomeEnv(home, {
+    TEXRA_INTERNAL_VALIDATE_ECHO: '1',
+    TEXRA_NO_TELEMETRY: '1',
+  });
+  const ptyEnv = {
+    ...env,
+    ...validationModelProviderEnv,
+    [validationEnv]: '1',
+    [validationFlagEnv]: validationFlagPath,
+  };
+  const storage = path.join(home, '.texra', 'v1', 'workspace-storage');
+  return {
+    work,
+    ptyEnv,
+    /** A headless run of the agent on `instruction`: its run id. */
+    firstRun: (instruction) => {
+      const first = run(
+        process.execPath,
+        [
+          binaryPath,
+          'run',
+          'echo_validation',
+          '--model',
+          'openai/gpt-5.6-sol',
+          '--instruction',
+          instruction,
+          '--cwd',
+          work,
+          '--approval-policy',
+          'never',
+          '--output-format',
+          'json',
+          '--print',
+        ],
+        { cwd: work, validationModel: true, validationFlagPath, env },
       );
-      replies.push(reply);
-      return plain.match(/texra resume ([0-9a-f]{12})/)?.[1];
-    };
-    const storage = path.join(home, '.texra', 'v1', 'workspace-storage');
+      assertSuccess(first, 'texra run echo_validation');
+      return parseJson(first.stdout, 'echo run').runId;
+    },
     /** One read of the project's store, closed again for the next writer. */
-    const readStore = (sql) => {
+    readStore: (sql) => {
       const [project] = readdirSync(storage);
       const db = new DatabaseSync(path.join(storage, project, 'texra.db'), {
         readOnly: true,
@@ -1056,16 +1026,106 @@ prompts:
       } finally {
         db.close();
       }
-    };
+    },
+    /**
+     * `texra resume` with `args` under a PTY, then each exchange in turn:
+     * its message typed once the chat idles (none: the resume itself starts
+     * the turn), and its reply awaited. Exits once the last reply shows;
+     * answers the run id the exit hint names.
+     */
+    chat: async (args, exchanges) => {
+      let at = 0;
+      let typed = false;
+      let from = 0;
+      let exiting = false;
+      const result = await runTexraPty(['resume', ...args], {
+        label: `texra resume ${args.join(' ')}`,
+        cwd: work,
+        cols: 160,
+        rows: 40,
+        timeoutMs: 40_000 * exchanges.length,
+        env: ptyEnv,
+        onData: (_data, pty) => {
+          // One chunk can carry a reply and the next idle: take every step
+          // the output already shows.
+          while (!exiting) {
+            const plain = stripVTControlCharacters(pty.output).slice(from);
+            const exchange = exchanges[at];
+            if (
+              !typed &&
+              (exchange.message === null || plain.includes('Idle'))
+            ) {
+              typed = true;
+              if (exchange.message !== null) {
+                pty.setTimer(() => pty.write(exchange.message), 500);
+                pty.setTimer(() => pty.write('\r'), 900);
+              }
+            }
+            if (!typed || !plain.includes(exchange.reply)) return;
+            from += plain.indexOf(exchange.reply) + exchange.reply.length;
+            at += 1;
+            typed = false;
+            if (at === exchanges.length) {
+              exiting = true;
+              pty.setTimer(() => pty.write(ETX), 800);
+              pty.setTimer(() => pty.write(ETX), 2_000);
+            }
+          }
+        },
+      });
+      const plain = stripVTControlCharacters(result.output);
+      assert(
+        result.exit.exitCode === 0 && at === exchanges.length,
+        `texra resume ${args.join(' ')} should show ${JSON.stringify(exchanges.map(({ reply }) => reply))} and exit cleanly (exit ${result.exit.exitCode})\noutput:\n${plain.slice(-3000)}`,
+      );
+      return plain.match(/texra resume ([0-9a-f]{12})/)?.[1];
+    },
+  };
+}
+
+/** The `run.start` and `context.edit` rows of a store, kept as an artifact. */
+const VIEW_ROWS = `SELECT s.logical_id AS run, e.seq, e.type,
+     json_extract(e.data, '$.provenance') AS provenance,
+     json_extract(e.data, '$.payload.cause') AS cause,
+     json_extract(e.data, '$.payload.trigger') AS trigger,
+     json_extract(e.data, '$.payload.range') AS range,
+     json_array_length(e.data, '$.payload.messages') AS messages
+   FROM event e JOIN event_sequence s ON s.id = e.aggregate
+   WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`;
+
+function writeArtifact(name, value) {
+  const artifactDir = path.join(validationRoot, 'artifacts');
+  mkdirSync(artifactDir, { recursive: true });
+  const artifactPath = path.join(artifactDir, name);
+  writeFileSync(artifactPath, `${JSON.stringify(value, null, 2)}\n`);
+  return artifactPath;
+}
+
+/**
+ * Fork, handoff and reset end to end (durable harness H5): a headless run
+ * answers one message; `texra resume --fork` continues a new task holding
+ * that conversation, `--handoff` continues it from a note alone, and
+ * `--reset` from nothing. The store's `run.start` and `context.edit` rows
+ * are kept as the artifact.
+ */
+async function validateForkResetHandoff() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-fork-'));
+  try {
+    const project = echoProject(cwd);
+    const source = project.firstRun('First message');
     // The source's `turn.begin`: inside its turn, which a fork refuses.
-    const [inside] = readStore(
+    const [inside] = project.readStore(
       `SELECT e.seq FROM event e JOIN event_sequence s ON s.id = e.aggregate
        WHERE s.logical_id = '${source}' AND e.type = 'run.position'
          AND json_extract(e.data, '$.payload.at') = 'turn.begin'`,
     );
     const unsettled = await runTexraPty(
       ['resume', source, '--fork', '--at', String(inside.seq)],
-      { label: 'texra resume --fork --at 2', cwd: work, env: ptyEnv },
+      {
+        label: 'texra resume --fork --at <turn.begin>',
+        cwd: project.work,
+        env: project.ptyEnv,
+      },
     );
     assert(
       unsettled.exit.exitCode !== 0 &&
@@ -1074,42 +1134,32 @@ prompts:
         ),
       `a fork inside a turn should be refused\noutput:\n${unsettled.output}`,
     );
-    const fork = await resumeChat(
-      source,
-      ['--fork'],
-      'Second message',
+    const replies = [
       'First message | Second message',
+      'Model saw: Handoff note',
+      'Model saw: After reset',
+    ];
+    const fork = await project.chat(
+      [source, '--fork'],
+      [{ message: 'Second message', reply: replies[0] }],
     );
     assert(fork && fork !== source, 'the fork should continue a new task');
-    await resumeChat(
-      fork,
-      ['--handoff', 'Handoff note'],
-      null,
-      'Model saw: Handoff note',
+    await project.chat(
+      [fork, '--handoff', 'Handoff note'],
+      [{ message: null, reply: replies[1] }],
     );
-    await resumeChat(
-      fork,
-      ['--reset'],
-      'After reset',
-      'Model saw: After reset',
+    await project.chat(
+      [fork, '--reset'],
+      [{ message: 'After reset', reply: replies[2] }],
     );
 
-    const rows = readStore(
-      `SELECT s.logical_id AS run, e.seq, e.type,
-         json_extract(e.data, '$.provenance') AS provenance,
-         json_extract(e.data, '$.payload.cause') AS cause,
-         json_extract(e.data, '$.payload.range') AS range,
-         json_array_length(e.data, '$.payload.messages') AS messages
-       FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE e.type IN ('run.start', 'context.edit') ORDER BY e."commit"`,
-    );
-    const artifactDir = path.join(validationRoot, 'artifacts');
-    mkdirSync(artifactDir, { recursive: true });
-    const artifactPath = path.join(artifactDir, 'fork-reset-handoff.json');
-    writeFileSync(
-      artifactPath,
-      `${JSON.stringify({ source, fork, replies, rows }, null, 2)}\n`,
-    );
+    const rows = project.readStore(VIEW_ROWS);
+    const artifactPath = writeArtifact('fork-reset-handoff.json', {
+      source,
+      fork,
+      replies,
+      rows,
+    });
     const forkStart = rows.find(
       (row) => row.run === fork && row.type === 'run.start',
     );
@@ -1124,6 +1174,52 @@ prompts:
     assert(
       causes.join() === 'fork,handoff,reset',
       `the fork should record its seed, the handoff and the reset as context.edit rows, got ${causes.join()} (artifact: ${artifactPath})`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Background compaction end to end (durable harness H5, gap 4): at a 1%
+ * threshold, a long first message puts the conversation over it. The
+ * resumed chat's next turn starts the summary off the loop and still sends
+ * the whole history (the reply names the first message), and the turn
+ * after lands it, as an edit of the messages before that turn's request,
+ * keeping what followed (the reply names the summary and the new message
+ * only). The store's `context.edit` rows are kept as the artifact.
+ */
+async function validateBackgroundCompaction() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-compaction-'));
+  try {
+    const project = echoProject(cwd, {
+      'texra.model.compactionThresholdPercent': 1,
+    });
+    const source = project.firstRun(`${'filler '.repeat(8_000)}First message`);
+    const replies = [
+      'First message | Second message',
+      'Earlier turns, summarized. | Third message',
+    ];
+    await project.chat(
+      [source],
+      [
+        { message: 'Second message', reply: replies[0] },
+        { message: 'Third message', reply: replies[1] },
+      ],
+    );
+    const rows = project.readStore(VIEW_ROWS);
+    const artifactPath = writeArtifact('background-compaction.json', {
+      source,
+      replies,
+      rows,
+    });
+    const edits = rows.filter((row) => row.type === 'context.edit');
+    assert(
+      edits.length === 1 &&
+        edits[0].cause === 'compaction' &&
+        edits[0].trigger === 'context-limit' &&
+        JSON.parse(edits[0].range).to === 3,
+      `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
@@ -1364,6 +1460,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   await validateForkResetHandoff();
+  await validateBackgroundCompaction();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');

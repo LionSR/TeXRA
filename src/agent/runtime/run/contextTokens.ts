@@ -45,11 +45,17 @@ export function estimateMessageTokens(
 }
 
 export function contextTokens(
-  state: Pick<RunState, 'messages' | 'lastTurn' | 'pendingResponse'>,
+  state: Pick<
+    RunState,
+    'messages' | 'lastTurn' | 'countStale' | 'pendingResponse'
+  >,
 ): number {
   const { usage } = state.lastTurn ?? {};
+  // An edit that changed the view since the counted turn (a compaction that
+  // kept the turns after its range) leaves the count measuring a history
+  // the view no longer holds: the estimate alone measures it.
   const counted =
-    usage?.inputTokens != null && usage.inputTokens > 0
+    !state.countStale && usage?.inputTokens != null && usage.inputTokens > 0
       ? usage.inputTokens + (usage.outputTokens ?? 0)
       : null;
   if (counted === null) return estimateMessageTokens(state.messages);
