@@ -112,11 +112,12 @@ const VALIDATION = {
 /**
  * The crash points this build does not yet survive, by what the prefix
  * holds there. Each is a finding of this suite, reported for its own fix:
- * - `registered-without-history`: a run's registration (`run.start`,
- *   `run.config`, `run.activate`) and its first history batch are separate
- *   commits. Killed between them, a launched run is classified finished and
- *   never resumes or ends, and a fork is left with no history (`forkRun`
- *   ends such a fork failed only when the history write fails in-process).
+ * - `launch-without-history`, `fork-without-history`: a run's registration
+ *   (`run.start`, `run.config`, `run.activate`) and its first history batch
+ *   are separate commits. Killed between them, a launched run is classified
+ *   finished and never resumes or ends, and a fork is left with no history
+ *   (`forkRun` ends such a fork failed only when the history write fails
+ *   in-process).
  * - `answer-not-finalized`: a text response commits, then its
  *   `response.finalized` row in a later batch; a resume replays the
  *   committed response without finalizing it, so its answer never reaches
@@ -134,7 +135,8 @@ const KNOWN_GAPS = [
   'answer-not-finalized',
   'child-answer-lost',
   'compaction-request-lost',
-  'registered-without-history',
+  'fork-without-history',
+  'launch-without-history',
 ];
 
 interface Row {
@@ -307,30 +309,36 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
-/** The violations each pinned gap explains at a prefix it stands in; any
- *  other violation there still fails. */
+/** The violations each pinned gap explains at a prefix it stands in, down
+ *  to the outcome fields it changes; any other violation there still
+ *  fails. */
 const GAP_VIOLATIONS: Record<string, readonly string[]> = {
-  'registered-without-history': [
+  // Nothing runs: the conversation is the prefix's.
+  'launch-without-history': [
     'the resume was refused: finished',
-    'the conversation came to',
+    "the conversation's ",
   ],
+  'fork-without-history': ["the conversation's forks "],
   'answer-not-finalized': ['an answer was never finalized'],
-  'child-answer-lost': ['the conversation came to'],
-  'compaction-request-lost': ['the conversation came to'],
+  // The script's result, and its `agent()` call's, lack the answer.
+  'child-answer-lost': ["the conversation's settled "],
+  // The request is answered as a message: one answer more.
+  'compaction-request-lost': ["the conversation's answers "],
 };
 
 /** Which pinned gap a prefix stands in, if any. */
 function gapOf(prefix: readonly Row[], root: string): string | null {
-  const started = prefix.filter((row) => row.type === 'run.start');
-  if (
-    started.some(
-      (start) =>
-        !prefix.some(
-          (row) => row.run === start.run && row.type === 'run.snapshot',
-        ),
-    )
-  )
-    return 'registered-without-history';
+  const unstarted = prefix.find(
+    (start) =>
+      start.type === 'run.start' &&
+      !prefix.some(
+        (row) => row.run === start.run && row.type === 'run.snapshot',
+      ),
+  );
+  if (unstarted !== undefined)
+    return isFork(unstarted)
+      ? 'fork-without-history'
+      : 'launch-without-history';
   const mine = prefix.filter((row) => row.run === root);
   const asked = mine.findLast(
     (row) =>
@@ -613,9 +621,12 @@ function violations(
       ).length,
   );
   return [
-    JSON.stringify(got) === JSON.stringify(expected)
-      ? null
-      : `the conversation came to ${JSON.stringify(got)}`,
+    ...Object.entries(got).map(([field, value]) =>
+      JSON.stringify(value) ===
+      JSON.stringify(expected[field as keyof typeof expected])
+        ? null
+        : `the conversation's ${field} came to ${JSON.stringify(value)}`,
+    ),
     resumed.some((row) => settledBefore.has(key(row)))
       ? 'a call settled before the crash settled again'
       : null,
