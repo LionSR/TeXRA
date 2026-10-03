@@ -264,11 +264,21 @@ export class UsagePanel extends LitElement {
   /** The run's own share, when its agents spent too; undefined otherwise. */
   private ownShareLabel(): string | undefined {
     const own = this.ownUsage;
-    if (!this.usage || !own || own.cost === this.usage.cost) return undefined;
+    const total = this.usage;
+    // Tokens too, not cost alone: under a subscription both costs can be
+    // zero while the agents' tokens are in the total.
+    if (
+      !total ||
+      !own ||
+      (own.cost === total.cost &&
+        own.inputTokens === total.inputTokens &&
+        own.outputTokens === total.outputTokens)
+    )
+      return undefined;
     const ownCost =
       usageCostLabel(own.cost, own.usageRoute, own.usagePlan) ??
       formatCostUsd(own.cost);
-    return `Own model calls: ${ownCost}. The total includes its agents.`;
+    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${ownCost}. The total includes its agents.`;
   }
 
   /**
