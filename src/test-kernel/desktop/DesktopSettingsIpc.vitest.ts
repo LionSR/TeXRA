@@ -585,9 +585,13 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
       settings: DEFAULT_LATEX_SETTINGS_STATUS,
     });
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
-    ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS });
+    // The rows post from a detached fiber that reads the install record
+    // and mcp.json from disk, so they can land after the flush.
+    await vi.waitFor(() =>
+      expect(
+        findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS),
+      ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS }),
+    );
 
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
