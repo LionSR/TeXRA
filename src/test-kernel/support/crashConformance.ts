@@ -543,11 +543,19 @@ function violations(
         earlier.commit < child.commit && callOf(earlier) === callOf(child),
     ),
   );
-  const agentRetries = retries.filter((retry) => retry.tool === 'agent');
+  // Each relaunch of a call needs its own retry of that call before it.
   const unaskedRelaunches = relaunches.filter(
-    (child, index) =>
-      agentRetries.filter((retry) => retry.commit < child.commit).length <=
-      index,
+    (child) =>
+      retries.filter(
+        (retry) =>
+          retry.tool === 'agent' &&
+          retry.callId === callOf(child) &&
+          retry.commit < child.commit,
+      ).length <
+      relaunches.filter(
+        (other) =>
+          callOf(other) === callOf(child) && other.commit <= child.commit,
+      ).length,
   );
   const got = outcome(final, root);
   // Every run's committed answers, each finalized once.
