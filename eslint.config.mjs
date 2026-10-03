@@ -46,8 +46,9 @@ const COMPOSITION_ROOT_FILES = new Set([
   // entry and the Effect subpath's `Sessions.layer` both call.
   path.join(__dirname, 'packages/agent/src/effect/runtime.ts'),
   // The test suite's composition root: the one harness file that installs
-  // the process runtime the session graph runs on.
-  path.join(__dirname, 'src/test-kernel/support/sessionGraphTestSetup.ts'),
+  // the process runtime the session graph runs on, over the plugin list its
+  // setup module passes (`sessionGraphTestSetup`, `builtinSessionGraphTestSetup`).
+  path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
 ]);
 
 // The `@utils/*` modules the webview frontends may import at runtime. Each is

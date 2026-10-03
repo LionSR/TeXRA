@@ -119,7 +119,8 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { identityReads } from '@test/support/sessionGraphTestSetup';
+import '@test/support/sessionGraphTestSetup';
+import { identityReads } from '@test/support/sessionGraphInstall';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

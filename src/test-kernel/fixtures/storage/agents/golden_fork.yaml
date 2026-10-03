@@ -1,0 +1,8 @@
+name: golden_fork
+description: The golden store's forked conversation, and the handoff that continues its fork.
+settings:
+  agentCategory: toolUse
+  tools: []
+prompts:
+  systemPrompt: 'GOLDEN-FORK: say what you were shown.'
+  userRequest: '{{ INSTRUCTION }}'

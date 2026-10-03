@@ -36,6 +36,7 @@ import {
 } from '@texra-ai/llm';
 import { envVar } from '@utils/system/envFlags';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction';
+import { SKIPPED_NOT_STARTED } from './tools';
 import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
@@ -105,6 +106,17 @@ return { a: a.response, b: b.response }`;
 const GOLDEN_BACKGROUND_SOURCE = `phase('Background')
 const answer = await agent('Background child: answer once released.', { agentName: 'golden_child', label: 'Child' })
 return { answer: answer.response }`;
+
+/** The crash-point conformance run's script: a read and a command in one
+ *  `Promise.all`, then an awaited `agent()` call, whose child the call owns
+ *  (`run.start.parent.callId`). */
+const GOLDEN_CRASH_SOURCE = `phase('Gather')
+const [notes, shell] = await Promise.all([
+  tools.read_file({ path: 'notes.tex' }),
+  tools.bash({ command: 'echo script >> effects.log', description: 'Record the script effect' }),
+])
+const child = await agent('Answer the conformance child task.', { agentName: 'golden_child', label: 'Child' })
+return { notes: notes.output, shell: shell.output, child: child.response }`;
 
 /**
  * The scripted conversation of the golden 1.0 store
@@ -262,6 +274,51 @@ function goldenTurn(
       return Effect.succeed(text('Background script reported.'));
     return gate('golden-background-reply.release').pipe(
       Effect.as(text('Background script sent.')),
+    );
+  }
+  // The fork and its handoff: each reply names the user messages its view
+  // held, each by its last line (a headless run's first message ends with
+  // its instruction), so the store records what the edit left.
+  if (system.includes('GOLDEN-FORK')) {
+    const users = turn.messages.flatMap((message) =>
+      message.role === 'user'
+        ? message.content.flatMap((part) =>
+            part.kind === 'text' ? [part.text.trim().split('\n').at(-1)] : [],
+          )
+        : [],
+    );
+    return Effect.succeed(text(`Saw: ${users.join(' | ')}`));
+  }
+  // The crash-point conformance run: a response with two calls, then a
+  // script, then the echo's text. A step a crash cut off before it started
+  // (its calls settled as not started) is asked for again, as a model
+  // decides to retry. A view an edit replaced (a handoff, a compaction, a
+  // fork of either) no longer holds the task, and the echo answers it: what
+  // it says shows the view the edit left.
+  if (system.includes('GOLDEN-CRASH')) {
+    const done = results.filter(
+      (message) =>
+        !message.results.some((result) =>
+          result.content.some(
+            (part) =>
+              part.kind === 'text' && part.text.includes(SKIPPED_NOT_STARTED),
+          ),
+        ),
+    ).length;
+    const step = [
+      () => [
+        call('read_file', { path: 'notes.tex' }),
+        call('bash', {
+          command: 'echo batch >> effects.log',
+          description: 'Record the batch effect',
+        }),
+      ],
+      () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
+    ][done];
+    return Effect.succeed(
+      step === undefined || !said.includes('Work through the crash task.')
+        ? null
+        : step(),
     );
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);
