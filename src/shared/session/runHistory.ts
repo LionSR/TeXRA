@@ -15,7 +15,7 @@
  */
 import { Cause, Context, Data, type Effect } from 'effect';
 
-import type { RunId, SessionEvent } from '@shared/schemas';
+import type { RunId, SessionEvent, SessionEventDraft } from '@shared/schemas';
 import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
   RunHistoryDraft,
@@ -159,11 +159,16 @@ export class RunHistory extends Context.Service<
      *   `callId` (committed before, or earlier in this batch). This is the
      *   settlement-to-provider join: the canonical tool message binds
      *   results to calls positionally, the run history keys them by `callId`.
+     * - `registration`, the rows that register the run this batch opens
+     *   (`run.start` first), comes only with a null `state`: they commit
+     *   ahead of `rows` in the same transaction, so no crash leaves the run
+     *   registered without the history it was registered with.
      */
     readonly appendBatch: (
       run: RunId,
       state: RunState | null,
       rows: readonly RunHistoryDraft[],
+      registration?: readonly SessionEventDraft[],
     ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
   }
 >()('@texra/session/RunHistory') {}

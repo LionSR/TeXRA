@@ -648,6 +648,17 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task killed at the wrong moment resumes as if it had not been.** Five
+  crash points the crash-conformance suite found are closed. A task, or an
+  agent it started, killed after it was registered but before its first
+  message was recorded is resumed from the start instead of being listed as
+  finished. A fork is recorded with its history in one write, so it never
+  appears empty. An agent that had answered when the task was killed hands
+  its answer to the resumed task instead of an empty one. A `/compact` whose
+  compaction had not run yet compacts on resume instead of being answered
+  as a message. An answer recorded just before the kill now shows in the
+  transcript and the history after resume.
+
 - **A task's cost counts every agent it started, on every surface.** The
   progress-view footer showed only the run's own model calls (so a task that
   ran two agents could read `$0.000`), and a script card added its direct

@@ -4,17 +4,23 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { type RunSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { runEndFromEvents } from './runRecords';
 
 const CHANNEL = 'Resumability';
 
 /**
  * What the durable run facts alone say about continuing a run: a
- * `run.snapshot` exists on the run aggregate, nothing is left to resume, or
+ * `run.snapshot` exists on the run aggregate, the run was never opened,
+ * nothing is left to resume, or
  * the storage itself could not be read (reported with its cause, which is
  * display text, never guessed).
  */
 export type ResumabilityDecision =
   | { readonly kind: 'checkpoint'; readonly snapshot: RunSnapshotPayload }
+  /** Registered, not ended, and never opened: its launch stopped between
+   *  the registration and the opening batch. A run TeXRA drives opens from
+   *  its configuration, so it resumes by opening. */
+  | { readonly kind: 'unopened' }
   | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly cause: string };
 
@@ -62,6 +68,15 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   if (snapshot.success !== null) {
     return { kind: 'checkpoint', snapshot: snapshot.success.payload };
   }
+  // A process or an external CLI drives its own run and records no opening.
+  const start = records.success.find((row) => row.type === 'run.start');
+  if (
+    start?.type === 'run.start' &&
+    start.identity.kind === 'agent' &&
+    start.identity.tool === undefined &&
+    runEndFromEvents(records.success, runId) === null
+  )
+    return { kind: 'unopened' };
   return { kind: 'none' };
 });
 

@@ -15,11 +15,10 @@
 import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage/runRecords';
-import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
+import { registrationRows } from '@agent/storage/runLifecycle';
 import {
   AgentCategory,
   aggregateId,
-  RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -153,39 +152,22 @@ export const forkRun = Effect.fn('forkRun')(function* (
     outputSchema: _schema,
     ...record
   } = config;
-  // Registration and history are two commits: a fork that stops between
-  // them is ended (failed) rather than left as a run with no history, and
-  // no interruption lands between them.
-  yield* Effect.uninterruptible(
-    Effect.gen(function* () {
-      yield* registerRun(session, runId, record, {
-        identity: start.identity,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        provenance: { kind: 'fork', from, at: cut },
-        ...(title !== null && {
-          description: title.description,
-          descriptionBy: title.by,
-        }),
-      });
-      // The registration's claim, ended once the history is written: the
-      // fork is the host's to resume, as any waiting conversation is.
-      yield* Effect.scoped(
-        session.holdRunClaim(runId).pipe(
-          Effect.andThen(session.runHistory.appendBatch(runId, null, rows)),
-          Effect.tapError((error) =>
-            Effect.flatMap(
-              finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
-              (ended) =>
-                Effect.logWarning(
-                  ended.ok
-                    ? `Fork ${runId} of ${from.id} was ended: its history did not commit`
-                    : `Fork ${runId} of ${from.id} has no history, and could not be ended`,
-                ).pipe(Effect.annotateLogs({ data: error })),
-            ),
-          ),
-        ),
-      );
+  const registration = yield* registrationRows(session, runId, record, {
+    identity: start.identity,
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+    provenance: { kind: 'fork', from, at: cut },
+    ...(title !== null && {
+      description: title.description,
+      descriptionBy: title.by,
     }),
+  });
+  // Registration and history are one commit: a fork exists with its history
+  // or not at all. The claim the commit leaves this process is ended at
+  // once: the fork is the host's to resume, as any waiting conversation is.
+  yield* Effect.uninterruptible(
+    session.runHistory
+      .appendBatch(runId, null, rows, registration)
+      .pipe(Effect.andThen(Effect.scoped(session.holdRunClaim(runId)))),
   );
   return runId;
 });
