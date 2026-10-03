@@ -40,7 +40,7 @@ describe('CLI session status formatter', () => {
       statusLabel: 'Idle',
     });
 
-    expect(status).toContain('auto-approvals: agent work, commands, edits');
+    expect(status).toContain('auto-approvals: edits, commands, agent work');
     expect(status).not.toContain('all privileged actions');
   });
 });

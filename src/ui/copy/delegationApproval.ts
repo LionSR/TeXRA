@@ -5,6 +5,13 @@ import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
  * commands, agent work. The approval cards' Approve ▾ menu, the header's
  * grant chips and the CLI's `/status` name the same grant with the same noun.
  */
+/** The one order grants are listed in, on every surface. */
+export const RUN_GRANT_ORDER = [
+  'toolEdit',
+  'bash',
+  'superYolo',
+] as const satisfies readonly ApprovalBypassKind[];
+
 export const RUN_GRANT_NOUN = Object.freeze({
   toolEdit: 'edits',
   bash: 'commands',

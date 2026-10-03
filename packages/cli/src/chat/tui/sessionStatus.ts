@@ -11,7 +11,7 @@ import {
 } from '@shared/approvalPolicy';
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
-import { RUN_GRANT_NOUN } from '@ui/copy/delegationApproval';
+import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { formatCostUsd, truncateSummary } from '@utils/text/stringUtils';
@@ -125,9 +125,9 @@ function activeApprovalBypassLabels(
   if (!bypasses) return [];
   // The grants given with `a` on a card, named as the cards and the
   // extension's header chips name them.
-  return (['superYolo', 'bash', 'toolEdit'] as const)
-    .filter((kind) => bypasses[kind] === true)
-    .map((kind) => RUN_GRANT_NOUN[kind]);
+  return RUN_GRANT_ORDER.filter((kind) => bypasses[kind] === true).map(
+    (kind) => RUN_GRANT_NOUN[kind],
+  );
 }
 
 export function formatCliSessionStatus(input: CliSessionStatusInput): string {

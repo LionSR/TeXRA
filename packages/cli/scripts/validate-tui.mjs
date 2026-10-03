@@ -1856,7 +1856,7 @@ const SCENARIOS = [
     bootExpect: 'a approve agent work for this chat',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['auto-approvals: agent work, commands, edits'],
+    expect: ['auto-approvals: edits, commands, agent work'],
     unexpect: ['Spawn review?'],
   },
   {
@@ -2031,7 +2031,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['PLAN-GOAL', 'auto-approvals: agent work, commands, edits'],
+    expect: ['PLAN-GOAL', 'auto-approvals: edits, commands, agent work'],
     unexpect: ['Approve plan?', '1 approval'],
   },
   {

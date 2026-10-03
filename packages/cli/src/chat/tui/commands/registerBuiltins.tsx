@@ -13,10 +13,10 @@ import type {
 } from '@cli/runtime/loginOptions';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
 import {
@@ -205,9 +205,7 @@ export function registerBuiltinSlashCommands(options: {
       runId === undefined
         ? undefined
         : currentView().policy.get(runId)?.bypasses;
-    const grants = APPROVAL_BYPASS_KINDS.filter(
-      (kind) => bypasses?.[kind] === true,
-    );
+    const grants = RUN_GRANT_ORDER.filter((kind) => bypasses?.[kind] === true);
     return (
       <ApprovalPolicyForm
         availableRows={props.availableRows}
