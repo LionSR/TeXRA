@@ -265,7 +265,11 @@ All notable changes to this project will be documented in this file.
   before a run was interrupted and left no result, the request now names the
   tool (and the agent run it left, for an `agent` call) and offers Run again
   or Skip, in the progress view and the terminal alike, instead of a generic
-  question with a run id in its text.
+  question with a run id in its text. It reads "Did the agent finish before
+  TeXRA stopped?" with Run again and Skip it, says what each does, and an
+  agent call's card links that agent's conversation instead of naming its
+  id; the script card's row waiting on it says "Wants a decision: did the
+  agent finish?".
 - **`script` tool (code mode, first stage).** An agent whose configuration
   lists `script` can run one JavaScript program that calls its other tools as
   `await tools.read_file({ path })`, with `Promise.all`, try/catch,
