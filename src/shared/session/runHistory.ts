@@ -116,6 +116,8 @@ export class RunHistory extends Context.Service<
      */
     readonly load: (
       run: RunId,
+      /** Fold only the rows up to this `seq`: the run as it stood there. */
+      through?: number,
     ) => Effect.Effect<RunState | null, RunHistoryRefused | DatabaseReadFailed>;
     /**
      * The latest `run.snapshot` on the run aggregate, one indexed row read

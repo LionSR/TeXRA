@@ -167,7 +167,7 @@ const taken = (followUps: ToolUseFollowUpQueue, lease: FollowUpConsumerLease) =>
   Effect.gen(function* () {
     const input = followUps.attachInput(lease.runId, lease)!;
     const batch = input.hasQueued() ? yield* input.take : null;
-    return batch === null || batch.synthetic
+    return batch?.kind !== 'followUps'
       ? []
       : batch.followUps.map((followUp) => followUp.content.text);
   });
@@ -764,9 +764,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
       pending.push(followUp('first'), followUp('second'));
       input.notify();
 
-      expect(yield* input.take).toEqual({ synthetic: true, text: 'compact' });
+      expect(yield* input.take).toEqual({ kind: 'synthetic', text: 'compact' });
       expect(yield* input.take).toEqual({
-        synthetic: false,
+        kind: 'followUps',
         followUps: [followUp('first'), followUp('second')],
       });
       input.end();

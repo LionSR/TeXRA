@@ -420,6 +420,20 @@ execution id and honors the headless globals (`--print`, `--output-format`,
 prints recent executions, with an id it continues the stored session. A
 missing or malformed id exits with code 2.
 
+Fork, reset or hand off a conversation as you continue it:
+
+```bash
+texra resume <id> --fork               # a new task holding the conversation
+texra resume <id> --fork --at <n>      # the same, cut at the end of an earlier turn
+texra resume <id> --reset              # clear what the model sees, then continue
+texra resume <id> --handoff "<text>"   # clear it and continue from this text
+```
+
+A fork leaves the original task unchanged, and it can be cut only at the
+end of a turn: a position inside one is refused. A reset or a handoff takes
+effect when the task is next waiting for you, and the handoff's text is the
+message the model answers next.
+
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another
 machine, or its liveness cannot be proven) counts as holding the run; when you

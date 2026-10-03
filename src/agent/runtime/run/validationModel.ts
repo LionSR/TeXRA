@@ -383,6 +383,7 @@ export function validationModel(config: ModelConfig): {
     turn: ResolvedTurn,
     scriptFanout: boolean,
     historyQuery: boolean,
+    echo: boolean,
     golden: TurnResult['content'] | null,
   ): TurnResult => {
     const toolNames = new Set(turn.tools.map((tool) => tool.name));
@@ -392,6 +393,22 @@ export function validationModel(config: ModelConfig): {
     let content: TurnResult['content'];
     if (golden !== null) {
       content = golden;
+    } else if (echo) {
+      // The user messages the request carries, in order: what a fork, a
+      // reset or a handoff left of the model's view.
+      const seen = turn.messages.flatMap((message) =>
+        message.role === 'user'
+          ? message.content.flatMap((part) =>
+              part.kind === 'text' ? [part.text] : [],
+            )
+          : [],
+      );
+      content = [
+        {
+          kind: 'message',
+          content: [{ kind: 'text', text: `Model saw: ${seen.join(' | ')}` }],
+        },
+      ];
     } else if (scriptFanout && toolNames.has('submit_output')) {
       content = [
         call(
@@ -506,10 +523,11 @@ export function validationModel(config: ModelConfig): {
     Stream.fromEffect(
       Effect.gen(function* () {
         responses += 1;
-        const [scriptFanout, historyQuery, golden, flagPath] =
+        const [scriptFanout, historyQuery, echo, golden, flagPath] =
           yield* Effect.all([
             envVar('TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT'),
             envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
+            envVar('TEXRA_INTERNAL_VALIDATE_ECHO'),
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
             envVar(
               process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '',
@@ -519,6 +537,7 @@ export function validationModel(config: ModelConfig): {
           turn,
           scriptFanout === '1',
           historyQuery === '1',
+          echo === '1',
           golden === '1' && flagPath
             ? yield* goldenTurn(turn, flagPath, call)
             : null,

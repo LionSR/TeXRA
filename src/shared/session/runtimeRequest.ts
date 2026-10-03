@@ -38,6 +38,25 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('run.delete'), ...runScoped }),
   z.object({ kind: z.literal('run.compact'), ...runScoped }),
+  /**
+   * A new task holding this run's conversation up to `at`, the `seq` of a
+   * settled position in its history (its latest when absent): answered with
+   * the new run's id, which waits for its host to resume it.
+   */
+  z.object({
+    kind: z.literal('run.fork'),
+    ...runScoped,
+    at: z.int().positive().nullish(),
+  }),
+  /**
+   * Clear the model's view of this run at its next park; with `handoff`, the
+   * cleared view starts from that text, which the run then answers.
+   */
+  z.object({
+    kind: z.literal('run.reset'),
+    ...runScoped,
+    handoff: z.string().min(1).nullish(),
+  }),
   z.object({
     kind: z.literal('followUp.send'),
     ...runScoped,
@@ -87,6 +106,7 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
     /** A queued input whose recovery wake did not reach the run. */
     wake: z.literal('failed').nullish(),
   }),
+  z.object({ kind: z.literal('forked'), runId: RunIdSchema }),
   z.object({
     kind: z.literal('deleted'),
     result: z.enum(['deleted', 'active', 'failed', 'superseded']),

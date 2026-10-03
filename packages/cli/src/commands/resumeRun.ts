@@ -20,6 +20,7 @@ import { pathExists } from '@utils/files/fsDurability';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
+import { describeRequestError } from '../chat/tui/state/transcript';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
@@ -36,6 +37,12 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
+
+/** What `texra resume` does to the conversation besides continuing it:
+ *  continue a fork of it, or reset its view first (with a handoff's text). */
+export type ResumeAction =
+  | { readonly kind: 'fork'; readonly at: number | null }
+  | { readonly kind: 'edit'; readonly handoff: string | null };
 
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
@@ -87,7 +94,11 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
  * still needs a graceful handler, and `runChat` hands ownership over once Ink
  * mounts.
  */
-export function runResumeCommand(context: CliContext, id: RunId) {
+export function runResumeCommand(
+  context: CliContext,
+  id: RunId,
+  action?: ResumeAction,
+) {
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
     const session = yield* stores.session;
@@ -101,6 +112,52 @@ export function runResumeCommand(context: CliContext, id: RunId) {
     if (!config) {
       writeTextStderr(`Run not found: ${id}`);
       return CliExitCode.Usage;
+    }
+    if (
+      action !== undefined &&
+      config.agentCategory !== AgentCategory.ToolUse
+    ) {
+      writeTextStderr(
+        `Task ${id} is a workflow: only a conversation can be forked, reset or handed off.`,
+      );
+      return CliExitCode.Usage;
+    }
+    // A fork reads the source's committed rows, whoever holds it, and the
+    // chat continues the new task.
+    if (action?.kind === 'fork') {
+      const terminalFailure = interactiveTerminalFailure(context);
+      if (terminalFailure) {
+        writeTextStderr(
+          formatInteractiveTerminalFailure(terminalFailure, {
+            headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
+            dumbTerminalCommand: 'resume',
+            dumbTerminalOptions: { commandName: context.commandName },
+          }),
+        );
+        return CliExitCode.Usage;
+      }
+      const forked = yield* Effect.result(
+        session.requests.request({
+          kind: 'run.fork',
+          runId: id,
+          at: action.at,
+        }),
+      );
+      if (Result.isFailure(forked)) {
+        writeTextStderr(describeRequestError(forked.failure));
+        return CliExitCode.Usage;
+      }
+      if (forked.success.kind !== 'forked')
+        return yield* Effect.die(
+          new Error(`run.fork answered ${forked.success.kind}`),
+        );
+      const forkId = forked.success.runId;
+      const forkConfig = yield* getRunRecords(session, forkId).readConfig();
+      if (!forkConfig) {
+        writeTextStderr(`Task ${forkId} was forked without a configuration.`);
+        return CliExitCode.AgentError;
+      }
+      return { chat: { initialResume: { id: forkId, config: forkConfig } } };
     }
     // Gate resume on ownership: a run held by any owner that is alive or cannot
     // be proven dead refuses, naming that owner.
@@ -154,7 +211,17 @@ export function runResumeCommand(context: CliContext, id: RunId) {
         );
         return CliExitCode.Usage;
       }
-      return { chat: { initialResume: { id, config } } };
+      return {
+        chat: {
+          initialResume: {
+            id,
+            config,
+            ...(action?.kind === 'edit' && {
+              edit: { handoff: action.handoff },
+            }),
+          },
+        },
+      };
     }
 
     // The launch pinned the resolved source on the record, so resume checks

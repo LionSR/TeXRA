@@ -30,6 +30,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { forkRun } from '@agent/runtime/forkRun';
 import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -205,8 +206,10 @@ function admit(
         );
       }
       const liveness = SubscriptionRef.getUnsafe(local);
+      // A fork only reads the committed rows of its source, whoever holds it.
       if (
         req.kind !== 'run.delete' &&
+        req.kind !== 'run.fork' &&
         state.ownerId !== null &&
         !liveness.self.includes(state.ownerId) &&
         !liveness.dead.includes(state.ownerId)
@@ -433,6 +436,36 @@ function handle(
               }),
             );
         }
+      });
+    case 'run.fork':
+      return forkRun(
+        session,
+        { id: req.runId, uid: admitted.uid },
+        req.at ?? null,
+      ).pipe(
+        Effect.catchIf(
+          (error): error is Error => !(error instanceof Rejected),
+          (error) => Effect.die(error),
+        ),
+        Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
+      );
+    case 'run.reset':
+      return Effect.flatMap(Runs, (runs) => {
+        const controls = runs.getHandle(req.runId)?.controls;
+        if (controls === undefined)
+          return Effect.fail(
+            new Unavailable({
+              runId: req.runId,
+              reason: 'Resume the task to reset it.',
+            }),
+          );
+        return controls.editView(req.handoff ?? null).pipe(
+          Effect.mapError(
+            (error): RequestError =>
+              new Unavailable({ runId: req.runId, reason: error.message }),
+          ),
+          Effect.as(done),
+        );
       });
     case 'followUp.send':
       return submitFollowUp(

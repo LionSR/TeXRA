@@ -3,18 +3,34 @@
  * follow-ups the run's rows still queue. The rows are the authority; this
  * holds no copy of them.
  */
-import { Data, Effect, Latch } from 'effect';
+import { Data, Deferred, Effect, Latch } from 'effect';
 
 import type { QueuedFollowUp } from '@shared/session/runRows';
 
 /**
- * What a run takes from its input: queued follow-ups in commit order, or the
+ * A host's edit of a parked run's view (durable harness, gap 3): a reset
+ * (`handoff` null) or a handoff, the reset with the user's note as the
+ * message the next turn answers. `done` settles when its rows commit, or
+ * fails when they are refused or the run's input ends first.
+ */
+export interface ViewEdit {
+  readonly handoff: string | null;
+  readonly done: Deferred.Deferred<void, Error>;
+}
+
+/**
+ * What a run takes from its input: queued follow-ups in commit order, the
  * loop's own maintenance wake (an immediate compaction's turn), which is no
- * row and never shares a batch with follow-ups.
+ * row and never shares a batch with follow-ups, or a view edit, taken before
+ * either.
  */
 export type FollowUpBatch =
-  | { readonly synthetic: false; readonly followUps: readonly QueuedFollowUp[] }
-  | { readonly synthetic: true; readonly text: string };
+  | {
+      readonly kind: 'followUps';
+      readonly followUps: readonly QueuedFollowUp[];
+    }
+  | { readonly kind: 'synthetic'; readonly text: string }
+  | { readonly kind: 'edit'; readonly edit: ViewEdit };
 
 /** A live consumer claim refused: another consumer already holds the run's input. */
 export class FollowUpContinuationOwned extends Data.TaggedError(
@@ -37,6 +53,7 @@ export class FollowUpContinuationOwned extends Data.TaggedError(
 export class RunInput {
   private readonly signal = Latch.makeUnsafe(false);
   private readonly synthetic: string[] = [];
+  private edit: ViewEdit | null = null;
   private ended = false;
 
   constructor(private readonly pending: () => readonly QueuedFollowUp[]) {}
@@ -56,14 +73,37 @@ export class RunInput {
     Latch.openUnsafe(this.signal);
   }
 
-  hasQueued(): boolean {
-    return this.synthetic.length > 0 || this.pending().length > 0;
+  /**
+   * Queue one view edit, taken before anything else is. False while another
+   * is queued or once the generation has ended.
+   */
+  editView(edit: ViewEdit): boolean {
+    if (this.ended || this.edit !== null) return false;
+    this.edit = edit;
+    Latch.openUnsafe(this.signal);
+    return true;
   }
 
-  /** End the generation: what is pending stays queued on the run's rows. */
+  hasQueued(): boolean {
+    return (
+      this.edit !== null ||
+      this.synthetic.length > 0 ||
+      this.pending().length > 0
+    );
+  }
+
+  /** End the generation: what is pending stays queued on the run's rows; a
+   *  view edit nobody took fails. */
   end(): void {
     this.ended = true;
     this.synthetic.length = 0;
+    if (this.edit !== null) {
+      Deferred.doneUnsafe(
+        this.edit.done,
+        Effect.fail(new Error('The task stopped before its view was edited.')),
+      );
+      this.edit = null;
+    }
     Latch.openUnsafe(this.signal);
   }
 
@@ -74,11 +114,16 @@ export class RunInput {
         if (this.ended) return null;
         // Closed before the read: a signal landing after it reopens the wait.
         Latch.closeUnsafe(this.signal);
+        const edit = this.edit;
+        if (edit !== null) {
+          this.edit = null;
+          return { kind: 'edit', edit } as const;
+        }
         const text = this.synthetic.shift();
-        if (text !== undefined) return { synthetic: true, text } as const;
+        if (text !== undefined) return { kind: 'synthetic', text } as const;
         const followUps = this.pending();
         if (followUps.length > 0) {
-          return { synthetic: false, followUps } as const;
+          return { kind: 'followUps', followUps } as const;
         }
         yield* this.signal.await;
       }

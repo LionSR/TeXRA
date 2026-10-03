@@ -23,7 +23,16 @@
  * hand the child its parent's input: a round-mode child that settled it
  * ended the parent's lease, and the parked parent halted cancelled.
  */
-import { Effect, type FileSystem, type Scope, SynchronizedRef } from 'effect';
+import { randomUUID } from 'node:crypto';
+
+import {
+  Deferred,
+  Effect,
+  Exit,
+  type FileSystem,
+  type Scope,
+  SynchronizedRef,
+} from 'effect';
 
 import {
   followUpDisplay,
@@ -33,6 +42,7 @@ import {
 import {
   FollowUpContinuationOwned,
   type FollowUpBatch,
+  type ViewEdit,
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
@@ -91,6 +101,9 @@ export interface FollowUps {
   readonly hasQueued: () => boolean;
   /** Queue one maintenance turn; a pending one is not duplicated. */
   readonly appendSynthetic: (text: string) => void;
+  /** Queue a view edit, taken at the loop's next park before any input:
+   *  false while another is queued or once the input has ended. */
+  readonly editView: (edit: ViewEdit) => boolean;
   /** Block for the next batch; null when the queue was taken away. */
   readonly wait: Effect.Effect<FollowUpBatch | null>;
   /**
@@ -111,7 +124,9 @@ export interface FollowUps {
   /**
    * Commit a batch: its `followup.consumed` rows, its user message, and
    * `run.position turn.ready` in one transaction. On failure nothing is
-   * consumed and the run's rows still queue the batch.
+   * consumed and the run's rows still queue the batch. A view edit commits
+   * its `context.edit`, and a handoff's note as the message, the same way,
+   * and settles the edit's `done` with the commit.
    */
   readonly consume: (
     state: RunState,
@@ -157,7 +172,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   let syntheticPending = false;
 
   const taken = (batch: FollowUpBatch | null) => {
-    if (batch?.synthetic) syntheticPending = false;
+    if (batch?.kind === 'synthetic') syntheticPending = false;
     return batch;
   };
 
@@ -231,11 +246,26 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const all = batch.synthetic ? [] : batch.followUps;
-    const followUps = all.filter((followUp) => !endedChildProgress(followUp));
-    const turn = batch.synthetic || followUps.length > 0;
+    const all = batch.kind === 'followUps' ? batch.followUps : [];
+    const edit = batch.kind === 'edit' ? batch.edit : null;
+    // A handoff's note is what its user typed, delivered as their follow-up
+    // is, in the batch that resets the view: no row ever queued it.
+    const handedOff: QueuedFollowUp[] =
+      edit?.handoff == null
+        ? []
+        : [
+            {
+              followUpId: randomUUID(),
+              content: { text: edit.handoff, from: { kind: 'user' } },
+            },
+          ];
+    const followUps = [
+      ...handedOff,
+      ...all.filter((followUp) => !endedChildProgress(followUp)),
+    ];
+    const turn = batch.kind === 'synthetic' || followUps.length > 0;
     const built = yield* (
-      batch.synthetic
+      batch.kind === 'synthetic'
         ? Effect.succeed({
             message: {
               role: 'user',
@@ -312,6 +342,27 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         ...(activated === undefined ? {} : { activated }),
       },
       rows: [
+        // A reset replaces the whole view, the context updates in it too:
+        // the next step renders them anew.
+        ...(edit === null
+          ? []
+          : [
+              {
+                type: 'context.edit' as const,
+                aggregateId: rowAggregate(runId),
+                payload: {
+                  cause:
+                    edit.handoff === null
+                      ? ('reset' as const)
+                      : ('handoff' as const),
+                  trigger: null,
+                  base: state.lastEdit,
+                  range: { from: 0, to: state.messages.length },
+                  messages: [],
+                  usage: null,
+                },
+              },
+            ]),
         ...blobRows(runId, state, [
           ...(instruction === undefined ? [] : [instruction]),
         ]),
@@ -336,25 +387,39 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const joined = yield* batchRows(state, batch);
+    const joined = yield* batchRows(state, batch).pipe(
+      Effect.tapError((error) =>
+        batch.kind === 'edit'
+          ? Deferred.fail(batch.edit.done, error)
+          : Effect.void,
+      ),
+    );
     const committed = yield* Effect.uninterruptible(
-      runHistory.appendBatch(runId, state, [
-        ...joined.rows,
-        // The input that recovers a failed run clears the error fact in
-        // the same transaction, so a resume taken between this batch and
-        // the next turn's snapshot does not read the run as still failed.
-        ...(joined.turn
-          ? [
-              ...snapshotRow(runId, state, {
-                runtime: { lastError: null },
-                ...(state.loop
-                  ? { state: { ...state.loop, ...joined.recorded } }
-                  : {}),
-              }),
-              positionRow(runId, state, 'turn.ready'),
-            ]
-          : []),
-      ]),
+      runHistory
+        .appendBatch(runId, state, [
+          ...joined.rows,
+          // The input that recovers a failed run clears the error fact in
+          // the same transaction, so a resume taken between this batch and
+          // the next turn's snapshot does not read the run as still failed.
+          ...(joined.turn
+            ? [
+                ...snapshotRow(runId, state, {
+                  runtime: { lastError: null },
+                  ...(state.loop
+                    ? { state: { ...state.loop, ...joined.recorded } }
+                    : {}),
+                }),
+                positionRow(runId, state, 'turn.ready'),
+              ]
+            : []),
+        ])
+        .pipe(
+          Effect.onExit((exit) =>
+            batch.kind === 'edit'
+              ? Deferred.done(batch.edit.done, Exit.asVoid(exit))
+              : Effect.void,
+          ),
+        ),
     );
     joined.delivered();
     return { state: committed, turn: joined.turn };
@@ -367,6 +432,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       syntheticPending = true;
       input.wake(text);
     },
+    editView: (edit) => input.editView(edit),
     wait: Effect.map(input.take, taken),
     joinStopped: (state) =>
       state.at === 'halted' &&
@@ -379,10 +445,21 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             // `!syntheticPending`: no maintenance wake is queued, so this
             // take is follow-ups, which stay queued until consumed, and a
             // declined batch is left for the ordinary wait.
-            if (batch?.synthetic) {
+            if (batch?.kind === 'synthetic') {
               return Effect.die(
                 new Error('joinStopped took a wake none was pending.'),
               );
+            }
+            // A view edit waits for the park this stopped turn ends at.
+            if (batch?.kind === 'edit') {
+              if (!input.editView(batch.edit))
+                Deferred.doneUnsafe(
+                  batch.edit.done,
+                  Effect.fail(
+                    new Error('The task stopped before its view was edited.'),
+                  ),
+                );
+              return Effect.succeed(null);
             }
             return batch === null ||
               !batch.followUps.some((f) => isInstruction(f.content))

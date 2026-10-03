@@ -393,9 +393,18 @@ export const runHistoryLayer: Layer.Layer<
       return yield* log.readRunSnapshot(qualifyAggregateId('run', run));
     });
 
-    const load = Effect.fn('RunHistory.load')(function* (run: RunId) {
+    const load = Effect.fn('RunHistory.load')(function* (
+      run: RunId,
+      through?: number,
+    ) {
       const rows = yield* log.readAggregate(qualifyAggregateId('run', run), 1);
-      return yield* loaded(run, foldStored(null, rows));
+      return yield* loaded(
+        run,
+        foldStored(
+          null,
+          through === undefined ? rows : rows.filter((r) => r.seq <= through),
+        ),
+      );
     });
 
     const appendBatch = Effect.fn('RunHistory.appendBatch')(function* (
