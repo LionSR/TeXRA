@@ -2,14 +2,9 @@
  * Shared request handling for the usage-logging edge functions: records API
  * usage for analytics.
  *
- * Receives batched usage entries from the TeXRA clients and stores them via
- * service-role RPCs, which aggregate per-stream so the tables grow by run
- * rather than by round. Subscription-backed usage is kept in a separate table
- * from paid relay/API-key usage.
- *
- * Each function supplies only its owner resolver: `log-usage` (released
- * clients, login JWT) and `log-usage-v2` (anonymous install id). Rows have
- * exactly one owner.
+ * Receives batched usage entries from the TeXRA clients. Each function
+ * supplies an owner resolver (`log-usage`: login JWT, released clients;
+ * `log-usage-v2`: anonymous install id) and a store that writes the batch.
  *
  * Response contract:
  * - Complete writes return success with the exact accepted entry count.
@@ -22,74 +17,14 @@
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
  *   marker so clients retain and retry the original batch identifier.
- *
- * Database Requirements:
- * - Tables: usage_logs, subscription_usage_logs
- * - RPCs: usage_logs_upsert, subscription_usage_logs_upsert (service role only)
  */
 
 import { handleCors } from './cors.ts';
 import { adminClient, SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
 import { jsonResponse } from './responses.ts';
-import { equivalentListCost } from './equivalentCost.ts';
-import {
-  subscriptionSourceForUsage,
-  UsageBatchSchema,
-  type UsageLogEntry,
-} from './usageValidation.ts';
-
-/** Exactly one owner per row: a GoTrue user (JWT) or an anonymous install. */
-export type UsageOwner =
-  | { readonly userId: string; readonly installId: null }
-  | { readonly userId: null; readonly installId: string };
-
-// =============================================================================
-// Constants
-// =============================================================================
+import { UsageBatchSchema, type UsageBatch } from './usageValidation.ts';
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
-
-const usageDestinations = [
-  {
-    table: 'usage_logs',
-    rpc: 'usage_logs_upsert',
-    accepts: (entry: UsageLogEntry) =>
-      subscriptionSourceForUsage(entry) === undefined,
-    toRows: toDbRows,
-  },
-  {
-    table: 'subscription_usage_logs',
-    rpc: 'subscription_usage_logs_upsert',
-    accepts: (entry: UsageLogEntry) =>
-      subscriptionSourceForUsage(entry) !== undefined,
-    toRows: (
-      owner: UsageOwner,
-      batchId: string,
-      entries: readonly UsageLogEntry[],
-    ) =>
-      toDbRows(owner, batchId, entries).map((row, index) => {
-        const entry = entries[index];
-        const source = subscriptionSourceForUsage(entry) ?? 'chatgpt';
-        // Subscription rounds arrive with cost 0 (the client prices them
-        // through zeroed subscription overrides); store the list-price
-        // equivalent instead. A client-supplied nonzero cost passes through.
-        if (row.cost > 0) return { ...row, source };
-        const equivalent = equivalentListCost(entry);
-        if (equivalent === undefined) {
-          console.warn(
-            `[LOG_USAGE] No llm-zoo list price for subscription model "${entry.model}"; equivalent cost left 0`,
-          );
-        }
-        return { ...row, source, cost: equivalent ?? 0 };
-      }),
-  },
-] as const;
-
-type UsageDestination = (typeof usageDestinations)[number];
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 function successResponse(
   req: Request,
@@ -130,107 +65,39 @@ function errorResponse(
   );
 }
 
-function toDbRows(
-  owner: UsageOwner,
-  batchId: string,
-  entries: readonly UsageLogEntry[],
-) {
-  return entries.map((entry) => ({
-    user_id: owner.userId,
-    install_id: owner.installId,
-    logged_at: entry.timestamp,
-    model: entry.model,
-    provider: entry.provider,
-    agent_name: entry.agentName ?? null,
-    agent_category: entry.agentCategory ?? null,
-    input_tokens: entry.inputTokens,
-    output_tokens: entry.outputTokens,
-    cost: entry.cost,
-    response_time_ms: entry.responseTimeMs ?? null,
-    cached_input_tokens: entry.cachedInputTokens ?? null,
-    reasoning_tokens: entry.reasoningTokens ?? null,
-    used_relay: entry.usedRelay ?? false,
-    stream_id: entry.streamId ?? null,
-    extension_version: entry.extensionVersion ?? null,
-    editor_type: entry.editorType ?? null,
-    batch_id: batchId,
-  }));
-}
-
-async function batchExists(
-  destination: UsageDestination,
-  owner: UsageOwner,
-  batchId: string,
-): Promise<boolean> {
-  const { data: existingBatch, error } = await adminClient!
-    .from(destination.table)
-    .select('id')
-    .eq(
-      owner.userId ? 'user_id' : 'install_id',
-      owner.userId ?? owner.installId,
-    )
-    .eq('batch_id', batchId)
-    .limit(1);
-  if (error) {
-    throw new Error(
-      `Failed to check ${destination.table} batch deduplication: ${error.message}`,
-    );
-  }
-  return (existingBatch?.length ?? 0) > 0;
-}
-
-async function upsertUsageRows(
-  destination: UsageDestination,
-  rows: ReturnType<typeof toDbRows>,
-): Promise<string | undefined> {
-  if (rows.length === 0) return undefined;
-
-  const { error: rpcError } = await adminClient!.rpc(destination.rpc, {
-    p_rows: rows,
-  });
-  return rpcError?.message;
-}
-
-// =============================================================================
-// Environment Validation (fail fast)
-// =============================================================================
-
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
   console.error('[LOG_USAGE] Missing required environment variables');
 }
 
-// =============================================================================
-// Request Handler
-// =============================================================================
-
-/** Serve usage logging for the owners `resolveOwner` recognizes (null = 401). */
-export function serveLogUsage(
-  resolveOwner: (req: Request) => Promise<UsageOwner | null>,
+/**
+ * Serve usage logging. `resolveOwner` yields the batch owner (null = 401);
+ * `store` writes the batch and returns false when it was already stored (a
+ * client retry), and throws on failure.
+ */
+export function serveLogUsage<Owner>(
+  resolveOwner: (req: Request) => Promise<Owner | null>,
+  store: (owner: Owner, batch: UsageBatch) => Promise<boolean>,
 ): void {
   Deno.serve(async (req: Request) => {
-    // Handle CORS
     const response = handleCors(req);
     if (response) return response;
 
-    // Only accept POST requests
     if (req.method !== 'POST') {
       return errorResponse(req, 'Method not allowed', 405);
     }
 
     // Module-level init only logs, so requests must get an explicit 500 here
-    // rather than crashing on a null dereference deeper in the handler.
+    // rather than crashing on a null dereference deeper in the store.
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
       return errorResponse(req, 'Server configuration error', 500);
     }
 
     try {
-      // 1. Resolve the owner.
       const owner = await resolveOwner(req);
       if (!owner) {
         return errorResponse(req, 'Missing or invalid credential', 401);
       }
 
-      // 2. Parse request body
       let body: unknown;
       try {
         body = await req.json();
@@ -241,15 +108,15 @@ export function serveLogUsage(
         });
       }
 
-      // 3. Validate the complete batch before any destination write.
+      // Validate the complete batch before any write.
       const batchResult = UsageBatchSchema.safeParse(body);
       if (!batchResult.success) {
         // Keep the application-level rejection on HTTP 200 during the rolling
         // client transition. Older clients let ky throw before reading 4xx
-        // bodies, which would pin this permanently invalid batch at the head of
-        // their retry queue. They already understand success:false on 2xx. This
-        // compatibility status can return to 422 under the #6981 retirement gate
-        // once the minimum supported client includes #8267.
+        // bodies, which would pin this permanently invalid batch at the head
+        // of their retry queue. They already understand success:false on 2xx.
+        // This status can return to 422 under the #6981 retirement gate once
+        // the minimum supported client includes #8267.
         return errorResponse(req, 'Invalid batch format or entry data', 200, {
           retryable: false,
           errorCode: 'BATCH_REJECTED',
@@ -265,51 +132,12 @@ export function serveLogUsage(
       }
       const batch = batchResult.data;
 
-      const entries = batch.entries;
-
-      // 4. Check for duplicate batch (idempotency for client retries).
-      // After per-stream compaction the canonical row keeps only one batch_id
-      // out of the inputs that produced it, so this is best-effort: it catches
-      // the common case of an immediate retry of an in-flight request. Each
-      // destination is checked separately so a retry after a partial write can
-      // still fill the missing table.
-      const destinationRows = await Promise.all(
-        usageDestinations.map(async (destination) => {
-          const destinationEntries = entries.filter(destination.accepts);
-          const rows =
-            destinationEntries.length === 0 ||
-            (await batchExists(destination, owner, batch.batchId))
-              ? []
-              : destination.toRows(owner, batch.batchId, destinationEntries);
-          return { destination, rows };
-        }),
+      const stored = await store(owner, batch);
+      return successResponse(
+        req,
+        batch.entries.length,
+        stored ? undefined : 'Batch already processed (deduplicated)',
       );
-
-      if (destinationRows.every(({ rows }) => rows.length === 0)) {
-        return successResponse(
-          req,
-          entries.length,
-          'Batch already processed (deduplicated)',
-        );
-      }
-
-      // Server-side aggregation: rows with the same (owner, stream_id) update
-      // the canonical row instead of producing per-round duplicates.
-      const upsertErrors = (
-        await Promise.all(
-          destinationRows.map(({ destination, rows }) =>
-            upsertUsageRows(destination, rows),
-          ),
-        )
-      ).filter((message): message is string => message != null);
-
-      if (upsertErrors.length > 0) {
-        console.error('[LOG_USAGE] Upsert error:', upsertErrors.join('; '));
-        return errorResponse(req, 'Failed to store usage logs', 500);
-      }
-
-      // 5. Return success response
-      return successResponse(req, entries.length);
     } catch (error) {
       console.error('[LOG_USAGE] Unexpected error:', error);
       return errorResponse(req, 'Internal server error', 500);

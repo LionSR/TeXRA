@@ -19,7 +19,7 @@ Deno.test('accepts a well-formed install id and ignores any JWT', async () => {
         Authorization: 'Bearer invalid',
       }),
     ),
-    { userId: null, installId: INSTALL_ID },
+    INSTALL_ID,
   );
 });
 

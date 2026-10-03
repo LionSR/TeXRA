@@ -8,6 +8,7 @@
  */
 
 import { serveLogUsage } from '../_shared/logUsage.ts';
+import { storeForUser } from './legacyStore.ts';
 import { resolveJwtOwner } from './usageOwner.ts';
 
-serveLogUsage(resolveJwtOwner);
+serveLogUsage(resolveJwtOwner, storeForUser);
