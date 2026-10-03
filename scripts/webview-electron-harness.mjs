@@ -99,7 +99,7 @@ export function renderSessionHarnessBridge({
   const source = `
     ${nowMs === undefined ? '' : `Date.now = () => ${nowMs};`}
     const harnessSession = ${JSON.stringify(session ?? null)};
-    const harnessLocal = { self: [${JSON.stringify(owner)}], dead: [], unreadable: [] };
+    const harnessLocal = { self: [${JSON.stringify(owner)}], dead: [], unreadable: [], resumeBlocked: [] };
     function harnessFrame(subscribe) {
       const named = new Set(subscribe.aggregates.map((aggregate) => aggregate.id));
       const events = harnessSession.events.flatMap((event) => {
