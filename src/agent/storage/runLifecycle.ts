@@ -149,6 +149,9 @@ interface RegisterRunOptions {
    * `generateSessionDescription` later, as a second row of the same type.
    */
   readonly description?: string;
+  /** Who wrote that description: the model unless a fork copies a title
+   *  its user gave. */
+  readonly descriptionBy?: 'model' | 'user';
   /** Where the run's history came from: a fork's source and cut. */
   readonly provenance?: RunProvenance;
 }
@@ -243,7 +246,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         type: 'run.description',
         aggregateId: target,
         description: options.description,
-        by: 'model',
+        by: options.descriptionBy ?? 'model',
       });
     yield* session.commitRegistration(events);
   }).pipe(

@@ -15,10 +15,11 @@
 import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage/runRecords';
-import { registerRun } from '@agent/storage/runLifecycle';
+import { finalizeRun, registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentCategory,
   aggregateId,
+  RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
@@ -66,12 +67,28 @@ export const forkRun = Effect.fn('forkRun')(function* (
   ) {
     return yield* refused('Only a conversation can be forked.');
   }
-  const latest = yield* session.readRunRecords(from.id);
-  const start = latest.find((row) => row.type === 'run.start');
-  const title = latest.findLast((row) => row.type === 'run.description');
+  const aggregate = aggregateId('run', from.id);
+  const start = (yield* session.readRunRecords(from.id)).find(
+    (row) => row.type === 'run.start',
+  );
   if (start?.type !== 'run.start') {
     return yield* refused(`Task ${from.id} has no recorded start.`);
   }
+  // The title the source shows: its newest user title over any later model
+  // title, as the fold reads it, with its authorship.
+  const titles = (yield* session.readAggregate(aggregate, [
+    'run.description',
+  ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
+  const title =
+    titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
+  // The cut is a position row: a turn boundary of the source, not any seq.
+  const parks = (yield* session.readAggregate(aggregate, [
+    'run.position',
+  ])).filter(
+    (row) =>
+      row.type === 'run.position' &&
+      (row.payload.at === 'waiting' || row.payload.at === 'halted'),
+  );
   const settledAt = (seq: number) =>
     Effect.map(session.runHistory.load(from.id, seq), (state) =>
       state !== null && state.loop !== null && isSettled(state)
@@ -80,17 +97,10 @@ export const forkRun = Effect.fn('forkRun')(function* (
     );
   let found: Effect.Success<ReturnType<typeof settledAt>> = null;
   if (at !== null) {
-    found = yield* settledAt(at);
+    if (parks.some((park) => park.seq === at)) found = yield* settledAt(at);
   } else {
     // The latest turn boundary whose state is settled: the last park of a
     // conversation, or the one before the turn it is in now.
-    const parks = (yield* session.readAggregate(aggregateId('run', from.id), [
-      'run.position',
-    ])).filter(
-      (row) =>
-        row.type === 'run.position' &&
-        (row.payload.at === 'waiting' || row.payload.at === 'halted'),
-    );
     for (const park of parks.toReversed()) {
       found = yield* settledAt(park.seq);
       if (found !== null) break;
@@ -136,20 +146,41 @@ export const forkRun = Effect.fn('forkRun')(function* (
     ),
     positionRow(runId, state, 'waiting'),
   ];
-  yield* registerRun(session, runId, config, {
-    identity: start.identity,
-    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-    provenance: { kind: 'fork', from, at: cut },
-    ...(title?.type === 'run.description' && {
-      description: title.description,
+  // A child's fork is a root: the task its ancestors were given is not its.
+  const { rootUserInstruction: __, ...record } = config;
+  // Registration and history are two commits: a fork that stops between
+  // them is ended (failed) rather than left as a run with no history, and
+  // no interruption lands between them.
+  yield* Effect.uninterruptible(
+    Effect.gen(function* () {
+      yield* registerRun(session, runId, record, {
+        identity: start.identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        provenance: { kind: 'fork', from, at: cut },
+        ...(title !== null && {
+          description: title.description,
+          descriptionBy: title.by,
+        }),
+      });
+      // The registration's claim, ended once the history is written: the
+      // fork is the host's to resume, as any waiting conversation is.
+      yield* Effect.scoped(
+        session.holdRunClaim(runId).pipe(
+          Effect.andThen(session.runHistory.appendBatch(runId, null, rows)),
+          Effect.tapError((error) =>
+            Effect.flatMap(
+              finalizeRun(session, { runId, outcome: RUN_OUTCOME.FAILED }),
+              (ended) =>
+                Effect.logWarning(
+                  ended.ok
+                    ? `Fork ${runId} of ${from.id} was ended: its history did not commit`
+                    : `Fork ${runId} of ${from.id} has no history, and could not be ended`,
+                ).pipe(Effect.annotateLogs({ data: error })),
+            ),
+          ),
+        ),
+      );
     }),
-  });
-  // The registration's claim, ended once the history is written: the fork
-  // is the host's to resume, as any waiting conversation is.
-  yield* Effect.scoped(
-    session
-      .holdRunClaim(runId)
-      .pipe(Effect.andThen(session.runHistory.appendBatch(runId, null, rows))),
   );
   return runId;
 });

@@ -625,10 +625,16 @@ export function createChatSessionController(
               isCancellationRequested: () => session.stopRequested,
             });
             if ('started' in result) {
-              if (edit !== undefined) {
+              // A resume of an owned child continues its parent: the edit
+              // was asked of the child, never of the parent.
+              if (edit !== undefined && session.runId !== id) {
+                appendLocalErrorTranscript(
+                  `Task ${id} is an agent of task ${session.runId}, which was resumed instead; it was not reset.`,
+                );
+              } else if (edit !== undefined) {
                 const refused = yield* request({
                   kind: 'run.reset',
-                  runId: session.runId ?? id,
+                  runId: id,
                   handoff: edit.handoff,
                 });
                 if (refused !== undefined) appendLocalErrorTranscript(refused);
