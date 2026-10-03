@@ -1,5 +1,5 @@
 /**
- * The invoker's two owners of retry, over the ledger.
+ * The invoker's two owners of retry, over the run history.
  *
  * Owner A is automatic and route-scoped: `classifyModelFailure` decides
  * whether an attempt repeats at all and what the session's recovery gate is
@@ -73,7 +73,7 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistory, RunHistoryRefused } from '@shared/session/runHistory';
 import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runStateFold';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
@@ -301,8 +301,8 @@ interface InvokerKit {
   readonly runId: RunId;
   /** The folded state of the freshly opened run. */
   readonly state: RunState;
-  /** `ModelInvoker` and this run's ledger, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker | RunLedger>;
+  /** `ModelInvoker` and this run's history, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker | RunHistory>;
 }
 
 /**
@@ -316,13 +316,13 @@ const openRun = Effect.fn('openRun')(function* (
   logger: AgentTrace = noopTrace,
 ): Effect.fn.Return<
   InvokerKit,
-  RunLedgerRefused | DatabaseReadFailed | DatabaseWriteFailed
+  RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
 > {
   const runId = retryRunId();
   publishTestRunStart(session, runId);
   yield* session.settlePublications().pipe(Effect.orDie);
-  yield* session.ledger.acquire(runId);
-  const state = yield* session.ledger.appendBatch(runId, null, [
+  yield* session.runHistory.acquire(runId);
+  const state = yield* session.runHistory.appendBatch(runId, null, [
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
@@ -350,7 +350,7 @@ const openRun = Effect.fn('openRun')(function* (
         testHttpClientLayer,
       ),
     ),
-    Layer.merge(Layer.succeed(RunLedger, session.ledger)),
+    Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
   );
   return { runId, state, layer };
 });
@@ -668,7 +668,7 @@ describe('ModelInvoker retry', () => {
     await installPlatform();
   });
 
-  it.effect('keeps a delegated call on its own model and run ledger', () =>
+  it.effect('keeps a delegated call on its own model and run history', () =>
     Effect.gen(function* () {
       const session = yield* sessionWithInteractions(undefined);
       const parentModel = stubModel([{ ok: completedTurn('parent') }]);
@@ -685,8 +685,10 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('response');
       expect(childModel.attempts()).toBe(1);
       expect(parentModel.attempts()).toBe(0);
-      expect((yield* session.ledger.load(parent.runId))?.lastTurn).toBeNull();
-      expect((yield* session.ledger.load(child.runId))?.lastTurn).toEqual(
+      expect(
+        (yield* session.runHistory.load(parent.runId))?.lastTurn,
+      ).toBeNull();
+      expect((yield* session.runHistory.load(child.runId))?.lastTurn).toEqual(
         completedTurn('child'),
       );
       yield* closeSessionOf(session);
@@ -832,7 +834,7 @@ describe('ModelInvoker retry', () => {
       // The response retires the failure the gate recorded in its own batch:
       // a crash before the loop's next snapshot resumes a recovered run, not
       // one that re-reads the stale error and finishes FAILED.
-      expect((yield* session.ledger.load(runId))?.lastError).toBeNull();
+      expect((yield* session.runHistory.load(runId))?.lastError).toBeNull();
       // The decision neither parks nor ends the run: the phase the fold
       // reports is still running.
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
@@ -874,7 +876,7 @@ describe('ModelInvoker retry', () => {
 
         expect(outcome.kind).toBe('response');
         // The route the failed attempt billed is declined on this run's own
-        // ledger, so a resume rebinds the same way and a concurrent run keeps
+        // run history, so a resume rebinds the same way and a concurrent run keeps
         // the subscription the user still prefers.
         if (outcome.kind === 'response') {
           expect(outcome.state.declinedRoutes).toStrictEqual([
@@ -1050,16 +1052,20 @@ describe('ModelInvoker retry', () => {
         expect(first.state.continuation).not.toBeNull();
 
         // The next turn's message, sent on top of the stored response.
-        const next = yield* session.ledger.appendBatch(kit.runId, first.state, [
-          appendRow(kit.runId, [
-            { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-          ]),
-        ]);
+        const next = yield* session.runHistory.appendBatch(
+          kit.runId,
+          first.state,
+          [
+            appendRow(kit.runId, [
+              { role: 'user', content: [{ kind: 'text', text: 'again' }] },
+            ]),
+          ],
+        );
         const outcome = yield* invokeOn({ ...kit, state: next });
 
         expect(outcome.kind).toBe('response');
         expect(chained).toEqual([false, true, false]);
-        const rows = yield* session.ledger.load(kit.runId);
+        const rows = yield* session.runHistory.load(kit.runId);
         expect(
           Object.values(rows?.contents ?? {}).filter(
             (value) =>
@@ -1141,8 +1147,9 @@ describe('ModelInvoker retry', () => {
           yield* Deferred.await(observing);
           stopped.set(kit.runId, reason);
           yield* Fiber.interrupt(fiber);
-          const state = yield* session.ledger.load(kit.runId);
-          if (state === null) throw new Error('The run has no ledger state.');
+          const state = yield* session.runHistory.load(kit.runId);
+          if (state === null)
+            throw new Error('The run has no run history state.');
           const resumed = yield* invokeOn({ ...kit, state });
           return { calls, accepted: state.openAttempt?.accepted, resumed };
         });

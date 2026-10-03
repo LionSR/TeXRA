@@ -2,7 +2,7 @@
  * The history query contract: the one table the query store holds and the
  * views over it, as SQL, with the summary the executions tool description
  * renders. The store holds only display rows (`Database.readDisplay`), so
- * nothing a query names can reach a ledger row, a private run record, or an
+ * nothing a query names can reach a run history row, a private run record, or an
  * envelope column: they are never copied in.
  *
  * The views apply the fold's lifecycle rules (`sessionFold.ts`) so a query

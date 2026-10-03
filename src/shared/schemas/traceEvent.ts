@@ -46,10 +46,10 @@ export const TranscriptEventSchemas = {
     attempt: z.int().min(2).optional(),
   }),
   /**
-   * On a run with a ledger the card stores no output: `result` is projected
+   * On a run with a run history the card stores no output: `result` is projected
    * at read time from the `tool.result` it commits with and its `tool.start`
    * input (`rowCodec.ts`), and `files` names what the call edited. A run
-   * without a ledger (an agent-CLI child) stores `result` here.
+   * without a run history (an agent-CLI child) stores `result` here.
    */
   toolEnd: trace('tool.end', {
     logId: z.string(),
@@ -59,11 +59,11 @@ export const TranscriptEventSchemas = {
   }),
   /**
    * One priced model turn of the row's run: never a running total, so a
-   * run's usage is the sum of its rows. A run with a ledger stores none: the
+   * run's usage is the sum of its rows. A run with a run history stores none: the
    * database projects one from each priced `model.message` response and
    * `context.edit` summary (`Database`'s display reads). A child's spend
    * is on the child's own run, never on its parent's. An
-   * agent-CLI child, which has no ledger, stores one per turn. `elapsedTime`
+   * agent-CLI child, which has no run history, stores one per turn. `elapsedTime`
    * is the turn's response time in seconds; `percentageCached` is a
    * statistics row's, never a turn's.
    */

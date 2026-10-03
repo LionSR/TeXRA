@@ -65,10 +65,10 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema, toJsonValue } from '@shared/schemas';
-import { findStorageRefusal } from '@shared/session/runLedger';
+import { findStorageRefusal } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
-  type RunLedgerDraft,
+  type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId, getBasename } from '@utils/core';
@@ -150,7 +150,7 @@ interface DispatchOutcome {
 }
 
 /**
- * A sanitized result as the ledger stores it: `diagnostics` narrowed to JSON.
+ * A sanitized result as the run history stores it: `diagnostics` narrowed to JSON.
  * The sanitizer already reduced it to the validation-error shape or nothing,
  * so a value that is not JSON here is a defect in that projection, and the
  * row refuses it rather than storing a value `JSON.stringify` would throw on.
@@ -239,7 +239,7 @@ const UPLOAD_DEADLINE = '5 seconds';
 
 /**
  * The model-visible content of one settlement: text, then inline media. The
- * ledger keeps the bytes; whether a later request sends them or a file id is
+ * run history keeps the bytes; whether a later request sends them or a file id is
  * the bound model's in-memory upload cache's decision, made when it lowers.
  *
  * An attachment the binding cannot carry inline (a PDF on a route without
@@ -347,7 +347,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     attempt: number,
     settlement: Settlement,
-    cards: readonly RunLedgerDraft[],
+    cards: readonly RunHistoryDraft[],
     /** An executed call carries the workspace with its result. A synthetic
      *  settlement ran no tool, and a duplicate reapplies no effect — the
      *  payload schema refuses one that claims otherwise. */
@@ -382,7 +382,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     attempt: number,
-  ): RunLedgerDraft =>
+  ): RunHistoryDraft =>
     displayRow(runId, {
       type: 'tool.start',
       logId: fact.logId,
@@ -402,7 +402,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     status: ToolCallStatus,
     attempt: number,
     files: readonly FileListEntry[] = [],
-  ): RunLedgerDraft[] => [
+  ): RunHistoryDraft[] => [
     ...(step.registry.get(fact.toolName)?.slow === true
       ? []
       : [cardStart(fact, input, attempt)]),
@@ -419,7 +419,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: CallFacts,
     input: unknown,
     attempt: number,
-  ): RunLedgerDraft[] =>
+  ): RunHistoryDraft[] =>
     step.registry.get(fact.toolName)?.slow === true
       ? [cardStart(fact, input, attempt)]
       : [];
@@ -429,7 +429,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     origin: ToolIntentOrigin,
     callId: string,
     attempt: number,
-  ): RunLedgerDraft => ({
+  ): RunHistoryDraft => ({
     type: 'tool.intent',
     aggregateId,
     payload: { origin, callIds: [callId], attempt },
@@ -1102,7 +1102,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               stageId,
               phase: op.phase,
             },
-          }) satisfies RunLedgerDraft;
+          }) satisfies RunHistoryDraft;
 
         /** Settles `op`: from its rows when they settled it; else by `answer`,
          *  one of the script's host functions, recorded with no card; else by

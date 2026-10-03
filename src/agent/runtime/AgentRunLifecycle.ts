@@ -213,7 +213,7 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
     // Write the terminal row BEFORE untrack so the registry's terminal listener
     // event never precedes it. The row carries the classified error `kind`
     // (when any) and the flow's output; `finalizeRun` adds the usage totals
-    // from the run's ledger, their one authority.
+    // from the run's history, their one authority.
     const event: ResultEvent = {
       type: 'run.end',
       outcome,

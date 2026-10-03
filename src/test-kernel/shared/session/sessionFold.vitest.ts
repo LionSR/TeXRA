@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { Result } from 'effect';
 
 import { ModelOriginSchema } from '@texra-ai/llm';
-import { ledgerRows, storedDraft } from '@agent/runtime/storedTurn';
+import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -29,11 +29,11 @@ import {
   type RunId,
 } from '@shared/schemas';
 
-import type { RunLedgerRow } from '@shared/session/ledgerTurns';
+import type { RunHistoryRow } from '@shared/session/historyTurns';
 import {
   foldRunState,
   unboundRequests,
-  type RunLedgerDraft,
+  type RunHistoryDraft,
 } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -1256,8 +1256,8 @@ describe('sessionFold', () => {
 // carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
-const LEDGER_RUN = RunIdSchema.parse('ab12cd');
-const LEDGER_AGGREGATE = qualifyAggregateId('run', LEDGER_RUN);
+const RUN_HISTORY_RUN = RunIdSchema.parse('ab12cd');
+const RUN_HISTORY_AGGREGATE = qualifyAggregateId('run', RUN_HISTORY_RUN);
 const ORIGIN = {
   protocol: 'openai-responses',
   requestedModel: 'gpt-test',
@@ -1398,17 +1398,17 @@ const TOOL_GROUP = {
 };
 
 /** One committed row, stored and read back through the production boundary. */
-const ledgerRow = (
+const runHistoryRow = (
   commit: number,
   draft: Record<string, unknown>,
-): RunLedgerRow =>
+): RunHistoryRow =>
   Result.getOrThrow(
-    ledgerRows([
+    runHistoryRows([
       SessionEventSchema.parse({
         ...storedDraft({
-          aggregateId: LEDGER_AGGREGATE,
+          aggregateId: RUN_HISTORY_AGGREGATE,
           ...draft,
-        } as unknown as RunLedgerDraft),
+        } as unknown as RunHistoryDraft),
         seq: commit,
         commit,
         origin: null,
@@ -1420,7 +1420,7 @@ const ledgerRow = (
 /** The same boundary, asked whether it accepts the draft at all. */
 const rowAccepted = (draft: Record<string, unknown>): boolean =>
   SessionEventSchema.safeParse({
-    aggregateId: LEDGER_AGGREGATE,
+    aggregateId: RUN_HISTORY_AGGREGATE,
     ...draft,
     seq: 1,
     commit: 1,
@@ -1429,7 +1429,7 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
   }).success;
 
 /** The whole life of one tool-use turn, commit by commit. */
-const TURN_ROWS: readonly RunLedgerRow[] = [
+const TURN_ROWS: readonly RunHistoryRow[] = [
   message({
     kind: 'append',
     messages: [USER('list the files')],
@@ -1477,12 +1477,12 @@ const TURN_ROWS: readonly RunLedgerRow[] = [
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
   },
-].map((draft, index) => ledgerRow(index + 1, draft));
+].map((draft, index) => runHistoryRow(index + 1, draft));
 
 const through = (count: number, ...extra: Record<string, unknown>[]) =>
   foldRunState(null, [
     ...TURN_ROWS.slice(0, count),
-    ...extra.map((draft, index) => ledgerRow(count + index + 1, draft)),
+    ...extra.map((draft, index) => runHistoryRow(count + index + 1, draft)),
   ]);
 
 const stateOf = <A, E>(result: Result.Result<A, E>): A => {
@@ -1539,7 +1539,7 @@ describe('foldRunState', () => {
                   requestId: 'req-1',
                   command: 'ls',
                   allowBypass: true,
-                  runId: LEDGER_RUN,
+                  runId: RUN_HISTORY_RUN,
                 },
               },
             },
@@ -1573,7 +1573,7 @@ describe('foldRunState', () => {
                 question: 'which branch?',
                 threadId: 'ei_0123456789ab',
                 allowBypass: false,
-                runId: LEDGER_RUN,
+                runId: RUN_HISTORY_RUN,
                 transcript: [],
               },
             }),
@@ -1583,7 +1583,7 @@ describe('foldRunState', () => {
         expect(inquiry === null ? [] : unboundRequests(inquiry)).toEqual([]);
         // A request that parks a tool is not that case: nothing in a later
         // process could answer it, so a resume retires it first
-        // (`RunLedger.acquire`).
+        // (`RunHistory.acquire`).
         const parking = stateOf(
           through(
             6,
@@ -1593,7 +1593,7 @@ describe('foldRunState', () => {
                 requestId: 'req-2',
                 command: 'ls',
                 allowBypass: true,
-                runId: LEDGER_RUN,
+                runId: RUN_HISTORY_RUN,
               },
             }),
           ),
@@ -1670,7 +1670,7 @@ describe('foldRunState', () => {
         const restored = stateOf(
           foldRunState(null, [
             ...TURN_ROWS.slice(0, 2),
-            ledgerRow(
+            runHistoryRow(
               3,
               message({
                 kind: 'attempt',
@@ -1681,7 +1681,7 @@ describe('foldRunState', () => {
               }),
             ),
             ...TURN_ROWS.slice(3, 4),
-            ledgerRow(
+            runHistoryRow(
               5,
               message({
                 kind: 'response',
@@ -1704,7 +1704,7 @@ describe('foldRunState', () => {
         // it: continuing from an anchor over a prefix that is gone is the
         // same window in the other direction.
         expect(
-          stateOf(foldRunState(restored, [ledgerRow(12, compaction)]))
+          stateOf(foldRunState(restored, [runHistoryRow(12, compaction)]))
             ?.continuation,
         ).toBeNull();
       },
@@ -1819,12 +1819,12 @@ describe('foldRunState', () => {
       },
     ],
     [
-      'a run recorded before the run ledger: null, distinct from corrupt',
+      'a run recorded before the run history: null, distinct from corrupt',
       () => {
         expect(
           stateOf(
             foldRunState(null, [
-              ledgerRow(1, {
+              runHistoryRow(1, {
                 type: 'run.start',
                 identity: { kind: 'agent', agent: 'chat' },
                 userFollowUpSupport: 'unsupported',
@@ -1832,7 +1832,7 @@ describe('foldRunState', () => {
                 parent: null,
                 provenance: null,
               }),
-              ledgerRow(2, {
+              runHistoryRow(2, {
                 type: 'run.activate',
                 category: AgentCategory.ToolUse,
               }),
@@ -1858,9 +1858,9 @@ describe('foldRunState', () => {
       deadlineAtMs: 1_000,
     });
     const draft = storedDraft({
-      aggregateId: LEDGER_AGGREGATE,
+      aggregateId: RUN_HISTORY_AGGREGATE,
       ...accepted,
-    } as unknown as RunLedgerDraft);
+    } as unknown as RunHistoryDraft);
     // The cursor is provider evidence, wrapped exactly once.
     expect(draft.type === 'model.message' && draft.payload).toMatchObject({
       operation: {
@@ -1870,7 +1870,9 @@ describe('foldRunState', () => {
         },
       },
     });
-    expect(ledgerRow(1, accepted)).toMatchObject({ payload: { operation } });
+    expect(runHistoryRow(1, accepted)).toMatchObject({
+      payload: { operation },
+    });
   });
 
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
@@ -1924,8 +1926,8 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
-  it('keeps the private ledger types out of the listing and off the transport, and lists run.position', () => {
-    const ledgerTypes = [
+  it('keeps the private run history types out of the listing and off the transport, and lists run.position', () => {
+    const runHistoryTypes = [
       'model.message',
       'context.edit',
       'tool.intent',
@@ -1934,8 +1936,9 @@ describe('foldRunState', () => {
       'model.retry',
       'run.snapshot',
     ] as const;
-    for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();
-    // The one ledger row the listing keys: a cold hydrate that dropped it
+    for (const type of runHistoryTypes)
+      expect(listingTypeOf({ type })).toBeNull();
+    // The one run history row the listing keys: a cold hydrate that dropped it
     // would paint every parked run as ready (ruling A9-5).
     expect(listingTypeOf({ type: 'run.position' })).toBe('run.position');
     for (const row of TURN_ROWS) {

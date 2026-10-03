@@ -7,7 +7,7 @@
  */
 import type { InvocationRef } from '@shared/schemas';
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
-import type { ModelMessagePayload } from './ledgerTurns';
+import type { ModelMessagePayload } from './historyTurns';
 
 export type OpenAttempt = {
   readonly invocation: InvocationRef;

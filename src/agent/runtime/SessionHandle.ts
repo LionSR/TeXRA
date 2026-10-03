@@ -78,7 +78,7 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
-import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import type { RunHistoryDraft } from '@shared/session/runStateFold';
 import { endsRun, foldRunRows } from '@shared/session/runRows';
 import type {
   Append,
@@ -107,7 +107,7 @@ import type { ModelRetryGate } from './ModelRetryGate';
 /** The rows that open a request: its `request.opened`, and the
  *  `request.decided` the policy lands beside it. */
 type RequestRow = Extract<
-  RunLedgerDraft,
+  RunHistoryDraft,
   { type: 'request.opened' | 'request.decided' }
 >;
 
@@ -248,9 +248,9 @@ export class SessionHandle {
    * reached through the session rather than from context.
    */
   readonly requests: SessionGraph['requests'];
-  /** The run ledger over this session's event plane, provided to each run's
+  /** The run history over this session's event plane, provided to each run's
    *  program at the `executeAgent` boundary. */
-  readonly ledger: SessionGraph['ledger'];
+  readonly runHistory: SessionGraph['runHistory'];
   /**
    * The tail as the view has folded it (PRD 7.2): what a reader that reads
    * {@link view} beside each row reads, from `now()`, so no row reaches it
@@ -322,7 +322,7 @@ export class SessionHandle {
     this.graph = graph;
     this.approvals = graph.requests.approvals;
     this.events = graph.events;
-    this.ledger = graph.ledger;
+    this.runHistory = graph.runHistory;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
     this.storeMovedAside = graph.storeMovedAside;
@@ -620,7 +620,7 @@ export class SessionHandle {
    */
   streamClosureFacts(
     runId: RunId,
-  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
+  ): Extract<RunHistoryDraft, { type: 'stream.end' }>[] {
     return this.openWork(runId).flatMap(({ kind, id }) =>
       kind === 'stream'
         ? [
@@ -680,7 +680,7 @@ export class SessionHandle {
    * Ask a person: open the request on its run and wait for the decision. The
    * one door for a request a tool raises (a command, an edit, a plan, a
    * delegation, a question); the loop's own outcome question commits its row
-   * with its recovery binding through the ledger and waits with
+   * with its recovery binding through the run history and waits with
    * {@link decisionFor} directly. An interruption anywhere in the call (the
    * run stopped, the session unwound) closes the request as cancelled, so a
    * pending set is never left behind in the fold; a cancel for a request
@@ -696,7 +696,7 @@ export class SessionHandle {
     options: {
       /**
        * How the request's rows commit, answering the commit its decision is
-       * read from: a tool call's request commits through its run's ledger,
+       * read from: a tool call's request commits through its run's history,
        * beside the `tool.binding` that lets it outlive this process, and a
        * request a resumed call re-enters commits only what the policy
        * decides. Omitted, this session commits them.

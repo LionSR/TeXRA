@@ -8,7 +8,7 @@ import { settleRun, type RunCell } from '@agent/runtime/loop/runProgram';
 import { Runs } from '@agent/runtime/runRegistry';
 import { RUN_OUTCOME, RUN_PHASE, type RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import { RunHistoryRefused } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateRunId } from '@utils/core';
 
@@ -30,7 +30,7 @@ describe('settleRun', () => {
         const logger = { warn } as never;
         const lease = { release } as never;
         const runs = { hasActiveChildren: () => false } as never;
-        const makeCell = (failure: RunLedgerRefused | DatabaseWriteFailed) => {
+        const makeCell = (failure: RunHistoryRefused | DatabaseWriteFailed) => {
           const append = vi.fn(() => Effect.fail(failure));
           const cell = {
             runId,
@@ -43,7 +43,7 @@ describe('settleRun', () => {
           return { cell, append };
         };
 
-        const refusal = new RunLedgerRefused({
+        const refusal = new RunHistoryRefused({
           reason: 'not-owner',
           runId,
           detail: 'claim moved',

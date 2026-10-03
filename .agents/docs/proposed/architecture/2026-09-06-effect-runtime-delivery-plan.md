@@ -52,7 +52,7 @@ are no longer delivery goals.
 | [`runAgent.ts`](../../../../src/agent/runtime/runAgent.ts#L93), [`executeAgent.ts`](../../../../src/agent/runtime/executeAgent.ts#L404) and [`AgentRunLifecycle.ts`](../../../../src/agent/runtime/AgentRunLifecycle.ts#L474) still use Promise orchestration                  | Convert the complete launch/resume/settlement path, not just its innermost model invocation.                            |
 | [`node/index.ts`](../../../../src/agent/node/index.ts#L27) implements `prep/exec/post`, successors, cloning and service propagation                                                                                                                                            | Delete this generic interpreter when both flow families move; keep their substantive behavior as functions.             |
 | [`persistedFlow.ts`](../../../../src/agent/node/persistedFlow.ts#L349) persists shared state and a graph-local cursor after a node; [`ExecutionKVStore.ts`](../../../../src/agent/storage/ExecutionKVStore.ts#L187) fences writes                                              | Preserve initial persistence, resume coordinates and exclusive write ownership when changing the representation.        |
-| [`SessionEvents.ts`](../../../../src/agent/runtime/SessionEvents.ts#L11) explicitly describes its current log as in memory                                                                                                                                                     | Its cursor/tail contract is useful existing work, but it is not yet the proposed durable execution ledger.              |
+| [`SessionEvents.ts`](../../../../src/agent/runtime/SessionEvents.ts#L11) explicitly describes its current log as in memory                                                                                                                                                     | Its cursor/tail contract is useful existing work, but it is not yet the proposed durable execution run history.         |
 | [`ToolUseDispatchNode.ts`](../../../../src/agent/implementations/flows/tooluse/toolUseRound/ToolUseDispatchNode.ts#L147) preserves barriers, safe partitions, duplicate fan-out and result order                                                                               | A mechanical `Effect.forEach` replacement would be insufficient. These are product contracts.                           |
 | [`FollowUpQueue.ts`](../../../../src/agent/followUp/FollowUpQueue.ts#L58), [`childRunLoop.ts`](../../../../src/agent/runtime/childRunLoop.ts) and [`runWorkflowScript.ts`](../../../../src/agent/workflowScript/runWorkflowScript.ts) own further coordination and persistence | Replacing PocketFlow alone does not finish the runtime. Include follow-up admission and the common child-call protocol. |
 
@@ -176,7 +176,7 @@ there is no graph interpreter, node inheritance, successor map or `prep/exec/pos
 Resume switches on the committed phase to choose the next operation. A code rearrangement
 must not change what that phase means.
 
-The proposed `RunLedger` owns durable append/load semantics. One pure execution-state fold
+The proposed `RunHistory` owns durable append/load semantics. One pure execution-state fold
 serves live committed state and recovery; snapshots accelerate that fold, rather than
 creating another mutable source of truth. The presentation fold owns the different task
 of deriving redacted UI state. It cannot reconstruct provider conversation state from
@@ -208,7 +208,7 @@ Keep the canonical execution conversation and exact opaque provider values separ
 display/export redaction. Persist encoding identity and bind continuation to its covered
 history, never to provider name alone. Unknown formats fail explicitly. The joint contract
 owns prepared invocation, remote acceptance and immutable tool observations; do not
-serialize SDK objects, closures, fibers or services. Private ledger rows stay outside the
+serialize SDK objects, closures, fibers or services. Private run history rows stay outside the
 public trace union. Completed histories remain until explicit deletion under the retention
 decision; old-format resumability is a separate 0.41 breaking change.
 
@@ -230,7 +230,7 @@ for attachments, snapshots and retained history in storage-growth measurements.
 | User authorizes another attempt    | Persist the decision and new attempt identity before dispatch; do not turn it into automatic retry permission forever |
 
 No local transaction or fiber can make an arbitrary shell command or remote mutation
-exactly-once. The ledger establishes what TeXRA committed, not everything the external
+exactly-once. The run history establishes what TeXRA committed, not everything the external
 world did. The local commit and external action cannot generally be one transaction.
 
 `ITool.parallelSafe` currently couples side-effect-free and approval-free execution.
@@ -378,8 +378,8 @@ other data handling; dropping the flow importer does not authorize deleting thos
 The unreleased desktop uses the current format directly.
 
 **Rollback:** the current PRD explicitly withdraws resumability across rollback for runs
-that progressed under the ledger. It orders the old flow record's `.superseded` rename
-before the first ledger append, so a reverted binary cannot resume a stale cursor and
+that progressed under the run history. It orders the old flow record's `.superseded` rename
+before the first run history append, so a reverted binary cannot resume a stale cursor and
 repeat external work. Preserve this ordering and test both crash windows. New rows are
 not readable by the old runtime; describe exceptional export/recovery and any data loss
 honestly. There is no lossless rollback promise or old-runtime compatibility backend.

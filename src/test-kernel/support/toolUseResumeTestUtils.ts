@@ -5,7 +5,7 @@ import type { RunId } from '@shared/schemas';
 /**
  * The identity a host resumes a tool-use run under: the config and the run
  * id. The run's state and route are not part of it — the loop folds them
- * from the ledger.
+ * from the run history.
  */
 export function createToolUseResumeData(
   overrides: Partial<ResumeData> = {},

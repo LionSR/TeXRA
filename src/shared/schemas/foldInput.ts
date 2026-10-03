@@ -87,7 +87,7 @@ export type ExistenceReconciliation = z.infer<
  * An aggregate whose rows this build cannot read whole: a row of a newer
  * version or an unknown kind (a later build wrote it), or one that fails
  * its own version's schema. The listing delivers what decodes and this
- * verdict beside it; the fold marks the run blocked, and every ledger read
+ * verdict beside it; the fold marks the run blocked, and every run history read
  * and claim of it is refused.
  */
 export const BlockedAggregateSchema = z.object({

@@ -1,7 +1,7 @@
 /**
  * Session resume data retrieval: the identity a host needs to launch a
  * resumed run, read from the durable run facts. Every run resumes from the
- * same fact: the run aggregate's latest `run.snapshot`, one indexed read. The run's state is `RunLedger.load`, folded by the loop that
+ * same fact: the run aggregate's latest `run.snapshot`, one indexed read. The run's state is `RunHistory.load`, folded by the loop that
  * continues it; nothing here parses a checkpoint.
  */
 

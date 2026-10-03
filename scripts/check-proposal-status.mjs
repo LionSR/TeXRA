@@ -4,7 +4,7 @@
 // `.agents/docs/` is organized by lifecycle, and the lifecycle is typed, not
 // derived: a note sits in `proposed/` until someone moves it. Nothing enforced
 // that, so on 2026-09-20 all 29 notes under `proposed/` said `proposed` while
-// at least seven of them had shipped — the run ledger and the two Effect run
+// at least seven of them had shipped — the run history and the two Effect run
 // programs are current architecture and CLAUDE.md describes them as such. An
 // agent reading the tree cannot tell a live direction from an executed one,
 // and a shipped design read as a proposal is a confidently wrong answer.

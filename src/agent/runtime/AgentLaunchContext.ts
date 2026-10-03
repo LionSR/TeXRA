@@ -376,7 +376,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // A resumed run's latest snapshot (one indexed read): whether its rows
     // hold its opening, and that opening's memory misses.
     const snapshot = input.resumed
-      ? yield* session.ledger.latestSnapshot(runId)
+      ? yield* session.runHistory.latestSnapshot(runId)
       : null;
     const recorded = snapshot?.payload.state;
     // The run's model is bound from the stores the launch already has: the

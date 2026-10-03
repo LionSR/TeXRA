@@ -10,7 +10,7 @@ named owner.
 
 ## Method
 
-Eleven read-only mappers each covered one seam: session ledger, model
+Eleven read-only mappers each covered one seam: session run history, model
 routing, tools and delegation, settings and config, platform and hosts,
 persistence, host UI state, wire schemas, agents and resources, signals and
 logging, and latex/controllers/workspace. Every mapper held the September
@@ -152,7 +152,7 @@ These parts of the twelve candidates were refuted by at least one skeptic at
   `ToolRowModel.showOutput` renamed is churn (R5). (The
   `UsageMonitor.lastSeenTotals` refutation that stood here is reopened by
   section 4, finding 1, and reversed 2026-09-25: `finalizeRun` reads the
-  ledger's `RunState.usage` on every terminal path and the cache is
+  run history's `RunState.usage` on every terminal path and the cache is
   deleted.)
 - **Pass-throughs.** `requireDelegationParent` was refuted in wave 8, because
   `requireToolRun` returns a `ToolRun`, not a `DelegationParent`.
@@ -206,7 +206,7 @@ finalizer and holds either way.
    `RunState.usage` holds the totals. Parents bill from it
    (`nativeSubagentStrategy.ts:124`, and `workflowScriptAgentRunner.ts:872`,
    which reads a missing value as `0`). The durable source is reachable on
-   that arm: `RunLedger.load` (`RunLedger.ts:336`) folds the run's rows.
+   that arm: `RunHistory.load` (`RunHistory.ts:336`) folds the run's rows.
    Severity: bug (under-billing after resume).
 
 2. **Approval bypass after a resume.** Enforcement lives in the session's
@@ -244,7 +244,7 @@ finalizer and holds either way.
    only the code is a second copy. Severity: duplication.
 
 6. **The model has four holders.** `RunState.modelId` (snapshot), `run.record`
-   (overwritten by a detached `session.publish` after the ledger batch,
+   (overwritten by a detached `session.publish` after the run history batch,
    `toolUse.ts:298`, so the two writes are not atomic), `run.config`, and
    `ctx.config.model`. Since #13143 `/model` reaches a parked run, widening
    the window. `packages/cli/src/runtime/history.ts:570` says the listing

@@ -1,5 +1,5 @@
 /**
- * The payload of a run ledger's `hook.outcome` arm (`sessionEvent.ts`): what
+ * The payload of a run history's `hook.outcome` arm (`sessionEvent.ts`): what
  * one invocation of an installed plugin's Claude Code hook did, recorded
  * through the run's one writer so a resume reuses it instead of running the
  * hook again (`2026-09-28-code-plugins-hooks-v1.md`).

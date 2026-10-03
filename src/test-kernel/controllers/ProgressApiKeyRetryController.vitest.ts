@@ -141,7 +141,7 @@ describe('ProgressApiKeyRetryController', () => {
       // The subscription quota failed, not the key — a stored key is already
       // usable, so "Use your own API key" must not jump to the key-input
       // prompt. The route the run turns away from is the run's own decision,
-      // recorded on its ledger, not a write to the user's settings.
+      // recorded on its run history, not a write to the user's settings.
       expect(harness.prompts).toStrictEqual([]);
       expect(harness.retries).toStrictEqual(['stream-d']);
     }),

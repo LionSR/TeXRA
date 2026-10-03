@@ -1,5 +1,5 @@
 /**
- * The run's tools, as the package sees them and as the ledger records them:
+ * The run's tools, as the package sees them and as the run history records them:
  * the uniform tool definitions of a `TurnRequest`, and the per-call dispatch
  * facts stamped on a `response` row so the fold and the resume rule need no
  * tool registry. Parallel-safe calls share a partition; every barrier is its

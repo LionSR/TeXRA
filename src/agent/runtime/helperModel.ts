@@ -5,7 +5,7 @@
  * under.
  *
  * A helper call is gated, priced and reported to the usage log like every
- * model call; it writes no ledger row, because it belongs to no run's history.
+ * model call; it writes no run history row, because it belongs to no run's history.
  */
 import { Data, Effect, Exit, Ref, Scope } from 'effect';
 

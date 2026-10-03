@@ -46,7 +46,7 @@ and package builds cannot establish or exclude.
 | [July 9 SDK north star][north-star]                                                  | First-party clients become SDK consumers; no extra wrapper, unenforced package or speculative definition framework       | Readiness must include full lifecycle and interaction behavior, beyond the previously measured bootstrap and import reductions                                                                                                                  |
 | [One-fold PRD][one-fold], G1–G7                                                      | Same pure fold, input-only transport, local Surface, replacement deletes, Effect inside and Promises outside             | Subscription owns a reader; the application owns final runtime disposal. Replay readiness is authoritative membership, not an empty view. Shared recording presence belongs to its process owner; its result belongs to its originating Surface |
 | [Effect migration PRD][effect-prd], R1/R5/R6                                         | One managed runtime per process, scoped execution, external AbortSignal boundary, LifecycleHost shutdown order/deadlines | Expose the existing shutdown's completion and incomplete outcome to embedders; do not create a second shutdown coordinator                                                                                                                      |
-| [September 4 runtime proposal][runtime-proposal] and [substrate decision][substrate] | Their coordinated ledger/loop and storage cutover, C1–C10, existing retention/redaction decisions                        | SDK API does not expose checkpoint files, SQL tables, raw stores or temporary bridges. This proposal does not independently ratify or implement that cutover                                                                                    |
+| [September 4 runtime proposal][runtime-proposal] and [substrate decision][substrate] | Their coordinated run history/loop and storage cutover, C1–C10, existing retention/redaction decisions                   | SDK API does not expose checkpoint files, SQL tables, raw stores or temporary bridges. This proposal does not independently ratify or implement that cutover                                                                                    |
 | [September 4 readiness assessment][readiness]                                        | Historical source counts remain historical evidence                                                                      | Its “no structural refactor is warranted” verdict is insufficient for the new ownership failures and public-consumer requirements; use the acceptance scenarios in section 11                                                                   |
 
 The public names retain TeXRA's meanings. A **session is a paper/workspace**, not a chat thread.
@@ -259,7 +259,7 @@ wire request, extend the existing request schema and handler; do not create an S
 bus. Native reveal/open behavior consumes the resulting identity and does not launch again.
 
 Resume loads the existing retained execution state and acquires its execution lease.
-With the proposed ledger cutover, resumability follows the runtime proposal's
+With the proposed run history cutover, resumability follows the runtime proposal's
 outcome-independent snapshot-plus-no-live-owner rule, including completed continuable
 runs. Until that cutover, use the current canonical resume owner; do not simulate it in
 the package by reconstructing conversation from display rows. Workflow relaunch creates
@@ -343,7 +343,7 @@ TeXRA's text-ordering contract.
 Nothing derived is persisted beyond the substrate's named exception. The runtime's
 `foldRunState` and the display `fold` have different durable obligations: one reconstructs
 execution inputs/control state, the other produces the canonical view. They read the same
-agreed ledger and must not implement competing versions of the same business fact.
+agreed run history and must not implement competing versions of the same business fact.
 A UI renderer never recreates either from private event cases.
 
 Draft admission retains and temporarily locks the complete submitted draft until its
@@ -363,7 +363,7 @@ changes never select a new destination, and no component consumes a temporary re
 | Models and context                     | Existing model invocation/handler and run model cell                          | Model choice and provider capabilities; no public second context pipeline |
 | Tools                                  | Existing resolution and dispatch inside the execution scope                   | Declared tools and explicit tool selection constraints                    |
 | Delegation                             | Existing child dispatch and execution registry, with parent scope/lease rules | Child intent; no SDK agent-team registry                                  |
-| Persistence / resume                   | Session storage authority and coordinated ledger cutover                      | Session roots and retained identity; no transcript mirror                 |
+| Persistence / resume                   | Session storage authority and coordinated run history cutover                 | Session roots and retained identity; no transcript mirror                 |
 | Status, usage, transcript and topology | Canonical published facts and shared fold                                     | Presentation preferences; no consumer status synthesis                    |
 | Drafts and selection                   | Originating Surface                                                           | User edits; no process-global current selection                           |
 | Files and external resources           | Explicit roots and owner at operation admission                               | Native filesystem/editor/process capabilities                             |
@@ -499,7 +499,7 @@ Coordinate with the active lanes; a new SDK workstream must not overwrite their 
 3. **Move the first complete host workflow through the public contract.** Start with the CLI,
    then extension and desktop. Publish only exports exercised by these consumers and an external
    embedding example. Delete migrated deep imports and host ceremony in the same change.
-4. **Coordinate the ledger/runtime cutover separately but atomically for its data.** The two
+4. **Coordinate the run history/runtime cutover separately but atomically for its data.** The two
    loop families, workflow journal and importer adopt the agreed durable shape together.
    Do not expose an intermediate checkpoint backend or introduce a second SDK persistence mode.
    Session ownership repairs need not wait for SQL; durable storage changes follow its owner.

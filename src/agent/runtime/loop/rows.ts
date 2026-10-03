@@ -1,5 +1,5 @@
 /**
- * The loops' row constructors: every ledger draft a loop appends, built from
+ * The loops' row constructors: every run history draft a loop appends, built from
  * the folded `RunState` and nothing else. A `run.position` is the one record
  * of where the loop stands; a `run.snapshot` carries the loop state and what
  * the loop runs on (model, failure, declined routes); every fact a row already
@@ -20,7 +20,7 @@ import {
   type SnapshotRuntime,
   type ToolBindingPayload,
 } from '@shared/schemas';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
 
@@ -49,7 +49,7 @@ export function positionRow(
   runId: RunId,
   state: PositionCoordinates,
   at: Exclude<PositionAt, 'halted'>,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: rowAggregate(runId),
@@ -65,7 +65,7 @@ export function haltedPositionRow(
   runId: RunId,
   state: PositionCoordinates,
   outcome: RunOutcome,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: rowAggregate(runId),
@@ -82,7 +82,7 @@ export function appendRow(
   runId: RunId,
   messages: readonly Message[],
   sourceResponse: string | null = null,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return {
     type: 'model.message',
     aggregateId: rowAggregate(runId),
@@ -113,7 +113,7 @@ export function snapshotRow(
   runId: RunId,
   state: RunState,
   patch: SnapshotPatch,
-): readonly RunLedgerDraft[] {
+): readonly RunHistoryDraft[] {
   const loop = patch.state ?? state.loop;
   if (loop === null) {
     throw new Error('A run.snapshot presupposes an opened run.');
@@ -155,7 +155,7 @@ export function snapshotRow(
 export function bindingRow(
   runId: RunId,
   binding: ToolBindingPayload,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return {
     type: 'tool.binding',
     aggregateId: rowAggregate(runId),
@@ -167,7 +167,7 @@ export function bindingRow(
 export function retryRow(
   runId: RunId,
   permit: PendingRetry | null,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return {
     type: 'model.retry',
     aggregateId: rowAggregate(runId),
@@ -182,20 +182,20 @@ export function retryRows(
   state: RunState,
   permit: PendingRetry | null,
   runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
-): readonly RunLedgerDraft[] {
+): readonly RunHistoryDraft[] {
   return [retryRow(runId, permit), ...snapshotRow(runId, state, { runtime })];
 }
 
 /** Each arm of a draft union keeps its own required fields. */
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 
-/** A display row the loop commits atomically with a ledger row: the card a
+/** A display row the loop commits atomically with a run history row: the card a
  *  tool call opens, closes, or both, in the batch that settles it. */
 export function displayRow(
   runId: RunId,
   draft: Unqualified<
     Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
   >,
-): RunLedgerDraft {
+): RunHistoryDraft {
   return { ...draft, aggregateId: rowAggregate(runId) };
 }

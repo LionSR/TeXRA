@@ -89,7 +89,7 @@ A script normally runs as one of the lead's tool calls, and the lead waits for i
 
 ## Resume
 
-Every call a script makes is recorded in the run's ledger as it settles. If the app restarts or the run is interrupted, the script runs again from the top against those records: calls that finished are handed back from the ledger and are not run or billed again, and only unfinished calls run.
+Every call a script makes is recorded in the run's history as it settles. If the app restarts or the run is interrupted, the script runs again from the top against those records: calls that finished are handed back from the run history and are not run or billed again, and only unfinished calls run.
 
 A completed `agent` call is also reused by a later identical call in the same run, matched on its prompt, options, and the contents of its files. So when a script fails partway through, on a bug or a timeout, the lead fixes the code and sends it again: everything that already finished comes back as **Reused** at no cost. Editing one of a call's files makes that call run again.
 

@@ -11,7 +11,7 @@ import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
 import { RUN_OUTCOME, type JsonValue } from '@shared/schemas';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runStateFold';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -28,7 +28,7 @@ import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { sessionWithInteractions } from '../progressTestUtils';
 
 // ---------------------------------------------------------------------------
-// The loop harness: the run's own services over a real session ledger, with
+// The loop harness: the run's own services over a real session run history, with
 // the model faked at the `ModelInvoker` seam. The rows the fake writes are the
 // production ones, so the turn's own decisions — the blank-turn retry, the
 // terminal-tool turn, the stage it opens and closes — run against the durable
@@ -51,11 +51,13 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
         Layer.provideMerge(
           agentRunTestLayer({ stopAfterCycle: true, ...init }),
         ),
-        Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
       ),
     ),
   );
-  const state = yield* init.session.ledger.load(init.runId).pipe(Effect.orDie);
+  const state = yield* init.session.runHistory
+    .load(init.runId)
+    .pipe(Effect.orDie);
   return { result, requests, state };
 });
 

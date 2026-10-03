@@ -26,7 +26,7 @@ is now a constraint, and the mechanism changed to fit it.
 3. **`entry.fiber` and `entry.activation` don't prove the claim is held.**
    `RunRegistry.admit` registers the generation (`launches`, then `fiber` as
    the fiber's first step) before the run program acquires the claim
-   (`holdRunClaim`, inside the launch guard or ledger acquire).
+   (`holdRunClaim`, inside the launch guard or run history acquire).
 4. **A child activation outlives its input consumer.** The activation covers
    preparation and final delivery (`reserveChildActivation` → release after
    the terminal delivery). The child's input lease is released earlier, at

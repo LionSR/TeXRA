@@ -44,7 +44,7 @@ import {
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { runLedgerLayer } from '@agent/runtime/RunLedger';
+import { runHistoryLayer } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -81,7 +81,7 @@ import {
   type ProcessProbe,
 } from '@platform/defaults/nodeProcesses';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
-import { RunLedger } from '@shared/session/runLedger';
+import { RunHistory } from '@shared/session/runHistory';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -204,7 +204,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
-      const ledger = yield* RunLedger;
+      const runHistory = yield* RunHistory;
       const inquiryRecords = yield* InquiryRecords;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
@@ -305,7 +305,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         );
         return {
           events: reads,
-          ledger,
+          runHistory,
           publishText: (runId, id, text) =>
             SubscriptionRef.update(chunks.ref, (held) => {
               const next = new Map(held);
@@ -673,7 +673,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
-    Layer.provideMerge(runLedgerLayer),
+    Layer.provideMerge(runHistoryLayer),
     Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(

@@ -12,7 +12,7 @@
  *   listing delivers; an open request and a queued follow-up are keys of
  *   their own (`pendingKeyOf`), deleted when their pair closes them.
  * - `usage`: a `usage` display row per priced `model.message` response and
- *   `context.edit` summary (a run with a ledger stores its spend there,
+ *   `context.edit` summary (a run with a run history stores its spend there,
  *   never as a `usage` row), and each run's spend summed by `sumUsageStats`.
  * - `model`: a `run.model` display row at each `run.snapshot` whose model
  *   differs from the snapshot before it, and each run's latest switch.

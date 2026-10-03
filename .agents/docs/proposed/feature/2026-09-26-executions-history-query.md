@@ -57,13 +57,13 @@ These storage facts constrain the design:
 - Every `run.activate` opens a new running window. A resumed run's earlier
   `run.end` belongs to the previous lifecycle (`sessionFold.ts`,
   `case 'run.activate'`; `runEndFromEvents` in `runRecords.ts`).
-- Run-ledger rows (`model.message`, `model.compaction`, `tool.intent`,
+- Run-history rows (`model.message`, `model.compaction`, `tool.intent`,
   `tool.binding`, `tool.result`, `model.retry`, `run.snapshot`,
   `child.turn`) share the table and the `["run", id]` aggregate with the
   display rows. C3 makes them byte-exact and readable only through
-  `RunLedger`.
+  `RunHistory`.
 - `Database.readDisplay(fromCommit)` already returns exactly the public rows:
-  `DISPLAY_EVENT_TYPES`, which excludes the private run records, the ledger
+  `DISPLAY_EVENT_TYPES`, which excludes the private run records, the run history
   rows and the stored-value rows, filtered in SQL.
 - Liveness is not in the table. "Is it running" is the in-memory `Runs`
   registry plus `proveOwnerLiveness` over the claim.
@@ -82,7 +82,7 @@ holds, not from filtering statements.
 
 This is the only sound option. `node:sqlite` has no authorizer, so a
 connection to the session file cannot stop `SELECT * FROM event` from reading
-ledger rows and the hidden envelope columns. A `TEMP VIEW` over that
+run history rows and the hidden envelope columns. A `TEMP VIEW` over that
 connection sits next to the base tables and does not hide them. Checking the
 statement's text cannot tell a base-table name from a view name. In the query
 store, those tables do not exist.
@@ -202,11 +202,11 @@ Other rules:
 
 - **No private records.** `run.report` and `run.result` are left out.
   `/report` and `/result` currently warn when the latest record belongs to an
-  earlier turn of a multi-turn child. That warning needs `child.turn`, a ledger
+  earlier turn of a multi-turn child. That warning needs `child.turn`, a run history
   row (`executions/turnAttribution.ts`). A view could not attribute a report
   to its turn, so it would silently present an old turn's result as current.
   Those paths stay.
-- **No ledger rows**, by construction: `readDisplay` never returns them.
+- **No run history rows**, by construction: `readDisplay` never returns them.
 - **No redaction step.** Trace rows are scrubbed before they are written, and
   display rows are the scrubbed set.
 - **The project database only.** The global database (app state, inquiries,
@@ -343,7 +343,7 @@ durable boundary, from a failure-mode list written first.
   3. a detached child still appears under its former parent;
   4. a runaway statement holds the store instead of stopping at its deadline,
      or the store stays dead after it;
-  5. a ledger row, a private record, or the session database's own tables are
+  5. a run history row, a private record, or the session database's own tables are
      reachable from a query;
   6. a statement writes to the store or runs a second statement.
 - The two `/todos` cases in `ExecutionsToolWorkspaceFiles.vitest.ts` now read
@@ -369,7 +369,7 @@ orchestrator and progress-check prompts now use the query).
    collapse deletes the trace copy of message text, after which the display
    fold reads `model.message` with redaction applied. At that point the
    display rows no longer carry message text. `messages` must then be fed
-   from a projection that `RunLedger` owns, and `/conversation` can retire.
+   from a projection that `RunHistory` owns, and `/conversation` can retire.
 4. **Budgets.** 200 rows per page, 5 s per query, 2,000 characters per cell
    and a 1 GiB SQLite heap are first guesses, not measurements.
 5. **`/config`** could move onto the `runs` view once the query has proven

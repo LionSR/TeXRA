@@ -163,8 +163,8 @@ gives that ordering by construction.
 > **Landed 2026-09-13 (one-door publisher).** The queue exists, and it carries more than the
 > trace: `SessionEvents` is one inbox drained by one fiber, and _every_ writer of the log is a
 > job on it — the trace subscriber (`detach`, enqueued synchronously at emit time), the run
-> loop's `RunLedger.appendBatch` (`publish`, awaited), and the surfaces' read-then-append
-> decisions (`exclusive`). A queue that carried only the trace would have left the ledger
+> loop's `RunHistory.appendBatch` (`publish`, awaited), and the surfaces' read-then-append
+> decisions (`exclusive`). A queue that carried only the trace would have left the run history
 > racing the drain fiber exactly as it raced the gate (the 2026-09-12 inversion: a tool card's
 > terminal row committed before its start row in 24 of 89 cards of one session).
 > `publicationGate`, the promise `Set`, `schedulePublication` and its `runPromise` are gone

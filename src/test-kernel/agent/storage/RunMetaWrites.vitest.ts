@@ -68,9 +68,9 @@ describe('run metadata updates', () => {
     }),
   );
   // A run resumed in a new process holds its earlier rounds' spend only in
-  // its ledger; ending it before a round here must still bill them.
+  // its run history; ending it before a round here must still bill them.
   it.effect(
-    'carries the ledger usage on a run ended before its next round',
+    'carries the run history usage on a run ended before its next round',
     () =>
       Effect.gen(function* () {
         const invocation = {
@@ -86,14 +86,14 @@ describe('run metadata updates', () => {
             credentialScope: 'openai',
           },
         } as const;
-        yield* session.ledger.acquire(id);
+        yield* session.runHistory.acquire(id);
         const opening = {
           ...freshRunState(0),
           family: 'toolUse' as const,
           modelId: 'openai/gpt-5.4-2026-03-05',
           modelCompatibilityKey: 'OpenAI' as const,
         };
-        const opened = yield* session.ledger.appendBatch(id, null, [
+        const opened = yield* session.runHistory.appendBatch(id, null, [
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
@@ -103,7 +103,7 @@ describe('run metadata updates', () => {
             },
           }),
         ]);
-        yield* session.ledger.appendBatch(id, opened, [
+        yield* session.runHistory.appendBatch(id, opened, [
           {
             type: 'model.message',
             aggregateId: rowAggregate(id),

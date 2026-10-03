@@ -182,7 +182,7 @@ is a job on the `SessionEvents` inbox (`publish`, `exclusive`, `detach`,
 `settle`); commit order is enqueue order, and nothing appends around it. A
 tool call's card belongs to the run loop. A slow tool's `tool.start` commits
 with the row that admits the attempt; a fast tool's card opens and closes in
-its settlement batch. On a run with a ledger, the card stores no output: its
+its settlement batch. On a run with a run history, the card stores no output: its
 output is projected at read time from the `tool.result` it commits with.
 What a tool prints while it runs is transient text on the card id
 (`hooks.onToolOutput` → `stream.chunk`), never a row. Do not add a tool-side
@@ -214,7 +214,7 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
 `src/agent/core/README.md`); `runtime/loop/` holds the one run program
-(`toolUse.ts`), a plain Effect loop over the run ledger that workflow agents
+(`toolUse.ts`), a plain Effect loop over the run history that workflow agents
 run in round mode (`rounds.ts`), with `runtime/run/` the per-run services it
 takes from context (`AgentRun`, model binding, pricing, media, tools) and
 `runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
@@ -238,14 +238,14 @@ write points: AGENTS.md "Patterns across the codebase" (Run loop
 architecture).
 
 **There is no flow engine.** A run is one Effect program that appends rows to
-the run ledger (`src/shared/session/runLedger.ts`) and continues from the
+the run history (`src/shared/session/runHistory.ts`) and continues from the
 folded `RunState` each `appendBatch` returns; resume is the same function
 reading the same rows. Every wait writes a `run.position`; a response row is
 committed before its tools dispatch and a `tool.result` before the loop
 continues. Retry has two owners inside `ModelInvoker`: an automatic
 route-scoped batch under the session's `ModelRetryGate`, and a durable human
 permit (`request.opened` + the snapshot's `pendingRetry`). Do not add a
-node, a cursor, a services bag, or a second writer of the ledger.
+node, a cursor, a services bag, or a second writer of the run history.
 
 ## Design guardrails
 

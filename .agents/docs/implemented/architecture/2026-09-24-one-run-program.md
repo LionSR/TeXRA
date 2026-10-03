@@ -12,7 +12,7 @@ mechanics.
 
 ## Summary
 
-TeXRA has two run programs over one ledger:
+TeXRA has two run programs over one run history:
 
 |                            | File                                                         | Lines       |
 | -------------------------- | ------------------------------------------------------------ | ----------- |
@@ -46,7 +46,7 @@ rebased it onto `394c301b0a`. The review's numbers:
 |                                       | Reflection | Round mode |
 | ------------------------------------- | ---------- | ---------- |
 | Model calls (2-round polish)          | 2          | 2          |
-| Ledger rows                           | 99         | 91         |
+| Run history rows                      | 99         | 91         |
 | Request bytes                         | —          | identical  |
 | paper2slide (2 rounds, compile fails) | FAILED     | FAILED     |
 | Crash in round 2, then resume         | 1 request  | 1 request  |
@@ -71,8 +71,8 @@ typecheck on current main (two TS2322 errors in `documentRounds.ts`).
 - `launchReflectionRun` in `executeAgent.ts`, and the category branch that
   picks it.
 - The `reflection` arm of `FlowSnapshotPayloadSchema`
-  (`runLedgerEvent.ts:546`) and `ReflectionSnapshotStateSchema`.
-- The `round.ready` and `output.pending` loop phases (`runLedgerEvent.ts:474`,
+  (`runHistoryEvent.ts:546`) and `ReflectionSnapshotStateSchema`.
+- The `round.ready` and `output.pending` loop phases (`runHistoryEvent.ts:474`,
   `:478`). The pipeline's re-entry is derived from folded state instead (see
   "Resume").
 - The per-cycle raw files (`raw/r<n>/output.c<i>.xml`) and the
@@ -327,7 +327,7 @@ stored sessions.
    next planned bump rather than forcing one of its own. Scope: the other
    readers of the `reflection` family (`runStatusDisplay.ts:184`,
    `AgentRun.ts:262`, `SessionResumeRetrieval.ts:51`, the `RunFamily` enum at
-   `runLedgerEvent.ts:46`) and the 11 test files that reference the family or
+   `runHistoryEvent.ts:46`) and the 11 test files that reference the family or
    `runReflection`. Nothing outside `reflection.ts` and the schema reads the
    two phases.
 
@@ -375,7 +375,7 @@ pipeline behind a boundary.
   `output/documentRounds.ts`, 332 lines).
 - Independent review, 2026-09-25, at `394c301b0a`: 20+ live DeepSeek CLI runs
   (polish, correct, paper2slide, forced continuation, SIGKILL and SIGINT with
-  resume, relaunch of a completed run, resume after a forced 400). The ledger
+  resume, relaunch of a completed run, resume after a forced 400). The run history
   was compared by SQLite queries and the wire bodies byte for byte, and
   `ReflectionLoop.vitest.ts` passed 29/29. Child runs, media per round,
   declared-tools dispatch and compile-rejection edge cases were read, not run.

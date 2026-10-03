@@ -36,7 +36,7 @@ import {
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
 import { delegationSection } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -101,7 +101,7 @@ export function blobRows(
   runId: RunId,
   state: RunState,
   values: readonly unknown[],
-): RunLedgerDraft[] {
+): RunHistoryDraft[] {
   const stored = new Set(Object.keys(state.contents));
   return values.flatMap((value) => {
     const digest = sha256(value);
@@ -128,7 +128,7 @@ export function attemptRows(
   invocation: InvocationRef,
   origin: ModelOrigin,
   resolved: ResolvedTurn,
-): RunLedgerDraft[] {
+): RunHistoryDraft[] {
   const agent = {
     agent: run.config.agent,
     setting: run.setting,
@@ -308,7 +308,7 @@ export const checkRecordedRequest = Effect.fn('requestContext.check')(
       (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||
       (yield* envFlag('VITEST'));
     if (!on) return;
-    const state = yield* Effect.orDie(run.session.ledger.load(run.runId));
+    const state = yield* Effect.orDie(run.session.runHistory.load(run.runId));
     let problem: string | null;
     try {
       problem = state === null ? 'the run has no rows' : mismatch(state, sent);

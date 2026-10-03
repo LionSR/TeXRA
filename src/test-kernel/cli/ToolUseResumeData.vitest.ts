@@ -86,9 +86,9 @@ describe('CLI listing resumability', () => {
   async function writeSnapshot(runId: RunId, terminal: boolean): Promise<void> {
     publishTestRunStart(session, runId);
     await Effect.runPromise(session.settlePublications());
-    await Effect.runPromise(session.ledger.acquire(runId));
+    await Effect.runPromise(session.runHistory.acquire(runId));
     await Effect.runPromise(
-      session.ledger.appendBatch(runId, null, [
+      session.runHistory.appendBatch(runId, null, [
         {
           type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),

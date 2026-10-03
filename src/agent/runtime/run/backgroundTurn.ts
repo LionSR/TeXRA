@@ -100,7 +100,7 @@ export const observeBackground = <E>(
  * Background work: submit, and if the provider accepted it rather than
  * completing at once, commit the `accepted` row with its deadline before
  * `observe` is called (the commit barrier, row 4). A progress callback is no
- * substitute: nothing observes an operation the ledger does not hold.
+ * substitute: nothing observes an operation the run history does not hold.
  */
 export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
   run: AgentRunShape,

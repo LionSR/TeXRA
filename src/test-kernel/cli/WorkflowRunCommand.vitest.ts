@@ -386,9 +386,9 @@ const seedResumableCheckpoint = (
 ) =>
   Effect.gen(function* () {
     yield* seedStartedRun(session, runId);
-    yield* session.ledger.acquire(runId as RunId);
+    yield* session.runHistory.acquire(runId as RunId);
     const aggregate = aggregateId('run', runId as RunId);
-    yield* session.ledger.appendBatch(runId as RunId, null, [
+    yield* session.runHistory.appendBatch(runId as RunId, null, [
       {
         type: 'run.snapshot',
         aggregateId: aggregate,

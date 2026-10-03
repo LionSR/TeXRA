@@ -12,9 +12,9 @@ Baseline: `main` at `35909133bd`. Line references point into that tree.
 The model gets one tool, `script`. Its argument is a JavaScript program that
 calls TeXRA's tools as `await tools.read_file({ path })`. Every nested call is
 an ordinary tool call: it passes the core approval policy, it is written to
-the run ledger, and its card nests under the script's card. When a run
+the run history, and its card nests under the script's card. When a run
 resumes, the script runs again from the top. Calls that finished are replayed
-from the ledger in the order they settled. A call that was still in flight
+from the run history in the order they settled. A call that was still in flight
 follows the `replay: 'safe' | 'unsafe'` rule that direct calls already follow.
 
 The engine is the QuickJS sandbox the workflow-script tool already ships
@@ -167,21 +167,21 @@ lines go. Applying it in direct mode too avoids two rules for one text.
 Each concern has one owner. A piece that owns two concerns, or a concern with
 two owners, is a defect this design either fixes or names.
 
-| Concern           | Owner                                                                                    | Must not know about                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Sandbox           | `CodeSandbox` service, `src/agent/codeSandbox/` (#13601)                                 | tools, the ledger, approvals; it runs JS under limits and exchanges JSON              |
-| Script tool       | `script`, `src/tools/codemode/`, in the `codemode` plugin                                | any tool by name; it never writes a row, it hands each call to the per-call program   |
-| Per-call program  | `toolUseDispatch.ts:391-571` (hooks, guard, approval, settle)                            | whether a model response or a script issued the call, beyond the `tool.intent` origin |
-| Ledger and fold   | `RunLedger` (`runLedger.ts:86`), `SessionEvents` (`sessionEvents.ts:77`), `runStateFold` | live state, realms, rendering                                                         |
-| Registry and step | `ToolRegistry` (`toolTable.ts:208`), `LiveTools` (`liveTools.ts:70`), `Step.open`        | prompt text                                                                           |
-| Discovery         | `searchTools`, `describeTool` in `src/tools/codemode/`                                   | the live registry; it reads the step's pinned generation only                         |
-| Child runs        | the `agent` tool, `src/tools/delegation/`                                                | whether it was called directly or from a script, except for the default of awaiting   |
-| Messaging         | the follow-up inbox (`FollowUps.ts`, `ToolUseFollowUpQueueManager.ts`)                   | scripts                                                                               |
-| Prompt            | the system-text freeze (`requestContext.ts:168-195`, `offeredSystem`)                    | live availability; it reads it once, at the freeze                                    |
-| Renderers         | the three hosts over cards and rows (`transcriptFold.ts`)                                | anything not in a row; no data fixes at render time                                   |
-| Domain tools      | plugins (`pluginManifest.ts`)                                                            | code mode; they reach scripts only as registry entries                                |
+| Concern              | Owner                                                                                      | Must not know about                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Sandbox              | `CodeSandbox` service, `src/agent/codeSandbox/` (#13601)                                   | tools, the run history, approvals; it runs JS under limits and exchanges JSON         |
+| Script tool          | `script`, `src/tools/codemode/`, in the `codemode` plugin                                  | any tool by name; it never writes a row, it hands each call to the per-call program   |
+| Per-call program     | `toolUseDispatch.ts:391-571` (hooks, guard, approval, settle)                              | whether a model response or a script issued the call, beyond the `tool.intent` origin |
+| Run history and fold | `RunHistory` (`runHistory.ts:86`), `SessionEvents` (`sessionEvents.ts:77`), `runStateFold` | live state, realms, rendering                                                         |
+| Registry and step    | `ToolRegistry` (`toolTable.ts:208`), `LiveTools` (`liveTools.ts:70`), `Step.open`          | prompt text                                                                           |
+| Discovery            | `searchTools`, `describeTool` in `src/tools/codemode/`                                     | the live registry; it reads the step's pinned generation only                         |
+| Child runs           | the `agent` tool, `src/tools/delegation/`                                                  | whether it was called directly or from a script, except for the default of awaiting   |
+| Messaging            | the follow-up inbox (`FollowUps.ts`, `ToolUseFollowUpQueueManager.ts`)                     | scripts                                                                               |
+| Prompt               | the system-text freeze (`requestContext.ts:168-195`, `offeredSystem`)                      | live availability; it reads it once, at the freeze                                    |
+| Renderers            | the three hosts over cards and rows (`transcriptFold.ts`)                                  | anything not in a row; no data fixes at render time                                   |
+| Domain tools         | plugins (`pluginManifest.ts`)                                                              | code mode; they reach scripts only as registry entries                                |
 
-**Direction.** sandbox ← script tool ← per-call program ← ledger. The domain
+**Direction.** sandbox ← script tool ← per-call program ← run history. The domain
 reaches all four only through the registry, and code mode never switches on a
 tool's name.
 
@@ -211,7 +211,7 @@ sandbox.
 
 | Port          | Service                                                                              | Status                           |
 | ------------- | ------------------------------------------------------------------------------------ | -------------------------------- |
-| Storage       | `RunLedger`, `SessionEvents`, `StorageFs` (`rootedFs.ts:33`)                         | exists                           |
+| Storage       | `RunHistory`, `SessionEvents`, `StorageFs` (`rootedFs.ts:33`)                        | exists                           |
 | Models        | `LanguageModel` (`languageModel.ts:89`), `ModelInvoker` (`ModelInvoker.ts:196`)      | exists                           |
 | Settings      | `AppState` (`interfaces.ts:164`) through `readSettingFrom`                           | exists; a narrower port is later |
 | Execution env | `WorkspaceFs` (`rootedFs.ts:27`), `FileSystem`, `ChildProcessSpawner` (`bash.ts:48`) | exists                           |
@@ -293,7 +293,7 @@ Numbering calls in issue order is not enough:
 `a().then(() => tools.read_file(x))` issues its read in whatever order `a`
 settles. The fix is Temporal's, and it costs nothing extra here:
 
-1. The host delivers settlements to the realm one at a time, in ledger commit
+1. The host delivers settlements to the realm one at a time, in run history commit
    order.
 2. After each delivery it drains QuickJS's job queue
    (`runtime.executePendingJobs`) before reading newly issued calls.
@@ -301,7 +301,7 @@ settles. The fix is Temporal's, and it costs nothing extra here:
 4. On replay, the recorded results are delivered in the same order.
 
 The `SessionEvents` publisher already makes commit order enqueue order, so
-the ledger is the settle log. The guards stay: `Date.now()`, argless
+the run history is the settle log. The guards stay: `Date.now()`, argless
 `new Date()`, `Math.random()` and `Intl` throw, code generation is off, and
 the promise prototype is frozen (`determinismPrelude.ts:17-89`). The realm has
 no timers.
@@ -315,7 +315,7 @@ reversal (Q1).
 
 What the script gives up against `yield*` is the six narrowings ruled in Q6.
 
-## Approvals, cards and the ledger
+## Approvals, cards and the run history
 
 **Approval.** A nested call runs the same per-call program as a direct call:
 preToolUse hooks, `guardedToolCall` (`toolGuard.ts:35-125`), the tool body
@@ -338,9 +338,9 @@ calls ask on their own.
 order; `agent` calls also take the session's child-run budget
 (`runRegistry.ts:597-601`).
 
-**The ledger.** A direct call's arguments ride on the `model.message` row
+**The run history.** A direct call's arguments ride on the `model.message` row
 (`ModelInvoker.ts:462-486`), and `tool.intent` names the response
-(`runLedgerEvent.ts:283-291`). A nested call has no response, so:
+(`runHistoryEvent.ts:283-291`). A nested call has no response, so:
 
 - **`script.call`** (new): `{ scriptCallId, seq, callId, toolName, input,
 replay, stageId, phase }`, committed by the per-call program when the guest
@@ -355,7 +355,7 @@ nested results stay out of the model's history. Offered-tool identity
 (`offeredTools.ts:16-31`, `:82-89`) checks a nested call as it checks a
 direct one.
 
-**Cards.** Every card already carries a `stageId` (`runLedgerEvent.ts:121`),
+**Cards.** Every card already carries a `stageId` (`runHistoryEvent.ts:121`),
 and stages nest (`traceEvent.ts:33-40`). The script's card opens a stage of a
 new kind, `script` (`taskGroup.ts:5`), and its nested calls carry that
 `stageId`. All three hosts already render nested stages. Cards stay
@@ -367,7 +367,7 @@ Resume opens a fresh realm and runs the source, read from the script's
 `model.message` arguments, from the top:
 
 - **Settled.** A nested call with a `tool.result` is delivered from the
-  ledger in commit order and not run again.
+  run history in commit order and not run again.
 - **In flight.** A call whose saved and current `replay` both say `safe`
   re-runs at `attempt + 1` (`run/tools.ts:139-165`); any other goes to
   `decideOutcomeUnknown` (`toolUseDispatch.ts:574-691`). If #13604 lands, a
@@ -388,7 +388,7 @@ the outcome-unknown request instead of aborting the workflow.
 
 **Cross-script reuse (Q2, ruled).** A model may fix a failed script and run
 it again without re-billing finished children (`WorkflowScriptTool.ts:668`).
-Ledger replay covers one script's resume, not a new script call, so `agent`,
+Run history replay covers one script's resume, not a new script call, so `agent`,
 and no other tool, reuses a completed result:
 
 - **Key.** A hash of the prompt, every run-affecting option, and a
@@ -509,7 +509,7 @@ comes from the existing `workflow-script` plugin (`pluginManifest.ts:238-253`),
 which stays toggleable and off on new installs, so fan-out keeps its two
 consents: the YAML names `agent`, and the switch is on.
 
-**One writer.** `script.call` and every nested call's rows are core ledger
+**One writer.** `script.call` and every nested call's rows are core run history
 kinds, appended through the run's `RunCell` and committed by the one
 `SessionEvents` publisher.
 
@@ -572,7 +572,7 @@ calls: `agent` (foreground or `background: true`) and
 `tools.executions({ action: 'send' | 'wait' | 'view' | 'query' | 'kill', … })`.
 Messages still land at the recipient's next turn boundary (decision 4), so a
 script never reads its inbox; a result it awaits is an `agent()` value. Every
-message stays a `followup.queued` row and every consumption a run-ledger row;
+message stays a `followup.queued` row and every consumption a run-history row;
 code mode adds no channel, subscriber or writer. The workflow envelopes
 `<workflow-script-result>`, `<workflow-script-error>` and
 `<workflow-summary>` (`deliveryTags.ts:13-27`) go in lane 7; a background
@@ -683,7 +683,7 @@ option, and an effort option beyond the `@effort` suffix.
 | Second launch of the same `meta.name` refused while one runs   | `Tool:407-418`                                        | **Dropped** (Q6): each background script is its own run                                        | —    |
 | `<workflow-summary>` line: tally, cost, duration, files, cause | `workflowScriptDelivery.ts:13-23`; `Strategy:239-255` | the same line, folded from the cards and the children's usage rows                             | 4    |
 | Stop leaves a resumable notice for the parent                  | `Strategy:390-395`; `childRun.ts:113-119`             | the stop notice names the run to resume                                                        | 4    |
-| Resume after crash, stop or timeout                            | `checkpoint.ts:299-482`                               | ledger replay; `resumeRun` for a background script run                                         | 2, 4 |
+| Resume after crash, stop or timeout                            | `checkpoint.ts:299-482`                               | run history replay; `resumeRun` for a background script run                                    | 2, 4 |
 | `/executions/{id}` with a bounded board                        | `workflowSummaryView.ts:22-24`, `:119-143`            | the run's view lists its script stage's cards, same bounds                                     | 4    |
 | Kill the run                                                   | `ExecutionsTool.ts:420-450`; `Popup:363-365`          | unchanged: a background script is a child run                                                  | 4    |
 | Cost per call and in total, discarded attempts included        | `workflowScriptRun.ts:89-119`                         | children's usage rows; the script card sums them                                               | 4, 6 |
@@ -762,7 +762,7 @@ Each is its own proposal and needs its own ruling before the tag. Code mode
 depends on none of them.
 
 - Effect class replacing `replay` (`DispatchFacts.replay`,
-  `runLedgerEvent.ts:111`), and any grant derived from it. The script
+  `runHistoryEvent.ts:111`), and any grant derived from it. The script
   request's grant stays `agent`-only.
 - One view-edit kind: ruled 2026-10-02 in
   [the durable harness note](./2026-10-02-durable-harness.md); `context.edit`
@@ -884,7 +884,7 @@ pi v1.0.0 (tag `a13d35a74`, read in `packages/codemode` and
 a worker per call with BM25 tool search and no replay; Codex (`codex-rs`
 `code-mode*`) runs V8 in a separate host process with no durable record.
 Neither survives a restart with its finished calls intact, which here follows
-from the run ledger, not from the sandbox.
+from the run history, not from the sandbox.
 
 ## Verified
 
@@ -892,7 +892,7 @@ from the run ledger, not from the sandbox.
   `src/tools/delegation/*`; `src/agent/runtime/{agentToolResolution,ModelInvoker,SessionHandle,runRegistry}.ts`;
   `src/agent/runtime/loop/{toolUseDispatch,step,hooks,rounds}.ts`;
   `src/agent/runtime/run/{tools,toolSchema,requestContext,toolResultText,modelBinding}.ts`;
-  `src/shared/schemas/{runLedgerEvent,sessionEvent,traceEvent,toolResult,offeredTools,prompts,runIdentity}.ts`;
+  `src/shared/schemas/{runHistoryEvent,sessionEvent,traceEvent,toolResult,offeredTools,prompts,runIdentity}.ts`;
   `src/tools/{pluginManifest,plugins,liveRegistry,liveTools,catalogEntries,serverHolds,ExecutionsTool}.ts`;
   `src/tools/{memory,executions}/*`; `src/platform/{rootedFs,interfaces,languageModel}.ts`;
   the renderer files listed under "What gets deleted"; every built-in agent

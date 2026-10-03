@@ -1,4 +1,4 @@
-# The agent runtime on Effect: one ledger, two loops, no graph (2026-09-04)
+# The agent runtime on Effect: one run history, two loops, no graph (2026-09-04)
 
 Status: implemented — PR0–PR4 landed (#11843 docs, #12287 foundation, #12314 both loops, #12329 replay + one child protocol); moved from `proposed/` 2026-09-13. The pure-Effect direction was ratified on 2026-09-06 in the
 migration PRD. The
@@ -8,7 +8,7 @@ there); the crash-boundary verification §8 asks for is the open acceptance item
 in #12025 rather than claimed here.
 The PRD's later boundary, privacy and 0.41 compatibility rulings supersede the
 historical sketches below wherever they differ: no internal Promise adapter,
-no old-flow importer, and no private ledger row in the public trace union.
+no old-flow importer, and no private run history row in the public trace union.
 
 Historical scope: reverses migration PRD R4 and 13.C,
 amends persistence proposal §6 Stage 5 and §7, and the one-fold PRD non-goal
@@ -18,7 +18,7 @@ Amended 2026-09-04 against substrate contract §6.1 after it adopted the §2.1
 row vocabulary: C1/C2 name the columns (`aggregate_id`, `commit`), C10
 forbids the `run_state` and transcript projections this draft had, C1
 forbids rewriting a row (so no null-on-complete), and C3 was rewritten the
-same day with three owners so that the ledger-private rows stay byte-exact.
+same day with three owners so that the run-history-private rows stay byte-exact.
 The run-aggregate shape and its transaction boundaries are in §2.1.
 
 ## 0. Recommendation
@@ -73,7 +73,7 @@ over `IModelHandler` or the old superclass.
 schemas. Provider SDK types stay inside protocol modules. The package's
 canonical content preserves ordering, local tool calls/results, provider-hosted
 output, reasoning, media and exact opaque values required by the provider.
-The ledger persists this representation directly. Do not first ship rows
+The run history persists this representation directly. Do not first ship rows
 whose permanent API is the old SDK message union and then migrate them again.
 
 | Boundary value            | Required meaning and evidence                                                                                                                                                                          |
@@ -91,7 +91,7 @@ intent. Lowering the prepared invocation may not reread changing model
 defaults. Credentials are resolved when executing under the recorded route
 binding; secrets are never persisted. Uploads are external operations, not
 hidden side effects of a function described as pure preparation: materialize
-content and record upload evidence through the existing asset/ledger owners.
+content and record upload evidence through the existing asset/run-history owners.
 An unsupported encoding version or unavailable asset fails explicitly;
 choosing different semantic input requires a newly admitted attempt.
 
@@ -176,8 +176,8 @@ attack the same row shape.
 | -------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | A. Ratified kernel + one event                     | Typed node transitions over the existing cursor record                              | Private working copy discards mid-step `switchModel` commit (silent wrong-model resume). No replay from trace by construction.                                                                                                                                                                           | Rejected. Does not meet the ruling; would be a stepping stone, which is the dual system.               |
 | B. Journaled activities, replayed program          | Deterministic program re-executed against journaled activity results by logical key | Tool-mutated run/workspace state never journaled; model payload has no Zod schema (raw SDK response); post-compaction injection uses `Date.now()` so every resume across a compaction faults; sequencing re-migrates the checkpoint twice                                                                | Rejected as written. Its keys and intent rows are grafted.                                             |
-| C. Effect `unstable/workflow` with a custom engine | Workflow bodies + Activities memoized in our table                                  | Requires Effect Schema (binding ruling 6); `Schema.Unknown` removes the Zod boundary on memo hits; memoized failures replay as failures so resume-after-failure is impossible; `DurableDeferred` completes once so batched follow-ups drop                                                               | Rejected. The module is not the way to the ledger model.                                               |
-| D. Ledger loop                                     | Two `Effect.fn` loops over appended conversation rows + run_state projection        | Sequencing kept a blob writer beside the new rows across three PRs; no intent rows (R4.2/R4.3 unmet); assistant text durable twice; layers placed at process scope instead of per session root                                                                                                           | Selected, with the fixes below applied.                                                                |
+| C. Effect `unstable/workflow` with a custom engine | Workflow bodies + Activities memoized in our table                                  | Requires Effect Schema (binding ruling 6); `Schema.Unknown` removes the Zod boundary on memo hits; memoized failures replay as failures so resume-after-failure is impossible; `DurableDeferred` completes once so batched follow-ups drop                                                               | Rejected. The module is not the way to the run history model.                                          |
+| D. Run history loop                                | Two `Effect.fn` loops over appended conversation rows + run_state projection        | Sequencing kept a blob writer beside the new rows across three PRs; no intent rows (R4.2/R4.3 unmet); assistant text durable twice; layers placed at process scope instead of per session root                                                                                                           | Selected, with the fixes below applied.                                                                |
 | E. The flow is a fold                              | Pure reducer over Zod state emitting commands; generic interpreter                  | None fatal. Two-exit interpreter cannot halt on cancel; tools activity breaks the one-outcome shape; Stage 5 carve-out is the lazy import §9 forbids. (Its refuter's "raw output file written before commit" finding was itself wrong: the per-continuation file is the mid-cycle checkpoint and stays.) | Runner-up. Its fold rule and checkpoint policy are grafted; its reducer and command machinery are not. |
 
 Findings all refuters agreed on, regardless of design:
@@ -228,7 +228,7 @@ aggregate wording below is likewise the one run model's single `run` aggregate
 One `run` aggregate per run in the substrate's `event` table, keyed
 `(aggregate_id, seq)` (contract C1). Its storage key is
 `aggregateId('run', runId)` under C2 (one run model §3.1, decision D0); a
-logical id alone is never an aggregate key. `RunLedger.load` accepts the run
+logical id alone is never an aggregate key. `RunHistory.load` accepts the run
 id and qualifies its database reads internally. The `commit` column (`INTEGER
 PRIMARY KEY AUTOINCREMENT`) is the database-wide total order; nothing
 relies on the implicit rowid. What exists today as two files is two classes
@@ -239,10 +239,10 @@ of row on that one aggregate:
   `flow.step`. Every one is scrubbed at publish (C3 applies in full) and
   lives until the user explicitly deletes the run under C9. This is today's
   transcript sidecar.
-- **Ledger-private rows** hold what the model sees: `model.message`,
+- **Run-history-private rows** hold what the model sees: `model.message`,
   `model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`. They
   are byte-exact and never scrubbed (C3, second owner). Raw reads belong to
-  `RunLedger`, including the input it supplies to the shared display fold;
+  `RunHistory`, including the input it supplies to the shared display fold;
   the lease gates writes, not reads. No row is ever rewritten and nothing is removed at completion:
   single-owner D8 (#11304, "a checkpoint is deleted only by the user")
   keeps a completed run continuable, and once the view-state
@@ -269,7 +269,7 @@ Flow row types, all Zod-validated at the boundary, all carried as
 Snapshots omit the accumulated provider message array. `messageBaseCommit`
 references the latest `model.compaction`, or the first `model.message` append if
 there has been no compaction (null for an empty initial conversation).
-`RunLedger.load` reconstructs messages from `append` payloads and compactions
+`RunHistory.load` reconstructs messages from `append` payloads and compactions
 from that row, inclusive, through the snapshot's commit; `pending-tools`
 payloads are recovery inputs, not additions to the provider conversation.
 It restores the snapshot's non-message state and then
@@ -289,7 +289,7 @@ call is mutating state is not a valid delta. Folding the result applies its
 mutation exactly once and removes its pending intent. A crash after the row
 commits therefore cannot retain the result while losing work-plan,
 file-interaction, or usage changes. Each settlement is one
-`RunLedger.appendBatch`, backed by C6 `publishBatch`: its `tool.result` and
+`RunHistory.appendBatch`, backed by C6 `publishBatch`: its `tool.result` and
 terminal display `tool.end` commit together, with the same call and
 attempt identity. The settlement owner constructs both rows; the executor
 must not publish completion earlier from `logAndProcessMediaFiles` or its
@@ -403,18 +403,18 @@ redacted on the way in and no reader redacts on the way out. The
 paragraphs on C3 below are the record of the earlier design.)
 
 Redaction: `redactSecrets` runs at publish on every display row
-(C3, unchanged from today's recorder), and never on a ledger-private
+(C3, unchanged from today's recorder), and never on a run-history-private
 row. There is no projection table (C10): the transcript surfaces and
 `readCompletedRunConversation` (executions tool, chat export, CLI history)
 read through C7's aggregate queries. After the conversation fold collapses,
-display also consumes the ledger-private rows through `RunLedger` and the
+display also consumes the run-history-private rows through `RunHistory` and the
 shared redaction boundary. Each read takes its own `fromSeq`, and the
 50 KB display bound is a fold and render decision, not a stored one. The
 first draft's transcript projector and `transcript_entries` table are
 withdrawn, as is its "null payloads on COMPLETED" rule, since C1 forbids
 rewriting a row.
 
-Why the ledger-private rows are exempt from C3, and why that is not a second
+Why the run-history-private rows are exempt from C3, and why that is not a second
 store: `redactSecrets` rewrites JSON string values under token, secret,
 password, and API-key names and any `sk-`, `AIza`, `xai-`, or `Bearer`
 token (`src/logger/redaction.ts:5-14`). Applied to model-visible content it
@@ -425,11 +425,11 @@ run; and it changes `tool_use` inputs and tool results the model has
 already reasoned over, so the resumed context is not the one the model saw.
 That is why today's checkpoint is never redacted (single-owner §6). The two
 row classes do not duplicate a store: a display row never holds provider
-messages, and a ledger-private row never holds display content.
+messages, and a run-history-private row never holds display content.
 One residue, named in C3 as well: until the view-state PRD collapses the
 fold, message text is durable twice (redacted trace rows and
 `model.message`); the collapse deletes the trace copy, after which the
-ledger-private rows are the only conversation and the shared display fold
+run-history-private rows are the only conversation and the shared display fold
 redacts it before any view state is exposed, including direct in-process
 subscribers. A secret in a payload remains on disk until explicit user deletion under
 C9; display redaction does not remove it from the recovery data.
@@ -444,7 +444,7 @@ Mid-run model switch: today `persistModelSwitch`
 (`runToolUseFlow.ts:254`, called at `:330`) is a two-phase write, record
 first and `config.json` second, and A's durability refuter showed it is a
 mid-step durable commit that a private working copy loses. In the row
-model a switch calls `RunLedger.appendBatch`, backed by substrate C6's
+model a switch calls `RunHistory.appendBatch`, backed by substrate C6's
 `SessionEvents.publishBatch(events)`: all target ownership checks, sequence
 assignments, and inserts share one transaction. It appends the existing
 `run.config` display row and a `flow.snapshot` with the
@@ -472,13 +472,13 @@ version, nothing downstream branching on version.
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ) {
-  const ledger = yield* RunLedger; // appendBatch -> Effect<RunState>; load(runId)
+  const runHistory = yield* RunHistory; // appendBatch -> Effect<RunState>; load(runId)
   const run = yield* AgentRun; // runId, model binding, setting, logger, session
   const followUps = yield* FollowUps; // ToolUseSessionLifecycle behind Effect.callback
-  let s = yield* ledger.load(run.runId); // fold of rows, or null on a fresh run
+  let s = yield* runHistory.load(run.runId); // fold of rows, or null on a fresh run
   if (s === null) {
     const initial = yield* prepareSession(start); // no model or tool activity
-    s = yield* ledger.appendBatch([
+    s = yield* runHistory.appendBatch([
       initialMessages(initial),
       snapshot(initial), // committed before runTurn can invoke an external activity
     ]);
@@ -492,7 +492,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     }
     s = yield* runTurn(s); // resumes at the folded phase
     if (s.halt) return s.halt; // 'cancelled' | 'failed'
-    s = yield* ledger.appendBatch([
+    s = yield* runHistory.appendBatch([
       snapshot({ ...s, phase: 'waiting' }),
       step('waiting'),
     ]);
@@ -526,7 +526,7 @@ that fails (oversized or corrupt media in `addMediaToUserMessage`,
 `resumeQueuedToolUse` restores it to the queue on the next resume. The
 sketch's `FollowUps.consume` keeps that: `wait` and `drain` reserve a batch
 without removing it durably. `consume` validates and builds its messages,
-then uses `RunLedger.appendBatch` to commit the `model.message` rows,
+then uses `RunHistory.appendBatch` to commit the `model.message` rows,
 `flow.step turn.ready`, and the post-consumption queued-follow-ups snapshot
 in the same C6 transaction. The step makes the consumed batch ready for the next turn.
 Queue mutations, including
@@ -541,7 +541,7 @@ The reflection loop is the same shape with one outer coordinate:
 
 ```ts
 export const runReflection = Effect.fn('reflection.run')(function* (start) {
-  const ledger = yield* RunLedger;
+  const runHistory = yield* RunHistory;
   const model = yield* ModelInvoker;
   let s = yield* loadOrInitializeReflection(start); // initial messages + snapshot committed first
   while (!s.done) {
@@ -555,7 +555,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (start) {
           if (s.phase === 'model.ready') {
             const r = yield* model.invoke(s);
             // Replacement history precedes this completed response, even on the final continuation.
-            s = yield* ledger.appendBatch([
+            s = yield* runHistory.appendBatch([
               ...replacementRows(r),
               assistant(r),
               step('response.ready', s.round, s.continuation),
@@ -565,7 +565,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (start) {
         }
         const out = yield* produceOutput(s); // commits output.pending plan, or reconciles that saved phase
         const next = finishRound(s, out, shouldContinue(s, out));
-        return yield* ledger.appendBatch([
+        return yield* runHistory.appendBatch([
           ...out.facts, // output/compile facts settle once with the phase
           step('round.end', s.round, out), // before the snapshot: a step's coordinates never regress
           snapshot(next), // includes next round/phase, or done; never repeats a settled round
@@ -641,7 +641,7 @@ message batch is delivered, following §2.1. Snapshots retain
 these maps, pending approval decisions, the `pendingRetry` gate below,
 durable phase, and the reference to
 any response still awaiting processing. It runs in
-`RunLedger.load` on resume and in the trace viewer's
+`RunHistory.load` on resume and in the trace viewer's
 stepper, and nowhere else: there is no `run_state` summary, no projection
 table, and no `executions` table (contract C10). The listing tier reads the
 latest canonical `status` fact through the `(aggregate_id, type, seq)` index,
@@ -659,7 +659,7 @@ sequence spaces to reconcile. Every
 row also carries the database-wide `commit` value, exported under the same
 name, and the scrubber keys on that. `StreamLogEntry.seqNo` is
 renumbered on merge and is explicitly not foldable, so it is not the key.
-`RunLedger.load` uses C7's indexed
+`RunHistory.load` uses C7's indexed
 `aggregatesAfterCommit([aggregateId('run', runId)], snapshot.commit)` for the
 tail, so it does not scan unrelated
 runs. A snapshot includes the preceding rows and its
@@ -675,7 +675,7 @@ the runtime alone receives byte-exact provider content. Both local display
 and exported documents pass through C3's display redaction.
 
 Resume: `runAgent({kind:'resume'})` acquires the run's current claim
-first (C5), then calls `RunLedger.load`.
+first (C5), then calls `RunHistory.load`.
 Claims come from current aggregate state, never the writer on a historical
 event. It restores the recoverable approval bindings below before retiring
 any stale process-local request. The
@@ -724,7 +724,7 @@ fold without special handling.
 
 Manual retry across process death: `ModelInvoker` currently blocks on
 `session.interactions.requestRetry` (`ModelInvocationNode.ts:554-598`).
-Before presenting that prompt, the ledger atomically commits its
+Before presenting that prompt, the run history atomically commits its
 `approval.requested` and a snapshot containing `pendingRetry`: the request
 id, invocation identity, failed attempt, failed model/compatibility key,
 credential-route requirements without secrets, and a `waiting` recovery
@@ -735,7 +735,7 @@ to retry while the gate is waiting.
 Only two approval purposes have a durable recovery binding: `model-retry`
 names that saved invocation/request, and `tool-outcome` names the pending
 response/call/attempt above. Resume validates these bindings against the
-ledger and reconnects each unresolved request's original id to a new
+run history and reconnects each unresolved request's original id to a new
 listener before admitting model or tool activity. The companion's generic
 `approval.resolved { cause: 'interrupted' }` cleanup applies only to
 unrecoverable process-local requests; it must not retire these two kinds.
@@ -760,7 +760,7 @@ approval events in PR 2 (§7 item 3).
 
 `Context.Service` classes with static layers, `Data.TaggedError` errors, Zod
 payloads, no Effect Schema. Per session root (inside the one-fold PRD 7.3
-`LayerMap`): `Database`, `SessionEvents`, `RunLedger`. Per run, provided at
+`LayerMap`): `Database`, `SessionEvents`, `RunHistory`. Per run, provided at
 the Promise boundary in `executeAgent`: `AgentRun`, `ModelInvoker`
 (`ModelCell`, `ModelRetryGate`, the auto-retry batch as
 `Effect.retry` with a `Schedule`, the manual approval loop, `prepareRetry`
@@ -868,7 +868,7 @@ withdrawn.
 The clean sequencing is that **this program is Stage 5 and lane D of the
 substrate cutover**. The cutover already has zero code, so nothing is
 re-done: lane D's deliverable is the two loops, the row vocabulary of §2.1,
-`RunLedger`, and `foldRunState`.
+`RunHistory`, and `foldRunState`.
 
 ~~and the one importer, which converts each
 supported `flow_<id>.json` directly into canonical rows. It preserves the
@@ -909,11 +909,11 @@ argument, and a retirement nobody will remember to perform. The behaviour
 instead is breaking and stated: a run whose only durable state is a
 `flow_<id>.json` record is reported as not resumable under the named
 release, and its record is left readable: a reverted release resuming that
-run repeats nothing, because nothing about it was written to the ledger.
+run repeats nothing, because nothing about it was written to the run history.
 The rename to `flow_<id>.json.superseded` covers the other case, the one
-the PRD's rollout section names. The first time a run appends a ledger row
+the PRD's rollout section names. The first time a run appends a run history row
 while a `flow_<id>.json` for it still exists, it renames the record before
-that append, so a reverted release cannot resume from a cursor the ledger
+that append, so a reverted release cannot resume from a cursor the run history
 has already moved past. Either way the file stays on disk for the
 single-owner D8 sweep to delete.
 Nothing below this note is struck: the deletions in the next paragraph, the
@@ -939,7 +939,7 @@ The cost is that the cutover branch is larger: five substrate lanes plus
 one runtime lane, and the runtime lane is the riskiest behavioral change in
 the program. Three things keep it bounded without an intermediate:
 
-- The runtime lane is developed against the `RunLedger` interface with an
+- The runtime lane is developed against the `RunHistory` interface with an
   in-memory layer, `TestClock`, and `Layer.mock`, so it does not wait for
   the SQLite lanes to be green; it is integrated once, on the branch.
 - Both families convert in the same lane so `ModelInvocationNode` is deleted
@@ -966,7 +966,7 @@ Deleted (with the replacement in the same PR, R10):
 | Path                                                                                                                                        | LoC         | Replaced by                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
 | `src/agent/node/index.ts`                                                                                                                   | 158         | nothing                                                                        |
-| `src/agent/node/persistedFlow.ts`                                                                                                           | 531         | `RunLedger` + `foldRunState`                                                   |
+| `src/agent/node/persistedFlow.ts`                                                                                                           | 531         | `RunHistory` + `foldRunState`                                                  |
 | `reflection/RoundPersistedFlow.ts`                                                                                                          | 270         | round loop + `shouldContinue`                                                  |
 | `reflection/ResponseCycleFlow.ts` (nodes and graph)                                                                                         | 593         | continuation loop                                                              |
 | `reflection/nodes/*` as classes                                                                                                             | 751         | functions; bodies move                                                         |
@@ -978,14 +978,14 @@ Deleted (with the replacement in the same PR, R10):
 | `src/agent/storage/resumability.ts` full-checkpoint parse                                                                                   | 120         | latest-of-type index read (`flow.snapshot` present) plus the C5 liveness probe |
 | `SessionResumeRetrieval.ts` checkpoint read                                                                                                 | ~170 of 234 | fold; model id from the latest `flow.snapshot`                                 |
 | `runtime/persistedCompileRejection.ts`                                                                                                      | 46          | snapshot field                                                                 |
-| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; the 13 record-format pins, deleted with the format they pin | ~900        | fold test, ledger test, repair-policy test (~400)                              |
+| Tests: `PocketFlowNode`, `PersistedFlow`, `ReflectionFlowStateRecovery` suites; the 13 record-format pins, deleted with the format they pin | ~900        | fold test, run history test, repair-policy test (~400)                         |
 
 Rewired, not deleted (the refuters' missing list): `AgentLaunchContext.ts`
 (compat key from snapshot row), `executionLifecycle.ts`,
 `executionListing.ts`, `tools/executions/executionKvFiles.ts`,
 `tools/executions/executionLiveness.ts` and
-`controllers/session/SessionState.ts` (replace `flowKey` reads with ledger
-queries), `runtime/resumeRun.ts` (handle the ledger's persisted-state error
+`controllers/session/SessionState.ts` (replace `flowKey` reads with run history
+queries), `runtime/resumeRun.ts` (handle the run history's persisted-state error
 instead of `PersistedFlowStateError`),
 `SessionHandle.ts`, `runClassification.ts`, `ExecutionsTool.ts`, and the
 CLI's `toolUseResumeData.ts`, `runExecution.ts`, `commands/workflow.ts`
@@ -1006,13 +1006,13 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    as in §3; record the R4 and 13.C reversal in the migration PRD; add the
    six row types to the one-fold PRD §6 durable set; state the retention
    rule.
-1. Foundation: `RunLedger` service over `SessionEvents`, the Zod row
+1. Foundation: `RunHistory` service over `SessionEvents`, the Zod row
    vocabulary and `SessionEventDraftSchema` placement specified by the
    PR 1 foundation proposal,
    `foldRunState` in `src/shared`, the
-   in-memory ledger layer, one ledger test and one fold test. Nothing
+   in-memory run history layer, one run history test and one fold test. Nothing
    deleted yet; nothing in production calls it yet.
-2. Both families on the ledger, one PR: `ModelInvoker`, `Tools`,
+2. Both families on the run history, one PR: `ModelInvoker`, `Tools`,
    `FollowUps`, `AgentRun`, `OutputPipeline`, `runToolUse`,
    `runReflection`; `executeAgent` and every resume arm call
    `runtime.runPromiseExit` with the fiber's signal; ~~the importer's
@@ -1037,7 +1037,7 @@ compresses when the phase ceremony goes. `output/` (3,482) and
    under the script run's aggregate; native `ChildTurnRef` and the script
    journal entry become one attempt identity. Deletes
    `workflowScript/persistence.ts`, `ChildTurnState`, and the turn-state
-   writes in `childRunLoop.ts`. In scope, not optional: leaving two ledgers
+   writes in `childRunLoop.ts`. In scope, not optional: leaving two run histories
    is the intermediate this program refuses.
 
 Each PR deletes what it replaces. There is no shim, no interim column, and
@@ -1083,7 +1083,7 @@ branch.
   model actually saw; and (c) is exactly why today's checkpoint is never
   redacted (single-owner §6). Settled with the substrate owner on
   2026-09-04: C3 now has three owners (scrub at publish for display rows,
-  error and approval payloads; byte-exact ledger-private rows; display
+  error and approval payloads; byte-exact run-history-private rows; display
   redaction in the shared display fold before exposing view state, and at
   every transport framer and export). This document's
   "null on COMPLETED" and "removed at completion" were withdrawn because
@@ -1093,7 +1093,7 @@ branch.
 - One-fold PRD line 102: reversed by the owner's ruling; its `fold(view,
 event)` gains the `flow.step` arm and its §6 durable set gains six rows.
 - Single-owner §6: its single door at admission stays for display
-  rows; for ledger-private rows display redaction precedes every
+  rows; for run-history-private rows display redaction precedes every
   view-state update, including in-process CLI views, as well as transport
   and export (C3, third owner); its "checkpoint content" list is false
   of the table, by design. Single-owner D8 is upheld and extended: nothing
@@ -1117,7 +1117,7 @@ it.
    conversation after the folds merge and violate the completed-run resume
    contract.
    **Resolved:** byte-exact rows on the run aggregate are never scrubbed and
-   have no age-based expiry in the landed `RunLedger` (#12287); deletion is
+   have no age-based expiry in the landed `RunHistory` (#12287); deletion is
    the substrate's C9 tombstone only.
 3. Confirm that the existing `approval.requested` / `approval.resolved`
    events land with PR 2. They are required for outcome-unknown barrier
@@ -1127,7 +1127,7 @@ it.
    `request.decided` rows with one decision route — in #12329, after PR 2
    rather than with it.
 4. Confirm that the child-protocol unification (PR 4) is in scope, since
-   leaving the script journal as a second ledger would be an intermediate.
+   leaving the script journal as a second run history would be an intermediate.
    **Resolved:** in scope and landed in #12329 as `child.turn` on the run
    aggregate plus `workflow.script`/`workflow.journal` on a
    `workflow-checkpoint` aggregate (not the single row pair sketched in §2.1;
@@ -1145,18 +1145,18 @@ it.
   eventual provider content. Accept both in N+1; a later asset store may
   address this cost without weakening recovery.
 - Handlers that return `updatedMessages` on every call would write a
-  compaction row per call; the prefix check in `RunLedger.append` must be
+  compaction row per call; the prefix check in `RunHistory.append` must be
   exact.
 - Effect rc churn: every name below is verified in rc.112; the next rc may
   rename. All uses sit behind the five service classes.
 - Raw provider content lives in the database until explicit user deletion
   (§7 item 2). Any new reader of the `event` table that bypasses the fold is a
   redaction leak. The `Database` layer exposes the five
-  ledger-private row types only through `RunLedger`, so the raw query is
+  run-history-private row types only through `RunHistory`, so the raw query is
   unconstructible elsewhere and no test is needed. Otherwise the
   architecture test that fails persistence writes outside the database
   (substrate Stage 1) needs a sibling that fails raw reads of those rows
-  outside `RunLedger` and the fold.
+  outside `RunHistory` and the fold.
 - A dedicated durability refutation of this text ran on 2026-09-04 and found
   two fatals and six majors in the first draft (the approval-hook intent row,
   the retention rule nulling display results, ten snapshot fields with no

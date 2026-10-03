@@ -3,13 +3,13 @@
  * aggregate (`run.config`, `run.report`, `run.result`, ...), the terminal
  * fact, and the child loop's turn bookkeeping. Every read is a database read
  * of committed rows; nothing here reads a file, and the run loop itself
- * writes the run ledger.
+ * writes the run history.
  */
 
 import { Effect, Result } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { ledgerRows } from '@agent/runtime/storedTurn';
+import { runHistoryRows } from '@agent/runtime/storedTurn';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
@@ -173,7 +173,7 @@ const callChildren = (
 /**
  * The open call that owns `runId` (HQ6): the parent call that launched it,
  * while the run is not detached and the call is still unsettled in the
- * parent's ledger. Null for a root, a detached child, a child no call
+ * parent's run history. Null for a root, a detached child, a child no call
  * launched, or one whose call has settled.
  */
 export const owningCall = Effect.fn('owningCall')(function* (
@@ -183,7 +183,7 @@ export const owningCall = Effect.fn('owningCall')(function* (
   const edge = yield* parentEdge(session, runId);
   if (edge?.callId == null) return null;
   const { id, callId } = edge;
-  const intent = (yield* session.ledger.load(id))?.pendingIntents[callId];
+  const intent = (yield* session.runHistory.load(id))?.pendingIntents[callId];
   // A later response may reuse the call id: the pending call owns the run
   // only when the run is named by it.
   return intent !== undefined &&
@@ -194,13 +194,13 @@ export const owningCall = Effect.fn('owningCall')(function* (
 
 /**
  * The children `runId`'s open calls own that have not ended, read from its
- * ledger and the children's own rows, never from a view that may lag them.
+ * run history and the children's own rows, never from a view that may lag them.
  */
 export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const intents = (yield* session.ledger.load(runId))?.pendingIntents ?? {};
+  const intents = (yield* session.runHistory.load(runId))?.pendingIntents ?? {};
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
   for (const [callId, intent] of Object.entries(intents))
     for (const child of callChildren(runId, callId, intent)) {
@@ -249,9 +249,9 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * tool-use reply, a workflow run's files ({@link workflowOutputOf}), and
-   * the usage the run ledger folds from its priced response rows. Absent
-   * usage is a run with no ledger (an agent-CLI child, a launch that failed
-   * before its first batch); an unreadable ledger is logged and reads the
+   * the usage the run history folds from its priced response rows. Absent
+   * usage is a run with no run history (an agent-CLI child, a launch that failed
+   * before its first batch); an unreadable run history is logged and reads the
    * same, so it never also costs the run its terminal fact.
    */
   const runEndOf = (rows: readonly SessionEvent[]) =>
@@ -261,12 +261,12 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       // The usage is folded from these same rows, so the terminal fact and
       // the totals come from one read and a resume can never pair them
       // across two.
-      const folded = Result.flatMap(ledgerRows(rows), (live) =>
+      const folded = Result.flatMap(runHistoryRows(rows), (live) =>
         foldRunState(null, live),
       );
       if (Result.isFailure(folded)) {
         yield* Effect.logWarning(
-          'Failed to fold the run usage from its ledger rows',
+          'Failed to fold the run usage from its run history rows',
         ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
       }
       const usage = Result.isSuccess(folded)
@@ -344,11 +344,11 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     /**
      * The workspace files the run edited: the edits its latest `run.snapshot`
      * restates in the loop state's workspace snapshot, the one record of
-     * them, read as one indexed row. A run with no snapshot (no ledger, or
+     * them, read as one indexed row. A run with no snapshot (no run history, or
      * a closed run) edited nothing here.
      */
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      session.ledger
+      session.runHistory
         .latestSnapshot(runId)
         .pipe(
           Effect.map((row) =>

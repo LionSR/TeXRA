@@ -12,7 +12,7 @@ import {
 } from '@agent/runtime/modelRoutes';
 import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunHistoryDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel, PROTOCOL_BY_KEY } from '../run/modelBinding';
@@ -33,7 +33,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     snapshot: (
       state: RunState,
       patch: Omit<SnapshotPatch, 'state'>,
-    ) => readonly RunLedgerDraft[],
+    ) => readonly RunHistoryDraft[],
   ): Effect.fn.Return<
     RunState,
     Error,

@@ -21,7 +21,7 @@ import {
  * 3. A detached child still appears under its former parent.
  * 4. A runaway statement holds the store instead of stopping at its
  *    deadline, or the store stays dead after it.
- * 5. A ledger row, a private record, or the session database's own tables
+ * 5. A run history row, a private record, or the session database's own tables
  *    are reachable from a query.
  * 6. A statement writes to the store or runs a second statement.
  */

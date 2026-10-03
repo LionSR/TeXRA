@@ -73,7 +73,8 @@ const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
   session: SessionHandle,
   runId: RunId | undefined,
 ) {
-  const state = runId === undefined ? null : yield* session.ledger.load(runId);
+  const state =
+    runId === undefined ? null : yield* session.runHistory.load(runId);
   return state?.offeredSkills ?? [];
 });
 

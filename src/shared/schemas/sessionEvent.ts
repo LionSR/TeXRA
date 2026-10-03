@@ -51,7 +51,7 @@ import {
   ScriptCallPayloadSchema,
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
-} from './runLedgerEvent';
+} from './runHistoryEvent';
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
@@ -343,7 +343,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
-   * A child driven by the child loop, which has no ledger or rounds, parks
+   * A child driven by the child loop, which has no run history or rounds, parks
    * on its own row (one run model, 3.3): `parked` before the loop blocks on
    * its queue, `resumed` when a batch starts the next turn (what
    * `getToolUseFollowUpTarget` reads to admit a turn), `paused` when a stop
@@ -419,10 +419,10 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
-   * The loop's position: family, `at`, and coordinates. The one run-ledger
+   * The loop's position: family, `at`, and coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
    * parks the run, any other position is running) and `RunView.position`
-   * carries its coordinates; its five siblings below are ledger-private.
+   * carries its coordinates; its five siblings below are run-history-private.
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
@@ -443,12 +443,12 @@ const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.closed', {}),
 ]);
 /**
- * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
+ * The run history's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
  * the byte-exact conversation and the loop's durable state (its hooks'
- * outcomes included), read only by `foldRunState` through `RunLedger`. Never
+ * outcomes included), read only by `foldRunState` through `RunHistory`. Never
  * redacted, on a renderer's transport or in the cold listing.
  */
-const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
+const RunHistoryEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('context.edit', { payload: ContextEditPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
@@ -480,7 +480,7 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
 export const SessionEventDraftSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventDraftSchema.options,
   ...RunRecordEventDraftSchema.options,
-  ...RunLedgerEventDraftSchema.options,
+  ...RunHistoryEventDraftSchema.options,
 ]);
 export const DisplaySessionEventSchema = z.discriminatedUnion('type', [
   RunStartEventSchema.extend(envelope),
@@ -502,7 +502,9 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
   ...RunRecordEventDraftSchema.options.map((schema) => schema.extend(envelope)),
-  ...RunLedgerEventDraftSchema.options.map((schema) => schema.extend(envelope)),
+  ...RunHistoryEventDraftSchema.options.map((schema) =>
+    schema.extend(envelope),
+  ),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
@@ -609,7 +611,7 @@ export function listingTypeOf(
     case 'context.blob':
     case 'hook.outcome':
     case 'child.turn':
-      // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
+      // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
       // rows stay out: a cold hydrate never pulls a `run.snapshot` into every
       // renderer (`run.position`, `output.produced` are listing rows). Keyed
       // records fold whole; the fold suite pins this list.

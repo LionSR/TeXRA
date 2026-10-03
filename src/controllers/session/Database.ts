@@ -1,7 +1,7 @@
 /**
  * The persistence substrate (`2026-09-03-persistence-substrate-decision.md`,
  * reshaped by `2026-09-28-storage-v1-design.md`): the connection, its
- * transactions and busy retry, the ledger's one write path, claims, the
+ * transactions and busy retry, the run history's one write path, claims, the
  * aggregate lifecycle, deletion and collection, and the reads. One database
  * per session root (`WorkspaceRoots`), never a process singleton; an
  * ephemeral session runs the same schema in SQLite memory, and a failed file

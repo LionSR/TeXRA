@@ -1,8 +1,8 @@
 /**
  * The conversion between the package's turn and history values and their
  * storage-owned shapes (`@shared/schemas` `storedTurn.ts`), at the run
- * ledger's boundary: `RunLedger` stores what the loop authored through
- * {@link storedDraft} and folds what it reads through {@link ledgerRows}.
+ * run history's boundary: `RunHistory` stores what the loop authored through
+ * {@link storedDraft} and folds what it reads through {@link runHistoryRows}.
  *
  * Provider evidence crosses as `{ kind, data }`: storage keeps the bytes and
  * the package's own schemas parse them back here, so a turn another build of
@@ -27,11 +27,11 @@ import {
 } from '@shared/schemas';
 import type {
   ModelMessagePayload,
-  RunLedgerRow,
-} from '@shared/session/ledgerTurns';
+  RunHistoryRow,
+} from '@shared/session/historyTurns';
 import {
-  RunLedgerInconsistent,
-  type RunLedgerDraft,
+  RunHistoryInconsistent,
+  type RunHistoryDraft,
 } from '@shared/session/runStateFold';
 import { isObject } from '@utils/core';
 import type { z } from 'zod';
@@ -91,8 +91,8 @@ const storedOperation = ({
   evidence: { kind: origin.protocol, ...cursor },
 });
 
-/** A ledger row as the store keeps it. */
-export function storedDraft(row: RunLedgerDraft): SessionEventDraft {
+/** A run history row as the store keeps it. */
+export function storedDraft(row: RunHistoryDraft): SessionEventDraft {
   if (row.type === 'context.edit')
     return {
       ...row,
@@ -149,7 +149,7 @@ function livePayload(
   }
 }
 
-function liveRow(row: SessionEvent): RunLedgerRow {
+function liveRow(row: SessionEvent): RunHistoryRow {
   if (row.type === 'context.edit')
     return {
       ...row,
@@ -161,14 +161,14 @@ function liveRow(row: SessionEvent): RunLedgerRow {
 
 /** Committed rows as the run fold reads them, or the row whose turn this
  *  build of the package cannot read. */
-export function ledgerRows(
+export function runHistoryRows(
   rows: readonly SessionEvent[],
-): Result.Result<readonly RunLedgerRow[], RunLedgerInconsistent> {
+): Result.Result<readonly RunHistoryRow[], RunHistoryInconsistent> {
   let at: SessionEvent | undefined;
   return Result.try({
     try: () => rows.map((row) => liveRow((at = row))),
     catch: (cause) =>
-      new RunLedgerInconsistent({
+      new RunHistoryInconsistent({
         reason: 'unreadable-turn',
         detail: `${at?.type} at commit ${at?.commit}: ${
           cause instanceof Error ? cause.message : String(cause)

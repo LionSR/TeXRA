@@ -211,8 +211,8 @@ response's step recorded. This mirrors `heldToRecord` for tools:
 
 ## Recorded rows
 
-Each hook invocation writes one `hook.outcome` row on the run's ledger,
-through the run's one writer (`RunLedger.appendBatch`). The row carries:
+Each hook invocation writes one `hook.outcome` row on the run's history,
+through the run's one writer (`RunHistory.appendBatch`). The row carries:
 
 - `point`: the event plus its site: `SessionStart`, `UserPromptSubmit:open`,
   `UserPromptSubmit:<follow-up id>`, `PreToolUse:<response id>/<call id>`,

@@ -146,7 +146,7 @@ describe('run listing normalization', () => {
         yield* Effect.promise(() =>
           writeRun(id, '2026-07-15T11:00:00.000Z', config('assistant')),
         );
-        vi.spyOn(session.ledger, 'latestSnapshot').mockReturnValue(
+        vi.spyOn(session.runHistory, 'latestSnapshot').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'session.db',

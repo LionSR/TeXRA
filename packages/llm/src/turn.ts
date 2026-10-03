@@ -813,7 +813,7 @@ export interface Model {
      * Observe the remote work `operation` names. The admitted turn is passed
      * back because a completion's continuation anchors to the exact history
      * prefix it covers, which the handle deliberately does not copy: an
-     * accepted operation is a handle, and the ledger keeps no second
+     * accepted operation is a handle, and the run history keeps no second
      * transcript. The caller owns that history and re-derives the same
      * admitted turn when a resume observes an operation it did not submit.
      * Re-derivation can drift: when the turn no longer fingerprints as the
