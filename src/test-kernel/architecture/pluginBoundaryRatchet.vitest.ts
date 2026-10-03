@@ -55,11 +55,21 @@ const PLUGIN_SERVICES: readonly {
   },
   { tag: 'CodexThreads', users: /^src\/tools\/codex\.ts$/ },
   { tag: 'ClaudeAgentSessions', users: /^src\/tools\/claudeAgent\.ts$/ },
+  // The Lean 4 plugin's port: its tools and probe, and the VS Code host's
+  // bridge, which that host passes as the plugin's layer.
+  {
+    tag: 'LeanLanguageServices',
+    users:
+      /^src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+  },
+  // The `core` plugin's Comments UI port: its tool.
+  { tag: 'InlineComments', users: /^src\/tools\/comment\// },
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
   'src/tools/agentCliSessionStores.ts',
   'src/tools/integrationPlugins.ts',
+  'src/tools/registry.ts',
   'src/platform/processRuntime.ts',
 ]);
 

@@ -58,10 +58,10 @@ export interface InlineCommentProvider {
 }
 
 /**
- * The host's inline-comment provider, served by `installProcessRuntime`'s
- * `inlineComments` option on the one host that has a Comments UI. A host
- * without one provides no layer, exactly as it does for `ToolMissingReporter`, and
- * the tool reads the absence rather than a module slot's `undefined`.
+ * The host's inline-comment provider, the `core` plugin's process layer on
+ * the one host that has a Comments UI (`texraPlugins({ inlineComments })`).
+ * A host without one passes none, and the tool reads the absence rather
+ * than a module slot's `undefined`.
  */
 export class InlineComments extends Context.Service<
   InlineComments,

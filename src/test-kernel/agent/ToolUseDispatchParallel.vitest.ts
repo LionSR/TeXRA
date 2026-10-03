@@ -61,7 +61,7 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentTrace } from '@agent/trace';
-import type { PluginServices } from '@platform/processRuntime';
+import type { PluginContext } from '@platform/processRuntime';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
@@ -354,7 +354,7 @@ const dispatch = (kit: DispatchKit) =>
         definitions: [],
         registry: kit.tools,
         offered: [],
-        services: Context.empty() as Context.Context<PluginServices>,
+        services: Context.empty() as PluginContext,
         stepRoots: [],
         hooks: [],
       }),

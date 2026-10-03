@@ -451,6 +451,10 @@ describe('run-scoped tool resolution', () => {
                 },
               },
             ]),
+          ).pipe(
+            Layer.provide(
+              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+            ),
           ),
         ),
         Effect.provide(nodeSpawnerLayer),

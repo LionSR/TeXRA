@@ -166,11 +166,20 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     globalStorage,
     // TeXRA's plugins, with Copilot's TeXRA tools where a default session
     // runs their calls.
-    plugins: texraPlugins(
-      workspaceRoot
-        ? { copilot: copilotToolsLayer(() => runtime, tryDefaultSession) }
-        : {},
-    ),
+    plugins: texraPlugins({
+      ...(workspaceRoot && {
+        copilot: copilotToolsLayer(() => runtime, tryDefaultSession),
+      }),
+      // The Comments UI behind the `inline_comment` tool. The provider reads
+      // the controller this host registers at activation, so it is a value
+      // from module load; nothing about it waits on that registration.
+      inlineComments: getInlineCommentProvider(),
+      // Lean through the Lean 4 extension, not a direct `lake` pool.
+      lean: Layer.effect(
+        LeanLanguageServices,
+        Effect.map(AppState, createVscodeLeanLanguageServices),
+      ),
+    }),
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     appState,
@@ -180,15 +189,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
-    // The Comments UI behind the `inline_comment` tool. The provider reads
-    // the controller this host registers at activation, so it is a value
-    // from module load; nothing about it waits on that registration.
-    inlineComments: getInlineCommentProvider(),
-    // Lean through the Lean 4 extension, not a direct `lake` pool.
-    lean: Layer.effect(
-      LeanLanguageServices,
-      Effect.map(AppState, createVscodeLeanLanguageServices),
-    ),
     usageLog: usageLogLayer({
       version: extensionVersion,
       editorType: vscode.env.appName || undefined,
