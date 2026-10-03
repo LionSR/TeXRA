@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The Multi-Agent Workflow switch is named `multi-agent`.** Use
+  `texra tools enable multi-agent` (or `disable`, `status`). A stored switch
+  under the old `workflow-script` name is dropped once, with a warning in the
+  log, and the plugin is back to its default (on).
 - **Models are named by their provider's own model ID.** Settings, agent
   files, `--model` and delegation now take names like
   `anthropic/claude-opus-5-5` or `openai/gpt-6.1-sol`, optionally with an
