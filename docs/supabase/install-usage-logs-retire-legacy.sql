@@ -1,28 +1,16 @@
--- LATER step: run ONLY AFTER `log-usage` has been redeployed JWT-only (deploy step 4),
--- in one transaction, after a released client version posts to log-usage-v2.
--- It moves the install rows the combined v34-v36 function wrote into the
--- legacy tables over to install_usage_logs, then restores the legacy tables
--- and upserts to their original (account-only) shape. The tail of this file is
--- the original upsert bodies, exactly as they were before the install-id change.
---
--- The moved rows are the legacy per-stream aggregates (one row per run, not
--- per call); entry_index only keeps them unique within their batch.
+-- APPLIED 2026-10-03, after `log-usage` was redeployed JWT-only (v37). Kept for
+-- the record. One transaction. It archives the install rows the combined
+-- v34-v36 function wrote into the legacy tables (873 rows, all from 0.41.0 dev
+-- builds; no released client ever sent an install ID) into
+-- install_usage_logs_archive, deletes them from the legacy tables, then restores
+-- the legacy tables and upserts to their original (account-only) shape. The tail
+-- of this file is the original upsert bodies, exactly as they were before the
+-- install-id change. The archive keeps the legacy per-stream aggregate shape
+-- (one row per run, not per call), so it is not mixed into install_usage_logs.
 BEGIN;
 
-INSERT INTO public.install_usage_logs (
-  install_id, batch_id, entry_index, logged_at, model, provider, agent_name,
-  agent_category, usage_route, input_tokens, output_tokens,
-  cached_input_tokens, reasoning_tokens, cost, response_time_ms, stream_id,
-  extension_version, editor_type
-)
-SELECT
-  install_id, batch_id,
-  row_number() OVER (PARTITION BY install_id, batch_id ORDER BY id) - 1,
-  logged_at, model, provider, agent_name, agent_category,
-  usage_route, input_tokens, output_tokens, cached_input_tokens,
-  reasoning_tokens, cost, response_time_ms, stream_id, extension_version,
-  editor_type
-FROM (
+CREATE TABLE public.install_usage_logs_archive AS
+SELECT * FROM (
   SELECT id, install_id, batch_id, logged_at, model, provider, agent_name,
          agent_category, 'api-key' AS usage_route, input_tokens, output_tokens,
          cached_input_tokens, reasoning_tokens, cost, response_time_ms,
@@ -38,7 +26,8 @@ FROM (
          input_tokens, output_tokens, cached_input_tokens, reasoning_tokens,
          cost, response_time_ms, stream_id, extension_version, editor_type
   FROM public.subscription_usage_logs WHERE install_id IS NOT NULL
-) moved;
+) archived;
+ALTER TABLE public.install_usage_logs_archive ENABLE ROW LEVEL SECURITY;
 
 DELETE FROM public.usage_logs WHERE install_id IS NOT NULL;
 DELETE FROM public.subscription_usage_logs WHERE install_id IS NOT NULL;
