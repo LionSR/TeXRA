@@ -1,7 +1,7 @@
 /** Shared canonical configuration schema for runtime and persisted events. */
 import { z } from 'zod';
 
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 import { AgentCategory, AgentSourceSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';

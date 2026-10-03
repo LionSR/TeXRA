@@ -26,7 +26,8 @@ vi.mock('@cli/runtime/modelAccessSelection', () => ({
   readCliModelAccessStatus: mocks.readCliModelAccessStatus,
 }));
 
-vi.mock('@model/apiProviders', () => ({
+vi.mock('@texra-ai/llm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@texra-ai/llm')>()),
   API_PROVIDERS: ['deepseek', 'glm', 'kimiCode'],
   lookupApiKeyOrigin: mocks.lookupApiKeyOrigin,
   configuredApiKeyProviders: () =>

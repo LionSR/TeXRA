@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
 import { redactDisplayValue, redactSecrets } from '@logger/redaction';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 
 /**
  * Representative keys for each configurable provider's key shape. These are

@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 
+import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 import {
   InquiryDraftSchema,
   LaunchTargetSchema,
@@ -24,7 +25,6 @@ import {
   type InquiryDraft,
   type RunId,
 } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
   acceptsFollowUp,
   type FollowUpHost,

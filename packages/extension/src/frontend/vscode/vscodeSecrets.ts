@@ -9,7 +9,8 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import { SecretsFailed } from '@texra-ai/llm';
+import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export class VscodeSecrets implements PlatformSecrets {

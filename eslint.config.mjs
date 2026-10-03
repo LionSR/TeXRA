@@ -155,13 +155,46 @@ const AGENT_CORE_RESTRICTED_IMPORT_PATTERNS = [
   ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
 ];
 
-const AUTH_RESTRICTED_IMPORT_PATTERNS = [
+// `@texra-ai/llm` imports nothing else in the repo: it takes configuration
+// and credentials as inputs. No baseline.
+const LLM_RESTRICTED_IMPORT_PATTERNS = [
   {
-    regex: '^(?:@model(?:/|$)|(?:\\.\\./)+model(?:/|$))',
+    group: INTERNAL_ALIAS_NAMES.flatMap((alias) => [alias, `${alias}/**`]),
     message:
-      'Authentication must not own or depend on model policy; move the policy to src/model.',
+      '@texra-ai/llm imports nothing else in the repo; take the value as an input.',
   },
-  ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+  {
+    regex: '^@texra-ai/',
+    message:
+      '@texra-ai/llm imports nothing else in the repo; take the value as an input.',
+  },
+  {
+    // Three levels up from `src/<dir>/` leaves the package.
+    regex: '^(?:\\.\\./){3,}',
+    message:
+      '@texra-ai/llm imports nothing else in the repo; take the value as an input.',
+  },
+];
+
+// The `.` entry of `@texra-ai/llm` is browser-safe: outside `api/`,
+// `oauth/` and `node.ts` no module loads a Node built-in or a vendor SDK.
+const LLM_BROWSER_SAFE_RESTRICTED_IMPORT_PATTERNS = [
+  ...LLM_RESTRICTED_IMPORT_PATTERNS,
+  {
+    group: [
+      '@anthropic-ai/sdk',
+      '@anthropic-ai/sdk/**',
+      '@google/genai',
+      '@google/genai/**',
+      '@openrouter/sdk',
+      '@openrouter/sdk/**',
+      'openai',
+      'openai/**',
+      'ws',
+    ],
+    message:
+      "@texra-ai/llm's browser-safe entry reaches no vendor SDK; protocol code lives in api/ and loads through bindModel.",
+  },
 ];
 
 function isUnderDir(filename, dir) {
@@ -745,17 +778,29 @@ export default tseslint.config(
     },
   },
 
-  // Authentication owns credentials, sessions, and preferences. Model policy
-  // may consume that state, but auth must not depend back on the model layer.
+  // The model package imports nothing else in the repo, by alias, by
+  // package name or by a relative path out of the package.
   {
-    files: ['src/auth/**/*.{ts,tsx,mts}'],
+    files: ['packages/llm/src/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
-        {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
-          patterns: AUTH_RESTRICTED_IMPORT_PATTERNS,
-        },
+        { patterns: LLM_RESTRICTED_IMPORT_PATTERNS },
+      ],
+    },
+  },
+  {
+    files: ['packages/llm/src/**/*.{ts,tsx,mts}'],
+    ignores: [
+      'packages/llm/src/api/**',
+      'packages/llm/src/oauth/**',
+      'packages/llm/src/node.ts',
+    ],
+    rules: {
+      'import/no-nodejs-modules': 'error',
+      'no-restricted-imports': [
+        'error',
+        { patterns: LLM_BROWSER_SAFE_RESTRICTED_IMPORT_PATTERNS },
       ],
     },
   },

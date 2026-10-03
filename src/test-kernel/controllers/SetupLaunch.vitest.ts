@@ -41,8 +41,8 @@ vi.mock('@model/computeModelOptions', () => ({
     mocks.usageRoutes.get(model),
 }));
 
-vi.mock('@model/apiProviders', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@model/apiProviders')>();
+vi.mock('@texra-ai/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@texra-ai/llm')>();
   return { ...actual, hasUsableApiKey: mocks.hasUsableApiKey };
 });
 

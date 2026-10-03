@@ -9,8 +9,7 @@
 
 import { Effect } from 'effect';
 
-import { getCodexStatus } from '@auth/codex';
-import { getXaiStatus } from '@auth/xai';
+import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
 import { setSignedInProbe } from '@model/subscriptionAccess';
 import type { PlatformSecrets } from '@platform/secrets';
 

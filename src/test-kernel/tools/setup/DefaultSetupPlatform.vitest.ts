@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import * as codexAuth from '@auth/codex';
+import * as codexAuth from '@texra-ai/llm/node';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   fakeProcessServices,

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { hasUsableApiKey } from '@model/apiProviders';
+import { hasUsableApiKey } from '@texra-ai/llm';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,

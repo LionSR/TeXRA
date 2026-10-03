@@ -3,12 +3,15 @@ import { it } from '@effect/vitest';
 import { describe } from 'vitest';
 
 import {
+  API_PROVIDERS,
+  decideModelRoute,
+  modelConfig,
+  OWN_KEY_ROUTE_FACTS,
+} from '@texra-ai/llm';
+import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
 } from '@model/setupModelDefaults';
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import { API_PROVIDERS } from '@model/apiProviders';
-import { modelConfig } from '@shared/model/modelSelection';
 
 /**
  * The setup pins are literal data. An llm-zoo bump that retires or deprecates

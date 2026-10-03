@@ -2,8 +2,8 @@
 import { z } from 'zod';
 
 // Local imports
+import { API_PROVIDERS, type ApiProvider } from '@texra-ai/llm';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { AgentCategorySchema, type AgentCategory } from '@shared/schemas';

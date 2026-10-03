@@ -1,8 +1,8 @@
 import { Effect } from 'effect';
 
+import { API_PROVIDERS, loadApiKeyStatusMap } from '@texra-ai/llm';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@common/secrets/storeCredential';
-import { API_PROVIDERS, loadApiKeyStatusMap } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';

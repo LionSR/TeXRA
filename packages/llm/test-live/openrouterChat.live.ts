@@ -1,5 +1,5 @@
 // Local imports
-import { openrouterChatModel } from '../src/openrouterChat.js';
+import { openrouterChatModel } from '../src/api/openrouterChat.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({

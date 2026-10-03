@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import { ModelError, completedTurn } from '@texra-ai/llm/turn';
+import { ModelError, completedTurn } from '@texra-ai/llm';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';

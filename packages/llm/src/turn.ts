@@ -1,13 +1,13 @@
 /**
- * `@texra-ai/llm/turn` — the package's public entry for the turn contract.
+ * The turn contract, which the package's `.` entry exports whole.
  *
  * What a caller reads and writes is here: the request, the selected binding,
  * the prepared and resolved turn, its result and its events, and the `Model`
  * interface that executes one. The modules this contract was split into —
  * `protocol.ts`, `message.ts` and `errors.ts` — define the symbols they own,
- * and this entry re-exports the ones consumers read, so a consumer imports
- * this one subpath and never the file layout behind it. The protocol helpers
- * in `errors.ts` and `transport.ts` stay package-internal.
+ * and this module re-exports the ones consumers read, so a consumer never
+ * imports the file layout behind it. The protocol helpers in `errors.ts` and
+ * `api/transport.ts` stay package-internal.
  */
 // Third-party imports
 import { Effect, Stream } from 'effect';

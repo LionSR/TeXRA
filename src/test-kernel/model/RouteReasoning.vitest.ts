@@ -2,9 +2,12 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { lookup, ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 
-import { chooseReasoning, type ReasoningRequest } from '@model/reasoningChoice';
+import {
+  chooseReasoning,
+  modelFileName,
+  type ReasoningRequest,
+} from '@texra-ai/llm';
 import { reasoningFor, type ReasoningRoute } from '@model/reasoningLevel';
-import { modelFileName } from '@shared/model/modelSelection';
 
 import { FakeStateStore } from '../support/FakePlatform';
 

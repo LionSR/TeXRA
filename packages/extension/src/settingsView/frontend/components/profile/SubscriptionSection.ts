@@ -11,8 +11,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared auth
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
-import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
+import { codexAccountLabel, xaiAccountLabel } from '@texra-ai/llm';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';

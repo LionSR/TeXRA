@@ -1,8 +1,10 @@
 import { Effect, type Scope } from 'effect';
 
+import {
+  LoopbackTransportUnavailableError,
+  type SubscriptionDeviceCodePrompt,
+} from '@texra-ai/llm/node';
 import type { SessionHandle } from '@agent/runtime';
-import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
-import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,

@@ -5,9 +5,9 @@
  * identical payload (the wire shape is validated by
  * `SubscriptionAuthStatusSchema` at each host's boundary).
  *
- * Lives beside the catalog rather than in `@auth/**` so the model layer's
- * subscription preferences stay reachable without depending on the OAuth
- * machinery; both facts already hang off the catalog row.
+ * Lives beside the catalog rather than in `@texra-ai/llm`, which reads no
+ * settings, so the model layer's subscription preferences join the session
+ * status here; both facts already hang off the catalog row.
  */
 import { Effect } from 'effect';
 

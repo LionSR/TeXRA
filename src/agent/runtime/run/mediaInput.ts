@@ -27,7 +27,7 @@ import {
   processPdf2Png,
 } from '@utils/media/img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { MessageSchema } from '@texra-ai/llm/turn';
+import type { MessageSchema } from '@texra-ai/llm';
 import type { z } from 'zod';
 
 /** One element of a canonical user or tool-result message. */

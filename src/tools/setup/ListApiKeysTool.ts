@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
+import { API_PROVIDERS, apiKeySecretName } from '@texra-ai/llm';
 import { Secrets } from '@platform/secrets';
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { executed } from '@tools/core/result';

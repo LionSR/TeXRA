@@ -80,8 +80,8 @@ function unknownErrorChannels(file: string): string[] {
 const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
   'packages/agent/src/effect/runtime.ts': 1,
   'packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts': 2,
-  'packages/llm/src/openaiResponsesWebSocket.ts': 1,
-  'packages/llm/src/transport.ts': 1,
+  'packages/llm/src/api/openaiResponsesWebSocket.ts': 1,
+  'packages/llm/src/api/transport.ts': 1,
   'src/latex/arxivProcessor.ts': 1,
 };
 

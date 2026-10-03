@@ -14,6 +14,12 @@
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
+import {
+  API_PROVIDERS,
+  apiProviderOfSecretName,
+  codingPlanForApiProvider,
+  loadApiKeyStatusMap,
+} from '@texra-ai/llm';
 
 import type { SessionHandle } from '@agent/runtime';
 import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
@@ -41,22 +47,14 @@ import {
 } from '@controllers/settingsView/settingsViewDispatch';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  API_PROVIDERS,
-  apiProviderOfSecretName,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
-import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import { codingPlanForUsageSetting } from '@model/codingPlanSubscriptions';
 import { discoverCopilotRoutes } from '@model/copilotRouting';
 import type { ProcessServices } from '@platform/processRuntime';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import {
-  codingPlanForApiProvider,
-  codingPlanForUsageSetting,
-} from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';

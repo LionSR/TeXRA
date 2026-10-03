@@ -5,12 +5,9 @@ import path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
+import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import {
-  SecretsFailed,
-  type PlatformSecrets,
-  type SecretsOperation,
-} from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {

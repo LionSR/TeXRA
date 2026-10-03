@@ -5,10 +5,13 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { apiKeySecretName } from '@model/apiProviders';
+import {
+  apiKeySecretName,
+  decideModelRoute,
+  resolveRouteEndpoint,
+} from '@texra-ai/llm';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { decideModelRoute, readRouteFacts } from '@model/modelRoute';
-import { resolveRouteEndpoint } from '@model/routeEndpoint';
+import { readRouteFacts } from '@model/modelRoute';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -25,8 +28,9 @@ const boundEndpoint = (
   declinedRoutes?: readonly DeclinableUsageRoute[],
 ) =>
   Effect.gen(function* () {
+    const facts = yield* readRouteFacts(hostStores(), declinedRoutes);
     const route = decideModelRoute(config, {
-      ...(yield* readRouteFacts(hostStores(), declinedRoutes)),
+      ...facts,
       validation: false,
       prefersCopilot: false,
       copilotRoute: undefined,
@@ -34,7 +38,7 @@ const boundEndpoint = (
     if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
       throw new Error(`unexpected ${route.kind} route`);
     }
-    const baseUrl = yield* resolveRouteEndpoint(hostStores(), config, route);
+    const baseUrl = resolveRouteEndpoint(config, route, facts);
     return route.kind === 'api-key' && route.usageRoute !== 'api-key'
       ? { baseUrl, usageRoute: route.usageRoute }
       : { baseUrl };

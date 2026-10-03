@@ -17,6 +17,7 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -28,7 +29,6 @@ import {
   SettingsViewInboundMessageSchema,
   type DerivedSettingsSnapshot,
 } from '@shared/settingsView/settingsViewMessages';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

@@ -144,8 +144,8 @@ sync with this list and with each other.
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (calls `installProcessRuntime()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
-`packages/extension/src/common/`, `src/platform/` interface definitions, and
-`src/auth/`. Within `src/utils/`, a browser-reachable module additionally
+`packages/extension/src/common/`, and `src/platform/` interface definitions.
+Within `src/utils/`, a browser-reachable module additionally
 stays free of Node built-ins — see the browser-safe note above; that is a
 stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.

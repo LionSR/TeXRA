@@ -759,6 +759,9 @@ importers:
       '@openrouter/sdk':
         specifier: 1.4.2
         version: 1.4.2
+      llm-zoo:
+        specifier: 'catalog:'
+        version: 2.0.0(zod@4.4.3)
       openai:
         specifier: 7.20.0
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.2)(ws@8.22.0)(zod@4.4.3)

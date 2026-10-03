@@ -9,6 +9,7 @@
  */
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
+import { selectModel } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   AgentPrompt,
@@ -24,7 +25,6 @@ import {
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import { selectModel } from '@shared/model/modelSelection';
 import {
   AGENT_SOURCE,
   AgentCategory,

@@ -4,9 +4,9 @@ import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
+import { apiKeySecretName } from '@texra-ai/llm';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
-import { apiKeySecretName } from '@model/apiProviders';
 import { AppState } from '@platform/interfaces';
 import {
   LanguageModel,

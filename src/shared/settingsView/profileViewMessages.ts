@@ -6,17 +6,23 @@
 import { z } from 'zod';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { ProviderSettingDefSchema } from '@shared/constants/providers';
 
 // ============================================================
 // Data schemas
 // ============================================================
 
 /**
- * A native configuration toggle surfaced in a provider's expanded settings.
- * Extends ProviderSettingDefSchema (single source of truth) with runtime `value`.
+ * A native configuration toggle surfaced in a provider's expanded settings:
+ * one Models tab control (its rows are catalog rows, `stateSettings.ts`
+ * `surfaces.models`) with its runtime `value`.
  */
-const ProviderSettingSchema = ProviderSettingDefSchema.extend({
+const ProviderSettingSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  description: z.string(),
+  warning: z.string().optional(),
+  warningUrl: z.string().optional(),
+  warningUrlLabel: z.string().optional(),
   value: z.boolean(),
 });
 export type ProviderSetting = z.infer<typeof ProviderSettingSchema>;

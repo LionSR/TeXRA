@@ -11,6 +11,7 @@ import {
 } from 'llm-zoo';
 
 // Local imports - platform
+import { modelConfig } from '@texra-ai/llm';
 import {
   JsonConfigProvider,
   type ConfigStore,
@@ -26,7 +27,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
-import { modelConfig } from '@shared/model/modelSelection';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';

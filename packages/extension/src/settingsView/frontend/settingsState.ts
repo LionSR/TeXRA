@@ -21,6 +21,7 @@
  * replays. A signal declared any other way is silently left out of the reset.
  */
 
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { createTrackedSignalRegistry, Signal } from '@shared/signals';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
@@ -60,7 +61,6 @@ import {
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is

@@ -13,11 +13,6 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
-import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
-import {
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
-} from '@shared/constants/providers';
 import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
   DEFAULT_ENABLED_REPLACEMENTS,
@@ -56,6 +51,11 @@ import {
   QualifiedSkillNameSchema,
   TELEMETRY_ENABLED_DEFAULT,
 } from '@shared/schemas';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
+import {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  PROVIDER_REGION_SETTINGS,
+} from '@shared/state/providerSettings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ============================================================================
@@ -722,20 +722,16 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region toggles resolved by `@model/routeEndpoint`, each also a Models tab
+ * Region toggles resolved into `RouteFacts.endpoints`, each also a Models tab
  * control for its provider: one row per provider plugin `region`.
  */
-const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
-  ({ id: provider, region }) =>
-    region === undefined
-      ? []
-      : [
-          globalProviderToggle({
-            key: region.key,
-            default: region.default,
-            model: { provider, ...region.control },
-          }),
-        ],
+const PROVIDER_ROUTING_SETTINGS = PROVIDER_REGION_SETTINGS.map(
+  ({ provider, key, default: china, control }) =>
+    globalProviderToggle({
+      key,
+      default: china,
+      model: { provider, ...control },
+    }),
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [

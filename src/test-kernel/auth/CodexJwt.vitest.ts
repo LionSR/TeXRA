@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractCodexClaims } from '@auth/codex/codexJwt';
+import { extractCodexClaims } from '../../../packages/llm/src/oauth/codex/codexJwt.js';
 
 /** Build a JWT with the given payload (signature is irrelevant — we only decode). */
 function makeJwt(payload: Record<string, unknown>): string {

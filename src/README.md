@@ -14,29 +14,28 @@ Use the alias, not a long relative chain.
 
 ## Subsystems
 
-| Directory           | What it is                                                                                                                                                                                               |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/agent/`        | The agent domain model, the two run loops, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                  |
-| `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                    |
-| `src/shared/`       | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them. Browser-reachable throughout                                                                                       |
-| `src/ui/`           | The shared browser UI kit (`wa/`, `styles/`, `transcript/`, `markdown/`, `copy/`) all three hosts render with. Lit and Web Awesome live here, not in a host package                                      |
-| `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                              |
-| `src/utils/`        | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                              |
-| `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                  |
-| `src/common/`       | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                        |
-| `src/auth/`         | Sign-in, session, and credential handling. **Core zones import this directly today** — `tools/setup/platform.ts`, `agent/remote/`, `telemetry/` all do. Decoupling it behind ports is proposed, not done |
-| `src/platform/`     | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) served by `installProcessRuntime`                                                                 |
-| `src/model/`        | Model catalog, selection, and capability resolution                                                                                                                                                      |
-| `src/transcript/`   | Trace and transcript document schemas plus stream logging                                                                                                                                                |
-| `src/replacement/`  | Text-replacement utilities used by editing tools                                                                                                                                                         |
-| `src/skills/`       | Skill schema and loading                                                                                                                                                                                 |
-| `src/housekeeping/` | Workspace cleanup routines                                                                                                                                                                               |
-| `src/telemetry/`    | Usage-log reporting                                                                                                                                                                                      |
-| `src/logger/`       | Channel-keyed logging primitives                                                                                                                                                                         |
-| `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                       |
-| `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                        |
-| `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                             |
-| `src/test-kernel/`  | The test suite. It dominates a directory listing but ships in nothing                                                                                                                                    |
+| Directory           | What it is                                                                                                                                                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/agent/`        | The agent domain model, the two run loops, and provider abstraction. Largest subsystem; has its own READMEs — start with [`agent/core/README.md`](agent/core/README.md)                                                                        |
+| `src/tools/`        | Tool implementations the agent can call (bash, file edits, delegation, search, setup)                                                                                                                                                          |
+| `src/shared/`       | Wire contracts and message types (Zod schemas) plus the host-neutral logic over them. Browser-reachable throughout                                                                                                                             |
+| `src/ui/`           | The shared browser UI kit (`wa/`, `styles/`, `transcript/`, `markdown/`, `copy/`) all three hosts render with. Lit and Web Awesome live here, not in a host package                                                                            |
+| `src/controllers/`  | Host-neutral orchestration — the layer hosts call into instead of driving `agent/` directly                                                                                                                                                    |
+| `src/utils/`        | Host-agnostic helpers. A fixed set is additionally browser-safe (see below)                                                                                                                                                                    |
+| `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                                                        |
+| `src/common/`       | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                                                              |
+| `src/platform/`     | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) served by `installProcessRuntime`                                                                                                       |
+| `src/model/`        | The binding of a run's model choice to the session's settings: route facts, the picker's options, Copilot routing, reasoning levels, subscription preferences. The catalog, routes, providers and sign-in are `@texra-ai/llm` (`packages/llm`) |
+| `src/transcript/`   | Trace and transcript document schemas plus stream logging                                                                                                                                                                                      |
+| `src/replacement/`  | Text-replacement utilities used by editing tools                                                                                                                                                                                               |
+| `src/skills/`       | Skill schema and loading                                                                                                                                                                                                                       |
+| `src/housekeeping/` | Workspace cleanup routines                                                                                                                                                                                                                     |
+| `src/telemetry/`    | Usage-log reporting                                                                                                                                                                                                                            |
+| `src/logger/`       | Channel-keyed logging primitives                                                                                                                                                                                                               |
+| `src/eventBus/`     | `AppSignals` **only** — process-scoped app-lifecycle signals (auth, subscriptions, tool availability). Not run or session progress                                                                                                             |
+| `src/hosts/`        | UI host descriptors shared across the three hosts                                                                                                                                                                                              |
+| `src/types/`        | Ambient module declarations for untyped third-party packages                                                                                                                                                                                   |
+| `src/test-kernel/`  | The test suite. It dominates a directory listing but ships in nothing                                                                                                                                                                          |
 
 ## Two axes that decide where code goes
 
@@ -76,7 +75,7 @@ wrong.
 When two fit, prefer the one with the tighter constraints. Note that "tighter"
 varies by directory: `shared/settingsView/handlers/` is guarded by
 `SharedSettingsViewBoundary.vitest.ts` against importing `@controllers/`,
-`@agent/`, `@model/`, `@tools/` or `@auth/`, while `ui/wa/` deliberately
+`@agent/`, `@model/` or `@tools/`, while `ui/wa/` deliberately
 depends on Lit. Check for an existing boundary test near your target directory
 before assuming either extreme.
 

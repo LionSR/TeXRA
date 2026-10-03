@@ -7,13 +7,18 @@ import { Cause, Deferred, Effect, Fiber, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
+  completedTurn,
+  type ModelError,
+  RemoteOperationSchema,
+  type TurnRequest,
+  type TurnResult,
+} from '@texra-ai/llm';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import {
   GOOGLE_PREFIX_DOMAIN,
   googleInteractionsModel,
-} from '@texra-ai/llm/google-interactions';
-import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { RemoteOperationSchema, completedTurn } from '@texra-ai/llm/turn';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
+} from '../../../packages/llm/src/api/googleInteractions.js';
+import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
 
 function model(
   store = true,

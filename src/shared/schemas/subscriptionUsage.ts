@@ -1,9 +1,15 @@
 import { z } from 'zod';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 
+/**
+ * The subscriptions whose usage is reported. Storage owns the enum, so a
+ * catalog change is never a silent stored format change; a coding plan's
+ * `usageProvider` in the llm catalog is passed where this type is expected,
+ * so a plan it lacks does not compile.
+ */
 export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
   'chatgpt',
-  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.usageProvider),
+  'kimiCode',
+  'glmCodingPlan',
 ] as const);
 
 const SubscriptionUsageProviderSchema = z.enum(SUBSCRIPTION_USAGE_PROVIDERS);

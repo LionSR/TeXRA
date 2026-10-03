@@ -1,9 +1,9 @@
-import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
-} from '@shared/codingPlanSubscriptions';
+} from '@texra-ai/llm';
+import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthStatus,
