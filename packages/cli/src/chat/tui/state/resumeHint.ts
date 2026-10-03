@@ -16,7 +16,6 @@ import { runViewOf } from './sessionView';
 export interface ResumeTarget {
   readonly runId: string;
   readonly label: string;
-  readonly isRoot: boolean;
 }
 
 interface ResumeTargetsInput {
@@ -101,14 +100,14 @@ export function collectResumeTargets({
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
   if (rootRunId) {
-    targets.push({ runId: rootRunId, label: 'task', isRoot: true });
+    targets.push({ runId: rootRunId, label: 'task' });
   }
   for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: false,
   })) {
     const run = runViewOf(view, runId);
     if (!run?.resumeEligible) continue;
-    targets.push({ runId: run.id, label: run.label, isRoot: false });
+    targets.push({ runId: run.id, label: run.label });
   }
   return targets;
 }

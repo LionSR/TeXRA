@@ -1,8 +1,5 @@
 import { Data, Effect, FileSystem, type Path } from 'effect';
 
-import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
-import type { AgentDirectoriesFailed } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
@@ -43,18 +40,9 @@ function onShellFailure<A, E, R>(
   );
 }
 
-interface DesktopShellActionFactoryOptions extends Pick<
-  MessageHost,
-  'showInfoMessage'
-> {
-  getCustomAgentDirectory(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  >;
+interface DesktopShellActionFactoryOptions {
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
-  openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
     void,
     Error,
@@ -68,18 +56,13 @@ interface DesktopShellActionFactoryOptions extends Pick<
 }
 
 /**
- * The window's shell actions: what the native menu, the command palette,
- * and the host request arms reach the shell through.
+ * The window's shell actions: what the native menu and the command palette
+ * reach the shell through.
  */
-export interface DesktopShellActions extends DesktopCommandActions {
-  openAgentDirectory(customDirSet?: boolean): void;
-  showInfoMessage(message: string): void;
-}
-
 export function createDesktopShellActions(
   renderer: DesktopRenderer,
   options: DesktopShellActionFactoryOptions,
-): DesktopShellActions {
+): DesktopCommandActions {
   const reportAsyncError = options.onAsyncError;
 
   /**
@@ -92,17 +75,13 @@ export function createDesktopShellActions(
   function runShellAction(
     program: Effect.Effect<
       void,
-      ShellActionFailed | NotificationFailed,
-      | GlobalStorageFs
-      | FileSystem.FileSystem
-      | Path.Path
-      | ProjectDatabases
-      | ChildProcessSpawner
+      ShellActionFailed,
+      FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
     >,
   ): void {
     options.spawn(
       program.pipe(
-        Effect.catch((failure: ShellActionFailed | NotificationFailed) =>
+        Effect.catch((failure: ShellActionFailed) =>
           Effect.sync(() => reportAsyncError(failure.cause)),
         ),
       ),
@@ -124,20 +103,6 @@ export function createDesktopShellActions(
     );
   }
 
-  const openCustomAgentDirectory = onShellFailure(
-    Effect.flatMap(options.getCustomAgentDirectory(), (customDir) =>
-      options.openPath(customDir),
-    ),
-  );
-
-  function openAgentDirectory(customDirSet?: boolean) {
-    if (customDirSet !== true) {
-      showSettings('agents/library');
-      return;
-    }
-    runShellAction(openCustomAgentDirectory);
-  }
-
   function toggleLayout(panel: DesktopLayoutPanel) {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
@@ -146,7 +111,6 @@ export function createDesktopShellActions(
   }
 
   return {
-    openAgentDirectory,
     openDesktopDocs: () =>
       runShellAction(onShellFailure(options.openExternalUrl(DESKTOP_DOCS_URL))),
     openLogFolder: () =>
@@ -166,22 +130,17 @@ export function createDesktopShellActions(
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
-    showInfoMessage: (message) => {
-      // The member is an Effect already failing with `NotificationFailed`, so
-      // the action program is the member itself.
-      runShellAction(options.showInfoMessage(message));
-    },
   };
 }
 
 /**
  * The desktop-local commands the renderer posts by id (open log folder, the
- * walkthrough, the docs): they originate from the native menu's registry,
+ * docs): they originate from the native menu's registry,
  * not from a session, so they dispatch through the one command registry the
  * menu also uses.
  */
 export function createDesktopShellIpc(
-  actions: DesktopShellActions,
+  actions: DesktopCommandActions,
 ): DesktopCommandRoutes {
   // Every registry handler runs its action synchronously; an action that
   // forks host work reports its own failure.

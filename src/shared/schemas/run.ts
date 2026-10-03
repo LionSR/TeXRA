@@ -128,7 +128,7 @@ const RUN_ACTIONS = [
   'delete',
   /** Give the run the user's own title. */
   'rename',
-  /** Read-only: open its folder, export or copy its conversation. */
+  /** Read-only: open its folder, export its conversation, copy its diagnostics. */
   'openRunStorage',
   'export',
   'copy',

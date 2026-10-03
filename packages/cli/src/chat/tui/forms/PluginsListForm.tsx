@@ -18,9 +18,11 @@ import type { PluginRow } from '@shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
   PLUGINS_TUI,
+  pluginRowKey,
   pluginRowName,
   pluginRowProblem,
   pluginRowState,
+  pluginRowSwitchable,
   pluginRowSummary,
   pluginRowTrust,
   pluginRowUsedBy,
@@ -51,30 +53,6 @@ interface PendingTrust {
 
 const TRUST = 'trust';
 const DECLINE = 'decline';
-
-/** The row's select value: unique across the three kinds. */
-const rowValue = (row: PluginRow): string => {
-  switch (row.kind) {
-    case 'texra':
-      return `texra:${row.item.id}`;
-    case 'installed':
-      return `installed:${row.plugin.name}`;
-    case 'mcp':
-      return `mcp:${row.name}`;
-  }
-};
-
-/** Whether Enter can switch the row: one with no switch is listed only. */
-const switchable = (row: PluginRow): boolean => {
-  switch (row.kind) {
-    case 'texra':
-      return row.item.toggleable === true;
-    case 'installed':
-      return row.plugin.code.length === 0 && row.plugin.problem === undefined;
-    case 'mcp':
-      return false;
-  }
-};
 
 function rowDescription(row: PluginRow): string {
   return [
@@ -124,6 +102,14 @@ export function PluginsListForm(
     return Effect.void;
   };
 
+  const reviewLines = pending ? (
+    <Box flexDirection="column">
+      {pending.review.lines.map((line, index) => (
+        <Text key={index}>{line}</Text>
+      ))}
+    </Box>
+  ) : undefined;
+
   return (
     <AsyncListForm<Effect.Success<ReturnType<typeof buildPluginRows>>, string>
       title={pending ? PLUGINS_TUI.trustTitle(pending.review.name) : '/plugins'}
@@ -143,10 +129,10 @@ export function PluginsListForm(
               { value: DECLINE, label: PLUGINS_TUI.decline },
             ]
           : data.rows.map((row) => ({
-              value: rowValue(row),
+              value: pluginRowKey(row),
               label: pluginRowName(row),
               description: rowDescription(row),
-              disabled: !switchable(row),
+              disabled: !pluginRowSwitchable(row),
             }))
       }
       emptyMessage={PLUGINS_PAGE.empty}
@@ -155,28 +141,13 @@ export function PluginsListForm(
         pending ? undefined : <Text dimColor>{PLUGINS_TUI.description}</Text>
       }
       detailFor={(data) => {
-        if (pending)
-          return (
-            <Box flexDirection="column">
-              {pending.review.lines.map((line, index) => (
-                <Text key={index}>{line}</Text>
-              ))}
-            </Box>
-          );
+        if (reviewLines) return reviewLines;
         if (data.mcpWarnings.length === 0) return undefined;
         return <Text color={COLOR_WARNING}>{data.mcpWarnings.join(' ')}</Text>;
       }}
       // A trust question shows what it declares in every layout: the compact
       // one keeps the lines, not the list's warnings.
-      compactDetailFor={() =>
-        pending ? (
-          <Box flexDirection="column">
-            {pending.review.lines.map((line, index) => (
-              <Text key={index}>{line}</Text>
-            ))}
-          </Box>
-        ) : undefined
-      }
+      compactDetailFor={() => reviewLines}
       detailRowsFor={(data) => {
         if (pending) return pending.review.lines.length;
         return data.mcpWarnings.length > 0 ? 1 : 0;
@@ -189,9 +160,9 @@ export function PluginsListForm(
           return;
         }
         const row = data.rows.find(
-          (candidate) => rowValue(candidate) === value,
+          (candidate) => pluginRowKey(candidate) === value,
         );
-        if (row && switchable(row)) update(toggle(row));
+        if (row && pluginRowSwitchable(row)) update(toggle(row));
       }}
       onCancel={() => (pending ? pending.answer(false) : props.onClose())}
     />

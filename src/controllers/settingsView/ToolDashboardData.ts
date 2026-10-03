@@ -32,7 +32,7 @@ import {
 // Tool terminal actions
 // ============================================================
 
-export type ToolTerminalAction =
+type ToolTerminalAction =
   | {
       readonly kind: 'terminal';
       readonly name: string;

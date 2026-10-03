@@ -90,8 +90,7 @@ export function createDesktopOnboardingIpc(
   // This host's half of the shared funnel loop. Entering State 1 only paints
   // the setup card (the launcher's agent selection is the surface's), so the
   // `selectSetupAgent` arm is deliberately discarded here as it is in the CLI;
-  // the user launches setup explicitly via the card's "Run Setup" button
-  // (ONBOARDING_RUN_SETUP).
+  // the user launches setup explicitly via the card's "Run Setup" button.
   const funnel = new OnboardingFunnelRefresher({
     hasCredential: () => options.hasCredential(),
     flags: state,

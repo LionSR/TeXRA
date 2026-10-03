@@ -31,8 +31,7 @@ export const visuallyHiddenDeclarations: CSSResult = css`
  * copy across every view surface (InstructionPanel and WorktreeChip both
  * used to carry their own). Exported on its own — interpolated into
  * `commonViewStyles` below — for roots that compose a narrower sheet and so
- * cannot take the full common one (ProgressApp's `.view-header` rules would
- * clash with this sheet's).
+ * do not take the full common one.
  */
 export const visuallyHiddenStyles: CSSResult = css`
   .visually-hidden {
@@ -98,22 +97,6 @@ export const dropCueStyles: CSSResult = css`
 `;
 
 export const commonViewStyles: CSSResult = css`
-  .view-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--wa-space-l);
-  }
-
-  .view-header h1,
-  .view-header h2 {
-    margin: 0;
-  }
-
-  .view-header h1 {
-    color: var(--color-text-link);
-  }
-
   .list-item {
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-large);

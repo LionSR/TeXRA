@@ -1,6 +1,6 @@
 // Main → renderer pushes for the desktop-only surfaces: the editor tree's
 // change notice, terminal runs, browser state, the diff/pdf/prompt overlays, shell
-// navigation, logs, and onboarding.
+// navigation, and logs.
 //
 // This union adds no new wire shape — it composes the per-surface schemas so
 // `installDesktopHostBridge` can dev-assert every `desktop:*` command it
@@ -55,7 +55,7 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopCloseDiffMessageSchema,
   DesktopShowPdfMessageSchema,
   DesktopShowPromptMessageSchema,
-  // Shell, logs, onboarding
+  // Shell and logs
   DesktopOpenWorkbenchMessageSchema,
   DesktopOpenSettingsMessageSchema,
   DesktopSaveFileMessageSchema,

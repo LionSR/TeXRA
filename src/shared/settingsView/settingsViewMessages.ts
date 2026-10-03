@@ -803,7 +803,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,
     DeleteAgentModePresetMessageSchema,
-    // Goal settings-tab messages (read-only)
   ],
 );
 

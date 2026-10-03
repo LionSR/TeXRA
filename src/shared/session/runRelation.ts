@@ -1,7 +1,7 @@
 /**
  * The one reading of where two runs stand in the supervision tree, for
  * every surface that says it: admission stamping a message's sender, the
- * `/executions` listing, the CLI's `/ps`. Parentage is the view's
+ * `/executions` listing. Parentage is the view's
  * `parentId`, so a detached run is top level here as everywhere else.
  */
 import type { RunId, RunRelation } from '@shared/schemas';

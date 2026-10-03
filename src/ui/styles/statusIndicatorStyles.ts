@@ -27,8 +27,7 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--color-success);
   }
 
-  .status-indicator.is-completed,
-  .status-indicator.is-cancelled {
+  .status-indicator.is-completed {
     background-color: var(--color-text-muted);
   }
 
@@ -36,13 +35,8 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--color-error);
   }
 
-  .status-indicator.is-waiting,
-  .status-indicator.is-resuming {
-    background-color: var(--wa-color-text-link);
-  }
-
   /* Not the muted fill: "starting" is in progress, and folding it in with
-     completed/cancelled/ready made five different states render as one dot.
+     completed/ready would make different states render as one dot.
      --color-pending is the accent already used for in-progress timers. */
   .status-indicator.is-starting {
     background-color: var(--color-pending);

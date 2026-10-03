@@ -147,7 +147,6 @@ import {
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
-import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
 const HARNESS_MODEL = 'harness-model';
@@ -310,22 +309,6 @@ const HARNESS_VISIBLE_WORKFLOW_AGENTS = parseList(
 );
 const HARNESS_VISIBLE_MODELS = parseList(process.env.HARNESS_VISIBLE_MODELS);
 const HARNESS_MEMORY_FILES = parseList(process.env.HARNESS_MEMORY_FILES);
-const HARNESS_INPUT_HISTORY_ENTRIES = parseList(
-  process.env.HARNESS_INPUT_HISTORY,
-);
-const HARNESS_INPUT_HISTORY: InputHistory | undefined =
-  HARNESS_INPUT_HISTORY_ENTRIES.length === 0
-    ? undefined
-    : {
-        push(line) {
-          return Effect.sync(() => {
-            HARNESS_INPUT_HISTORY_ENTRIES.push(line);
-          });
-        },
-        reverseFind: () => undefined,
-        at: (index) => HARNESS_INPUT_HISTORY_ENTRIES[index],
-        length: () => HARNESS_INPUT_HISTORY_ENTRIES.length,
-      };
 
 if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
@@ -1800,7 +1783,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />

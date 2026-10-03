@@ -105,7 +105,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     mainDir: options.mainDir,
   });
   const host = createDesktopWindowHost({ window, runtime, spawn });
-  const { dialogs, previewHost } = host;
+  const { previewHost } = host;
   const promptController = yield* Effect.acquireRelease(
     Effect.sync(
       () => new DesktopPromptController({ postToRenderer: host.post }),
@@ -151,12 +151,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const shellActions = createDesktopShellActions(
     { postToRenderer: host.post },
     {
-      getCustomAgentDirectory: () => options.agentDirectories.custom(),
       openExternalUrl: previewHost.openExternal,
       openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
-      openPath: previewHost.openPath,
       openWorkspaceFolder: () => navigation.openFolder(),
-      showInfoMessage: dialogs.showInfoMessage,
       showLauncher: () => {
         const attached = surface.attached();
         if (!attached) return;

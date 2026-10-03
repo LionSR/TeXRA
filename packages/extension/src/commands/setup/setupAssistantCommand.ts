@@ -21,7 +21,6 @@ import {
   resolveSetupLaunchModel,
 } from '@model/setupCredentialAccess';
 import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -74,21 +73,6 @@ function withOpenRouterFlagOn<A, E, R>(
           ),
     );
   });
-}
-
-/**
- * Pre-flight uses the credential predicate shared by CLI, extension, and
- * desktop (adapter-level checks, so blank env keys do not count as credentials
- * and then fail later as "No model is available"). Host-specific setup launch
- * routing belongs to `resolveSetupLaunchModel`.
- */
-function hasAnyUsableSetupCredential(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<boolean, never, LanguageModel> {
-  return hasUsableSetupCredential(stores, secrets).pipe(
-    withLogChannel('Setup Credentials'),
-  );
 }
 
 // Routing is fine when the current configuration resolves any setup model.
@@ -185,7 +169,13 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    if (!(yield* hasAnyUsableSetupCredential(session.roots, secrets))) {
+    // The credential predicate every host shares: adapter-level checks, so a
+    // blank env key does not count and fail later as "No model is available".
+    const hasCredential = yield* hasUsableSetupCredential(
+      session.roots,
+      secrets,
+    ).pipe(withLogChannel('Setup Credentials'));
+    if (!hasCredential) {
       yield* connectModel;
       return 'not-started' as const;
     }

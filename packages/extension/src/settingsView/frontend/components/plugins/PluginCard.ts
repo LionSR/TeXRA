@@ -38,6 +38,7 @@ import {
   pluginRowProblem,
   pluginRowState,
   pluginRowSummary,
+  pluginRowSwitchable,
   pluginRowTrust,
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
@@ -419,7 +420,7 @@ export class PluginCard extends LitElement {
         });
     } else if (row.kind === 'installed') {
       checked = row.plugin.enabled;
-      disabled = row.plugin.code.length > 0 || row.plugin.problem !== undefined;
+      disabled = !pluginRowSwitchable(row);
       // Switching on asks the host to show what it declares and trust it.
       onChange = (on) => this.pluginAction(on ? 'enable' : 'disable');
     } else {
