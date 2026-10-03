@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { Effect, Stream } from 'effect';
 import { Sessions } from '@texra-ai/agent';
 import { nodePlatform } from '@texra-ai/agent/node';
+import { harnessBuiltins } from '@texra-ai/agent/plugins';
 
 const workspace = await mkdtemp(join(tmpdir(), 'texra-agent-example-'));
 const agentsDir = join(workspace, 'agents');
@@ -43,13 +44,14 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer(
-      nodePlatform({
+    Sessions.layer({
+      platform: nodePlatform({
         agentsDir,
         storageDir: join(workspace, 'storage'),
         workspaceDir: workspace,
       }),
-    ),
+      plugins: harnessBuiltins.all,
+    }),
   ),
 );
 

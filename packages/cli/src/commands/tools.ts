@@ -112,7 +112,7 @@ function toggleTool(context: CliContext, id: string, enabled: boolean) {
 // Not routed through executeCommand: install/auth guide commands are
 // interactive (they can prompt for input or open a browser), which needs true
 // stdio:'inherit' that executeCommand's buffered/streamed output can't
-// provide. `command` always comes from the static TOOL_PLUGINS manifest,
+// provide. `command` always comes from the process's plugin list,
 // never from user or LLM input. POSIX commands run as argv; Windows uses the
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
 const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
@@ -187,7 +187,7 @@ function toolGuideResult(
 function installTool(context: CliContext, id: string, run: boolean) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const guide = readCliToolGuide(id, 'install');
+    const guide = yield* readCliToolGuide(id, 'install');
     if (!guide) {
       writeTextStderr(formatCliToolNotFoundMessage(id));
       return CliExitCode.Usage;
@@ -223,7 +223,7 @@ function installTool(context: CliContext, id: string, run: boolean) {
 function authTool(context: CliContext, id: string) {
   return Effect.gen(function* () {
     yield* initCliPlatform(context);
-    const guide = readCliToolGuide(id, 'auth');
+    const guide = yield* readCliToolGuide(id, 'auth');
     if (!guide) {
       writeTextStderr(formatCliToolNotFoundMessage(id));
       return CliExitCode.Usage;

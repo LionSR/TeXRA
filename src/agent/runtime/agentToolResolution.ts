@@ -53,7 +53,6 @@ import {
   type ToolGeneration,
 } from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
-import { findToolPlugin } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -131,7 +130,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const injected: string[] = [];
   if (input.injectTools) {
     for (const id of table.plugins.keys()) {
-      const injections = findToolPlugin(id)?.injectedWhen ?? {};
+      const injections = table.entries.get(id)?.injectedWhen ?? {};
       for (const [name, setting] of Object.entries(injections)) {
         if (
           setting === true ||

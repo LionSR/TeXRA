@@ -183,6 +183,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import type { Plugin } from '@tools/plugins';
 import {
   aggregateId,
   type AgentPlatform,
@@ -190,6 +191,9 @@ import {
   Sessions,
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
+
+/** The plugin list every composition below is made with. */
+const PLUGINS: readonly Plugin[] = [];
 
 const PLATFORM = {
   globalState: { get: () => undefined, update: async () => undefined },
@@ -337,7 +341,12 @@ describe('agent package sessions', () => {
           expect(
             Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
           ).toBe(true);
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+          ),
+        );
       }),
   );
 
@@ -356,7 +365,12 @@ describe('agent package sessions', () => {
         const program = Effect.gen(function* () {
           const sessions = yield* Sessions;
           yield* sessions.open();
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+          ),
+        );
 
         const exit = yield* Effect.exit(program);
         expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
@@ -387,7 +401,12 @@ describe('agent package sessions', () => {
             yield* sessions.open();
             yield* Deferred.succeed(firstComposed, undefined);
             yield* Deferred.await(secondComposed);
-          }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
+          }).pipe(
+            Effect.scoped,
+            Effect.provide(
+              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+            ),
+          ),
         );
         yield* Deferred.await(firstComposed);
 
@@ -397,7 +416,12 @@ describe('agent package sessions', () => {
             yield* sessions.open();
             yield* Deferred.succeed(secondComposed, undefined);
             yield* Deferred.await(secondMayLeave);
-          }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
+          }).pipe(
+            Effect.scoped,
+            Effect.provide(
+              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+            ),
+          ),
         );
         yield* Deferred.await(secondComposed);
 
@@ -443,7 +467,9 @@ describe('agent package sessions', () => {
         yield* Effect.gen(function* () {
           const first = yield* Effect.forkChild(
             Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
-              Effect.provide(Sessions.layer(PLATFORM)),
+              Effect.provide(
+                Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+              ),
             ),
           );
           yield* Deferred.await(closing);
@@ -453,7 +479,11 @@ describe('agent package sessions', () => {
               yield* sessions.open();
               yield* Deferred.succeed(successorEntered, undefined);
               yield* Deferred.await(successorMayLeave);
-            }).pipe(Effect.provide(Sessions.layer(PLATFORM))),
+            }).pipe(
+              Effect.provide(
+                Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+              ),
+            ),
             { startImmediately: true },
           );
           expect(yield* Deferred.isDone(successorEntered)).toBe(false);
@@ -491,7 +521,12 @@ describe('agent package sessions', () => {
           const sessions = yield* Sessions;
           yield* sessions.open();
           yield* sessions.open(otherRoots as never);
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+          ),
+        );
 
         yield* program;
 
@@ -526,7 +561,12 @@ describe('agent package sessions', () => {
             const sessions = yield* Sessions;
             yield* sessions.open();
             yield* sessions.open({ storage: '/other-storage' } as never);
-          }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
+          }).pipe(
+            Effect.scoped,
+            Effect.provide(
+              Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+            ),
+          ),
         );
 
         yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
@@ -544,7 +584,7 @@ describe('agent package sessions', () => {
         const openOnce = (platform: AgentPlatform) =>
           Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
             Effect.scoped,
-            Effect.provide(Sessions.layer(platform)),
+            Effect.provide(Sessions.layer({ platform, plugins: PLUGINS })),
           );
         const toolMissingHandler = vi.fn();
         yield* openOnce({ ...PLATFORM, toolMissingHandler });
@@ -580,7 +620,12 @@ describe('agent package sessions', () => {
             instruction: 'Test instruction',
           });
           yield* Effect.scoped(session.subscribe(interest));
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+          ),
+        );
         yield* program;
 
         const ports = mocks.setTranscriptSubscriptions.mock.calls as [
@@ -645,7 +690,12 @@ describe('agent package sessions', () => {
             expect(failure).toBeInstanceOf(Error);
             expect((failure as Error).message).toBe('fold died');
           }
-        }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM)));
+        }).pipe(
+          Effect.scoped,
+          Effect.provide(
+            Sessions.layer({ platform: PLATFORM, plugins: PLUGINS }),
+          ),
+        );
       }),
   );
 });

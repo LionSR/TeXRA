@@ -87,7 +87,7 @@ const mcpToolTableLayer = (dir: string) =>
   Layer.unwrap(
     FileSystem.FileSystem.useSync((fs) =>
       toolTableLayer(
-        toolTable({}),
+        toolTable([]),
         mcpPluginLoader(fs, path.join(dir, 'mcp.json'), TEST_REVISION_KEY),
       ),
     ),

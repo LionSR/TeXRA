@@ -7,7 +7,7 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 
 /**
  * The codex and claude-agent plugins' session services
- * (`PLUGIN_SESSION_LAYERS`): each session's registry of that agent CLI's
+ * (their plugins' `sessionLayer`): each session's registry of that agent CLI's
  * live sessions, over the session's own `Runs`, so a registry dies with its
  * session instead of living as a process singleton. Each live child holds
  * its registry (`AgentCliSessionRegistry.holdWhileLive`), so switching the

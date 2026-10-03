@@ -1,7 +1,7 @@
 /**
  * Plugin layers: the services a plugin owns at process lifetime
- * (`PLUGIN_PROCESS_LAYERS`, built by the live catalog, `@tools/liveTools`)
- * and at session lifetime (`PLUGIN_SESSION_LAYERS`, built per session here).
+ * (a plugin's `processLayer`, built by the live catalog, `@tools/liveTools`)
+ * and at session lifetime (its `sessionLayer`, built per session here).
  * Either is up while its plugin is switched on or a step pins it, and its
  * services reach a tool or continuation only through that step.
  */

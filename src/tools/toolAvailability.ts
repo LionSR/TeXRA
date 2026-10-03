@@ -41,12 +41,7 @@ import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  findToolPlugin,
-  storedDisabledTools,
-  TOOL_PLUGINS,
-  type ToolPlugin,
-} from '@tools/plugins';
+import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
   ToolProbeError,
@@ -58,6 +53,7 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
+import { ToolRegistry } from '@tools/toolTable';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -104,7 +100,7 @@ export function setToolEnabled(
  * Seed the disabled-tool list for first-time users only, on every host and
  * in the agent package.
  *
- * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
+ * Every plugin of `plugins` flagged `toggleable: true` is treated as
  * opt-in and seeded as disabled on a fresh install, unless it is
  * `onByDefault`. Callers pass
  * the global state store they already hold. DISABLED_TOOLS is its own
@@ -116,24 +112,25 @@ export function setToolEnabled(
  * renamed or removed) is dropped from the record, with one warning.
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
-  function* (state: StateStore) {
+  function* (state: StateStore, plugins: readonly Plugin[]) {
     const stored = yield* state.get(GlobalStateKey.DISABLED_TOOLS);
     const recorded = yield* Effect.fromResult(storedDisabledTools(stored));
     if (recorded !== undefined) {
-      const unknown = [...recorded].filter((id) => !findToolPlugin(id));
+      const known = new Set(plugins.map(({ id }) => id));
+      const unknown = [...recorded].filter((id) => !known.has(id));
       if (unknown.length === 0) return;
       yield* state.update(
         GlobalStateKey.DISABLED_TOOLS,
-        [...recorded].filter((id) => findToolPlugin(id)),
+        [...recorded].filter((id) => known.has(id)),
       );
       return yield* Effect.logWarning(
         `Dropped switched-off tool plugins that no longer exist: ${unknown.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
     }
 
-    const defaults = TOOL_PLUGINS.filter(
-      (plugin) => plugin.toggleable && !plugin.onByDefault,
-    ).map((plugin) => plugin.id);
+    const defaults = plugins
+      .filter((plugin) => plugin.toggleable && !plugin.onByDefault)
+      .map((plugin) => plugin.id);
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     yield* Effect.logInfo(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
@@ -146,21 +143,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 // ============================================================
 
 /** A plugin with an external dependency to probe. */
-type ProbedToolPlugin = ToolPlugin & {
+type ProbedToolPlugin = Plugin & {
   readonly availability: ToolAvailabilityChecks;
 };
-
-/** The plugins the availability layer probes, in manifest order. */
-const PROBED_PLUGINS = TOOL_PLUGINS.filter(
-  (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
-);
-
-/** Every secret key some plugin's availability answer reads. */
-const REPROBE_SECRETS: ReadonlySet<string> = new Set(
-  PROBED_PLUGINS.flatMap(
-    (plugin) => plugin.availability.reprobeOnSecrets ?? [],
-  ),
-);
 
 type ProbeResults = readonly ExternalToolCheckResult[];
 
@@ -184,10 +169,20 @@ interface ProbeRound {
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   never,
-  ToolProbeServices
+  ToolProbeServices | ToolRegistry
 > = Layer.effect(
   ToolAvailability,
   Effect.gen(function* () {
+    // The plugins the layer probes, in list order, and every secret key
+    // some plugin's availability answer reads.
+    const PROBED_PLUGINS = [...(yield* ToolRegistry).entries.values()].filter(
+      (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
+    );
+    const REPROBE_SECRETS: ReadonlySet<string> = new Set(
+      PROBED_PLUGINS.flatMap(
+        (plugin) => plugin.availability.reprobeOnSecrets ?? [],
+      ),
+    );
     const services = yield* Effect.context<ToolProbeServices>();
     const layerScope = yield* Scope.Scope;
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
@@ -349,7 +344,7 @@ export const toolAvailabilityLayer: Layer.Layer<
 const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   {
     id,
-    toolNames,
+    tools,
     name,
     availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
   }: ProbedToolPlugin,
@@ -375,7 +370,7 @@ const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   );
   return {
     id,
-    tools: toolNames,
+    tools: Object.keys(tools ?? {}),
     name,
     status: available ? 'available' : 'not-found',
     statusLabel,
@@ -398,7 +393,7 @@ const probeToolGroup = (
       withLogChannel(CHANNEL),
       Effect.as({
         id: plugin.id,
-        tools: plugin.toolNames,
+        tools: Object.keys(plugin.tools ?? {}),
         name: plugin.name,
         status: 'unknown' as const,
         statusLabel: undefined,

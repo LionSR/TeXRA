@@ -47,9 +47,9 @@ const RULES: readonly {
     pattern:
       /\b(?:registry|continuations|sections)\.pin\b|\bpinSwitched\(|\.(?:continuations|sections)\.entries\b/,
     // The catalog itself, which serializes the switch read with the pin, and
-    // the process's tool registry, which applies a switch flipped in this
+    // the process's plugin catalog layer, which applies a switch flipped in this
     // process to the catalog at once (it pins nothing past the call).
-    also: ['src/tools/liveTools.ts', 'src/tools/registry.ts'],
+    also: ['src/tools/liveTools.ts', 'src/tools/pluginCatalog.ts'],
   },
   {
     what: "writes a run's current step",
@@ -66,13 +66,13 @@ const RULES: readonly {
     what: 'reads the live catalog service',
     pattern: /yield\*\s*\(?\s*(?:yield\*\s*)?LiveTools\b/,
     // The run's loaded-plugin hold (MCP servers for its life); the VS Code
-    // Copilot tools, which follow the current generation; the tool
-    // registry's switch follower (above); the shutdown protocol's plugin
+    // Copilot tools, which follow the current generation; the plugin
+    // catalog's switch follower (above); the shutdown protocol's plugin
     // drain; the settings Git tab's read of the GitHub plugin's process
     // services. None offers a run anything or pins a generation.
     also: [
       'src/agent/runtime/run/AgentRun.ts',
-      'src/tools/registry.ts',
+      'src/tools/pluginCatalog.ts',
       'src/controllers/session/sessionLayer.ts',
       'src/controllers/settingsView/githubSubscriptions.ts',
       'packages/extension/src/frontend/lm/registerLanguageModelTools.ts',

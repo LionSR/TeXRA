@@ -114,7 +114,8 @@ import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { LiveTools } from '@tools/liveTools';
-import type { ToolRegistry } from '@tools/toolTable';
+import { pluginCatalogLayer } from '@tools/pluginCatalog';
+import type { Plugin } from '@tools/plugins';
 import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -971,16 +972,14 @@ interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
   /**
-   * The app's plugin table, served as `ToolRegistry`, and the live catalog
-   * over it (`LiveTools`): the harness names no tool of its own. Every TeXRA
-   * entry passes `toolRegistryLayer` (`@tools/registry`) with its MCP config
-   * and host plugin layers.
+   * The app's plugins, in order, the harness's built-ins among them: the
+   * process serves them as `ToolRegistry` and the live catalog over it
+   * (`LiveTools`). The harness names no plugin of its own; TeXRA's entries
+   * pass `texraPlugins` (`@tools/registry`).
    */
-  readonly tools: Layer.Layer<
-    LiveTools | ToolRegistry,
-    never,
-    FileSystem.FileSystem | AppState | ChildProcessSpawner
-  >;
+  readonly plugins: readonly Plugin[];
+  /** The MCP config file (`.mcp.json` shape) the catalog reads. */
+  readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
   /**
    * The host's agent-directory layer, which can capture AppState at construction
@@ -1071,7 +1070,8 @@ interface ProcessRuntimeOptions {
 export function installProcessRuntime({
   processStart,
   globalStorage,
-  tools,
+  plugins,
+  mcpConfigPath,
   secrets,
   appState,
   languageModel,
@@ -1085,6 +1085,7 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
+  const catalog = pluginCatalogLayer(plugins, mcpConfigPath);
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,
@@ -1100,12 +1101,16 @@ export function installProcessRuntime({
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
     LanguageModel.layer(languageModel),
-    Layer.provideMerge(agentCatalogFollower, agentDirectories),
+    // The follower reads which plugins ship agents off the catalog.
+    Layer.provideMerge(
+      agentCatalogFollower,
+      Layer.merge(agentDirectories, catalog),
+    ),
     toolMissingReporter === undefined
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    tools,
+    catalog,
     Layer.succeed(AgentEngine)({
       executeAgent,
       resumeToolUseFromResumeData,
