@@ -9,8 +9,8 @@
  * change reaches the model as lines of the context update
  * (`delegationUpdate`). The tool descriptions never change with them, so
  * neither does the cached prefix. A launch is checked against the live lists
- * when it is called (`requireVisibleAgent`, `selectAvailableDelegationModel`),
- * and a refusal names the current ones.
+ * when it is called (`requireWorkflowOrToolUseAgent`,
+ * `selectAvailableDelegationModel`), and a refusal names the current ones.
  */
 
 // Third-party imports

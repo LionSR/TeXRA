@@ -1,10 +1,8 @@
 /**
- * Subagent run and async delivery lifecycle for delegation tools.
- *
- * Interactive subagents execute asynchronously — result delivered via follow-up
- * queue, driven by the shared `childRunLoop` over a native strategy. One-shot/
- * headless parent runs execute subagents in-band because there is no later
- * interactive follow-up turn to consume async delivery.
+ * The detached launch of an `agent` call's child: its result is delivered
+ * later through the follow-up queue, driven by the shared `childRunLoop`
+ * over a native strategy. An awaited call runs its child in band instead
+ * (`inBandSubagentRun.ts`).
  */
 
 // Third-party imports
@@ -35,15 +33,10 @@ import type { RunToolCall } from '@tools/core/toolRun';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 
-// ============================================================================
-// Shared utilities
-// ============================================================================
-
 /**
  * One compact line per child progress update, for an awaited child: the
- * `agent` call streams it to its card, the delegation tools' in-band arm to
- * the parent run's trace. Returns undefined for updates with nothing worth a
- * line.
+ * `agent` call streams it to its card. Returns undefined for updates with
+ * nothing worth a line.
  */
 export function describeSubagentProgress(
   agentName: string,

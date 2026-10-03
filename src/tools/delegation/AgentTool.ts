@@ -747,19 +747,14 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
         session,
         runId: agentChildRunId(call),
         parentRunId,
-        prepare: () =>
-          Effect.succeed({
-            configPayload,
-            parentRunId,
-            session,
-            parentOffered,
-            ...(call.logId !== undefined && { parentCard: call.logId }),
-            ...(call.toolCallId !== undefined && {
-              parentCallId: call.toolCallId,
-            }),
-            onRunResolved: inherit,
-            notify,
-          }),
+        configPayload,
+        parentOffered,
+        ...(call.logId !== undefined && { parentCard: call.logId }),
+        ...(call.toolCallId !== undefined && {
+          parentCallId: call.toolCallId,
+        }),
+        onRunResolved: inherit,
+        notify,
       }),
     ),
   );

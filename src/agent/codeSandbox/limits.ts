@@ -1,6 +1,6 @@
-// The QuickJS limits every guest script runs under, shared by the workflow
-// sandbox (on the host thread) and the code sandbox worker. This module holds
-// numbers only, so the worker bundle stays free of the host-side WASM bytes.
+// The QuickJS limits every guest script runs under, shared by the code
+// sandbox host and its worker. This module holds numbers only, so the worker
+// bundle stays free of the host-side WASM bytes.
 
 export const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
 export const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;

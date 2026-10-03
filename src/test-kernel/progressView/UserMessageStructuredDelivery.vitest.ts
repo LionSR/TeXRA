@@ -68,13 +68,9 @@ describe('user-message structured delivery', () => {
       tally: {
         total: 4,
         ok: 4,
-        running: 0,
-        queued: 0,
-        planned: 0,
         failed: 0,
         cancelled: 0,
         skipped: 0,
-        notRun: 0,
       },
       costUsd: 0.19,
       durationMs: 724_000,
