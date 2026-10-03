@@ -43,6 +43,7 @@ import {
   setCliSessionModelOverride,
 } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
+import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
