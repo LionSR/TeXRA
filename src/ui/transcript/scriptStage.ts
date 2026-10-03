@@ -18,9 +18,9 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
+import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@ui/copy/workflowCall';
 import { assertNever, getBasename, isObject } from '@utils/core';
-import { deliveredResponse } from '@shared/subagentFollowup';
 import {
   formatCompactDuration,
   formatCostUsd,

@@ -28,7 +28,6 @@ const scenes = process.env.SCENES
       'desktop-one-project',
       'desktop-empty-project',
       'desktop-narrow',
-      'desktop-subagents',
     ];
 const browser = await chromium.launch(
   process.env.PW_EXE ? { executablePath: process.env.PW_EXE } : {},

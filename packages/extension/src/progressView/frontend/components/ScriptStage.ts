@@ -16,8 +16,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
 import type { RunId } from '@shared/schemas';
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Surface, SurfaceRefusal } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -30,6 +28,8 @@ import {
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
+import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -273,7 +273,8 @@ export class ScriptStage extends LitElement {
       ><wa-dropdown-item
         value=${STOP_AGENT}
         ?disabled=${this.readOnly || child.readOnly}
-        >${waIcon('circle-stop', { slot: 'icon' })}Stop this agent</wa-dropdown-item
+        >${waIcon('circle-stop', { slot: 'icon' })}Stop this
+        agent</wa-dropdown-item
       ></wa-dropdown
     >`;
   }
@@ -310,10 +311,9 @@ export class ScriptStage extends LitElement {
       }
     >
       <span class="row-icon"
-        >${waIcon(
-          call.needsYou ? 'circle-dot' : statusIcon(call.status),
-          { label: SCRIPT_CALL_STATUS_LABEL[call.status] },
-        )}</span
+        >${waIcon(call.needsYou ? 'circle-dot' : statusIcon(call.status), {
+          label: SCRIPT_CALL_STATUS_LABEL[call.status],
+        })}</span
       >
       <bdi class="row-label" dir="auto">${call.label}</bdi>
       <span
@@ -354,10 +354,11 @@ export class ScriptStage extends LitElement {
 
   override render(): TemplateResult {
     return html`${
-      this.stage.summary === ''
-        ? nothing
-        : html`<div class="summary">${this.stage.summary}</div>`
-    }<div role="list">
+        this.stage.summary === ''
+          ? nothing
+          : html`<div class="summary">${this.stage.summary}</div>`
+      }
+      <div role="list">
         ${repeat(
           this.stage.phases,
           (phase) => phase.title ?? '',

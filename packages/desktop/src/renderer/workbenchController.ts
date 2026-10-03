@@ -38,8 +38,6 @@ interface WorkbenchControllerDeps {
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
   pdfPane: ReturnType<typeof createPdfPane>;
-  /** The Subagents tab's content, read from the active project's view. */
-  subagentsTemplate(): TemplateResult | typeof nothing;
   logsPane: HTMLElement;
   getState(): DesktopShellState;
   updateShell(next: DesktopShellState): void;
@@ -68,7 +66,6 @@ export function createWorkbenchController({
   terminalPane,
   reviewPane,
   pdfPane,
-  subagentsTemplate,
   logsPane,
   getState,
   updateShell,
@@ -290,8 +287,6 @@ export function createWorkbenchController({
         return isActive() ? workbenchSurfaceTemplate(logsPane) : nothing;
       case 'pdf':
         return workbenchSurfaceTemplate(pdfPane.frameFor(tab));
-      case 'subagents':
-        return workbenchSurfaceTemplate(subagentsTemplate());
     }
   }
 

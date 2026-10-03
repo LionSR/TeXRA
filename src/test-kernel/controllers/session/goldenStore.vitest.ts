@@ -875,7 +875,8 @@ describe('the interrupted golden runs', () => {
         );
         // Before the resume the run is interrupted (its owner proved dead):
         // nothing works on the call whose child was running, so it reads as
-        // interrupted, not running, under no Running section.
+        // interrupted, not running. A finished agent's row says the first
+        // line of its answer, never the `<subagent-result>` envelope.
         yield* session.setTranscriptSubscriptions('golden-test', [
           { id: FANOUT, fromSeq: 0 },
         ]);
@@ -893,10 +894,11 @@ describe('the interrupted golden runs', () => {
         const interrupted = killed!.runs.get(FANOUT)!;
         expect(
           scriptStages(interrupted, killed!)[0]!.calls.map(
-            ({ label, status, section, line }) => ({
+            ({ label, status, needsYou, summary, line }) => ({
               label,
               status,
-              section: section ?? null,
+              needsYou,
+              summary: summary ?? null,
               line: line.split(' · ')[0],
             }),
           ),
@@ -904,13 +906,15 @@ describe('the interrupted golden runs', () => {
           {
             label: 'A',
             status: 'finished',
-            section: null,
+            needsYou: false,
+            summary: 'Fan-out child A answer.',
             line: 'Finished: A',
           },
           {
             label: 'B',
             status: 'interrupted',
-            section: null,
+            needsYou: false,
+            summary: 'Stopped with its run. Resume the run to continue.',
             line: 'Interrupted: B',
           },
         ]);

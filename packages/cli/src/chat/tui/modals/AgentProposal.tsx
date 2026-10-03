@@ -235,9 +235,9 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         ))}
       </Box>
       <ScrollableModalText
-        hiddenNoun={script ? 'source rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
+        hiddenNoun={script ? 'code rows' : AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
-        scrollHint={script ? 'scroll source' : 'scroll prompt'}
+        scrollHint={script ? 'scroll code' : 'scroll prompt'}
         text={script ? script.source : props.payload.instruction}
         width={instructionWidth}
       />

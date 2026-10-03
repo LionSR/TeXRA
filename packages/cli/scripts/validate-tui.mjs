@@ -1688,6 +1688,38 @@ const SCENARIOS = [
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {
+    // A script's request leads with what approving allows and the first
+    // agent; the code follows under its line count.
+    name: 'script-proposal',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_AGENT_PROPOSAL: '1',
+      HARNESS_SCRIPT_PROPOSAL: '1',
+    },
+    bootExpect: 'Start agents for',
+    expect: [
+      'Start agents for "Review and fix chapter 2"?',
+      'Approving lets this script start agents until it ends.',
+      'First agent: review',
+      'Code (6 lines):',
+    ],
+    unexpect: ['Source:', 'Run the script'],
+  },
+  {
+    // A finished agent call shows its answer, never the delivery XML.
+    name: 'agent-result-card',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: { HARNESS_ENTRIES: '0', HARNESS_AGENT_RESULT: '1' },
+    bootExpect: 'Lemma 4 needs a bound',
+    expect: ['Result:', 'Lemma 4 needs a bound on the error term.'],
+    unexpect: ['<subagent-result', '<response>', '</subagent-result>'],
+  },
+  {
     name: 'agent-proposal-long',
     frame: 'scrollback',
     rows: 24,

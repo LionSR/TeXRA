@@ -73,14 +73,6 @@ export const WORKBENCH_KIND_META = {
     label: 'PDF',
     singleton: false,
   },
-  /** The selected stream's root subtree. While it is open the rail lists
-   *  top-level runs only: the tree has one home at a time. */
-  subagents: {
-    defaultPlacement: 'right',
-    icon: 'diagram-project',
-    label: 'Subagents',
-    singleton: true,
-  },
 } as const satisfies Record<string, WorkbenchKindMeta>;
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
