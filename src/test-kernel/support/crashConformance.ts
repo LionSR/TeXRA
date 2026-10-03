@@ -24,8 +24,9 @@
  * - the conversation comes to another end than the clean one: the root's
  *   answers, its view edits, what each executed call returned, its owned
  *   children and their answers, its fork;
- * - a call settled before the crash settles again, or any call twice; an
- *   unfinished command runs again without a person's retry;
+ * - a call settled before the crash settles again, or any call twice; a
+ *   command runs before its approval, or an unfinished one again without a
+ *   person's retry;
  * - a command's side effect (the line it appends) happens during the resume
  *   with no newly executed command to account for it, or one is missing;
  * - one model invocation is answered twice (a turn paid twice);
@@ -294,6 +295,7 @@ function crashAt(clean: string, storage: string, n: number): void {
       DELETE FROM event_blob WHERE "commit" > ${n};
       DELETE FROM event WHERE "commit" > ${n};
       DELETE FROM event_sequence WHERE id NOT IN (SELECT aggregate FROM event);
+      DELETE FROM blob WHERE digest NOT IN (SELECT digest FROM event_blob);
       UPDATE event_sequence SET
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
         closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END,
@@ -552,6 +554,29 @@ function violations(
           retry.callId === payload(row).callId && retry.commit < row.commit,
       ),
   );
+  // A command runs only once a person approved it, before its result.
+  const approvals = final.flatMap((row) => {
+    if (row.type !== 'request.decided') return [];
+    const decided = json(row) as {
+      readonly requestId: string;
+      readonly decision: { readonly action: string };
+    };
+    return decided.decision.action === 'approve'
+      ? [{ callId: boundTo.get(decided.requestId), commit: row.commit }]
+      : [];
+  });
+  const unapproved = resumed.filter(
+    (row) =>
+      payload(row).disposition === 'executed' &&
+      /validation-(bash-\d+|script-\d+\/1)$/.test(
+        String(payload(row).callId),
+      ) &&
+      !approvals.some(
+        (approval) =>
+          approval.callId === payload(row).callId &&
+          approval.commit < row.commit,
+      ),
+  );
   // A call's child launches again only after a person chose to retry it.
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
@@ -606,6 +631,7 @@ function violations(
     unaskedReruns.length === 0
       ? null
       : 'an unfinished command ran again with no one asked',
+    unapproved.length === 0 ? null : 'a command ran before its approval',
     unaskedRelaunches.length === 0
       ? null
       : 'a child launched again with no one asked',
