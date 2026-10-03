@@ -47,7 +47,7 @@ const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
- * `@shared/schemas/settingsViewMessages` is the same set the catalog keys on.
+ * `@shared/model/subscriptionAuth` is the same set the catalog keys on.
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
