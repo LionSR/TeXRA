@@ -648,6 +648,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Interrupted tasks now resume reliably after a crash at any point.** A
+  task, an agent it started or a background script that was killed just
+  after it started now resumes from the beginning instead of showing as
+  finished. A fork never appears empty. An agent that had already answered
+  when its task was killed passes that answer on to the resumed task
+  instead of nothing. A `/compact` that had not run yet still compacts on
+  resume instead of being answered as a message. An answer given just
+  before a crash shows in the transcript and the task history after
+  resume.
+
 - **A task's cost counts every agent it started, on every surface.** The
   progress-view footer showed only the run's own model calls (so a task that
   ran two agents could read `$0.000`), and a script card added its direct

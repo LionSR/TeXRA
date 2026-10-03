@@ -18,6 +18,8 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
   AgentCategory,
+  emptyRunEndOutput,
+  storedRunOutput,
   type RunSnapshotPayload,
   type ModelCompatibilityKey,
   type RunId,
@@ -104,11 +106,19 @@ describe('retrieveSessionResumeData', () => {
       }),
   );
 
-  it.effect('reports a run with no snapshot as nothing to resume', () =>
+  it.effect('reports an ended run with no snapshot as nothing to resume', () =>
     Effect.gen(function* () {
       const runId = 'ab0002' as RunId;
       publishTestRunStart(session, runId);
-      yield* session.settlePublications();
+      // Registered and never opened, it would resume by opening: it ended.
+      yield* session.commit([
+        {
+          type: 'run.end',
+          aggregateId: aggregateId('run', runId),
+          outcome: 'failed',
+          output: storedRunOutput(emptyRunEndOutput(AgentCategory.ToolUse)),
+        },
+      ]);
 
       expect(
         yield* retrieveSessionResumeData(runId, CONFIG, session),

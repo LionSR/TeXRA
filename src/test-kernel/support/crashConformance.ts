@@ -34,9 +34,6 @@
  *   to retry it, or a child is left without a terminal row;
  * - a fork is left without the history it was registered with;
  * - a text answer any run committed is never finalized for display.
- *
- * The gaps this build has are pinned (`KNOWN_GAPS`), each with the
- * violations it explains, so a fix shows up here as a diff.
  */
 import {
   cpSync,
@@ -108,36 +105,6 @@ const VALIDATION = {
   TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   TEXRA_INTERNAL_VALIDATE_ECHO: '1',
 };
-
-/**
- * The crash points this build does not yet survive, by what the prefix
- * holds there. Each is a finding of this suite, reported for its own fix:
- * - `launch-without-history`, `fork-without-history`: a run's registration
- *   (`run.start`, `run.config`, `run.activate`) and its first history batch
- *   are separate commits. Killed between them, a launched run is classified
- *   finished and never resumes or ends, and a fork is left with no history
- *   (`forkRun` ends such a fork failed only when the history write fails
- *   in-process).
- * - `answer-not-finalized`: a text response commits, then its
- *   `response.finalized` row in a later batch; a resume replays the
- *   committed response without finalizing it, so its answer never reaches
- *   a non-streamed transcript or the history query's `messages` view.
- * - `child-answer-lost`: an awaited child that answered and parked, killed
- *   before its `run.end`, is resumed in band by its call (its turn was
- *   accepted, never settled), runs no turn, and hands the call an empty
- *   response: the parent's script gets `""` for the child's answer.
- * - `compaction-request-lost`: `run.compact` commits the follow-up that
- *   asks for it; the compaction itself is an in-memory flag the turn reads.
- *   Killed between them, the resumed turn sends the request to the model as
- *   a user message and never compacts.
- */
-const KNOWN_GAPS = [
-  'answer-not-finalized',
-  'child-answer-lost',
-  'compaction-request-lost',
-  'fork-without-history',
-  'launch-without-history',
-];
 
 interface Row {
   readonly commit: number;
@@ -307,85 +274,6 @@ function crashAt(clean: string, storage: string, n: number): void {
   } finally {
     db.close();
   }
-}
-
-/** The violations each pinned gap explains at a prefix it stands in, down
- *  to the outcome fields it changes; any other violation there still
- *  fails. */
-const GAP_VIOLATIONS: Record<string, readonly string[]> = {
-  // Nothing runs: the conversation is the prefix's.
-  'launch-without-history': [
-    'the resume was refused: finished',
-    "the conversation's ",
-  ],
-  'fork-without-history': ["the conversation's forks "],
-  'answer-not-finalized': ['an answer was never finalized'],
-  // The script's result, and its `agent()` call's, lack the answer.
-  'child-answer-lost': ["the conversation's settled "],
-  // The request is answered as a message: one answer more.
-  'compaction-request-lost': ["the conversation's answers "],
-};
-
-/** Which pinned gap a prefix stands in, if any. */
-function gapOf(prefix: readonly Row[], root: string): string | null {
-  const unstarted = prefix.find(
-    (start) =>
-      start.type === 'run.start' &&
-      !prefix.some(
-        (row) => row.run === start.run && row.type === 'run.snapshot',
-      ),
-  );
-  if (unstarted !== undefined)
-    return isFork(unstarted)
-      ? 'fork-without-history'
-      : 'launch-without-history';
-  const mine = prefix.filter((row) => row.run === root);
-  const asked = mine.findLast(
-    (row) =>
-      row.type === 'model.message' &&
-      row.data.includes('The user requested immediate context compaction'),
-  );
-  if (
-    asked !== undefined &&
-    !mine.some(
-      (row) =>
-        row.type === 'context.edit' &&
-        row.commit > asked.commit &&
-        payload(row).cause === 'compaction',
-    )
-  )
-    return 'compaction-request-lost';
-  const runs = [...new Set(prefix.map((row) => row.run))];
-  const lastPosition = (run: string) =>
-    prefix.findLast((row) => row.run === run && row.type === 'run.position');
-  if (
-    runs.some((run) => {
-      const at = lastPosition(run);
-      return (
-        prefix.some((row) => row.run === run && row.parent !== null) &&
-        at !== undefined &&
-        ['waiting', 'halted'].includes(String(payload(at).at)) &&
-        !prefix.some((row) => row.run === run && row.type === 'run.end')
-      );
-    })
-  )
-    return 'child-answer-lost';
-  if (
-    runs.some((run) => {
-      const at = lastPosition(run);
-      const response = prefix.findLast(
-        (row) => row.run === run && isResponse(row),
-      );
-      return (
-        at !== undefined &&
-        payload(at).at === 'response.ready' &&
-        response !== undefined &&
-        answerOf(response) !== null
-      );
-    })
-  )
-    return 'answer-not-finalized';
-  return null;
 }
 
 /** Answer every request the runs open, those the prefix left pending
@@ -814,8 +702,7 @@ export function crashConformanceSuite(plugins: string): void {
             violations([], cleanRows, 0, root, expected, ['batch', 'script']),
           ).toEqual([]);
 
-          const unexplained: string[] = [];
-          const gaps = new Set<string>();
+          const broken: string[] = [];
           for (const n of points) {
             const storage = join(roots.storage, `crash-${n}`);
             crashAt(clean, storage, n);
@@ -864,19 +751,10 @@ export function crashConformanceSuite(plugins: string): void {
                 effects,
               ),
             ];
-            if (found.length === 0) continue;
-            const gap = gapOf(prefix, root);
-            const explained = gap === null ? [] : GAP_VIOLATIONS[gap]!;
-            const rest = found.filter(
-              (violation) =>
-                !explained.some((known) => violation.startsWith(known)),
-            );
-            if (rest.length > 0)
-              unexplained.push(`after commit ${n}: ${rest.join('; ')}`);
-            if (gap !== null && rest.length < found.length) gaps.add(gap);
+            if (found.length > 0)
+              broken.push(`after commit ${n}: ${found.join('; ')}`);
           }
-          expect(unexplained).toEqual([]);
-          expect([...gaps].sort()).toEqual(KNOWN_GAPS);
+          expect(broken).toEqual([]);
         }),
       300_000,
     );

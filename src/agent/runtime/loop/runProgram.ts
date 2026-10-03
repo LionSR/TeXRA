@@ -154,10 +154,13 @@ export const loadRun = (
       }
       return { _tag: 'restored', loaded } satisfies RunEntry;
     }
-    if (loaded === null && resume) {
+    // A resume of a run never opened (its launch stopped between its
+    // registration and its opening batch) opens it, as the launch would
+    // have; its launch context rendered the opening from its configuration.
+    const run = yield* AgentRun;
+    if (resume && run.opening === null) {
       return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
     }
-    const run = yield* AgentRun;
     const bound = yield* SynchronizedRef.get(run.model);
     return {
       _tag: 'fresh',

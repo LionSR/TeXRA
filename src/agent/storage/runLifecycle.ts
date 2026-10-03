@@ -166,6 +166,26 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
+  return yield* registrationRows(session, runId, record, options).pipe(
+    Effect.flatMap((events) => session.commitRegistration(events)),
+    Effect.asVoid,
+    // A registration that died wrote nothing, and the caller refuses the
+    // launch on it like any other refused registration.
+    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+  );
+});
+
+/**
+ * The rows that register a run, uncommitted: for a caller that commits them
+ * with the run's first history in one batch, as a fork does, so no crash
+ * leaves the run registered without the history it was registered with.
+ */
+export const registrationRows = Effect.fn('registrationRows')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  record: RunRecord,
+  options: RegisterRunOptions,
+): Effect.fn.Return<readonly SessionEventDraft[], Error> {
   return yield* Effect.gen(function* () {
     // A re-registration writes into a run that already has rows; the
     // registration takes the run's claim over as it commits.
@@ -248,12 +268,8 @@ export const registerRun = Effect.fn('registerRun')(function* (
         description: options.description,
         by: options.descriptionBy ?? 'model',
       });
-    yield* session.commitRegistration(events);
-  }).pipe(
-    // A registration that died wrote nothing, and the caller refuses the
-    // launch on it like any other refused registration.
-    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
-  );
+    return events;
+  }).pipe(Effect.catchDefect((defect) => Effect.fail(ensureError(defect))));
 });
 
 export interface FinalizeRunInput {

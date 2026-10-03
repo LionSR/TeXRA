@@ -14,6 +14,7 @@ import {
   aggregateId as qualifyAggregateId,
   type RunId,
   type SessionEvent,
+  type SessionEventDraft,
 } from '@shared/schemas';
 import {
   Database,
@@ -68,10 +69,19 @@ function contractViolation(
   run: RunId,
   state: RunState | null,
   rows: readonly RunHistoryDraft[],
+  registration: readonly SessionEventDraft[],
 ): string | null {
   const aggregate = qualifyAggregateId('run', run);
   const settledInBatch = new Map<string, 'success' | 'error'>();
   const hasResponse = rows.some(isResponse);
+  if (registration.length > 0) {
+    if (state !== null) return 'a registration comes with a run state';
+    if (registration[0]?.type !== 'run.start')
+      return 'a registration does not start with its run.start';
+    const stray = registration.find((row) => row.aggregateId !== aggregate);
+    if (stray !== undefined)
+      return `a registration's ${stray.type} targets ${stray.aggregateId}, not ${aggregate}`;
+  }
   // The writer key is the row's own aggregate while `acquire` and `load` key
   // by the run's, so a row naming another aggregate would fold into the
   // returned live state and be invisible to a reload.
@@ -411,8 +421,9 @@ export const runHistoryLayer: Layer.Layer<
       run: RunId,
       state: RunState | null,
       rows: readonly RunHistoryDraft[],
+      registration: readonly SessionEventDraft[] = [],
     ) {
-      const violation = contractViolation(run, state, rows);
+      const violation = contractViolation(run, state, rows, registration);
       if (violation !== null) {
         return yield* Effect.die(
           new Error(`RunHistory.appendBatch contract: ${violation}`),
@@ -470,17 +481,34 @@ export const runHistoryLayer: Layer.Layer<
       // A target this process no longer holds open is the run history's
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
-      const committed = yield* events.publish(rows.map(storedDraft)).pipe(
-        Effect.catchTag('DatabaseNotOwner', (failure) =>
-          Effect.fail(
-            new RunHistoryRefused({
-              reason: 'not-owner',
-              runId: run,
-              detail: notOwnerDetail(failure),
-            }),
+      const committed = yield* events
+        .publish([...registration, ...rows.map(storedDraft)])
+        .pipe(
+          Effect.catchTag('DatabaseNotOwner', (failure) =>
+            Effect.fail(
+              new RunHistoryRefused({
+                reason: 'not-owner',
+                runId: run,
+                detail: notOwnerDetail(failure),
+              }),
+            ),
           ),
-        ),
-      );
+        );
+      // A run registered with its history is its host's to resume, as any
+      // parked run is: the claim its birth took here goes back at once. The
+      // rows are durable whatever happens to the claim, so a release that
+      // fails is no failure of the batch; it says so, and the next process
+      // proves this one dead before it takes the claim.
+      if (registration.length > 0)
+        yield* log
+          .releaseClaims([qualifyAggregateId('run', run)])
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Run ${run} was registered with its history, but its claim was not released: this process cannot resume it`,
+              ).pipe(Effect.annotateLogs({ data: error })),
+            ),
+          );
       // The same fold over the same rows, at the commits the publisher
       // actually assigned: that is the state the loop continues from. It
       // differs from the candidate fold only in those ordinals, so a failure

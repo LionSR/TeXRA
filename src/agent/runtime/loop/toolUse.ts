@@ -94,6 +94,33 @@ const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
  *  `script/<seq>`. */
 const SCRIPT_CALL_ID = 'script';
 
+type HistoryMessage = RunState['messages'][number];
+
+/** The text an assistant message answers with. */
+const answerOf = (
+  message: Extract<HistoryMessage, { readonly role: 'assistant' }>,
+): string =>
+  message.content
+    .flatMap((part) =>
+      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
+    )
+    .join('');
+
+/** Whether the view ends on the request a `/compact` queued: its compaction
+ *  is still owed, since the edit that compacts replaces the view holding it. */
+const owesCompaction = (
+  message: { readonly role: string } | undefined,
+): boolean => {
+  if (message?.role !== 'user' || !('content' in message)) return false;
+  const { content } = message;
+  return (
+    Array.isArray(content) &&
+    content.length === 1 &&
+    (content[0] as { readonly text?: unknown }).text ===
+      IMMEDIATE_COMPACTION_FOLLOW_UP
+  );
+};
+
 export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
@@ -374,6 +401,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     systemPrompt = saved.system && stored(state, saved.system, z.string());
     memoryMisses = saved.memoryMisses ?? [];
     if (saved.structured !== undefined) run.structured.value = saved.structured;
+    const last = state.messages.at(-1);
+    // A run parked after a turn answers with that turn's text, which a
+    // resumed child that runs no further turn hands its call.
+    if (
+      (state.phase === 'waiting' || state.phase === 'halted') &&
+      last?.role === 'assistant'
+    )
+      response = answerOf(last);
     logger.debug('Resuming tool-use run from the run history.');
   };
 
@@ -508,10 +543,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         function* (
           at: RunState,
           text: string,
-          /** A response this turn just received. A recovered one is already
-           *  in the transcript its rows were folded from, so replaying it
-           *  must not finalize it a second time. */
+          /** A response this turn just received, not one a resume replays. */
           live: boolean,
+          /** Its answer is not yet finalized for display: always a live
+           *  one's, and a replayed one's whose finalization never committed. */
+          finalize: boolean = live,
         ): Effect.fn.Return<
           { readonly state: RunState; readonly done: boolean },
           Error,
@@ -543,7 +579,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ]);
             return { state: next, done: false };
           }
-          if (text && live) logger.emit({ type: 'response.finalized', text });
+          if (text && finalize)
+            logger.emit({ type: 'response.finalized', text });
           if (
             run.finalToolName !== null &&
             !finalToolAttempted &&
@@ -598,15 +635,35 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               ? state.messages.at(-1)
               : undefined;
           if (last?.role === 'assistant') {
-            const text = last.content
-              .flatMap((part) =>
-                part.kind === 'message'
-                  ? part.content.map((piece) => piece.text)
-                  : [],
-              )
-              .join('');
+            const text = answerOf(last);
             if (text) response = text;
-            const replayed = yield* afterTextResponse(state, text, false);
+            // Its `response.finalized` is a trace row a later commit carries:
+            // finalized iff one landed after the batch that made it ready.
+            const rows =
+              text && rounds === null
+                ? yield* session.readAggregate(rowAggregate(runId), [
+                    'run.position',
+                    'response.finalized',
+                  ])
+                : [];
+            const ready = rows.findLast(
+              (row) =>
+                row.type === 'run.position' &&
+                row.payload.at === 'response.ready',
+            );
+            const finalize =
+              ready !== undefined &&
+              !rows.some(
+                (row) =>
+                  row.type === 'response.finalized' &&
+                  row.commit > ready.commit,
+              );
+            const replayed = yield* afterTextResponse(
+              state,
+              text,
+              false,
+              finalize,
+            );
             state = replayed.state;
             if (replayed.done) return completeTurn(state);
             continue;
@@ -688,11 +745,33 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // held this run, or a batch a crash left unconsumed, C3) are the
     // publisher's, seeded where `loadRun`'s claim moved here.
     const entry = yield* loadRun(runId, start.resume);
-    const opened =
-      entry._tag === 'fresh'
-        ? yield* openFresh(entry.opening)
-        : (restore(entry.loaded), entry.loaded);
-    return yield* makeRunCell(runId, opened);
+    if (entry._tag === 'fresh')
+      return yield* makeRunCell(runId, yield* openFresh(entry.opening));
+    restore(entry.loaded);
+    // The flag a `/compact` set died with the process; its request did not.
+    // It is owed until a model boundary passed it: the boundary that runs
+    // the compaction either replaces the view (the request goes with it)
+    // or, when there is nothing to summarize, goes on to an attempt.
+    if (owesCompaction(entry.loaded.messages.at(-1))) {
+      const rows = yield* session.readAggregate(rowAggregate(runId), [
+        'model.message',
+      ]);
+      const asked = rows.findLast(
+        (row) =>
+          row.type === 'model.message' &&
+          row.payload.kind === 'append' &&
+          owesCompaction(row.payload.messages.at(-1)),
+      );
+      compactionRequested =
+        asked !== undefined &&
+        !rows.some(
+          (row) =>
+            row.type === 'model.message' &&
+            row.payload.kind === 'attempt' &&
+            row.commit > asked.commit,
+        );
+    }
+    return yield* makeRunCell(runId, entry.loaded);
   });
 
   const loopBody = (cell: RunCell) =>

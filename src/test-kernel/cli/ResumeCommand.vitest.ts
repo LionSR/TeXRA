@@ -13,7 +13,11 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { aggregateId } from '@shared/schemas';
+import {
+  aggregateId,
+  emptyRunEndOutput,
+  storedRunOutput,
+} from '@shared/schemas';
 import type { RunSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
@@ -324,18 +328,36 @@ describe('runResumeCommand', () => {
     );
   });
 
-  it('reports a run with no checkpoint as finished', async () => {
-    await seedRunRecord({
-      config: TOOL_USE_CONFIG,
-      checkpoint: false,
-    });
+  it.effect('reports an ended run with no checkpoint as finished', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        seedRunRecord({ config: TOOL_USE_CONFIG, checkpoint: false }),
+      );
+      // Registered and never opened, it would resume by opening: it ended.
+      yield* Effect.scoped(
+        seededSession.borrowRunClaim(RUN_ID).pipe(
+          Effect.andThen(
+            seededSession.commit([
+              {
+                type: 'run.end',
+                aggregateId: aggregateId('run', RUN_ID),
+                outcome: 'failed',
+                output: storedRunOutput(
+                  emptyRunEndOutput(AgentCategory.ToolUse),
+                ),
+              },
+            ]),
+          ),
+        ),
+      );
 
-    await expect(run(cliContext())).resolves.toBe(2);
+      expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
-    );
-  });
+      expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+        'This run has finished. Start a new agent task to continue.',
+      );
+    }),
+  );
 
   it.effect('reports a live run instead of failing silently', () =>
     Effect.gen(function* () {
