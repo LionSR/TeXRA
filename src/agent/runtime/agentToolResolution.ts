@@ -16,8 +16,8 @@
  *      is approval-gated while approval prompts are unavailable is withheld;
  *      so is one whose plugin is off (not in the generation).
  *   2. The injected tools not already declared, under the same gates: the
- *      manifest's, and every tool of an installed plugin (its MCP servers'),
- *      which the plugin's enablement offers every top-level tool-use run but
+ *      plugins' (`injectedWhen`), and every tool of an installed plugin (its
+ *      MCP servers'), which the plugin's enablement offers every top-level tool-use run but
  *      a plugin agent that names its tools.
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
@@ -67,7 +67,7 @@ export interface StepToolInputs {
   readonly host: SettingHost;
   /** Tools only this run holds, laid over the resolved list (step 4). */
   readonly runTools: readonly ITool[];
-  /** Whether the manifest's injected tools join (step 2). */
+  /** Whether the plugins' injected tools join (step 2). */
   readonly injectTools: boolean;
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
    *  unless it is a plugin agent that names its own tools. */
@@ -129,9 +129,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const warnings: string[] = [];
   const injected: string[] = [];
   if (input.injectTools) {
-    for (const id of table.plugins.keys()) {
-      const injections = table.entries.get(id)?.injectedWhen ?? {};
-      for (const [name, setting] of Object.entries(injections)) {
+    for (const { injectedWhen } of table.entries.values()) {
+      for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
         if (
           setting === true ||
           (yield* readSettingFrom<boolean>(input.stores, setting))

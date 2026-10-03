@@ -1,7 +1,6 @@
 /**
- * Each probed tool plugin's availability checks: what `@tools/plugins`
- * attaches to a plugin with an external dependency. Kept apart from the
- * manifest so the manifest stays data; built from the primitives in
+ * Each probed integration's availability checks: the `availability` of its
+ * plugin value in `@tools/integrationPlugins`, built from the primitives in
  * {@link @tools/toolProbes}.
  */
 

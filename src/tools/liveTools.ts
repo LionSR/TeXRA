@@ -158,7 +158,7 @@ const liveToolsLayer = (
       const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
-          buildPluginLayer(id, table.processLayers.get(id)!.layer).pipe(
+          buildPluginLayer(id, table.entries.get(id)!.processLayer!.layer).pipe(
             Effect.provideService(LiveTools, self.service!),
             Effect.provide(process),
             Effect.tap(() =>
@@ -213,27 +213,25 @@ const liveToolsLayer = (
        *  scope) to match `off`. */
       const reconcile = (off: ReadonlySet<string>) =>
         Effect.gen(function* () {
-          for (const id of new Set([
-            ...table.plugins.keys(),
-            ...table.continuations.keys(),
-            ...table.prompt.keys(),
-            ...table.processLayers.keys(),
-          ])) {
+          for (const [id, plugin] of table.entries) {
             // Only a probed plugin has a switch: a stored id of any other
             // plugin switches nothing.
-            const on =
-              !off.has(id) || table.entries.get(id)?.availability === undefined;
+            const on = !off.has(id) || plugin.availability === undefined;
             const held = builtIns.get(id);
             if (on && held === undefined) {
               const contribution = yield* Scope.fork(scope);
-              const continuation = table.continuations.get(id);
-              const prompt = table.prompt.get(id);
+              const { continuation } = plugin;
+              // Its section, and whether it ships skills for the catalog.
+              const prompt: PromptContribution = {
+                section: plugin.prompt ?? null,
+                skills: plugin.skills === true,
+              };
               // The table rules out a name two plugins share, so a
               // conflict between built-in plugins is a defect.
               yield* Effect.all([
                 registry.contribute(
                   id,
-                  entriesOf(id, table.plugins.get(id) ?? new Map()),
+                  entriesOf(id, new Map(Object.entries(plugin.tools ?? {}))),
                 ),
                 continuations.contribute(
                   id,
@@ -245,11 +243,15 @@ const liveToolsLayer = (
                 ),
                 sections.contribute(
                   id,
-                  new Map(prompt === undefined ? [] : [[id, prompt]]),
+                  new Map(
+                    prompt.section === null && !prompt.skills
+                      ? []
+                      : [[id, prompt]],
+                  ),
                 ),
               ]).pipe(Scope.provide(contribution), Effect.orDie);
               // The switch's own hold on the plugin's process services.
-              if (table.processLayers.has(id))
+              if (plugin.processLayer !== undefined)
                 yield* RcMap.get(layers, id).pipe(Scope.provide(contribution));
               builtIns.set(id, contribution);
             } else if (!on && held !== undefined) {
@@ -350,8 +352,8 @@ const liveToolsLayer = (
                 const pinned = yield* sections.pin;
                 // Every on plugin's process layer, held until the step has
                 // pinned the ones it uses: a flip meanwhile drops none of them.
-                const on = [...builtIns.keys()].filter((id) =>
-                  table.processLayers.has(id),
+                const on = [...builtIns.keys()].filter(
+                  (id) => table.entries.get(id)!.processLayer !== undefined,
                 );
                 const bridge = yield* Scope.fork(yield* Effect.scope);
                 for (const id of on)
