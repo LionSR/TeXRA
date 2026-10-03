@@ -183,7 +183,7 @@ function composeProcess(
   ) {
     throw new PlatformConflict({
       message:
-        'The agent package is already using another platform in this process.',
+        'The agent package is already using another platform or plugin list in this process: compose every hold from the same platform and plugin list values.',
     });
   }
   const processServices = {

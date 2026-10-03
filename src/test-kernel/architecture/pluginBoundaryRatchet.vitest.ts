@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { harnessBuiltins } from '@tools/builtinPlugins';
+import { PLUGIN_ARMS } from '@tools/pluginArms';
 import type { Plugin } from '@tools/plugins';
 import { texraPlugins } from '@tools/registry';
 import {
@@ -173,6 +174,16 @@ describe('plugin rosters', () => {
       ['copilot', []],
       ['documents', []],
     ]);
+  });
+
+  it('pins the row kinds plugins write, each of a listed plugin', () => {
+    const ids = new Set(texraPlugins().map(({ id }) => id));
+    expect(
+      [...PLUGIN_ARMS.values()].map(({ plugin, kind }) => [
+        `${plugin}/${kind}`,
+        ids.has(plugin),
+      ]),
+    ).toEqual([['goal/state', true]]);
   });
 
   it("pins the harness's built-in lists", () => {
