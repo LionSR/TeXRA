@@ -54,6 +54,8 @@ export class RunInput {
   private readonly signal = Latch.makeUnsafe(false);
   private readonly synthetic: string[] = [];
   private edit: ViewEdit | null = null;
+  /** The follow-ups queued when the edit was: delivered before it. */
+  private beforeEdit: ReadonlySet<string> = new Set();
   private ended = false;
 
   constructor(private readonly pending: () => readonly QueuedFollowUp[]) {}
@@ -74,12 +76,14 @@ export class RunInput {
   }
 
   /**
-   * Queue one view edit, taken before anything else is. False while another
-   * is queued or once the generation has ended.
+   * Queue one view edit, taken after the follow-ups already queued and
+   * before anything queued later. False while another is queued or once the
+   * generation has ended.
    */
   editView(edit: ViewEdit): boolean {
     if (this.ended || this.edit !== null) return false;
     this.edit = edit;
+    this.beforeEdit = new Set(this.pending().map((f) => f.followUpId));
     Latch.openUnsafe(this.signal);
     return true;
   }
@@ -116,6 +120,11 @@ export class RunInput {
         Latch.closeUnsafe(this.signal);
         const edit = this.edit;
         if (edit !== null) {
+          const earlier = this.pending().filter((f) =>
+            this.beforeEdit.has(f.followUpId),
+          );
+          if (earlier.length > 0)
+            return { kind: 'followUps', followUps: earlier } as const;
           this.edit = null;
           return { kind: 'edit', edit } as const;
         }

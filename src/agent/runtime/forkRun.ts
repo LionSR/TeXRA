@@ -146,8 +146,13 @@ export const forkRun = Effect.fn('forkRun')(function* (
     ),
     positionRow(runId, state, 'waiting'),
   ];
-  // A child's fork is a root: the task its ancestors were given is not its.
-  const { rootUserInstruction: __, ...record } = config;
+  // A child's fork is a root: the task its ancestors were given, and the
+  // structured result its parent's call asked for, are not its.
+  const {
+    rootUserInstruction: _root,
+    outputSchema: _schema,
+    ...record
+  } = config;
   // Registration and history are two commits: a fork that stops between
   // them is ended (failed) rather than left as a run with no history, and
   // no interruption lands between them.
