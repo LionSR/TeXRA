@@ -334,7 +334,7 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
   await expect(bottomTabs).toHaveCount(countBeforeContextClose - 1);
 });
 
-test('loads tools, centers every compact nav icon, and customizes shortcuts', async () => {
+test('loads plugins, centers every compact nav icon, and customizes shortcuts', async () => {
   const { app, page } = launched;
 
   await openSettings();

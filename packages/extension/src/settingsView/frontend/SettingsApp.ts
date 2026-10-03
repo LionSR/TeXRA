@@ -361,8 +361,9 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         // one of the rows' inline settings re-renders the page.
         const settingValues = Object.fromEntries(
           (page?.rows ?? [])
-            .flatMap((row) => (row.kind === 'texra' ? row.item.settings : []))
-            .flatMap((settings) => settings ?? [])
+            .flatMap((row) =>
+              row.kind === 'texra' ? (row.item.settings ?? []) : [],
+            )
             .map(([key]) => [key, settingSignal<string>(key).get()]),
         );
         return html`
