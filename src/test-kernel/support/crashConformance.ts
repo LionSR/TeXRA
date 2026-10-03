@@ -35,6 +35,7 @@
  */
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   rmSync,
@@ -387,7 +388,7 @@ function violations(
     new Set(results.map(key)).size === results.length
       ? null
       : 'a call settled twice',
-    JSON.stringify([...effects].sort()) === JSON.stringify(commands)
+    JSON.stringify(effects.toSorted()) === JSON.stringify(commands)
       ? null
       : `the resume's effects ${JSON.stringify(effects)} are not its commands ${JSON.stringify(commands)}`,
     new Set(invocations).size === invocations.length
@@ -582,14 +583,10 @@ export function crashConformanceSuite(plugins: string): void {
                 ),
               ),
             );
-            let effects: string[] = [];
-            try {
-              effects = readFileSync(effectsLog, 'utf8')
-                .split('\n')
-                .filter(Boolean);
-            } catch {
-              effects = [];
-            }
+            // No file: no command ran during the resume.
+            const effects = existsSync(effectsLog)
+              ? readFileSync(effectsLog, 'utf8').split('\n').filter(Boolean)
+              : [];
             const found = [
               ...(refused === null ? [] : [refused]),
               ...violations(
