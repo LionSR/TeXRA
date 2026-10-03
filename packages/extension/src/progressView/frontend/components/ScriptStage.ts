@@ -288,10 +288,7 @@ export class ScriptStage extends LitElement {
     // A row opens the run that is asking, else its child: for an agent,
     // its conversation, where the composer talks to it.
     const target = call.askingRunId ?? child?.id;
-    const talk =
-      call.askingRunId === undefined &&
-      child !== undefined &&
-      call.toolName === 'agent';
+    const talk = call.talkable;
     const last = call.summary ?? '';
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);

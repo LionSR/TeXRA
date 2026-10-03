@@ -338,8 +338,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // The running script on its root: the card's rows, one agent at work
-  // and one asking under it.
+  // The running script on its root: the card's one agent at work.
   'ext-script-running': () => {
     const view = withoutApproval();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));

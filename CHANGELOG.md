@@ -242,12 +242,13 @@ All notable changes to this project will be documented in this file.
   one line, such as `3 agents · 1 needs you · $0.840`, then each phase's
   calls as plain rows. A finished agent's row shows the first line of its
   answer, and the CLI shows an agent call's answer under `Result:` instead of
-  the raw `<subagent-result>` XML. Stopping a running agent moves from a Skip
+  internal delivery markup. Stopping a running agent moves from a Skip
   button to "Stop this agent" in the row's menu (`s` in the CLI popup); the
   separate "Call details" list is now a Log link inside the card; a call
   shows "retried" only when it ran more than once. An agent's row is the way
-  to talk to it: "Talk to this agent" opens its conversation with the
-  composer addressed to it (Enter in the CLI popup focuses it).
+  to talk to it: when the agent takes messages, "Talk to this agent" opens
+  its conversation with the composer addressed to it (Enter in the CLI popup
+  focuses it).
 - **Approving a script leads with what it allows.** The request asks "Start
   agents for …?", says that each agent's edits and commands still ask, and
   names the first agent and its instruction; the code and the calls so far

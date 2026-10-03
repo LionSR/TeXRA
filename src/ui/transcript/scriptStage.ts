@@ -13,6 +13,7 @@
  */
 import {
   TOOL_CALL_STATUS,
+  USER_FOLLOW_UP_SUPPORT,
   type PermissionPayload,
   type RunId,
   type TaskGroup,
@@ -82,6 +83,9 @@ export interface ScriptCallView {
   readonly askingRunId?: RunId;
   /** A run under the call waits on the user. */
   readonly needsYou: boolean;
+  /** An agent row whose agent takes messages: opening it is talking to it
+   *  (`TALK_TO_AGENT`). An agent that takes none opens read-only. */
+  readonly talkable: boolean;
   /** The row's one line: its `detail`, else a finished agent's answer, else
    *  what its child last said, each cut to its first line. Never the
    *  delivery envelope or the instruction's later paragraphs. */
@@ -255,6 +259,11 @@ function callView(
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
     needsYou: request !== undefined,
+    talkable:
+      agent &&
+      asking === undefined &&
+      child !== undefined &&
+      child.followUpSupport !== USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
     line: `${SCRIPT_CALL_STATUS_LABEL[status]}: ${label}${suffix}${detail ? ` — ${detail.text}` : ''}`,
   };

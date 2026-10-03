@@ -1,4 +1,5 @@
 import type { AgentProposalPermission } from '@shared/schemas';
+import { countLines } from '@utils/text/stringUtils';
 
 /** The script a request for a script's `agent` calls shows: its title, its
  *  source, and the calls it had issued when it asked. */
@@ -15,13 +16,13 @@ export const SCRIPT_REQUEST_COPY = {
       ? 'Start agents for this script?'
       : `Start agents for "${script.title}"?`,
   grant:
-    "Approving lets this script start agents until it ends. Each agent's edits and commands still ask you.",
+    'Approving lets this script start agents until it ends. Their edits and commands follow your approval settings.',
   callsHeading: 'Calls so far',
   /** `Code (14 lines)`: the folded source's heading. */
   code: (script: ScriptRequestScript): string =>
-    `Code (${script.source.split('\n').length} lines)`,
+    `Code (${countLines(script.source)} lines)`,
   showCode: (script: ScriptRequestScript): string =>
-    `Show code (${script.source.split('\n').length} lines)`,
+    `Show code (${countLines(script.source)} lines)`,
 } as const;
 
 /** `First agent: referee · GPT-6.1 Sol — "Review chapter 2 as a referee…"`:

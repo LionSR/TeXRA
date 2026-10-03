@@ -177,8 +177,7 @@ export function ScriptStagePopup({
   // where the input talks to it.
   let enterAction = 'open';
   if (call?.askingRunId !== undefined) enterAction = 'review';
-  else if (call?.toolName === 'agent')
-    enterAction = TALK_TO_AGENT.toLowerCase();
+  else if (call?.talkable === true) enterAction = TALK_TO_AGENT.toLowerCase();
   const hints: KeyHint[] = [
     ...(stages.length > 1 ? [{ key: '←/→', action: 'script' }] : []),
     { key: '↑/↓', action: 'select' },
