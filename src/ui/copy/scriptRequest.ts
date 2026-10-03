@@ -1,5 +1,9 @@
 import type { AgentProposalPermission } from '@shared/schemas';
-import { countLines } from '@utils/text/stringUtils';
+import { countLines, truncateSummary } from '@utils/text/stringUtils';
+
+/** How much of the first agent's instruction the request quotes: the full
+ *  text is in the folded code. */
+const FIRST_AGENT_PREVIEW_CHARS = 80;
 
 /** The script a request for a script's `agent` calls shows: its title, its
  *  source, and the calls it had issued when it asked. */
@@ -32,11 +36,13 @@ export function scriptRequestFirstAgentLine(
   modelLabel: string,
   instruction: string,
 ): string {
-  const first =
+  const first = truncateSummary(
     instruction
       .split('\n')
       .map((line) => line.trim())
-      .find((line) => line.length > 0) ?? '';
+      .find((line) => line.length > 0) ?? '',
+    FIRST_AGENT_PREVIEW_CHARS,
+  );
   return first.length > 0
     ? `First agent: ${agent} · ${modelLabel} — "${first}"`
     : `First agent: ${agent} · ${modelLabel}`;

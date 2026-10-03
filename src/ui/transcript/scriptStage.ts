@@ -13,12 +13,16 @@
  */
 import {
   TOOL_CALL_STATUS,
-  USER_FOLLOW_UP_SUPPORT,
   type PermissionPayload,
   type RunId,
   type TaskGroup,
 } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  acceptsFollowUp,
+  type FollowUpHost,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { TOOL_OUTCOME_COPY } from '@ui/copy/toolOutcome';
 import { formatWorkflowCallFiles } from '@ui/copy/workflowCall';
@@ -84,8 +88,9 @@ export interface ScriptCallView {
   readonly askingRunId?: RunId;
   /** A run under the call waits on the user. */
   readonly needsYou: boolean;
-  /** An agent row whose agent takes messages: opening it is talking to it
-   *  (`TALK_TO_AGENT`). An agent that takes none opens read-only. */
+  /** An agent row whose agent takes a message here now (`acceptsFollowUp`,
+   *  the rule the composer it opens reads): opening it is talking to it
+   *  (`TALK_TO_AGENT`). Any other agent opens read-only. */
   readonly talkable: boolean;
   /** The row's one line: its `detail`, else a finished agent's answer, else
    *  what its child last said, each cut to its first line. Never the
@@ -193,6 +198,7 @@ function callView(
   row: ToolRow,
   run: RunView,
   view: StageSession,
+  host: FollowUpHost,
 ): ScriptCallView {
   const agent = row.toolUse.toolName === AGENT_TOOL;
   const input = isObject(row.toolUse.input) ? row.toolUse.input : {};
@@ -246,7 +252,7 @@ function callView(
   const answer = deliveredResponse(row.toolUse.outputText);
   const said =
     detail?.text ??
-    (agent && status === 'finished'
+    (agent && (status === 'finished' || status === 'reused')
       ? (answer ?? child?.latestLine)
       : child?.latestLine);
   const summary = said == null ? undefined : firstLine(said);
@@ -266,7 +272,7 @@ function callView(
       agent &&
       asking === undefined &&
       child !== undefined &&
-      child.followUpSupport !== USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      acceptsFollowUp(child, host),
     ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
     line: `${SCRIPT_CALL_STATUS_LABEL[status]}: ${label}${suffix}${detail ? ` — ${detail.text}` : ''}`,
   };
@@ -346,6 +352,7 @@ export function dispatchedChildren(
 export function scriptStages(
   run: RunView,
   view: StageSession,
+  host: FollowUpHost,
 ): ScriptStageView[] {
   const { taskGroups, rows } = run.transcript;
   const stages = taskGroups.filter((group) => group.kind === 'script');
@@ -360,7 +367,7 @@ export function scriptStages(
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])
       .toSorted((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
-      .map((row) => callView(row, run, view));
+      .map((row) => callView(row, run, view, host));
     const cards = new Set(calls.map((call) => call.id));
     let costUsd = 0;
     for (const childId of run.childIds) {

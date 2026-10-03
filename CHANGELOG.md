@@ -250,7 +250,7 @@ All notable changes to this project will be documented in this file.
   button to "Stop this agent" in the row's menu (`s` in the CLI popup); the
   separate "Call details" list is now a Log link inside the card; a call
   shows "retried" only when it ran more than once. An agent's row is the way
-  to talk to it: when the agent takes messages, "Talk to this agent" opens
+  to talk to it: while the agent takes messages, "Talk to this agent" opens
   its conversation with the composer addressed to it (Enter in the CLI popup
   focuses it).
 - **Approving a script leads with what it allows.** The request asks "Start

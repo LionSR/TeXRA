@@ -35,7 +35,12 @@ import {
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
-import { killableRunId, runViewOf, sessionView } from '../state/sessionView';
+import {
+  CLI_FOLLOW_UP_HOST,
+  killableRunId,
+  runViewOf,
+  sessionView,
+} from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
 
@@ -132,7 +137,8 @@ export function ScriptStagePopup({
   const { columns } = useWindowSize();
   const session = useSignal(sessionView());
   const run = runViewOf(session, runId);
-  const stages = run === undefined ? [] : scriptStages(run, session);
+  const stages =
+    run === undefined ? [] : scriptStages(run, session, CLI_FOLLOW_UP_HOST);
   // The newest script unless the user moved to another.
   const stageIndex = Math.max(
     0,

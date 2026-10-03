@@ -107,6 +107,9 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import { autoDecideRequests } from '@test/agent/progressTestUtils';
 import { dispatchedChildren, scriptStages } from '@ui/transcript';
 
+/** The host the painted script stages are read for. */
+const CLI_HOST = { terminalBacked: false } as const;
+
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
   'utf8',
@@ -882,7 +885,7 @@ describe('the interrupted golden runs', () => {
             const run = view.runs.get(FANOUT);
             return (
               run?.group === 'interrupted' &&
-              scriptStages(run, view).length === 1
+              scriptStages(run, view, CLI_HOST).length === 1
             );
           }),
           Stream.take(1),
@@ -890,7 +893,7 @@ describe('the interrupted golden runs', () => {
         );
         const interrupted = killed!.runs.get(FANOUT)!;
         expect(
-          scriptStages(interrupted, killed!)[0]!.calls.map(
+          scriptStages(interrupted, killed!, CLI_HOST)[0]!.calls.map(
             ({ label, status, needsYou, summary, line }) => ({
               label,
               status,
@@ -1031,14 +1034,17 @@ describe('the interrupted golden runs', () => {
         const [painted] = yield* SubscriptionRef.changes(session.view).pipe(
           Stream.filter((view) => {
             const run = view.runs.get(FANOUT);
-            return run !== undefined && scriptStages(run, view).length === 2;
+            return (
+              run !== undefined &&
+              scriptStages(run, view, CLI_HOST).length === 2
+            );
           }),
           Stream.take(1),
           Stream.runCollect,
         );
         const fanout = painted!.runs.get(FANOUT)!;
         expect(
-          scriptStages(fanout, painted!).map((stage) =>
+          scriptStages(fanout, painted!, CLI_HOST).map((stage) =>
             stage.calls.map(({ label, status, phase, childRunId }) => ({
               label,
               status,
