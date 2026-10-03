@@ -212,7 +212,7 @@ export const commandCatalog = [
   {
     id: 'texra.showProgressView',
     extensionRegistry: true,
-    title: 'Show Sessions',
+    title: 'Show Tasks',
     category: 'TeXRA',
     icon: '$(eye)',
     keybinding: {
@@ -224,7 +224,7 @@ export const commandCatalog = [
   {
     id: 'texra.openProgressViewInTab',
     extensionRegistry: true,
-    title: 'Open Sessions in Editor',
+    title: 'Open Tasks in Editor',
     shortTitle: 'Open in Editor',
     category: 'TeXRA',
     icon: '$(multiple-windows)',

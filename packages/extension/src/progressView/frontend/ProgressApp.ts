@@ -56,14 +56,17 @@ import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
 /** A workflow task's planned pass count: its agent's catalog entry, by the
- *  key the launch recorded or, for a plain name, the agent name. */
+ *  key the launch recorded or, for a plain name only, the agent name. A
+ *  source-qualified key names one agent exactly, so a same-named agent from
+ *  another source never lends it its count. */
 function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
   if (run.category !== 'workflow' || run.identity.kind !== 'agent') {
     return undefined;
   }
   const id = run.identity.agent;
   return host.agentOptions.workflow?.find(
-    (option) => option.value === id || option.label === agentName(id),
+    (option) =>
+      option.value === id || (agentName(id) === id && option.label === id),
   )?.rounds;
 }
 

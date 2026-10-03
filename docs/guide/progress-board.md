@@ -13,21 +13,21 @@ The ProgressBoard is TeXRA's execution dashboard for tracking autonomous agents 
 ::: tip CLI
 The ProgressBoard is the VS Code extension's live view. The CLI shows the same
 streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI. Past
-runs are shared across surfaces. Browse them with `texra history list` in the terminal, or in the **Sessions**
-tab of the TeXRA view in VS Code.
+tasks are shared across surfaces. Browse them with `texra history list` in the terminal, or with the **Tasks**
+button of the TeXRA view in VS Code.
 :::
 
 <CliHistoryHero />
 
-<p class="hero-caption">The board's runs, from a terminal: the same executions, one tab-separated row each. <code>texra resume</code> picks a stored session back up.</p>
+<p class="hero-caption">The board's tasks, from a terminal: one tab-separated row each. <code>texra resume</code> picks a stored task back up.</p>
 
 ## Opening the ProgressBoard
 
-The ProgressBoard shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Sessions** button at the top left of the panel lists every session, and **+** starts a new task.
+The ProgressBoard shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Tasks** button at the top left of the panel lists every task, and **+** starts a new task.
 
 - **Automatic**: It usually opens when you execute an agent.
-- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Sessions**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest session.
-- **Editor tab**: Run **TeXRA: Open Sessions in Editor**, or pick **Open sessions in editor** from the panel's **⋯** menu, to open the ProgressBoard as a full editor tab.
+- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Tasks**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest task.
+- **Editor tab**: Run **TeXRA: Open Tasks in Editor**, or pick **Open tasks in editor** from the panel's **⋯** menu, to open the ProgressBoard as a full editor tab.
 
 <GuideIntroHero />
 
@@ -42,7 +42,7 @@ The ProgressBoard is split into two main sections (usually side by side, but con
 
 ## Stream tabs section
 
-This section lists the stored runs for the workspace, including runs from earlier sessions and from other TeXRA hosts; transcripts and run facts load from the workspace SQLite run database.
+This section lists the stored tasks for the workspace, including tasks started earlier and from other TeXRA hosts; their conversations load from the workspace's SQLite database.
 
 - **Switching streams**: Select a stream name (e.g., `polish: paper.tex`) to view its logs and status in the Content Area.
 - **Removing a stream**: Each tab has an <wa-icon library="texra" name="xmark"></wa-icon> button that removes that stream and its logs from the ProgressBoard view.
@@ -76,9 +76,9 @@ The header provides a summary and actions for the selected stream:
   Archive outputs, and Delete output files; other tasks offer Compact,
   Open task folder, Export, and Copy diagnostics. Export saves the
   conversation as Markdown, HTML, or PDF.
-- **Once a session ends**: where the message box stood, the session says
+- **Once a task ends**: where the message box stood, the task says
   it has ended and offers **Edit as new task**, which opens New task with
-  the same agent, files, and instruction. An interrupted session also
+  the same agent, files, and instruction. An interrupted task also
   offers **Resume**.
 - **Delete task**: at the end of the menu, for a task that has stopped.
   It removes the conversation and its task folder.

@@ -178,7 +178,7 @@ function runHistoryDelete(
       // the visibility filter here.
       const count = (yield* listRuns(session)).length;
       writeTextStderr(
-        `Refusing to delete ${formatResultCount(count, 'stored run')}. Re-run with --yes to confirm.`,
+        `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
       );
       return CliExitCode.Usage;
     }
@@ -209,7 +209,7 @@ function runHistoryDelete(
       }
       if (result.status === 'active') {
         writeTextStderr(
-          `Run ${result.id} is active in TeXRA and was not deleted.`,
+          `Task ${result.id} is active in TeXRA and was not deleted.`,
         );
         return CliExitCode.Usage;
       }
@@ -223,7 +223,7 @@ function runHistoryDelete(
         failed: result.failed.length,
       });
     } else if (result.status === 'deleted') {
-      text = `Deleted run ${result.id}.`;
+      text = `Deleted task ${result.id}.`;
     } else {
       text = '';
     }

@@ -128,8 +128,8 @@ export class DependencyBanner extends LitElement {
           ${renderIconActionButton({
             id: 'dependencyDismissButton',
             icon: 'xmark',
-            label: 'Dismiss until TeXRA restarts',
-            tooltip: 'Dismiss until TeXRA restarts',
+            label: 'Hide for now',
+            tooltip: 'Hide for now',
             onClick: () =>
               this.dispatchEvent(
                 SessionUiEvents.host({

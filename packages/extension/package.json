@@ -309,13 +309,13 @@
       },
       {
         "command": "texra.showProgressView",
-        "title": "Show Sessions",
+        "title": "Show Tasks",
         "category": "TeXRA",
         "icon": "$(eye)"
       },
       {
         "command": "texra.openProgressViewInTab",
-        "title": "Open Sessions in Editor",
+        "title": "Open Tasks in Editor",
         "shortTitle": "Open in Editor",
         "category": "TeXRA",
         "icon": "$(multiple-windows)"
