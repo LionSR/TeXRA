@@ -72,7 +72,7 @@ function statusIcon(
 function refusalText(error: SurfaceRefusal): string {
   switch (error._tag) {
     case 'NotOwner':
-      return 'This run is controlled by another TeXRA window.';
+      return 'This task is controlled by another TeXRA window.';
     case 'Internal':
       return `The request failed. See the TeXRA log (reference ${error.ref}).`;
     default:

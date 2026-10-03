@@ -1,7 +1,7 @@
 /**
  * The Sessions drawer (PRD 12.1): a slide-over with a scrim, headed by the
  * project name with search and close, the real `<run-tabs>` in group
- * sections as its body, and "Open sessions in editor" as its footer. New
+ * sections as its body, and "Open tasks in editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.
  *
  * `Surface.drawerOpen` opens it and `Surface.search` filters it; both reach
@@ -127,7 +127,7 @@ export class SessionDrawer extends LitElement {
     const inEditor = this.placement === 'editor';
     return html`
       <div class="scrim" @click=${this.close}></div>
-      <div class="panel" role="dialog" aria-label="Sessions">
+      <div class="panel" role="dialog" aria-label="Tasks">
         <div class="overlay-header">
           <span class="overlay-title">${this.host?.project.name ?? ''}</span>
           ${renderIconActionButton({
@@ -141,8 +141,8 @@ export class SessionDrawer extends LitElement {
         <div class="drawer-search">
           <wa-input
             size="s"
-            placeholder="Filter sessions"
-            aria-label="Filter sessions"
+            placeholder="Filter tasks"
+            aria-label="Filter tasks"
             .value=${live(search)}
             @input=${this.handleSearchInput}
           >
@@ -170,7 +170,7 @@ export class SessionDrawer extends LitElement {
                     slot: 'start',
                   })}
                   ${
-                    inEditor ? 'Back to sidebar' : 'Open sessions in editor'
+                    inEditor ? 'Back to sidebar' : 'Open tasks in editor'
                   }</wa-button
                 >
               </div>`

@@ -6,7 +6,7 @@
 // its own row.
 
 import { metaChordLabel } from '@cli/runtime/shortcutLabels';
-import { SESSION_LIST } from '@ui/copy/nestedRuns';
+import { AGENT_LIST } from '@ui/copy/nestedRuns';
 
 import { textInputEditingHelp } from '../input/textInputBindings';
 
@@ -18,7 +18,7 @@ const CATEGORY_SECTIONS: ReadonlyArray<{
   readonly category: SlashCommandCategory | undefined;
   readonly label: string;
 }> = [
-  { category: 'session', label: 'Session' },
+  { category: 'session', label: 'Task' },
   { category: 'configuration', label: 'Configuration' },
   { category: 'account', label: 'Account' },
   { category: undefined, label: 'Other' },
@@ -63,11 +63,11 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` closes panels, returns to the parent session, and rejects an open approval · `Ctrl-C` stops the active response, or exits when idle',
-    "- `Ctrl-T` opens the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
-    "- `Ctrl-O` lists the calls of the focused run's script: open a call's agent, review what it waits on, or skip it",
-    `- \`Tab\` ${SESSION_LIST.openHelp}`,
-    `- \`${focusChord}\` focuses a run in the visible session-list order`,
+    '- `Esc` closes panels, returns to the parent agent, and rejects an open approval · `Ctrl-C` stops the active response, or exits when idle',
+    "- `Ctrl-T` opens the focused agent's full output in a scrollable reader (PgUp/PgDn pages)",
+    "- `Ctrl-O` lists the calls of the focused agent's script: open a call's agent, review what it waits on, or skip it",
+    `- \`Tab\` ${AGENT_LIST.openHelp}`,
+    `- \`${focusChord}\` focuses an agent in the agent-list order`,
   ].join('\n');
 }
 

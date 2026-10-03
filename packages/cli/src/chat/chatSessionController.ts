@@ -60,7 +60,7 @@ import type {
   RuntimeRequest,
 } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -397,7 +397,7 @@ export function createChatSessionController(
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
     // Ctrl-C leaves the child policy unset, so the session's request handler
-    // applies the configured "Keep subagents running".
+    // applies the configured "Keep agents running".
     runtime.runFork(request({ kind: 'run.stop', runId, reason: stopReason }));
   };
 
@@ -533,7 +533,7 @@ export function createChatSessionController(
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
         appendLocalNotice(
-          'Finish the active chat before resuming a previous session.',
+          'Finish the active task before resuming a previous one.',
         );
         return Effect.void;
       }
@@ -564,7 +564,7 @@ export function createChatSessionController(
         const refuseResume = (reason: string): void =>
           endResumeUnstarted(() => appendLocalErrorTranscript(reason));
         if (!config || !exists) {
-          refuseResume(`Run not found: ${id}`);
+          refuseResume(`Task not found: ${id}`);
           return;
         }
         if (config.agentCategory !== AgentCategory.ToolUse) {
@@ -864,7 +864,7 @@ export function createChatSessionController(
     const focusedChild = focusedChildTarget();
     if (focusedChild.kind === 'reject') {
       appendLocalNotice(
-        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+        FOCUSED_AGENT.selectedNoLongerAccepting,
         focusedChild.runId,
       );
       return;
@@ -1025,7 +1025,7 @@ export function createChatSessionController(
             session.stopRequested = true;
           } else {
             appendLocalNotice(
-              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+              FOCUSED_AGENT.selectedNoLongerAccepting,
               followUpTarget,
             );
           }

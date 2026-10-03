@@ -331,14 +331,14 @@ describe('handleTuiSlashCommand', () => {
       const context = createContext();
 
       yield* dispatchSlash('/plan', context);
-      expect(transientNotice.get()?.text).toBe('No focused session.');
+      expect(transientNotice.get()?.text).toBe('No focused agent.');
 
       const runId = 'plan-reader' as RunId;
       ensureRun(runId);
       focusRun(runId);
       yield* dispatchSlash('/plan', context);
       expect(transientNotice.get()?.text).toBe(
-        'The focused session has no work plan.',
+        'The focused agent has no work plan.',
       );
 
       seedWorkPlan(runId, { objective: 'Check every case.' }, [
@@ -799,7 +799,7 @@ describe('handleTuiSlashCommand', () => {
 
         const statusText = lastEntryText(rootRunId);
         expect(statusText).toContain('status: Idle');
-        expect(statusText).toContain('active background tasks: 1');
+        expect(statusText).toContain('active agents: 1');
       }),
   );
 
@@ -849,8 +849,8 @@ describe('handleTuiSlashCommand', () => {
         yield* dispatchSlash('/status', createContext(session));
 
         const statusText = lastEntryText(rootRunId);
-        expect(statusText).toContain('active background tasks: 1');
-        expect(statusText).not.toContain('active background tasks: 2');
+        expect(statusText).toContain('active agents: 1');
+        expect(statusText).not.toContain('active agents: 2');
       }),
   );
 
@@ -882,7 +882,7 @@ describe('handleTuiSlashCommand', () => {
 
         const statusText = lastEntryText(rootRunId);
         expect(statusText).toContain('status: Running');
-        expect(statusText).toContain('active background tasks: 2');
+        expect(statusText).toContain('active agents: 2');
       }),
   );
 

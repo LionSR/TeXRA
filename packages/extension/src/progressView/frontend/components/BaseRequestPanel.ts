@@ -55,14 +55,14 @@ import {
 const DECLINE_LABEL = {
   reject: 'Reject',
   skip: 'Skip',
-  stop: 'Stop run',
+  stop: 'Stop task',
 } as const;
 
 type Decline = keyof typeof DECLINE_LABEL;
 
 /** What a card this window cannot answer says in place of its actions. */
 const UNANSWERABLE_NOTE = {
-  resume: 'Resume the session to answer.',
+  resume: 'Resume the task to answer.',
   readOnly: 'This window cannot answer this request.',
 } as const;
 

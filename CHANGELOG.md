@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **"Task" and "agent" are the only nouns, and `/ps` and `/send` are gone.**
+  What you start is a task and what it starts is an agent, in all three
+  hosts: the CLI's Tab list is the agent list (**Tab agents**), the exit line
+  reads "Resume this task with:", `texra resume` and `texra history` speak of
+  stored tasks, the Sessions button is **Tasks**, and the dispatch card reads
+  "3 agents working in the background". The TUI's `/ps` and `/send` are cut:
+  the Tab list shows the same agents by title, and typing to a focused agent
+  (Tab or Alt+N) messages it. Raw ids leave the task rows' tooltips and the
+  "Category:" label goes; the header menu's **Copy diagnostics**, now on
+  every task, replaces Copy run context and is the one place a task's id is
+  shown. The header's "Round 2 · 3 tool calls" chip shows only on workflow
+  tasks, as **Pass 2 of 3**.
 - **The Multi-Agent Workflow switch is named `multi-agent`.** Use
   `texra tools enable multi-agent` (or `disable`, `status`). A stored switch
   under the old `workflow-script` name is dropped once, with a warning in the

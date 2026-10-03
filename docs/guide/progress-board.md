@@ -67,20 +67,21 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **One header row**: the Sessions button, the run's title, its status and
+- **One header row**: the Tasks button, the task's title, its status and
   time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
-  The menu holds the run's actions, then Open sessions in editor,
-  LaTeXDiffs, and Figures. Workflow runs offer Run again from
-  scratch, Resume, Open run folder, Export, Copy run context, latexdiff,
-  Archive outputs, and Delete output files; tool-use runs offer Compact,
-  Open run folder, and Export. Export saves the conversation as Markdown,
-  HTML, or PDF.
+  A workflow task also shows which pass it is on, as **Pass 2 of 3**.
+  The menu holds the task's actions, then Open tasks in editor,
+  LaTeXDiffs, and Figures. Workflow tasks offer Run again from
+  scratch, Resume, Open task folder, Export, Copy diagnostics, latexdiff,
+  Archive outputs, and Delete output files; other tasks offer Compact,
+  Open task folder, Export, and Copy diagnostics. Export saves the
+  conversation as Markdown, HTML, or PDF.
 - **Once a session ends**: where the message box stood, the session says
   it has ended and offers **Edit as new task**, which opens New task with
   the same agent, files, and instruction. An interrupted session also
   offers **Resume**.
-- **Delete session…**: at the end of the menu, for a run that has stopped.
-  It asks before it removes the conversation and its run folder.
+- **Delete task**: at the end of the menu, for a task that has stopped.
+  It removes the conversation and its task folder.
 
 Each action in detail:
 
@@ -93,10 +94,10 @@ Each action in detail:
   Reveals the run folder under run storage so you can browse generated
   files, compile logs, mirrored dependencies, and intermediate artifacts
   yourself.
-- <wa-icon library="texra" name="copy"></wa-icon> **Copy run context**: Copies the
-  run identity, output paths, and compile failures to the clipboard as plain
-  text, so you can paste them into a new tool-use chat. The button is disabled
-  when the run has neither outputs nor compile failures.
+- <wa-icon library="texra" name="copy"></wa-icon> **Copy diagnostics**: Copies
+  the task's title, agent, model, status and id, its output paths, and its
+  compile failures to the clipboard as plain text, for a bug report or to
+  paste into a new task. It is the one place the task's id is shown.
 - <wa-icon library="texra" name="box-archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. Read the [file management guide](./file-management.md).
 - <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the run folder associated with this stream.
 
@@ -132,8 +133,8 @@ When a tool-use agent works on a multi-step task, it shows a **live checklist** 
 
 ### After a workflow run
 
-To follow up on a finished workflow in chat, use **Copy run context** in the
-header toolbar to put the run's output paths and compile failures on the
+To follow up on a finished workflow in chat, use **Copy diagnostics** in the
+header menu to put the task's output paths and compile failures on the
 clipboard, then start a tool-use chat from the **New** view and paste that text
 into the instruction box.
 

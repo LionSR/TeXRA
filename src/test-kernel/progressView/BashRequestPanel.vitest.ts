@@ -50,7 +50,7 @@ describe('bash-request-panel', () => {
       element.shadowRoot
         ?.querySelector('wa-dropdown-item[value="grant"]')
         ?.textContent?.trim(),
-    ).toBe('Approve all commands in this run');
+    ).toBe('Approve all commands in this task');
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions).toEqual([

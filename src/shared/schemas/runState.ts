@@ -22,8 +22,6 @@ export const ConversationProgressSchema = z.object({
   toolCallCount: z.number().prefault(0),
 });
 
-export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
-
 export const ApprovalBypassesSchema = z.record(
   z.enum(APPROVAL_BYPASS_KINDS),
   z.boolean(),

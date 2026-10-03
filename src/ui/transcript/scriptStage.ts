@@ -38,7 +38,7 @@ import type { ToolRow, TranscriptRow } from './transcriptRow';
 
 /** What a card the run's end failed while it was open says: the call never
  *  settled, so nothing records how it ended. */
-export const TOOL_CUT_BY_RUN_END = 'The run ended before this tool completed.';
+export const TOOL_CUT_BY_RUN_END = 'The task ended before this tool completed.';
 
 const AGENT_TOOL = 'agent';
 

@@ -187,6 +187,8 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isOrchestrator: z.boolean().optional(),
   /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
   source: AgentSourceSchema.optional(),
+  /** A workflow agent's planned passes: the header's "Pass 2 of 3". */
+  rounds: z.int().positive().optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 

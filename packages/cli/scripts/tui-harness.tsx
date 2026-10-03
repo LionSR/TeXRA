@@ -80,7 +80,7 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -1595,7 +1595,7 @@ function handleHarnessSubmit(line: string): void {
   if (focused && focused.parentId !== null) {
     if (!acceptsFollowUp(focused, CLI_FOLLOW_UP_HOST)) {
       appendHarnessAssistantTranscript(
-        FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+        FOCUSED_AGENT.selectedNoLongerAccepting,
         focused.id,
       );
       return;

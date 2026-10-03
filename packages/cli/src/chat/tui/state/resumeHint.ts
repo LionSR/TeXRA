@@ -9,6 +9,7 @@ import {
 } from '@shared/schemas';
 import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 import { usageCostLabel } from '@ui/copy/modelAccess';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
 
@@ -60,7 +61,7 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
-/** The session's metered usage: the root run and every descendant. */
+/** The task's metered usage: the root run and every descendant. */
 export function collectResumeUsage(
   view: SessionView,
   rootRunId: RunId | undefined,
@@ -90,7 +91,7 @@ function formatResumeUsage(
     usage.usagePlan,
   );
   return costLine
-    ? `Token usage: ${lines.join(' ')}\nSession cost: ${costLine}`
+    ? `Token usage: ${lines.join(' ')}\nTask cost: ${costLine}`
     : `Token usage: ${lines.join(' ')}`;
 }
 
@@ -100,7 +101,7 @@ export function collectResumeTargets({
 }: ResumeTargetsInput): readonly ResumeTarget[] {
   const targets: ResumeTarget[] = [];
   if (rootRunId) {
-    targets.push({ runId: rootRunId, label: 'main', isRoot: true });
+    targets.push({ runId: rootRunId, label: 'task', isRoot: true });
   }
   for (const runId of descendantRuns(view, rootRunId, {
     includeRoot: false,
@@ -119,7 +120,7 @@ export function formatResumeHint(
   commandOptions?: ResumeCommandOptions,
 ): string | undefined {
   if (targets.length === 0) return undefined;
-  const lines = [formatResumeUsage(usage), 'Resume this session with:'].filter(
+  const lines = [formatResumeUsage(usage), TASK_ACTIONS.resumeHint].filter(
     (line): line is string => Boolean(line),
   );
   for (const target of targets) {

@@ -12,7 +12,6 @@ import {
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { formatCostUsd, truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
@@ -123,7 +122,7 @@ function activeApprovalBypassLabels(
 ): string[] {
   if (!bypasses) return [];
   const labels: string[] = [];
-  if (bypasses.superYolo) labels.push('delegated tasks');
+  if (bypasses.superYolo) labels.push('agent work');
   if (bypasses.bash) labels.push('commands');
   if (bypasses.toolEdit) labels.push('file edits');
   return labels;
@@ -143,7 +142,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     `status: ${input.statusLabel ?? 'not started'}`,
     ...costStatusLines(input.cost),
     ...((input.activeChildSessions ?? 0) > 0
-      ? [`active ${BACKGROUND_TASK.inlinePlural}: ${input.activeChildSessions}`]
+      ? [`active agents: ${input.activeChildSessions}`]
       : []),
     ...(input.activeSkills.length > 0
       ? [`skills: ${input.activeSkills.join(', ')}`]
@@ -159,7 +158,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       : []),
     ...(input.sessionId
       ? [
-          `session: ${input.sessionId}`,
+          `task: ${input.sessionId}`,
           `resume later with: ${formatResumeCommand(
             input.commandName,
             input.sessionId,

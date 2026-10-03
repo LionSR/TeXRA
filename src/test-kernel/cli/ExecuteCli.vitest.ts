@@ -1320,7 +1320,7 @@ describe('executeCliConfig', () => {
           exitCode: CliExitCode.Interrupted,
         });
         expect(mocks.writeTextStderrAndWait).toHaveBeenCalledExactlyOnceWith(
-          "Resume this session with: texra resume exec-1 --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'",
+          "Resume this task with: texra resume exec-1 --cwd /tmp/project --approval-policy yolo --include-interop --source '/tmp/skill path'",
         );
       }),
   );

@@ -41,7 +41,7 @@ describe('CLI session status formatter', () => {
     });
 
     expect(status).toContain(
-      'auto-approvals: delegated tasks, commands, file edits',
+      'auto-approvals: agent work, commands, file edits',
     );
     expect(status).not.toContain('all privileged actions');
   });

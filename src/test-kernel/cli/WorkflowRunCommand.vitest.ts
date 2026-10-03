@@ -120,7 +120,7 @@ function expectedRecoveryHint(
   runId: string,
   workingDirectory = context.cwd,
 ): string {
-  return `Resume this workflow with: ${formatResumeCommand(
+  return `Resume this task with: ${formatResumeCommand(
     context.commandName,
     runId,
     {
@@ -1551,7 +1551,7 @@ describe('CLI run command, workflow agents', () => {
         expect(cwdSpy).toHaveBeenCalledOnce();
         cwdSpy.mockRestore();
         expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledExactlyOnceWith(
-          `Resume this workflow with: ${formatResumeCommand(
+          `Resume this task with: ${formatResumeCommand(
             context.commandName,
             'abc011',
             {

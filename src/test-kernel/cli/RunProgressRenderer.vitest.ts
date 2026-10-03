@@ -20,7 +20,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import {
   aggregateId as qualifyAggregateId,
   RUN_PHASE,
-  type ConversationProgress,
   type RunId,
   type RunIdentity,
   type RunPhase,
@@ -34,6 +33,8 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
+
+type ConversationProgress = RunView['conversationProgress'];
 
 /** The catalog the renderer is built over: named by the caller, as production
  *  names the process catalog, so no suite has to replace `@agent/index`. */

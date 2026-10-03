@@ -54,7 +54,7 @@ export function applyInitialCliAgentSelection(
 ) {
   return Effect.gen(function* () {
     const fixedAgentNotice =
-      'The agent is fixed for this chat session. Start a new chat to use a different agent.';
+      'The agent is fixed for this task. Start a new task to use a different agent.';
     if (!chatTuiCanStartRootRun(context.session)) {
       setTransientNotice(fixedAgentNotice);
       return;
@@ -91,7 +91,7 @@ export function applyInitialCliAgentSelection(
 export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
   function* (teamId: string, context: SlashCommandContext) {
     const fixedTeamNotice =
-      'The agent is fixed for this chat session. Start a new chat to use a team.';
+      'The agent is fixed for this task. Start a new task to use a team.';
     if (!chatTuiCanStartRootRun(context.session)) {
       setTransientNotice(fixedTeamNotice);
       return;

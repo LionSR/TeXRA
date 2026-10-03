@@ -685,7 +685,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('Session list'));
+      await waitFor(() => stdout.output.includes('Agent list'));
       const beforeListCancel = stdout.output.length;
       stdin.write(ESC);
       await waitFor(() =>
@@ -697,7 +697,7 @@ describe('App foreground Escape ownership', () => {
       const beforeListFocus = stdout.output.length;
       stdin.write('\t');
       await waitFor(() =>
-        stdout.output.slice(beforeListFocus).includes('Session list'),
+        stdout.output.slice(beforeListFocus).includes('Agent list'),
       );
       const beforeTabReturn = stdout.output.length;
       stdin.write('\t');
@@ -720,7 +720,7 @@ describe('App foreground Escape ownership', () => {
       }
       await sleep(30);
 
-      expect(stdout.output).not.toContain('Session list');
+      expect(stdout.output).not.toContain('Agent list');
       expect(selectedRunId.get()).toBe(ROOT);
     } finally {
       instance.unmount();

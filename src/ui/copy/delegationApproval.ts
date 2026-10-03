@@ -11,21 +11,21 @@ export const RUN_GRANT_NOUN = Object.freeze({
   superYolo: 'agent work',
 } as const satisfies Record<ApprovalBypassKind, string>);
 
-/** The approval card's run-grant item, e.g. "Approve all edits in this run". */
+/** The approval card's grant item, e.g. "Approve all edits in this task". */
 export const RUN_GRANT_LABEL = Object.freeze({
-  toolEdit: `Approve all ${RUN_GRANT_NOUN.toolEdit} in this run`,
-  bash: `Approve all ${RUN_GRANT_NOUN.bash} in this run`,
-  superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this run`,
+  toolEdit: `Approve all ${RUN_GRANT_NOUN.toolEdit} in this task`,
+  bash: `Approve all ${RUN_GRANT_NOUN.bash} in this task`,
+  superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this task`,
 } as const satisfies Record<ApprovalBypassKind, string>);
 
 /** Host-specific user copy for the delegated-work approval grant. */
 export const DELEGATION_APPROVAL_COPY = Object.freeze({
-  cliAction: 'approve agent work for this chat',
+  cliAction: 'approve agent work for this task',
   cliCompactAction: 'all agent work',
   cliExplanation:
-    'Press y to approve only this task. Press a to approve delegated tasks, file edits, and commands for this chat. Other prompts still ask.',
+    'Press y to approve only this agent. Press a to approve agent work, file edits, and commands for this task. Other prompts still ask.',
   progressViewToggle:
-    'Auto-approve later agent tasks, file edits, and shell commands in this run',
+    'Auto-approve later agent work, file edits, and shell commands in this task',
 } as const);
 
 /**

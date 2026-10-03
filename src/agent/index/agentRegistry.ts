@@ -417,6 +417,7 @@ function entriesToOptionData(
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
     source: entry.source,
+    ...(entry.rounds === undefined ? {} : { rounds: entry.rounds }),
   }));
 }
 

@@ -577,15 +577,15 @@ export class TaskGroupList extends LitElement {
   private renderLogContent(): TemplateResult {
     // Pre-output placeholder, including terminal-mode (process-agent) runs:
     // with no output the terminal buffer is empty and would render a blank
-    // pane, so show the same "Run is starting" / idle text instead.
+    // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
       const active = isInFlightPhase(this.runStatus);
       return html`
         <div class="log-placeholder">
           ${
             active
-              ? 'Run is starting. Progress updates will appear here.'
-              : 'No log output for this run yet.'
+              ? 'Task is starting. Progress updates will appear here.'
+              : 'No log output for this task yet.'
           }
         </div>
       `;

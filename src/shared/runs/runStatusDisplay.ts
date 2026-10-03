@@ -187,19 +187,6 @@ export function formatLoopPositionLabel(
   });
 }
 
-/** Spelled-out counterpart of {@link formatLoopPositionLabel} on the same
- *  coordinate — `Round 2`, `Turn 2` — for the surfaces that word the
- *  position instead of abbreviating it. Only `round` gains one: its index is
- *  zero-based, a turn's one-based. */
-export function formatLoopPositionTitle(
-  position: Readonly<LoopCoordinate> | null | undefined,
-): string | undefined {
-  if (position == null) return undefined;
-  return position.kind === 'round'
-    ? `Round ${position.index + 1}`
-    : `Turn ${position.index}`;
-}
-
 /**
  * One section per `group` arm, and the order the sections are painted in.
  * Both surfaces that group a run list — the webview tab strip and the

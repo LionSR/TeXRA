@@ -25,7 +25,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { type TeXRAIconName } from '@ui/wa/iconNames';
-import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { getBasename } from '@utils/core';
 import { formatRelativeTime, formatResultCount } from '@utils/text/stringUtils';
 import { runTabStyles } from './RunTab.styles';
@@ -60,22 +60,21 @@ function buildTooltip(run: RunView): string {
   const lastSeen = run.lastTimestamp
     ? formatRelativeTime(run.lastTimestamp)
     : '';
-  // The opaque id stays in the accessible name: it is what tells two
-  // parallel runs of the same agent apart.
+  // No raw id: two parallel agents differ by title, model and time, and
+  // the id is for bug reports ("Copy diagnostics").
   return [
     mainLine,
     run.description,
     run.statusDetail,
-    run.id,
     lastSeen && `Last activity ${lastSeen}`,
   ]
     .filter(Boolean)
     .join('\n');
 }
 
-/** A collapsed parent's descendants in words: "2 background tasks · 1 running". */
+/** A collapsed parent's descendants in words: "2 agents · 1 running". */
 function rollupLabel(run: RunView): string {
-  const total = formatResultCount(run.rollup.total, BACKGROUND_TASK.countNoun);
+  const total = formatResultCount(run.rollup.total, NESTED_AGENT.countNoun);
   return run.rollup.running > 0
     ? `${total} · ${run.rollup.running} running`
     : total;
@@ -138,10 +137,10 @@ export class RunTab extends LitElement {
     const tooltip = buildTooltip(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,
-      BACKGROUND_TASK.countNoun,
+      NESTED_AGENT.countNoun,
     );
     const childToggleLabel = this.expanded
-      ? BACKGROUND_TASK.collapseAction
+      ? NESTED_AGENT.collapseAction
       : childCountLabel;
     const metaAgentName =
       run.identity.kind === 'agent' && run.description ? run.label : undefined;
@@ -270,13 +269,7 @@ export class RunTab extends LitElement {
           </button>
           <wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>
         </div>
-        <wa-tooltip for="run-tab-kind"
-          >${
-            run.identity.kind === 'agent'
-              ? `Category: ${this.decorator.label}`
-              : this.decorator.label
-          }</wa-tooltip
-        >
+        <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
         ${
           run.group === 'interrupted' && run.actions.includes('resume')
             ? html`<wa-button
@@ -301,12 +294,12 @@ export class RunTab extends LitElement {
                   variant="neutral"
                   size="s"
                   type="button"
-                  aria-label=${`Delete ${runTitle}`}
+                  aria-label=${`${TASK_ACTIONS.delete}: ${runTitle}`}
                   data-run=${run.id}
                   data-action="delete"
                   >${waIcon('xmark')}</wa-button
                 ><wa-tooltip for="run-tab-remove-button"
-                  >Delete session</wa-tooltip
+                  >${TASK_ACTIONS.delete}</wa-tooltip
                 >`
             : nothing
         }

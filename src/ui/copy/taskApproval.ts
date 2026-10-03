@@ -21,6 +21,6 @@ export const TASK_APPROVAL = {
     label: AUTO_APPROVE_LABEL,
     detail: 'this task only',
     description:
-      'Auto-approve file edits, shell commands and subagent work in this task. Turn it off from the run header at any time; a Block policy still blocks.',
+      'Auto-approve file edits, shell commands and agent work in this task. Turn it off from the task header at any time; a Block policy still blocks.',
   },
 } as const;

@@ -80,7 +80,7 @@ export abstract class BaseRunContent extends LitElement {
       <span role="status" aria-atomic="true"
         >${
           run.statusDetail ??
-          (live ? 'This session takes no messages.' : 'This session has ended.')
+          (live ? 'This task takes no messages.' : 'This task has ended.')
         }</span
       >
       ${

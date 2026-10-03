@@ -240,14 +240,14 @@ function runHistoryDelete(
 }
 
 const historyListCommand = defineCliCommand({
-  meta: { name: 'list', description: 'List stored runs' },
+  meta: { name: 'list', description: 'List stored tasks' },
   args: {
     ...GLOBAL_ARGS,
     limit: {
       type: 'string',
       alias: 'n',
       valueHint: 'count',
-      description: 'Show at most this many runs',
+      description: 'Show at most this many tasks',
     },
   },
   // The argument parses are the builder's, above the program: a refusal is
@@ -266,13 +266,13 @@ const historyListCommand = defineCliCommand({
 });
 
 const historyShowCommand = defineCliCommand({
-  meta: { name: 'show', description: 'Show one stored run' },
+  meta: { name: 'show', description: 'Show one stored task' },
   args: {
     ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
-      description: 'Run id from `texra history list`',
+      description: 'Task id from `texra history list`',
     },
     full: {
       type: 'boolean',
@@ -289,7 +289,7 @@ const historyShowCommand = defineCliCommand({
   run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
-      throw new CliUsageError(`Invalid run id: ${ctx.args.id}`);
+      throw new CliUsageError(`Invalid task id: ${ctx.args.id}`);
     }
     const exportFormat = optString(ctx.args.export);
     if (exportFormat !== undefined) {
@@ -303,17 +303,17 @@ const historyShowCommand = defineCliCommand({
 });
 
 const historyDeleteCommand = defineCliCommand({
-  meta: { name: 'delete', description: 'Delete stored runs' },
+  meta: { name: 'delete', description: 'Delete stored tasks' },
   args: {
     ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: false,
-      description: 'Run id from `texra history list`',
+      description: 'Task id from `texra history list`',
     },
     all: {
       type: 'boolean',
-      description: 'Delete all stored runs (requires --yes to confirm)',
+      description: 'Delete all stored tasks (requires --yes to confirm)',
     },
     yes: {
       type: 'boolean',
@@ -326,7 +326,7 @@ const historyDeleteCommand = defineCliCommand({
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
-      throw new CliUsageError(`Invalid run id: ${rawId}`);
+      throw new CliUsageError(`Invalid task id: ${rawId}`);
     }
     return runHistoryDelete(context, {
       id,
@@ -337,7 +337,7 @@ const historyDeleteCommand = defineCliCommand({
 });
 
 export const historyCommand = defineCommand({
-  meta: { name: 'history', description: 'Inspect stored runs' },
+  meta: { name: 'history', description: 'Inspect stored tasks' },
   args: {
     ...GLOBAL_ARGS,
   },

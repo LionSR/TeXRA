@@ -579,9 +579,7 @@ describe('CLI StatusBar display model', () => {
       'Running',
       'Press Ctrl-C again to exit',
     ]);
-    expect(display.bindings).toBe(
-      'Resume this session with: texra resume abc123',
-    );
+    expect(display.bindings).toBe('Resume this task with: texra resume abc123');
   });
 
   it('warns that queued follow-ups are discarded while exit is armed', () => {
@@ -697,9 +695,7 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(leftTexts(display)).toEqual(['◆', 'run', 'Press Ctrl-C again t…']);
-    expect(display.bindings).toBe(
-      'Resume this session with: texra resume abc123',
-    );
+    expect(display.bindings).toBe('Resume this task with: texra resume abc123');
   });
 
   it('shows the limiting coding-plan quota in the persistent status row', () => {
