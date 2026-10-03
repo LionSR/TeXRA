@@ -38,12 +38,3 @@ export function formatCliHistoryAgentLabel(
 ): string {
   return entry.teamId ? `team:${entry.teamId}` : entry.agent;
 }
-
-export function formatCliHistoryResumeSummary(
-  entry: Pick<
-    CliHistoryEntry,
-    'agent' | 'description' | 'inputBasename' | 'status' | 'teamId'
-  >,
-): string {
-  return `${formatCliHistoryAgentLabel(entry)}; ${entry.status}; ${formatCliHistorySubject(entry, 'no input')}`;
-}

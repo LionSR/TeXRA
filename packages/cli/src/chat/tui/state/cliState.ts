@@ -381,6 +381,10 @@ type TransientNoticeOptions =
 
 const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 
+/** The open-time interrupted-tasks notice was answered or passed over:
+ *  anything submitted hides it until the next open. */
+export const interruptedNoticeHidden = signal(false);
+
 /** Single status-bar notice slot; later notices replace earlier ones. */
 export const transientNotice = signal<TransientNotice | undefined>(undefined);
 

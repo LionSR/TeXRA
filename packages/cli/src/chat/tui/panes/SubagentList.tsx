@@ -12,11 +12,7 @@ import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
-import {
-  killableRunId,
-  resumableRunId,
-  runPhaseOf,
-} from '../state/sessionView';
+import { killableRunId, runPhaseOf } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -150,12 +146,6 @@ function SessionRow({
       {rollup ? (
         <RowSegment color={color} flexShrink={metadataColumn ? 0 : 1}>
           {` [${rollup}]`}
-        </RowSegment>
-      ) : null}
-      {resumableRunId(run) ? (
-        <RowSegment color={color} flexShrink={0}>
-          {' '}
-          · Resume
         </RowSegment>
       ) : null}
       {summary ? (

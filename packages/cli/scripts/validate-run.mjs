@@ -1330,6 +1330,133 @@ async function validateInterruptedTasks() {
   }
 }
 
+/**
+ * The open-time prompt and rename (GUI lane G4): a chat killed while it
+ * waits leaves its task interrupted; under the default
+ * `texra.resumeOnOpen: ask`, the next `texra chat` lists it above the input
+ * by title and resumes nothing until `/resume all`. A resumed chat's
+ * `/rename` then writes the user's title. The notice's lines, the
+ * activation counts and the task's `run.description` rows are the artifact.
+ */
+async function validateOpenTimePrompt() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-open-prompt-'));
+  try {
+    const project = echoProject(cwd);
+    const source = project.firstRun('First message');
+    const activations = () =>
+      project.readStore(
+        `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = '${source}' AND e.type = 'run.activate'`,
+      )[0].n;
+    let killed = false;
+    await runTexraPty(['resume', source], {
+      label: 'texra resume, then SIGKILL',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 40_000,
+      env: project.ptyEnv,
+      onData: (_data, pty) => {
+        if (!killed && stripVTControlCharacters(pty.output).includes('Idle')) {
+          killed = true;
+          pty.setTimer(() => pty.kill('SIGKILL'), 800);
+        }
+      },
+    });
+    const interrupted = activations();
+
+    let phase = 'opening';
+    let notice = [];
+    let whileListed = null;
+    let resumed = null;
+    const chat = await runTexraPty(['chat'], {
+      label: 'texra chat with an interrupted task (ask)',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 60_000,
+      env: project.ptyEnv,
+      onData: (_data, pty) => {
+        const plain = stripVTControlCharacters(pty.output);
+        if (phase !== 'opening' || !plain.includes('1 task was interrupted'))
+          return;
+        phase = 'listed';
+        pty.setTimer(() => {
+          const shown = stripVTControlCharacters(pty.output);
+          const at = shown.lastIndexOf('1 task was interrupted');
+          notice = shown
+            .slice(at)
+            .split('\n')
+            .slice(0, 3)
+            .map((line) => line.trim());
+          whileListed = activations();
+          pty.write('/resume all');
+          pty.setTimer(() => pty.write('\r'), 400);
+          const poll = () => {
+            const now = activations();
+            if (now > interrupted) {
+              resumed = now;
+              pty.setTimer(() => pty.write(ETX), 800);
+              pty.setTimer(() => pty.write(ETX), 2_000);
+            } else pty.setTimer(poll, 300);
+          };
+          pty.setTimer(poll, 600);
+        }, 2_000);
+      },
+    });
+
+    let renamed = false;
+    await runTexraPty(['resume', source], {
+      label: 'texra resume, then /rename',
+      cwd: project.work,
+      cols: 160,
+      rows: 40,
+      timeoutMs: 40_000,
+      env: project.ptyEnv,
+      onData: (_data, pty) => {
+        const plain = stripVTControlCharacters(pty.output);
+        if (!renamed && plain.includes('Idle')) {
+          renamed = true;
+          pty.setTimer(() => pty.write('/rename Chapter two review'), 500);
+          pty.setTimer(() => pty.write('\r'), 900);
+        }
+        if (renamed && plain.includes('Renamed to Chapter two review')) {
+          pty.setTimer(() => pty.write(ETX), 800);
+          pty.setTimer(() => pty.write(ETX), 2_000);
+        }
+      },
+    });
+    const titles = project.readStore(
+      `SELECT json_extract(e.data, '$.description') AS description,
+              json_extract(e.data, '$.by') AS "by"
+         FROM event e JOIN event_sequence s ON s.id = e.aggregate
+        WHERE s.logical_id = '${source}' AND e.type = 'run.description'
+        ORDER BY e."commit"`,
+    );
+    const artifactPath = writeArtifact('open-time-prompt.json', {
+      source,
+      notice,
+      activations: { interrupted, whileListed, resumed },
+      titles,
+    });
+    assert(
+      chat.exit.exitCode === 0 &&
+        notice.length > 1 &&
+        notice[1].includes('stopped') &&
+        whileListed === interrupted &&
+        resumed === interrupted + 1,
+      `the chat should list the interrupted task by title, resume nothing until /resume all, then resume it (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
+    );
+    assert(
+      titles.at(-1)?.by === 'user' &&
+        titles.at(-1)?.description === 'Chapter two review',
+      `/rename should write the user's title (artifact: ${artifactPath})`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 function validateScriptFanoutRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-script-fanout-run-'));
   try {
@@ -1566,6 +1693,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateForkResetHandoff();
   await validateBackgroundCompaction();
   await validateInterruptedTasks();
+  await validateOpenTimePrompt();
   validateScriptFanoutRunCommand();
   validateTeamRunCommand();
   console.log('CLI run validation passed');

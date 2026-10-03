@@ -18,6 +18,26 @@ All notable changes to this project will be documented in this file.
   every task, replaces Copy run context and is the one place a task's id is
   shown. The header's "Round 2 · 3 tool calls" chip shows only on workflow
   tasks, as **Pass 2 of 3**.
+- **Opening TeXRA lists the tasks it left interrupted, and Resume has one
+  home.** When a project, the VS Code sidebar or `texra chat` opens and
+  finds tasks a closed or crashed TeXRA left unfinished, a notice above the
+  composer lists them by title ("2 tasks were interrupted"), with when each
+  stopped and how many of its agents finished. **Resume all** continues
+  them, a title opens that task, and **Not now** hides the notice until the
+  next open; **Always resume** links to Settings › General. A task that
+  cannot continue says why ("needs the zotero plugin, which is off") with
+  **Turn on** or **Review**, which open Settings › Plugins. In the CLI the
+  notice sits above the input and is answered with `/resume all` or
+  `/resume`; anything you send hides it. A task's one Resume is now on its
+  ended line: the Resume button on task rows is gone (a row says
+  Interrupted and opens the task), the workflow menu's "Resume from saved
+  outputs" moved to the ended line, and the CLI agent list's `· Resume`
+  marker is gone (Enter on that row still resumes). A request card whose
+  task stopped before it was answered carries its own **Resume** button.
+  `/resume` lists tasks by title, not id.
+- **Rename a task.** The header menu's **Rename…** (the CLI's
+  `/rename <title>`) gives a task your own title, which a later generated
+  title does not replace.
 - **One "Connect a model" card, and one place to grant auto-approval.** The
   welcome card is now the "Connect a model" card, and it is the one place a
   first install asks for a credential: the no-folder welcome view, the setup

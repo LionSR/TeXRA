@@ -267,9 +267,6 @@ export class RunTabs extends LitElement {
       case 'delete':
         this.deleteRun(tab, runId);
         break;
-      case 'resume':
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId }));
-        break;
       case 'toggle-children':
         this.dispatchEvent(
           SessionUiEvents.surface({

@@ -596,6 +596,9 @@ export const createHostRunActions = (
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resume');
         const resumed = yield* resumeOnSession(runId, session);
+        // A blocked resume is asked for, not refused: the task's own line
+        // says what it waits for, and it continues once that is back.
+        if ('failed' in resumed && resumed.failed === 'blocked') return;
         if (!('started' in resumed) || !resumed.delivered)
           return yield* Effect.fail(
             new Unavailable({

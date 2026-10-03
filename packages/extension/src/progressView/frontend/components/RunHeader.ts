@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -48,6 +48,8 @@ export interface HeaderMenuItem {
 
 /** The menu value of the delete item. */
 const DELETE_SESSION = 'deleteSession';
+/** The menu value of the rename item, which turns the title into a field. */
+const RENAME_TASK = 'renameTask';
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
 const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
@@ -104,6 +106,20 @@ export class RunHeader extends LitElement {
         font-weight: var(--font-weight-semibold);
         line-height: 1.2;
         letter-spacing: -0.012em;
+      }
+
+      .rename-input {
+        flex: 1;
+        min-width: 6ch;
+        margin: 0;
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        border: 1px solid var(--wa-color-brand-border-normal);
+        border-radius: var(--border-radius-small);
+        background: var(--wa-color-surface-default);
+        color: var(--wa-color-text-normal);
+        font: inherit;
+        font-size: var(--font-size);
+        font-weight: var(--font-weight-semibold);
       }
 
       .status-label,
@@ -218,6 +234,9 @@ export class RunHeader extends LitElement {
   /** A workflow agent's planned pass count, from the agent catalog. */
   @property({ attribute: false }) plannedPasses: number | undefined;
 
+  /** The title is a field while the user renames the run. */
+  @state() private renaming = false;
+
   private readonly copyDiagnostics = new CopyButtonController(this, {
     successTitle: 'Copied!',
   });
@@ -234,6 +253,48 @@ export class RunHeader extends LitElement {
     } else {
       this.dispatchEvent(SessionUiEvents.host({ kind: action.arm, runId }));
     }
+  }
+
+  private startRename(): void {
+    this.renaming = true;
+    void this.updateComplete.then(() => {
+      const input =
+        this.renderRoot.querySelector<HTMLInputElement>('.rename-input');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  /** Enter or leaving the field saves a changed title; Esc keeps the old. */
+  private finishRename(run: RunView, input: HTMLInputElement, save: boolean) {
+    if (!this.renaming) return;
+    this.renaming = false;
+    const title = input.value.trim();
+    if (!save || title === '' || title === (run.description || run.label))
+      return;
+    this.dispatchEvent(
+      SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
+    );
+  }
+
+  private renderTitle(run: RunView): TemplateResult {
+    if (this.renaming)
+      return html`<input
+        class="rename-input"
+        aria-label="Task title"
+        .value=${run.description || run.label}
+        @keydown=${(event: KeyboardEvent) => {
+          const input = event.target as HTMLInputElement;
+          if (event.key === 'Enter') this.finishRename(run, input, true);
+          else if (event.key === 'Escape') this.finishRename(run, input, false);
+        }}
+        @blur=${(event: FocusEvent) =>
+          this.finishRename(run, event.target as HTMLInputElement, true)}
+      />`;
+    return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
+        ${run.description || run.label}
+      </h1>
+      <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>`;
   }
 
   /** Whether a run grant is on, per the run's policy snapshot. */
@@ -264,11 +325,7 @@ export class RunHeader extends LitElement {
     return html`
       <div class="log-header">
         <slot name="start"></slot>
-        ${this.renderAncestors(run)}
-        <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-          ${run.description || run.label}
-        </h1>
-        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>
+        ${this.renderAncestors(run)} ${this.renderTitle(run)}
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}
           role="img"
@@ -333,6 +390,7 @@ export class RunHeader extends LitElement {
     ).filter((action) => run.actions.includes(action.action));
     const copied = this.copyDiagnostics.state.copied;
     const canDelete = run.actions.includes('delete');
+    const canRename = run.actions.includes('rename');
     return html`
       <wa-dropdown
         placement="bottom-end"
@@ -340,6 +398,10 @@ export class RunHeader extends LitElement {
           const { item } = event.detail;
           if (item.localName !== 'wa-dropdown-item') return;
           const { value } = item as WaDropdownItem;
+          if (value === RENAME_TASK) {
+            this.startRename();
+            return;
+          }
           if (value === DELETE_SESSION) {
             this.dispatchEvent(
               SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
@@ -366,6 +428,13 @@ export class RunHeader extends LitElement {
         <div class="menu-status">
           ${statusLabel}${passLabel ? ` · ${passLabel}` : ''}
         </div>
+        ${
+          canRename
+            ? html`<wa-dropdown-item value=${RENAME_TASK}
+                >${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item
+              >`
+            : nothing
+        }
         ${repeat(
           actions,
           (action) => action.id,

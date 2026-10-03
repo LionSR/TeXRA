@@ -123,6 +123,8 @@ const RUN_ACTIONS = [
   'clean',
   /** Remove the run and its folder from history. */
   'delete',
+  /** Give the run the user's own title. */
+  'rename',
   /** Read-only: open its folder, export or copy its conversation. */
   'openRunStorage',
   'export',

@@ -89,7 +89,9 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
    *  (the header's gear). */
   z.object({
     kind: z.literal('openSettings'),
-    section: z.enum(['agents', 'teams', 'models']).nullish(),
+    section: z
+      .enum(['agents', 'teams', 'models', 'plugins', 'general'])
+      .nullish(),
     sessionType: SessionTypeSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the

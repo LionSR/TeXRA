@@ -23,7 +23,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * or spawned and not started yet) can only be stopped; while it works, an
  * agent's run takes approval grants and a tool-use agent's compaction.
  * Nothing that rewrites or removes a run's files or history is offered while
- * it is live. After, it can be deleted; a plain agent's can be resumed (an
+ * it is live; any run this process can act on can be renamed. After, it can be deleted; a plain agent's can be resumed (an
  * interrupted one, or a workflow from its saved outputs), run again, or
  * restored into the launcher; a background script's can be resumed unless it
  * completed, and restored; a workflow agent's outputs can be diffed,
@@ -47,10 +47,11 @@ export function runActions(
       'stop',
       ...(agent ? (['grant'] as const) : []),
       ...(compact ? (['compact'] as const) : []),
+      'rename',
       ...inspectActions(),
     ];
   }
-  const actions: RunAction[] = ['delete'];
+  const actions: RunAction[] = ['delete', 'rename'];
   if (isPlainAgentIdentity(run.identity)) {
     if (run.group === 'interrupted' || run.category === AgentCategory.Workflow)
       actions.push('resume');
@@ -91,7 +92,8 @@ const ACTION_LABEL: Record<RunAction, string> = {
   diff: 'Latexdiff of the outputs',
   pack: 'Archiving the outputs',
   clean: 'Deleting the output files',
-  delete: 'Deleting the session',
+  delete: 'Deleting the task',
+  rename: 'Renaming',
   openRunStorage: 'Opening the run folder',
   export: 'Export',
   copy: 'Copy',

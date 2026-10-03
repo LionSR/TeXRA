@@ -1873,7 +1873,22 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     // existed, and a run with no claim has no owner: re-read the log so the
     // three new aggregates carry the owner each was emitted under.
     log.drained(),
-    local({ self: [OWNER], dead: [OTHER_OWNER] }),
+    local({
+      self: [OWNER],
+      dead: [OTHER_OWNER],
+      // What a resume of the interrupted root waits for, as the session's
+      // follower marks it at open.
+      resumeBlocked:
+        process.env.HARNESS_RESUME_BLOCKED === '1'
+          ? [
+              {
+                runId: interrupted,
+                reason: { kind: 'pluginOff', name: 'zotero' },
+                retry: false,
+              },
+            ]
+          : [],
+    }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));

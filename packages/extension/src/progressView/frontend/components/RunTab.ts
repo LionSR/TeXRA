@@ -1,6 +1,7 @@
 // One run row of the run list: its title, status glyph, rollup and the
-// row actions (expand, resume, and, where the list is `removable`, delete).
-// `run-tabs` lays the rows out.
+// row actions (expand, and, where the list is `removable`, delete). An
+// interrupted row says so; its one Resume is on the task's ended line, which
+// the row opens. `run-tabs` lays the rows out.
 import {
   LitElement,
   html,
@@ -270,21 +271,6 @@ export class RunTab extends LitElement {
           <wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>
         </div>
         <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
-        ${
-          run.group === 'interrupted' && run.actions.includes('resume')
-            ? html`<wa-button
-                id="run-tab-resume-button"
-                class="tab-resume"
-                appearance="outlined"
-                variant="brand"
-                size="s"
-                type="button"
-                data-run=${run.id}
-                data-action="resume"
-                >${waIcon('forward-step', { slot: 'start' })} Resume</wa-button
-              >`
-            : nothing
-        }
         ${
           this.removable
             ? html`<wa-button

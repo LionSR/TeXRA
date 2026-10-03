@@ -144,6 +144,9 @@ export interface Surface {
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
   readonly storageHintDismissed: boolean;
+  /** The interrupted tasks the open-time notice's "Not now" hid: until the
+   *  next open, so never persisted. */
+  readonly interruptedDismissed: ReadonlySet<RunId>;
   /** The drawer's filter. Never persisted. */
   readonly search: string;
   readonly workbench: WorkbenchLayout | null;
@@ -205,6 +208,7 @@ export function loadSurface(
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
+    interruptedDismissed: new Set(),
     search: '',
     workbench: persisted.workbench,
   };
@@ -393,6 +397,10 @@ export type SurfaceAction =
   | { readonly kind: 'focusRow'; readonly rowId: string | null }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
   | { readonly kind: 'dismissStorageHint' }
+  | {
+      readonly kind: 'dismissInterrupted';
+      readonly runIds: readonly RunId[];
+    }
   | { readonly kind: 'seen'; readonly view: SessionView };
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
@@ -421,6 +429,14 @@ export function applySurfaceAction(
       return { ...surface, toolsSheetOpen: action.open };
     case 'dismissStorageHint':
       return { ...surface, storageHintDismissed: true };
+    case 'dismissInterrupted':
+      return {
+        ...surface,
+        interruptedDismissed: new Set([
+          ...surface.interruptedDismissed,
+          ...action.runIds,
+        ]),
+      };
     case 'search':
       return { ...surface, search: action.value };
     case 'draft':

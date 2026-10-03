@@ -64,6 +64,8 @@ export const TASK_ACTIONS = {
   delete: 'Delete task',
   /** The header menu's clipboard item: the task's facts for a bug report. */
   copyDiagnostics: 'Copy diagnostics',
+  /** The header menu's title item (the TUI's `/rename`). */
+  rename: 'Rename…',
   /** The header menu's folder item. */
   openFolder: 'Open task folder',
   /** The header's breadcrumb of the tasks above an agent. */

@@ -97,6 +97,7 @@ export class ProcessRunContent extends BaseRunContent {
         }
         ${this.renderLog()}
       </div>
+      ${this.renderInterruptedDock()}
     `;
   }
 }

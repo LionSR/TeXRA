@@ -10,6 +10,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -23,6 +24,11 @@ import {
 } from '../appLayout';
 import { ConversationPane } from './ConversationPane';
 import {
+  InterruptedTasksNotice,
+  interruptedNoticeRowCount,
+  NOTICE_MIN_ROWS,
+} from './InterruptedTasksNotice';
+import {
   QueuedFollowUpsPanel,
   queuedFollowUpPanelRowCount,
 } from './QueuedFollowUpsPanel';
@@ -31,6 +37,7 @@ import { SubagentList } from './SubagentList';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './TodosPlanPanel';
 import {
   inputBarContentRows,
+  interruptedNoticeHidden as interruptedNoticeHiddenSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   rootRunId as rootRunIdSignal,
   selectedRunId as selectedRunIdSignal,
@@ -125,12 +132,24 @@ export function ConversationRegion({
     ? clamp(rows - footerRows, 0, requestedQueuedFollowUpPanelRows)
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
+  // The open-time notice shares the queued panel's place above the footer
+  // and its share of the row budget.
+  const noticeHidden = useSignal(interruptedNoticeHiddenSignal);
+  const noticeTasks =
+    noticeHidden || foregroundOpen ? [] : interruptedTasks(view);
+  const noticeBudget = clamp(
+    rows - footerRows - queuedFollowUpPanelRows,
+    0,
+    interruptedNoticeRowCount(noticeTasks),
+  );
+  const noticeRows = noticeBudget < NOTICE_MIN_ROWS ? 0 : noticeBudget;
+  const aboveFooterRows = queuedFollowUpPanelRows + noticeRows;
   const staticTranscriptRows = scopedTranscript
     ? undefined
     : staticTranscriptRowBudget({
         footerRows,
         foregroundOpen,
-        queuedFollowUpPanelRows,
+        queuedFollowUpPanelRows: aboveFooterRows,
         rows,
       });
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
@@ -144,7 +163,7 @@ export function ConversationRegion({
     footerRows,
     foregroundMaxRows: snapshot.foregroundMaxRows,
     foregroundOpen,
-    queuedFollowUpPanelRows,
+    queuedFollowUpPanelRows: aboveFooterRows,
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
@@ -219,6 +238,13 @@ export function ConversationRegion({
           <QueuedFollowUpsPanel
             maxRows={queuedFollowUpPanelRows}
             messages={queuedFollowUpMessages}
+            width={columns}
+          />
+        ) : null}
+        {noticeRows > 0 ? (
+          <InterruptedTasksNotice
+            maxRows={noticeRows}
+            tasks={noticeTasks}
             width={columns}
           />
         ) : null}
