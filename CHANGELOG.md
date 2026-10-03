@@ -238,6 +238,23 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A script's card reads as its agents, not its code.** The card opens with
+  one line, such as `3 agents · 1 needs you · $0.840`, then each phase's
+  calls as plain rows. A finished agent's row shows the first line of its
+  answer, and the CLI shows an agent call's answer under `Result:` instead of
+  the raw `<subagent-result>` XML. Stopping a running agent moves from a Skip
+  button to "Stop this agent" in the row's menu (`s` in the CLI popup); the
+  separate "Call details" list is now a Log link inside the card; a call
+  shows "retried" only when it ran more than once.
+- **Approving a script leads with what it allows.** The request asks "Start
+  agents for …?", says that each agent's edits and commands still ask, and
+  names the first agent and its instruction; the code and the calls so far
+  fold under "Show code (N lines)". "Edit as new task" on this card is now
+  "Change and start myself".
+- **The desktop Subagents pane and its header button are gone.** A script's
+  agents live on its card and detached agents on their dispatch card; a
+  workbench layout saved with the pane open starts fresh once.
+
 - **`script` tool (code mode, first stage).** An agent whose configuration
   lists `script` can run one JavaScript program that calls its other tools as
   `await tools.read_file({ path })`, with `Promise.all`, try/catch,
