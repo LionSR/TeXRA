@@ -169,6 +169,12 @@ const workflowResumeRefusal = (runId: RunId): string =>
  * Every mutation to {@link TuiSession} flows through one of these methods so
  * the Ink layer never directly mutates session run-state fields.
  */
+/** A view edit a resume applies once the run is back at its park:
+ *  `texra resume --reset` (`handoff` null) or `--handoff <text>`. */
+export interface ResumeEdit {
+  readonly handoff: string | null;
+}
+
 export interface ChatSessionController {
   /** Start a new root agent run from a fresh config. */
   startRootRun(config: AgentConfigPayload): void;
@@ -180,7 +186,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Effect.Effect<void, Error>;
+  resume(id: RunId, edit?: ResumeEdit): Effect.Effect<void, Error>;
 
   /** Request stop of the root run using the configured child policy, for
    *  `reason`: a `user` stop also cancels its remote background work. */
@@ -520,7 +526,7 @@ export function createChatSessionController(
   // `onResumeResolved`, which `resumeRun` calls only once the saved state
   // loaded. The stopped conversation it supersedes stays the chat's target
   // again when the resume never reaches its run.
-  const resume = (id: RunId): Effect.Effect<void, Error> =>
+  const resume = (id: RunId, edit?: ResumeEdit): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
     // claim are one uninterrupted synchronous callback (see
@@ -619,6 +625,20 @@ export function createChatSessionController(
               isCancellationRequested: () => session.stopRequested,
             });
             if ('started' in result) {
+              // A resume of an owned child continues its parent: the edit
+              // was asked of the child, never of the parent.
+              if (edit !== undefined && session.runId !== id) {
+                appendLocalErrorTranscript(
+                  `Task ${id} is an agent of task ${session.runId}, which was resumed instead; it was not reset.`,
+                );
+              } else if (edit !== undefined) {
+                const refused = yield* request({
+                  kind: 'run.reset',
+                  runId: id,
+                  handoff: edit.handoff,
+                });
+                if (refused !== undefined) appendLocalErrorTranscript(refused);
+              }
               yield* settleResumedTurn(result);
             } else if (session.stopRequested) {
               session.runExitCode = CliExitCode.Interrupted;

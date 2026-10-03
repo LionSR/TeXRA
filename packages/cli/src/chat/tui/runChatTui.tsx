@@ -46,6 +46,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createChatSessionController,
   type ChatSessionController,
+  type ResumeEdit,
 } from '../chatSessionController';
 import { makeFollowUpDeliveryQueue } from '../followUpDeliveryQueue';
 import { App } from './App';
@@ -126,6 +127,8 @@ export interface RunChatInit {
   readonly initialResume?: {
     readonly id: RunId;
     readonly config: AgentConfig;
+    /** `--reset` or `--handoff`: applied once the run is resumed. */
+    readonly edit?: ResumeEdit;
   };
 }
 
@@ -535,7 +538,9 @@ export async function runChat(
   // root-run slot, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.runId as usual).
   if (initialResume) {
-    runtime.runFork(chatController.resume(initialResume.id));
+    runtime.runFork(
+      chatController.resume(initialResume.id, initialResume.edit),
+    );
   }
 
   // The one "agent finished" notification: the claimed run's turn settles,

@@ -259,6 +259,7 @@ const RunProvenanceSchema = z.discriminatedUnion('kind', [
     at: z.int().positive(),
   }),
 ]);
+export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
 
 /**
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`

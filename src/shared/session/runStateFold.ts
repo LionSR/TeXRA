@@ -594,8 +594,26 @@ function foldRow(
       return p satisfies never;
     }
     case 'context.edit': {
-      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
+      // A fork's seed is its run's first view: it opens nothing, like an
+      // undelivered append, and comes before the opening snapshot. Every
+      // other edit edits a view an opened run already holds.
+      if ((p.cause === 'fork') === opened(current)) {
+        return p.cause === 'fork'
+          ? outOfOrder('a fork edit on a run that is already open')
+          : beforeOpening(row.type);
+      }
+      if (!opened(current)) {
+        const state = current ?? freshRunState(commit);
+        if (p.base !== null || p.range.to !== 0 || state.messages.length > 0) {
+          return outOfOrder('a fork edit replaces no earlier view');
+        }
+        return Result.succeed({
+          ...advance(state),
+          messages: appended(state, ...p.messages),
+          lastEdit: row.seq,
+        });
+      }
       const base = current.lastEdit;
       if (p.base !== base) {
         return outOfOrder(

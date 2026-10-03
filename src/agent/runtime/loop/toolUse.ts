@@ -24,7 +24,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
+import { Deferred, Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -228,6 +228,23 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
+    // Applied at the loop's next park, before any input it takes there: a
+    // park is a settled position, so the edit never cuts a turn.
+    editView: (handoff) =>
+      Effect.gen(function* () {
+        if (followUps === null || isChild() || run.toolPolicy.stopAfterCycle)
+          return yield* Effect.fail(
+            new Error(
+              'Only a conversation that waits for its user can be reset.',
+            ),
+          );
+        const done = yield* Deferred.make<void, Error>();
+        if (!followUps.editView({ handoff, done }))
+          return yield* Effect.fail(
+            new Error('This task is already being reset.'),
+          );
+        yield* Deferred.await(done);
+      }),
     ...modelSwitchPort(run, languageModel),
   };
   const attach = (): void => {
@@ -717,7 +734,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // A queued follow-up outranks the policy's synthetic turn.
           let batch: FollowUpBatch | null =
             next !== null && !followUps.hasQueued()
-              ? { synthetic: true, text: next }
+              ? { kind: 'synthetic', text: next }
               : null;
           if (batch === null) {
             // The host port stays attached: `/model`, `/compact` land here.

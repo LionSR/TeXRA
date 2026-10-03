@@ -269,6 +269,18 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Fork, reset and hand off a conversation.** `texra resume <id> --fork`
+  continues a new task that holds the conversation as it stood at the end
+  of its last turn (`--at <position>` picks an earlier turn's end), and
+  leaves the original unchanged. `--reset` clears what the model sees of
+  the conversation before you continue; `--handoff "<text>"` clears it and
+  continues from your text alone. A fork records where it came from, and
+  each reset or handoff is recorded where the model's view was cut. A fork
+  inside a turn is refused. A reset or handoff takes effect when the task
+  next waits for you, after any message already queued for it. The agent
+  SDK can fork, reset and hand off too; the progress view and desktop app
+  get their menus for these in a later release.
+
 - **One Plugins page.** Settings › Plugins (and `/plugins` in the terminal)
   lists everything that adds tools or agents: TeXRA's own plugins, installed
   Claude Code and Codex plugins, and the MCP servers in `~/.texra/mcp.json`

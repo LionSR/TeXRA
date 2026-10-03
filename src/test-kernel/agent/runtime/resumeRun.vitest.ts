@@ -102,7 +102,7 @@ const resumedFlowTakes = (session: SessionHandle) =>
   Effect.gen(function* () {
     const input = session.followUps.attachInput(RUN)!;
     const batch = input.hasQueued() ? yield* input.take : null;
-    if (batch !== null && !batch.synthetic) {
+    if (batch?.kind === 'followUps') {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
       // What the loop's consume commits: the rows stop queueing the batch.
       yield* session.commit(

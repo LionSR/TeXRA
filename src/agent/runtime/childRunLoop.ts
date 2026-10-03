@@ -1090,12 +1090,18 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             if (!batch || loop.isInterrupted()) break;
             // The batch leaves the park: the loop is running again from
             // here, and the turn it is about to accept is the top's.
-            const taken = batch.synthetic ? [] : batch.followUps;
+            // A view edit is asked of a root's own loop, never of a child.
+            if (batch.kind === 'edit')
+              return yield* Effect.die(
+                new Error(`${runId}: a child run took a view edit`),
+              );
+            const taken = batch.kind === 'synthetic' ? [] : batch.followUps;
             yield* commitPark(runSession, runId, 'resumed');
             consumed = taken;
-            const prompts: readonly FollowUpContent[] = batch.synthetic
-              ? [{ text: batch.text, from: { kind: 'user' } }]
-              : taken.map((followUp) => followUp.content);
+            const prompts: readonly FollowUpContent[] =
+              batch.kind === 'synthetic'
+                ? [{ text: batch.text, from: { kind: 'user' } }]
+                : taken.map((followUp) => followUp.content);
             runner = (signal) => nextRunTurn(prompts, ports, signal);
           }
         }),
