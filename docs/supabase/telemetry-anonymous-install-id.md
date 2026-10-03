@@ -56,8 +56,8 @@ anonymous data goes to its own table.
 - `docs/supabase/install-usage-logs.sql`: the additive migration (table, unique
   constraint, index, RLS with no policies). Apply first.
 - `docs/supabase/install-usage-logs-retire-legacy.sql`: a LATER step, in one
-  transaction. It copies the install rows the combined function left in
-  `usage_logs` / `subscription_usage_logs` into `install_usage_logs`, deletes
+  transaction. It archives the install rows the combined function left in
+  `usage_logs` / `subscription_usage_logs` into `install_usage_logs_archive`, deletes
   them from the old tables, drops the `*_one_owner` checks, the `*_install_*`
   indexes and the `install_id` columns, restores `user_id SET NOT NULL`, and
   restores the two original upsert bodies (inlined at the end of the file).
@@ -68,6 +68,16 @@ anonymous data goes to its own table.
 
 Neither file has been applied; nothing in this change touches the database or
 the live functions.
+
+## Status (2026-10-03)
+
+All four steps are done on the live project except the client release: the
+additive SQL, `log-usage-v2` (v1, write smoke test passed), `log-usage`
+redeployed JWT-only (v37), and the retire-legacy SQL (873 dev-build rows
+archived into `install_usage_logs_archive`, legacy tables back to
+`user_id NOT NULL`). `log-usage` serves released clients (login JWT) and
+`log-usage-v2` serves the anonymous client. Remote-agents functions stay live
+for previous versions; they are not part of this change.
 
 ## Deploy order
 
