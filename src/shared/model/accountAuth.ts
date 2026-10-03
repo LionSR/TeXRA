@@ -18,7 +18,7 @@
  * Wire identifiers (`chatgpt`, `grok`) stay internal.
  */
 
-import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
 
 /** Shared device-code option description for any account picker. */
 export const DEVICE_CODE_DESCRIPTION =

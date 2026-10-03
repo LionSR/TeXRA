@@ -22,7 +22,6 @@ import {
 } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
 import { GlobTool } from '@tools/glob';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { GrepTool } from '@tools/grep';
@@ -35,16 +34,16 @@ import { TodoWriteTool } from '@tools/todo/TodoTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
-import { WriteFileTool } from '@tools/WriteTool';
+import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
 
-const FILE_TOOLS = {
+const fileTools = (writeFilter?: WriteFilter) => ({
   bash: BashTool,
   read_file: ReadFileTool,
-  write_file: WriteFileTool,
+  write_file: writeFileTool(writeFilter),
   edit_file: EditFileTool,
   glob: GlobTool,
   grep: GrepTool,
-};
+});
 
 const SCRIPT_TOOLS = { script: ScriptTool };
 
@@ -57,19 +56,22 @@ type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
   Exclude<
     CanonicalToolDisplayName,
-    keyof typeof FILE_TOOLS | keyof typeof SCRIPT_TOOLS
+    keyof ReturnType<typeof fileTools> | keyof typeof SCRIPT_TOOLS
   >
 >;
 
-/** Files and the shell: every agent needs them. */
-export const fileOps: Plugin = {
+/** Files and the shell: every agent needs them. An app passes the filter
+ *  `write_file` applies to what it writes (TeXRA's `.tex` replacements). */
+export const fileOps = (
+  options: { readonly writeFilter?: WriteFilter } = {},
+): Plugin => ({
   id: 'file-ops',
   name: 'File & Shell Operations',
   category: 'file',
   description:
     'Read, write, edit files and run shell commands. Includes glob/grep search.',
-  tools: FILE_TOOLS,
-};
+  tools: fileTools(options.writeFilter),
+});
 
 export const web: Plugin = {
   id: 'web',
@@ -90,7 +92,6 @@ export const memoryWorkflow: Plugin = {
     memory: MemoryTool,
     todo_write: TodoWriteTool,
     executions: ExecutionsTool,
-    accept_run_files: AcceptRunFilesTool,
   },
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
   prompt: memoryPromptSection,
@@ -170,6 +171,6 @@ export const harnessBuiltins: {
   readonly all: readonly Plugin[];
   readonly minimal: readonly Plugin[];
 } = {
-  all: [fileOps, web, memoryWorkflow, goal, multiAgent(), codemode],
-  minimal: [fileOps],
+  all: [fileOps(), web, memoryWorkflow, goal, multiAgent(), codemode],
+  minimal: [fileOps()],
 };

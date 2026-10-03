@@ -39,7 +39,7 @@ import {
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
+import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 
@@ -47,7 +47,7 @@ const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
- * `@shared/schemas/settingsViewMessages` is the same set the catalog keys on.
+ * `@shared/model/subscriptionAuth` is the same set the catalog keys on.
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];

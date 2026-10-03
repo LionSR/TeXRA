@@ -43,8 +43,8 @@ import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';

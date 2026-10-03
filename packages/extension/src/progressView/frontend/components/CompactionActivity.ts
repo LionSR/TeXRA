@@ -3,8 +3,8 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

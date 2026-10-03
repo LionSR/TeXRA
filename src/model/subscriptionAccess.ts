@@ -19,7 +19,7 @@ import {
   readConfigSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-import type { SubscriptionAuthStatus } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatus } from '@shared/model/subscriptionAuth';
 import { settingByKey } from '@shared/state/stateSettings';
 import { writeSettingTo } from '@utils/config/platformSettings';
 

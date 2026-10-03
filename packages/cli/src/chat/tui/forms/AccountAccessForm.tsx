@@ -20,12 +20,12 @@ import type { SubscriptionProviderId } from '@controllers/modelAccess/subscripti
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
-import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
 import {
   DEVICE_CODE_DESCRIPTION,
   SUBSCRIPTION_AUTH_COPY,
-} from '@ui/copy/accountAuth';
+} from '@shared/model/accountAuth';
+import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
 

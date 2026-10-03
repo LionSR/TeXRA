@@ -20,7 +20,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import type {
   BuildDisplayFn,
   LatexPreviewEntry,
-} from '@tools/approval/latexPreview';
+} from '@tools/latex/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -51,9 +51,9 @@ const latexPreview = vi.hoisted(() => ({
   injectedOptions: [] as Array<{ openBuildDisplay: BuildDisplayFn }>,
 }));
 
-vi.mock('@tools/approval/latexPreview', async (importOriginal) => {
+vi.mock('@tools/latex/latexPreview', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@tools/approval/latexPreview')>();
+    await importOriginal<typeof import('@tools/latex/latexPreview')>();
   return { ...actual, previewProposedLatex: latexPreview.previewProposedLatex };
 });
 

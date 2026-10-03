@@ -10,8 +10,8 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
-import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/model/subscriptionAuth';
+import { SUBSCRIPTION_AUTH_COPY } from '@shared/model/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 import {

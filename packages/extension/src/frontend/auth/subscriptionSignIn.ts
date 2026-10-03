@@ -20,7 +20,7 @@ import { withVSCodeProgress } from '@frontend/ui/progress';
 import { withLogChannel } from '@logger/effectLog';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
+import { ACCOUNT_OUTCOME } from '@shared/model/accountAuth';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/http';
 

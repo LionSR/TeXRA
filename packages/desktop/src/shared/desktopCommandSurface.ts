@@ -15,7 +15,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopWorkbenchKind,

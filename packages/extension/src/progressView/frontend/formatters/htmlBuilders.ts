@@ -17,10 +17,10 @@ import { diffWordsWithSpace } from 'diff';
 import type { FileListEntry } from '@shared/schemas';
 import { highlightSpans } from '@shared/highlighting/highlightCode';
 import { copyWithFeedback } from '@shared/utils/clipboard';
+import type { TeXRAIconName } from '@shared/iconNames';
 import type { FileListRow } from '@ui/transcript';
 
 // Local imports - shared utilities
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

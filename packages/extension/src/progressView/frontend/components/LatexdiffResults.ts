@@ -15,8 +15,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/runs/runStatusDisplay';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view events

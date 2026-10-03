@@ -21,10 +21,8 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
-import {
-  type CopilotRouteInfo,
-  type SubscriptionAuthStatuses,
-} from '@shared/settingsView/settingsViewMessages';
+import { type CopilotRouteInfo } from '@shared/settingsView/settingsViewMessages';
+import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { TickerController } from '@shared/litControllers/TickerController';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';

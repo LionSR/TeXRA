@@ -33,7 +33,7 @@ import type {
   ToolServices,
 } from '@agent/runtime/ToolServices';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
-import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
+import type { ToolCategory } from '@shared/tools/toolPlugin';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';

@@ -36,12 +36,12 @@ import {
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RequestAnswerability } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { TeXRAIconName } from '@shared/iconNames';
 import {
   commonViewStyles,
   designTokens,
   requestPanelSharedStyles,
 } from '@ui/styles';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import {
   renderLabeledActionButton,
   renderLabeledActionButtonParts,

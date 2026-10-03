@@ -18,10 +18,10 @@ import {
 import { SortableController } from '@shared/litControllers/SortableController';
 import type { SurfaceAction } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
+import type { TeXRAIconName } from '@shared/iconNames';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize, formatResultCount } from '@utils/text/stringUtils';

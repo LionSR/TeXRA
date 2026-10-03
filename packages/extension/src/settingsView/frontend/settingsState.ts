@@ -48,18 +48,18 @@ import {
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
-  type AgentScanIssue,
   type AgentSelectionItem,
   type CopilotRouteInfo,
-  type MemoryViewItem,
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
   type SettingsSectionName,
   type SettingsTabPanelName,
-  type SubscriptionAuthStatuses,
   type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
+import type { AgentScanIssue } from '@shared/schemas';
+import type { MemoryViewItem } from '@shared/tools/memoryView';
+import type { SubscriptionAuthStatuses } from '@shared/model/subscriptionAuth';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // ---------------------------------------------------------------------------
