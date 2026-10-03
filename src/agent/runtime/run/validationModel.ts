@@ -292,8 +292,9 @@ function goldenTurn(
   // The crash-point conformance run: a response with two calls, then a
   // script, then the echo's text. A step a crash cut off before it started
   // (its calls settled as not started) is asked for again, as a model
-  // decides to retry. A handoff's or a fork's next turn is the echo's too:
-  // what it says shows the view the edit left.
+  // decides to retry. A view an edit replaced (a handoff, a compaction, a
+  // fork of either) no longer holds the task, and the echo answers it: what
+  // it says shows the view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -315,7 +316,9 @@ function goldenTurn(
       () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
     ][done];
     return Effect.succeed(
-      step === undefined || said.includes('CRASH-HANDOFF') ? null : step(),
+      step === undefined || !said.includes('Work through the crash task.')
+        ? null
+        : step(),
     );
   }
   if (!system.includes('GOLDEN-PARENT')) return Effect.succeed(null);

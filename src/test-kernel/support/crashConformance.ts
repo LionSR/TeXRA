@@ -9,29 +9,33 @@
  * in-process over a persistent store: a response with two calls (a read and
  * a command), a script whose nested calls run a read, a command and an
  * awaited `agent()` call that owns its child, the echo's answer, then a
- * handoff (`context.edit`) and a fork. The pass records the commit each
+ * handoff and a compaction (`context.edit`) and a fork. The pass records
+ * the commit each
  * write transaction ended at, from the store's own `observedCommit`: a
  * batch commits whole, so those are the crash points. For each point N the
  * suite copies the clean store, truncates it to commits 1..N (the store a
  * process killed after commit N leaves), hands its claims to a dead owner,
- * opens a fresh session over it and resumes the root run. The handoff and
- * the fork are a user's requests, which a crash loses: they are issued
- * again when their rows are not in the prefix. Every request is approved,
+ * opens a fresh session over it and resumes the root run. The handoff, the
+ * compaction and the fork are a user's requests, which a crash loses: they
+ * are issued again when their rows are not in the prefix. Every request is approved,
  * and an unfinished call whose outcome is unknown is retried.
  *
  * Failure modes, each checked at every point:
  * - the conversation comes to another end than the clean one: the root's
- *   answers, its view edits, its owned children, its fork;
- * - a call settled before the crash settles again, or any call twice;
+ *   answers, its view edits, what each executed call returned, its owned
+ *   children and their answers, its fork;
+ * - a call settled before the crash settles again, or any call twice; an
+ *   unfinished command runs again without a person's retry;
  * - a command's side effect (the line it appends) happens during the resume
  *   with no newly executed command to account for it, or one is missing;
  * - one model invocation is answered twice (a turn paid twice);
  * - an owned child launches again for its call without a person choosing
  *   to retry it, or a child is left without a terminal row;
  * - a fork is left without the history it was registered with;
- * - a text answer the run committed is never finalized for display.
+ * - a text answer any run committed is never finalized for display.
  *
- * Two gaps are pinned (`KNOWN_GAPS`) so a fix shows up here as a diff.
+ * The gaps this build has are pinned (`KNOWN_GAPS`), each with the
+ * violations it explains, so a fix shows up here as a diff.
  */
 import {
   cpSync,
@@ -116,8 +120,21 @@ const VALIDATION = {
  *   `response.finalized` row in a later batch; a resume replays the
  *   committed response without finalizing it, so its answer never reaches
  *   a non-streamed transcript or the history query's `messages` view.
+ * - `child-answer-lost`: an awaited child that answered and parked, killed
+ *   before its `run.end`, is resumed in band by its call (its turn was
+ *   accepted, never settled), runs no turn, and hands the call an empty
+ *   response: the parent's script gets `""` for the child's answer.
+ * - `compaction-request-lost`: `run.compact` commits the follow-up that
+ *   asks for it; the compaction itself is an in-memory flag the turn reads.
+ *   Killed between them, the resumed turn sends the request to the model as
+ *   a user message and never compacts.
  */
-const KNOWN_GAPS = ['answer-not-finalized', 'registered-without-history'];
+const KNOWN_GAPS = [
+  'answer-not-finalized',
+  'child-answer-lost',
+  'compaction-request-lost',
+  'registered-without-history',
+];
 
 interface Row {
   readonly commit: number;
@@ -150,6 +167,14 @@ const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
 const payload = (row: Row) => json(row).payload as Record<string, unknown>;
 const isResponse = (row: Row) =>
   row.type === 'model.message' && payload(row).kind === 'response';
+/** A provider's call ids restart with each model binding, so a resumed
+ *  run's differ from the clean run's by their counter; run ids are minted,
+ *  and a command's summary names how long it took. */
+const normalized = (text: string) =>
+  text
+    .replaceAll(/validation-([a-z_]+)-\d+/g, 'validation-$1')
+    .replaceAll(/[0-9a-f]{12,}/g, 'ID')
+    .replaceAll(/, [\d.]+m?s\)/g, ')');
 const isFork = (row: Row) =>
   row.type === 'run.start' && row.data.includes('"kind":"fork"');
 
@@ -189,12 +214,39 @@ function outcome(rows: readonly Row[], root: string) {
       return `${first} (+${rest.length})`;
     }),
     edits: of(root, 'context.edit').map((row) => payload(row).cause),
-    // The calls that own a child: a call's retried child is the same call's.
+    // What each executed call returned, by call: a retried call returns
+    // what its first attempt would have.
+    settled: [
+      ...new Set(
+        rows
+          .filter(
+            (row) =>
+              row.run === root &&
+              row.type === 'tool.result' &&
+              payload(row).disposition === 'executed',
+          )
+          .map(
+            (row) =>
+              `${normalized(String(payload(row).callId))} ${normalized(
+                JSON.stringify(payload(row).result),
+              )}`,
+          ),
+      ),
+    ].sort(),
+    // The calls that own a child, and what the children answered: a call's
+    // retried child is the same call's.
     children: new Set(
       rows
         .filter((row) => row.type === 'run.start' && row.parent === root)
         .map((row) => (json(row).parent as { callId: string }).callId),
     ).size,
+    childAnswers: [
+      ...new Set(
+        rows
+          .filter((row) => row.type === 'run.start' && row.parent === root)
+          .flatMap((child) => answers(rows, child.run)),
+      ),
+    ],
     forks: rows.filter(isFork).map((fork) => ({
       edits: of(fork.run, 'context.edit').map((row) => payload(row).cause),
       positions: of(fork.run, 'run.position').map((row) => payload(row).at),
@@ -232,6 +284,18 @@ function crashAt(clean: string, storage: string, n: number): void {
   }
 }
 
+/** The violations each pinned gap explains at a prefix it stands in; any
+ *  other violation there still fails. */
+const GAP_VIOLATIONS: Record<string, readonly string[]> = {
+  'registered-without-history': [
+    'the resume was refused: finished',
+    'the conversation came to',
+  ],
+  'answer-not-finalized': ['an answer was never finalized'],
+  'child-answer-lost': ['the conversation came to'],
+  'compaction-request-lost': ['the conversation came to'],
+};
+
 /** Which pinned gap a prefix stands in, if any. */
 function gapOf(prefix: readonly Row[], root: string): string | null {
   const started = prefix.filter((row) => row.type === 'run.start');
@@ -245,13 +309,49 @@ function gapOf(prefix: readonly Row[], root: string): string | null {
   )
     return 'registered-without-history';
   const mine = prefix.filter((row) => row.run === root);
-  const position = mine.findLast((row) => row.type === 'run.position');
-  const response = mine.findLast(isResponse);
+  const asked = mine.findLast(
+    (row) =>
+      row.type === 'model.message' &&
+      row.data.includes('The user requested immediate context compaction'),
+  );
   if (
-    position !== undefined &&
-    payload(position).at === 'response.ready' &&
-    response !== undefined &&
-    answerOf(response) !== null
+    asked !== undefined &&
+    !mine.some(
+      (row) =>
+        row.type === 'context.edit' &&
+        row.commit > asked.commit &&
+        payload(row).cause === 'compaction',
+    )
+  )
+    return 'compaction-request-lost';
+  const runs = [...new Set(prefix.map((row) => row.run))];
+  const lastPosition = (run: string) =>
+    prefix.findLast((row) => row.run === run && row.type === 'run.position');
+  if (
+    runs.some((run) => {
+      const at = lastPosition(run);
+      return (
+        prefix.some((row) => row.run === run && row.parent !== null) &&
+        at !== undefined &&
+        ['waiting', 'halted'].includes(String(payload(at).at)) &&
+        !prefix.some((row) => row.run === run && row.type === 'run.end')
+      );
+    })
+  )
+    return 'child-answer-lost';
+  if (
+    runs.some((run) => {
+      const at = lastPosition(run);
+      const response = prefix.findLast(
+        (row) => row.run === run && isResponse(row),
+      );
+      return (
+        at !== undefined &&
+        payload(at).at === 'response.ready' &&
+        response !== undefined &&
+        answerOf(response) !== null
+      );
+    })
   )
     return 'answer-not-finalized';
   return null;
@@ -281,40 +381,58 @@ const approveAll = (session: SessionHandle) =>
     },
   ).pipe(Effect.forkScoped);
 
-/** Wait until the root has answered `count` times and parks. */
-const parked = (storage: string, root: string, count: number) =>
+/** Wait until `ready` holds of the store's rows. */
+const until = (storage: string, ready: (rows: readonly Row[]) => boolean) =>
   Effect.gen(function* () {
-    for (;;) {
-      const rows = rowsOf(storage).filter((row) => row.run === root);
-      const last = rows.findLast((row) => row.type === 'run.position');
-      if (
-        answers(rows, root).length >= count &&
-        last !== undefined &&
-        payload(last).at === 'waiting'
-      )
-        return;
-      yield* Effect.sleep(Duration.millis(25));
-    }
+    while (!ready(rowsOf(storage))) yield* Effect.sleep(Duration.millis(25));
   }).pipe(Effect.timeout('30 seconds'));
 
-/** The user's part, each step issued only if its rows are not committed:
- *  a handoff once the run parks, then a fork of the conversation. */
+/** The root's view edits, by cause. */
+const editsOf = (rows: readonly Row[], root: string) =>
+  rows
+    .filter((row) => row.run === root && row.type === 'context.edit')
+    .map((row) => payload(row).cause);
+
+/** The root parks with `count` answers, after its last view edit. */
+const parkedAfter = (rows: readonly Row[], root: string, count: number) => {
+  const mine = rows.filter((row) => row.run === root);
+  const last = mine.findLast((row) => row.type === 'run.position');
+  const edit = mine.findLast((row) => row.type === 'context.edit');
+  return (
+    answers(mine, root).length >= count &&
+    last !== undefined &&
+    payload(last).at === 'waiting' &&
+    (edit === undefined || edit.commit < last.commit)
+  );
+};
+
+/**
+ * The user's part, each step issued only if its rows are not committed: a
+ * handoff once the run parks, a compaction once it has answered the
+ * handoff, then, once it has answered from the summary, a fork of the
+ * conversation.
+ */
 const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
   Effect.gen(function* () {
-    if (
-      !rowsOf(storage).some(
-        (row) => row.run === root && row.type === 'context.edit',
-      )
-    ) {
-      yield* parked(storage, root, 1);
+    if (!editsOf(rowsOf(storage), root).includes('handoff')) {
+      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
       yield* session.requests.request({
         kind: 'run.reset',
         runId: root,
         handoff: HANDOFF,
       });
     }
+    if (!editsOf(rowsOf(storage), root).includes('compaction')) {
+      yield* until(storage, (rows) => parkedAfter(rows, root, 2));
+      yield* session.requests.request({ kind: 'run.compact', runId: root });
+    }
     if (!rowsOf(storage).some(isFork)) {
-      yield* parked(storage, root, 2);
+      yield* until(
+        storage,
+        (rows) =>
+          editsOf(rows, root).includes('compaction') &&
+          parkedAfter(rows, root, 3),
+      );
       yield* session.requests.request({
         kind: 'run.fork',
         runId: root,
@@ -358,26 +476,88 @@ function violations(
       (row) =>
         (payload(row).invocation as { invocationId: string }).invocationId,
     );
+  // A person's retry of a call whose outcome is unknown: the decision's
+  // commit, by the tool the question is about and the call it is bound to.
+  const questions = new Map(
+    final.flatMap((row): [string, string][] => {
+      if (row.type !== 'request.opened') return [];
+      const opened = json(row) as {
+        readonly requestId: string;
+        readonly payload: {
+          readonly kind: string;
+          readonly data: { readonly toolName?: string };
+        };
+      };
+      return opened.payload.kind === 'toolOutcome'
+        ? [[opened.requestId, opened.payload.data.toolName ?? '']]
+        : [];
+    }),
+  );
+  const boundTo = new Map(
+    final
+      .filter((row) => row.type === 'tool.binding')
+      .map((row) => [
+        String(payload(row).requestId),
+        String(payload(row).callId),
+      ]),
+  );
+  const retries = final.flatMap((row) => {
+    if (row.type !== 'request.decided') return [];
+    const decided = json(row) as {
+      readonly requestId: string;
+      readonly decision: { readonly action: string };
+    };
+    const tool = questions.get(decided.requestId);
+    return tool !== undefined && decided.decision.action === 'retry'
+      ? [
+          {
+            tool,
+            callId: boundTo.get(decided.requestId) ?? null,
+            commit: row.commit,
+          },
+        ]
+      : [];
+  });
+  // An unfinished command runs again only once a person chose to retry it.
+  const unaskedReruns = resumed.filter(
+    (row) =>
+      payload(row).disposition === 'executed' &&
+      Number(payload(row).attempt) > 1 &&
+      /validation-(bash-\d+|script-\d+\/1)$/.test(
+        String(payload(row).callId),
+      ) &&
+      !retries.some(
+        (retry) =>
+          retry.callId === payload(row).callId && retry.commit < row.commit,
+      ),
+  );
+  // A call's child launches again only after a person chose to retry it.
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
-  const childCalls = new Set(
-    children.map((row) => (json(row).parent as { callId: string }).callId),
+  const callOf = (child: Row) =>
+    (json(child).parent as { callId: string }).callId;
+  const relaunches = children.filter((child) =>
+    children.some(
+      (earlier) =>
+        earlier.commit < child.commit && callOf(earlier) === callOf(child),
+    ),
   );
-  // A child whose rows leave its work unaccounted for is asked about; a
-  // retry launches the call's child again.
-  const retried = final.filter((row) => {
-    if (row.type !== 'request.opened') return false;
-    const opened = json(row).payload as {
-      readonly kind: string;
-      readonly data: { readonly toolName?: string };
-    };
-    return opened.kind === 'toolOutcome' && opened.data.toolName === 'agent';
-  }).length;
+  const agentRetries = retries.filter((retry) => retry.tool === 'agent');
+  const unaskedRelaunches = relaunches.filter(
+    (child, index) =>
+      agentRetries.filter((retry) => retry.commit < child.commit).length <=
+      index,
+  );
   const got = outcome(final, root);
-  const finalized = final.filter(
-    (row) => row.run === root && row.type === 'response.finalized',
-  ).length;
+  // Every run's committed answers, each finalized once.
+  const unfinalized = [...new Set(final.map((row) => row.run))].filter(
+    (run) =>
+      answers(final, run).length !==
+      final.filter(
+        (row) => row.run === run && row.type === 'response.finalized',
+      ).length,
+  );
   return [
     JSON.stringify(got) === JSON.stringify(expected)
       ? null
@@ -394,7 +574,10 @@ function violations(
     new Set(invocations).size === invocations.length
       ? null
       : 'an invocation was answered twice',
-    children.length - childCalls.size <= retried
+    unaskedReruns.length === 0
+      ? null
+      : 'an unfinished command ran again with no one asked',
+    unaskedRelaunches.length === 0
       ? null
       : 'a child launched again with no one asked',
     children.every((child) =>
@@ -402,9 +585,7 @@ function violations(
     )
       ? null
       : 'a child was left without a terminal row',
-    answers(final, root).length === finalized
-      ? null
-      : 'an answer was never finalized',
+    unfinalized.length === 0 ? null : 'an answer was never finalized',
   ].filter((violation) => violation !== null);
 }
 
@@ -512,6 +693,12 @@ export function crashConformanceSuite(plugins: string): void {
               yield* userSteps(session, roots.storage, root);
               yield* teardownDefaultSession();
               yield* Fiber.interrupt(run);
+              // Every transaction observed, through the store's last commit.
+              const last = Math.max(
+                ...rowsOf(roots.storage).map((row) => row.commit),
+              );
+              while (!commits.includes(last))
+                yield* Effect.sleep(Duration.millis(10));
               return [...new Set(commits)].filter((commit) => commit > 0);
             }),
           );
@@ -527,15 +714,19 @@ export function crashConformanceSuite(plugins: string): void {
           const cleanRows = rowsOf(roots.storage);
           const expected = outcome(cleanRows, root);
           // The clean pass crossed every boundary the suite names.
-          expect(expected).toEqual({
+          expect(expected).toMatchObject({
             answers: [
               'Model saw: Work through the crash task. (+0)',
               `Model saw: ${HANDOFF} (+0)`,
+              'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
             ],
-            edits: ['handoff'],
+            edits: ['handoff', 'compaction'],
             children: 1,
+            childAnswers: ['Child result.'],
             forks: [{ edits: ['fork'], positions: ['waiting'] }],
           });
+          // The two calls, the script and its three calls, each settled.
+          expect(expected.settled).toHaveLength(6);
           expect(
             [
               'tool.intent',
@@ -600,9 +791,14 @@ export function crashConformanceSuite(plugins: string): void {
             ];
             if (found.length === 0) continue;
             const gap = gapOf(prefix, root);
-            if (gap === null)
-              unexplained.push(`after commit ${n}: ${found.join('; ')}`);
-            else gaps.add(gap);
+            const explained = gap === null ? [] : GAP_VIOLATIONS[gap]!;
+            const rest = found.filter(
+              (violation) =>
+                !explained.some((known) => violation.startsWith(known)),
+            );
+            if (rest.length > 0)
+              unexplained.push(`after commit ${n}: ${rest.join('; ')}`);
+            if (gap !== null && rest.length < found.length) gaps.add(gap);
           }
           expect(unexplained).toEqual([]);
           expect([...gaps].sort()).toEqual(KNOWN_GAPS);
