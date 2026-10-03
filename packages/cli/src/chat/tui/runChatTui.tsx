@@ -381,7 +381,7 @@ export async function runChat(
     runtime,
   });
 
-  const resetSessionForClear = (): void => {
+  const resetSessionForClear = (): boolean => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
@@ -391,9 +391,9 @@ export async function runChat(
       isActivePhase(activeStatus)
     ) {
       setTransientNotice(
-        'Wait for the active response to finish, or press Ctrl-C before /clear.',
+        'Wait for the active response to finish, or press Ctrl-C first.',
       );
-      return;
+      return false;
     }
 
     const meta = sessionMetaSignal.get();
@@ -410,6 +410,7 @@ export async function runChat(
     // so the remounted `<Static>` repaints the header without ever carrying
     // the cleared rows.
     notifyStaticTranscriptErased();
+    return true;
   };
 
   // Pre-register the slash commands the input palette uses.

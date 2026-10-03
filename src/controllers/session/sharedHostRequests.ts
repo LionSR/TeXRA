@@ -27,7 +27,6 @@ import {
 import { hostFailure } from '@controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import {
-  launchPatchOf,
   type HostRunActions,
   type WorkflowDiffRequest,
   type WorkflowFileOperationRequest,
@@ -56,6 +55,7 @@ const SHARED_HOST_REQUEST_KINDS = [
   'dismissBanner',
   'exportTranscript',
   'fileAction',
+  'fork',
   'gettingStarted',
   'launch',
   'latexdiff',
@@ -72,8 +72,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'record',
   'refreshCommits',
   'refreshFiles',
-  'restoreIntoLauncher',
-  'restoreProposalConfig',
   'resume',
   'runCompileFixer',
   'runNew',
@@ -107,9 +105,6 @@ type HostVerb<A> = Effect.Effect<
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
-/** The launcher form of a settled run's setup, as `launchPatchOf` takes it. */
-type LaunchConfig = Parameters<typeof launchPatchOf>[0];
-
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type OpenSettingsRequest = Extract<HostRequest, { kind: 'openSettings' }>;
 type AgentConfigBannerRequest = Extract<
@@ -139,10 +134,6 @@ export interface SharedHostRequestBindings {
   showInfo(message: string): HostVerb<void>;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Bring the launcher into view behind a restore. The desktop's window is
-   *  the launcher, so the two surface actions above are the whole move
-   *  there; only the extension has a sidebar to raise. */
-  readonly showLauncher: HostVerb<void>;
   /** Admit a launch this host cannot run as asked, with the refusal that
    *  says why; the extension names only open workspace folders as a working
    *  directory. */
@@ -219,14 +210,6 @@ export function handleSharedHostRequest(
   ProcessServices | StorageFs | WorkspaceFs
 > {
   const { host } = ports;
-
-  /** A run's saved setup into the launcher, and the launcher into view. */
-  const restoreIntoLauncher = (config: LaunchConfig) =>
-    Effect.gen(function* () {
-      host.surfaceAction({ kind: 'launch', patch: launchPatchOf(config) });
-      host.surfaceAction({ kind: 'selectNew' });
-      yield* host.showLauncher;
-    });
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
   const latexdiffs = (sheet: LatexdiffsRequest) =>
@@ -339,6 +322,20 @@ export function handleSharedHostRequest(
       case 'runNew':
         yield* ports.runActions.runNew(request.runId);
         return done;
+      case 'fork': {
+        const forked = yield* ports.runActions.fork(
+          request.runId,
+          request.at ?? null,
+        );
+        if (request.draft != null)
+          host.surfaceAction({
+            kind: 'draft',
+            runId: forked,
+            text: request.draft,
+          });
+        host.surfaceAction({ kind: 'select', runId: forked });
+        return done;
+      }
       case 'runCompileFixer':
         yield* ports.runActions.runCompileFixer(request.runId);
         return done;
@@ -368,16 +365,6 @@ export function handleSharedHostRequest(
       }
       case 'exportTranscript':
         yield* host.exportTranscript(request.runId);
-        return done;
-      case 'restoreIntoLauncher':
-        yield* restoreIntoLauncher(
-          yield* ports.runActions.restoreState(request.runId),
-        );
-        return done;
-      case 'restoreProposalConfig':
-        yield* restoreIntoLauncher(
-          yield* ports.runActions.restoreProposal(request.proposal),
-        );
         return done;
       case 'latexdiff': {
         const diff = yield* ports.runActions.workflowDiffRequest(request.runId);

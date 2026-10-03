@@ -11,7 +11,6 @@
 import { z } from 'zod';
 
 import {
-  AgentProposalSchema,
   CredentialSwitchSchema,
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
@@ -33,12 +32,22 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('openLabel'), label: z.string() }),
   z.object({ kind: z.literal('openRunStorage'), ...runScoped }),
   z.object({ kind: z.literal('exportTranscript'), ...runScoped }),
-  z.object({ kind: z.literal('restoreIntoLauncher'), ...runScoped }),
   /** Relaunch a settled run: a workflow through the host's launcher with
    *  its run id, a tool-use run through the resume port. */
   z.object({ kind: z.literal('resume'), ...runScoped }),
   /** A fresh run from a settled run's setup. */
   z.object({ kind: z.literal('runNew'), ...runScoped }),
+  /**
+   * Fork: a new task holding this conversation up to `at` (its latest
+   * settled point when absent), continued and shown; with `draft` (Fork
+   * from here), the message it was cut before waits in its composer.
+   */
+  z.object({
+    kind: z.literal('fork'),
+    ...runScoped,
+    at: z.int().positive().nullish(),
+    draft: z.string().nullish(),
+  }),
   /** The latexFixer follow-up over a workflow run's compile failures. */
   z.object({ kind: z.literal('runCompileFixer'), ...runScoped }),
   /** A retry on the user's own API key: the host stores one, then settles
@@ -169,11 +178,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     file: z.string().min(1),
     base: z.string().nullish(),
     prev: z.string().nullish(),
-  }),
-  /** The "Edit as new task" link on a settled delegation row. */
-  z.object({
-    kind: z.literal('restoreProposalConfig'),
-    proposal: AgentProposalSchema,
   }),
   // The New-task state's banners and onboarding cards (host-owned state,
   // HostSnapshot.banners and .onboarding).

@@ -92,6 +92,10 @@ export interface UserRow extends TranscriptRowBase {
   readonly scriptSummary?: ScriptDeliverySummary;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];
+  /** The settled point "Fork from here" cuts at: the `seq` of the park the
+   *  run stood at before it took this message. Absent on the first message,
+   *  which no park precedes. */
+  readonly forkAt?: number;
 }
 
 /**

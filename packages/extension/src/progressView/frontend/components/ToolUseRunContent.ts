@@ -23,6 +23,7 @@ export class ToolUseRunContent extends BaseRunContent {
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
+          ${this.renderForkedFrom(run)}
           <todo-list
             .todos=${run.todos}
             .runId=${run.id}

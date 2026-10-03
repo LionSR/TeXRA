@@ -555,7 +555,6 @@ export function createExtensionHostRequests(
     surfaceAction: (action) => options.surfaceAction(action),
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
-    showLauncher: Effect.suspend(() => options.showInSidebar()),
     runWorkflowDiff: (diff) =>
       runHandler('runLatexdiff', handleRunLatexdiff(session, diff)),
     runWorkflowFileOperation: (operation, request) =>

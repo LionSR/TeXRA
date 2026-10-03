@@ -137,40 +137,6 @@ export const toolUseStyles = css`
     padding: 0 var(--wa-space-xs) var(--wa-space-xs);
   }
 
-  /* Summary actions — real <button>s (not role="button" spans) so
-   * wa-details' own summary click handler recognizes it as interactive and
-   * skips its toggle; reset native button chrome to keep the prior
-   * link-like appearance. */
-  .proposal-restore-link {
-    background: none;
-    border: none;
-    margin: 0;
-    padding: 0;
-    font: inherit;
-    text-align: left;
-    color: var(--color-text-link);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-  }
-
-  /* Radius only — the ring comes from focusRingStyles. */
-  .proposal-restore-link:focus-visible {
-    border-radius: var(--border-radius-small);
-  }
-
-  /* Summary actions (in summary row and body) */
-  .proposal-restore-link:hover {
-    text-decoration: underline;
-  }
-
-  .proposal-banner-setup {
-    margin-inline-start: var(--wa-space-s);
-  }
-
   /* Diff styles */
   .diff-add {
     color: var(--color-diff-added);

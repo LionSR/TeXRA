@@ -17,8 +17,10 @@ import {
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import type { ForkFromHere } from './UserMessage';
 import './InterruptedTasksNotice';
 import './RequestPanels';
 import './LogList';
@@ -57,7 +59,22 @@ export abstract class BaseRunContent extends LitElement {
   }
 
   protected renderLog(): TemplateResult {
-    return html`<div class="conversation-log">
+    return html`<div
+      class="conversation-log"
+      style=${this.run?.actions.includes('fork') ? '' : '--texra-fork-from-here: none'}
+      @fork-from-here=${(event: CustomEvent<ForkFromHere>) => {
+        const run = this.run;
+        if (!run?.actions.includes('fork')) return;
+        this.dispatchEvent(
+          SessionUiEvents.host({
+            kind: 'fork',
+            runId: run.id,
+            at: event.detail.at,
+            draft: event.detail.draft,
+          }),
+        );
+      }}
+    >
       <log-list
         .run=${this.run}
         .view=${this.view}
@@ -70,16 +87,16 @@ export abstract class BaseRunContent extends LitElement {
    * The line in the composer's place for a run that takes no follow-up:
    * why (the fold's detail, else ended or no replies), then what the user
    * can do. A run that resumes has its one Resume here, and a blocked one
-   * the fix its detail names; a run that has stopped, however it
-   * stopped, starts a new task from its setup (the launcher prefilled with
-   * its agent and instruction). This is the one home of Edit as new task.
-   * Each is offered only while the run's `actions` holds it.
+   * the fix its detail names; a conversation forks into a new task holding
+   * its history (there is no prefilled "new task from this": the composer
+   * already starts one). Each is offered only while the run's `actions`
+   * holds it.
    */
   protected renderEndedLine(run: RunView): TemplateResult {
     const live = isLiveRun(run);
     // What a blocked resume waits for has its fix in Settings › Plugins.
     const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
-    const request = (kind: 'resume' | 'restoreIntoLauncher') => () =>
+    const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     return html`<div class="conversation-ended">
       <span role="status" aria-atomic="true"
@@ -122,14 +139,19 @@ export abstract class BaseRunContent extends LitElement {
           : nothing
       }
       ${
-        run.actions.includes('restore')
+        run.actions.includes('fork')
           ? html`<wa-button
-              id="editAsNewTaskBtn"
+              id="forkTaskBtn"
               appearance="outlined"
               variant="neutral"
               size="s"
-              @click=${request('restoreIntoLauncher')}
-              >${waIcon('reply', { slot: 'start' })}Edit as new task</wa-button
+              @click=${() =>
+                this.dispatchEvent(
+                  SessionUiEvents.host({ kind: 'fork', runId: run.id }),
+                )}
+              >${waIcon('code-branch', { slot: 'start' })}${
+                TASK_ACTIONS.fork
+              }</wa-button
             >`
           : nothing
       }
@@ -148,6 +170,19 @@ export abstract class BaseRunContent extends LitElement {
     return html`<div class="conversation-composer-dock">
       <div class="conversation-column">${this.renderInterruptedNotice()}</div>
     </div>`;
+  }
+
+  /** A fork's first line: the task and the point it was cut at, since its
+   *  transcript starts empty (the model's view is the source's). */
+  protected renderForkedFrom(run: RunView): TemplateResult | typeof nothing {
+    const source = run.forkedFrom;
+    if (source === null) return nothing;
+    const from = this.view?.runs.get(source.id);
+    const title = from ? from.description || from.label : 'a deleted task';
+    return html`<p class="forked-from-line">
+      ${waIcon('code-branch')} ${TASK_ACTIONS.forkedFrom(title)} at step
+      ${source.at}: the model holds that conversation up to there.
+    </p>`;
   }
 
   /** The open-time notice, above the composer or the ended line. */

@@ -362,6 +362,11 @@ function createRun(
       (isPlainAgentIdentity(identity) || identity.kind === 'script'),
     context: null,
     parentId: event.parent === null ? null : event.parent.id,
+    forkedFrom:
+      event.provenance?.kind === 'fork'
+        ? { id: event.provenance.from.id, at: event.provenance.at }
+        : null,
+    forkPoint: null,
     parentCard: event.parentCard ?? null,
     ancestors: [],
     childIds: [],
@@ -957,6 +962,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
+  if (
+    row.type === 'run.position' &&
+    (row.payload.at === 'waiting' || row.payload.at === 'halted')
+  )
+    run = { ...run, forkPoint: row.seq };
   const position = loopCoordinate(rows.turn, run.category);
   const phase = phaseMoveOf(row);
   return phase === null

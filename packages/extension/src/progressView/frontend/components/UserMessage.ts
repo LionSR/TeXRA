@@ -27,6 +27,7 @@ import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -39,6 +40,14 @@ import { formatDisplayTimestamp } from '../formatters/timestampUtils';
 const XML_ESCAPED_TAGS = new Set(
   DELIVERY_TAGS.filter((entry) => entry.escaped).map((entry) => entry.tag),
 );
+
+/** A user message's "Fork from here": the cut and the message, which the
+ *  fork's composer holds. */
+export interface ForkFromHere {
+  readonly at: number;
+  readonly draft: string;
+}
+const FORK_FROM_HERE = 'fork-from-here';
 
 type DisplayState = {
   isStructuredDelivery: boolean;
@@ -104,6 +113,12 @@ export class UserMessage extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
+      }
+
+      /* Off while the conversation it sits in cannot fork now: the
+         conversation sets the property, which crosses shadow roots. */
+      .user-message-fork {
+        display: var(--texra-fork-from-here, inline-flex);
       }
 
       .user-message-copy {
@@ -193,6 +208,10 @@ export class UserMessage extends LitElement {
   @property({ attribute: false })
   scriptSummary: ScriptDeliverySummary | null = null;
 
+  /** Where "Fork from here" cuts (`UserRow.forkAt`); null offers none. The
+   *  conversation that owns the row turns the event into its run's fork. */
+  @property({ attribute: false }) forkAt: number | null = null;
+
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
   });
@@ -213,6 +232,17 @@ export class UserMessage extends LitElement {
     copyText: '',
     structuredMarkdownHtml: '',
   };
+
+  private forkFromHere(): void {
+    if (this.forkAt === null) return;
+    this.dispatchEvent(
+      new CustomEvent<ForkFromHere>(FORK_FROM_HERE, {
+        detail: { at: this.forkAt, draft: this.text },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
 
   private getDisplayState(): DisplayState {
     if (
@@ -299,6 +329,18 @@ export class UserMessage extends LitElement {
               onClick: () => this.copyController.copy(copyText),
             })}
             ${
+              this.forkAt !== null && !isStructuredDelivery
+                ? renderIconActionButton({
+                    id: 'user-message-fork-button',
+                    icon: 'code-branch',
+                    label: TASK_ACTIONS.forkFromHere,
+                    tooltip: TASK_ACTIONS.forkFromHere,
+                    className: 'user-message-copy user-message-fork',
+                    onClick: () => this.forkFromHere(),
+                  })
+                : nothing
+            }
+            ${
               hasRawMessage
                 ? renderIconActionButton({
                     id: 'user-message-raw-copy-button',
@@ -335,6 +377,9 @@ export class UserMessage extends LitElement {
 }
 
 declare global {
+  interface HTMLElementEventMap {
+    'fork-from-here': CustomEvent<ForkFromHere>;
+  }
   interface HTMLElementTagNameMap {
     'user-message': UserMessage;
   }

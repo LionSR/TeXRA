@@ -312,6 +312,11 @@ export function foldTranscriptEvent(
     written: [],
     touched: false,
   };
+  if (
+    event.type === 'run.position' &&
+    (event.payload.at === 'waiting' || event.payload.at === 'halted')
+  )
+    d.ix.lastPark = event.seq;
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);
   // The model a later priced turn ran on, in row order: a statistics row

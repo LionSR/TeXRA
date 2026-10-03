@@ -111,7 +111,7 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
  * Enter/Space (and the click event that produces) is unaffected and still
  * bubbles normally to any delegated click handler further up the tree.
  */
-export function stopSummaryToggleKeydown(event: Event): void {
+function stopSummaryToggleKeydown(event: Event): void {
   if (!(event instanceof KeyboardEvent)) return;
   if (event.key !== 'Enter' && event.key !== ' ') return;
   event.stopPropagation();

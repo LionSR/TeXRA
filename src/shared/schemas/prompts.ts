@@ -132,12 +132,6 @@ export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 
-export const AgentProposalSchema = z.discriminatedUnion('agentCategory', [
-  WorkflowAgentProposalSchema,
-  ToolUseAgentProposalSchema,
-]);
-export type AgentProposal = z.infer<typeof AgentProposalSchema>;
-
 const ProposalPermissionBaseSchema = z.object({
   requestId: z.string(),
   runId: RunIdSchema,

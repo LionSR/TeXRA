@@ -109,6 +109,8 @@ export type Slot =
       readonly base: TranscriptRowBase;
       readonly text: string;
       readonly payload: LogRowPayload;
+      /** A user message's fork point (`UserRow.forkAt`). */
+      readonly forkAt?: number;
     };
 
 export interface TranscriptIndexes {
@@ -148,6 +150,12 @@ export interface TranscriptIndexes {
   /** The model of the newest `run.config` folded, the one a later turn ran
    *  on; undefined before the fold has read one. */
   model: string | undefined;
+  /** The `seq` of the run's newest park (a `run.position` at `waiting` or
+   *  `halted`): the settled point a user message that follows forks at. */
+  lastPark: number | null;
+  /** A user message has been taken: a park before the first one (a fork's
+   *  seed) cuts before nothing. */
+  seenUserMessage: boolean;
 }
 
 const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
@@ -193,6 +201,8 @@ export function emptyTranscript(): TranscriptView {
     runStage: undefined,
     spend: EMPTY_TURN_TOTALS,
     model: undefined,
+    lastPark: null,
+    seenUserMessage: false,
   });
   return transcript;
 }
@@ -374,7 +384,7 @@ function rowOf(
     case 'tool':
       return toolRow(slot.base, slot.log, live, ctx.runLabels, slot.call);
     case 'log':
-      return logPayloadRow(slot.base, slot.text, slot.payload);
+      return logPayloadRow(slot.base, slot.text, slot.payload, slot.forkAt);
   }
 }
 

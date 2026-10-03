@@ -557,7 +557,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 10 more',
+      '… 13 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -1286,7 +1286,7 @@ const SCENARIOS = [
       '… 5 previous rows',
       '› /status    Show task details and cost',
       '/memory',
-      '… 6 more rows',
+      '… 9 more rows',
       'Esc close',
     ],
   },

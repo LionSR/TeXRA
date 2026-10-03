@@ -24,10 +24,7 @@ import {
   type RunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
@@ -37,12 +34,7 @@ import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { AppState, StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import {
-  AgentCategory,
-  agentKey,
-  agentName,
-  type RunId,
-} from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
@@ -51,7 +43,6 @@ import {
   Unavailable,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
-import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
@@ -210,14 +201,13 @@ export interface HostRunActions {
     | StateReadFailed,
     AppState
   >;
-  /** The launcher's form of a settled run's saved setup. */
-  restoreState(
-    runId: RunId,
-  ): Effect.Effect<AgentConfig, Rejected | RunConfigUnreadable | Unavailable>;
+  /** A new task holding the run's conversation up to `at` (its latest
+   *  settled point when null), continued here so it takes a message: the
+   *  fork's id. */
+  fork(runId: RunId, at: number | null): Effect.Effect<RunId, RequestRefusal>;
   /** The run's output facts as the view holds them, read by the workflow
    *  controllers. */
   readonly runOutputs: ProgressFollowUpState;
-  restoreProposal(proposal: unknown): Effect.Effect<AgentConfig, Rejected>;
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
@@ -311,7 +301,7 @@ export const createHostRunActions = (
 
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
-      function* (runId: RunId, action: 'resume' | 'runNew' | 'restore') {
+      function* (runId: RunId, action: 'resume' | 'runNew') {
         yield* guard.require(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
@@ -534,22 +524,6 @@ export const createHostRunActions = (
 
     return {
       runOutputs,
-      restoreProposal(proposal) {
-        const parsed = AgentConfigSchema.safeParse(proposal);
-        if (parsed.success) return Effect.succeed(parsed.data);
-        return Effect.logWarning('Invalid proposal config', {
-          issues: parsed.error.issues,
-        }).pipe(
-          Effect.andThen(
-            Effect.fail(
-              new Rejected({
-                reason: 'This proposal does not carry a restorable setup.',
-              }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        );
-      },
       sendFollowUp(runId, text) {
         const present = (message: string) => ports.showWarning(message);
         const deliver = Effect.gen(function* () {
@@ -669,47 +643,28 @@ export const createHostRunActions = (
           requireNewKey: offer.kind === 'new-key',
         });
       },
-      restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 'restore').pipe(
-          Effect.tap(() => guard.hold(runId)),
-          Effect.scoped,
-        );
-        // A background script's run has no instruction of its own: its
-        // setup is the parent's agent asked to run the script again.
-        const script =
-          config.agentCategory === AgentCategory.ToolUse
-            ? config.backgroundScript
-            : null;
-        const code = script?.input.code;
-        return script == null || typeof code !== 'string'
-          ? config
-          : {
-              ...config,
-              instruction: `Run this script (${script.title}):\n\n\`\`\`js\n${code}\n\`\`\``,
-            };
+      fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
+        const outcome = yield* session.requests
+          .request({ kind: 'run.fork', runId, at })
+          .pipe(
+            Effect.mapError((error): RequestRefusal =>
+              isRequestRefusal(error)
+                ? error
+                : new Unavailable({
+                    runId,
+                    reason: 'The task could not be forked.',
+                  }),
+            ),
+          );
+        if (outcome.kind !== 'forked')
+          return yield* Effect.die(
+            new Error(`run.fork answered ${outcome.kind}`),
+          );
+        // The fork waits for its host: continuing it parks it on the
+        // user's next message. A refusal is told by the resume itself, and
+        // the fork keeps its Resume.
+        yield* resumeOnSession(outcome.runId, session);
+        return outcome.runId;
       }),
     };
   });
-
-/** The launcher's form of a run configuration (PRD 8.5, `launch`). */
-export function launchPatchOf(config: AgentConfig) {
-  const { toolConfig, agentCategory } = config;
-  const resolvedAgent = config.agentSource
-    ? agentKey(config.agentSource, agentName(config.agent))
-    : config.agent;
-  return LaunchSurfaceSchema.parse({
-    sessionType: agentCategory,
-    agent: resolvedAgent,
-    model: config.model,
-    instruction: config.instruction,
-    editedFile: config.editedFile,
-    inputFiles: config.inputFiles,
-    contextFiles: config.contextFiles,
-    mediaFiles: config.mediaFiles,
-    outputFiles: config.outputFiles,
-    autoExtractFigure: toolConfig.autoExtractFigure,
-    autoExtractTikzFigure: toolConfig.autoExtractTikzFigure,
-    autoCompileInputPdf: toolConfig.autoCompileInputPdf,
-    attachTeXCount: toolConfig.attachTeXCount,
-  });
-}

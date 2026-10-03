@@ -48,9 +48,12 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
-  const { id, timestamp, scriptSummary } = row;
+  const { id, timestamp, scriptSummary, attachments } = row;
+  // A fork's composer takes the message back as text: one that carried
+  // media is not offered, since its media would not come with it.
+  const forkAt = attachments?.length ? undefined : row.forkAt;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
