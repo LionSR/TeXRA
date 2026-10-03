@@ -34,6 +34,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
       state: RunState,
       patch: Omit<SnapshotPatch, 'state'>,
     ) => readonly RunHistoryDraft[],
+    /** What must settle on the view before the switch's edit: a background
+     *  compaction, which lands or stops. */
+    beforeEdit: (state: RunState) => Effect.Effect<RunState, Error>,
   ): Effect.fn.Return<
     RunState,
     Error,
@@ -49,6 +52,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     if (!selected) {
       return yield* Effect.fail(new Error(`Model ${model} is not registered`));
     }
+    // The switch is claimed above, so this settles exactly the edits before
+    // it: no other switch can land between.
+    state = yield* cell.adopt(yield* beforeEdit(state));
     let switched = state;
     yield* run.swapModel(() =>
       Effect.gen(function* () {

@@ -283,7 +283,8 @@ const land = Effect.fn('compaction.land')(function* (
   ]);
   logCompactionEvent({
     logger: input.logger,
-    tokensBefore: summary.tokensBefore,
+    // The history it replaces now, what the loop appended since included.
+    tokensBefore: contextTokens(state),
     tokensAfter: Math.max(1, estimateMessageTokens(compacted.messages)),
     contextWindow: summary.contextWindow,
     details: `${summary.to} messages summarized`,
@@ -319,8 +320,10 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
  * The tool-use loop's compaction (durable harness, gap 4). Crossing the
  * threshold starts the summary on a fiber in the run's scope, so a stop
  * interrupts it, and the loop goes on with the full history; a later
- * request boundary lands it, as the edit of messages `[0, to)` at the
- * `base` it was computed from, keeping what was appended since. Every other
+ * request boundary of the turn, or the turn's end at the latest, lands it,
+ * as the edit of messages `[0, to)` at the `base` it was computed from,
+ * keeping what was appended since. A binding that carries one turn at a
+ * time waits for its summary instead. Every other
  * edit of the view is the loop's own (a `/compact`, a model switch, a reset
  * or a handoff), and each settles this first ({@link settle}): a finished
  * summary lands, and one still running is cut short. So no summary meets a
@@ -338,6 +341,15 @@ export interface BackgroundCompaction {
     RunState,
     RunHistoryRefused | DatabaseWriteFailed | StateReadFailed
   >;
+  /**
+   * At the end of a turn: wait for the summary being made, and land it. A
+   * summary does not outlive the turn that started it, so a process that
+   * exits while the run is idle loses none, and its activity closes before
+   * the turn's `waiting`.
+   */
+  readonly finish: (
+    state: RunState,
+  ) => Effect.Effect<RunState, RunHistoryRefused | DatabaseWriteFailed>;
   /** Before another edit of the view: land a finished summary, cut short
    *  one still running (`why` says what edit is coming). */
   readonly settle: (
@@ -403,12 +415,11 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           force: 'request',
         });
       }
+      // A history past the window cannot go out: it waits for the summary.
+      const full =
+        bound.contextWindow > 0 && contextTokens(state) >= bound.contextWindow;
       if (pending !== null) {
-        // A history past the window cannot go out: wait for the summary.
         const running = pending.fiber;
-        const full =
-          bound.contextWindow > 0 &&
-          contextTokens(state) >= bound.contextWindow;
         const finished = full
           ? yield* Fiber.await(running)
           : yield* Effect.sync(() => running.pollUnsafe());
@@ -416,6 +427,10 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           ? state
           : yield* landPending(state, finished);
       }
+      // A binding that carries one turn at a time (a Responses WebSocket)
+      // cannot make the summary beside the request: it waits.
+      if (bound.persistentConnection)
+        return yield* compactIfNeeded(state, { ...input, bound, force: null });
       if (!(yield* overThreshold(state, { ...input, bound }))) return state;
       pending = {
         base: state.lastEdit,
@@ -423,9 +438,15 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           Effect.forkIn(scope),
         ),
       };
-      return state;
+      return full ? yield* finish(state) : state;
     });
 
-    return { atBoundary, settle };
+    /** Wait for the summary being made, and land it. */
+    const finish = Effect.fn('compaction.finish')(function* (state: RunState) {
+      if (pending === null) return state;
+      return yield* landPending(state, yield* Fiber.await(pending.fiber));
+    });
+
+    return { atBoundary, settle, finish };
   },
 );

@@ -272,8 +272,8 @@ All notable changes to this project will be documented in this file.
 - **Long conversations no longer pause to compact.** When a conversation
   reaches the compaction threshold, TeXRA summarizes the earlier turns in
   the background while the agent keeps working on the full history, and
-  swaps the summary in at the next model call, keeping everything that
-  happened since. `/compact` still waits for its summary, and a reset or
+  swaps the summary in at its next model call or when its turn ends,
+  keeping everything that happened since. `/compact` still waits for its summary, and a reset or
   handoff applies a finished summary first or stops one still running.
 
 - **Fork, reset and hand off a conversation.** `texra resume <id> --fork`

@@ -570,11 +570,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
-        if (compaction !== null && run.pendingModelSwitch.value !== null)
-          state = yield* cell.adopt(
-            yield* compaction.settle(state, 'the model is switching'),
-          );
-        state = yield* applyPendingModelSwitch(state, cell, snapshot);
+        state = yield* applyPendingModelSwitch(state, cell, snapshot, (at) =>
+          compaction === null
+            ? Effect.succeed(at)
+            : compaction.settle(at, 'the model is switching'),
+        );
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
           const joined = followUps && (yield* followUps.joinStopped(state));
@@ -775,6 +775,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (turn.outcome === 'cancelled') {
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
+        // A summary the turn started lands before the turn ends.
+        if (compaction !== null)
+          state = yield* cell.adopt(yield* compaction.finish(state));
         // The turn's trace rows publish fire-and-forget, so `waiting` would
         // commit ahead of them and the fold would drop its stream rows,
         // parking a run with no answer. Settling this run's publications (by
