@@ -34,7 +34,10 @@ export const PLUGINS_PAGE = Object.freeze({
 /** The TUI's `/plugins` copy. */
 export const PLUGINS_TUI = Object.freeze({
   description:
-    'Enter switches a plugin on or off. `/plugins add <GitHub URL or folder>` adds one; MCP servers are edited in ~/.texra/mcp.json.',
+    'Switch plugins on or off. Add one: /plugins add <URL or folder>',
+  compactTitle: '/plugins · Switch plugins on or off',
+  switchAction: 'switch on/off',
+  chooseAction: 'choose',
   trustTitle: (name: string) => `/plugins · Trust ${name}?`,
   trust: 'Trust and switch on',
   decline: 'Keep it off',

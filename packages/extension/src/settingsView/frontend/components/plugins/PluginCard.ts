@@ -35,6 +35,7 @@ import {
   PLUGINS_PAGE,
   pluginRowName,
   pluginRowProblem,
+  pluginRowState,
   pluginRowSummary,
   pluginRowTrust,
   pluginRowUsedBy,
@@ -382,7 +383,8 @@ export class PluginCard extends LitElement {
     let disabled = false;
     let onChange: (on: boolean) => void;
     if (row.kind === 'texra') {
-      if (row.item.toggleable !== true) return nothing;
+      if (row.item.toggleable !== true)
+        return html`<span class="plugin-switch">${pluginRowState(row)}</span>`;
       const { id } = row.item;
       checked = row.item.enabled !== false;
       onChange = (enabled) =>

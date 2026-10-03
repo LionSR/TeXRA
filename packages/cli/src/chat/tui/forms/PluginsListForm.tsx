@@ -125,7 +125,7 @@ export function PluginsListForm(
   return (
     <AsyncListForm<Effect.Success<ReturnType<typeof buildPluginRows>>, string>
       title={pending ? PLUGINS_TUI.trustTitle(pending.review.name) : '/plugins'}
-      compactTitle={`/plugins · ${PLUGINS_TUI.description}`}
+      compactTitle={PLUGINS_TUI.compactTitle}
       loadingLabel={PLUGINS_PAGE.loading}
       load={() => buildPluginRows(roots)}
       runtime={props.runtime}
@@ -164,7 +164,7 @@ export function PluginsListForm(
         if (pending) return pending.review.lines.length;
         return data.mcpWarnings.length > 0 ? 1 : 0;
       }}
-      action={pending ? 'choose' : 'switch on/off'}
+      action={pending ? PLUGINS_TUI.chooseAction : PLUGINS_TUI.switchAction}
       showTransientCloseHint={false}
       onSelect={(value, { data, update }) => {
         if (pending) {
