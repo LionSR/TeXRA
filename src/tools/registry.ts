@@ -3,6 +3,7 @@ import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
+import { documentRoundMode } from '@agent/output/documentRoundPolicy';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { revisionKey } from '@common/plugins/mcpServers';
 import {
@@ -317,6 +318,8 @@ const TOOL_TABLE = toolTable(
   ),
   PLUGIN_PROCESS_LAYERS,
   PLUGIN_SESSION_LAYERS,
+  // A workflow agent's run is the documents plugin's rounds.
+  { documents: documentRoundMode },
 );
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */

@@ -9,6 +9,7 @@
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { RoundMode } from '@agent/runtime/loop/rounds';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
@@ -178,18 +179,38 @@ export interface ToolTable {
   readonly continuations: ReadonlyMap<string, Continuation>;
   /** The prompt contribution of each plugin that makes one, by plugin id. */
   readonly prompt: ReadonlyMap<string, PromptContribution>;
+  /** The round mode of each plugin that drives an agent category's runs in
+   *  rounds, by that category; the loop reads it once at a run's open. */
+  readonly rounds: ReadonlyMap<AgentCategory, RoundMode>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
 }
 
-/** A table over plugin id → tools, continuation, prompt contribution and
- *  layers. */
+/** Each plugin's round mode by the category it drives: two plugins that
+ *  claim one category are a defect in the table, refused when it is built. */
+function roundsByCategory(
+  rounds: Readonly<Record<string, RoundMode>>,
+): ReadonlyMap<AgentCategory, RoundMode> {
+  const byCategory = new Map<AgentCategory, RoundMode>();
+  for (const [id, mode] of Object.entries(rounds)) {
+    if (byCategory.has(mode.category))
+      throw new Error(
+        `Plugin ${id} contributes a round mode for ${mode.category} agents, which another plugin already drives.`,
+      );
+    byCategory.set(mode.category, mode);
+  }
+  return byCategory;
+}
+
+/** A table over plugin id → tools, continuation, prompt contribution,
+ *  layers and round mode. */
 export function toolTable(
   plugins: Readonly<Record<string, Readonly<Record<string, ITool>>>>,
   continuations: Readonly<Record<string, Continuation>> = {},
   prompt: Readonly<Record<string, PromptContribution>> = {},
   processLayers: Readonly<Record<string, ProcessPluginLayer>> = {},
   sessionLayers: Readonly<Record<string, SessionPluginLayer>> = {},
+  rounds: Readonly<Record<string, RoundMode>> = {},
 ): ToolTable {
   const byName = new Map(Object.values(plugins).flatMap(Object.entries));
   return {
@@ -203,6 +224,7 @@ export function toolTable(
     prompt: new Map(Object.entries(prompt)),
     processLayers: new Map(Object.entries(processLayers)),
     sessionLayers: new Map(Object.entries(sessionLayers)),
+    rounds: roundsByCategory(rounds),
     get: (name) => byName.get(name),
   };
 }
