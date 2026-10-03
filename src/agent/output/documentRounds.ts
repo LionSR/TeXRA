@@ -46,11 +46,11 @@ import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { mediaInputParts, type InputPart } from '@agent/runtime/run/mediaInput';
 import { rowAggregate } from '@agent/runtime/loop/rows';
+import type { RoundServices } from '@agent/runtime/loop/rounds';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { logUserMessage } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
-import type { WorkspaceFs } from '@platform/rootedFs';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -69,11 +69,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/** The services a round prepares, compiles and diffs on. */
-export type RoundServices =
-  FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
 /** Why a turn ended; the editor arm, which reports none, reads as `stop`. */
 export type TurnFinish = Extract<
