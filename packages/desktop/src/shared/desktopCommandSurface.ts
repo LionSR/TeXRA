@@ -127,7 +127,7 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
-  'texra.showTools': 'screwdriver-wrench',
+  'texra.showTools': 'cube',
   'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',

@@ -1013,8 +1013,8 @@ const SCENARIOS = [
     expect: [
       '/plugins',
       'Switch plugins on or off. Add one: /plugins add <URL or folder>',
-      'always on · built in',
-      'Multi-Agent Workflow — on · built in · 1 tool',
+      'always on · TeXRA plugin',
+      'Multi-Agent Workflow — on · TeXRA plugin · 1 tool',
       'switch on/off',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', '/config · Tools', 'TeXRA CLI'],
@@ -1031,7 +1031,7 @@ const SCENARIOS = [
     keys: [...PLUGINS_FORM_KEYS, 'b'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: ['/plugins', 'Multi-Agent Workflow — on · built in · 1 tool'],
+    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 1 tool'],
     unexpect: ['Multi-Agent Workflow — off'],
   },
   {

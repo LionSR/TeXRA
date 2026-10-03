@@ -61,13 +61,13 @@ export function pluginRowName(row: PluginRow): string {
   }
 }
 
-/** Where the row comes from, then what it adds: "built in · 6 tools". */
+/** Where the row comes from, then what it adds: "TeXRA plugin · 6 tools". */
 export function pluginRowSummary(row: PluginRow): string {
   switch (row.kind) {
     case 'texra':
       return row.item.tools.length === 0
-        ? 'built in'
-        : `built in · ${formatResultCount(row.item.tools.length, 'tool')}`;
+        ? 'TeXRA plugin'
+        : `TeXRA plugin · ${formatResultCount(row.item.tools.length, 'tool')}`;
     case 'installed': {
       const { plugin } = row;
       const adds = [
@@ -112,10 +112,12 @@ export function pluginRowState(row: PluginRow): string {
 export function pluginRowTrust(row: PluginRow): string | null {
   if (row.kind !== 'installed') return null;
   const { plugin } = row;
+  // One that cannot be switched on has no trust question to answer.
+  if (plugin.problem !== undefined || plugin.code.length > 0) return null;
   const revision = plugin.commit?.slice(0, 12) ?? plugin.version;
   if (plugin.trusted) return revision ? `trusted at ${revision}` : 'trusted';
   return plugin.enabled
-    ? 'changed since you trusted it: review it to load it again'
+    ? 'not trusted as it is now: review it to load it'
     : 'not trusted yet: switching it on shows what it declares';
 }
 

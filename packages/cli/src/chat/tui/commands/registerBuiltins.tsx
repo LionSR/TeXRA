@@ -363,8 +363,9 @@ export function registerBuiltinSlashCommands(options: {
     context: SlashCommandContext,
   ): SlashCommandEffect =>
     Effect.gen(function* () {
-      const [verb, source, ...rest] = remainder.trim().split(/\s+/);
-      if (verb?.toLowerCase() !== 'add' || !source || rest.length > 0)
+      // The source is the rest of the line, so a folder may hold spaces.
+      const [, verb, source] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
+      if (verb?.toLowerCase() !== 'add' || !source)
         return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
       const { roots } = options.runtimeSession;
       const origin = parsePluginOrigin(

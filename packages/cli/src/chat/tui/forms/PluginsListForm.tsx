@@ -125,7 +125,11 @@ export function PluginsListForm(
   return (
     <AsyncListForm<Effect.Success<ReturnType<typeof buildPluginRows>>, string>
       title={pending ? PLUGINS_TUI.trustTitle(pending.review.name) : '/plugins'}
-      compactTitle={PLUGINS_TUI.compactTitle}
+      compactTitle={
+        pending
+          ? PLUGINS_TUI.trustTitle(pending.review.name)
+          : PLUGINS_TUI.compactTitle
+      }
       loadingLabel={PLUGINS_PAGE.loading}
       load={() => buildPluginRows(roots)}
       runtime={props.runtime}
@@ -160,6 +164,17 @@ export function PluginsListForm(
         if (data.mcpWarnings.length === 0) return undefined;
         return <Text color={COLOR_WARNING}>{data.mcpWarnings.join(' ')}</Text>;
       }}
+      // A trust question shows what it declares in every layout: the compact
+      // one keeps the lines, not the list's warnings.
+      compactDetailFor={() =>
+        pending ? (
+          <Box flexDirection="column">
+            {pending.review.lines.map((line, index) => (
+              <Text key={index}>{line}</Text>
+            ))}
+          </Box>
+        ) : undefined
+      }
       detailRowsFor={(data) => {
         if (pending) return pending.review.lines.length;
         return data.mcpWarnings.length > 0 ? 1 : 0;
