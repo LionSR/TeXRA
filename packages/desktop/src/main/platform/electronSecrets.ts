@@ -1,13 +1,10 @@
 import { Effect } from 'effect';
 import { safeStorage } from 'electron';
 
+import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
-import {
-  SecretsFailed,
-  type PlatformSecrets,
-  type SecretsOperation,
-} from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

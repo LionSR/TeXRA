@@ -14,6 +14,13 @@ import { Cause, Effect } from 'effect';
 import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
+import {
+  API_PROVIDERS,
+  apiKeyEnvName,
+  apiKeySecretName,
+  type ApiProvider,
+  providerDisplayName,
+} from '@texra-ai/llm';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
@@ -27,21 +34,12 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  API_PROVIDERS,
-  apiKeySecretName,
-  type ApiProvider,
-} from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { setOnboardingDeclined } from '@shared/state/onboardingState';
-import {
-  apiKeyEnvName,
-  providerDisplayName,
-} from '@shared/constants/providers';
 
 import {
   ONBOARDING_CARD_TITLE,

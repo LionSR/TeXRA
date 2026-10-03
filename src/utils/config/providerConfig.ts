@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 /**
  * Provider streaming, endpoint, and region configuration.
  *
- * The model provider plugins (`@shared/constants/modelProviderPlugins`) own
- * provider state keys and region metadata.
+ * The provider settings (`@shared/state/providerSettings`) own the provider
+ * state keys; the llm catalog owns the region copy.
  * This module only reads/writes those keys through the active platform state.
  *
  * Canonical read path: every key read here is registered in the state-setting
@@ -18,18 +18,58 @@ import { Effect } from 'effect';
  * carry.
  */
 
+import {
+  findModelProviderPlugin,
+  PROVIDER_URLS,
+  type EndpointProviderId,
+  type RegionalProviderId,
+} from '@texra-ai/llm';
+
 import type { ConfigWriteFailed } from '@platform/interfaces';
-import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
-import { PROVIDER_URLS } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
+  PROVIDER_REGION_SETTINGS,
+  providerEndpointKey,
+  providerRegionSetting,
+} from '@shared/state/providerSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom, writeSettingTo } from './platformSettings';
 
+type AssertNever<T extends never> = T;
+
+/**
+ * The settings rows cover the catalog exactly: every provider with an HTTP
+ * endpoint of its own has a custom-endpoint row and every regional provider
+ * a region toggle, and no row names another provider. The error names the
+ * provider ids on either side that lack their counterpart.
+ */
+type _EndpointRowsCoverTheCatalog = AssertNever<
+  | Exclude<
+      EndpointProviderId,
+      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id']
+    >
+  | Exclude<
+      (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['id'],
+      EndpointProviderId
+    >
+>;
+type _RegionRowsCoverTheCatalog = AssertNever<
+  | Exclude<
+      RegionalProviderId,
+      (typeof PROVIDER_REGION_SETTINGS)[number]['provider']
+    >
+  | Exclude<
+      (typeof PROVIDER_REGION_SETTINGS)[number]['provider'],
+      RegionalProviderId
+    >
+>;
+
 function regionSet(stores: SettingsStores, provider: string) {
   return Effect.gen(function* () {
-    const region = findModelProviderPlugin(provider)?.region;
+    const region = providerRegionSetting(provider);
     // Region keys are catalog-modeled, so the default comes from the entry's
-    // schema, which the catalog builds from the plugin's `region.default`.
+    // schema, which the catalog builds from the region's China default.
     return region
       ? yield* readSettingFrom<boolean>(stores, region.key)
       : undefined;
@@ -42,14 +82,14 @@ function regionSet(stores: SettingsStores, provider: string) {
 
 export function getProviderEndpoint(stores: SettingsStores, provider: string) {
   return Effect.gen(function* () {
-    const key = findModelProviderPlugin(provider)?.endpointKey;
+    const key = providerEndpointKey(provider);
     // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
     return key ? yield* readSettingFrom<string>(stores, key) : '';
   });
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
-  return findModelProviderPlugin(provider)?.endpointKey !== undefined;
+  return providerEndpointKey(provider) !== undefined;
 }
 
 // ---------------------------------------------------------------------------

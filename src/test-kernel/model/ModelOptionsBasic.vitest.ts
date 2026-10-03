@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
-  DEFAULT_MODELS,
   isDeprecatedModel,
+  isExpensiveModel,
   isRetiredModel,
-} from '@model/modelOptionsBasic';
-import { modelConfig } from '@shared/model/modelSelection';
-
-// Local imports - model
+  modelConfig,
+} from '@texra-ai/llm';
 import {
   DEFAULT_HELPER_MODEL,
-  isExpensiveModel,
-} from '@shared/constants/providers';
+  DEFAULT_MODELS,
+} from '@shared/constants/defaultModels';
+
+// Local imports - model
 
 describe('default helper model', () => {
   it('resolves to a valid, non-deprecated DeepSeek model in llm-zoo', () => {

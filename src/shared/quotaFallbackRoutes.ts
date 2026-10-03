@@ -1,5 +1,5 @@
+import { CODING_PLAN_SUBSCRIPTIONS } from '@texra-ai/llm';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
-import { CODING_PLAN_SUBSCRIPTIONS } from './codingPlanSubscriptions';
 import type { ExhaustionReason } from './schemas/errors';
 import type { DeclinableUsageRoute } from './schemas/usage';
 

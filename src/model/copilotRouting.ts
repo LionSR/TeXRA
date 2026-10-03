@@ -13,9 +13,15 @@ import { MODEL_CONFIGS, lookup, type ModelConfig } from 'llm-zoo';
  * `ModelRoute` it decides.
  */
 
-import type { ApiProvider } from '@model/apiProviders';
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
+import {
+  type ApiProvider,
+  decideModelRoute,
+  isDeprecatedModel,
+  isRetiredModel,
+  OWN_KEY_ROUTE_FACTS,
+  selectModel,
+  zeroCostAccessOverrides,
+} from '@texra-ai/llm';
 import type { StateStore } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -25,9 +31,6 @@ import {
 } from '@platform/languageModel';
 import { readState } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-import { selectModel } from '@shared/model/modelSelection';
-import { isDeprecatedModel, isRetiredModel } from './modelOptionsBasic';
 
 /**
  * The Copilot access route for one canonical base model: the exact editor

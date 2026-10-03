@@ -7,10 +7,9 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, vi } from 'vitest';
 
 // Local imports
-import * as apiProviders from '@model/apiProviders';
+import * as apiProviders from '@texra-ai/llm';
+import { apiKeyEnvName, SecretsFailed } from '@texra-ai/llm';
 import * as setupCredentialAccess from '@model/setupCredentialAccess';
-import { SecretsFailed } from '@platform/secrets';
-import { apiKeyEnvName } from '@shared/constants/providers';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';

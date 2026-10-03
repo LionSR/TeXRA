@@ -55,8 +55,8 @@ vi.mock('@utils/config/providerConfig', async (importActual) => {
   };
 });
 
-vi.mock('@model/apiProviders', async (importActual) => {
-  const actual = await importActual<typeof import('@model/apiProviders')>();
+vi.mock('@texra-ai/llm', async (importActual) => {
+  const actual = await importActual<typeof import('@texra-ai/llm')>();
   return {
     ...actual,
     hasUsableApiKey: mocks.hasUsableApiKey,

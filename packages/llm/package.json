@@ -5,12 +5,8 @@
   "type": "module",
   "description": "TeXRA-owned canonical model operations",
   "exports": {
-    "./openrouter-chat": "./src/openrouterChat.ts",
-    "./turn": "./src/turn.ts",
-    "./openai-responses": "./src/openaiResponses.ts",
-    "./anthropic-messages": "./src/anthropicMessages.ts",
-    "./google-interactions": "./src/googleInteractions.ts",
-    "./prefix-fingerprint": "./src/prefixFingerprint.ts"
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
@@ -19,6 +15,7 @@
     "@anthropic-ai/sdk": "0.129.0",
     "@google/genai": "2.24.0",
     "@openrouter/sdk": "1.4.2",
+    "llm-zoo": "catalog:",
     "openai": "7.20.0",
     "ws": "8.22.0"
   },

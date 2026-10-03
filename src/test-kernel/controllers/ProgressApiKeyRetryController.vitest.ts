@@ -6,10 +6,10 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
-import type { ApiProvider } from '@model/apiProviders';
 import type { AppState } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import type { ApiProvider } from '@texra-ai/llm';
 
 /**
  * `it.effect` for this suite. Every controller entry point reads the process

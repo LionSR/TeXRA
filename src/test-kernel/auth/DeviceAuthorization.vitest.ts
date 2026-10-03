@@ -7,7 +7,7 @@ import {
   DeviceAuthorizationPending,
   DeviceAuthorizationTransient,
   pollDeviceAuthorization,
-} from '@auth/oauth/deviceAuthorization';
+} from '../../../packages/llm/src/oauth/deviceAuthorization.js';
 
 /** The failure an exit carries, or undefined when it succeeded. */
 const failureOf = (exit: Exit.Exit<unknown, unknown>): unknown =>

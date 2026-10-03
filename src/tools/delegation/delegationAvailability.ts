@@ -17,6 +17,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { modelRefOf } from '@texra-ai/llm';
 import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -36,7 +37,6 @@ import type {
 } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
-import { modelRefOf } from '@shared/model/modelSelection';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';

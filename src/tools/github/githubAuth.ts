@@ -13,10 +13,10 @@ import { Effect } from 'effect';
 
 import {
   type CredentialOrigin,
-  type PlatformSecrets,
   resolveCredential,
   type SecretsFailed,
-} from '@platform/secrets';
+} from '@texra-ai/llm';
+import type { PlatformSecrets } from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';

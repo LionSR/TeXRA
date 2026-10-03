@@ -1,4 +1,4 @@
-import type { TurnResult } from '@texra-ai/llm/turn';
+import type { TurnResult } from '@texra-ai/llm';
 
 /** The assistant text of a completed turn: message parts, in order. */
 export function turnText(turn: TurnResult): string {

@@ -9,26 +9,24 @@ import { TestClock } from 'effect/testing';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
-  ContinuationSchema,
-  RemoteOperationSchema,
+  type BackgroundEvent,
   completedTurn,
-} from '@texra-ai/llm/turn';
+  ContinuationSchema,
+  type ModelError,
+  type OpenAIResponsesConfiguration,
+  type RemoteOperation,
+  RemoteOperationSchema,
+  type TurnEvent,
+  type TurnRequest,
+} from '@texra-ai/llm';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
 import {
   RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
-  openaiResponsesModel,
-  openaiResponsesWebSocketModel,
-} from '@texra-ai/llm/openai-responses';
-import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import type {
-  BackgroundEvent,
-  ModelError,
-  OpenAIResponsesConfiguration,
-  RemoteOperation,
-  TurnEvent,
-  TurnRequest,
-} from '@texra-ai/llm/turn';
+} from '../../../packages/llm/src/api/openaiResponsesLower.js';
+import { openaiResponsesWebSocketModel } from '../../../packages/llm/src/api/openaiResponsesWebSocket.js';
+import { admittedFingerprint } from '../../../packages/llm/src/api/prefixFingerprint.js';
 
 const CONFIG: OpenAIResponsesConfiguration = {
   protocol: 'openai-responses',

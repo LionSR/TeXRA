@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { SharedAttempt } from '@utils/core/sharedAttempt';
+import { SharedAttempt } from '@texra-ai/llm/node';
 
 describe('SharedAttempt', () => {
   it.effect(

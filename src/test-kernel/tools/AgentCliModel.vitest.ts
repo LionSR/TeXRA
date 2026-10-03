@@ -5,7 +5,7 @@ import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { ReasoningEffort } from 'llm-zoo';
 
-import { modelConfig } from '@shared/model/modelSelection';
+import { modelConfig } from '@texra-ai/llm';
 import { settingDefault } from '@shared/config/settingsAccess';
 import {
   CLAUDE_AGENT_MODEL_SETTING,

@@ -3,8 +3,8 @@ import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
 // Local imports - agent config
+import { codexBackendModelId } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import { codexBackendModelId } from '@model/providerCapabilities';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {

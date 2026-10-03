@@ -25,7 +25,7 @@ import {
   type ModelOrigin,
   type ResolvedTurn,
   type TurnRequest,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
 import {

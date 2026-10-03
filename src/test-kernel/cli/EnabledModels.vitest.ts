@@ -6,7 +6,7 @@ import {
   listCliEnabledModelCatalog,
   setCliModelEnabled,
 } from '@cli/runtime/enabledModels';
-import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 

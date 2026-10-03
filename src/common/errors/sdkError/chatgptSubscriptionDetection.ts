@@ -1,7 +1,7 @@
 /**
  * Detection + formatting for the ChatGPT-subscription (Codex backend) usage
  * limit. When a user drives Codex-eligible models through their ChatGPT
- * subscription (see `@auth/codex`), the backend rejects requests once the
+ * subscription (see `@texra-ai/llm/node`), the backend rejects requests once the
  * plan's quota is exhausted with a distinctive body:
  *
  *   { "type": "usage_limit_reached", "message": "...", "plan_type": "pro",

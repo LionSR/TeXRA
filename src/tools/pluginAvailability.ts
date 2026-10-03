@@ -9,10 +9,9 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
 import { withLogChannel } from '@logger/effectLog';
-import { lookupApiKeyOrigin } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
-import { apiKeyEnvName } from '@shared/constants/providers';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import {
   importClaudeAgentSdk,

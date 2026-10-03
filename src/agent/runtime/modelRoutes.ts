@@ -1,13 +1,25 @@
 import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
-import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import {
   CODEX_BACKEND_BASE_URL,
   codexCoordinator,
   SubscriptionOAuthError,
-} from '@auth/codex';
-import { xaiCoordinator } from '@auth/xai';
+  xaiCoordinator,
+} from '@texra-ai/llm/node';
+import {
+  type ApiProvider,
+  codexBackendModelId,
+  decideModelRoute,
+  exposeApiKey,
+  findModelProviderPlugin,
+  getApiKey,
+  type ModelRoute,
+  resolveRouteEndpoint,
+  type HostRouteFacts,
+  type RouteFacts,
+} from '@texra-ai/llm';
+import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
@@ -17,15 +29,7 @@ import {
   prefersCopilotRoute,
   type CopilotModelRoute,
 } from '@model/copilotRouting';
-import { codexBackendModelId } from '@model/providerCapabilities';
-import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
-import {
-  decideModelRoute,
-  readRouteFacts,
-  type ModelRoute,
-} from '@model/modelRoute';
-import { resolveRouteEndpoint } from '@model/routeEndpoint';
-import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import { readRouteFacts } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -35,7 +39,6 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -62,7 +65,7 @@ export interface ApiKeyRouteCredential {
  * What a subscription route reads off its signed-in session: the ChatGPT
  * (Codex) session on the Responses protocol, the Grok session on the xAI Chat
  * protocol, each with the endpoint its token is accepted at. The token is the
- * bearer the package sends; `@auth/*` owns its refresh, so a binding always
+ * bearer the package sends; `@texra-ai/llm/node` owns its refresh, so a binding always
  * carries a fresh one.
  */
 type SubscriptionSession =
@@ -103,11 +106,6 @@ export function routeBearer(credential: RouteCredential): string {
     case 'xai-subscription':
       return credential.accessToken;
   }
-}
-
-/** A bearer route's model transport: its secret over the long-stream fetch. */
-export function bearerTransport(credential: RouteCredential) {
-  return { apiKey: routeBearer(credential), fetch: longRunningModelFetch };
 }
 
 /**
@@ -158,7 +156,7 @@ interface SubscriptionRouteRow {
  *
  * Each binding calls through rather than capturing the imported value: the
  * table is built at module load, and a suite that partially mocks
- * `@auth/*` must still load this one.
+ * `@texra-ai/llm/node` must still load this one.
  */
 const SUBSCRIPTION_ROUTES: {
   readonly [K in SubscriptionSession['route']]: SubscriptionRouteRow;
@@ -242,12 +240,12 @@ export function refreshRejectedSubscription(
  * decision named, or the OpenRouter key. The one producer of the
  * missing-credential fact the run lifecycle classifies for the loop, so the
  * failure carries the typed marker rather than a message pattern. `secrets`
- * is the process secret store the caller already holds; the endpoint is read
- * over `stores`, the setting slots of the workspace the caller holds.
+ * is the process secret store the caller already holds; the endpoint is the
+ * one the route's facts name for the provider.
  */
 export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
   function* (
-    stores: SettingsStores,
+    facts: Pick<RouteFacts, 'endpoints'>,
     config: ModelConfig,
     route: Extract<
       ModelRoute,
@@ -276,9 +274,17 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
         return Effect.fail(error);
       }),
     );
+    const endpoint = resolveRouteEndpoint(config, route, facts);
+    if (endpoint === undefined) {
+      return yield* Effect.die(
+        new Error(
+          `No HTTP endpoint is configured for provider ${config.provider}.`,
+        ),
+      );
+    }
     return {
       apiKey,
-      endpoint: yield* resolveRouteEndpoint(stores, config, route),
+      endpoint,
       provider,
       route: route.kind,
       usageRoute: route.kind === 'openrouter' ? 'api-key' : route.usageRoute,
@@ -291,11 +297,16 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
  * a Copilot route binds only with the editor route discovered for it.
  */
 export type BindableRoute =
-  | Exclude<ModelRoute, { kind: 'openrouter-unsupported' | 'copilot' }>
+  | Exclude<
+      ModelRoute<CopilotModelRoute>,
+      { kind: 'openrouter-unsupported' | 'copilot' }
+    >
   | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
 
 /**
- * The route `config` binds under, decided once over this workspace's facts.
+ * The route `config` binds under, decided once over this workspace's facts,
+ * and those facts (the binding reads the route's config and endpoint off
+ * them).
  * A resumed conversation's persisted format constrains the facts it answers
  * for: its OpenRouter, Copilot and validation choice are the format's, and a
  * subscription serves it only on the protocol the format names, so turning a
@@ -320,7 +331,11 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
     /** The provider reasoning mode the request asks for (OpenAI `pro`). */
     readonly mode?: ReasoningMode;
   } = {},
-): Effect.fn.Return<BindableRoute, Error, LanguageModel> {
+): Effect.fn.Return<
+  { readonly route: BindableRoute; readonly facts: HostRouteFacts },
+  Error,
+  LanguageModel
+> {
   const host = yield* readRouteFacts(stores, options.declinedRoutes);
   const key = options.compatibilityKey;
   const prefersCopilot =
@@ -364,7 +379,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ),
     );
   }
-  if (route.kind !== 'copilot') return route;
+  if (route.kind !== 'copilot') return { route, facts: host };
   // A fresh run needs the editor to allow the route; a resumed conversation
   // keeps its format and binds whatever route the editor offers.
   const unavailableReason =
@@ -381,7 +396,7 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ),
     );
   }
-  return { kind: 'copilot', route: route.route };
+  return { route: { kind: 'copilot', route: route.route }, facts: host };
 });
 
 /**

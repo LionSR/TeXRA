@@ -7,7 +7,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {

@@ -5,6 +5,7 @@
  */
 import { Effect, SynchronizedRef } from 'effect';
 
+import { selectModel } from '@texra-ai/llm';
 import {
   resolveModelRoute,
   routeCompatibilityKey,
@@ -13,7 +14,6 @@ import { decideReasoning } from '@model/reasoningLevel';
 import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
-import { selectModel } from '@shared/model/modelSelection';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel, PROTOCOL_BY_KEY } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
@@ -119,7 +119,7 @@ export function modelSwitchPort(
     const nextConfig = selected.config;
     // The routes the run declined, so the preflight decides the route the
     // bind at the next model boundary will.
-    const route = yield* resolveModelRoute(run.stores, nextConfig, {
+    const { route } = yield* resolveModelRoute(run.stores, nextConfig, {
       mode: selected.request.mode,
       declinedRoutes: run.declinedRoutes,
     }).pipe(Effect.provideService(LanguageModel, languageModel));

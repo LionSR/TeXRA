@@ -3,20 +3,20 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import {
+  API_PROVIDERS,
+  type ApiProvider,
+  loadApiKeyStatusMap,
+  PROVIDER_DISPLAY_NAMES,
+} from '@texra-ai/llm';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import {
-  API_PROVIDERS,
-  loadApiKeyStatusMap,
-  type ApiProvider,
-} from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getProviderDisplayName,
   getProviderKeyUrl,

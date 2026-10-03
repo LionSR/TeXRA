@@ -4,6 +4,7 @@ import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { selectModel } from '@texra-ai/llm';
 import {
   getCatalogLoadFailure,
   getCustomAgentScanIssues,
@@ -38,7 +39,6 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
-import { selectModel } from '@shared/model/modelSelection';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { ToolRegistry } from '@tools/toolTable';

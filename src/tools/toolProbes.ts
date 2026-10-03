@@ -14,7 +14,7 @@ import {
   causeChain,
   isModuleNotFoundError,
 } from '@common/errors/errorPredicates';
-import type { Secrets, SecretsFailed } from '@platform/secrets';
+import type { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
@@ -27,6 +27,7 @@ import {
   type SystemPackageManager,
 } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { SecretsFailed } from '@texra-ai/llm';
 
 import type { Cause } from 'effect';
 import type { HttpClient, HttpClientError } from 'effect/http';

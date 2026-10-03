@@ -2,15 +2,15 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   createSecretBackedCoordinator,
   getSubscriptionSessionStatus,
   type SessionAccessCoordinator,
-  type SessionSecretStore,
-} from '@auth/oauth/sessionAccess';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
+} from '../../../packages/llm/src/oauth/sessionAccess.js';
+import type { CredentialStore as SessionSecretStore } from '@texra-ai/llm';
 
 function coordinator(
   overrides: Partial<SessionAccessCoordinator> = {},

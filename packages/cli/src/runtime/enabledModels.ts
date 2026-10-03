@@ -12,14 +12,18 @@
  */
 import { Effect } from 'effect';
 
+import {
+  isDeprecatedModel,
+  isRetiredModel,
+  modelConfig,
+  modelRefOf,
+} from '@texra-ai/llm';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
-import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
 
-import { modelConfig, modelRefOf } from '@shared/model/modelSelection';
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {

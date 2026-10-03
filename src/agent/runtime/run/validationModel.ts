@@ -33,7 +33,7 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-} from '@texra-ai/llm/turn';
+} from '@texra-ai/llm';
 import { envVar } from '@utils/system/envFlags';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction';
 import type { ModelConfig } from 'llm-zoo';

@@ -23,8 +23,11 @@
  */
 import { Config, ConfigProvider, Effect, Layer, Option } from 'effect';
 
-import type { ApiKeyProviderId } from '@shared/constants/modelProviderPlugins';
-import { API_KEY_ENV_NAMES, apiKeyEnvName } from '@shared/constants/providers';
+import {
+  API_KEY_ENV_NAMES,
+  apiKeyEnvName,
+  type ApiKeyProviderId,
+} from '@texra-ai/llm';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 const ENV_FLAG_OFF_VALUES = new Set(['', '0', 'false', 'no', 'off']);

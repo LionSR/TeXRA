@@ -1,5 +1,5 @@
 // Local imports
-import { googleInteractionsModel } from '../src/googleInteractions.js';
+import { googleInteractionsModel } from '../src/api/googleInteractions.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({

@@ -1,11 +1,11 @@
 import { Data, Effect } from 'effect';
 
+import { hasUsableApiKey } from '@texra-ai/llm';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
-import { hasUsableApiKey } from '@model/apiProviders';
 import {
   codingPlanSubscriptionRuntimes,
   type CodingPlanSubscriptionRuntime,

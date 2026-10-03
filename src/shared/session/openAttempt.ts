@@ -6,7 +6,7 @@
  * resume submits anew instead of observing work the user stopped.
  */
 import type { InvocationRef } from '@shared/schemas';
-import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm/turn';
+import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
 import type { ModelMessagePayload } from './ledgerTurns';
 
 export type OpenAttempt = {

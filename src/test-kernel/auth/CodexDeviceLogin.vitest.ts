@@ -4,14 +4,14 @@ import { FetchHttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
-import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
-import { loginWithDeviceCode } from '@auth/codex/codexDeviceLogin';
+import { codexLoginWithDeviceCode as loginWithDeviceCode } from '@texra-ai/llm/node';
+import { createDeferred } from '@test/support/asyncTestUtils';
+import { jsonResponse } from '@test/support/fetchTestUtils';
 import {
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
-} from '@auth/codex/codexConstants';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import { jsonResponse } from '@test/support/fetchTestUtils';
+} from '../../../packages/llm/src/oauth/codex/codexConstants.js';
+import type { CodexSessionCoordinator } from '../../../packages/llm/src/oauth/codex/CodexSessionCoordinator.js';
 
 /**
  * Drive the flow through the wire: the usercode endpoint answers once, and

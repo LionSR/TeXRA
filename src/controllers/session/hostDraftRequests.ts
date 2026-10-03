@@ -8,6 +8,7 @@ import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import { withLogChannel } from '@logger/effectLog';
+import { readProviderEndpoints } from '@model/modelRoute';
 import { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs } from '@platform/rootedFs';
@@ -246,12 +247,17 @@ export class HostDraftRequests {
       // calling frame, and the resolved credential reaches the
       // transcription as data.
       const postStop = Effect.gen(function* () {
-        const credential = yield* resolveRouteCredential(
+        const credential = yield* readProviderEndpoints(
           take.session.roots,
-          MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
-          { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-          secrets,
         ).pipe(
+          Effect.flatMap((endpoints) =>
+            resolveRouteCredential(
+              { endpoints },
+              MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
+              { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
+              secrets,
+            ),
+          ),
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         const text = yield* transcribeRecording(recordingPath, credential).pipe(

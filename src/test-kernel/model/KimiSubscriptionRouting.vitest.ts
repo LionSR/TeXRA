@@ -1,16 +1,13 @@
-import { it as effectIt } from '@effect/vitest';
-import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ModelProvider } from 'llm-zoo';
 
 import {
   decideModelRoute,
+  isKimiSubscriptionEligible,
+  KIMI_CODE_BASE_URL,
   OWN_KEY_ROUTE_FACTS,
   routeConfig,
-} from '@model/modelRoute';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
+} from '@texra-ai/llm';
 import type { ModelConfig } from 'llm-zoo';
 
 const dual = {
@@ -90,29 +87,27 @@ describe('decideModelRoute on Kimi Code', () => {
 });
 
 describe('routeConfig on Kimi Code', () => {
-  effectIt.effect('swaps in the coding wire id without touching baseUrl', () =>
-    Effect.gen(function* () {
-      const config = asConfig({
-        provider: ModelProvider.MOONSHOT,
-        kimiSubscription: true,
-        id: 'kimi-k3',
-        shortName: 'kimi-k3',
-        contextWindow: 1_048_576,
-      });
-      const runtime = yield* routeConfig(
-        {} as SettingsStores,
-        config,
-        decideModelRoute(config, {
-          ...OWN_KEY_ROUTE_FACTS,
-          kimiCodeKey: true,
-          preferKimiCode: true,
-        }),
-      );
-      expect(runtime.id).toBe('k3');
-      expect(runtime.shortName).toBe('k3');
-      expect(runtime.contextWindow).toBe(262_144);
-      // The route, not a pinned baseUrl, names the coding endpoint.
-      expect(runtime.baseUrl).toBeUndefined();
-    }),
-  );
+  it('swaps in the coding wire id without touching baseUrl', () => {
+    const config = asConfig({
+      provider: ModelProvider.MOONSHOT,
+      kimiSubscription: true,
+      id: 'kimi-k3',
+      shortName: 'kimi-k3',
+      contextWindow: 1_048_576,
+    });
+    const runtime = routeConfig(
+      config,
+      decideModelRoute(config, {
+        ...OWN_KEY_ROUTE_FACTS,
+        kimiCodeKey: true,
+        preferKimiCode: true,
+      }),
+      { chatgptContextWindow: 0 },
+    );
+    expect(runtime.id).toBe('k3');
+    expect(runtime.shortName).toBe('k3');
+    expect(runtime.contextWindow).toBe(262_144);
+    // The route, not a pinned baseUrl, names the coding endpoint.
+    expect(runtime.baseUrl).toBeUndefined();
+  });
 });
